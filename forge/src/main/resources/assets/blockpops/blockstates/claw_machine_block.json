@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "facing=north,half=lower": { "model": "blockpops:block/claw_machine_block" },
+    "facing=south,half=lower": { "model": "blockpops:block/claw_machine_block", "y": 180 },
+    "facing=west,half=lower": { "model": "blockpops:block/claw_machine_block", "y": 270 },
+    "facing=east,half=lower": { "model": "blockpops:block/claw_machine_block", "y": 90 },
+    "facing=north,half=upper": { "model": "blockpops:block/claw_machine_block_upper" },
+    "facing=south,half=upper": { "model": "blockpops:block/claw_machine_block_upper", "y": 180 },
+    "facing=west,half=upper": { "model": "blockpops:block/claw_machine_block_upper", "y": 270 },
+    "facing=east,half=upper": { "model": "blockpops:block/claw_machine_block_upper", "y": 90 }
+  }
+}

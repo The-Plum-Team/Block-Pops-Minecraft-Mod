@@ -2,6 +2,7 @@ package com.theplumteam.registry;
 
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.BoxBlock;
+import com.theplumteam.block.ClawMachineBlock;
 import com.theplumteam.block.PopBlockColor;
 import dev.architectury.registry.registries.DeferredRegister;
 import dev.architectury.registry.registries.RegistrySupplier;
@@ -17,6 +18,16 @@ public class ModBlocks {
         DeferredRegister.create(BlockPopsMod.MOD_ID, Registries.BLOCK);
 
     public static final Map<PopBlockColor, RegistrySupplier<Block>> BOX_BLOCKS = new HashMap<>();
+
+    public static final RegistrySupplier<Block> CLAW_MACHINE_BLOCK = BLOCKS.register(
+        "claw_machine_block",
+        () -> new ClawMachineBlock(
+            BlockBehaviour.Properties.of()
+                .strength(1.5F, 6.0F)
+                .requiresCorrectToolForDrops()
+                .noOcclusion()
+        )
+    );
 
     static {
         for (PopBlockColor color : PopBlockColor.values()) {

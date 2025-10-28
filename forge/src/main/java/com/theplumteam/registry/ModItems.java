@@ -17,6 +17,11 @@ public class ModItems {
 
     public static final Map<PopBlockColor, RegistrySupplier<Item>> BOX_BLOCK_ITEMS = new HashMap<>();
 
+    public static final RegistrySupplier<Item> CLAW_MACHINE_BLOCK_ITEM = ITEMS.register(
+        "claw_machine_block",
+        () -> new GeoBlockItem(ModBlocks.CLAW_MACHINE_BLOCK.get(), new Item.Properties())
+    );
+
     static {
         for (PopBlockColor color : PopBlockColor.values()) {
             BOX_BLOCK_ITEMS.put(color, ITEMS.register(

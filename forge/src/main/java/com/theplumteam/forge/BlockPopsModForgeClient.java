@@ -1,6 +1,7 @@
 package com.theplumteam.forge;
 
 import com.theplumteam.client.renderer.BoxBlockRenderer;
+import com.theplumteam.client.renderer.ClawMachineBlockRenderer;
 import com.theplumteam.registry.ModBlockEntities;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
@@ -12,5 +13,6 @@ public class BlockPopsModForgeClient {
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(ModBlockEntities.BOX_BLOCK.get(), context -> new BoxBlockRenderer());
+        event.registerBlockEntityRenderer(ModBlockEntities.CLAW_MACHINE_BLOCK.get(), context -> new ClawMachineBlockRenderer());
     }
 }

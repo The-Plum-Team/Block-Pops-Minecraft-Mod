@@ -19,6 +19,9 @@ public class ModCreativeTabs {
             .title(Component.translatable("itemGroup.blockpops.blockpops_tab"))
             .icon(() -> new ItemStack(ModItems.BOX_BLOCK_ITEMS.get(PopBlockColor.ORIGINAL).get()))
             .displayItems((parameters, output) -> {
+                // Add claw machine
+                output.accept(ModItems.CLAW_MACHINE_BLOCK_ITEM.get());
+
                 // Add all box blocks to the creative tab
                 for (PopBlockColor color : PopBlockColor.values()) {
                     output.accept(ModItems.BOX_BLOCK_ITEMS.get(color).get());
