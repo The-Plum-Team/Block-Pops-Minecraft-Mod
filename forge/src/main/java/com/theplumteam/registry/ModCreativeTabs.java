@@ -1,7 +1,7 @@
 package com.theplumteam.registry;
 
 import com.theplumteam.BlockPopsMod;
-import com.theplumteam.block.PopBlockColor;
+import com.theplumteam.figure.BuiltInCollections;
 import dev.architectury.registry.registries.DeferredRegister;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.minecraft.core.registries.Registries;
@@ -17,14 +17,14 @@ public class ModCreativeTabs {
         "blockpops_tab",
         () -> CreativeModeTab.builder(CreativeModeTab.Row.TOP, 0)
             .title(Component.translatable("itemGroup.blockpops.blockpops_tab"))
-            .icon(() -> new ItemStack(ModItems.BOX_BLOCK_ITEMS.get(PopBlockColor.ORIGINAL).get()))
+            .icon(() -> new ItemStack(ModItems.BOX_BLOCK_ITEMS.get("default").get()))
             .displayItems((parameters, output) -> {
                 // Add claw machine
                 output.accept(ModItems.CLAW_MACHINE_BLOCK_ITEM.get());
 
-                // Add all box blocks to the creative tab
-                for (PopBlockColor color : PopBlockColor.values()) {
-                    output.accept(ModItems.BOX_BLOCK_ITEMS.get(color).get());
+                // Add all collection box blocks to the creative tab
+                for (String collectionId : BuiltInCollections.COLLECTION_IDS) {
+                    output.accept(ModItems.BOX_BLOCK_ITEMS.get(collectionId).get());
                 }
             })
             .build()
@@ -34,3 +34,4 @@ public class ModCreativeTabs {
         CREATIVE_TABS.register();
     }
 }
+

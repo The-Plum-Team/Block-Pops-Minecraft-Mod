@@ -1,0 +1,28 @@
+{
+  "id": "jojos",
+  "name": "JoJo's Bizarre Adventure Collection",
+  "box_texture": "blockpops:textures/block/box/jojos.png",
+  "figures": [
+    {
+      "id": "jotaro",
+      "name": "Jotaro Kujo",
+      "model": "blockpops:geo/figure/jojos/jotaro.geo.json",
+      "texture": "blockpops:textures/figure/jojos/jotaro.png",
+      "animation": "blockpops:animations/figure/jojos/jotaro.animation.json"
+    },
+    {
+      "id": "dio",
+      "name": "Dio Brando",
+      "model": "blockpops:geo/figure/jojos/dio.geo.json",
+      "texture": "blockpops:textures/figure/jojos/dio.png",
+      "animation": "blockpops:animations/figure/jojos/dio.animation.json"
+    },
+    {
+      "id": "joseph",
+      "name": "Joseph Joestar",
+      "model": "blockpops:geo/figure/jojos/joseph.geo.json",
+      "texture": "blockpops:textures/figure/jojos/joseph.png",
+      "animation": "blockpops:animations/figure/jojos/joseph.animation.json"
+    }
+  ]
+}

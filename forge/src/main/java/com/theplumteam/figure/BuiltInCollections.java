@@ -1,0 +1,29 @@
+package com.theplumteam.figure;
+
+import java.util.List;
+
+/**
+ * Defines the built-in collection IDs that will have box blocks registered for them.
+ * The actual collection content (figures, textures, etc.) is loaded from JSON files.
+ */
+public class BuiltInCollections {
+    // Add new collection IDs here to automatically create box blocks for them
+    public static final List<String> COLLECTION_IDS = List.of(
+        "default",
+        "star_wars",
+        "jojos"
+        // Add more collections as needed
+    );
+
+    /**
+     * Gets the display name for a collection ID (used for block names)
+     */
+    public static String getDisplayName(String collectionId) {
+        return switch (collectionId) {
+            case "default" -> "Default";
+            case "star_wars" -> "Star Wars";
+            case "jojos" -> "JoJos";
+            default -> collectionId;
+        };
+    }
+}

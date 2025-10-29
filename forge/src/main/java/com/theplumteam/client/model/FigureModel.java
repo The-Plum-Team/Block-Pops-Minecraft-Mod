@@ -1,46 +1,45 @@
 package com.theplumteam.client.model;
 
-import com.theplumteam.BlockPopsMod;
 import com.theplumteam.blockentity.BoxBlockEntity;
-import com.theplumteam.figure.FigureType;
+import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.model.GeoModel;
 
+/**
+ * GeoModel for rendering figures dynamically based on collection data
+ */
 public class FigureModel extends GeoModel<BoxBlockEntity> {
     @Override
     public ResourceLocation getModelResource(BoxBlockEntity animatable) {
-        FigureType figureType = animatable.getFigureType();
-        if (figureType == FigureType.NONE || figureType.getModelPath() == null) {
+        FigureDefinition figure = animatable.getFigureDefinition();
+        if (figure == null) {
             return null;
         }
-        return new ResourceLocation(BlockPopsMod.MOD_ID, figureType.getModelPath());
+        return figure.getModelPath();
     }
 
     @Override
     public ResourceLocation getTextureResource(BoxBlockEntity animatable) {
-        // Use dedicated figure texture based on figure type
-        FigureType figureType = animatable.getFigureType();
-        if (figureType == FigureType.NONE) {
+        FigureDefinition figure = animatable.getFigureDefinition();
+        if (figure == null) {
             return null;
         }
-        return new ResourceLocation(BlockPopsMod.MOD_ID, "textures/figure/box_figure_" + figureType.getSerializedName() + ".png");
+        return figure.getTexturePath();
     }
 
     @Override
     public ResourceLocation getAnimationResource(BoxBlockEntity animatable) {
-        FigureType figureType = animatable.getFigureType();
-        if (figureType == FigureType.NONE) {
+        FigureDefinition figure = animatable.getFigureDefinition();
+        if (figure == null) {
             return null;
         }
-        // Each figure type can have its own animation file
-        return new ResourceLocation(BlockPopsMod.MOD_ID, "animations/figure/box_figure_" + figureType.getSerializedName() + ".animation.json");
+        return figure.getAnimationPath();
     }
 
     @Override
     public RenderType getRenderType(BoxBlockEntity animatable, ResourceLocation texture) {
-        // Use entityCutoutNoCull like Lineages does for the book
-        // This ensures proper rendering without culling issues
+        // Use entityCutoutNoCull for proper rendering without culling issues
         return RenderType.entityCutoutNoCull(getTextureResource(animatable));
     }
 }

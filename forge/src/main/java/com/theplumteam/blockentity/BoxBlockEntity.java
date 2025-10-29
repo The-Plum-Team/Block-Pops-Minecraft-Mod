@@ -1,8 +1,8 @@
 package com.theplumteam.blockentity;
 
 import com.theplumteam.block.BoxBlock;
-import com.theplumteam.block.PopBlockColor;
-import com.theplumteam.figure.FigureType;
+import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -27,7 +27,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
     private static final RawAnimation BOX_ANIMATION = RawAnimation.begin().thenLoop("animation.box_block.idle");
-    private FigureType figureType = FigureType.DEFAULT;
+
+    // Collection and figure data
+    private String figureId = ""; // Empty means no figure
 
     // Figure positioning - correct values found through testing
     private double figureOffsetX = -0.60;
@@ -55,23 +57,49 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         return cache;
     }
 
-    public PopBlockColor getColor() {
+    /**
+     * Gets the collection ID from the block this entity belongs to
+     */
+    public String getCollectionId() {
         if (getBlockState().getBlock() instanceof BoxBlock boxBlock) {
-            return boxBlock.getColor();
+            return boxBlock.getCollectionId();
         }
-        return PopBlockColor.ORIGINAL;
+        return "default";
     }
 
-    public FigureType getFigureType() {
-        return figureType;
+    /**
+     * Gets the ID of the figure currently in this box
+     */
+    public String getFigureId() {
+        return figureId;
     }
 
-    public void setFigureType(FigureType figureType) {
-        this.figureType = figureType;
+    /**
+     * Sets which figure is in this box (by figure ID within the collection)
+     */
+    public void setFigureId(String figureId) {
+        this.figureId = figureId != null ? figureId : "";
         setChanged();
         if (level != null && !level.isClientSide) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
+    }
+
+    /**
+     * Gets the full FigureDefinition for the current figure
+     */
+    public FigureDefinition getFigureDefinition() {
+        if (figureId.isEmpty()) {
+            return null;
+        }
+        return CollectionRegistry.getFigure(getCollectionId(), figureId).orElse(null);
+    }
+
+    /**
+     * Checks if this box currently contains a figure
+     */
+    public boolean hasFigure() {
+        return !figureId.isEmpty() && getFigureDefinition() != null;
     }
 
     public double getFigureOffsetX() {
@@ -111,7 +139,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     @Override
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
-        tag.putString("FigureType", figureType.getSerializedName());
+        tag.putString("FigureId", figureId);
         tag.putDouble("FigureOffsetX", figureOffsetX);
         tag.putDouble("FigureOffsetY", figureOffsetY);
         tag.putDouble("FigureOffsetZ", figureOffsetZ);
@@ -121,8 +149,8 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
-        if (tag.contains("FigureType")) {
-            this.figureType = FigureType.fromString(tag.getString("FigureType"));
+        if (tag.contains("FigureId")) {
+            this.figureId = tag.getString("FigureId");
         }
         if (tag.contains("FigureOffsetX")) {
             this.figureOffsetX = tag.getDouble("FigureOffsetX");

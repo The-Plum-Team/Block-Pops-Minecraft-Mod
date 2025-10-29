@@ -1,0 +1,14 @@
+{
+  "id": "default",
+  "name": "Default Collection",
+  "box_texture": "blockpops:textures/block/box/default.png",
+  "figures": [
+    {
+      "id": "default",
+      "name": "Default Figure",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/box_figure_default.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    }
+  ]
+}

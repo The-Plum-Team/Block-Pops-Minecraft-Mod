@@ -2,15 +2,12 @@ package com.theplumteam.client.renderer;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.theplumteam.block.BoxBlock;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.model.BoxBlockModel;
 import com.theplumteam.client.model.FigureModel;
-import com.theplumteam.figure.FigureType;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
@@ -43,8 +40,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                            isReRender, partialTick, packedLight, packedOverlay, red, green, blue, alpha);
 
         // Then, render the figure model if one exists
-        FigureType figureType = animatable.getFigureType();
-        if (figureType.hasFigure()) {
+        if (animatable.hasFigure()) {
             poseStack.pushPose();
 
             // Apply figure offset and scale
@@ -55,8 +51,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                           (float) animatable.getFigureScale(),
                           (float) animatable.getFigureScale());
 
-            // Render the figure using separate renderer (like Lineages does with the book)
-            // Note: The figure will inherit the block's rotation from GeckoLib's automatic rotation
+            // Render the figure using separate renderer
             figureRenderer.render(animatable, partialTick, poseStack, bufferSource,
                                 packedLight, packedOverlay);
 

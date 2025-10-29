@@ -26,16 +26,16 @@ import org.jetbrains.annotations.Nullable;
 
 public class BoxBlock extends BaseEntityBlock {
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
-    private final PopBlockColor color;
+    private final String collectionId;
 
-    public BoxBlock(Properties properties, PopBlockColor color) {
+    public BoxBlock(Properties properties, String collectionId) {
         super(properties);
-        this.color = color;
+        this.collectionId = collectionId;
         this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
     }
 
-    public PopBlockColor getColor() {
-        return color;
+    public String getCollectionId() {
+        return collectionId;
     }
 
     @Nullable
