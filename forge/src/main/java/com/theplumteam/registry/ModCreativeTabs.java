@@ -1,6 +1,7 @@
 package com.theplumteam.registry;
 
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.figure.BuiltInCollections;
 import dev.architectury.registry.registries.DeferredRegister;
 import dev.architectury.registry.registries.RegistrySupplier;
@@ -17,14 +18,21 @@ public class ModCreativeTabs {
         "blockpops_tab",
         () -> CreativeModeTab.builder(CreativeModeTab.Row.TOP, 0)
             .title(Component.translatable("itemGroup.blockpops.blockpops_tab"))
-            .icon(() -> new ItemStack(ModItems.BOX_BLOCK_ITEMS.get("default").get()))
+            .icon(() -> new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(PopBlockColor.ORIGINAL).get()))
             .displayItems((parameters, output) -> {
                 // Add claw machine
                 output.accept(ModItems.CLAW_MACHINE_BLOCK_ITEM.get());
 
-                // Add all collection box blocks to the creative tab
+                // Add all default collection color variants
+                for (PopBlockColor color : PopBlockColor.values()) {
+                    output.accept(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(color).get());
+                }
+
+                // Add other collection box blocks
                 for (String collectionId : BuiltInCollections.COLLECTION_IDS) {
-                    output.accept(ModItems.BOX_BLOCK_ITEMS.get(collectionId).get());
+                    if (!collectionId.equals("default")) {
+                        output.accept(ModItems.BOX_BLOCK_ITEMS.get(collectionId).get());
+                    }
                 }
             })
             .build()

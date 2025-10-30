@@ -16,12 +16,23 @@ public class ModBlockEntities {
     public static final RegistrySupplier<BlockEntityType<BoxBlockEntity>> BOX_BLOCK =
         BLOCK_ENTITIES.register("box_block", () -> {
             // Extract blocks array inside the lambda, after blocks are registered
-            Block[] blocks = ModBlocks.BOX_BLOCKS.values().stream()
+            // Include both default color variants AND themed collection blocks
+            Block[] defaultBlocks = ModBlocks.DEFAULT_BOX_BLOCKS.values().stream()
                 .map(RegistrySupplier::get)
                 .toArray(Block[]::new);
+
+            Block[] collectionBlocks = ModBlocks.BOX_BLOCKS.values().stream()
+                .map(RegistrySupplier::get)
+                .toArray(Block[]::new);
+
+            // Combine both arrays
+            Block[] allBlocks = new Block[defaultBlocks.length + collectionBlocks.length];
+            System.arraycopy(defaultBlocks, 0, allBlocks, 0, defaultBlocks.length);
+            System.arraycopy(collectionBlocks, 0, allBlocks, defaultBlocks.length, collectionBlocks.length);
+
             return BlockEntityType.Builder.of(
                 BoxBlockEntity::new,
-                blocks
+                allBlocks
             ).build(null);
         });
 
