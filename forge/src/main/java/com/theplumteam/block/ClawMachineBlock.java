@@ -1,7 +1,9 @@
 package com.theplumteam.block;
 
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.client.gui.CollectionSelectionScreen;
 import com.theplumteam.registry.ModBlockEntities;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
@@ -78,7 +80,11 @@ public class ClawMachineBlock extends BaseEntityBlock {
         if (level.isClientSide && player.isShiftKeyDown()) {
             BlockEntity blockEntity = level.getBlockEntity(lowerPos);
             if (blockEntity instanceof ClawMachineBlockEntity clawMachineBlockEntity) {
-                // Interaction logic here (e.g., open GUI, activate claw, etc.)
+                // Open the collection selection screen
+                Minecraft.getInstance().setScreen(new CollectionSelectionScreen(
+                    lowerPos,
+                    clawMachineBlockEntity.getCollectionId()
+                ));
                 return InteractionResult.SUCCESS;
             }
         }

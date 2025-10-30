@@ -1,6 +1,8 @@
 package com.theplumteam.forge;
 
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.network.ClawMachineCollectionPacket;
+import com.theplumteam.network.DropBoxPacket;
 import com.theplumteam.network.FigurePositionPacket;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModBlocks;
@@ -47,6 +49,18 @@ public final class BlockPopsModForge {
                 FigurePositionPacket::encode,
                 FigurePositionPacket::decode,
                 FigurePositionPacket::handle
+        );
+        NETWORK_CHANNEL.registerMessage(packetId++,
+                ClawMachineCollectionPacket.class,
+                ClawMachineCollectionPacket::encode,
+                ClawMachineCollectionPacket::decode,
+                ClawMachineCollectionPacket::handle
+        );
+        NETWORK_CHANNEL.registerMessage(packetId++,
+                DropBoxPacket.class,
+                DropBoxPacket::encode,
+                DropBoxPacket::decode,
+                DropBoxPacket::handle
         );
     }
 }

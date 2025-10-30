@@ -22,6 +22,8 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
     private static final RawAnimation IDLE_ANIMATION =
         RawAnimation.begin().thenLoop("animation.claw_machine_block.idle");
 
+    private String collectionId = "";
+
     public ClawMachineBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.CLAW_MACHINE_BLOCK.get(), pos, blockState);
     }
@@ -41,13 +43,15 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
     @Override
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
-        // Save custom data here if needed
+        tag.putString("CollectionId", collectionId);
     }
 
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
-        // Load custom data here if needed
+        if (tag.contains("CollectionId")) {
+            this.collectionId = tag.getString("CollectionId");
+        }
     }
 
     // ===== CHUNK LOAD SYNCHRONIZATION =====
@@ -85,5 +89,15 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
         if (level.isClientSide && blockEntity instanceof ClawMachineBlockEntity) {
             // GeckoLib handles animation ticking automatically
         }
+    }
+
+    // ===== COLLECTION MANAGEMENT =====
+    public String getCollectionId() {
+        return collectionId;
+    }
+
+    public void setCollectionId(String collectionId) {
+        this.collectionId = collectionId;
+        setChanged();
     }
 }
