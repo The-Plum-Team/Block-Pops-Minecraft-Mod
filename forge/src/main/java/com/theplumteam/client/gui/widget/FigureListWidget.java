@@ -35,13 +35,13 @@ public class FigureListWidget extends ObjectSelectionList<FigureEntry> {
         if (collection != null) {
             List<FigureDefinition> figures = collection.getFigures();
 
-            // Group figures into rows of 3
+            // Group figures into rows of 4
             List<FigureDefinition> currentRow = new java.util.ArrayList<>();
             for (int i = 0; i < figures.size(); i++) {
                 currentRow.add(figures.get(i));
 
-                // When we have 3 figures or reached the end, create a row entry
-                if (currentRow.size() == 3 || i == figures.size() - 1) {
+                // When we have 4 figures or reached the end, create a row entry
+                if (currentRow.size() == 4 || i == figures.size() - 1) {
                     FigureEntry entry = new FigureEntry(currentRow, collection.getId());
                     entry.setConfiguration(modelScale, xRotation, yRotation, zRotation, xOffset, yOffset, zOffset);
                     this.addEntry(entry);
@@ -113,5 +113,14 @@ public class FigureListWidget extends ObjectSelectionList<FigureEntry> {
     @Override
     protected void renderBackground(net.minecraft.client.gui.GuiGraphics graphics) {
         // Don't render default background
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+        // Smooth scrolling: use fixed pixel amount instead of itemHeight-based
+        // Default scrolls by itemHeight/2 (45 pixels for 90px items) which is too jerky
+        // We use 20 pixels per scroll tick for smooth, precise control
+        this.setScrollAmount(this.getScrollAmount() - amount * 20.0);
+        return true;
     }
 }

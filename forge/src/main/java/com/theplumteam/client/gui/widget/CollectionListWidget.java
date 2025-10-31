@@ -69,4 +69,13 @@ public class CollectionListWidget extends ObjectSelectionList<CollectionEntry> {
     protected void renderBackground(net.minecraft.client.gui.GuiGraphics graphics) {
         // Don't render default background - parent screen handles it
     }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+        // Smooth scrolling: use fixed pixel amount instead of itemHeight-based
+        // Default scrolls by itemHeight/2 (18 pixels for 36px items)
+        // We use 15 pixels per scroll tick for smooth, consistent control
+        this.setScrollAmount(this.getScrollAmount() - amount * 15.0);
+        return true;
+    }
 }

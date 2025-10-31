@@ -23,11 +23,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Entry for displaying a row of up to 3 figures with 3D models
+ * Entry for displaying a row of up to 4 figures with 3D models
  */
 public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     private final Minecraft mc;
-    private final List<FigureDefinition> figures; // Up to 3 figures per row
+    private final List<FigureDefinition> figures; // Up to 4 figures per row
     private final String collectionId;
     private final FigureModel figureModel;
     private final GeoBlockRenderer<BoxBlockEntity> figureRenderer;
