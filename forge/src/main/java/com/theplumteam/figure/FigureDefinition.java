@@ -3,9 +3,12 @@ package com.theplumteam.figure;
 import com.google.gson.JsonObject;
 import net.minecraft.resources.ResourceLocation;
 
+import java.util.UUID;
+
 /**
  * Represents a single figure within a collection.
  * Contains all resource paths needed to render the figure.
+ * Can represent either a static figure (from JSON) or a dynamic player figure.
  */
 public class FigureDefinition {
     private final String id;
@@ -13,6 +16,8 @@ public class FigureDefinition {
     private final ResourceLocation modelPath;
     private final ResourceLocation texturePath;
     private final ResourceLocation animationPath;
+    private final FigureType type;
+    private final UUID playerUUID;
 
     public FigureDefinition(String id, String name, ResourceLocation modelPath,
                            ResourceLocation texturePath, ResourceLocation animationPath) {
@@ -21,6 +26,22 @@ public class FigureDefinition {
         this.modelPath = modelPath;
         this.texturePath = texturePath;
         this.animationPath = animationPath;
+        this.type = FigureType.STATIC;
+        this.playerUUID = null;
+    }
+
+    /**
+     * Constructor for player figures (dynamic figures using player skins)
+     */
+    public FigureDefinition(String id, String name, ResourceLocation modelPath,
+                           ResourceLocation animationPath, UUID playerUUID) {
+        this.id = id;
+        this.name = name;
+        this.modelPath = modelPath;
+        this.texturePath = null; // Texture is handled dynamically
+        this.animationPath = animationPath;
+        this.type = FigureType.PLAYER;
+        this.playerUUID = playerUUID;
     }
 
     /**
@@ -57,8 +78,16 @@ public class FigureDefinition {
         return animationPath;
     }
 
+    public FigureType getType() {
+        return type;
+    }
+
+    public UUID getPlayerUUID() {
+        return playerUUID;
+    }
+
     @Override
     public String toString() {
-        return "FigureDefinition{id='" + id + "', name='" + name + "'}";
+        return "FigureDefinition{id='" + id + "', name='" + name + "', type=" + type + "}";
     }
 }

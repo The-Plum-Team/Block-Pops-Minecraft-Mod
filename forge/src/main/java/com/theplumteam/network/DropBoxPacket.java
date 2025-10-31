@@ -58,11 +58,16 @@ public class DropBoxPacket {
                         .findFirst()
                         .map(supplier -> supplier.get())
                         .orElse(null);
+                } else if (ModBlocks.BOX_BLOCKS.containsKey(packet.collectionId)) {
+                    // For static collections, get the specific box block
+                    boxBlock = ModBlocks.BOX_BLOCKS.get(packet.collectionId).get();
                 } else {
-                    // For other collections, get the specific box block
-                    boxBlock = ModBlocks.BOX_BLOCKS.containsKey(packet.collectionId)
-                        ? ModBlocks.BOX_BLOCKS.get(packet.collectionId).get()
-                        : null;
+                    // For dynamic collections (like world_players), use the default box block as fallback
+                    LOGGER.info("Using default box block for dynamic collection: {}", packet.collectionId);
+                    boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.values().stream()
+                        .findFirst()
+                        .map(supplier -> supplier.get())
+                        .orElse(null);
                 }
 
                 if (boxBlock != null) {
@@ -80,12 +85,14 @@ public class DropBoxPacket {
                             // Create NBT data for the box with the random figure
                             CompoundTag blockEntityTag = new CompoundTag();
                             blockEntityTag.putString("FigureId", randomFigure.getId());
+                            // Store the collection ID so dynamic collections work correctly
+                            blockEntityTag.putString("CollectionId", packet.collectionId);
 
                             // Set the BlockEntityTag on the item
                             boxItem.getOrCreateTag().put("BlockEntityTag", blockEntityTag);
 
-                            LOGGER.info("Selected random figure '{}' ({}) for box",
-                                       randomFigure.getId(), randomFigure.getName());
+                            LOGGER.info("Selected random figure '{}' ({}) from collection '{}' for box",
+                                       randomFigure.getId(), randomFigure.getName(), packet.collectionId);
                         } else {
                             LOGGER.warn("Collection '{}' has no figures", packet.collectionId);
                         }

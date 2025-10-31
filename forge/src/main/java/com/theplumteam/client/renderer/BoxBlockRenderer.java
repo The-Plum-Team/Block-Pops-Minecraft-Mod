@@ -75,8 +75,9 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure == null) return;
 
-        // Get the figure texture
-        ResourceLocation figureTexture = figure.getTexturePath();
+        // Get the figure texture using the FigureModel which handles dynamic player skins
+        ResourceLocation figureTexture = figureRenderer.getGeoModel().getTextureResource(animatable);
+        if (figureTexture == null) return; // Safety check
         RenderType figureRenderType = RenderType.entityCutoutNoCull(figureTexture);
         VertexConsumer figureBuffer = bufferSource.getBuffer(figureRenderType);
 

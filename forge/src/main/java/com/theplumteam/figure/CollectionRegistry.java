@@ -21,14 +21,22 @@ public class CollectionRegistry {
     private static final Gson GSON = new Gson();
     private static final Map<String, FigureCollection> collections = new LinkedHashMap<>();
     private static final Map<String, FigureDefinition> figuresById = new HashMap<>();
+    private static final Map<String, FigureCollection> dynamicCollections = new LinkedHashMap<>();
     private static boolean initialized = false;
 
     /**
      * Loads all collections from data/blockpops/collections/*.json
+     * Note: Dynamic collections are preserved across reloads
      */
     public static void loadCollections(ResourceManager resourceManager) {
+        // Clear only static collections, preserve dynamic ones
         collections.clear();
         figuresById.clear();
+
+        // Re-add dynamic collections after clearing
+        for (Map.Entry<String, FigureCollection> entry : dynamicCollections.entrySet()) {
+            registerCollectionInternal(entry.getValue(), false);
+        }
 
         try {
             // Find all collection JSON files
@@ -127,5 +135,37 @@ public class CollectionRegistry {
         }
         // Otherwise return first collection
         return collections.values().stream().findFirst();
+    }
+
+    /**
+     * Registers a dynamic collection (e.g., world players collection).
+     * Dynamic collections are preserved across resource reloads.
+     *
+     * @param collection The collection to register
+     */
+    public static void registerDynamicCollection(FigureCollection collection) {
+        dynamicCollections.put(collection.getId(), collection);
+        registerCollectionInternal(collection, true);
+    }
+
+    /**
+     * Internal method to register a collection to the main maps
+     *
+     * @param collection The collection to register
+     * @param isDynamic Whether this is a dynamic collection
+     */
+    private static void registerCollectionInternal(FigureCollection collection, boolean isDynamic) {
+        collections.put(collection.getId(), collection);
+
+        // Register all figures with collectionId:figureId key
+        for (FigureDefinition figure : collection.getFigures()) {
+            String fullId = collection.getId() + ":" + figure.getId();
+            figuresById.put(fullId, figure);
+        }
+
+        if (isDynamic) {
+            BlockPopsMod.LOGGER.info("Registered dynamic collection '{}' with {} figures",
+                    collection.getName(), collection.getFigures().size());
+        }
     }
 }

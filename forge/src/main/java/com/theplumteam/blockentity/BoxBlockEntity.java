@@ -30,6 +30,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     // Collection and figure data
     private String figureId = ""; // Empty means no figure
+    private String collectionIdOverride = null; // For dynamic collections using default box blocks
 
     // Figure positioning - correct values found through testing
     private double figureOffsetX = -0.60;
@@ -63,9 +64,15 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     /**
-     * Gets the collection ID from the block this entity belongs to
+     * Gets the collection ID from the block this entity belongs to.
+     * If a collection ID override is set in NBT (for dynamic collections), that takes precedence.
      */
     public String getCollectionId() {
+        // Check if there's an override from NBT (for dynamic collections like world_players)
+        if (collectionIdOverride != null && !collectionIdOverride.isEmpty()) {
+            return collectionIdOverride;
+        }
+        // Otherwise, get from the block
         if (getBlockState().getBlock() instanceof BoxBlock boxBlock) {
             return boxBlock.getCollectionId();
         }
@@ -167,6 +174,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
         tag.putString("FigureId", figureId);
+        if (collectionIdOverride != null) {
+            tag.putString("CollectionId", collectionIdOverride);
+        }
         tag.putDouble("FigureOffsetX", figureOffsetX);
         tag.putDouble("FigureOffsetY", figureOffsetY);
         tag.putDouble("FigureOffsetZ", figureOffsetZ);
@@ -181,6 +191,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         super.load(tag);
         if (tag.contains("FigureId")) {
             this.figureId = tag.getString("FigureId");
+        }
+        if (tag.contains("CollectionId")) {
+            this.collectionIdOverride = tag.getString("CollectionId");
         }
         if (tag.contains("FigureOffsetX")) {
             this.figureOffsetX = tag.getDouble("FigureOffsetX");
