@@ -54,6 +54,14 @@ public class BoxBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
                 poseStack.translate(-0.5, 0.5, -0.5); // Move back and lift up
             }
 
+            // Scale down when held in hand (third person view)
+            if (displayContext == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND ||
+                displayContext == ItemDisplayContext.THIRD_PERSON_LEFT_HAND) {
+                poseStack.translate(0.5, 0, 0.5); // Move to center
+                poseStack.scale(0.4F, 0.4F, 0.4F); // Much smaller in hand
+                poseStack.translate(-0.5, 1.0, -0.5); // Move back and up significantly
+            }
+
             // Get the partial tick time for smooth animations
             float partialTick = Minecraft.getInstance().getFrameTime();
 
