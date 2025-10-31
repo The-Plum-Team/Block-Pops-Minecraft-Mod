@@ -1,12 +1,15 @@
 package com.theplumteam.forge;
 
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.capability.PlayerDiscoveryProvider;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.PlayerCollectionGenerator;
 import com.theplumteam.network.ClawMachineCollectionPacket;
 import com.theplumteam.network.DropBoxPacket;
 import com.theplumteam.network.FigurePositionPacket;
+import com.theplumteam.network.SyncDiscoveryDataPacket;
+import com.theplumteam.network.UnlockFigurePacket;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModBlocks;
 import com.theplumteam.registry.ModCreativeTabs;
@@ -15,9 +18,11 @@ import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.PlayerEvent;
 import dev.architectury.platform.forge.EventBuses;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.network.NetworkRegistry;
+import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 @Mod(BlockPopsMod.MOD_ID)
@@ -66,6 +71,17 @@ public final class BlockPopsModForge {
                 FigureCollection updatedCollection = PlayerCollectionGenerator.generate(player.getServer());
                 CollectionRegistry.registerDynamicCollection(updatedCollection);
                 BlockPopsMod.LOGGER.debug("Updated World Players collection after player join: {}", player.getName().getString());
+
+                // Sync discovery data to the client when they join
+                if (player instanceof ServerPlayer) {
+                    ServerPlayer serverPlayer = (ServerPlayer) player;
+                    serverPlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
+                        SyncDiscoveryDataPacket packet = new SyncDiscoveryDataPacket(discovery.getDiscoveredSet());
+                        NETWORK_CHANNEL.send(PacketDistributor.PLAYER.with(() -> serverPlayer), packet);
+                        BlockPopsMod.LOGGER.info("Synced {} discovered figures to {}",
+                                discovery.getDiscoveredSet().size(), serverPlayer.getName().getString());
+                    });
+                }
             }
         });
     }
@@ -89,6 +105,18 @@ public final class BlockPopsModForge {
                 DropBoxPacket::encode,
                 DropBoxPacket::decode,
                 DropBoxPacket::handle
+        );
+        NETWORK_CHANNEL.registerMessage(packetId++,
+                SyncDiscoveryDataPacket.class,
+                SyncDiscoveryDataPacket::encode,
+                SyncDiscoveryDataPacket::decode,
+                SyncDiscoveryDataPacket::handle
+        );
+        NETWORK_CHANNEL.registerMessage(packetId++,
+                UnlockFigurePacket.class,
+                UnlockFigurePacket::encode,
+                UnlockFigurePacket::decode,
+                UnlockFigurePacket::handle
         );
     }
 }

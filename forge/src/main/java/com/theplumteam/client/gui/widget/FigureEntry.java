@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import com.theplumteam.blockentity.BoxBlockEntity;
+import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.model.FigureModel;
 import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.client.Minecraft;
@@ -72,34 +73,62 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             FigureDefinition figure = figures.get(i);
             int figureX = x + i * (FIGURE_SIZE + GRID_SPACING);
 
-            // Draw background
-            graphics.fill(figureX, y, figureX + FIGURE_SIZE, y + FIGURE_SIZE, 0x30FFFFFF);
+            // Check if this figure has been discovered
+            String uniqueFigureId = collectionId + ":" + figure.getId();
+            boolean isDiscovered = ClientDiscoveryManager.isDiscovered(uniqueFigureId);
+
+            // Draw background (darker for undiscovered figures)
+            if (isDiscovered) {
+                graphics.fill(figureX, y, figureX + FIGURE_SIZE, y + FIGURE_SIZE, 0x30FFFFFF);
+            } else {
+                graphics.fill(figureX, y, figureX + FIGURE_SIZE, y + FIGURE_SIZE, 0x50000000);
+            }
 
             // Check if mouse is hovering over this specific figure
             boolean isFigureHovered = mouseX >= figureX && mouseX < figureX + FIGURE_SIZE &&
                                      mouseY >= y && mouseY < y + FIGURE_SIZE;
 
             if (isFigureHovered) {
-                graphics.fill(figureX, y, figureX + FIGURE_SIZE, y + FIGURE_SIZE, 0x40FFFFFF);
-            }
-
-            // Render the 3D figure model
-            render3DFigure(graphics, figure, figureX, y, FIGURE_SIZE, partialTick);
-
-            // Draw figure name
-            Component figureName = Component.literal(figure.getName());
-            int nameWidth = mc.font.width(figureName);
-            if (nameWidth > FIGURE_SIZE - 4) {
-                String truncated = figure.getName();
-                while (mc.font.width(truncated + "...") > FIGURE_SIZE - 4 && truncated.length() > 0) {
-                    truncated = truncated.substring(0, truncated.length() - 1);
+                if (isDiscovered) {
+                    graphics.fill(figureX, y, figureX + FIGURE_SIZE, y + FIGURE_SIZE, 0x40FFFFFF);
+                } else {
+                    graphics.fill(figureX, y, figureX + FIGURE_SIZE, y + FIGURE_SIZE, 0x60000000);
                 }
-                figureName = Component.literal(truncated + "...");
             }
 
-            int nameX = figureX + (FIGURE_SIZE - mc.font.width(figureName)) / 2;
-            int nameY = y + FIGURE_SIZE - mc.font.lineHeight - 2;
-            graphics.drawString(mc.font, figureName, nameX, nameY, 0xFFFFFF, true);
+            if (isDiscovered) {
+                // Render the 3D figure model for discovered figures
+                render3DFigure(graphics, figure, figureX, y, FIGURE_SIZE, partialTick);
+
+                // Draw figure name
+                Component figureName = Component.literal(figure.getName());
+                int nameWidth = mc.font.width(figureName);
+                if (nameWidth > FIGURE_SIZE - 4) {
+                    String truncated = figure.getName();
+                    while (mc.font.width(truncated + "...") > FIGURE_SIZE - 4 && truncated.length() > 0) {
+                        truncated = truncated.substring(0, truncated.length() - 1);
+                    }
+                    figureName = Component.literal(truncated + "...");
+                }
+
+                int nameX = figureX + (FIGURE_SIZE - mc.font.width(figureName)) / 2;
+                int nameY = y + FIGURE_SIZE - mc.font.lineHeight - 2;
+                graphics.drawString(mc.font, figureName, nameX, nameY, 0xFFFFFF, true);
+            } else {
+                // Draw a question mark for undiscovered figures
+                Component questionMark = Component.literal("?");
+                int qmWidth = mc.font.width(questionMark);
+                int qmX = figureX + (FIGURE_SIZE - qmWidth) / 2;
+                int qmY = y + (FIGURE_SIZE - mc.font.lineHeight) / 2;
+                graphics.drawString(mc.font, questionMark, qmX, qmY, 0x808080, false);
+
+                // Draw "???" as the name
+                Component unknownName = Component.literal("???");
+                int unknownNameWidth = mc.font.width(unknownName);
+                int unknownNameX = figureX + (FIGURE_SIZE - unknownNameWidth) / 2;
+                int unknownNameY = y + FIGURE_SIZE - mc.font.lineHeight - 2;
+                graphics.drawString(mc.font, unknownName, unknownNameX, unknownNameY, 0x808080, true);
+            }
         }
     }
 
@@ -190,9 +219,19 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         if (figures.isEmpty()) {
             return Component.literal("Empty row");
         } else if (figures.size() == 1) {
-            return Component.literal(figures.get(0).getName());
+            FigureDefinition figure = figures.get(0);
+            String uniqueFigureId = collectionId + ":" + figure.getId();
+            boolean isDiscovered = ClientDiscoveryManager.isDiscovered(uniqueFigureId);
+            return Component.literal(isDiscovered ? figure.getName() : "Undiscovered Figure");
         } else {
-            return Component.literal(figures.size() + " figures");
+            int discoveredCount = 0;
+            for (FigureDefinition figure : figures) {
+                String uniqueFigureId = collectionId + ":" + figure.getId();
+                if (ClientDiscoveryManager.isDiscovered(uniqueFigureId)) {
+                    discoveredCount++;
+                }
+            }
+            return Component.literal(discoveredCount + " of " + figures.size() + " figures discovered");
         }
     }
 

@@ -1,8 +1,10 @@
 package com.theplumteam.network;
 
+import com.theplumteam.capability.PlayerDiscoveryProvider;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -12,6 +14,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.network.PacketDistributor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,6 +84,30 @@ public class DropBoxPacket {
                             // Select a random figure from the collection
                             Random random = new Random();
                             FigureDefinition randomFigure = figures.get(random.nextInt(figures.size()));
+
+                            // Create unique figure ID for discovery tracking
+                            String uniqueFigureId = packet.collectionId + ":" + randomFigure.getId();
+
+                            // Check if this is a new discovery
+                            player.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
+                                if (!discovery.isDiscovered(uniqueFigureId)) {
+                                    // Mark as discovered on the server
+                                    discovery.discover(uniqueFigureId);
+
+                                    // Notify the client of the new discovery
+                                    UnlockFigurePacket unlockPacket = new UnlockFigurePacket(uniqueFigureId, randomFigure.getName());
+                                    BlockPopsModForge.NETWORK_CHANNEL.send(
+                                        PacketDistributor.PLAYER.with(() -> player),
+                                        unlockPacket
+                                    );
+
+                                    LOGGER.info("Player {} discovered new figure: {} ({})",
+                                            player.getName().getString(), randomFigure.getName(), uniqueFigureId);
+                                } else {
+                                    LOGGER.debug("Player {} received duplicate figure: {} ({})",
+                                            player.getName().getString(), randomFigure.getName(), uniqueFigureId);
+                                }
+                            });
 
                             // Create NBT data for the box with the random figure
                             CompoundTag blockEntityTag = new CompoundTag();
