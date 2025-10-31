@@ -11,7 +11,8 @@ public class BuiltInCollections {
     public static final List<String> COLLECTION_IDS = List.of(
         "default",
         "star_wars",
-        "jojos"
+        "jojos",
+        "jujutsukaisen"
         // Add more collections as needed
     );
 
@@ -23,6 +24,7 @@ public class BuiltInCollections {
             case "default" -> "Default";
             case "star_wars" -> "Star Wars";
             case "jojos" -> "JoJos";
+            case "jujutsukaisen" -> "Jujutsu Kaisen";
             default -> collectionId;
         };
     }

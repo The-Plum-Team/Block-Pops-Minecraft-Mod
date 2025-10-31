@@ -17,12 +17,16 @@ public class FigureCollection {
     private final String id;
     private final String name;
     private final ResourceLocation boxTexture;
+    private final ResourceLocation logoTexture; // Optional: logo to display on the box
+    private final String logoType; // Optional: "square", "wide", or "tall" (defaults to "square")
     private final List<FigureDefinition> figures;
 
-    public FigureCollection(String id, String name, ResourceLocation boxTexture, List<FigureDefinition> figures) {
+    public FigureCollection(String id, String name, ResourceLocation boxTexture, ResourceLocation logoTexture, String logoType, List<FigureDefinition> figures) {
         this.id = id;
         this.name = name;
         this.boxTexture = boxTexture;
+        this.logoTexture = logoTexture;
+        this.logoType = logoType != null ? logoType : "square";
         this.figures = new ArrayList<>(figures);
     }
 
@@ -34,6 +38,15 @@ public class FigureCollection {
         String name = json.get("name").getAsString();
         ResourceLocation boxTexture = new ResourceLocation(json.get("box_texture").getAsString());
 
+        // Logo texture is optional
+        ResourceLocation logoTexture = null;
+        if (json.has("logo_texture")) {
+            logoTexture = new ResourceLocation(json.get("logo_texture").getAsString());
+        }
+
+        // Logo type is optional (defaults to "square")
+        String logoType = json.has("logo_type") ? json.get("logo_type").getAsString() : "square";
+
         List<FigureDefinition> figures = new ArrayList<>();
         JsonArray figuresArray = json.getAsJsonArray("figures");
         for (int i = 0; i < figuresArray.size(); i++) {
@@ -41,7 +54,7 @@ public class FigureCollection {
             figures.add(FigureDefinition.fromJson(figureJson));
         }
 
-        return new FigureCollection(id, name, boxTexture, figures);
+        return new FigureCollection(id, name, boxTexture, logoTexture, logoType, figures);
     }
 
     public String getId() {
@@ -54,6 +67,14 @@ public class FigureCollection {
 
     public ResourceLocation getBoxTexture() {
         return boxTexture;
+    }
+
+    public ResourceLocation getLogoTexture() {
+        return logoTexture;
+    }
+
+    public String getLogoType() {
+        return logoType;
     }
 
     public List<FigureDefinition> getFigures() {

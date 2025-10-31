@@ -2,6 +2,8 @@
   "id": "jojos",
   "name": "JoJo's Bizarre Adventure Collection",
   "box_texture": "blockpops:textures/block/box/jojos.png",
+  "logo_texture": "blockpops:textures/block/box/logo/logo_jojos.png",
+  "logo_type": "wide",
   "figures": [
     {
       "id": "josuke",

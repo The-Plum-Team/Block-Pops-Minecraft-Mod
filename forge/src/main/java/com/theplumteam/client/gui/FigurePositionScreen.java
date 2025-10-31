@@ -20,21 +20,31 @@ public class FigurePositionScreen extends Screen {
     private double offsetY;
     private double offsetZ;
     private double scale;
+    private double hitboxOffsetX;
+    private double hitboxOffsetY;
+    private double hitboxOffsetZ;
 
     private AbstractSliderButton sliderX;
     private AbstractSliderButton sliderY;
     private AbstractSliderButton sliderZ;
     private AbstractSliderButton sliderScale;
+    private AbstractSliderButton sliderHitboxX;
+    private AbstractSliderButton sliderHitboxY;
+    private AbstractSliderButton sliderHitboxZ;
 
-    public FigurePositionScreen(BlockPos blockPos, double offsetX, double offsetY, double offsetZ, double scale) {
-        super(Component.literal("Adjust Figure Position"));
+    public FigurePositionScreen(BlockPos blockPos, double offsetX, double offsetY, double offsetZ, double scale,
+                                double hitboxOffsetX, double hitboxOffsetY, double hitboxOffsetZ) {
+        super(Component.literal("Adjust Figure & Hitbox Position"));
         this.blockPos = blockPos;
         this.offsetX = offsetX;
         this.offsetY = offsetY;
         this.offsetZ = offsetZ;
         this.scale = scale;
-        LOGGER.info("FigurePositionScreen opened at {} with offsets: X={}, Y={}, Z={}, Scale={}",
-                    blockPos, offsetX, offsetY, offsetZ, scale);
+        this.hitboxOffsetX = hitboxOffsetX;
+        this.hitboxOffsetY = hitboxOffsetY;
+        this.hitboxOffsetZ = hitboxOffsetZ;
+        LOGGER.info("FigurePositionScreen opened at {} with offsets: X={}, Y={}, Z={}, Scale={}, HitboxOffsets: X={}, Y={}, Z={}",
+                    blockPos, offsetX, offsetY, offsetZ, scale, hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ);
     }
 
     @Override
@@ -42,7 +52,9 @@ public class FigurePositionScreen extends Screen {
         super.init();
 
         int centerX = this.width / 2;
-        int startY = this.height / 2 - 60;
+        int startY = this.height / 2 - 120;
+
+        // === FIGURE CONTROLS ===
 
         // X Offset Slider (-1 to 1)
         this.sliderX = new AbstractSliderButton(centerX - 100, startY, 200, 20,
@@ -120,20 +132,82 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderScale);
 
+        // === HITBOX CONTROLS ===
+
+        // Hitbox X Offset Slider (-1 to 1)
+        this.sliderHitboxX = new AbstractSliderButton(centerX - 100, startY + 130, 200, 20,
+                Component.literal("Hitbox X: " + String.format("%.2f", hitboxOffsetX)),
+                (hitboxOffsetX + 1.0) / 2.0) {
+            @Override
+            protected void updateMessage() {
+                hitboxOffsetX = (this.value * 2.0) - 1.0;
+                this.setMessage(Component.literal("Hitbox X: " + String.format("%.2f", hitboxOffsetX)));
+                sendUpdate();
+            }
+
+            @Override
+            protected void applyValue() {
+                hitboxOffsetX = (this.value * 2.0) - 1.0;
+                sendUpdate();
+            }
+        };
+        this.addRenderableWidget(sliderHitboxX);
+
+        // Hitbox Y Offset Slider (-1 to 1)
+        this.sliderHitboxY = new AbstractSliderButton(centerX - 100, startY + 160, 200, 20,
+                Component.literal("Hitbox Y: " + String.format("%.2f", hitboxOffsetY)),
+                (hitboxOffsetY + 1.0) / 2.0) {
+            @Override
+            protected void updateMessage() {
+                hitboxOffsetY = (this.value * 2.0) - 1.0;
+                this.setMessage(Component.literal("Hitbox Y: " + String.format("%.2f", hitboxOffsetY)));
+                sendUpdate();
+            }
+
+            @Override
+            protected void applyValue() {
+                hitboxOffsetY = (this.value * 2.0) - 1.0;
+                sendUpdate();
+            }
+        };
+        this.addRenderableWidget(sliderHitboxY);
+
+        // Hitbox Z Offset Slider (-1 to 1)
+        this.sliderHitboxZ = new AbstractSliderButton(centerX - 100, startY + 190, 200, 20,
+                Component.literal("Hitbox Z: " + String.format("%.2f", hitboxOffsetZ)),
+                (hitboxOffsetZ + 1.0) / 2.0) {
+            @Override
+            protected void updateMessage() {
+                hitboxOffsetZ = (this.value * 2.0) - 1.0;
+                this.setMessage(Component.literal("Hitbox Z: " + String.format("%.2f", hitboxOffsetZ)));
+                sendUpdate();
+            }
+
+            @Override
+            protected void applyValue() {
+                hitboxOffsetZ = (this.value * 2.0) - 1.0;
+                sendUpdate();
+            }
+        };
+        this.addRenderableWidget(sliderHitboxZ);
+
         // Reset Button
         this.addRenderableWidget(Button.builder(Component.literal("Reset"), button -> {
             offsetX = 0.0;
             offsetY = 0.1;
             offsetZ = 0.0;
             scale = 1.0;
+            hitboxOffsetX = -0.03;
+            hitboxOffsetY = 0.0;
+            hitboxOffsetZ = -0.06;
             this.rebuildWidgets();
             sendUpdate();
-        }).bounds(centerX - 100, startY + 120, 95, 20).build());
+        }).bounds(centerX - 100, startY + 220, 95, 20).build());
 
         // Done Button
         this.addRenderableWidget(Button.builder(Component.literal("Done"), button -> {
             this.onClose();
-        }).bounds(centerX + 5, startY + 120, 95, 20).build());
+        }).bounds(centerX + 5, startY + 220, 95, 20).build());
     }
 
     @Override
@@ -158,9 +232,10 @@ public class FigurePositionScreen extends Screen {
 
     private void sendUpdate() {
         // Send packet to server with new values
-        LOGGER.info("Sending update - Position: {}, Offsets: X={}, Y={}, Z={}, Scale={}",
-                    blockPos, offsetX, offsetY, offsetZ, scale);
-        FigurePositionPacket packet = new FigurePositionPacket(blockPos, offsetX, offsetY, offsetZ, scale);
+        LOGGER.info("Sending update - Position: {}, Offsets: X={}, Y={}, Z={}, Scale={}, HitboxOffsets: X={}, Y={}, Z={}",
+                    blockPos, offsetX, offsetY, offsetZ, scale, hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ);
+        FigurePositionPacket packet = new FigurePositionPacket(blockPos, offsetX, offsetY, offsetZ, scale,
+                                                               hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ);
         BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
     }
 

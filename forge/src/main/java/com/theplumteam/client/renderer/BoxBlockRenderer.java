@@ -5,6 +5,8 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.model.BoxBlockModel;
 import com.theplumteam.client.model.FigureModel;
+import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -63,6 +65,9 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
             // Render the figure face on the box
             renderFigureFace(poseStack, animatable, model, bufferSource, partialTick, packedLight, packedOverlay);
         }
+
+        // Render the collection logo on the box
+        renderLogo(poseStack, animatable, model, bufferSource, partialTick, packedLight, packedOverlay);
     }
 
     private void renderFigureFace(PoseStack poseStack, BoxBlockEntity animatable, BakedGeoModel model,
@@ -75,13 +80,74 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         RenderType figureRenderType = RenderType.entityCutoutNoCull(figureTexture);
         VertexConsumer figureBuffer = bufferSource.getBuffer(figureRenderType);
 
-        // Find the "figure_face" bone
+        // Get the figure model to access the head bone
+        BakedGeoModel figureModel = figureRenderer.getGeoModel().getBakedModel(
+            figureRenderer.getGeoModel().getModelResource(animatable)
+        );
+
+        // Find the head bone in the figure model
+        GeoBone figureHeadBone = null;
+        for (GeoBone bone : figureModel.topLevelBones()) {
+            if (bone.getName().equals("head")) {
+                figureHeadBone = bone;
+                break;
+            }
+        }
+
+        // Render both the flat texture layer and 3D head layer
         for (GeoBone bone : model.topLevelBones()) {
             if (bone.getName().equals("figure_face")) {
+                // Render flat texture layer
+                poseStack.pushPose();
+                renderRecursively(poseStack, animatable, bone, figureRenderType, bufferSource, figureBuffer,
+                                true, partialTick, packedLight, packedOverlay, 1, 1, 1, 1);
+                poseStack.popPose();
+            } else if (bone.getName().equals("figure_head_3d") && figureHeadBone != null) {
+                // Render 3D head layer at the bone's position
                 poseStack.pushPose();
 
-                // Render this bone with the figure texture using a special flag
-                renderRecursively(poseStack, animatable, bone, figureRenderType, bufferSource, figureBuffer,
+                // Translate to the bone's pivot point (as defined in the model)
+                poseStack.translate(bone.getPivotX() / 16.0f, bone.getPivotY() / 16.0f, bone.getPivotZ() / 16.0f);
+
+                // Scale the head to fit nicely
+                float headScale = 0.3f;
+                poseStack.scale(headScale, headScale, headScale);
+
+                // Render the figure's head bone with the figure texture
+                figureRenderer.renderRecursively(poseStack, animatable, figureHeadBone, figureRenderType,
+                                                bufferSource, figureBuffer, false, partialTick,
+                                                packedLight, packedOverlay, 1, 1, 1, 1);
+
+                poseStack.popPose();
+            }
+        }
+    }
+
+    private void renderLogo(PoseStack poseStack, BoxBlockEntity animatable, BakedGeoModel model,
+                           MultiBufferSource bufferSource, float partialTick, int packedLight, int packedOverlay) {
+        // Get logo texture from collection
+        String collectionId = animatable.getCollectionId();
+        FigureCollection collection = CollectionRegistry.getCollection(collectionId).orElse(null);
+
+        if (collection == null) return;
+
+        ResourceLocation logoTexture = collection.getLogoTexture();
+        if (logoTexture == null) return;
+
+        RenderType logoRenderType = RenderType.entityCutoutNoCull(logoTexture);
+        VertexConsumer logoBuffer = bufferSource.getBuffer(logoRenderType);
+
+        // Find the appropriate logo bone based on collection ID
+        // Match any bone that starts with "logo_" or "Logo_" and contains the collection ID (case-insensitive)
+        for (GeoBone bone : model.topLevelBones()) {
+            String boneName = bone.getName();
+            // Check if this bone is a logo bone that matches our collection
+            if ((boneName.startsWith("logo_") || boneName.startsWith("Logo_")) &&
+                boneName.toLowerCase().contains(collectionId.toLowerCase())) {
+                poseStack.pushPose();
+
+                // Render this bone with the logo texture using a special flag
+                renderRecursively(poseStack, animatable, bone, logoRenderType, bufferSource, logoBuffer,
                                 true, partialTick, packedLight, packedOverlay, 1, 1, 1, 1);
 
                 poseStack.popPose();
@@ -95,10 +161,12 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                                   MultiBufferSource bufferSource, VertexConsumer buffer, boolean isReRender,
                                   float partialTick, int packedLight, int packedOverlay,
                                   float red, float green, float blue, float alpha) {
-        // Skip rendering the "figure_face" bone during normal box rendering
-        // It will be rendered separately with the figure texture
-        // When isReRender is true, we're rendering it with the figure texture
-        if (bone.getName().equals("figure_face") && !isReRender) {
+        // Skip rendering the "figure_face", "figure_head_3d", and logo bones during normal box rendering
+        // They will be rendered separately with their own textures
+        // When isReRender is true, we're rendering them with the appropriate texture
+        String boneName = bone.getName();
+        boolean isLogoBone = boneName.startsWith("logo_") || boneName.startsWith("Logo_");
+        if ((boneName.equals("figure_face") || boneName.equals("figure_head_3d") || isLogoBone) && !isReRender) {
             return;
         }
 

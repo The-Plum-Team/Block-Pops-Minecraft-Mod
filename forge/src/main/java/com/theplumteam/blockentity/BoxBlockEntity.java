@@ -37,6 +37,11 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     private double figureOffsetZ = -0.55;
     private double figureScale = 1.0;
 
+    // Hitbox offset - allows fine-tuning hitbox position
+    private double hitboxOffsetX = -0.03;
+    private double hitboxOffsetY = 0.00;
+    private double hitboxOffsetZ = -0.06;
+
     public BoxBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.BOX_BLOCK.get(), pos, blockState);
     }
@@ -136,6 +141,28 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
     }
 
+    public double getHitboxOffsetX() {
+        return hitboxOffsetX;
+    }
+
+    public double getHitboxOffsetY() {
+        return hitboxOffsetY;
+    }
+
+    public double getHitboxOffsetZ() {
+        return hitboxOffsetZ;
+    }
+
+    public void setHitboxOffset(double x, double y, double z) {
+        this.hitboxOffsetX = x;
+        this.hitboxOffsetY = y;
+        this.hitboxOffsetZ = z;
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        }
+    }
+
     @Override
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
@@ -144,6 +171,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         tag.putDouble("FigureOffsetY", figureOffsetY);
         tag.putDouble("FigureOffsetZ", figureOffsetZ);
         tag.putDouble("FigureScale", figureScale);
+        tag.putDouble("HitboxOffsetX", hitboxOffsetX);
+        tag.putDouble("HitboxOffsetY", hitboxOffsetY);
+        tag.putDouble("HitboxOffsetZ", hitboxOffsetZ);
     }
 
     @Override
@@ -163,6 +193,15 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
         if (tag.contains("FigureScale")) {
             this.figureScale = tag.getDouble("FigureScale");
+        }
+        if (tag.contains("HitboxOffsetX")) {
+            this.hitboxOffsetX = tag.getDouble("HitboxOffsetX");
+        }
+        if (tag.contains("HitboxOffsetY")) {
+            this.hitboxOffsetY = tag.getDouble("HitboxOffsetY");
+        }
+        if (tag.contains("HitboxOffsetZ")) {
+            this.hitboxOffsetZ = tag.getDouble("HitboxOffsetZ");
         }
     }
 

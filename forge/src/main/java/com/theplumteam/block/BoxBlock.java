@@ -32,13 +32,46 @@ public class BoxBlock extends BaseEntityBlock {
 
     // Custom hitbox matching the main square of the box model
     // Box dimensions based on geo.json: approximately 9x14x11 units, centered
-    private static final VoxelShape SHAPE = Block.box(
-        3.5,  // minX - offset from west edge
+    // Each facing direction needs its own hitbox, moved 1 pixel forward in that direction
+
+    // NORTH (facing -Z): Width (X) = 9 units, Depth (Z) = 11 units, shifted -1 in Z
+    private static final VoxelShape SHAPE_NORTH = Block.box(
+        3.5,  // minX - 9 units width centered at X=8
         0,    // minY - starts at ground
-        2.5,  // minZ - offset from north edge
-        12.5, // maxX - offset from west edge
+        1.5,  // minZ - moved forward (north = -Z)
+        12.5, // maxX
         14,   // maxY - height of box
-        13.5  // maxZ - offset from north edge
+        12.5  // maxZ
+    );
+
+    // SOUTH (facing +Z): Width (X) = 9 units, Depth (Z) = 11 units, shifted +1 in Z
+    private static final VoxelShape SHAPE_SOUTH = Block.box(
+        3.5,  // minX - 9 units width centered at X=8
+        0,    // minY - starts at ground
+        3.5,  // minZ - moved forward (south = +Z)
+        12.5, // maxX
+        14,   // maxY - height of box
+        14.5  // maxZ
+    );
+
+    // EAST (facing +X): Width (X) = 11 units, Depth (Z) = 9 units, shifted +1 in X
+    private static final VoxelShape SHAPE_EAST = Block.box(
+        3.5,  // minX - moved forward (east = +X)
+        0,    // minY - starts at ground
+        3.5,  // minZ - 9 units depth centered at Z=8
+        14.5, // maxX
+        14,   // maxY - height of box
+        12.5  // maxZ
+    );
+
+    // WEST (facing -X): Width (X) = 11 units, Depth (Z) = 9 units, shifted -1 in X
+    private static final VoxelShape SHAPE_WEST = Block.box(
+        1.5,  // minX - moved forward (west = -X)
+        0,    // minY - starts at ground
+        3.5,  // minZ - 9 units depth centered at Z=8
+        12.5, // maxX
+        14,   // maxY - height of box
+        12.5  // maxZ
     );
 
     private final String collectionId;
@@ -66,7 +99,51 @@ public class BoxBlock extends BaseEntityBlock {
 
     @Override
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return SHAPE;
+        Direction facing = state.getValue(FACING);
+        VoxelShape baseShape = switch (facing) {
+            case NORTH -> SHAPE_NORTH;
+            case SOUTH -> SHAPE_SOUTH;
+            case EAST -> SHAPE_EAST;
+            case WEST -> SHAPE_WEST;
+            default -> SHAPE_NORTH; // Fallback, should never happen
+        };
+
+        // Apply hitbox offsets from block entity if available
+        if (level.getBlockEntity(pos) instanceof BoxBlockEntity boxBlockEntity) {
+            double localOffsetX = boxBlockEntity.getHitboxOffsetX(); // Right offset (perpendicular to facing)
+            double localOffsetY = boxBlockEntity.getHitboxOffsetY(); // Up offset
+            double localOffsetZ = boxBlockEntity.getHitboxOffsetZ(); // Forward offset (along facing)
+
+            // Only apply offset if at least one is non-zero (performance optimization)
+            if (localOffsetX != 0.0 || localOffsetY != 0.0 || localOffsetZ != 0.0) {
+                // Transform local offsets to world offsets based on facing direction
+                double worldOffsetX = 0;
+                double worldOffsetZ = 0;
+
+                switch (facing) {
+                    case NORTH: // Facing -Z
+                        worldOffsetX = localOffsetX;   // Right is +X
+                        worldOffsetZ = -localOffsetZ;  // Forward is -Z
+                        break;
+                    case SOUTH: // Facing +Z
+                        worldOffsetX = -localOffsetX;  // Right is -X
+                        worldOffsetZ = localOffsetZ;   // Forward is +Z
+                        break;
+                    case EAST:  // Facing +X
+                        worldOffsetX = localOffsetZ;   // Forward is +X
+                        worldOffsetZ = localOffsetX;   // Right is +Z
+                        break;
+                    case WEST:  // Facing -X
+                        worldOffsetX = -localOffsetZ;  // Forward is -X
+                        worldOffsetZ = -localOffsetX;  // Right is -Z
+                        break;
+                }
+
+                return baseShape.move(worldOffsetX, localOffsetY, worldOffsetZ);
+            }
+        }
+
+        return baseShape;
     }
 
     @Nullable
@@ -97,7 +174,10 @@ public class BoxBlock extends BaseEntityBlock {
                     boxBlockEntity.getFigureOffsetX(),
                     boxBlockEntity.getFigureOffsetY(),
                     boxBlockEntity.getFigureOffsetZ(),
-                    boxBlockEntity.getFigureScale()
+                    boxBlockEntity.getFigureScale(),
+                    boxBlockEntity.getHitboxOffsetX(),
+                    boxBlockEntity.getHitboxOffsetY(),
+                    boxBlockEntity.getHitboxOffsetZ()
                 ));
                 return InteractionResult.SUCCESS;
             }
