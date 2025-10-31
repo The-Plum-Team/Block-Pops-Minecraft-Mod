@@ -170,6 +170,14 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
     }
 
+    /**
+     * Sets the collection ID override (used for dynamic collections like world_players)
+     */
+    public void setCollectionIdOverride(String collectionId) {
+        this.collectionIdOverride = collectionId;
+        setChanged();
+    }
+
     @Override
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
