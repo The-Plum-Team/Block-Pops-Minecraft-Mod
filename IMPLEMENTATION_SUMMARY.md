@@ -2,7 +2,7 @@
 
 ## Overview
 
-Successfully implemented a data-driven, scalable system for figure collections that allows adding new themed collections (Star Wars, JoJos, etc.) without modifying code. The system is fully JSON-based and supports unlimited collections and figures.
+Successfully implemented a data-driven, scalable system for figure collections that allows adding new themed collections (JoJos, Jujutsu Kaisen, etc.) without modifying code. The system is fully JSON-based and supports unlimited collections and figures.
 
 ## What Was Implemented
 
@@ -43,31 +43,31 @@ forge/src/main/resources/assets/blockpops/
 ├── collections/                    [NEW DIRECTORY]
 │   ├── README.md
 │   ├── default.json
-│   ├── star_wars.json
-│   └── jojos.json
+│   ├── jojos.json
+│   └── jujutsukaisen.json
 ├── textures/
 │   ├── block/box/
 │   │   ├── default.png            [NEW - copy of Original.png]
-│   │   ├── star_wars.png          [NEW - placeholder]
-│   │   └── jojos.png              [NEW - placeholder]
+│   │   ├── jojos.png              [NEW - placeholder]
+│   │   └── jujutsukaisen.png      [NEW - placeholder]
 │   └── figure/
-│       ├── star_wars/             [NEW DIRECTORY]
-│       │   ├── luke.png
-│       │   ├── darth_vader.png
-│       │   └── yoda.png
-│       └── jojos/                 [NEW DIRECTORY]
-│           ├── jotaro.png
-│           ├── dio.png
-│           └── joseph.png
+│       ├── jojos/                 [NEW DIRECTORY]
+│       │   ├── jotaro.png
+│       │   ├── dio.png
+│       │   └── joseph.png
+│       └── jujutsukaisen/         [NEW DIRECTORY]
+│           ├── gojo.png
+│           ├── yuji.png
+│           └── sukuna.png
 ├── geo/figure/
-│   ├── star_wars/                 [NEW DIRECTORY]
+│   ├── jojos/                     [NEW DIRECTORY]
 │   │   └── [figure models]
-│   └── jojos/                     [NEW DIRECTORY]
+│   └── jujutsukaisen/             [NEW DIRECTORY]
 │       └── [figure models]
 └── animations/figure/
-    ├── star_wars/                 [NEW DIRECTORY]
+    ├── jojos/                     [NEW DIRECTORY]
     │   └── [animations]
-    └── jojos/                     [NEW DIRECTORY]
+    └── jujutsukaisen/             [NEW DIRECTORY]
         └── [animations]
 
 COLLECTIONS_GUIDE.md               [NEW - comprehensive docs]
@@ -143,16 +143,16 @@ BoxBlockRenderer.render()
 
 ```json
 {
-  "id": "star_wars",
-  "name": "Star Wars Collection",
-  "box_texture": "blockpops:textures/block/box/star_wars.png",
+  "id": "jojos",
+  "name": "JoJo's Collection",
+  "box_texture": "blockpops:textures/block/box/jojos.png",
   "figures": [
     {
-      "id": "luke",
-      "name": "Luke Skywalker",
-      "model": "blockpops:geo/figure/star_wars/luke.geo.json",
-      "texture": "blockpops:textures/figure/star_wars/luke.png",
-      "animation": "blockpops:animations/figure/star_wars/luke.animation.json"
+      "id": "jotaro",
+      "name": "Jotaro Kujo",
+      "model": "blockpops:geo/figure/jojos/jotaro.geo.json",
+      "texture": "blockpops:textures/figure/jojos/jotaro.png",
+      "animation": "blockpops:animations/figure/jojos/jotaro.animation.json"
     }
   ]
 }
@@ -205,7 +205,7 @@ BoxBlockRenderer.render()
 To verify the implementation works:
 
 - [ ] Build completes successfully
-- [ ] Three box blocks appear in creative tab (default, star_wars, jojos)
+- [ ] Three box blocks appear in creative tab (default, jojos, jujutsukaisen)
 - [ ] Placing boxes shows correct box textures
 - [ ] Setting figure ID shows correct figure skin
 - [ ] Figure positioning GUI works

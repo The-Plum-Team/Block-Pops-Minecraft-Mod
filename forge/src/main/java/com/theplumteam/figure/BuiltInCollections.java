@@ -10,7 +10,6 @@ public class BuiltInCollections {
     // Add new collection IDs here to automatically create box blocks for them
     public static final List<String> COLLECTION_IDS = List.of(
         "default",
-        "star_wars",
         "jojos",
         "jujutsukaisen"
         // Add more collections as needed
@@ -22,7 +21,6 @@ public class BuiltInCollections {
     public static String getDisplayName(String collectionId) {
         return switch (collectionId) {
             case "default" -> "Default";
-            case "star_wars" -> "Star Wars";
             case "jojos" -> "JoJos";
             case "jujutsukaisen" -> "Jujutsu Kaisen";
             default -> collectionId;

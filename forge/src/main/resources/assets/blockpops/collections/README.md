@@ -26,8 +26,8 @@ Each collection is defined in a JSON file with the following structure:
 ## Available Collections
 
 - **default.json** - Default collection with basic figures
-- **star_wars.json** - Star Wars themed collection
 - **jojos.json** - JoJo's Bizarre Adventure themed collection
+- **jujutsukaisen.json** - Jujutsu Kaisen themed collection
 
 ## Adding New Collections
 

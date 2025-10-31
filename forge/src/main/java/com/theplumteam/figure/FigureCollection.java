@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Represents a collection/edition of figures (e.g., Star Wars, JoJos, etc.)
+ * Represents a collection/edition of figures (e.g., JoJos, Jujutsu Kaisen, etc.)
  * Each collection has its own box texture and set of figures.
  */
 public class FigureCollection {

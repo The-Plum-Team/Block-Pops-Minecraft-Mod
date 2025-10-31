@@ -4,7 +4,7 @@ This guide explains how to add new figure collections to BlockPops without modif
 
 ## Overview
 
-The Figure Collections system allows you to create themed sets of figures (e.g., Star Wars, JoJos) with custom box textures. Each collection is defined through a simple JSON file and associated assets.
+The Figure Collections system allows you to create themed sets of figures (e.g., JoJos, Jujutsu Kaisen) with custom box textures. Each collection is defined through a simple JSON file and associated assets.
 
 ## Quick Start: Adding a New Collection
 
@@ -15,8 +15,8 @@ Edit `forge/src/main/java/com/theplumteam/figure/BuiltInCollections.java` and ad
 ```java
 public static final List<String> COLLECTION_IDS = List.of(
     "default",
-    "star_wars",
     "jojos",
+    "jujutsukaisen",
     "your_collection_name"  // Add your new collection here
 );
 ```
@@ -98,38 +98,38 @@ mkdir -p forge/src/main/resources/assets/blockpops/animations/figure/your_collec
 forge/src/main/resources/assets/blockpops/
 ├── collections/
 │   ├── default.json
-│   ├── star_wars.json
 │   ├── jojos.json
+│   ├── jujutsukaisen.json
 │   └── your_collection_name.json
 ├── textures/
 │   ├── block/box/
 │   │   ├── default.png
-│   │   ├── star_wars.png
 │   │   ├── jojos.png
+│   │   ├── jujutsukaisen.png
 │   │   └── your_collection_name.png
 │   └── figure/
-│       ├── star_wars/
-│       │   ├── luke.png
-│       │   ├── darth_vader.png
-│       │   └── yoda.png
 │       ├── jojos/
 │       │   ├── jotaro.png
 │       │   ├── dio.png
 │       │   └── joseph.png
+│       ├── jujutsukaisen/
+│       │   ├── gojo.png
+│       │   ├── yuji.png
+│       │   └── sukuna.png
 │       └── your_collection_name/
 │           └── character_1.png
 ├── geo/figure/
-│   ├── star_wars/
-│   │   └── luke.geo.json
 │   ├── jojos/
 │   │   └── jotaro.geo.json
+│   ├── jujutsukaisen/
+│   │   └── gojo.geo.json
 │   └── your_collection_name/
 │       └── character_1.geo.json
 └── animations/figure/
-    ├── star_wars/
-    │   └── luke.animation.json
     ├── jojos/
     │   └── jotaro.animation.json
+    ├── jujutsukaisen/
+    │   └── gojo.animation.json
     └── your_collection_name/
         └── character_1.animation.json
 ```
@@ -138,16 +138,16 @@ forge/src/main/resources/assets/blockpops/
 
 To add a new figure to an existing collection:
 
-1. Edit the collection JSON file (e.g., `collections/star_wars.json`)
+1. Edit the collection JSON file (e.g., `collections/jojos.json`)
 2. Add a new figure entry to the `figures` array:
 
 ```json
 {
   "id": "new_character",
   "name": "New Character",
-  "model": "blockpops:geo/figure/star_wars/new_character.geo.json",
-  "texture": "blockpops:textures/figure/star_wars/new_character.png",
-  "animation": "blockpops:animations/figure/star_wars/new_character.animation.json"
+  "model": "blockpops:geo/figure/jojos/new_character.geo.json",
+  "texture": "blockpops:textures/figure/jojos/new_character.png",
+  "animation": "blockpops:animations/figure/jojos/new_character.animation.json"
 }
 ```
 
@@ -240,5 +240,5 @@ case "marvel" -> "Marvel";  // in getDisplayName()
 
 Check the example collections:
 - `collections/default.json` - Simple single-figure collection
-- `collections/star_wars.json` - Multi-figure collection example
-- `collections/jojos.json` - Another multi-figure example
+- `collections/jojos.json` - Multi-figure collection example
+- `collections/jujutsukaisen.json` - Another multi-figure example
