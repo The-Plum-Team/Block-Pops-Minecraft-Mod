@@ -25,6 +25,8 @@ import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.HitResult;
 import org.jetbrains.annotations.Nullable;
 
 public class BoxBlock extends BaseEntityBlock {
@@ -197,5 +199,15 @@ public class BoxBlock extends BaseEntityBlock {
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         builder.add(FACING);
+    }
+
+    @Override
+    public ItemStack getCloneItemStack(BlockState state, HitResult target, BlockGetter level, BlockPos pos, Player player) {
+        ItemStack stack = super.getCloneItemStack(state, target, level, pos, player);
+        // Save block entity data to the ItemStack so figure data is preserved
+        if (level.getBlockEntity(pos) instanceof BoxBlockEntity boxBlockEntity) {
+            boxBlockEntity.saveToItem(stack);
+        }
+        return stack;
     }
 }
