@@ -47,6 +47,13 @@ public class BoxBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
             poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(90));
             poseStack.translate(-0.5, 0, -0.5);
 
+            // Scale down ground items to 70% size (after rotation to avoid pivot issues)
+            if (displayContext == ItemDisplayContext.GROUND) {
+                poseStack.translate(0.5, 0, 0.5); // Move to center
+                poseStack.scale(0.7F, 0.7F, 0.7F);
+                poseStack.translate(-0.5, 0.5, -0.5); // Move back and lift up
+            }
+
             // Get the partial tick time for smooth animations
             float partialTick = Minecraft.getInstance().getFrameTime();
 
