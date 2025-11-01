@@ -10,7 +10,8 @@ public class BuiltInCollections {
     // Add new collection IDs here to automatically create box blocks for them
     public static final List<String> COLLECTION_IDS = List.of(
         "jojos",
-        "jujutsukaisen"
+        "jujutsukaisen",
+        "adventuretime"
         // Add more collections as needed
     );
 
@@ -21,6 +22,7 @@ public class BuiltInCollections {
         return switch (collectionId) {
             case "jojos" -> "JoJos";
             case "jujutsukaisen" -> "Jujutsu Kaisen";
+            case "adventuretime" -> "Adventure Time";
             default -> collectionId;
         };
     }
