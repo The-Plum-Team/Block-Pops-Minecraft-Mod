@@ -78,4 +78,9 @@ public class CollectionListWidget extends ObjectSelectionList<CollectionEntry> {
         this.setScrollAmount(this.getScrollAmount() - amount * 15.0);
         return true;
     }
+
+    @Override
+    protected void renderSelection(net.minecraft.client.gui.GuiGraphics graphics, int top, int width, int height, int outerColor, int innerColor) {
+        // Disable default selection border - we handle selection rendering in CollectionEntry
+    }
 }
