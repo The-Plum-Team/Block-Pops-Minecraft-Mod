@@ -110,7 +110,10 @@ public class CollectionSelectionScreen extends Screen {
 
         // Calculate heights
         int topSectionHeight = scaledPadding + scaledComponentHeight + scaledPadding;
-        int bottomSectionHeight = (scaledComponentHeight * 2) + scaledSpacing + scaledPadding;
+        // Bottom section: token info text + spacing + token buttons + spacing + done button + padding
+        int tokenInfoHeight = font.lineHeight + scaledSpacing; // Space for token info text above buttons
+        int extraBottomSpacing = 5; // Additional spacing between lists and token info
+        int bottomSectionHeight = tokenInfoHeight + (scaledComponentHeight * 2) + scaledSpacing + scaledPadding + extraBottomSpacing;
         int listHeight = panelHeight - topSectionHeight - bottomSectionHeight;
 
         // Create collection list on the left

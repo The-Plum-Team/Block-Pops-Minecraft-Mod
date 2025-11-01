@@ -49,6 +49,9 @@ public class FigureListWidget extends ObjectSelectionList<FigureEntry> {
                 }
             }
         }
+
+        // Reset scroll to top when collection changes
+        this.setScrollAmount(0.0);
     }
 
     public void updateConfiguration(float modelScale, float xRotation, float yRotation, float zRotation,
