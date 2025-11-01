@@ -9,6 +9,7 @@ import com.theplumteam.network.ClawMachineCollectionPacket;
 import com.theplumteam.network.DropBoxPacket;
 import com.theplumteam.network.FigurePositionPacket;
 import com.theplumteam.network.SyncDiscoveryDataPacket;
+import com.theplumteam.network.SyncTokenDataPacket;
 import com.theplumteam.network.UnlockFigurePacket;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModBlocks;
@@ -24,6 +25,9 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
+
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 @Mod(BlockPopsMod.MOD_ID)
 public final class BlockPopsModForge {
@@ -72,14 +76,35 @@ public final class BlockPopsModForge {
                 CollectionRegistry.registerDynamicCollection(updatedCollection);
                 BlockPopsMod.LOGGER.debug("Updated World Players collection after player join: {}", player.getName().getString());
 
-                // Sync discovery data to the client when they join
+                // Sync discovery data and token data to the client when they join
                 if (player instanceof ServerPlayer) {
                     ServerPlayer serverPlayer = (ServerPlayer) player;
                     serverPlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
-                        SyncDiscoveryDataPacket packet = new SyncDiscoveryDataPacket(discovery.getDiscoveredSet());
-                        NETWORK_CHANNEL.send(PacketDistributor.PLAYER.with(() -> serverPlayer), packet);
+                        // Sync discovered figures
+                        SyncDiscoveryDataPacket discoveryPacket = new SyncDiscoveryDataPacket(discovery.getDiscoveredSet());
+                        NETWORK_CHANNEL.send(PacketDistributor.PLAYER.with(() -> serverPlayer), discoveryPacket);
                         BlockPopsMod.LOGGER.info("Synced {} discovered figures to {}",
                                 discovery.getDiscoveredSet().size(), serverPlayer.getName().getString());
+
+                        // Sync token data
+                        long gameTime = serverPlayer.serverLevel().getGameTime();
+                        long nextRegularTime = discovery.getNextRegularTokenTime();
+                        long ticksUntilNext = Math.max(0, nextRegularTime - gameTime);
+
+                        // Calculate millis until next special reset
+                        long millisUntilReset = calculateMillisUntilNextReset();
+
+                        SyncTokenDataPacket tokenPacket = new SyncTokenDataPacket(
+                                discovery.getRegularTokens(),
+                                ticksUntilNext,
+                                !discovery.hasUsedTodaySpecialToken(),
+                                millisUntilReset
+                        );
+                        NETWORK_CHANNEL.send(PacketDistributor.PLAYER.with(() -> serverPlayer), tokenPacket);
+                        BlockPopsMod.LOGGER.info("Synced token data to {}: {} regular tokens, special: {}",
+                                serverPlayer.getName().getString(),
+                                discovery.getRegularTokens(),
+                                !discovery.hasUsedTodaySpecialToken() ? "available" : "used");
                     });
                 }
             }
@@ -118,5 +143,26 @@ public final class BlockPopsModForge {
                 UnlockFigurePacket::decode,
                 UnlockFigurePacket::handle
         );
+        NETWORK_CHANNEL.registerMessage(packetId++,
+                SyncTokenDataPacket.class,
+                SyncTokenDataPacket::encode,
+                SyncTokenDataPacket::decode,
+                SyncTokenDataPacket::handle
+        );
+    }
+
+    /**
+     * Calculate milliseconds until the next daily reset at 18:00 UTC (6 PM).
+     */
+    private static long calculateMillisUntilNextReset() {
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
+        ZonedDateTime nextReset = now.withHour(18).withMinute(0).withSecond(0).withNano(0);
+
+        // If we're past reset hour today, next reset is tomorrow
+        if (now.getHour() >= 18) {
+            nextReset = nextReset.plusDays(1);
+        }
+
+        return nextReset.toInstant().toEpochMilli() - now.toInstant().toEpochMilli();
     }
 }

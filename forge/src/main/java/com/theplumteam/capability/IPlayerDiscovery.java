@@ -32,4 +32,54 @@ public interface IPlayerDiscovery {
      * @param discovered The new set of discovered figure IDs
      */
     void syncFrom(Set<String> discovered);
+
+    // Token System Methods
+
+    /**
+     * Get the number of regular tokens the player currently has.
+     * @return Number of regular tokens (0-3)
+     */
+    int getRegularTokens();
+
+    /**
+     * Set the number of regular tokens the player has.
+     * @param count Number of tokens (should be 0-3)
+     */
+    void setRegularTokens(int count);
+
+    /**
+     * Get the world time (in ticks) when the next regular token will be granted.
+     * @return World time in ticks for next token generation
+     */
+    long getNextRegularTokenTime();
+
+    /**
+     * Set the world time when the next regular token should be granted.
+     * @param worldTimeTicks World time in ticks
+     */
+    void setNextRegularTokenTime(long worldTimeTicks);
+
+    /**
+     * Get the timestamp (System.currentTimeMillis) of the last special token reset.
+     * @return Timestamp in milliseconds
+     */
+    long getLastSpecialTokenResetTimestamp();
+
+    /**
+     * Set the timestamp of the last special token reset.
+     * @param timestamp Timestamp in milliseconds from System.currentTimeMillis()
+     */
+    void setLastSpecialTokenResetTimestamp(long timestamp);
+
+    /**
+     * Check if the player has used their guaranteed token today.
+     * @return true if used, false if available
+     */
+    boolean hasUsedTodaySpecialToken();
+
+    /**
+     * Set whether the player has used their guaranteed token today.
+     * @param used true if used, false if available
+     */
+    void setUsedTodaySpecialToken(boolean used);
 }

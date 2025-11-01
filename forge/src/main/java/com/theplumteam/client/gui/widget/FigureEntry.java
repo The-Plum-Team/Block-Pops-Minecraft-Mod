@@ -96,6 +96,17 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 }
             }
 
+            // Draw border around each figure
+            int borderColor = isDiscovered ? 0x80FFFFFF : 0x60808080; // White for discovered, gray for undiscovered
+            // Top border
+            graphics.fill(figureX, y, figureX + FIGURE_SIZE, y + 1, borderColor);
+            // Bottom border
+            graphics.fill(figureX, y + FIGURE_SIZE - 1, figureX + FIGURE_SIZE, y + FIGURE_SIZE, borderColor);
+            // Left border
+            graphics.fill(figureX, y, figureX + 1, y + FIGURE_SIZE, borderColor);
+            // Right border
+            graphics.fill(figureX + FIGURE_SIZE - 1, y, figureX + FIGURE_SIZE, y + FIGURE_SIZE, borderColor);
+
             if (isDiscovered) {
                 // Render the 3D figure model for discovered figures
                 render3DFigure(graphics, figure, figureX, y, FIGURE_SIZE, partialTick);

@@ -1,18 +1,25 @@
 package com.theplumteam.client.gui;
 
+import com.theplumteam.BlockPopsMod;
+import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.widget.CollectionEntry;
 import com.theplumteam.client.gui.widget.CollectionListWidget;
 import com.theplumteam.client.gui.widget.FigureListWidget;
+import com.theplumteam.client.gui.widget.LinkButton;
+import com.theplumteam.client.token.ClientTokenManager;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
+import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.network.ClawMachineCollectionPacket;
 import com.theplumteam.network.DropBoxPacket;
+import com.theplumteam.network.TokenType;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -38,7 +45,8 @@ public class CollectionSelectionScreen extends Screen {
     private CollectionListWidget collectionListWidget;
     @Nullable
     private FigureListWidget figureListWidget;
-    private Button dropBoxButton;
+    private Button useRegularButton;
+    private Button useSpecialButton;
     private Button doneButton;
     private Button configButton;
 
@@ -50,8 +58,19 @@ public class CollectionSelectionScreen extends Screen {
 
     // Constants
     private static final int MIN_PANEL_WIDTH = 500;
-    private static final int MAX_PANEL_WIDTH = 800;
+    private static final int MAX_PANEL_WIDTH = 1200;
     private static final int MIN_PANEL_HEIGHT = 400;
+
+    // Icon textures
+    private static final ResourceLocation DISCORD_ICON = new ResourceLocation("blockpops", "textures/gui/discord_icon.png");
+    private static final ResourceLocation CURSEFORGE_ICON = new ResourceLocation("blockpops", "textures/gui/curseforge_icon.png");
+    private static final ResourceLocation MODRINTH_ICON = new ResourceLocation("blockpops", "textures/gui/modrinth_icon.png");
+    private static final ResourceLocation SETTINGS_ICON = new ResourceLocation("blockpops", "textures/gui/settings_icon.png");
+
+    // URLs
+    private static final String DISCORD_URL = "https://discord.gg/yGxdvA7qej";
+    private static final String CURSEFORGE_URL = "https://www.curseforge.com/minecraft/mc-mods/blockpops";
+    private static final String MODRINTH_URL = "https://modrinth.com/mod/blockpops";
 
     public CollectionSelectionScreen(BlockPos blockPos, String currentCollectionId) {
         super(Component.literal("Claw Machine Configuration"));
@@ -153,36 +172,108 @@ public class CollectionSelectionScreen extends Screen {
                 .build();
         this.addRenderableWidget(doneButton);
 
-        // Drop Box button
+        // Token buttons (side by side)
         bottomY -= (scaledComponentHeight + scaledSpacing);
-        dropBoxButton = Button.builder(Component.literal("Drop a Box from Selected Collection"), button -> {
+        int buttonWidth = (fullComponentWidth - scaledSpacing) / 2;
+
+        // Use Regular Token button (left)
+        useRegularButton = Button.builder(Component.literal("Use Regular Token"), button -> {
             if (selectedCollectionId != null && !selectedCollectionId.isEmpty()) {
-                LOGGER.info("Requesting box drop for collection: {}", selectedCollectionId);
-                DropBoxPacket packet = new DropBoxPacket(blockPos, selectedCollectionId);
+                LOGGER.info("Using regular token for collection: {}", selectedCollectionId);
+                DropBoxPacket packet = new DropBoxPacket(blockPos, selectedCollectionId, TokenType.REGULAR);
                 BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
             }
-        }).bounds(fullWidthX, bottomY, fullComponentWidth, scaledComponentHeight).build();
-        this.addRenderableWidget(dropBoxButton);
-        updateDropBoxButtonState();
+        }).bounds(fullWidthX, bottomY, buttonWidth, scaledComponentHeight).build();
+        this.addRenderableWidget(useRegularButton);
+
+        // Use Guaranteed Token button (right)
+        useSpecialButton = Button.builder(Component.literal("Use Guaranteed Token"), button -> {
+            if (selectedCollectionId != null && !selectedCollectionId.isEmpty()) {
+                LOGGER.info("Using guaranteed token for collection: {}", selectedCollectionId);
+                DropBoxPacket packet = new DropBoxPacket(blockPos, selectedCollectionId, TokenType.GUARANTEED);
+                BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
+            }
+        }).bounds(fullWidthX + buttonWidth + scaledSpacing, bottomY, buttonWidth, scaledComponentHeight).build();
+        this.addRenderableWidget(useSpecialButton);
+
+        updateTokenButtonStates();
+
+        // --- Top-Right Link Buttons (Settings, Discord, CurseForge, Modrinth) ---
+        int buttonSize = scaledComponentHeight;
+        int linkButtonY = panelY + scaledPadding;
+
+        // Settings button (far right)
+        int settingsButtonX = panelX + panelWidth - buttonSize - scaledPadding;
+        this.addRenderableWidget(new LinkButton(
+                settingsButtonX,
+                linkButtonY,
+                buttonSize,
+                buttonSize,
+                SETTINGS_ICON,
+                null, // No URL, will be handled differently
+                Component.literal("Settings")
+        ) {
+            @Override
+            public void onPress() {
+                // TODO: Open settings screen
+                BlockPopsMod.LOGGER.info("Settings button pressed");
+            }
+        });
+
+        // Discord button (left of settings)
+        int discordButtonX = settingsButtonX - buttonSize - scaledSpacing;
+        this.addRenderableWidget(new LinkButton(
+                discordButtonX,
+                linkButtonY,
+                buttonSize,
+                buttonSize,
+                DISCORD_ICON,
+                DISCORD_URL,
+                Component.literal("Join our Discord!")
+        ));
+
+        // CurseForge button (left of Discord)
+        int curseforgeButtonX = discordButtonX - buttonSize - scaledSpacing;
+        this.addRenderableWidget(new LinkButton(
+                curseforgeButtonX,
+                linkButtonY,
+                buttonSize,
+                buttonSize,
+                CURSEFORGE_ICON,
+                CURSEFORGE_URL,
+                Component.literal("Visit our CurseForge page")
+        ));
+
+        // Modrinth button (left of CurseForge)
+        int modrinthButtonX = curseforgeButtonX - buttonSize - scaledSpacing;
+        this.addRenderableWidget(new LinkButton(
+                modrinthButtonX,
+                linkButtonY,
+                buttonSize,
+                buttonSize,
+                MODRINTH_ICON,
+                MODRINTH_URL,
+                Component.literal("Visit our Modrinth page")
+        ));
     }
 
     /**
      * Calculate panel dimensions based on screen size
      */
     private void calculatePanelDimensions() {
-        int desiredWidth = (int)(this.width * 0.7f);
-        int desiredHeight = (int)(this.height * 0.8f);
+        int desiredWidth = (int)(this.width * 0.8f);  // Increased from 0.7 to 0.8 (10% increase)
+        int desiredHeight = (int)(this.height * 0.85f); // Increased from 0.8 to 0.85 (5% increase)
 
         panelWidth = Mth.clamp(
             desiredWidth,
             MIN_PANEL_WIDTH,
-            Math.min(MAX_PANEL_WIDTH, this.width - 80)
+            Math.min(MAX_PANEL_WIDTH, this.width - 60)
         );
 
         panelHeight = Mth.clamp(
             desiredHeight,
             MIN_PANEL_HEIGHT,
-            this.height - 80
+            this.height - 60
         );
 
         // Center the panel
@@ -198,14 +289,8 @@ public class CollectionSelectionScreen extends Screen {
         // Render panel background (frosted glass effect)
         renderPanel(graphics);
 
-        // Render title
-        graphics.drawCenteredString(
-                this.font,
-                this.title,
-                this.width / 2,
-                panelY + 10,
-                0xFFFFFF
-        );
+        // Render token information header (replacing title)
+        renderTokenInfo(graphics);
 
         // Render figure panel header
         renderFigurePanelHeader(graphics);
@@ -304,17 +389,109 @@ public class CollectionSelectionScreen extends Screen {
             sendUpdate();
 
             // Update button states
-            updateDropBoxButtonState();
+            updateTokenButtonStates();
         }
     }
 
     /**
-     * Update the drop box button state based on selection
+     * Update the token button states based on selection and token availability
      */
-    private void updateDropBoxButtonState() {
-        if (dropBoxButton != null) {
-            dropBoxButton.active = selectedCollectionId != null && !selectedCollectionId.isEmpty();
+    private void updateTokenButtonStates() {
+        boolean hasSelection = selectedCollectionId != null && !selectedCollectionId.isEmpty();
+
+        if (useRegularButton != null) {
+            useRegularButton.active = hasSelection && ClientTokenManager.getRegularTokens() > 0;
         }
+
+        if (useSpecialButton != null) {
+            boolean collectionComplete = hasSelection && isCollectionComplete();
+            useSpecialButton.active = hasSelection && ClientTokenManager.hasSpecialToken() && !collectionComplete;
+        }
+    }
+
+    /**
+     * Check if the selected collection is complete (all figures discovered)
+     */
+    private boolean isCollectionComplete() {
+        if (selectedCollectionId == null || selectedCollectionId.isEmpty()) {
+            return false;
+        }
+
+        return CollectionRegistry.getCollection(selectedCollectionId)
+                .map(collection -> {
+                    for (FigureDefinition figure : collection.getFigures()) {
+                        String figureId = collection.getId() + ":" + figure.getId();
+                        if (!ClientDiscoveryManager.isDiscovered(figureId)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .orElse(false);
+    }
+
+    /**
+     * Render token information in a single row across the header with colors
+     */
+    private void renderTokenInfo(GuiGraphics graphics) {
+        int scaledPadding = 10;
+        int tokenInfoY = panelY + 10; // Same position where title was
+
+        // Colors
+        int blueColor = 0x5599FF;  // Blue for regular tokens
+        int goldColor = 0xFFD700;  // Gold for guaranteed tokens
+        int whiteColor = 0xFFFFFF; // White for separators
+
+        // Build text components
+        int regularTokens = ClientTokenManager.getRegularTokens();
+        String regularText = "Regular Tokens: " + regularTokens + "/3";
+
+        String regularTimeText = "";
+        if (regularTokens < 3) {
+            String nextRegularTime = ClientTokenManager.formatNextRegularTime();
+            regularTimeText = " - Next: " + nextRegularTime;
+        }
+
+        boolean hasSpecial = ClientTokenManager.hasSpecialToken();
+        String specialText = "Guaranteed Token: " + (hasSpecial ? "Available" : "Used");
+
+        String specialTimeText = "";
+        if (!hasSpecial) {
+            String nextSpecialTime = ClientTokenManager.formatNextSpecialResetTime();
+            specialTimeText = " - Resets: " + nextSpecialTime;
+        }
+
+        String separator = "  |  ";
+
+        // Calculate total width for centering
+        int totalWidth = font.width(regularText) + font.width(regularTimeText) +
+                        font.width(separator) + font.width(specialText) + font.width(specialTimeText);
+
+        int currentX = panelX + (panelWidth - totalWidth) / 2;
+
+        // Draw regular tokens section in blue
+        graphics.drawString(this.font, regularText, currentX, tokenInfoY, blueColor, false);
+        currentX += font.width(regularText);
+
+        graphics.drawString(this.font, regularTimeText, currentX, tokenInfoY, blueColor, false);
+        currentX += font.width(regularTimeText);
+
+        // Draw separator in white
+        graphics.drawString(this.font, separator, currentX, tokenInfoY, whiteColor, false);
+        currentX += font.width(separator);
+
+        // Draw guaranteed tokens section in gold
+        graphics.drawString(this.font, specialText, currentX, tokenInfoY, goldColor, false);
+        currentX += font.width(specialText);
+
+        graphics.drawString(this.font, specialTimeText, currentX, tokenInfoY, goldColor, false);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        // Update button states each tick to reflect token changes
+        updateTokenButtonStates();
     }
 
     /**
