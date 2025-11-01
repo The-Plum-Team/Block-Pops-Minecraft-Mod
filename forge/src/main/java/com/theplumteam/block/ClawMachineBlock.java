@@ -101,9 +101,9 @@ public class ClawMachineBlock extends BaseEntityBlock {
         if (pos.getY() < level.getMaxBuildHeight() - 1
             && level.getBlockState(pos.above()).canBeReplaced(context)) {
 
-            // Rotate 90 degrees counter-clockwise from player's facing direction to face the player
+            // Face the player directly (opposite of player's facing direction)
             Direction playerFacing = context.getHorizontalDirection();
-            Direction blockFacing = playerFacing.getCounterClockWise();
+            Direction blockFacing = playerFacing.getOpposite();
 
             return this.defaultBlockState()
                 .setValue(FACING, blockFacing)
