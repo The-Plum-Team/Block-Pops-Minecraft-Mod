@@ -68,10 +68,16 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth,
                       int entryHeight, int mouseX, int mouseY, boolean isMouseOver, float partialTick) {
 
-        // Render each figure in this row (up to 3)
+        // Calculate total width of all figures in this row
+        int totalFiguresWidth = figures.size() * FIGURE_SIZE + (figures.size() - 1) * GRID_SPACING;
+
+        // Calculate starting X position to center the figures
+        int startX = x + (entryWidth - totalFiguresWidth) / 2;
+
+        // Render each figure in this row (up to 4)
         for (int i = 0; i < figures.size(); i++) {
             FigureDefinition figure = figures.get(i);
-            int figureX = x + i * (FIGURE_SIZE + GRID_SPACING);
+            int figureX = startX + i * (FIGURE_SIZE + GRID_SPACING);
 
             // Check if this figure has been discovered
             String uniqueFigureId = collectionId + ":" + figure.getId();
@@ -133,12 +139,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 int qmY = y + (FIGURE_SIZE - mc.font.lineHeight) / 2;
                 graphics.drawString(mc.font, questionMark, qmX, qmY, 0x808080, false);
 
-                // Draw "???" as the name
-                Component unknownName = Component.literal("???");
-                int unknownNameWidth = mc.font.width(unknownName);
-                int unknownNameX = figureX + (FIGURE_SIZE - unknownNameWidth) / 2;
-                int unknownNameY = y + FIGURE_SIZE - mc.font.lineHeight - 2;
-                graphics.drawString(mc.font, unknownName, unknownNameX, unknownNameY, 0x808080, true);
+                // Don't show name for undiscovered figures
             }
         }
     }
