@@ -2,6 +2,7 @@ package com.theplumteam.forge;
 
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.capability.PlayerDiscoveryProvider;
+import com.theplumteam.command.GetBoxCommand;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.PlayerCollectionGenerator;
@@ -20,6 +21,8 @@ import dev.architectury.event.events.common.PlayerEvent;
 import dev.architectury.platform.forge.EventBuses;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.network.NetworkRegistry;
@@ -55,8 +58,20 @@ public final class BlockPopsModForge {
         // Register server lifecycle events
         registerServerEvents();
 
+        // Register commands
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(this);
+
         // Run our common setup.
         BlockPopsMod.init();
+    }
+
+    /**
+     * Register commands when the server starts
+     */
+    @SubscribeEvent
+    public void onRegisterCommands(RegisterCommandsEvent event) {
+        GetBoxCommand.register(event.getDispatcher());
+        BlockPopsMod.LOGGER.info("Registered /blockpops getbox command");
     }
 
     private void registerServerEvents() {
