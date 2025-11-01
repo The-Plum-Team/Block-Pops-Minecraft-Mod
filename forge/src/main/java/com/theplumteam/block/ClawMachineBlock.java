@@ -77,7 +77,7 @@ public class ClawMachineBlock extends BaseEntityBlock {
             ? pos
             : pos.below();
 
-        if (level.isClientSide && player.isShiftKeyDown()) {
+        if (level.isClientSide) {
             BlockEntity blockEntity = level.getBlockEntity(lowerPos);
             if (blockEntity instanceof ClawMachineBlockEntity clawMachineBlockEntity) {
                 // Open the collection selection screen
