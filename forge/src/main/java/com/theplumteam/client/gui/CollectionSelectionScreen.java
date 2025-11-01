@@ -186,7 +186,7 @@ public class CollectionSelectionScreen extends Screen {
         updateTokenButtonStates();
 
         // --- Top-Right Link Buttons (Discord, CurseForge, Modrinth) ---
-        int buttonSize = scaledComponentHeight;
+        int buttonSize = 24; // Larger button size (previously scaledComponentHeight which was 20)
         int linkButtonY = panelY + scaledPadding;
 
         // Discord button (far right)
@@ -400,60 +400,55 @@ public class CollectionSelectionScreen extends Screen {
     }
 
     /**
-     * Render token information in a single row across the header with colors
+     * Render token information centered above each respective button
      */
     private void renderTokenInfo(GuiGraphics graphics) {
         int scaledPadding = 10;
-        int tokenInfoY = panelY + 10; // Same position where title was
+        int scaledSpacing = 6;
+        int scaledComponentHeight = 20;
+
+        // Calculate position to be above the token buttons
+        int bottomY = panelY + panelHeight - scaledPadding;
+        bottomY -= scaledComponentHeight; // Done button
+        bottomY -= (scaledComponentHeight + scaledSpacing); // Token buttons
+        int tokenInfoY = bottomY - font.lineHeight - scaledSpacing; // Above the token buttons
 
         // Colors
         int blueColor = 0x5599FF;  // Blue for regular tokens
         int goldColor = 0xFFD700;  // Gold for guaranteed tokens
-        int whiteColor = 0xFFFFFF; // White for separators
 
-        // Build text components
+        // Calculate button positions (same as in init())
+        int fullWidthX = panelX + scaledPadding;
+        int fullComponentWidth = panelWidth - (scaledPadding * 2);
+        int buttonWidth = (fullComponentWidth - scaledSpacing) / 2;
+
+        // Regular token section (centered above left button)
         int regularTokens = ClientTokenManager.getRegularTokens();
         String regularText = "Regular Tokens: " + regularTokens + "/3";
-
-        String regularTimeText = "";
         if (regularTokens < 3) {
             String nextRegularTime = ClientTokenManager.formatNextRegularTime();
-            regularTimeText = " - Next: " + nextRegularTime;
+            regularText += " - Next: " + nextRegularTime;
         }
 
+        // Center text above regular button
+        int regularButtonCenterX = fullWidthX + (buttonWidth / 2);
+        int regularTextWidth = font.width(regularText);
+        int regularTextX = regularButtonCenterX - (regularTextWidth / 2);
+        graphics.drawString(this.font, regularText, regularTextX, tokenInfoY, blueColor, false);
+
+        // Guaranteed token section (centered above right button)
         boolean hasSpecial = ClientTokenManager.hasSpecialToken();
         String specialText = "Guaranteed Token: " + (hasSpecial ? "Available" : "Used");
-
-        String specialTimeText = "";
         if (!hasSpecial) {
             String nextSpecialTime = ClientTokenManager.formatNextSpecialResetTime();
-            specialTimeText = " - Resets: " + nextSpecialTime;
+            specialText += " - Resets: " + nextSpecialTime;
         }
 
-        String separator = "  |  ";
-
-        // Calculate total width for centering
-        int totalWidth = font.width(regularText) + font.width(regularTimeText) +
-                        font.width(separator) + font.width(specialText) + font.width(specialTimeText);
-
-        int currentX = panelX + (panelWidth - totalWidth) / 2;
-
-        // Draw regular tokens section in blue
-        graphics.drawString(this.font, regularText, currentX, tokenInfoY, blueColor, false);
-        currentX += font.width(regularText);
-
-        graphics.drawString(this.font, regularTimeText, currentX, tokenInfoY, blueColor, false);
-        currentX += font.width(regularTimeText);
-
-        // Draw separator in white
-        graphics.drawString(this.font, separator, currentX, tokenInfoY, whiteColor, false);
-        currentX += font.width(separator);
-
-        // Draw guaranteed tokens section in gold
-        graphics.drawString(this.font, specialText, currentX, tokenInfoY, goldColor, false);
-        currentX += font.width(specialText);
-
-        graphics.drawString(this.font, specialTimeText, currentX, tokenInfoY, goldColor, false);
+        // Center text above guaranteed button
+        int specialButtonCenterX = fullWidthX + buttonWidth + scaledSpacing + (buttonWidth / 2);
+        int specialTextWidth = font.width(specialText);
+        int specialTextX = specialButtonCenterX - (specialTextWidth / 2);
+        graphics.drawString(this.font, specialText, specialTextX, tokenInfoY, goldColor, false);
     }
 
     @Override
