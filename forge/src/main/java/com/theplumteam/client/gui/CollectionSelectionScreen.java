@@ -75,6 +75,16 @@ public class CollectionSelectionScreen extends Screen {
         this.blockPos = blockPos;
         this.selectedCollectionId = currentCollectionId;
         this.collections = new ArrayList<>(CollectionRegistry.getAllCollections());
+
+        // Sort collections to show players' collection first
+        this.collections.sort((c1, c2) -> {
+            boolean c1IsPlayers = "world_players".equals(c1.getId());
+            boolean c2IsPlayers = "world_players".equals(c2.getId());
+            if (c1IsPlayers && !c2IsPlayers) return -1;
+            if (!c1IsPlayers && c2IsPlayers) return 1;
+            return 0; // Keep original order for other collections
+        });
+
         LOGGER.info("CollectionSelectionScreen opened at {} with current collection: {}",
                     blockPos, currentCollectionId);
     }
