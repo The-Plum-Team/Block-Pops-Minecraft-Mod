@@ -48,7 +48,6 @@ public class CollectionSelectionScreen extends Screen {
     private Button useRegularButton;
     private Button useSpecialButton;
     private Button doneButton;
-    private Button configButton;
 
     // Panel dimensions
     private int panelX;
@@ -65,7 +64,6 @@ public class CollectionSelectionScreen extends Screen {
     private static final ResourceLocation DISCORD_ICON = new ResourceLocation("blockpops", "textures/gui/discord_icon.png");
     private static final ResourceLocation CURSEFORGE_ICON = new ResourceLocation("blockpops", "textures/gui/curseforge_icon.png");
     private static final ResourceLocation MODRINTH_ICON = new ResourceLocation("blockpops", "textures/gui/modrinth_icon.png");
-    private static final ResourceLocation SETTINGS_ICON = new ResourceLocation("blockpops", "textures/gui/settings_icon.png");
 
     // URLs
     private static final String DISCORD_URL = "https://discord.gg/yGxdvA7qej";
@@ -140,17 +138,6 @@ public class CollectionSelectionScreen extends Screen {
         figureListWidget.setRenderTopAndBottom(false);
         this.addRenderableWidget(figureListWidget);
 
-        // Config button (gear icon) in top right of figure panel
-        int configButtonSize = 20;
-        int configButtonX = previewX + rightPanelWidth - configButtonSize - 4;
-        int configButtonY = yPos + 4;
-        configButton = Button.builder(Component.literal("⚙"), button -> {
-            if (figureListWidget != null && minecraft != null) {
-                minecraft.setScreen(new PreviewConfigScreen(this, figureListWidget));
-            }
-        }).bounds(configButtonX, configButtonY, configButtonSize, configButtonSize).build();
-        this.addRenderableWidget(configButton);
-
         // Update preview if there's a selected collection
         if (selectedCollectionId != null && !selectedCollectionId.isEmpty()) {
             CollectionRegistry.getCollection(selectedCollectionId).ifPresent(collection -> {
@@ -198,30 +185,12 @@ public class CollectionSelectionScreen extends Screen {
 
         updateTokenButtonStates();
 
-        // --- Top-Right Link Buttons (Settings, Discord, CurseForge, Modrinth) ---
+        // --- Top-Right Link Buttons (Discord, CurseForge, Modrinth) ---
         int buttonSize = scaledComponentHeight;
         int linkButtonY = panelY + scaledPadding;
 
-        // Settings button (far right)
-        int settingsButtonX = panelX + panelWidth - buttonSize - scaledPadding;
-        this.addRenderableWidget(new LinkButton(
-                settingsButtonX,
-                linkButtonY,
-                buttonSize,
-                buttonSize,
-                SETTINGS_ICON,
-                null, // No URL, will be handled differently
-                Component.literal("Settings")
-        ) {
-            @Override
-            public void onPress() {
-                // TODO: Open settings screen
-                BlockPopsMod.LOGGER.info("Settings button pressed");
-            }
-        });
-
-        // Discord button (left of settings)
-        int discordButtonX = settingsButtonX - buttonSize - scaledSpacing;
+        // Discord button (far right)
+        int discordButtonX = panelX + panelWidth - buttonSize - scaledPadding;
         this.addRenderableWidget(new LinkButton(
                 discordButtonX,
                 linkButtonY,
