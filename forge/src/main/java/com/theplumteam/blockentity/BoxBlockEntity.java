@@ -366,6 +366,15 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
     }
 
+    /**
+     * Saves this block entity's data to an ItemStack
+     */
+    public void saveToItem(net.minecraft.world.item.ItemStack stack) {
+        CompoundTag tag = new CompoundTag();
+        saveAdditional(tag);
+        stack.addTagElement("BlockEntityTag", tag);
+    }
+
     public static <T extends BlockEntity> void tick(Level level, BlockPos pos, BlockState state, T blockEntity) {
         if (level.isClientSide && blockEntity instanceof BoxBlockEntity boxBlockEntity) {
             // Animation ticking handled automatically by GeckoLib

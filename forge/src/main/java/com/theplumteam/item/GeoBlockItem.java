@@ -2,11 +2,22 @@ package com.theplumteam.item;
 
 import com.theplumteam.block.BoxBlock;
 import com.theplumteam.client.renderer.BoxBlockItemRenderer;
+import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.figure.FigureCollection;
+import com.theplumteam.figure.FigureDefinition;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraftforge.client.extensions.common.IClientItemExtensions;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.function.Consumer;
 
 public class GeoBlockItem extends BlockItem {
@@ -18,6 +29,99 @@ public class GeoBlockItem extends BlockItem {
 
     public BoxBlock getBoxBlock() {
         return (BoxBlock) getBlock();
+    }
+
+    @Override
+    public Component getName(ItemStack stack) {
+        // Only customize name for BoxBlock items
+        if (!(getBlock() instanceof BoxBlock boxBlock)) {
+            return super.getName(stack);
+        }
+
+        // Try to get collection ID and figure ID from NBT
+        CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
+        String collectionId = null;
+        String figureId = "";
+
+        if (blockEntityTag != null) {
+            // Check for collection ID override (for dynamic collections)
+            if (blockEntityTag.contains("CollectionId")) {
+                collectionId = blockEntityTag.getString("CollectionId");
+            }
+            // Get figure ID if present
+            if (blockEntityTag.contains("FigureId")) {
+                figureId = blockEntityTag.getString("FigureId");
+            }
+        }
+
+        // If no collection ID in NBT, get from the block
+        if (collectionId == null || collectionId.isEmpty()) {
+            collectionId = boxBlock.getCollectionId();
+        }
+
+        // If still no collection ID, use default naming
+        if (collectionId == null || collectionId.isEmpty()) {
+            return super.getName(stack);
+        }
+
+        // Look up the collection
+        FigureCollection collection = CollectionRegistry.getCollection(collectionId).orElse(null);
+        if (collection == null) {
+            return super.getName(stack);
+        }
+
+        String collectionName = collection.getName();
+
+        // If there's a figure, just show the figure name
+        if (figureId != null && !figureId.isEmpty()) {
+            FigureDefinition figure = collection.getFigure(figureId).orElse(null);
+            if (figure != null) {
+                // Show only the figure name in white
+                return Component.literal(figure.getName()).withStyle(ChatFormatting.WHITE);
+            }
+        }
+
+        // No figure, use "Collection Name Box"
+        return Component.literal(collectionName + " Box");
+    }
+
+    @Override
+    public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
+        super.appendHoverText(stack, level, tooltip, flag);
+
+        // Only add tooltip for BoxBlock items
+        if (!(getBlock() instanceof BoxBlock boxBlock)) {
+            return;
+        }
+
+        // Try to get collection ID from NBT or block
+        CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
+        String collectionId = null;
+        String figureId = "";
+
+        if (blockEntityTag != null) {
+            if (blockEntityTag.contains("CollectionId")) {
+                collectionId = blockEntityTag.getString("CollectionId");
+            }
+            if (blockEntityTag.contains("FigureId")) {
+                figureId = blockEntityTag.getString("FigureId");
+            }
+        }
+
+        if (collectionId == null || collectionId.isEmpty()) {
+            collectionId = boxBlock.getCollectionId();
+        }
+
+        if (collectionId == null || collectionId.isEmpty()) {
+            return;
+        }
+
+        // Look up the collection and add to tooltip if figure exists
+        FigureCollection collection = CollectionRegistry.getCollection(collectionId).orElse(null);
+        if (collection != null && figureId != null && !figureId.isEmpty()) {
+            // Add collection name to tooltip
+            tooltip.add(Component.literal(collection.getName()).withStyle(ChatFormatting.GRAY));
+        }
     }
 
     @Override
