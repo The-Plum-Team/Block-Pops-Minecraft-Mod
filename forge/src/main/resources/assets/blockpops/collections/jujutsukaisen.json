@@ -1,6 +1,8 @@
 {
   "id": "jujutsukaisen",
   "name": "Jujutsu Kaisen Collection",
+  "author": "strawbrysage",
+  "author_url": "https://www.planetminecraft.com/member/strawbrysage",
   "box_texture": "blockpops:textures/block/box/jujutsukaisen.png",
   "logo": {
     "texture": "blockpops:textures/block/box/logo/logo_jujutsukaisen.png",

@@ -120,7 +120,7 @@ public class CollectionSelectionScreen extends Screen {
             leftPanelWidth,
             listHeight,
             yPos,
-            36 // Entry height
+            55 // Entry height - adjusted for optimal spacing
         );
         collectionListWidget.setLeftPos(componentX);
         collectionListWidget.setRenderBackground(false);

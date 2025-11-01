@@ -98,6 +98,8 @@ public class PlayerCollectionGenerator {
             return new FigureCollection(
                 COLLECTION_ID,
                 COLLECTION_NAME,
+                "Minecraft",  // Author for player collection
+                null,  // No URL for player collection
                 boxTexture,
                 null,  // No logo for player collection
                 playerFigures
@@ -117,6 +119,8 @@ public class PlayerCollectionGenerator {
         return new FigureCollection(
             COLLECTION_ID,
             COLLECTION_NAME,
+            "Minecraft",  // Author for player collection
+            null,  // No URL for player collection
             boxTexture,
             null,  // No logo for player collection
             new ArrayList<>()

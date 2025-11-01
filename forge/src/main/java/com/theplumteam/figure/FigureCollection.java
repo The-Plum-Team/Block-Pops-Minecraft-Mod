@@ -61,13 +61,17 @@ public class FigureCollection {
 
     private final String id;
     private final String name;
+    private final String author;
+    private final String authorUrl; // Optional: URL to creator's page
     private final ResourceLocation boxTexture;
     private final LogoConfig logoConfig; // Optional: logo configuration for display on the box
     private final List<FigureDefinition> figures;
 
-    public FigureCollection(String id, String name, ResourceLocation boxTexture, LogoConfig logoConfig, List<FigureDefinition> figures) {
+    public FigureCollection(String id, String name, String author, String authorUrl, ResourceLocation boxTexture, LogoConfig logoConfig, List<FigureDefinition> figures) {
         this.id = id;
         this.name = name;
+        this.author = author;
+        this.authorUrl = authorUrl;
         this.boxTexture = boxTexture;
         this.logoConfig = logoConfig;
         this.figures = new ArrayList<>(figures);
@@ -79,6 +83,8 @@ public class FigureCollection {
     public static FigureCollection fromJson(JsonObject json) {
         String id = json.get("id").getAsString();
         String name = json.get("name").getAsString();
+        String author = json.has("author") ? json.get("author").getAsString() : "Unknown";
+        String authorUrl = json.has("author_url") ? json.get("author_url").getAsString() : null;
         ResourceLocation boxTexture = new ResourceLocation(json.get("box_texture").getAsString());
 
         // Parse logo configuration (optional)
@@ -117,7 +123,7 @@ public class FigureCollection {
             figures.add(FigureDefinition.fromJson(figureJson));
         }
 
-        return new FigureCollection(id, name, boxTexture, logoConfig, figures);
+        return new FigureCollection(id, name, author, authorUrl, boxTexture, logoConfig, figures);
     }
 
     public String getId() {
@@ -126,6 +132,14 @@ public class FigureCollection {
 
     public String getName() {
         return name;
+    }
+
+    public String getAuthor() {
+        return author;
+    }
+
+    public String getAuthorUrl() {
+        return authorUrl;
     }
 
     public ResourceLocation getBoxTexture() {
