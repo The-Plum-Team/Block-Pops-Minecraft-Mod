@@ -43,6 +43,14 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     private double hitboxOffsetY = 0.00;
     private double hitboxOffsetZ = -0.06;
 
+    // Logo configuration - allows adjusting logo position and scale per box
+    // null values mean use the collection's default configuration
+    private Double logoPositionX = null;
+    private Double logoPositionY = null;
+    private Double logoPositionZ = null;
+    private Double logoScaleX = null;
+    private Double logoScaleY = null;
+
     public BoxBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.BOX_BLOCK.get(), pos, blockState);
     }
@@ -177,6 +185,45 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
     }
 
+    public Double getLogoPositionX() {
+        return logoPositionX;
+    }
+
+    public Double getLogoPositionY() {
+        return logoPositionY;
+    }
+
+    public Double getLogoPositionZ() {
+        return logoPositionZ;
+    }
+
+    public Double getLogoScaleX() {
+        return logoScaleX;
+    }
+
+    public Double getLogoScaleY() {
+        return logoScaleY;
+    }
+
+    public void setLogoPosition(Double x, Double y, Double z) {
+        this.logoPositionX = x;
+        this.logoPositionY = y;
+        this.logoPositionZ = z;
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        }
+    }
+
+    public void setLogoScale(Double scaleX, Double scaleY) {
+        this.logoScaleX = scaleX;
+        this.logoScaleY = scaleY;
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        }
+    }
+
     /**
      * Sets the collection ID override (used for dynamic collections like world_players)
      */
@@ -199,6 +246,21 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         tag.putDouble("HitboxOffsetX", hitboxOffsetX);
         tag.putDouble("HitboxOffsetY", hitboxOffsetY);
         tag.putDouble("HitboxOffsetZ", hitboxOffsetZ);
+        if (logoPositionX != null) {
+            tag.putDouble("LogoPositionX", logoPositionX);
+        }
+        if (logoPositionY != null) {
+            tag.putDouble("LogoPositionY", logoPositionY);
+        }
+        if (logoPositionZ != null) {
+            tag.putDouble("LogoPositionZ", logoPositionZ);
+        }
+        if (logoScaleX != null) {
+            tag.putDouble("LogoScaleX", logoScaleX);
+        }
+        if (logoScaleY != null) {
+            tag.putDouble("LogoScaleY", logoScaleY);
+        }
     }
 
     @Override
@@ -230,6 +292,31 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
         if (tag.contains("HitboxOffsetZ")) {
             this.hitboxOffsetZ = tag.getDouble("HitboxOffsetZ");
+        }
+        if (tag.contains("LogoPositionX")) {
+            this.logoPositionX = tag.getDouble("LogoPositionX");
+        } else {
+            this.logoPositionX = null;
+        }
+        if (tag.contains("LogoPositionY")) {
+            this.logoPositionY = tag.getDouble("LogoPositionY");
+        } else {
+            this.logoPositionY = null;
+        }
+        if (tag.contains("LogoPositionZ")) {
+            this.logoPositionZ = tag.getDouble("LogoPositionZ");
+        } else {
+            this.logoPositionZ = null;
+        }
+        if (tag.contains("LogoScaleX")) {
+            this.logoScaleX = tag.getDouble("LogoScaleX");
+        } else {
+            this.logoScaleX = null;
+        }
+        if (tag.contains("LogoScaleY")) {
+            this.logoScaleY = tag.getDouble("LogoScaleY");
+        } else {
+            this.logoScaleY = null;
         }
     }
 

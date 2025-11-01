@@ -22,9 +22,16 @@ public class FigurePositionPacket {
     private final double hitboxOffsetX;
     private final double hitboxOffsetY;
     private final double hitboxOffsetZ;
+    private final Double logoPositionX;
+    private final Double logoPositionY;
+    private final Double logoPositionZ;
+    private final Double logoScaleX;
+    private final Double logoScaleY;
 
     public FigurePositionPacket(BlockPos pos, double offsetX, double offsetY, double offsetZ, double scale,
-                                double hitboxOffsetX, double hitboxOffsetY, double hitboxOffsetZ) {
+                                double hitboxOffsetX, double hitboxOffsetY, double hitboxOffsetZ,
+                                Double logoPositionX, Double logoPositionY, Double logoPositionZ,
+                                Double logoScaleX, Double logoScaleY) {
         this.pos = pos;
         this.offsetX = offsetX;
         this.offsetY = offsetY;
@@ -33,6 +40,11 @@ public class FigurePositionPacket {
         this.hitboxOffsetX = hitboxOffsetX;
         this.hitboxOffsetY = hitboxOffsetY;
         this.hitboxOffsetZ = hitboxOffsetZ;
+        this.logoPositionX = logoPositionX;
+        this.logoPositionY = logoPositionY;
+        this.logoPositionZ = logoPositionZ;
+        this.logoScaleX = logoScaleX;
+        this.logoScaleY = logoScaleY;
     }
 
     public static void encode(FigurePositionPacket packet, FriendlyByteBuf buffer) {
@@ -44,6 +56,17 @@ public class FigurePositionPacket {
         buffer.writeDouble(packet.hitboxOffsetX);
         buffer.writeDouble(packet.hitboxOffsetY);
         buffer.writeDouble(packet.hitboxOffsetZ);
+        // Write logo config (nullable fields)
+        buffer.writeBoolean(packet.logoPositionX != null);
+        if (packet.logoPositionX != null) buffer.writeDouble(packet.logoPositionX);
+        buffer.writeBoolean(packet.logoPositionY != null);
+        if (packet.logoPositionY != null) buffer.writeDouble(packet.logoPositionY);
+        buffer.writeBoolean(packet.logoPositionZ != null);
+        if (packet.logoPositionZ != null) buffer.writeDouble(packet.logoPositionZ);
+        buffer.writeBoolean(packet.logoScaleX != null);
+        if (packet.logoScaleX != null) buffer.writeDouble(packet.logoScaleX);
+        buffer.writeBoolean(packet.logoScaleY != null);
+        if (packet.logoScaleY != null) buffer.writeDouble(packet.logoScaleY);
     }
 
     public static FigurePositionPacket decode(FriendlyByteBuf buffer) {
@@ -55,7 +78,14 @@ public class FigurePositionPacket {
         double hitboxOffsetX = buffer.readDouble();
         double hitboxOffsetY = buffer.readDouble();
         double hitboxOffsetZ = buffer.readDouble();
-        return new FigurePositionPacket(pos, offsetX, offsetY, offsetZ, scale, hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ);
+        // Read logo config (nullable fields)
+        Double logoPositionX = buffer.readBoolean() ? buffer.readDouble() : null;
+        Double logoPositionY = buffer.readBoolean() ? buffer.readDouble() : null;
+        Double logoPositionZ = buffer.readBoolean() ? buffer.readDouble() : null;
+        Double logoScaleX = buffer.readBoolean() ? buffer.readDouble() : null;
+        Double logoScaleY = buffer.readBoolean() ? buffer.readDouble() : null;
+        return new FigurePositionPacket(pos, offsetX, offsetY, offsetZ, scale, hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ,
+                                       logoPositionX, logoPositionY, logoPositionZ, logoScaleX, logoScaleY);
     }
 
     public static void handle(FigurePositionPacket packet, Supplier<NetworkEvent.Context> contextSupplier) {
@@ -70,12 +100,14 @@ public class FigurePositionPacket {
                 BlockEntity blockEntity = player.level().getBlockEntity(packet.pos);
                 LOGGER.info("BlockEntity at {}: {}", packet.pos, blockEntity);
                 if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
-                    LOGGER.info("Setting figure offset, scale, and hitbox offset on BoxBlockEntity");
+                    LOGGER.info("Setting figure offset, scale, hitbox offset, and logo config on BoxBlockEntity");
                     boxBlockEntity.setFigureOffset(packet.offsetX, packet.offsetY, packet.offsetZ);
                     boxBlockEntity.setFigureScale(packet.scale);
                     boxBlockEntity.setHitboxOffset(packet.hitboxOffsetX, packet.hitboxOffsetY, packet.hitboxOffsetZ);
+                    boxBlockEntity.setLogoPosition(packet.logoPositionX, packet.logoPositionY, packet.logoPositionZ);
+                    boxBlockEntity.setLogoScale(packet.logoScaleX, packet.logoScaleY);
                     boxBlockEntity.setChanged();
-                    LOGGER.info("Figure and hitbox offsets updated successfully");
+                    LOGGER.info("Figure, hitbox offsets, and logo config updated successfully");
                 } else {
                     LOGGER.warn("BlockEntity is not a BoxBlockEntity!");
                 }

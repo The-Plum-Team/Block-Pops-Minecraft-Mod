@@ -126,26 +126,41 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
 
     private void renderLogo(PoseStack poseStack, BoxBlockEntity animatable, BakedGeoModel model,
                            MultiBufferSource bufferSource, float partialTick, int packedLight, int packedOverlay) {
-        // Get logo texture from collection
+        // Get logo configuration from collection
         String collectionId = animatable.getCollectionId();
         FigureCollection collection = CollectionRegistry.getCollection(collectionId).orElse(null);
 
         if (collection == null) return;
 
-        ResourceLocation logoTexture = collection.getLogoTexture();
-        if (logoTexture == null) return;
+        FigureCollection.LogoConfig collectionLogoConfig = collection.getLogoConfig();
+        if (collectionLogoConfig == null) return;
 
-        RenderType logoRenderType = RenderType.entityCutoutNoCull(logoTexture);
+        // Use entity-specific logo config if set, otherwise use collection defaults
+        float logoPositionX = animatable.getLogoPositionX() != null ?
+                              animatable.getLogoPositionX().floatValue() : collectionLogoConfig.getPositionX();
+        float logoPositionY = animatable.getLogoPositionY() != null ?
+                              animatable.getLogoPositionY().floatValue() : collectionLogoConfig.getPositionY();
+        float logoPositionZ = animatable.getLogoPositionZ() != null ?
+                              animatable.getLogoPositionZ().floatValue() : collectionLogoConfig.getPositionZ();
+        float logoScaleX = animatable.getLogoScaleX() != null ?
+                           animatable.getLogoScaleX().floatValue() : collectionLogoConfig.getScaleX();
+        float logoScaleY = animatable.getLogoScaleY() != null ?
+                           animatable.getLogoScaleY().floatValue() : collectionLogoConfig.getScaleY();
+
+        RenderType logoRenderType = RenderType.entityCutoutNoCull(collectionLogoConfig.getTexture());
         VertexConsumer logoBuffer = bufferSource.getBuffer(logoRenderType);
 
-        // Find the appropriate logo bone based on collection ID
-        // Match any bone that starts with "logo_" or "Logo_" and contains the collection ID (case-insensitive)
+        // Find the generic "logo" bone
         for (GeoBone bone : model.topLevelBones()) {
-            String boneName = bone.getName();
-            // Check if this bone is a logo bone that matches our collection
-            if ((boneName.startsWith("logo_") || boneName.startsWith("Logo_")) &&
-                boneName.toLowerCase().contains(collectionId.toLowerCase())) {
+            if (bone.getName().equals("logo")) {
                 poseStack.pushPose();
+
+                // Apply translate first, then scale (matrices apply in reverse order!)
+                // A vertex goes through: scale → translate
+                // This scales the 1x1 cube to desired size, then positions it correctly
+                // Note: logoScaleX controls width (Z axis), logoScaleY controls height (Y axis)
+                poseStack.translate(logoPositionX, logoPositionY, logoPositionZ);
+                poseStack.scale(1.0f, logoScaleY, logoScaleX);
 
                 // Render this bone with the logo texture using a special flag
                 renderRecursively(poseStack, animatable, bone, logoRenderType, bufferSource, logoBuffer,
@@ -162,12 +177,11 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                                   MultiBufferSource bufferSource, VertexConsumer buffer, boolean isReRender,
                                   float partialTick, int packedLight, int packedOverlay,
                                   float red, float green, float blue, float alpha) {
-        // Skip rendering the "figure_face", "figure_head_3d", and logo bones during normal box rendering
+        // Skip rendering the "figure_face", "figure_head_3d", and "logo" bone during normal box rendering
         // They will be rendered separately with their own textures
         // When isReRender is true, we're rendering them with the appropriate texture
         String boneName = bone.getName();
-        boolean isLogoBone = boneName.startsWith("logo_") || boneName.startsWith("Logo_");
-        if ((boneName.equals("figure_face") || boneName.equals("figure_head_3d") || isLogoBone) && !isReRender) {
+        if ((boneName.equals("figure_face") || boneName.equals("figure_head_3d") || boneName.equals("logo")) && !isReRender) {
             return;
         }
 

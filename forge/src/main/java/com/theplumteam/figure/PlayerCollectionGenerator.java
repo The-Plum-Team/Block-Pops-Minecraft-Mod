@@ -99,8 +99,7 @@ public class PlayerCollectionGenerator {
                 COLLECTION_ID,
                 COLLECTION_NAME,
                 boxTexture,
-                null,  // No logo texture for now
-                "square",
+                null,  // No logo for player collection
                 playerFigures
             );
 
@@ -119,8 +118,7 @@ public class PlayerCollectionGenerator {
             COLLECTION_ID,
             COLLECTION_NAME,
             boxTexture,
-            null,
-            "square",
+            null,  // No logo for player collection
             new ArrayList<>()
         );
     }

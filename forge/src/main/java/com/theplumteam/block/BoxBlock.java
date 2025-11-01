@@ -179,7 +179,12 @@ public class BoxBlock extends BaseEntityBlock {
                     boxBlockEntity.getFigureScale(),
                     boxBlockEntity.getHitboxOffsetX(),
                     boxBlockEntity.getHitboxOffsetY(),
-                    boxBlockEntity.getHitboxOffsetZ()
+                    boxBlockEntity.getHitboxOffsetZ(),
+                    boxBlockEntity.getLogoPositionX(),
+                    boxBlockEntity.getLogoPositionY(),
+                    boxBlockEntity.getLogoPositionZ(),
+                    boxBlockEntity.getLogoScaleX(),
+                    boxBlockEntity.getLogoScaleY()
                 ));
                 return InteractionResult.SUCCESS;
             }

@@ -14,19 +14,62 @@ import java.util.Optional;
  * Each collection has its own box texture and set of figures.
  */
 public class FigureCollection {
+    /**
+     * Configuration for how the logo should be rendered on the box
+     */
+    public static class LogoConfig {
+        private final ResourceLocation texture;
+        private final float positionX;
+        private final float positionY;
+        private final float positionZ;
+        private final float scaleX;
+        private final float scaleY;
+
+        public LogoConfig(ResourceLocation texture, float positionX, float positionY, float positionZ, float scaleX, float scaleY) {
+            this.texture = texture;
+            this.positionX = positionX;
+            this.positionY = positionY;
+            this.positionZ = positionZ;
+            this.scaleX = scaleX;
+            this.scaleY = scaleY;
+        }
+
+        public ResourceLocation getTexture() {
+            return texture;
+        }
+
+        public float getPositionX() {
+            return positionX;
+        }
+
+        public float getPositionY() {
+            return positionY;
+        }
+
+        public float getPositionZ() {
+            return positionZ;
+        }
+
+        public float getScaleX() {
+            return scaleX;
+        }
+
+        public float getScaleY() {
+            return scaleY;
+        }
+    }
+
     private final String id;
     private final String name;
     private final ResourceLocation boxTexture;
-    private final ResourceLocation logoTexture; // Optional: logo to display on the box
-    private final String logoType; // Optional: "square", "wide", or "tall" (defaults to "square")
+    private final LogoConfig logoConfig; // Optional: logo configuration for display on the box
     private final List<FigureDefinition> figures;
 
-    public FigureCollection(String id, String name, ResourceLocation boxTexture, ResourceLocation logoTexture, String logoType, List<FigureDefinition> figures) {
+    public FigureCollection(String id, String name, ResourceLocation boxTexture, LogoConfig logoConfig, List<FigureDefinition> figures) {
         this.id = id;
         this.name = name;
         this.boxTexture = boxTexture;
-        this.logoTexture = logoTexture;
-        this.logoType = logoType != null ? logoType : "square";
+        this.logoConfig = logoConfig;
         this.figures = new ArrayList<>(figures);
     }
 
@@ -38,14 +81,34 @@ public class FigureCollection {
         String name = json.get("name").getAsString();
         ResourceLocation boxTexture = new ResourceLocation(json.get("box_texture").getAsString());
 
-        // Logo texture is optional
-        ResourceLocation logoTexture = null;
-        if (json.has("logo_texture")) {
-            logoTexture = new ResourceLocation(json.get("logo_texture").getAsString());
+        // Parse logo configuration (optional)
+        LogoConfig logoConfig = null;
+        if (json.has("logo")) {
+            JsonObject logoJson = json.getAsJsonObject("logo");
+            ResourceLocation logoTexture = new ResourceLocation(logoJson.get("texture").getAsString());
+            float positionX = logoJson.has("position_x") ? logoJson.get("position_x").getAsFloat() : -3.5f;
+            float positionY = logoJson.has("position_y") ? logoJson.get("position_y").getAsFloat() : 0.8f;
+            float positionZ = logoJson.has("position_z") ? logoJson.get("position_z").getAsFloat() : -7.4f;
+            float scaleX = logoJson.has("scale_x") ? logoJson.get("scale_x").getAsFloat() : 5.0f;
+            float scaleY = logoJson.has("scale_y") ? logoJson.get("scale_y").getAsFloat() : 5.0f;
+            logoConfig = new LogoConfig(logoTexture, positionX, positionY, positionZ, scaleX, scaleY);
+        } else if (json.has("logo_texture")) {
+            // Backward compatibility: support old format
+            ResourceLocation logoTexture = new ResourceLocation(json.get("logo_texture").getAsString());
+            // Use default position and scale values based on old logo_type
+            String logoType = json.has("logo_type") ? json.get("logo_type").getAsString() : "square";
+            float scaleX = 5.0f;
+            float scaleY = 5.0f;
+            // Adjust scale for different types
+            if ("wide".equals(logoType)) {
+                scaleX = 6.0f;
+                scaleY = 4.15f;
+            } else if ("tall".equals(logoType)) {
+                scaleX = 4.0f;
+                scaleY = 6.0f;
+            }
+            logoConfig = new LogoConfig(logoTexture, -3.5f, 0.8f, -7.4f, scaleX, scaleY);
         }
-
-        // Logo type is optional (defaults to "square")
-        String logoType = json.has("logo_type") ? json.get("logo_type").getAsString() : "square";
 
         List<FigureDefinition> figures = new ArrayList<>();
         JsonArray figuresArray = json.getAsJsonArray("figures");
@@ -54,7 +117,7 @@ public class FigureCollection {
             figures.add(FigureDefinition.fromJson(figureJson));
         }
 
-        return new FigureCollection(id, name, boxTexture, logoTexture, logoType, figures);
+        return new FigureCollection(id, name, boxTexture, logoConfig, figures);
     }
 
     public String getId() {
@@ -69,12 +132,16 @@ public class FigureCollection {
         return boxTexture;
     }
 
-    public ResourceLocation getLogoTexture() {
-        return logoTexture;
+    public LogoConfig getLogoConfig() {
+        return logoConfig;
     }
 
-    public String getLogoType() {
-        return logoType;
+    /**
+     * @deprecated Use getLogoConfig() instead
+     */
+    @Deprecated
+    public ResourceLocation getLogoTexture() {
+        return logoConfig != null ? logoConfig.getTexture() : null;
     }
 
     public List<FigureDefinition> getFigures() {
