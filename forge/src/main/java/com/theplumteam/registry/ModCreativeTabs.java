@@ -23,14 +23,12 @@ public class ModCreativeTabs {
                 // Add claw machine
                 output.accept(ModItems.CLAW_MACHINE_BLOCK_ITEM.get());
 
-                // Add only the original default collection box block
+                // Add the original color variant box block
                 output.accept(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(PopBlockColor.ORIGINAL).get());
 
-                // Add other collection box blocks
+                // Add collection box blocks
                 for (String collectionId : BuiltInCollections.COLLECTION_IDS) {
-                    if (!collectionId.equals("default")) {
-                        output.accept(ModItems.BOX_BLOCK_ITEMS.get(collectionId).get());
-                    }
+                    output.accept(ModItems.BOX_BLOCK_ITEMS.get(collectionId).get());
                 }
             })
             .build()

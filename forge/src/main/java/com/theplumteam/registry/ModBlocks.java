@@ -35,37 +35,34 @@ public class ModBlocks {
     );
 
     static {
+        // Register 16 color variant box blocks (collection-independent)
+        for (PopBlockColor color : PopBlockColor.values()) {
+            DEFAULT_BOX_BLOCKS.put(color, BLOCKS.register(
+                "box_block_" + color.getSerializedName(),
+                () -> new BoxBlock(
+                    BlockBehaviour.Properties.of()
+                        .mapColor(color.getMapColor())
+                        .strength(1.5F, 6.0F)
+                        .requiresCorrectToolForDrops()
+                        .noOcclusion(),
+                    null,  // No specific collection - can be used with any collection
+                    color
+                )
+            ));
+        }
+
         // Register box blocks for each built-in collection
         for (String collectionId : BuiltInCollections.COLLECTION_IDS) {
-            if (collectionId.equals("default")) {
-                // For default collection, register 16 color variants
-                for (PopBlockColor color : PopBlockColor.values()) {
-                    DEFAULT_BOX_BLOCKS.put(color, BLOCKS.register(
-                        "box_block_" + color.getSerializedName(),
-                        () -> new BoxBlock(
-                            BlockBehaviour.Properties.of()
-                                .mapColor(color.getMapColor())
-                                .strength(1.5F, 6.0F)
-                                .requiresCorrectToolForDrops()
-                                .noOcclusion(),
-                            "default",
-                            color
-                        )
-                    ));
-                }
-            } else {
-                // For other collections, register one box block per collection
-                BOX_BLOCKS.put(collectionId, BLOCKS.register(
-                    "box_block_" + collectionId,
-                    () -> new BoxBlock(
-                        BlockBehaviour.Properties.of()
-                            .strength(1.5F, 6.0F)
-                            .requiresCorrectToolForDrops()
-                            .noOcclusion(),
-                        collectionId
-                    )
-                ));
-            }
+            BOX_BLOCKS.put(collectionId, BLOCKS.register(
+                "box_block_" + collectionId,
+                () -> new BoxBlock(
+                    BlockBehaviour.Properties.of()
+                        .strength(1.5F, 6.0F)
+                        .requiresCorrectToolForDrops()
+                        .noOcclusion(),
+                    collectionId
+                )
+            ));
         }
     }
 

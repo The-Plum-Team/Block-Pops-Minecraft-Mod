@@ -28,23 +28,20 @@ public class ModItems {
     );
 
     static {
+        // Register 16 color variant box block items (collection-independent)
+        for (PopBlockColor color : PopBlockColor.values()) {
+            DEFAULT_BOX_BLOCK_ITEMS.put(color, ITEMS.register(
+                "box_block_" + color.getSerializedName(),
+                () -> new GeoBlockItem(ModBlocks.DEFAULT_BOX_BLOCKS.get(color).get(), new Item.Properties())
+            ));
+        }
+
         // Register box block items for each collection
         for (String collectionId : BuiltInCollections.COLLECTION_IDS) {
-            if (collectionId.equals("default")) {
-                // For default collection, register 16 color variants
-                for (PopBlockColor color : PopBlockColor.values()) {
-                    DEFAULT_BOX_BLOCK_ITEMS.put(color, ITEMS.register(
-                        "box_block_" + color.getSerializedName(),
-                        () -> new GeoBlockItem(ModBlocks.DEFAULT_BOX_BLOCKS.get(color).get(), new Item.Properties())
-                    ));
-                }
-            } else {
-                // For other collections, register one item per collection
-                BOX_BLOCK_ITEMS.put(collectionId, ITEMS.register(
-                    "box_block_" + collectionId,
-                    () -> new GeoBlockItem(ModBlocks.BOX_BLOCKS.get(collectionId).get(), new Item.Properties())
-                ));
-            }
+            BOX_BLOCK_ITEMS.put(collectionId, ITEMS.register(
+                "box_block_" + collectionId,
+                () -> new GeoBlockItem(ModBlocks.BOX_BLOCKS.get(collectionId).get(), new Item.Properties())
+            ));
         }
     }
 

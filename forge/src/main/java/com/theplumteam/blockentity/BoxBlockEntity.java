@@ -74,9 +74,16 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
         // Otherwise, get from the block
         if (getBlockState().getBlock() instanceof BoxBlock boxBlock) {
-            return boxBlock.getCollectionId();
+            String collectionId = boxBlock.getCollectionId();
+            // Color variant boxes have null collection ID - return first available collection
+            if (collectionId == null) {
+                return CollectionRegistry.getDefaultCollection()
+                    .map(collection -> collection.getId())
+                    .orElse("");
+            }
+            return collectionId;
         }
-        return "default";
+        return "";
     }
 
     /**
