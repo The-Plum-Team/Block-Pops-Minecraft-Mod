@@ -138,7 +138,10 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         // Draw collection author below the figure count
         String author = collection.getAuthor();
         Component authorText;
-        if (author.equals("Unknown")) {
+        if ("world_players".equals(collection.getId())) {
+            authorText = Component.literal("Auto-generated skins")
+                .withStyle(ChatFormatting.GOLD);
+        } else if (author.equals("Unknown")) {
             authorText = Component.literal("Collection with multiple creators")
                 .withStyle(ChatFormatting.GOLD);
         } else {

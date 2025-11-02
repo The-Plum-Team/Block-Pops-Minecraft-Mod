@@ -54,7 +54,7 @@ public class FigureBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
             if (displayContext == ItemDisplayContext.GUI) {
                 poseStack.translate(0.5, 0, 0.5); // Move to center
                 poseStack.scale(1.2F, 1.2F, 1.2F); // Slightly larger in inventory
-                poseStack.translate(-0.5, -0.15, -0.5); // Move back and adjust position
+                poseStack.translate(-0.5, 0.0375F, -0.5); // Move back and adjust position (moved up 3 pixels)
             }
 
             // Scale down ground items to 70% size

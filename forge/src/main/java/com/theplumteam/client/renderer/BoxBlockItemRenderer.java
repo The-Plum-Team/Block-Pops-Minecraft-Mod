@@ -1,6 +1,7 @@
 package com.theplumteam.client.renderer;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import com.theplumteam.block.BoxBlock;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.item.GeoBlockItem;
@@ -41,6 +42,13 @@ public class BoxBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
 
             // Apply transformations for item rendering
             poseStack.pushPose();
+
+            // Rotate 180 degrees in inventory/GUI
+            if (displayContext == ItemDisplayContext.GUI) {
+                poseStack.translate(0.5, 0.5, 0.5); // Move to center
+                poseStack.mulPose(Axis.YP.rotationDegrees(180)); // Rotate 180 degrees around Y axis
+                poseStack.translate(-0.5, -0.4375F, -0.5); // Move back and up 1 pixel
+            }
 
             // Scale down ground items to 70% size
             if (displayContext == ItemDisplayContext.GROUND) {
