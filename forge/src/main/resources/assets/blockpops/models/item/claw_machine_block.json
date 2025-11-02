@@ -1,3 +1,4 @@
 {
-  "parent": "blockpops:block/claw_machine_block"
+  "parent": "builtin/entity",
+  "gui_light": "front"
 }
