@@ -20,7 +20,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
     private final CollectionListWidget parent;
     private static final int PADDING = 4;
     private static final int TOP_PADDING = 12; // Extra padding at the top
-    private static final int LOGO_MAX_SIZE = 48; // Maximum size of the logo image
+    private static final int LOGO_MAX_SIZE = 56; // Maximum size of the logo image
 
     // Link button state
     private static final int LINK_BUTTON_SIZE = 14; // Square button like the reference
@@ -110,7 +110,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
                     textureWidth, textureHeight,
                     textureWidth, textureHeight);
 
-            textStartX = logoX + LOGO_MAX_SIZE + PADDING; // Reserve full width for consistency
+            textStartX = logoX + logoWidth + PADDING; // Use actual logo width instead of max size
         }
 
         // Draw collection name
@@ -135,7 +135,10 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         graphics.drawString(mc.font, figureCount, textX, subTextY, subTextColor, false);
 
         // Draw collection author below the figure count
-        String authorText = "Created by " + collection.getAuthor();
+        String author = collection.getAuthor();
+        String authorText = author.equals("Unknown")
+            ? "Skins created by multiple users"
+            : "Skins created by " + author;
         int authorY = subTextY + mc.font.lineHeight + 2;
         int authorColor = 0xFFD700; // Gold color
         graphics.drawString(mc.font, authorText, textX, authorY, authorColor, false);
