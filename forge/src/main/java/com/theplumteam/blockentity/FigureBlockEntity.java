@@ -30,10 +30,10 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     private String figureId = "";
     private String collectionId = "";
 
-    // Figure positioning
-    private double figureOffsetX = 0.0;
-    private double figureOffsetY = 0.0;
-    private double figureOffsetZ = 0.0;
+    // Figure positioning - matches BoxBlockEntity for consistent display
+    private double figureOffsetX = -0.60;
+    private double figureOffsetY = 0.01;
+    private double figureOffsetZ = -0.55;
     private double figureScale = 1.0;
 
     public FigureBlockEntity(BlockPos pos, BlockState blockState) {

@@ -26,20 +26,8 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
             return;
         }
 
-        poseStack.pushPose();
-
-        // Apply figure offset and scale
-        poseStack.translate(animatable.getFigureOffsetX(),
-                          animatable.getFigureOffsetY(),
-                          animatable.getFigureOffsetZ());
-        poseStack.scale((float) animatable.getFigureScale(),
-                      (float) animatable.getFigureScale(),
-                      (float) animatable.getFigureScale());
-
-        // Render the figure
+        // Render the figure at default position (no offset or scale adjustments)
         super.actuallyRender(poseStack, animatable, model, renderType, bufferSource, buffer,
                            isReRender, partialTick, packedLight, packedOverlay, red, green, blue, alpha);
-
-        poseStack.popPose();
     }
 }

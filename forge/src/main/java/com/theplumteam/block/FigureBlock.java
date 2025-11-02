@@ -27,15 +27,15 @@ import org.jetbrains.annotations.Nullable;
 public class FigureBlock extends BaseEntityBlock {
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
 
-    // Hitbox for a standing figure (approximately player-sized)
-    // Width: 8 units, Height: 24 units, Depth: 8 units
+    // Hitbox for a standing figure (collectible-sized, tighter fit)
+    // Width: 6 units, Height: 12 units, Depth: 6 units
     private static final VoxelShape SHAPE = Block.box(
-        4,   // minX - 8 units width centered at X=8
+        5,   // minX - 6 units width centered at X=8
         0,   // minY - starts at ground
-        4,   // minZ - 8 units depth centered at Z=8
-        12,  // maxX
-        24,  // maxY - height of figure
-        12   // maxZ
+        5,   // minZ - 6 units depth centered at Z=8
+        11,  // maxX
+        12,  // maxY - height of figure (12 units = 0.75 blocks)
+        11   // maxZ
     );
 
     public FigureBlock(Properties properties) {

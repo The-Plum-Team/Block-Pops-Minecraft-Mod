@@ -42,15 +42,15 @@ public class FigureBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
                 }
             }
 
-            // Apply rotation for item rendering
+            // Apply transformations for item rendering
             poseStack.pushPose();
 
-            // Rotate 90 degrees clockwise around Y-axis to match block placement
+            // Rotate 180 degrees around Y-axis
             poseStack.translate(0.5, 0, 0.5);
-            poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(90));
+            poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(180));
             poseStack.translate(-0.5, 0, -0.5);
 
-            // Scale down ground items to 70% size (after rotation to avoid pivot issues)
+            // Scale down ground items to 70% size
             if (displayContext == ItemDisplayContext.GROUND) {
                 poseStack.translate(0.5, 0, 0.5); // Move to center
                 poseStack.scale(0.7F, 0.7F, 0.7F);
