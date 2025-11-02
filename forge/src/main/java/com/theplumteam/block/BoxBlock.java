@@ -167,21 +167,6 @@ public class BoxBlock extends BaseEntityBlock {
 
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-        ItemStack heldItem = player.getItemInHand(hand);
-
-        // Check if player is holding scissors (shears)
-        if (heldItem.getItem() == net.minecraft.world.item.Items.SHEARS) {
-            if (!level.isClientSide) {
-                BlockEntity blockEntity = level.getBlockEntity(pos);
-                if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
-                    // Trigger the opening animation on the server
-                    boxBlockEntity.triggerOpenAnimation();
-                    return InteractionResult.SUCCESS;
-                }
-            }
-            return InteractionResult.sidedSuccess(level.isClientSide);
-        }
-
         // Shift-right-click to open adjustment screen
         if (level.isClientSide && player.isShiftKeyDown()) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
@@ -205,7 +190,29 @@ public class BoxBlock extends BaseEntityBlock {
                 return InteractionResult.SUCCESS;
             }
         }
-        return InteractionResult.PASS;
+
+        // Regular right-click for opening/closing the box
+        if (!level.isClientSide) {
+            BlockEntity blockEntity = level.getBlockEntity(pos);
+            if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
+                ItemStack heldItem = player.getItemInHand(hand);
+
+                // If the box is open, only slime balls can close it
+                if (boxBlockEntity.isOpen()) {
+                    if (heldItem.getItem() == net.minecraft.world.item.Items.SLIME_BALL) {
+                        boxBlockEntity.toggleOpen();
+                        return InteractionResult.SUCCESS;
+                    }
+                }
+                // If the box is closed, only scissors can open it
+                else if (heldItem.getItem() == net.minecraft.world.item.Items.SHEARS) {
+                    boxBlockEntity.toggleOpen();
+                    return InteractionResult.SUCCESS;
+                }
+            }
+        }
+
+        return InteractionResult.sidedSuccess(level.isClientSide);
     }
 
     @Nullable

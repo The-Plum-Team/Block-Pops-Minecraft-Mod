@@ -26,8 +26,13 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     private static final Logger LOGGER = LoggerFactory.getLogger(BoxBlockEntity.class);
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
-    private static final RawAnimation BOX_ANIMATION = RawAnimation.begin().thenLoop("animation.box_block.idle");
+    private static final RawAnimation IDLE_ANIMATION = RawAnimation.begin().thenLoop("animation.box_block.idle");
     private static final RawAnimation OPEN_ANIMATION = RawAnimation.begin().thenPlay("animation.box_block.open");
+    private static final RawAnimation OPEN_STATE_ANIMATION = RawAnimation.begin().thenLoop("animation.box_block.open_state");
+    private static final RawAnimation CLOSE_ANIMATION = RawAnimation.begin().thenPlay("animation.box_block.close");
+
+    // Box state
+    private boolean isOpen = false;
 
     // Collection and figure data
     private String figureId = ""; // Empty means no figure
@@ -58,10 +63,17 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        // Controller for the box model animations
-        controllers.add(new AnimationController<>(this, "box_controller", 0, state ->
-            state.setAndContinue(BOX_ANIMATION)
-        ).triggerableAnim("open", OPEN_ANIMATION));
+        // Controller for the box model animations with state-based logic
+        controllers.add(new AnimationController<>(this, "box_controller", 0, state -> {
+            // If the box is open, play the open state animation (holds at final frame)
+            if (isOpen) {
+                return state.setAndContinue(OPEN_STATE_ANIMATION);
+            }
+            // If the box is closed, play the idle animation
+            return state.setAndContinue(IDLE_ANIMATION);
+        })
+        .triggerableAnim("open", OPEN_ANIMATION)
+        .triggerableAnim("close", CLOSE_ANIMATION));
 
         // Note: Figure animations are handled by the separate figure renderer
         // No controller needed here since we're using a separate GeoBlockRenderer for the figure
@@ -236,6 +248,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     @Override
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
+        tag.putBoolean("IsOpen", isOpen);
         tag.putString("FigureId", figureId);
         if (collectionIdOverride != null) {
             tag.putString("CollectionId", collectionIdOverride);
@@ -267,6 +280,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
+        if (tag.contains("IsOpen")) {
+            this.isOpen = tag.getBoolean("IsOpen");
+        }
         if (tag.contains("FigureId")) {
             this.figureId = tag.getString("FigureId");
         }
@@ -377,11 +393,41 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     /**
-     * Triggers the box opening animation
+     * Checks if the box is currently open
      */
+    public boolean isOpen() {
+        return isOpen;
+    }
+
+    /**
+     * Toggles the box between open and closed states
+     */
+    public void toggleOpen() {
+        if (level != null && !level.isClientSide) {
+            isOpen = !isOpen;
+
+            // Trigger the appropriate animation
+            if (isOpen) {
+                triggerAnim("box_controller", "open");
+            } else {
+                triggerAnim("box_controller", "close");
+            }
+
+            setChanged();
+            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        }
+    }
+
+    /**
+     * Triggers the box opening animation (legacy method for compatibility)
+     * @deprecated Use toggleOpen() instead
+     */
+    @Deprecated
     public void triggerOpenAnimation() {
         if (level != null && !level.isClientSide) {
-            triggerAnim("box_controller", "open");
+            if (!isOpen) {
+                toggleOpen();
+            }
         }
     }
 
