@@ -4,15 +4,55 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.theplumteam.blockentity.FigureBlockEntity;
 import com.theplumteam.client.model.FigureBlockModel;
+import com.theplumteam.util.SkinModelDetector;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
+import software.bernie.geckolib.cache.object.GeoBone;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
 
 public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
 
     public FigureBlockRenderer() {
         super(new FigureBlockModel());
+    }
+
+    @Override
+    public void preRender(PoseStack poseStack, FigureBlockEntity animatable, BakedGeoModel model,
+                         MultiBufferSource bufferSource, VertexConsumer buffer, boolean isReRender,
+                         float partialTick, int packedLight, int packedOverlay, float red, float green,
+                         float blue, float alpha) {
+        super.preRender(poseStack, animatable, model, bufferSource, buffer, isReRender, partialTick,
+                       packedLight, packedOverlay, red, green, blue, alpha);
+
+        // Detect skin model and show/hide appropriate arms
+        if (animatable.hasFigure()) {
+            ResourceLocation texture = this.getGeoModel().getTextureResource(animatable);
+            SkinModelDetector.SkinModel skinModel = SkinModelDetector.detectSkinModel(texture);
+
+            // Hide/show arms based on detection
+            boolean isSlim = (skinModel == SkinModelDetector.SkinModel.SLIM);
+
+            // Find and set visibility for arm bones
+            GeoBone rightArmSlim = model.getBone("RightArmSlim").orElse(null);
+            GeoBone leftArmSlim = model.getBone("LeftArmSlim").orElse(null);
+            GeoBone rightArmClassic = model.getBone("RightArmClassic").orElse(null);
+            GeoBone leftArmClassic = model.getBone("LeftArmClassic").orElse(null);
+
+            if (rightArmSlim != null) {
+                rightArmSlim.setHidden(!isSlim);
+            }
+            if (leftArmSlim != null) {
+                leftArmSlim.setHidden(!isSlim);
+            }
+            if (rightArmClassic != null) {
+                rightArmClassic.setHidden(isSlim);
+            }
+            if (leftArmClassic != null) {
+                leftArmClassic.setHidden(isSlim);
+            }
+        }
     }
 
     @Override

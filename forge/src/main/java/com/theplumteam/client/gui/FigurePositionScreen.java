@@ -1,13 +1,20 @@
 package com.theplumteam.client.gui;
 
+import com.theplumteam.blockentity.BoxBlockEntity;
+import com.theplumteam.blockentity.FigureBlockEntity;
+import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.network.FigurePositionPacket;
+import com.theplumteam.util.SkinModelDetector;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -464,6 +471,68 @@ public class FigurePositionScreen extends Screen {
         // Draw title
         guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 20, 0xFFFFFF);
 
+        // Detect and display skin model type
+        String skinTypeText = "Skin Type: Unknown";
+        int skinTypeColor = 0xAAAAAA; // Gray for unknown
+
+        if (minecraft != null && minecraft.level != null) {
+            BlockEntity blockEntity = minecraft.level.getBlockEntity(blockPos);
+            LOGGER.info("Block entity: {}", blockEntity);
+
+            // Handle both BoxBlockEntity and FigureBlockEntity
+            FigureDefinition figureDefinition = null;
+            int skinIndex = 0;
+
+            if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
+                LOGGER.info("Found BoxBlockEntity");
+                if (boxBlockEntity.hasFigure()) {
+                    figureDefinition = boxBlockEntity.getFigureDefinition();
+                    skinIndex = boxBlockEntity.getAlternativeSkinIndex();
+                }
+            } else if (blockEntity instanceof FigureBlockEntity figureBlockEntity) {
+                LOGGER.info("Found FigureBlockEntity");
+                if (figureBlockEntity.hasFigure()) {
+                    figureDefinition = figureBlockEntity.getFigureDefinition();
+                    skinIndex = figureBlockEntity.getAlternativeSkinIndex();
+                }
+            }
+
+            if (figureDefinition != null) {
+                LOGGER.info("Has figure: {} (skin index: {})", figureDefinition.getId(), skinIndex);
+                try {
+                    // Get the texture from the figure
+                    ResourceLocation texture = getTextureForFigure(figureDefinition, skinIndex);
+                    LOGGER.info("Texture location: {}", texture);
+                    if (texture != null) {
+                        // Detect the skin model
+                        SkinModelDetector.SkinModel skinModel = SkinModelDetector.detectSkinModel(texture);
+                        LOGGER.info("Detected skin model: {}", skinModel);
+
+                        if (skinModel == SkinModelDetector.SkinModel.SLIM) {
+                            skinTypeText = "Skin Type: SLIM (Alex)";
+                            skinTypeColor = 0xFF6B9D; // Pink for slim
+                        } else {
+                            skinTypeText = "Skin Type: CLASSIC (Steve)";
+                            skinTypeColor = 0x5DADE2; // Blue for classic
+                        }
+                    } else {
+                        skinTypeText = "Skin Type: No Texture";
+                        LOGGER.warn("Texture is null for figure");
+                    }
+                } catch (Exception e) {
+                    LOGGER.error("Error detecting skin type", e);
+                    skinTypeText = "Skin Type: Detection Error";
+                    skinTypeColor = 0xFF0000; // Red for error
+                }
+            } else {
+                skinTypeText = "Skin Type: No Figure";
+                LOGGER.info("No figure found in block entity");
+            }
+        }
+
+        // Draw skin type below title
+        guiGraphics.drawCenteredString(this.font, skinTypeText, this.width / 2, 30, skinTypeColor);
+
         // Draw column headers
         int centerX = this.width / 2;
         int columnSpacing = 200;
@@ -477,6 +546,37 @@ public class FigurePositionScreen extends Screen {
         guiGraphics.drawCenteredString(this.font, "FIGURE", col1X + 70, headerY, 0xFFD700); // Gold
         guiGraphics.drawCenteredString(this.font, "HITBOX", col2X + 70, headerY, 0x00FF00); // Green
         guiGraphics.drawCenteredString(this.font, "LOGO", col3X + 70, headerY, 0x00BFFF); // Sky blue
+    }
+
+    /**
+     * Helper method to get the texture for a figure definition
+     */
+    private ResourceLocation getTextureForFigure(FigureDefinition figure, int skinIndex) {
+        try {
+            if (figure == null) {
+                return null;
+            }
+
+            // Check for alternative skins
+            if (skinIndex > 0 && figure.hasAlternatives()) {
+                int altListIndex = skinIndex - 1;
+                if (altListIndex < figure.getAlternatives().size()) {
+                    return figure.getAlternatives().get(altListIndex).texture();
+                }
+            }
+
+            // Check if this is a player figure
+            if (figure.getType() == com.theplumteam.figure.FigureType.PLAYER && figure.getPlayerUUID() != null) {
+                com.mojang.authlib.GameProfile gameProfile = new com.mojang.authlib.GameProfile(figure.getPlayerUUID(), figure.getName());
+                return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(gameProfile);
+            }
+
+            // Static figure
+            return figure.getTexturePath();
+        } catch (Exception e) {
+            LOGGER.error("Error getting texture for figure", e);
+            return null;
+        }
     }
 
     @Override
