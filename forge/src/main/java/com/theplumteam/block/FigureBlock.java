@@ -25,6 +25,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.LivingEntity;
+import com.theplumteam.registry.ModItems;
 import org.jetbrains.annotations.Nullable;
 
 public class FigureBlock extends BaseEntityBlock {
@@ -95,6 +97,26 @@ public class FigureBlock extends BaseEntityBlock {
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         builder.add(FACING);
+    }
+
+    @Override
+    public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+        // Drop the figure block item with NBT data preserved
+        if (!level.isClientSide) {
+            BlockEntity blockEntity = level.getBlockEntity(pos);
+            if (blockEntity instanceof FigureBlockEntity figureBlockEntity) {
+                // Create the figure block item
+                ItemStack dropStack = new ItemStack(ModItems.FIGURE_BLOCK_ITEM.get());
+
+                // Save the block entity data to the item
+                figureBlockEntity.saveToItem(dropStack);
+
+                // Drop the item
+                popResource(level, pos, dropStack);
+            }
+        }
+
+        super.playerWillDestroy(level, pos, state, player);
     }
 
     @Override

@@ -52,8 +52,7 @@ public class ModBlocks {
                 () -> new BoxBlock(
                     BlockBehaviour.Properties.of()
                         .mapColor(color.getMapColor())
-                        .strength(1.5F, 6.0F)
-                        .requiresCorrectToolForDrops()
+                        .strength(0.5F, 1.0F)
                         .noOcclusion(),
                     null,  // No specific collection - can be used with any collection
                     color
@@ -67,8 +66,7 @@ public class ModBlocks {
                 "box_block_" + collectionId,
                 () -> new BoxBlock(
                     BlockBehaviour.Properties.of()
-                        .strength(1.5F, 6.0F)
-                        .requiresCorrectToolForDrops()
+                        .strength(0.5F, 1.0F)
                         .noOcclusion(),
                     collectionId
                 )

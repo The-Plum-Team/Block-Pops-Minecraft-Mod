@@ -29,6 +29,7 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.entity.LivingEntity;
 import org.jetbrains.annotations.Nullable;
 
 public class BoxBlock extends BaseEntityBlock {
@@ -279,6 +280,34 @@ public class BoxBlock extends BaseEntityBlock {
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         builder.add(FACING);
+    }
+
+    @Override
+    public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+        // Drop the box block item with NBT data preserved
+        if (!level.isClientSide) {
+            BlockEntity blockEntity = level.getBlockEntity(pos);
+            if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
+                // Determine which item to drop based on color or collectionId
+                ItemStack dropStack;
+                if (color != null) {
+                    dropStack = new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(color).get());
+                } else if (collectionId != null) {
+                    dropStack = new ItemStack(ModItems.BOX_BLOCK_ITEMS.get(collectionId).get());
+                } else {
+                    // Fallback to the block's item (shouldn't happen in normal gameplay)
+                    dropStack = new ItemStack(this.asItem());
+                }
+
+                // Save the block entity data to the item
+                boxBlockEntity.saveToItem(dropStack);
+
+                // Drop the item
+                popResource(level, pos, dropStack);
+            }
+        }
+
+        super.playerWillDestroy(level, pos, state, player);
     }
 
     @Override
