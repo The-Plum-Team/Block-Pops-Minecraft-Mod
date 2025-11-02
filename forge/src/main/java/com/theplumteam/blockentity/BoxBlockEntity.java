@@ -40,7 +40,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     private boolean isFigureExtracted = false; // Whether the figure has been taken out
 
     // Figure positioning - correct values found through testing
-    private double figureOffsetX = -0.60;
+    private double figureOffsetX = -0.53;
     private double figureOffsetY = 0.01;
     private double figureOffsetZ = -0.55;
     private double figureScale = 1.0;
@@ -74,7 +74,8 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
             return state.setAndContinue(IDLE_ANIMATION);
         })
         .triggerableAnim("open", OPEN_ANIMATION)
-        .triggerableAnim("close", CLOSE_ANIMATION));
+        .triggerableAnim("close", CLOSE_ANIMATION)
+        .setAnimationSpeed(1.2)); // 20% faster animations
 
         // Note: Figure animations are handled by the separate figure renderer
         // No controller needed here since we're using a separate GeoBlockRenderer for the figure

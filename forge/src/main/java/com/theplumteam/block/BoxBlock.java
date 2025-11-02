@@ -34,48 +34,15 @@ import org.jetbrains.annotations.Nullable;
 public class BoxBlock extends BaseEntityBlock {
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
 
-    // Custom hitbox matching the main square of the box model
-    // Box dimensions based on geo.json: approximately 9x14x11 units, centered
-    // Each facing direction needs its own hitbox, moved 1 pixel forward in that direction
-
-    // NORTH (facing -Z): Width (X) = 9 units, Depth (Z) = 11 units, shifted -1 in Z
-    private static final VoxelShape SHAPE_NORTH = Block.box(
-        3.5,  // minX - 9 units width centered at X=8
+    // Tighter hitbox for the core box (simplified, no directional variation)
+    // Width: 8 units, Height: 11 units, Depth: 8 units
+    private static final VoxelShape SHAPE = Block.box(
+        4,    // minX - 8 units width centered at X=8
         0,    // minY - starts at ground
-        1.5,  // minZ - moved forward (north = -Z)
-        12.5, // maxX
-        14,   // maxY - height of box
-        12.5  // maxZ
-    );
-
-    // SOUTH (facing +Z): Width (X) = 9 units, Depth (Z) = 11 units, shifted +1 in Z
-    private static final VoxelShape SHAPE_SOUTH = Block.box(
-        3.5,  // minX - 9 units width centered at X=8
-        0,    // minY - starts at ground
-        3.5,  // minZ - moved forward (south = +Z)
-        12.5, // maxX
-        14,   // maxY - height of box
-        14.5  // maxZ
-    );
-
-    // EAST (facing +X): Width (X) = 11 units, Depth (Z) = 9 units, shifted +1 in X
-    private static final VoxelShape SHAPE_EAST = Block.box(
-        3.5,  // minX - moved forward (east = +X)
-        0,    // minY - starts at ground
-        3.5,  // minZ - 9 units depth centered at Z=8
-        14.5, // maxX
-        14,   // maxY - height of box
-        12.5  // maxZ
-    );
-
-    // WEST (facing -X): Width (X) = 11 units, Depth (Z) = 9 units, shifted -1 in X
-    private static final VoxelShape SHAPE_WEST = Block.box(
-        1.5,  // minX - moved forward (west = -X)
-        0,    // minY - starts at ground
-        3.5,  // minZ - 9 units depth centered at Z=8
-        12.5, // maxX
-        14,   // maxY - height of box
-        12.5  // maxZ
+        4,    // minZ - 8 units depth centered at Z=8
+        12,   // maxX
+        11,   // maxY - height of core box
+        12    // maxZ
     );
 
     private final String collectionId;
@@ -103,14 +70,7 @@ public class BoxBlock extends BaseEntityBlock {
 
     @Override
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        Direction facing = state.getValue(FACING);
-        VoxelShape baseShape = switch (facing) {
-            case NORTH -> SHAPE_NORTH;
-            case SOUTH -> SHAPE_SOUTH;
-            case EAST -> SHAPE_EAST;
-            case WEST -> SHAPE_WEST;
-            default -> SHAPE_NORTH; // Fallback, should never happen
-        };
+        VoxelShape baseShape = SHAPE;
 
         // Apply hitbox offsets from block entity if available
         if (level.getBlockEntity(pos) instanceof BoxBlockEntity boxBlockEntity) {
@@ -121,6 +81,7 @@ public class BoxBlock extends BaseEntityBlock {
             // Only apply offset if at least one is non-zero (performance optimization)
             if (localOffsetX != 0.0 || localOffsetY != 0.0 || localOffsetZ != 0.0) {
                 // Transform local offsets to world offsets based on facing direction
+                Direction facing = state.getValue(FACING);
                 double worldOffsetX = 0;
                 double worldOffsetZ = 0;
 
@@ -245,9 +206,9 @@ public class BoxBlock extends BaseEntityBlock {
     @Nullable
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
-        // Rotate 90 degrees counter-clockwise from player's facing direction to face the player
+        // Face the player when placed
         Direction playerFacing = context.getHorizontalDirection();
-        Direction blockFacing = playerFacing.getCounterClockWise();
+        Direction blockFacing = playerFacing.getOpposite();
         return this.defaultBlockState().setValue(FACING, blockFacing);
     }
 

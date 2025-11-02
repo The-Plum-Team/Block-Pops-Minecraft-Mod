@@ -50,6 +50,13 @@ public class FigureBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
             poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(180));
             poseStack.translate(-0.5, 0, -0.5);
 
+            // Scale up GUI/inventory display
+            if (displayContext == ItemDisplayContext.GUI) {
+                poseStack.translate(0.5, 0, 0.5); // Move to center
+                poseStack.scale(1.2F, 1.2F, 1.2F); // Slightly larger in inventory
+                poseStack.translate(-0.5, -0.15, -0.5); // Move back and adjust position
+            }
+
             // Scale down ground items to 70% size
             if (displayContext == ItemDisplayContext.GROUND) {
                 poseStack.translate(0.5, 0, 0.5); // Move to center
