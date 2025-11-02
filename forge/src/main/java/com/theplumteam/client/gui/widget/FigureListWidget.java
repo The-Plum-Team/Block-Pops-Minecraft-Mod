@@ -18,9 +18,9 @@ public class FigureListWidget extends ObjectSelectionList<FigureEntry> {
     // Configuration values
     private float modelScale = 1.0f;
     private float xRotation = 0.0f;
-    private float yRotation = 70.0f;
+    private float yRotation = 150.0f;
     private float zRotation = 0.0f;
-    private float xOffset = -60.0f;
+    private float xOffset = 14.0f;
     private float yOffset = 15.0f;
     private float zOffset = 0.0f;
 

@@ -1,6 +1,7 @@
 package com.theplumteam.client.gui.widget;
 
 import com.mojang.blaze3d.platform.Lighting;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
@@ -154,9 +155,15 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             return;
         }
 
+        // Enable scissor test to clip rendering to the figure box
+        graphics.enableScissor(x, y, x + size, y + size);
+
+        // Disable depth test to prevent z-fighting and clipping issues
+        RenderSystem.disableDepthTest();
+
         float centerX = (x + size / 2.0f) + xOffset;
         float centerY = (y + size * 0.6f) + yOffset;
-        float centerZ = 50.0f + zOffset;
+        float centerZ = 100.0f + zOffset; // Increased from 50.0f to prevent near-plane clipping
 
         Lighting.setupForFlatItems();
 
@@ -173,6 +180,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         try {
             ResourceLocation modelResource = figureModel.getModelResource(renderEntity);
             if (modelResource == null) {
+                RenderSystem.enableDepthTest();
+                graphics.disableScissor();
                 poseStack.popPose();
                 return;
             }
@@ -180,6 +189,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             BakedGeoModel bakedModel = figureModel.getBakedModel(modelResource);
             ResourceLocation textureResource = figureModel.getTextureResource(renderEntity);
             if (textureResource == null) {
+                RenderSystem.enableDepthTest();
+                graphics.disableScissor();
                 poseStack.popPose();
                 return;
             }
@@ -205,6 +216,10 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         } catch (Exception e) {
             // Silently fail
         }
+
+        // Re-enable depth test and disable scissor
+        RenderSystem.enableDepthTest();
+        graphics.disableScissor();
 
         Lighting.setupFor3DItems();
         poseStack.popPose();
