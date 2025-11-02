@@ -116,13 +116,14 @@ public class CollectionSelectionScreen extends Screen {
         int bottomSectionHeight = tokenInfoHeight + (scaledComponentHeight * 2) + scaledSpacing + scaledPadding + extraBottomSpacing;
         int listHeight = panelHeight - topSectionHeight - bottomSectionHeight;
 
-        // Create collection list on the left
+        // Create collection list on the left (full height - header will render on top)
+        int collectionHeaderHeight = 30; // Space for "Collections" header (for rendering only)
         collectionListWidget = new CollectionListWidget(
             this,
             this.minecraft,
             leftPanelWidth,
-            listHeight,
-            yPos,
+            listHeight, // Full height - allow scrolling under header
+            yPos, // Start at same Y as before
             55 // Entry height - adjusted for optimal spacing
         );
         collectionListWidget.setLeftPos(componentX);
@@ -133,11 +134,11 @@ public class CollectionSelectionScreen extends Screen {
         // Load collections
         loadCollections();
 
-        // Create figure list on the right (leave space for header)
+        // Create figure list on the right (full height - header will render on top)
         int previewX = panelX + panelWidth - rightPanelWidth - scaledPadding;
-        int headerHeight = 50; // Space for collection name, count, and separator
-        int figureListY = yPos + headerHeight;
-        int figureListHeight = listHeight - headerHeight;
+        int headerHeight = 50; // Space for collection name, count, and separator (for rendering only)
+        int figureListY = yPos; // Start at same Y as collection list
+        int figureListHeight = listHeight; // Full height - allow scrolling under header
 
         figureListWidget = new FigureListWidget(
             this.minecraft,
@@ -271,14 +272,51 @@ public class CollectionSelectionScreen extends Screen {
         // Render panel background (frosted glass effect)
         renderPanel(graphics);
 
+        // Render widgets (buttons, lists, etc.)
+        super.render(graphics, mouseX, mouseY, partialTick);
+
         // Render token information header (replacing title)
         renderTokenInfo(graphics);
 
-        // Render figure panel header
-        renderFigurePanelHeader(graphics);
+        // Render collection list header (after widgets so it appears on top of scrollable content)
+        renderCollectionListHeader(graphics);
 
-        // Render widgets (buttons, lists, etc.)
-        super.render(graphics, mouseX, mouseY, partialTick);
+        // Render figure panel header (after widgets so it appears on top of scrollable content)
+        renderFigurePanelHeader(graphics);
+    }
+
+    /**
+     * Render the header for the collection list panel
+     */
+    private void renderCollectionListHeader(GuiGraphics graphics) {
+        if (collectionListWidget == null) {
+            return;
+        }
+
+        int scaledPadding = 10;
+        int scaledComponentHeight = 20;
+        int leftPanelWidth = (int) (panelWidth * 0.45f);
+        int componentX = panelX + scaledPadding;
+
+        // Header starts at the top of the panel
+        int headerStartY = panelY + scaledPadding;
+        int headerHeight = scaledComponentHeight + scaledPadding; // Full top section height
+
+        int currentY = headerStartY + 4;
+
+        // Collection list title
+        graphics.drawString(this.font, "Collections",
+                          componentX + 8, currentY, 0xFFFFFF, false);
+        currentY += font.lineHeight + 4;
+
+        // Collection count
+        String collectionCount = collections.size() + " collections available";
+        graphics.drawString(this.font, collectionCount,
+                          componentX + 8, currentY, 0xAAAAAA, false);
+
+        // Separator line (below the collection count)
+        currentY += font.lineHeight + 4;
+        graphics.fill(componentX + 8, currentY, componentX + leftPanelWidth - 8, currentY + 1, 0x40FFFFFF);
     }
 
     /**
@@ -295,13 +333,14 @@ public class CollectionSelectionScreen extends Screen {
         }
 
         int scaledPadding = 10;
+        int scaledComponentHeight = 20;
         int rightPanelWidth = (int) (panelWidth * 0.50f);
         int previewX = panelX + panelWidth - rightPanelWidth - scaledPadding;
 
-        int scaledComponentHeight = 20;
-        int yPos = panelY + scaledPadding + scaledComponentHeight + scaledPadding;
+        // Header starts at the top of the panel
+        int headerStartY = panelY + scaledPadding;
 
-        int currentY = yPos + 8;
+        int currentY = headerStartY + 4;
 
         // Collection name
         graphics.drawString(this.font, collection.getName(),
@@ -312,9 +351,9 @@ public class CollectionSelectionScreen extends Screen {
         String figureCount = collection.getFigures().size() + " figures in this collection";
         graphics.drawString(this.font, figureCount,
                           previewX + 8, currentY, 0xAAAAAA, false);
-        currentY += font.lineHeight + 8;
 
-        // Separator line
+        // Separator line (full width - will render on top of buttons)
+        currentY += font.lineHeight + 4;
         graphics.fill(previewX + 8, currentY, previewX + rightPanelWidth - 8, currentY + 1, 0x40FFFFFF);
     }
 
