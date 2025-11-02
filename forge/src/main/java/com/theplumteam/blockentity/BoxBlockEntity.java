@@ -37,6 +37,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     // Collection and figure data
     private String figureId = ""; // Empty means no figure
     private String collectionIdOverride = null; // For dynamic collections using default box blocks
+    private boolean isFigureExtracted = false; // Whether the figure has been taken out
 
     // Figure positioning - correct values found through testing
     private double figureOffsetX = -0.60;
@@ -140,6 +141,24 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
      */
     public boolean hasFigure() {
         return !figureId.isEmpty() && getFigureDefinition() != null;
+    }
+
+    /**
+     * Checks if the figure has been extracted from the box
+     */
+    public boolean isFigureExtracted() {
+        return isFigureExtracted;
+    }
+
+    /**
+     * Sets whether the figure has been extracted from the box
+     */
+    public void setFigureExtracted(boolean extracted) {
+        this.isFigureExtracted = extracted;
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        }
     }
 
     public double getFigureOffsetX() {
@@ -250,6 +269,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         super.saveAdditional(tag);
         tag.putBoolean("IsOpen", isOpen);
         tag.putString("FigureId", figureId);
+        tag.putBoolean("IsFigureExtracted", isFigureExtracted);
         if (collectionIdOverride != null) {
             tag.putString("CollectionId", collectionIdOverride);
         }
@@ -285,6 +305,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
         if (tag.contains("FigureId")) {
             this.figureId = tag.getString("FigureId");
+        }
+        if (tag.contains("IsFigureExtracted")) {
+            this.isFigureExtracted = tag.getBoolean("IsFigureExtracted");
         }
         if (tag.contains("CollectionId")) {
             this.collectionIdOverride = tag.getString("CollectionId");

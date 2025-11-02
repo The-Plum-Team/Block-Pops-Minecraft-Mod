@@ -2,8 +2,10 @@ package com.theplumteam.item;
 
 import com.theplumteam.block.BoxBlock;
 import com.theplumteam.block.ClawMachineBlock;
+import com.theplumteam.block.FigureBlock;
 import com.theplumteam.client.renderer.BoxBlockItemRenderer;
 import com.theplumteam.client.renderer.ClawMachineBlockItemRenderer;
+import com.theplumteam.client.renderer.FigureBlockItemRenderer;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
@@ -135,6 +137,8 @@ public class GeoBlockItem extends BlockItem {
                     // Return the appropriate renderer based on block type
                     if (getBlock() instanceof ClawMachineBlock) {
                         renderer = new ClawMachineBlockItemRenderer();
+                    } else if (getBlock() instanceof FigureBlock) {
+                        renderer = new FigureBlockItemRenderer();
                     } else {
                         // Default to BoxBlockItemRenderer for BoxBlock and other types
                         renderer = new BoxBlockItemRenderer();

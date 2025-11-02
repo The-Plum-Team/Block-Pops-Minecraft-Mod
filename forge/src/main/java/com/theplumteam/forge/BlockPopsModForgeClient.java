@@ -2,6 +2,7 @@ package com.theplumteam.forge;
 
 import com.theplumteam.client.renderer.BoxBlockRenderer;
 import com.theplumteam.client.renderer.ClawMachineBlockRenderer;
+import com.theplumteam.client.renderer.FigureBlockRenderer;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.registry.ModBlockEntities;
 import net.minecraft.server.packs.resources.ResourceManager;
@@ -19,6 +20,7 @@ public class BlockPopsModForgeClient {
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(ModBlockEntities.BOX_BLOCK.get(), context -> new BoxBlockRenderer());
         event.registerBlockEntityRenderer(ModBlockEntities.CLAW_MACHINE_BLOCK.get(), context -> new ClawMachineBlockRenderer());
+        event.registerBlockEntityRenderer(ModBlockEntities.FIGURE_BLOCK.get(), context -> new FigureBlockRenderer());
     }
 
     @SubscribeEvent

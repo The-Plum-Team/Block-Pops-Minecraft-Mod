@@ -3,6 +3,7 @@ package com.theplumteam.registry;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.BoxBlock;
 import com.theplumteam.block.ClawMachineBlock;
+import com.theplumteam.block.FigureBlock;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.figure.BuiltInCollections;
 import dev.architectury.registry.registries.DeferredRegister;
@@ -30,6 +31,15 @@ public class ModBlocks {
             BlockBehaviour.Properties.of()
                 .strength(1.5F, 6.0F)
                 .requiresCorrectToolForDrops()
+                .noOcclusion()
+        )
+    );
+
+    public static final RegistrySupplier<Block> FIGURE_BLOCK = BLOCKS.register(
+        "figure_block",
+        () -> new FigureBlock(
+            BlockBehaviour.Properties.of()
+                .strength(0.5F, 1.0F)
                 .noOcclusion()
         )
     );

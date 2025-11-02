@@ -3,9 +3,11 @@ package com.theplumteam.block;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.gui.FigurePositionScreen;
 import com.theplumteam.registry.ModBlockEntities;
+import com.theplumteam.registry.ModItems;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -197,9 +199,34 @@ public class BoxBlock extends BaseEntityBlock {
             if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
                 ItemStack heldItem = player.getItemInHand(hand);
 
-                // If the box is open, only slime balls can close it
+                // If the box is open
                 if (boxBlockEntity.isOpen()) {
-                    if (heldItem.getItem() == net.minecraft.world.item.Items.SLIME_BALL) {
+                    // Empty hand extracts the figure
+                    if (heldItem.isEmpty() && boxBlockEntity.hasFigure() && !boxBlockEntity.isFigureExtracted()) {
+                        // Create a figure block item with the figure data
+                        ItemStack figureBlockItem = new ItemStack(ModItems.FIGURE_BLOCK_ITEM.get());
+                        CompoundTag blockEntityTag = new CompoundTag();
+                        blockEntityTag.putString("FigureId", boxBlockEntity.getFigureId());
+                        blockEntityTag.putString("CollectionId", boxBlockEntity.getCollectionId());
+                        // Copy figure positioning data
+                        blockEntityTag.putDouble("FigureOffsetX", boxBlockEntity.getFigureOffsetX());
+                        blockEntityTag.putDouble("FigureOffsetY", boxBlockEntity.getFigureOffsetY());
+                        blockEntityTag.putDouble("FigureOffsetZ", boxBlockEntity.getFigureOffsetZ());
+                        blockEntityTag.putDouble("FigureScale", boxBlockEntity.getFigureScale());
+                        figureBlockItem.addTagElement("BlockEntityTag", blockEntityTag);
+
+                        // Give the player the figure block item
+                        if (!player.getInventory().add(figureBlockItem)) {
+                            // If inventory is full, drop it
+                            player.drop(figureBlockItem, false);
+                        }
+
+                        // Mark the figure as extracted
+                        boxBlockEntity.setFigureExtracted(true);
+                        return InteractionResult.SUCCESS;
+                    }
+                    // Slime ball closes the box
+                    else if (heldItem.getItem() == net.minecraft.world.item.Items.SLIME_BALL) {
                         boxBlockEntity.toggleOpen();
                         return InteractionResult.SUCCESS;
                     }

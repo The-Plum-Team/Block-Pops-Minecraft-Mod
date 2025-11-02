@@ -27,6 +27,11 @@ public class ModItems {
         () -> new GeoBlockItem(ModBlocks.CLAW_MACHINE_BLOCK.get(), new Item.Properties())
     );
 
+    public static final RegistrySupplier<Item> FIGURE_BLOCK_ITEM = ITEMS.register(
+        "figure_block",
+        () -> new GeoBlockItem(ModBlocks.FIGURE_BLOCK.get(), new Item.Properties())
+    );
+
     static {
         // Register 16 color variant box block items (collection-independent)
         for (PopBlockColor color : PopBlockColor.values()) {

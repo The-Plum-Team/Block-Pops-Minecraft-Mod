@@ -46,23 +46,26 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
 
         // Then, render the figure model if one exists
         if (animatable.hasFigure()) {
-            poseStack.pushPose();
+            // Only render the 3D figure model if it hasn't been extracted
+            if (!animatable.isFigureExtracted()) {
+                poseStack.pushPose();
 
-            // Apply figure offset and scale
-            poseStack.translate(animatable.getFigureOffsetX(),
-                              animatable.getFigureOffsetY(),
-                              animatable.getFigureOffsetZ());
-            poseStack.scale((float) animatable.getFigureScale(),
-                          (float) animatable.getFigureScale(),
-                          (float) animatable.getFigureScale());
+                // Apply figure offset and scale
+                poseStack.translate(animatable.getFigureOffsetX(),
+                                  animatable.getFigureOffsetY(),
+                                  animatable.getFigureOffsetZ());
+                poseStack.scale((float) animatable.getFigureScale(),
+                              (float) animatable.getFigureScale(),
+                              (float) animatable.getFigureScale());
 
-            // Render the figure using separate renderer
-            figureRenderer.render(animatable, partialTick, poseStack, bufferSource,
-                                packedLight, packedOverlay);
+                // Render the figure using separate renderer
+                figureRenderer.render(animatable, partialTick, poseStack, bufferSource,
+                                    packedLight, packedOverlay);
 
-            poseStack.popPose();
+                poseStack.popPose();
+            }
 
-            // Render the figure face on the box
+            // Always render the figure face on the box (even when extracted)
             renderFigureFace(poseStack, animatable, model, bufferSource, partialTick, packedLight, packedOverlay);
         }
 
