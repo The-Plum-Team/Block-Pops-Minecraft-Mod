@@ -5,6 +5,7 @@ import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.client.Minecraft;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.network.chat.Component;
@@ -136,12 +137,17 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
 
         // Draw collection author below the figure count
         String author = collection.getAuthor();
-        String authorText = author.equals("Unknown")
-            ? "Skins created by multiple users"
-            : "Skins created by " + author;
+        Component authorText;
+        if (author.equals("Unknown")) {
+            authorText = Component.literal("Collection with multiple creators")
+                .withStyle(ChatFormatting.GOLD);
+        } else {
+            authorText = Component.literal("Skin creator: ")
+                .withStyle(ChatFormatting.GOLD)
+                .append(Component.literal(author).withStyle(ChatFormatting.GOLD));
+        }
         int authorY = subTextY + mc.font.lineHeight + 2;
-        int authorColor = 0xFFD700; // Gold color
-        graphics.drawString(mc.font, authorText, textX, authorY, authorColor, false);
+        graphics.drawString(mc.font, authorText, textX, authorY, 0xFFFFFF, false);
 
         // Render link button on hover if author URL is available
         this.isLinkHovered = false;
