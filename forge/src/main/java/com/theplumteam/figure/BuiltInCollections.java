@@ -11,7 +11,8 @@ public class BuiltInCollections {
     public static final List<String> COLLECTION_IDS = List.of(
         "jojos",
         "jujutsukaisen",
-        "adventuretime"
+        "adventuretime",
+        "supermario"
         // Add more collections as needed
     );
 
@@ -23,6 +24,7 @@ public class BuiltInCollections {
             case "jojos" -> "JoJos";
             case "jujutsukaisen" -> "Jujutsu Kaisen";
             case "adventuretime" -> "Adventure Time";
+            case "supermario" -> "Super Mario";
             default -> collectionId;
         };
     }

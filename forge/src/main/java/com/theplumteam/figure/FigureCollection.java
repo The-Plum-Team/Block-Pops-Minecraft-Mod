@@ -24,14 +24,16 @@ public class FigureCollection {
         private final float positionZ;
         private final float scaleX;
         private final float scaleY;
+        private final float scaleZ;
 
-        public LogoConfig(ResourceLocation texture, float positionX, float positionY, float positionZ, float scaleX, float scaleY) {
+        public LogoConfig(ResourceLocation texture, float positionX, float positionY, float positionZ, float scaleX, float scaleY, float scaleZ) {
             this.texture = texture;
             this.positionX = positionX;
             this.positionY = positionY;
             this.positionZ = positionZ;
             this.scaleX = scaleX;
             this.scaleY = scaleY;
+            this.scaleZ = scaleZ;
         }
 
         public ResourceLocation getTexture() {
@@ -56,6 +58,10 @@ public class FigureCollection {
 
         public float getScaleY() {
             return scaleY;
+        }
+
+        public float getScaleZ() {
+            return scaleZ;
         }
     }
 
@@ -95,9 +101,10 @@ public class FigureCollection {
             float positionX = logoJson.has("position_x") ? logoJson.get("position_x").getAsFloat() : -3.5f;
             float positionY = logoJson.has("position_y") ? logoJson.get("position_y").getAsFloat() : 0.8f;
             float positionZ = logoJson.has("position_z") ? logoJson.get("position_z").getAsFloat() : -7.4f;
-            float scaleX = logoJson.has("scale_x") ? logoJson.get("scale_x").getAsFloat() : 5.0f;
+            float scaleX = logoJson.has("scale_x") ? logoJson.get("scale_x").getAsFloat() : 1.0f;
             float scaleY = logoJson.has("scale_y") ? logoJson.get("scale_y").getAsFloat() : 5.0f;
-            logoConfig = new LogoConfig(logoTexture, positionX, positionY, positionZ, scaleX, scaleY);
+            float scaleZ = logoJson.has("scale_z") ? logoJson.get("scale_z").getAsFloat() : 5.0f;
+            logoConfig = new LogoConfig(logoTexture, positionX, positionY, positionZ, scaleX, scaleY, scaleZ);
         } else if (json.has("logo_texture")) {
             // Backward compatibility: support old format
             ResourceLocation logoTexture = new ResourceLocation(json.get("logo_texture").getAsString());
@@ -113,7 +120,8 @@ public class FigureCollection {
                 scaleX = 4.0f;
                 scaleY = 6.0f;
             }
-            logoConfig = new LogoConfig(logoTexture, -3.5f, 0.8f, -7.4f, scaleX, scaleY);
+            // For backward compatibility: old scaleX becomes scaleZ (since it was used for Z-axis width)
+            logoConfig = new LogoConfig(logoTexture, -3.5f, 0.8f, -7.4f, 1.0f, scaleY, scaleX);
         }
 
         List<FigureDefinition> figures = new ArrayList<>();

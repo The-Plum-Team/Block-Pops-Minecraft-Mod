@@ -58,6 +58,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     private Double logoPositionZ = null;
     private Double logoScaleX = null;
     private Double logoScaleY = null;
+    private Double logoScaleZ = null;
 
     public BoxBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.BOX_BLOCK.get(), pos, blockState);
@@ -239,6 +240,10 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         return logoScaleY;
     }
 
+    public Double getLogoScaleZ() {
+        return logoScaleZ;
+    }
+
     public void setLogoPosition(Double x, Double y, Double z) {
         this.logoPositionX = x;
         this.logoPositionY = y;
@@ -249,9 +254,10 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
     }
 
-    public void setLogoScale(Double scaleX, Double scaleY) {
+    public void setLogoScale(Double scaleX, Double scaleY, Double scaleZ) {
         this.logoScaleX = scaleX;
         this.logoScaleY = scaleY;
+        this.logoScaleZ = scaleZ;
         setChanged();
         if (level != null && !level.isClientSide) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);

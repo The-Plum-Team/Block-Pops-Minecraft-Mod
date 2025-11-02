@@ -160,7 +160,8 @@ public class BoxBlock extends BaseEntityBlock {
                     boxBlockEntity.getLogoPositionY(),
                     boxBlockEntity.getLogoPositionZ(),
                     boxBlockEntity.getLogoScaleX(),
-                    boxBlockEntity.getLogoScaleY()
+                    boxBlockEntity.getLogoScaleY(),
+                    boxBlockEntity.getLogoScaleZ()
                 ));
                 return InteractionResult.SUCCESS;
             }

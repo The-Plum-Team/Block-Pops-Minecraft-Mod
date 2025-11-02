@@ -6,11 +6,12 @@
   "box_texture": "blockpops:textures/block/box/adventuretime.png",
   "logo": {
     "texture": "blockpops:textures/block/box/logo/logo_adventuretime.png",
-    "position_x": 0.149,
-    "position_y": 0.018,
-    "position_z": -0.30,
-    "scale_x": 6.500,
-    "scale_y": 5.000
+    "position_x": -1.818,
+    "position_y": -0.229,
+    "position_z": 0.0,
+    "scale_x": 6.969,
+    "scale_y": 5.000,
+    "scale_z": 1.0
   },
   "figures": [
     {

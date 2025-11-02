@@ -27,11 +27,12 @@ public class FigurePositionPacket {
     private final Double logoPositionZ;
     private final Double logoScaleX;
     private final Double logoScaleY;
+    private final Double logoScaleZ;
 
     public FigurePositionPacket(BlockPos pos, double offsetX, double offsetY, double offsetZ, double scale,
                                 double hitboxOffsetX, double hitboxOffsetY, double hitboxOffsetZ,
                                 Double logoPositionX, Double logoPositionY, Double logoPositionZ,
-                                Double logoScaleX, Double logoScaleY) {
+                                Double logoScaleX, Double logoScaleY, Double logoScaleZ) {
         this.pos = pos;
         this.offsetX = offsetX;
         this.offsetY = offsetY;
@@ -45,6 +46,7 @@ public class FigurePositionPacket {
         this.logoPositionZ = logoPositionZ;
         this.logoScaleX = logoScaleX;
         this.logoScaleY = logoScaleY;
+        this.logoScaleZ = logoScaleZ;
     }
 
     public static void encode(FigurePositionPacket packet, FriendlyByteBuf buffer) {
@@ -67,6 +69,8 @@ public class FigurePositionPacket {
         if (packet.logoScaleX != null) buffer.writeDouble(packet.logoScaleX);
         buffer.writeBoolean(packet.logoScaleY != null);
         if (packet.logoScaleY != null) buffer.writeDouble(packet.logoScaleY);
+        buffer.writeBoolean(packet.logoScaleZ != null);
+        if (packet.logoScaleZ != null) buffer.writeDouble(packet.logoScaleZ);
     }
 
     public static FigurePositionPacket decode(FriendlyByteBuf buffer) {
@@ -84,8 +88,9 @@ public class FigurePositionPacket {
         Double logoPositionZ = buffer.readBoolean() ? buffer.readDouble() : null;
         Double logoScaleX = buffer.readBoolean() ? buffer.readDouble() : null;
         Double logoScaleY = buffer.readBoolean() ? buffer.readDouble() : null;
+        Double logoScaleZ = buffer.readBoolean() ? buffer.readDouble() : null;
         return new FigurePositionPacket(pos, offsetX, offsetY, offsetZ, scale, hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ,
-                                       logoPositionX, logoPositionY, logoPositionZ, logoScaleX, logoScaleY);
+                                       logoPositionX, logoPositionY, logoPositionZ, logoScaleX, logoScaleY, logoScaleZ);
     }
 
     public static void handle(FigurePositionPacket packet, Supplier<NetworkEvent.Context> contextSupplier) {
@@ -105,7 +110,7 @@ public class FigurePositionPacket {
                     boxBlockEntity.setFigureScale(packet.scale);
                     boxBlockEntity.setHitboxOffset(packet.hitboxOffsetX, packet.hitboxOffsetY, packet.hitboxOffsetZ);
                     boxBlockEntity.setLogoPosition(packet.logoPositionX, packet.logoPositionY, packet.logoPositionZ);
-                    boxBlockEntity.setLogoScale(packet.logoScaleX, packet.logoScaleY);
+                    boxBlockEntity.setLogoScale(packet.logoScaleX, packet.logoScaleY, packet.logoScaleZ);
                     boxBlockEntity.setChanged();
                     LOGGER.info("Figure, hitbox offsets, and logo config updated successfully");
                 } else {

@@ -6,11 +6,12 @@
   "box_texture": "blockpops:textures/block/box/jojos.png",
   "logo": {
     "texture": "blockpops:textures/block/box/logo/logo_jojos.png",
-    "position_x": 0.149,
-    "position_y": 0.08,
-    "position_z": -0.30,
-    "scale_x": 5.60,
-    "scale_y": 3.25
+    "position_x": -1.668,
+    "position_y": -0.100,
+    "position_z": 0.0,
+    "scale_x": 6.469,
+    "scale_y": 3.563,
+    "scale_z": 1.0
   },
   "figures": [
     {

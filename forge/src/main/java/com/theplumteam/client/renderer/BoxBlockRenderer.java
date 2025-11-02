@@ -149,6 +149,8 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                            animatable.getLogoScaleX().floatValue() : collectionLogoConfig.getScaleX();
         float logoScaleY = animatable.getLogoScaleY() != null ?
                            animatable.getLogoScaleY().floatValue() : collectionLogoConfig.getScaleY();
+        float logoScaleZ = animatable.getLogoScaleZ() != null ?
+                           animatable.getLogoScaleZ().floatValue() : collectionLogoConfig.getScaleZ();
 
         RenderType logoRenderType = RenderType.entityCutoutNoCull(collectionLogoConfig.getTexture());
         VertexConsumer logoBuffer = bufferSource.getBuffer(logoRenderType);
@@ -161,9 +163,9 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                 // Apply translate first, then scale (matrices apply in reverse order!)
                 // A vertex goes through: scale → translate
                 // This scales the 1x1 cube to desired size, then positions it correctly
-                // Note: logoScaleX controls width (Z axis), logoScaleY controls height (Y axis)
+                // Note: logoScaleX controls width (X axis), logoScaleY controls height (Y axis), logoScaleZ controls depth (Z axis)
                 poseStack.translate(logoPositionX, logoPositionY, logoPositionZ);
-                poseStack.scale(1.0f, logoScaleY, logoScaleX);
+                poseStack.scale(logoScaleX, logoScaleY, logoScaleZ);
 
                 // Render this bone with the logo texture using a special flag
                 renderRecursively(poseStack, animatable, bone, logoRenderType, bufferSource, logoBuffer,

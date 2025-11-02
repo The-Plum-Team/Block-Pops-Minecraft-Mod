@@ -28,6 +28,7 @@ public class FigurePositionScreen extends Screen {
     private Double logoPositionZ;
     private Double logoScaleX;
     private Double logoScaleY;
+    private Double logoScaleZ;
 
     private AbstractSliderButton sliderX;
     private AbstractSliderButton sliderY;
@@ -41,11 +42,12 @@ public class FigurePositionScreen extends Screen {
     private AbstractSliderButton sliderLogoZ;
     private AbstractSliderButton sliderLogoScaleX;
     private AbstractSliderButton sliderLogoScaleY;
+    private AbstractSliderButton sliderLogoScaleZ;
 
     public FigurePositionScreen(BlockPos blockPos, double offsetX, double offsetY, double offsetZ, double scale,
                                 double hitboxOffsetX, double hitboxOffsetY, double hitboxOffsetZ,
                                 Double logoPositionX, Double logoPositionY, Double logoPositionZ,
-                                Double logoScaleX, Double logoScaleY) {
+                                Double logoScaleX, Double logoScaleY, Double logoScaleZ) {
         super(Component.literal("Adjust Figure, Hitbox & Logo"));
         this.blockPos = blockPos;
         this.offsetX = offsetX;
@@ -60,9 +62,10 @@ public class FigurePositionScreen extends Screen {
         this.logoPositionZ = logoPositionZ;
         this.logoScaleX = logoScaleX;
         this.logoScaleY = logoScaleY;
-        LOGGER.info("FigurePositionScreen opened at {} with offsets: X={}, Y={}, Z={}, Scale={}, HitboxOffsets: X={}, Y={}, Z={}, LogoPos: X={}, Y={}, Z={}, LogoScale: X={}, Y={}",
+        this.logoScaleZ = logoScaleZ;
+        LOGGER.info("FigurePositionScreen opened at {} with offsets: X={}, Y={}, Z={}, Scale={}, HitboxOffsets: X={}, Y={}, Z={}, LogoPos: X={}, Y={}, Z={}, LogoScale: X={}, Y={}, Z={}",
                     blockPos, offsetX, offsetY, offsetZ, scale, hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ,
-                    logoPositionX, logoPositionY, logoPositionZ, logoScaleX, logoScaleY);
+                    logoPositionX, logoPositionY, logoPositionZ, logoScaleX, logoScaleY, logoScaleZ);
     }
 
     // Helper method to add fine-tune buttons next to a slider
@@ -88,13 +91,20 @@ public class FigurePositionScreen extends Screen {
         super.init();
 
         int centerX = this.width / 2;
-        int startY = 40; // Start higher to fit all controls
-        int sliderWidth = 160; // Narrower to make room for +/- buttons
+        int startY = 50; // Start Y position for content
+        int sliderWidth = 140; // Slider width
+        int columnSpacing = 200; // Space between columns
 
-        // === FIGURE CONTROLS ===
+        // Calculate column X positions
+        int col1X = centerX - columnSpacing - 70;
+        int col2X = centerX - 70;
+        int col3X = centerX + columnSpacing - 70;
+
+        // === COLUMN 1: FIGURE CONTROLS ===
+        // Section header is drawn in render() method
 
         // X Offset Slider (-1 to 1)
-        this.sliderX = new AbstractSliderButton(centerX - 100, startY, sliderWidth, 20,
+        this.sliderX = new AbstractSliderButton(col1X, startY, sliderWidth, 20,
                 Component.literal("X Offset: " + String.format("%.2f", offsetX)),
                 (offsetX + 1.0) / 2.0) {
             @Override
@@ -111,12 +121,12 @@ public class FigurePositionScreen extends Screen {
             }
         };
         this.addRenderableWidget(sliderX);
-        addFineTuneButtons(centerX - 100 + sliderWidth + 2, startY,
+        addFineTuneButtons(col1X + sliderWidth + 2, startY,
             () -> { offsetX = Math.max(-1.0, offsetX - 0.001); sendUpdate(); },
             () -> { offsetX = Math.min(1.0, offsetX + 0.001); sendUpdate(); });
 
         // Y Offset Slider (-1 to 1)
-        this.sliderY = new AbstractSliderButton(centerX - 100, startY + 30, sliderWidth, 20,
+        this.sliderY = new AbstractSliderButton(col1X, startY + 25, sliderWidth, 20,
                 Component.literal("Y Offset: " + String.format("%.2f", offsetY)),
                 (offsetY + 1.0) / 2.0) {
             @Override
@@ -133,12 +143,12 @@ public class FigurePositionScreen extends Screen {
             }
         };
         this.addRenderableWidget(sliderY);
-        addFineTuneButtons(centerX - 100 + sliderWidth + 2, startY + 30,
+        addFineTuneButtons(col1X + sliderWidth + 2, startY + 25,
             () -> { offsetY = Math.max(-1.0, offsetY - 0.001); sendUpdate(); },
             () -> { offsetY = Math.min(1.0, offsetY + 0.001); sendUpdate(); });
 
         // Z Offset Slider (-1 to 1)
-        this.sliderZ = new AbstractSliderButton(centerX - 100, startY + 60, sliderWidth, 20,
+        this.sliderZ = new AbstractSliderButton(col1X, startY + 50, sliderWidth, 20,
                 Component.literal("Z Offset: " + String.format("%.2f", offsetZ)),
                 (offsetZ + 1.0) / 2.0) {
             @Override
@@ -155,12 +165,12 @@ public class FigurePositionScreen extends Screen {
             }
         };
         this.addRenderableWidget(sliderZ);
-        addFineTuneButtons(centerX - 100 + sliderWidth + 2, startY + 60,
+        addFineTuneButtons(col1X + sliderWidth + 2, startY + 50,
             () -> { offsetZ = Math.max(-1.0, offsetZ - 0.001); sendUpdate(); },
             () -> { offsetZ = Math.min(1.0, offsetZ + 0.001); sendUpdate(); });
 
         // Scale Slider (0.1 to 2.0)
-        this.sliderScale = new AbstractSliderButton(centerX - 100, startY + 90, sliderWidth, 20,
+        this.sliderScale = new AbstractSliderButton(col1X, startY + 75, sliderWidth, 20,
                 Component.literal("Scale: " + String.format("%.2f", scale)),
                 (scale - 0.1) / 1.9) {
             @Override
@@ -177,14 +187,15 @@ public class FigurePositionScreen extends Screen {
             }
         };
         this.addRenderableWidget(sliderScale);
-        addFineTuneButtons(centerX - 100 + sliderWidth + 2, startY + 90,
+        addFineTuneButtons(col1X + sliderWidth + 2, startY + 75,
             () -> { scale = Math.max(0.1, scale - 0.001); sendUpdate(); },
             () -> { scale = Math.min(2.0, scale + 0.001); sendUpdate(); });
 
-        // === HITBOX CONTROLS ===
+        // === COLUMN 2: HITBOX CONTROLS ===
+        // Section header is drawn in render() method
 
         // Hitbox X Offset Slider (-1 to 1)
-        this.sliderHitboxX = new AbstractSliderButton(centerX - 100, startY + 130, sliderWidth, 20,
+        this.sliderHitboxX = new AbstractSliderButton(col2X, startY, sliderWidth, 20,
                 Component.literal("Hitbox X: " + String.format("%.2f", hitboxOffsetX)),
                 (hitboxOffsetX + 1.0) / 2.0) {
             @Override
@@ -201,12 +212,12 @@ public class FigurePositionScreen extends Screen {
             }
         };
         this.addRenderableWidget(sliderHitboxX);
-        addFineTuneButtons(centerX - 100 + sliderWidth + 2, startY + 130,
+        addFineTuneButtons(col2X + sliderWidth + 2, startY,
             () -> { hitboxOffsetX = Math.max(-1.0, hitboxOffsetX - 0.001); sendUpdate(); },
             () -> { hitboxOffsetX = Math.min(1.0, hitboxOffsetX + 0.001); sendUpdate(); });
 
         // Hitbox Y Offset Slider (-1 to 1)
-        this.sliderHitboxY = new AbstractSliderButton(centerX - 100, startY + 160, sliderWidth, 20,
+        this.sliderHitboxY = new AbstractSliderButton(col2X, startY + 25, sliderWidth, 20,
                 Component.literal("Hitbox Y: " + String.format("%.2f", hitboxOffsetY)),
                 (hitboxOffsetY + 1.0) / 2.0) {
             @Override
@@ -223,12 +234,12 @@ public class FigurePositionScreen extends Screen {
             }
         };
         this.addRenderableWidget(sliderHitboxY);
-        addFineTuneButtons(centerX - 100 + sliderWidth + 2, startY + 160,
+        addFineTuneButtons(col2X + sliderWidth + 2, startY + 25,
             () -> { hitboxOffsetY = Math.max(-1.0, hitboxOffsetY - 0.001); sendUpdate(); },
             () -> { hitboxOffsetY = Math.min(1.0, hitboxOffsetY + 0.001); sendUpdate(); });
 
         // Hitbox Z Offset Slider (-1 to 1)
-        this.sliderHitboxZ = new AbstractSliderButton(centerX - 100, startY + 190, sliderWidth, 20,
+        this.sliderHitboxZ = new AbstractSliderButton(col2X, startY + 50, sliderWidth, 20,
                 Component.literal("Hitbox Z: " + String.format("%.2f", hitboxOffsetZ)),
                 (hitboxOffsetZ + 1.0) / 2.0) {
             @Override
@@ -245,15 +256,16 @@ public class FigurePositionScreen extends Screen {
             }
         };
         this.addRenderableWidget(sliderHitboxZ);
-        addFineTuneButtons(centerX - 100 + sliderWidth + 2, startY + 190,
+        addFineTuneButtons(col2X + sliderWidth + 2, startY + 50,
             () -> { hitboxOffsetZ = Math.max(-1.0, hitboxOffsetZ - 0.001); sendUpdate(); },
             () -> { hitboxOffsetZ = Math.min(1.0, hitboxOffsetZ + 0.001); sendUpdate(); });
 
-        // === LOGO CONTROLS ===
+        // === COLUMN 3: LOGO CONTROLS ===
+        // Section header is drawn in render() method
 
         // Logo X Position Slider (Depth: forward-back) (-10 to 10 model units)
         double logoX = logoPositionX != null ? logoPositionX : 0.0;
-        this.sliderLogoX = new AbstractSliderButton(centerX - 100, startY + 220, sliderWidth, 20,
+        this.sliderLogoX = new AbstractSliderButton(col3X, startY, sliderWidth, 20,
                 Component.literal("Logo Depth: " + String.format("%.2f", logoX)),
                 (logoX + 10.0) / 20.0) {
             @Override
@@ -270,13 +282,13 @@ public class FigurePositionScreen extends Screen {
             }
         };
         this.addRenderableWidget(sliderLogoX);
-        addFineTuneButtons(centerX - 100 + sliderWidth + 2, startY + 220,
+        addFineTuneButtons(col3X + sliderWidth + 2, startY,
             () -> { logoPositionX = Math.max(-10.0, (logoPositionX != null ? logoPositionX : 0.0) - 0.001); sendUpdate(); },
             () -> { logoPositionX = Math.min(10.0, (logoPositionX != null ? logoPositionX : 0.0) + 0.001); sendUpdate(); });
 
         // Logo Y Position Slider (Vertical: up-down) (-10 to 10 model units)
         double logoY = logoPositionY != null ? logoPositionY : 0.0;
-        this.sliderLogoY = new AbstractSliderButton(centerX - 100, startY + 250, sliderWidth, 20,
+        this.sliderLogoY = new AbstractSliderButton(col3X, startY + 25, sliderWidth, 20,
                 Component.literal("Logo Vertical: " + String.format("%.2f", logoY)),
                 (logoY + 10.0) / 20.0) {
             @Override
@@ -293,13 +305,13 @@ public class FigurePositionScreen extends Screen {
             }
         };
         this.addRenderableWidget(sliderLogoY);
-        addFineTuneButtons(centerX - 100 + sliderWidth + 2, startY + 250,
+        addFineTuneButtons(col3X + sliderWidth + 2, startY + 25,
             () -> { logoPositionY = Math.max(-10.0, (logoPositionY != null ? logoPositionY : 0.0) - 0.001); sendUpdate(); },
             () -> { logoPositionY = Math.min(10.0, (logoPositionY != null ? logoPositionY : 0.0) + 0.001); sendUpdate(); });
 
         // Logo Z Position Slider (Horizontal: left-right) (-10 to 10 model units)
         double logoZ = logoPositionZ != null ? logoPositionZ : 0.0;
-        this.sliderLogoZ = new AbstractSliderButton(centerX - 100, startY + 280, sliderWidth, 20,
+        this.sliderLogoZ = new AbstractSliderButton(col3X, startY + 50, sliderWidth, 20,
                 Component.literal("Logo Horizontal: " + String.format("%.2f", logoZ)),
                 (logoZ + 10.0) / 20.0) {
             @Override
@@ -316,13 +328,13 @@ public class FigurePositionScreen extends Screen {
             }
         };
         this.addRenderableWidget(sliderLogoZ);
-        addFineTuneButtons(centerX - 100 + sliderWidth + 2, startY + 280,
+        addFineTuneButtons(col3X + sliderWidth + 2, startY + 50,
             () -> { logoPositionZ = Math.max(-10.0, (logoPositionZ != null ? logoPositionZ : 0.0) - 0.001); sendUpdate(); },
             () -> { logoPositionZ = Math.min(10.0, (logoPositionZ != null ? logoPositionZ : 0.0) + 0.001); sendUpdate(); });
 
         // Logo X Scale Slider (0.5 to 10)
         double scaleX = logoScaleX != null ? logoScaleX : 5.0;
-        this.sliderLogoScaleX = new AbstractSliderButton(centerX - 100, startY + 310, sliderWidth, 20,
+        this.sliderLogoScaleX = new AbstractSliderButton(col3X, startY + 75, sliderWidth, 20,
                 Component.literal("Logo Width: " + String.format("%.2f", scaleX)),
                 (scaleX - 0.5) / 9.5) {
             @Override
@@ -339,13 +351,13 @@ public class FigurePositionScreen extends Screen {
             }
         };
         this.addRenderableWidget(sliderLogoScaleX);
-        addFineTuneButtons(centerX - 100 + sliderWidth + 2, startY + 310,
+        addFineTuneButtons(col3X + sliderWidth + 2, startY + 75,
             () -> { logoScaleX = Math.max(0.5, (logoScaleX != null ? logoScaleX : 5.0) - 0.001); sendUpdate(); },
             () -> { logoScaleX = Math.min(10.0, (logoScaleX != null ? logoScaleX : 5.0) + 0.001); sendUpdate(); });
 
         // Logo Y Scale Slider (0.5 to 10)
         double scaleY = logoScaleY != null ? logoScaleY : 5.0;
-        this.sliderLogoScaleY = new AbstractSliderButton(centerX - 100, startY + 340, sliderWidth, 20,
+        this.sliderLogoScaleY = new AbstractSliderButton(col3X, startY + 100, sliderWidth, 20,
                 Component.literal("Logo Height: " + String.format("%.2f", scaleY)),
                 (scaleY - 0.5) / 9.5) {
             @Override
@@ -362,12 +374,35 @@ public class FigurePositionScreen extends Screen {
             }
         };
         this.addRenderableWidget(sliderLogoScaleY);
-        addFineTuneButtons(centerX - 100 + sliderWidth + 2, startY + 340,
+        addFineTuneButtons(col3X + sliderWidth + 2, startY + 100,
             () -> { logoScaleY = Math.max(0.5, (logoScaleY != null ? logoScaleY : 5.0) - 0.001); sendUpdate(); },
             () -> { logoScaleY = Math.min(10.0, (logoScaleY != null ? logoScaleY : 5.0) + 0.001); sendUpdate(); });
 
+        // Logo Z Scale Slider (0.5 to 10)
+        double scaleZ = logoScaleZ != null ? logoScaleZ : 1.0;
+        this.sliderLogoScaleZ = new AbstractSliderButton(col3X, startY + 125, sliderWidth, 20,
+                Component.literal("Logo Depth Scale: " + String.format("%.2f", scaleZ)),
+                (scaleZ - 0.5) / 9.5) {
+            @Override
+            protected void updateMessage() {
+                logoScaleZ = 0.5 + (this.value * 9.5);
+                this.setMessage(Component.literal("Logo Depth Scale: " + String.format("%.2f", logoScaleZ)));
+                sendUpdate();
+            }
+
+            @Override
+            protected void applyValue() {
+                logoScaleZ = 0.5 + (this.value * 9.5);
+                sendUpdate();
+            }
+        };
+        this.addRenderableWidget(sliderLogoScaleZ);
+        addFineTuneButtons(col3X + sliderWidth + 2, startY + 125,
+            () -> { logoScaleZ = Math.max(0.5, (logoScaleZ != null ? logoScaleZ : 1.0) - 0.001); sendUpdate(); },
+            () -> { logoScaleZ = Math.min(10.0, (logoScaleZ != null ? logoScaleZ : 1.0) + 0.001); sendUpdate(); });
+
         // === COPY BUTTONS ===
-        int copyButtonY = startY + 370;
+        int copyButtonY = startY + 160;
         int copyButtonWidth = 95;
 
         // Copy Figure Position
@@ -386,12 +421,13 @@ public class FigurePositionScreen extends Screen {
 
         // Copy Logo
         this.addRenderableWidget(Button.builder(Component.literal("Copy Logo"), button -> {
-            String data = String.format("Logo: X=%.3f Y=%.3f Z=%.3f Width=%.3f Height=%.3f",
+            String data = String.format("Logo: X=%.3f Y=%.3f Z=%.3f Width=%.3f Height=%.3f Depth=%.3f",
                 logoPositionX != null ? logoPositionX : 0.0,
                 logoPositionY != null ? logoPositionY : 0.0,
                 logoPositionZ != null ? logoPositionZ : 0.0,
                 logoScaleX != null ? logoScaleX : 5.0,
-                logoScaleY != null ? logoScaleY : 5.0);
+                logoScaleY != null ? logoScaleY : 5.0,
+                logoScaleZ != null ? logoScaleZ : 1.0);
             minecraft.keyboardHandler.setClipboard(data);
         }).bounds(centerX - 45, copyButtonY + 25, copyButtonWidth, 20).build());
 
@@ -409,6 +445,7 @@ public class FigurePositionScreen extends Screen {
             logoPositionZ = null;
             logoScaleX = null;
             logoScaleY = null;
+            logoScaleZ = null;
             this.rebuildWidgets();
             sendUpdate();
         }).bounds(centerX - 100, copyButtonY + 50, 95, 20).build());
@@ -427,10 +464,19 @@ public class FigurePositionScreen extends Screen {
         // Draw title
         guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 20, 0xFFFFFF);
 
-        // Draw current values
+        // Draw column headers
         int centerX = this.width / 2;
-        int startY = this.height / 2 - 80;
-        guiGraphics.drawString(this.font, "Adjust the sliders to position the figure", centerX - 80, startY, 0xAAAAAA);
+        int columnSpacing = 200;
+        int headerY = 35;
+
+        int col1X = centerX - columnSpacing - 70;
+        int col2X = centerX - 70;
+        int col3X = centerX + columnSpacing - 70;
+
+        // Column headers with color coding
+        guiGraphics.drawCenteredString(this.font, "FIGURE", col1X + 70, headerY, 0xFFD700); // Gold
+        guiGraphics.drawCenteredString(this.font, "HITBOX", col2X + 70, headerY, 0x00FF00); // Green
+        guiGraphics.drawCenteredString(this.font, "LOGO", col3X + 70, headerY, 0x00BFFF); // Sky blue
     }
 
     @Override
@@ -441,13 +487,13 @@ public class FigurePositionScreen extends Screen {
 
     private void sendUpdate() {
         // Send packet to server with new values
-        LOGGER.info("Sending update - Position: {}, Offsets: X={}, Y={}, Z={}, Scale={}, HitboxOffsets: X={}, Y={}, Z={}, LogoPos: X={}, Y={}, Z={}, LogoScale: X={}, Y={}",
+        LOGGER.info("Sending update - Position: {}, Offsets: X={}, Y={}, Z={}, Scale={}, HitboxOffsets: X={}, Y={}, Z={}, LogoPos: X={}, Y={}, Z={}, LogoScale: X={}, Y={}, Z={}",
                     blockPos, offsetX, offsetY, offsetZ, scale, hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ,
-                    logoPositionX, logoPositionY, logoPositionZ, logoScaleX, logoScaleY);
+                    logoPositionX, logoPositionY, logoPositionZ, logoScaleX, logoScaleY, logoScaleZ);
         FigurePositionPacket packet = new FigurePositionPacket(blockPos, offsetX, offsetY, offsetZ, scale,
                                                                hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ,
                                                                logoPositionX, logoPositionY, logoPositionZ,
-                                                               logoScaleX, logoScaleY);
+                                                               logoScaleX, logoScaleY, logoScaleZ);
         BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
     }
 

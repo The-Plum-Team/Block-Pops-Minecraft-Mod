@@ -6,11 +6,12 @@
   "box_texture": "blockpops:textures/block/box/jujutsukaisen.png",
   "logo": {
     "texture": "blockpops:textures/block/box/logo/logo_jujutsukaisen.png",
-    "position_x": 0.149,
-    "position_y": 0.08,
-    "position_z": -0.30,
-    "scale_x": 4.50,
-    "scale_y": 4.50
+    "position_x": -1.225,
+    "position_y": -0.181,
+    "position_z": 0.0,
+    "scale_x": 5.000,
+    "scale_y": 5.000,
+    "scale_z": 1.0
   },
   "figures": [
     {
