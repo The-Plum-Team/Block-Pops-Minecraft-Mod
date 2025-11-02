@@ -198,6 +198,31 @@ public class BoxBlock extends BaseEntityBlock {
                         boxBlockEntity.setFigureExtracted(true);
                         return InteractionResult.SUCCESS;
                     }
+                    // Holding a figure block - try to put it back in the box
+                    else if (heldItem.getItem() == ModItems.FIGURE_BLOCK_ITEM.get() && boxBlockEntity.isFigureExtracted()) {
+                        // Check if the figure matches this box
+                        CompoundTag blockEntityTag = heldItem.getTagElement("BlockEntityTag");
+                        if (blockEntityTag != null) {
+                            String heldFigureId = blockEntityTag.getString("FigureId");
+                            String heldCollectionId = blockEntityTag.getString("CollectionId");
+
+                            // Verify it's the same figure that was in this box
+                            if (heldFigureId.equals(boxBlockEntity.getFigureId()) &&
+                                heldCollectionId.equals(boxBlockEntity.getCollectionId())) {
+
+                                // Put the figure back in the box
+                                boxBlockEntity.setFigureExtracted(false);
+
+                                // Close the box
+                                boxBlockEntity.toggleOpen();
+
+                                // Remove one figure item from player's hand
+                                heldItem.shrink(1);
+
+                                return InteractionResult.SUCCESS;
+                            }
+                        }
+                    }
                     // Slime ball closes the box
                     else if (heldItem.getItem() == net.minecraft.world.item.Items.SLIME_BALL) {
                         boxBlockEntity.toggleOpen();
