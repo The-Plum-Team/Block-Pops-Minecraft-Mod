@@ -167,6 +167,22 @@ public class BoxBlock extends BaseEntityBlock {
 
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+        ItemStack heldItem = player.getItemInHand(hand);
+
+        // Check if player is holding scissors (shears)
+        if (heldItem.getItem() == net.minecraft.world.item.Items.SHEARS) {
+            if (!level.isClientSide) {
+                BlockEntity blockEntity = level.getBlockEntity(pos);
+                if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
+                    // Trigger the opening animation on the server
+                    boxBlockEntity.triggerOpenAnimation();
+                    return InteractionResult.SUCCESS;
+                }
+            }
+            return InteractionResult.sidedSuccess(level.isClientSide);
+        }
+
+        // Shift-right-click to open adjustment screen
         if (level.isClientSide && player.isShiftKeyDown()) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {

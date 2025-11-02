@@ -27,6 +27,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
     private static final RawAnimation BOX_ANIMATION = RawAnimation.begin().thenLoop("animation.box_block.idle");
+    private static final RawAnimation OPEN_ANIMATION = RawAnimation.begin().thenPlay("animation.box_block.open");
 
     // Collection and figure data
     private String figureId = ""; // Empty means no figure
@@ -60,7 +61,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         // Controller for the box model animations
         controllers.add(new AnimationController<>(this, "box_controller", 0, state ->
             state.setAndContinue(BOX_ANIMATION)
-        ));
+        ).triggerableAnim("open", OPEN_ANIMATION));
 
         // Note: Figure animations are handled by the separate figure renderer
         // No controller needed here since we're using a separate GeoBlockRenderer for the figure
@@ -373,6 +374,15 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         CompoundTag tag = new CompoundTag();
         saveAdditional(tag);
         stack.addTagElement("BlockEntityTag", tag);
+    }
+
+    /**
+     * Triggers the box opening animation
+     */
+    public void triggerOpenAnimation() {
+        if (level != null && !level.isClientSide) {
+            triggerAnim("box_controller", "open");
+        }
     }
 
     public static <T extends BlockEntity> void tick(Level level, BlockPos pos, BlockState state, T blockEntity) {
