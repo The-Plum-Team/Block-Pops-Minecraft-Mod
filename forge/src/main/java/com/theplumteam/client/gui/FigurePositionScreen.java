@@ -30,6 +30,9 @@ public class FigurePositionScreen extends Screen {
     private double hitboxOffsetX;
     private double hitboxOffsetY;
     private double hitboxOffsetZ;
+    private double hitboxScaleX;
+    private double hitboxScaleY;
+    private double hitboxScaleZ;
     private Double logoPositionX;
     private Double logoPositionY;
     private Double logoPositionZ;
@@ -44,6 +47,9 @@ public class FigurePositionScreen extends Screen {
     private AbstractSliderButton sliderHitboxX;
     private AbstractSliderButton sliderHitboxY;
     private AbstractSliderButton sliderHitboxZ;
+    private AbstractSliderButton sliderHitboxScaleX;
+    private AbstractSliderButton sliderHitboxScaleY;
+    private AbstractSliderButton sliderHitboxScaleZ;
     private AbstractSliderButton sliderLogoX;
     private AbstractSliderButton sliderLogoY;
     private AbstractSliderButton sliderLogoZ;
@@ -53,6 +59,7 @@ public class FigurePositionScreen extends Screen {
 
     public FigurePositionScreen(BlockPos blockPos, double offsetX, double offsetY, double offsetZ, double scale,
                                 double hitboxOffsetX, double hitboxOffsetY, double hitboxOffsetZ,
+                                double hitboxScaleX, double hitboxScaleY, double hitboxScaleZ,
                                 Double logoPositionX, Double logoPositionY, Double logoPositionZ,
                                 Double logoScaleX, Double logoScaleY, Double logoScaleZ) {
         super(Component.literal("Adjust Figure, Hitbox & Logo"));
@@ -64,14 +71,18 @@ public class FigurePositionScreen extends Screen {
         this.hitboxOffsetX = hitboxOffsetX;
         this.hitboxOffsetY = hitboxOffsetY;
         this.hitboxOffsetZ = hitboxOffsetZ;
+        this.hitboxScaleX = hitboxScaleX;
+        this.hitboxScaleY = hitboxScaleY;
+        this.hitboxScaleZ = hitboxScaleZ;
         this.logoPositionX = logoPositionX;
         this.logoPositionY = logoPositionY;
         this.logoPositionZ = logoPositionZ;
         this.logoScaleX = logoScaleX;
         this.logoScaleY = logoScaleY;
         this.logoScaleZ = logoScaleZ;
-        LOGGER.info("FigurePositionScreen opened at {} with offsets: X={}, Y={}, Z={}, Scale={}, HitboxOffsets: X={}, Y={}, Z={}, LogoPos: X={}, Y={}, Z={}, LogoScale: X={}, Y={}, Z={}",
+        LOGGER.info("FigurePositionScreen opened at {} with offsets: X={}, Y={}, Z={}, Scale={}, HitboxOffsets: X={}, Y={}, Z={}, HitboxScale: X={}, Y={}, Z={}, LogoPos: X={}, Y={}, Z={}, LogoScale: X={}, Y={}, Z={}",
                     blockPos, offsetX, offsetY, offsetZ, scale, hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ,
+                    hitboxScaleX, hitboxScaleY, hitboxScaleZ,
                     logoPositionX, logoPositionY, logoPositionZ, logoScaleX, logoScaleY, logoScaleZ);
     }
 
@@ -266,6 +277,72 @@ public class FigurePositionScreen extends Screen {
         addFineTuneButtons(col2X + sliderWidth + 2, startY + 50,
             () -> { hitboxOffsetZ = Math.max(-1.0, hitboxOffsetZ - 0.001); sendUpdate(); },
             () -> { hitboxOffsetZ = Math.min(1.0, hitboxOffsetZ + 0.001); sendUpdate(); });
+
+        // Hitbox Scale X Slider (0.5 to 2.0)
+        this.sliderHitboxScaleX = new AbstractSliderButton(col2X, startY + 75, sliderWidth, 20,
+                Component.literal("Hitbox Scale X: " + String.format("%.2f", hitboxScaleX)),
+                (hitboxScaleX - 0.5) / 1.5) {
+            @Override
+            protected void updateMessage() {
+                hitboxScaleX = 0.5 + (this.value * 1.5);
+                this.setMessage(Component.literal("Hitbox Scale X: " + String.format("%.2f", hitboxScaleX)));
+                sendUpdate();
+            }
+
+            @Override
+            protected void applyValue() {
+                hitboxScaleX = 0.5 + (this.value * 1.5);
+                sendUpdate();
+            }
+        };
+        this.addRenderableWidget(sliderHitboxScaleX);
+        addFineTuneButtons(col2X + sliderWidth + 2, startY + 75,
+            () -> { hitboxScaleX = Math.max(0.5, hitboxScaleX - 0.01); sendUpdate(); },
+            () -> { hitboxScaleX = Math.min(2.0, hitboxScaleX + 0.01); sendUpdate(); });
+
+        // Hitbox Scale Y Slider (0.5 to 2.0)
+        this.sliderHitboxScaleY = new AbstractSliderButton(col2X, startY + 100, sliderWidth, 20,
+                Component.literal("Hitbox Scale Y: " + String.format("%.2f", hitboxScaleY)),
+                (hitboxScaleY - 0.5) / 1.5) {
+            @Override
+            protected void updateMessage() {
+                hitboxScaleY = 0.5 + (this.value * 1.5);
+                this.setMessage(Component.literal("Hitbox Scale Y: " + String.format("%.2f", hitboxScaleY)));
+                sendUpdate();
+            }
+
+            @Override
+            protected void applyValue() {
+                hitboxScaleY = 0.5 + (this.value * 1.5);
+                sendUpdate();
+            }
+        };
+        this.addRenderableWidget(sliderHitboxScaleY);
+        addFineTuneButtons(col2X + sliderWidth + 2, startY + 100,
+            () -> { hitboxScaleY = Math.max(0.5, hitboxScaleY - 0.01); sendUpdate(); },
+            () -> { hitboxScaleY = Math.min(2.0, hitboxScaleY + 0.01); sendUpdate(); });
+
+        // Hitbox Scale Z Slider (0.5 to 2.0)
+        this.sliderHitboxScaleZ = new AbstractSliderButton(col2X, startY + 125, sliderWidth, 20,
+                Component.literal("Hitbox Scale Z: " + String.format("%.2f", hitboxScaleZ)),
+                (hitboxScaleZ - 0.5) / 1.5) {
+            @Override
+            protected void updateMessage() {
+                hitboxScaleZ = 0.5 + (this.value * 1.5);
+                this.setMessage(Component.literal("Hitbox Scale Z: " + String.format("%.2f", hitboxScaleZ)));
+                sendUpdate();
+            }
+
+            @Override
+            protected void applyValue() {
+                hitboxScaleZ = 0.5 + (this.value * 1.5);
+                sendUpdate();
+            }
+        };
+        this.addRenderableWidget(sliderHitboxScaleZ);
+        addFineTuneButtons(col2X + sliderWidth + 2, startY + 125,
+            () -> { hitboxScaleZ = Math.max(0.5, hitboxScaleZ - 0.01); sendUpdate(); },
+            () -> { hitboxScaleZ = Math.min(2.0, hitboxScaleZ + 0.01); sendUpdate(); });
 
         // === COLUMN 3: LOGO CONTROLS ===
         // Section header is drawn in render() method
@@ -587,11 +664,13 @@ public class FigurePositionScreen extends Screen {
 
     private void sendUpdate() {
         // Send packet to server with new values
-        LOGGER.info("Sending update - Position: {}, Offsets: X={}, Y={}, Z={}, Scale={}, HitboxOffsets: X={}, Y={}, Z={}, LogoPos: X={}, Y={}, Z={}, LogoScale: X={}, Y={}, Z={}",
+        LOGGER.info("Sending update - Position: {}, Offsets: X={}, Y={}, Z={}, Scale={}, HitboxOffsets: X={}, Y={}, Z={}, HitboxScale: X={}, Y={}, Z={}, LogoPos: X={}, Y={}, Z={}, LogoScale: X={}, Y={}, Z={}",
                     blockPos, offsetX, offsetY, offsetZ, scale, hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ,
+                    hitboxScaleX, hitboxScaleY, hitboxScaleZ,
                     logoPositionX, logoPositionY, logoPositionZ, logoScaleX, logoScaleY, logoScaleZ);
         FigurePositionPacket packet = new FigurePositionPacket(blockPos, offsetX, offsetY, offsetZ, scale,
                                                                hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ,
+                                                               hitboxScaleX, hitboxScaleY, hitboxScaleZ,
                                                                logoPositionX, logoPositionY, logoPositionZ,
                                                                logoScaleX, logoScaleY, logoScaleZ);
         BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);

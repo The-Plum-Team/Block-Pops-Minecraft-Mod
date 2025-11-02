@@ -47,9 +47,14 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     private double figureScale = 1.0;
 
     // Hitbox offset - allows fine-tuning hitbox position
-    private double hitboxOffsetX = -0.03;
-    private double hitboxOffsetY = 0.00;
-    private double hitboxOffsetZ = -0.06;
+    private double hitboxOffsetX = 0.0;
+    private double hitboxOffsetY = 0.006;
+    private double hitboxOffsetZ = 0.0;
+
+    // Hitbox scale - allows adjusting hitbox size on each axis
+    private double hitboxScaleX = 1.10;
+    private double hitboxScaleY = 1.00;
+    private double hitboxScaleZ = 0.90;
 
     // Logo configuration - allows adjusting logo position and scale per box
     // null values mean use the collection's default configuration
@@ -210,10 +215,32 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         return hitboxOffsetZ;
     }
 
+    public double getHitboxScaleX() {
+        return hitboxScaleX;
+    }
+
+    public double getHitboxScaleY() {
+        return hitboxScaleY;
+    }
+
+    public double getHitboxScaleZ() {
+        return hitboxScaleZ;
+    }
+
     public void setHitboxOffset(double x, double y, double z) {
         this.hitboxOffsetX = x;
         this.hitboxOffsetY = y;
         this.hitboxOffsetZ = z;
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        }
+    }
+
+    public void setHitboxScale(double scaleX, double scaleY, double scaleZ) {
+        this.hitboxScaleX = scaleX;
+        this.hitboxScaleY = scaleY;
+        this.hitboxScaleZ = scaleZ;
         setChanged();
         if (level != null && !level.isClientSide) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
@@ -289,6 +316,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         tag.putDouble("HitboxOffsetX", hitboxOffsetX);
         tag.putDouble("HitboxOffsetY", hitboxOffsetY);
         tag.putDouble("HitboxOffsetZ", hitboxOffsetZ);
+        tag.putDouble("HitboxScaleX", hitboxScaleX);
+        tag.putDouble("HitboxScaleY", hitboxScaleY);
+        tag.putDouble("HitboxScaleZ", hitboxScaleZ);
         if (logoPositionX != null) {
             tag.putDouble("LogoPositionX", logoPositionX);
         }
@@ -344,6 +374,15 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
         if (tag.contains("HitboxOffsetZ")) {
             this.hitboxOffsetZ = tag.getDouble("HitboxOffsetZ");
+        }
+        if (tag.contains("HitboxScaleX")) {
+            this.hitboxScaleX = tag.getDouble("HitboxScaleX");
+        }
+        if (tag.contains("HitboxScaleY")) {
+            this.hitboxScaleY = tag.getDouble("HitboxScaleY");
+        }
+        if (tag.contains("HitboxScaleZ")) {
+            this.hitboxScaleZ = tag.getDouble("HitboxScaleZ");
         }
         if (tag.contains("LogoPositionX")) {
             this.logoPositionX = tag.getDouble("LogoPositionX");

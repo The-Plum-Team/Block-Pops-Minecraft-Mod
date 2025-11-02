@@ -34,15 +34,15 @@ import org.jetbrains.annotations.Nullable;
 public class BoxBlock extends BaseEntityBlock {
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
 
-    // Tighter hitbox for the core box (simplified, no directional variation)
-    // Width: 8 units, Height: 11 units, Depth: 8 units
+    // Hitbox matching the actual box model size
+    // Width: 10 units, Height: 14 units, Depth: 10 units
     private static final VoxelShape SHAPE = Block.box(
-        4,    // minX - 8 units width centered at X=8
+        3,    // minX - 10 units width centered
         0,    // minY - starts at ground
-        4,    // minZ - 8 units depth centered at Z=8
-        12,   // maxX
-        11,   // maxY - height of core box
-        12    // maxZ
+        3,    // minZ - 10 units depth centered
+        13,   // maxX
+        14,   // maxY - full height of box
+        13    // maxZ
     );
 
     private final String collectionId;
@@ -72,11 +72,33 @@ public class BoxBlock extends BaseEntityBlock {
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
         VoxelShape baseShape = SHAPE;
 
-        // Apply hitbox offsets from block entity if available
+        // Apply hitbox offsets and scale from block entity if available
         if (level.getBlockEntity(pos) instanceof BoxBlockEntity boxBlockEntity) {
             double localOffsetX = boxBlockEntity.getHitboxOffsetX(); // Right offset (perpendicular to facing)
             double localOffsetY = boxBlockEntity.getHitboxOffsetY(); // Up offset
             double localOffsetZ = boxBlockEntity.getHitboxOffsetZ(); // Forward offset (along facing)
+            double hitboxScaleX = boxBlockEntity.getHitboxScaleX();  // X axis scale
+            double hitboxScaleY = boxBlockEntity.getHitboxScaleY();  // Y axis scale
+            double hitboxScaleZ = boxBlockEntity.getHitboxScaleZ();  // Z axis scale
+
+            // Apply scale if any axis is not 1.0 (default)
+            VoxelShape scaledShape = baseShape;
+            if (hitboxScaleX != 1.0 || hitboxScaleY != 1.0 || hitboxScaleZ != 1.0) {
+                // Calculate the center of the shape (8, 7, 8 for the base shape)
+                double centerX = 8.0;
+                double centerY = 7.0;
+                double centerZ = 8.0;
+
+                // Scale from the center on each axis independently
+                double minX = centerX + (3.0 - centerX) * hitboxScaleX;
+                double minY = 0.0; // Keep base on the ground
+                double minZ = centerZ + (3.0 - centerZ) * hitboxScaleZ;
+                double maxX = centerX + (13.0 - centerX) * hitboxScaleX;
+                double maxY = 14.0 * hitboxScaleY;
+                double maxZ = centerZ + (13.0 - centerZ) * hitboxScaleZ;
+
+                scaledShape = Block.box(minX, minY, minZ, maxX, maxY, maxZ);
+            }
 
             // Only apply offset if at least one is non-zero (performance optimization)
             if (localOffsetX != 0.0 || localOffsetY != 0.0 || localOffsetZ != 0.0) {
@@ -104,8 +126,10 @@ public class BoxBlock extends BaseEntityBlock {
                         break;
                 }
 
-                return baseShape.move(worldOffsetX, localOffsetY, worldOffsetZ);
+                return scaledShape.move(worldOffsetX, localOffsetY, worldOffsetZ);
             }
+
+            return scaledShape;
         }
 
         return baseShape;
@@ -156,6 +180,9 @@ public class BoxBlock extends BaseEntityBlock {
                     boxBlockEntity.getHitboxOffsetX(),
                     boxBlockEntity.getHitboxOffsetY(),
                     boxBlockEntity.getHitboxOffsetZ(),
+                    boxBlockEntity.getHitboxScaleX(),
+                    boxBlockEntity.getHitboxScaleY(),
+                    boxBlockEntity.getHitboxScaleZ(),
                     boxBlockEntity.getLogoPositionX(),
                     boxBlockEntity.getLogoPositionY(),
                     boxBlockEntity.getLogoPositionZ(),
