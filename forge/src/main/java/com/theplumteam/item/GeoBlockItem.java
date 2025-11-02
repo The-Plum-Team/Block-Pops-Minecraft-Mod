@@ -125,6 +125,13 @@ public class GeoBlockItem extends BlockItem {
         if (collection != null && figureId != null && !figureId.isEmpty()) {
             // Add collection name to tooltip
             tooltip.add(Component.literal(collection.getName()).withStyle(ChatFormatting.GRAY));
+
+            // Check if figure has alternative skins
+            FigureDefinition figure = collection.getFigure(figureId).orElse(null);
+            if (figure != null && figure.hasAlternatives()) {
+                tooltip.add(Component.translatable("tooltip.blockpops.has_alternatives")
+                    .withStyle(ChatFormatting.DARK_PURPLE, ChatFormatting.ITALIC));
+            }
         }
     }
 

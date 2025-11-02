@@ -29,6 +29,7 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     // Figure data
     private String figureId = "";
     private String collectionId = "";
+    private int alternativeSkinIndex = 0; // 0 is default, 1+ are from the alternatives list
 
     // Figure positioning - matches BoxBlockEntity for consistent display
     private double figureOffsetX = -0.60;
@@ -137,11 +138,38 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
     }
 
+    /**
+     * Gets the current alternative skin index
+     */
+    public int getAlternativeSkinIndex() {
+        return alternativeSkinIndex;
+    }
+
+    /**
+     * Cycles to the next alternative skin
+     */
+    public void cycleAlternativeSkin() {
+        FigureDefinition def = getFigureDefinition();
+        if (def == null || !def.hasAlternatives()) {
+            return; // No figure or no alternatives to cycle.
+        }
+
+        int totalSkins = 1 + def.getAlternatives().size(); // 1 for the default skin
+        this.alternativeSkinIndex = (this.alternativeSkinIndex + 1) % totalSkins;
+
+        // Mark for saving and send an update to the client.
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        }
+    }
+
     @Override
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
         tag.putString("FigureId", figureId);
         tag.putString("CollectionId", collectionId);
+        tag.putInt("AlternativeSkinIndex", alternativeSkinIndex);
         tag.putDouble("FigureOffsetX", figureOffsetX);
         tag.putDouble("FigureOffsetY", figureOffsetY);
         tag.putDouble("FigureOffsetZ", figureOffsetZ);
@@ -156,6 +184,9 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
         if (tag.contains("CollectionId")) {
             this.collectionId = tag.getString("CollectionId");
+        }
+        if (tag.contains("AlternativeSkinIndex")) {
+            this.alternativeSkinIndex = tag.getInt("AlternativeSkinIndex");
         }
         if (tag.contains("FigureOffsetX")) {
             this.figureOffsetX = tag.getDouble("FigureOffsetX");

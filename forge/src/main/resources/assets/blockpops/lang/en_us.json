@@ -19,5 +19,6 @@
   "block.blockpops.box_block_jojos": "JoJo's Box",
   "block.blockpops.box_block_jujutsukaisen": "Jujutsu Kaisen Box",
   "block.blockpops.box_block_adventuretime": "Adventure Time Box",
-  "block.blockpops.claw_machine_block": "Arcade Claw Machine"
+  "block.blockpops.claw_machine_block": "Arcade Claw Machine",
+  "tooltip.blockpops.has_alternatives": "Has alternative skins! (Right-click with a stick)"
 }

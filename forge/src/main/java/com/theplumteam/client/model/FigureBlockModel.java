@@ -37,6 +37,17 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
             return FALLBACK_TEXTURE;
         }
 
+        // Check for alternative skins
+        int skinIndex = animatable.getAlternativeSkinIndex();
+
+        if (skinIndex > 0 && figure.hasAlternatives()) {
+            int altListIndex = skinIndex - 1;
+            if (altListIndex < figure.getAlternatives().size()) {
+                // Return the alternative texture
+                return figure.getAlternatives().get(altListIndex).texture();
+            }
+        }
+
         // Check if this is a player figure (dynamic skin)
         if (figure.getType() == FigureType.PLAYER && figure.getPlayerUUID() != null) {
             // Use Minecraft's skin manager to get the player's skin dynamically

@@ -130,6 +130,18 @@ public class BoxBlock extends BaseEntityBlock {
 
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+        ItemStack heldItem = player.getItemInHand(hand);
+
+        // Right-click with stick to cycle alternative skins
+        if (heldItem.is(net.minecraft.world.item.Items.STICK)) {
+            if (!level.isClientSide()) {
+                if (level.getBlockEntity(pos) instanceof BoxBlockEntity boxBlockEntity && boxBlockEntity.hasFigure()) {
+                    boxBlockEntity.cycleAlternativeSkin();
+                }
+            }
+            return InteractionResult.sidedSuccess(level.isClientSide());
+        }
+
         // Shift-right-click to open adjustment screen
         if (level.isClientSide && player.isShiftKeyDown()) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
@@ -158,8 +170,6 @@ public class BoxBlock extends BaseEntityBlock {
         if (!level.isClientSide) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
-                ItemStack heldItem = player.getItemInHand(hand);
-
                 // If the box is open
                 if (boxBlockEntity.isOpen()) {
                     // Empty hand extracts the figure
@@ -169,6 +179,7 @@ public class BoxBlock extends BaseEntityBlock {
                         CompoundTag blockEntityTag = new CompoundTag();
                         blockEntityTag.putString("FigureId", boxBlockEntity.getFigureId());
                         blockEntityTag.putString("CollectionId", boxBlockEntity.getCollectionId());
+                        blockEntityTag.putInt("AlternativeSkinIndex", boxBlockEntity.getAlternativeSkinIndex());
                         // Copy figure positioning data
                         blockEntityTag.putDouble("FigureOffsetX", boxBlockEntity.getFigureOffsetX());
                         blockEntityTag.putDouble("FigureOffsetY", boxBlockEntity.getFigureOffsetY());

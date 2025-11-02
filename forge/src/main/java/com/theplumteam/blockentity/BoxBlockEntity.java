@@ -38,6 +38,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     private String figureId = ""; // Empty means no figure
     private String collectionIdOverride = null; // For dynamic collections using default box blocks
     private boolean isFigureExtracted = false; // Whether the figure has been taken out
+    private int alternativeSkinIndex = 0; // 0 is default, 1+ are from the alternatives list
 
     // Figure positioning - correct values found through testing
     private double figureOffsetX = -0.53;
@@ -271,6 +272,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         tag.putBoolean("IsOpen", isOpen);
         tag.putString("FigureId", figureId);
         tag.putBoolean("IsFigureExtracted", isFigureExtracted);
+        tag.putInt("AlternativeSkinIndex", alternativeSkinIndex);
         if (collectionIdOverride != null) {
             tag.putString("CollectionId", collectionIdOverride);
         }
@@ -309,6 +311,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
         if (tag.contains("IsFigureExtracted")) {
             this.isFigureExtracted = tag.getBoolean("IsFigureExtracted");
+        }
+        if (tag.contains("AlternativeSkinIndex")) {
+            this.alternativeSkinIndex = tag.getInt("AlternativeSkinIndex");
         }
         if (tag.contains("CollectionId")) {
             this.collectionIdOverride = tag.getString("CollectionId");
@@ -414,6 +419,32 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         CompoundTag tag = new CompoundTag();
         saveAdditional(tag);
         stack.addTagElement("BlockEntityTag", tag);
+    }
+
+    /**
+     * Gets the current alternative skin index
+     */
+    public int getAlternativeSkinIndex() {
+        return alternativeSkinIndex;
+    }
+
+    /**
+     * Cycles to the next alternative skin
+     */
+    public void cycleAlternativeSkin() {
+        FigureDefinition def = getFigureDefinition();
+        if (def == null || !def.hasAlternatives()) {
+            return; // No figure or no alternatives to cycle.
+        }
+
+        int totalSkins = 1 + def.getAlternatives().size(); // 1 for the default skin
+        this.alternativeSkinIndex = (this.alternativeSkinIndex + 1) % totalSkins;
+
+        // Mark for saving and send an update to the client.
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        }
     }
 
     /**

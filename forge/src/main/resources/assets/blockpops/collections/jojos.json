@@ -46,14 +46,26 @@
       "name": "Jotaro Kujo (Part 4)",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
       "texture": "blockpops:textures/figure/jojos/jotaro_part4.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Jotaro Kujo (Part 3)",
+          "texture": "blockpops:textures/figure/jojos/jotaro_part3.png"
+        }
+      ]
     },
     {
       "id": "joseph_part4",
       "name": "Joseph Joestar (Part 4)",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
       "texture": "blockpops:textures/figure/jojos/joseph_part4.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Joseph Joestar (Part 3)",
+          "texture": "blockpops:textures/figure/jojos/joseph_part3.png"
+        }
+      ]
     },
     {
       "id": "shigechi",
@@ -98,24 +110,10 @@
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
-      "id": "jotaro_part3",
-      "name": "Jotaro Kujo (Part 3)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/jojos/jotaro_part3.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
       "id": "kakyoin",
       "name": "Noriaki Kakyoin",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
       "texture": "blockpops:textures/figure/jojos/kakyoin.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "joseph_part3",
-      "name": "Joseph Joestar (Part 3)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/jojos/joseph_part3.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
@@ -172,83 +170,6 @@
       "name": "Oingo",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
       "texture": "blockpops:textures/figure/jojos/oingo.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "jotaro_part3_alt",
-      "name": "Jotaro Kujo (Part 3 Alt)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/jojos/jotaro_part3_alt.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "kakyoin_alt",
-      "name": "Noriaki Kakyoin (Alt)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/jojos/kakyoin_alt.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "joseph_part3_alt",
-      "name": "Joseph Joestar (Part 3 Alt)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/jojos/joseph_part3_alt.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "avdol_alt",
-      "name": "Muhammad Avdol (Alt)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/jojos/avdol_alt.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "polnareff_alt",
-      "name": "Jean Pierre Polnareff (Alt)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/jojos/polnareff_alt.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "dio_alt",
-      "name": "Dio Brando (Alt)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/jojos/dio_alt.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "hol_horse_alt",
-      "name": "Hol Horse (Alt)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/jojos/hol_horse_alt.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "boingo_alt",
-      "name": "Boingo (Alt)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/jojos/boingo_alt.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "death_thirteen_alt",
-      "name": "Mannish Boy (Death Thirteen Alt)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/jojos/death_thirteen_alt.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "vanilla_ice_alt",
-      "name": "Vanilla Ice (Alt)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/jojos/vanilla_ice_alt.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "oingo_alt",
-      "name": "Oingo (Alt)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/jojos/oingo_alt.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     }
   ]
