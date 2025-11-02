@@ -37,47 +37,83 @@ public class GeoBlockItem extends BlockItem {
 
     @Override
     public Component getName(ItemStack stack) {
-        // Only customize name for BoxBlock items
-        if (!(getBlock() instanceof BoxBlock boxBlock)) {
-            return super.getName(stack);
-        }
-
-        // Try to get collection ID and figure ID from NBT
-        CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
+        // Customize name for both BoxBlock and FigureBlock items
         String collectionId = null;
-        String figureId = "";
 
-        if (blockEntityTag != null) {
-            // Check for collection ID override (for dynamic collections)
-            if (blockEntityTag.contains("CollectionId")) {
-                collectionId = blockEntityTag.getString("CollectionId");
+        if (getBlock() instanceof BoxBlock boxBlock) {
+            // Try to get collection ID and figure ID from NBT
+            CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
+            String figureId = "";
+
+            if (blockEntityTag != null) {
+                // Check for collection ID override (for dynamic collections)
+                if (blockEntityTag.contains("CollectionId")) {
+                    collectionId = blockEntityTag.getString("CollectionId");
+                }
+                // Get figure ID if present
+                if (blockEntityTag.contains("FigureId")) {
+                    figureId = blockEntityTag.getString("FigureId");
+                }
             }
-            // Get figure ID if present
-            if (blockEntityTag.contains("FigureId")) {
-                figureId = blockEntityTag.getString("FigureId");
+
+            // If no collection ID in NBT, get from the block
+            if (collectionId == null || collectionId.isEmpty()) {
+                collectionId = boxBlock.getCollectionId();
             }
-        }
 
-        // If no collection ID in NBT, get from the block
-        if (collectionId == null || collectionId.isEmpty()) {
-            collectionId = boxBlock.getCollectionId();
-        }
+            // If still no collection ID, use default naming
+            if (collectionId == null || collectionId.isEmpty()) {
+                return super.getName(stack);
+            }
 
-        // If still no collection ID, use default naming
-        if (collectionId == null || collectionId.isEmpty()) {
-            return super.getName(stack);
-        }
+            // Look up the collection
+            FigureCollection collection = CollectionRegistry.getCollection(collectionId).orElse(null);
+            if (collection == null) {
+                return super.getName(stack);
+            }
 
-        // Look up the collection
-        FigureCollection collection = CollectionRegistry.getCollection(collectionId).orElse(null);
-        if (collection == null) {
-            return super.getName(stack);
-        }
+            String collectionName = collection.getName();
 
-        String collectionName = collection.getName();
+            // If there's a figure, just show the figure name
+            if (figureId != null && !figureId.isEmpty()) {
+                FigureDefinition figure = collection.getFigure(figureId).orElse(null);
+                if (figure != null) {
+                    // Show only the figure name in white
+                    return Component.literal(figure.getName()).withStyle(ChatFormatting.WHITE);
+                }
+            }
 
-        // If there's a figure, just show the figure name
-        if (figureId != null && !figureId.isEmpty()) {
+            // No figure, use "Collection Name Box"
+            return Component.literal(collectionName + " Box");
+
+        } else if (getBlock() instanceof FigureBlock) {
+            // Handle FigureBlock items
+            CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
+            String figureId = "";
+
+            if (blockEntityTag != null) {
+                // Check for collection ID override (for dynamic collections)
+                if (blockEntityTag.contains("CollectionId")) {
+                    collectionId = blockEntityTag.getString("CollectionId");
+                }
+                // Get figure ID if present
+                if (blockEntityTag.contains("FigureId")) {
+                    figureId = blockEntityTag.getString("FigureId");
+                }
+            }
+
+            // If still no collection ID or figure ID, use default naming
+            if (collectionId == null || collectionId.isEmpty() || figureId.isEmpty()) {
+                return super.getName(stack);
+            }
+
+            // Look up the collection
+            FigureCollection collection = CollectionRegistry.getCollection(collectionId).orElse(null);
+            if (collection == null) {
+                return super.getName(stack);
+            }
+
+            // If there's a figure, show the figure name
             FigureDefinition figure = collection.getFigure(figureId).orElse(null);
             if (figure != null) {
                 // Show only the figure name in white
@@ -85,35 +121,45 @@ public class GeoBlockItem extends BlockItem {
             }
         }
 
-        // No figure, use "Collection Name Box"
-        return Component.literal(collectionName + " Box");
+        return super.getName(stack);
     }
 
     @Override
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
         super.appendHoverText(stack, level, tooltip, flag);
 
-        // Only add tooltip for BoxBlock items
-        if (!(getBlock() instanceof BoxBlock boxBlock)) {
-            return;
-        }
-
-        // Try to get collection ID from NBT or block
-        CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
+        // Add tooltip for both BoxBlock and FigureBlock items
         String collectionId = null;
         String figureId = "";
+        CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
 
-        if (blockEntityTag != null) {
-            if (blockEntityTag.contains("CollectionId")) {
-                collectionId = blockEntityTag.getString("CollectionId");
+        if (getBlock() instanceof BoxBlock boxBlock) {
+            // Try to get collection ID from NBT or block
+            if (blockEntityTag != null) {
+                if (blockEntityTag.contains("CollectionId")) {
+                    collectionId = blockEntityTag.getString("CollectionId");
+                }
+                if (blockEntityTag.contains("FigureId")) {
+                    figureId = blockEntityTag.getString("FigureId");
+                }
             }
-            if (blockEntityTag.contains("FigureId")) {
-                figureId = blockEntityTag.getString("FigureId");
-            }
-        }
 
-        if (collectionId == null || collectionId.isEmpty()) {
-            collectionId = boxBlock.getCollectionId();
+            if (collectionId == null || collectionId.isEmpty()) {
+                collectionId = boxBlock.getCollectionId();
+            }
+
+        } else if (getBlock() instanceof FigureBlock) {
+            // Handle FigureBlock items
+            if (blockEntityTag != null) {
+                if (blockEntityTag.contains("CollectionId")) {
+                    collectionId = blockEntityTag.getString("CollectionId");
+                }
+                if (blockEntityTag.contains("FigureId")) {
+                    figureId = blockEntityTag.getString("FigureId");
+                }
+            }
+        } else {
+            return;
         }
 
         if (collectionId == null || collectionId.isEmpty()) {
