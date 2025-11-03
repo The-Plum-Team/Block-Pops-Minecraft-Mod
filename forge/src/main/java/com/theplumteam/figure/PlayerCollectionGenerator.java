@@ -125,13 +125,25 @@ public class PlayerCollectionGenerator {
             // Use the default/original box texture
             ResourceLocation boxTexture = new ResourceLocation("blockpops", "textures/block/box/default.png");
 
+            // Create logo configuration for World Players collection
+            ResourceLocation logoTexture = new ResourceLocation("blockpops", "textures/block/box/logo/logo_worldplayers.png");
+            FigureCollection.LogoConfig logoConfig = new FigureCollection.LogoConfig(
+                logoTexture,
+                -0.915f,  // positionX
+                -0.165f,  // positionY
+                -0.001f,  // positionZ
+                4.004f,   // scaleX (Width)
+                4.503f,   // scaleY (Height)
+                1.0f      // scaleZ
+            );
+
             return new FigureCollection(
                 COLLECTION_ID,
                 COLLECTION_NAME,
                 "Minecraft",  // Author for player collection
                 null,  // No URL for player collection
                 boxTexture,
-                null,  // No logo for player collection
+                logoConfig,  // Logo configuration
                 playerFigures
             );
 
@@ -146,13 +158,26 @@ public class PlayerCollectionGenerator {
      */
     private static FigureCollection createEmptyCollection() {
         ResourceLocation boxTexture = new ResourceLocation("blockpops", "textures/block/box/default.png");
+
+        // Create logo configuration for World Players collection
+        ResourceLocation logoTexture = new ResourceLocation("blockpops", "textures/block/box/logo/logo_worldplayers.png");
+        FigureCollection.LogoConfig logoConfig = new FigureCollection.LogoConfig(
+            logoTexture,
+            -0.915f,  // positionX
+            -0.165f,  // positionY
+            -0.001f,  // positionZ
+            4.004f,   // scaleX (Width)
+            4.503f,   // scaleY (Height)
+            1.0f      // scaleZ
+        );
+
         return new FigureCollection(
             COLLECTION_ID,
             COLLECTION_NAME,
             "Minecraft",  // Author for player collection
             null,  // No URL for player collection
             boxTexture,
-            null,  // No logo for player collection
+            logoConfig,  // Logo configuration
             new ArrayList<>()
         );
     }
