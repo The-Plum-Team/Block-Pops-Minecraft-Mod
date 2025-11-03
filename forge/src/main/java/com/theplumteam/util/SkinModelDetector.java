@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Utility for detecting skin model type (slim/Alex vs classic/Steve)
@@ -17,6 +18,9 @@ import java.io.InputStream;
  */
 public class SkinModelDetector {
     private static final Logger LOGGER = LoggerFactory.getLogger(SkinModelDetector.class);
+
+    // Cache to avoid re-detecting the same texture multiple times
+    private static final ConcurrentHashMap<ResourceLocation, SkinModel> DETECTION_CACHE = new ConcurrentHashMap<>();
 
     public enum SkinModel {
         CLASSIC,  // Steve model - 4-pixel wide arms
@@ -57,30 +61,35 @@ public class SkinModelDetector {
     }
 
     /**
+     * Clear the detection cache (useful when resource packs are reloaded)
+     */
+    public static void clearCache() {
+        DETECTION_CACHE.clear();
+        LOGGER.info("Skin model detection cache cleared");
+    }
+
+    /**
      * Detect skin model from a texture ResourceLocation
      * @param textureLocation The skin texture location
      * @return SLIM or CLASSIC
      */
     public static SkinModel detectSkinModel(ResourceLocation textureLocation) {
-        LOGGER.info("Attempting to detect skin model for texture: {}", textureLocation);
+        // Check cache first
+        SkinModel cached = DETECTION_CACHE.get(textureLocation);
+        if (cached != null) {
+            return cached;
+        }
+
+        LOGGER.debug("Attempting to detect skin model for texture: {}", textureLocation);
         try {
             // Try to get texture from texture manager first (for player skins)
             var textureManager = Minecraft.getInstance().getTextureManager();
             var abstractTexture = textureManager.getTexture(textureLocation);
 
-            LOGGER.info("Texture from manager: {}", abstractTexture);
+            LOGGER.debug("Texture from manager: {}", abstractTexture);
 
             if (abstractTexture instanceof net.minecraft.client.renderer.texture.AbstractTexture) {
-                LOGGER.info("Found texture in texture manager, attempting to get image data");
-                // For player skins and other dynamic textures, try to bind and read
-                try {
-                    // This is a player skin or other already-loaded texture
-                    // We need to read it from OpenGL
-                    LOGGER.warn("Texture is loaded but we can't easily read pixel data from bound textures");
-                    LOGGER.warn("Falling back to resource manager approach");
-                } catch (Exception e) {
-                    LOGGER.error("Error reading from texture manager", e);
-                }
+                LOGGER.debug("Found texture in texture manager, falling back to resource manager");
             }
 
             // Try resource manager (for static textures in resources)
@@ -96,16 +105,22 @@ public class SkinModelDetector {
                 image.close();
                 inputStream.close();
 
-                LOGGER.info("Successfully detected skin model from resource: {}", model);
+                LOGGER.info("Detected {} skin for texture: {}", model, textureLocation);
+                // Cache the result
+                DETECTION_CACHE.put(textureLocation, model);
                 return model;
             } catch (Exception resourceException) {
                 LOGGER.warn("Could not load texture from resource manager: {}", resourceException.getMessage());
             }
 
             LOGGER.warn("Could not detect skin model, defaulting to CLASSIC");
+            // Cache the default result
+            DETECTION_CACHE.put(textureLocation, SkinModel.CLASSIC);
             return SkinModel.CLASSIC; // Default to classic on error
         } catch (Exception e) {
             LOGGER.error("Failed to detect skin model from texture: {}", textureLocation, e);
+            // Cache the default result even on error to avoid repeated failures
+            DETECTION_CACHE.put(textureLocation, SkinModel.CLASSIC);
             return SkinModel.CLASSIC;
         }
     }

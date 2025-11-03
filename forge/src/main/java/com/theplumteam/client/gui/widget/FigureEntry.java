@@ -22,7 +22,9 @@ import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Entry for displaying a row of up to 4 figures with 3D models
@@ -33,6 +35,9 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     private final String collectionId;
     private final FigureModel figureModel;
     private final GeoBlockRenderer<BoxBlockEntity> figureRenderer;
+
+    // Cache for render entities to avoid creating them every frame
+    private final Map<String, BoxBlockEntity> renderEntityCache = new HashMap<>();
 
     // Configuration from parent widget
     private float modelScale = 1.0f;
@@ -226,10 +231,19 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     }
 
     private BoxBlockEntity getOrCreateRenderEntity(FigureDefinition figure) {
+        // Check cache first
+        String cacheKey = collectionId + ":" + figure.getId();
+        BoxBlockEntity cached = renderEntityCache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+
+        // Create new entity and cache it
         try {
             BoxBlockEntity entity = new BoxBlockEntity(BlockPos.ZERO, Blocks.AIR.defaultBlockState());
             entity.setFigureId(figure.getId());
             entity.setCollectionIdOverride(collectionId);
+            renderEntityCache.put(cacheKey, entity);
             return entity;
         } catch (Exception e) {
             return null;

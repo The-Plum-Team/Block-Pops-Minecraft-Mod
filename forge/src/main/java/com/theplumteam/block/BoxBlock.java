@@ -78,9 +78,12 @@ public class BoxBlock extends BaseEntityBlock {
             double localOffsetX = boxBlockEntity.getHitboxOffsetX(); // Right offset (perpendicular to facing)
             double localOffsetY = boxBlockEntity.getHitboxOffsetY(); // Up offset
             double localOffsetZ = boxBlockEntity.getHitboxOffsetZ(); // Forward offset (along facing)
-            double hitboxScaleX = boxBlockEntity.getHitboxScaleX();  // X axis scale
-            double hitboxScaleY = boxBlockEntity.getHitboxScaleY();  // Y axis scale
-            double hitboxScaleZ = boxBlockEntity.getHitboxScaleZ();  // Z axis scale
+            double hitboxScaleX = boxBlockEntity.getHitboxScaleX();  // X axis scale (right/left)
+            double hitboxScaleY = boxBlockEntity.getHitboxScaleY();  // Y axis scale (up/down)
+            double hitboxScaleZ = boxBlockEntity.getHitboxScaleZ();  // Z axis scale (forward/back)
+
+            // Get facing direction for rotation
+            Direction facing = state.getValue(FACING);
 
             // Apply scale if any axis is not 1.0 (default)
             VoxelShape scaledShape = baseShape;
@@ -90,13 +93,24 @@ public class BoxBlock extends BaseEntityBlock {
                 double centerY = 7.0;
                 double centerZ = 8.0;
 
+                // For NORTH facing, use scales directly (this is the "reference" orientation)
+                // For other facings, we need to swap X and Z scales appropriately
+                double effectiveScaleX = hitboxScaleX;
+                double effectiveScaleZ = hitboxScaleZ;
+
+                // Swap X and Z scales for EAST/WEST facings since the block is rotated 90°
+                if (facing == Direction.EAST || facing == Direction.WEST) {
+                    effectiveScaleX = hitboxScaleZ; // What was forward/back is now left/right
+                    effectiveScaleZ = hitboxScaleX; // What was left/right is now forward/back
+                }
+
                 // Scale from the center on each axis independently
-                double minX = centerX + (3.0 - centerX) * hitboxScaleX;
+                double minX = centerX + (3.0 - centerX) * effectiveScaleX;
                 double minY = 0.0; // Keep base on the ground
-                double minZ = centerZ + (3.0 - centerZ) * hitboxScaleZ;
-                double maxX = centerX + (13.0 - centerX) * hitboxScaleX;
+                double minZ = centerZ + (3.0 - centerZ) * effectiveScaleZ;
+                double maxX = centerX + (13.0 - centerX) * effectiveScaleX;
                 double maxY = 14.0 * hitboxScaleY;
-                double maxZ = centerZ + (13.0 - centerZ) * hitboxScaleZ;
+                double maxZ = centerZ + (13.0 - centerZ) * effectiveScaleZ;
 
                 scaledShape = Block.box(minX, minY, minZ, maxX, maxY, maxZ);
             }
@@ -104,7 +118,6 @@ public class BoxBlock extends BaseEntityBlock {
             // Only apply offset if at least one is non-zero (performance optimization)
             if (localOffsetX != 0.0 || localOffsetY != 0.0 || localOffsetZ != 0.0) {
                 // Transform local offsets to world offsets based on facing direction
-                Direction facing = state.getValue(FACING);
                 double worldOffsetX = 0;
                 double worldOffsetZ = 0;
 

@@ -20,6 +20,7 @@ import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache
 import software.bernie.geckolib.core.animation.AnimatableManager;
 import software.bernie.geckolib.core.animation.AnimationController;
 import software.bernie.geckolib.core.animation.RawAnimation;
+import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
@@ -76,6 +77,11 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         // Controller for the box model animations with state-based logic
         controllers.add(new AnimationController<>(this, "box_controller", 0, state -> {
+            // Skip animations for UI rendering (entities at BlockPos.ZERO)
+            if (getBlockPos().equals(BlockPos.ZERO)) {
+                return PlayState.STOP;
+            }
+
             // If the box is open, play the open state animation (holds at final frame)
             if (isOpen) {
                 return state.setAndContinue(OPEN_STATE_ANIMATION);
