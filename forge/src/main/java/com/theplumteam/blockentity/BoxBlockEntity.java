@@ -77,8 +77,14 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         // Controller for the box model animations with state-based logic
         controllers.add(new AnimationController<>(this, "box_controller", 0, state -> {
-            // Always show correct animation based on open/closed state
-            // For item rendering (BlockPos.ZERO), this ensures correct visual state
+            // Skip animations for UI rendering (entities at BlockPos.ZERO)
+            // This prevents "Unable to find animation" warnings in inventory/GUI
+            // The visual state is determined by the model's default pose
+            if (getBlockPos().equals(BlockPos.ZERO)) {
+                return PlayState.STOP;
+            }
+
+            // If the box is open, play the open state animation (holds at final frame)
             if (isOpen) {
                 return state.setAndContinue(OPEN_STATE_ANIMATION);
             }

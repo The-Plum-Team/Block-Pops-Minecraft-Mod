@@ -59,10 +59,13 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         }
 
         // Draw logo on the left if available
-        int logoX = x + PADDING;
+        // All logos get the same container width for alignment
+        int logoContainerX = x + PADDING;
+        int logoContainerWidth = LOGO_MAX_SIZE; // Fixed container width
         ResourceLocation logoTexture = collection.getLogoTexture();
 
-        int textStartX = logoX; // Default if no logo
+        // Text always starts at the same position for all entries
+        int textStartX = logoContainerX + logoContainerWidth + PADDING;
 
         if (logoTexture != null) {
             // Enable blending for transparent logos
@@ -91,27 +94,31 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             int logoWidth;
             int logoHeight;
 
+            // Use smaller size for World Players collection
+            int maxSize = "world_players".equals(collection.getId()) ? 40 : LOGO_MAX_SIZE;
+
             if (aspectRatio > 1.0f) {
                 // Wider than tall - constrain width
-                logoWidth = LOGO_MAX_SIZE;
-                logoHeight = (int) (LOGO_MAX_SIZE / aspectRatio);
+                logoWidth = maxSize;
+                logoHeight = (int) (maxSize / aspectRatio);
             } else {
                 // Taller than wide or square - constrain height
-                logoHeight = LOGO_MAX_SIZE;
-                logoWidth = (int) (LOGO_MAX_SIZE * aspectRatio);
+                logoHeight = maxSize;
+                logoWidth = (int) (maxSize * aspectRatio);
             }
+
+            // Center the logo horizontally within the container
+            int logoX = logoContainerX + (logoContainerWidth - logoWidth) / 2;
 
             // Center the logo vertically
             int logoY = y + (entryHeight - logoHeight) / 2;
 
-            // Draw the logo with preserved aspect ratio
+            // Draw the logo centered within its container
             graphics.blit(logoTexture,
                     logoX, logoY, logoWidth, logoHeight,
                     0.0f, 0.0f,
                     textureWidth, textureHeight,
                     textureWidth, textureHeight);
-
-            textStartX = logoX + logoWidth + PADDING; // Use actual logo width instead of max size
         }
 
         // Draw collection name
