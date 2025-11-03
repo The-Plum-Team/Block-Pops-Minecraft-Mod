@@ -167,6 +167,9 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
 
     private void renderLogo(PoseStack poseStack, BoxBlockEntity animatable, BakedGeoModel model,
                            MultiBufferSource bufferSource, float partialTick, int packedLight, int packedOverlay) {
+        // Check if logo should be hidden (e.g., in UI displays)
+        if (animatable.isHideLogo()) return;
+
         // Get logo configuration from collection
         String collectionId = animatable.getCollectionId();
         FigureCollection collection = CollectionRegistry.getCollection(collectionId).orElse(null);

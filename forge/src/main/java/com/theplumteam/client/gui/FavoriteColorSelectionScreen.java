@@ -47,8 +47,8 @@ public class FavoriteColorSelectionScreen extends Screen {
     private float rotationY = 335.9f;
     private float rotationZ = 0.0f;
     private float scale = 1.2f;
-    private float offsetX = 202.8f;
-    private float offsetY = -137.3f;
+    private float offsetX = 198.0f;
+    private float offsetY = -134.0f;
     private float offsetZ = 0.0f;
 
     // Box container scale (scales the grid area only, not the entire panel)

@@ -65,6 +65,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     private Double logoScaleY = null;
     private Double logoScaleZ = null;
 
+    // Hide logo flag - used for UI displays like the color selection screen
+    private boolean hideLogo = false;
+
     public BoxBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.BOX_BLOCK.get(), pos, blockState);
     }
@@ -271,6 +274,10 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         return logoScaleZ;
     }
 
+    public boolean isHideLogo() {
+        return hideLogo;
+    }
+
     public void setLogoPosition(Double x, Double y, Double z) {
         this.logoPositionX = x;
         this.logoPositionY = y;
@@ -334,6 +341,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         if (logoScaleY != null) {
             tag.putDouble("LogoScaleY", logoScaleY);
         }
+        tag.putBoolean("HideLogo", hideLogo);
     }
 
     @Override
@@ -408,6 +416,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
             this.logoScaleY = tag.getDouble("LogoScaleY");
         } else {
             this.logoScaleY = null;
+        }
+        if (tag.contains("HideLogo")) {
+            this.hideLogo = tag.getBoolean("HideLogo");
         }
     }
 

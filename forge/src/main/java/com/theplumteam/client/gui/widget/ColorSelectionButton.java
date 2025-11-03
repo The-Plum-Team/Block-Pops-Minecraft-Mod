@@ -41,6 +41,8 @@ public class ColorSelectionButton extends Button {
         this.parentScreen = parentScreen;
         // Create the box item for this color
         this.boxItem = new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(color).get());
+        // Add NBT tag to hide the logo in the color selection screen
+        this.boxItem.getOrCreateTagElement("BlockEntityTag").putBoolean("HideLogo", true);
     }
 
     public void setSelected(boolean selected) {
