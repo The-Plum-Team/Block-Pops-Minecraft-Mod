@@ -9,6 +9,8 @@ import com.theplumteam.figure.PlayerCollectionGenerator;
 import com.theplumteam.network.ClawMachineCollectionPacket;
 import com.theplumteam.network.DropBoxPacket;
 import com.theplumteam.network.FigurePositionPacket;
+import com.theplumteam.network.OpenFavoriteColorScreenPacket;
+import com.theplumteam.network.SetFavoriteColorPacket;
 import com.theplumteam.network.SyncDiscoveryDataPacket;
 import com.theplumteam.network.SyncTokenDataPacket;
 import com.theplumteam.network.UnlockFigurePacket;
@@ -120,6 +122,14 @@ public final class BlockPopsModForge {
                                 serverPlayer.getName().getString(),
                                 discovery.getRegularTokens(),
                                 !discovery.hasUsedTodaySpecialToken() ? "available" : "used");
+
+                        // Check if favorite color needs to be chosen
+                        if (!discovery.hasChosenFavoriteColor()) {
+                            BlockPopsMod.LOGGER.info("Player {} has not chosen a favorite color. Sending packet to open selection screen.",
+                                    serverPlayer.getName().getString());
+                            NETWORK_CHANNEL.send(PacketDistributor.PLAYER.with(() -> serverPlayer),
+                                    new OpenFavoriteColorScreenPacket());
+                        }
                     });
                 }
             }
@@ -163,6 +173,18 @@ public final class BlockPopsModForge {
                 SyncTokenDataPacket::encode,
                 SyncTokenDataPacket::decode,
                 SyncTokenDataPacket::handle
+        );
+        NETWORK_CHANNEL.registerMessage(packetId++,
+                OpenFavoriteColorScreenPacket.class,
+                OpenFavoriteColorScreenPacket::encode,
+                OpenFavoriteColorScreenPacket::decode,
+                OpenFavoriteColorScreenPacket::handle
+        );
+        NETWORK_CHANNEL.registerMessage(packetId++,
+                SetFavoriteColorPacket.class,
+                SetFavoriteColorPacket::encode,
+                SetFavoriteColorPacket::decode,
+                SetFavoriteColorPacket::handle
         );
     }
 

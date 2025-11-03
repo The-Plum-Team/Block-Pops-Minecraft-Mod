@@ -1,10 +1,12 @@
 package com.theplumteam.network;
 
+import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.capability.IPlayerDiscovery;
 import com.theplumteam.capability.PlayerDiscoveryProvider;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.figure.PlayerCollectionGenerator;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
@@ -149,37 +151,46 @@ public class DropBoxPacket {
      * Process the actual box drop after token verification
      */
     private static void processBoxDrop(ServerPlayer player, DropBoxPacket packet, IPlayerDiscovery discovery) {
-                // Get the box block for this collection
-                Block boxBlock = null;
-                if (packet.collectionId.equals("default")) {
-                    // For default collection, use the first color variant (white)
-                    boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.values().stream()
-                        .findFirst()
-                        .map(supplier -> supplier.get())
-                        .orElse(null);
-                } else if (ModBlocks.BOX_BLOCKS.containsKey(packet.collectionId)) {
-                    // For static collections, get the specific box block
-                    boxBlock = ModBlocks.BOX_BLOCKS.get(packet.collectionId).get();
-                } else {
-                    // For dynamic collections (like world_players), use the default box block as fallback
-                    LOGGER.info("Using default box block for dynamic collection: {}", packet.collectionId);
-                    boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.values().stream()
-                        .findFirst()
-                        .map(supplier -> supplier.get())
-                        .orElse(null);
-                }
+                // Get the collection and select a figure based on token type FIRST
+                // This is necessary to determine the box color for world_players
+                CollectionRegistry.getCollection(packet.collectionId).ifPresent(collection -> {
+                    List<FigureDefinition> figures = collection.getFigures();
+                    if (!figures.isEmpty()) {
+                        // Select figure based on token type
+                        FigureDefinition selectedFigure = selectFigure(figures, packet.tokenType,
+                                discovery, packet.collectionId);
 
-                if (boxBlock != null) {
-                    // Create an ItemStack from the box block
-                    ItemStack boxItem = new ItemStack(boxBlock);
+                        // Now determine the box block to use
+                        Block boxBlock = null;
 
-                    // Get the collection and select a figure based on token type
-                    CollectionRegistry.getCollection(packet.collectionId).ifPresent(collection -> {
-                        List<FigureDefinition> figures = collection.getFigures();
-                        if (!figures.isEmpty()) {
-                            // Select figure based on token type
-                            FigureDefinition selectedFigure = selectFigure(figures, packet.tokenType,
-                                    discovery, packet.collectionId);
+                        if (packet.collectionId.equals(PlayerCollectionGenerator.getCollectionId())) {
+                            // It's a world_players figure, use their favorite color
+                            PopBlockColor color = selectedFigure.getFavoriteColor();
+                            if (color == null) color = PopBlockColor.ORIGINAL; // Safety default
+
+                            boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.get(color).get();
+                            LOGGER.info("Using {} color box for world_players figure", color.getSerializedName());
+                        } else if (packet.collectionId.equals("default")) {
+                            // For default collection, use the first color variant (white)
+                            boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.values().stream()
+                                .findFirst()
+                                .map(supplier -> supplier.get())
+                                .orElse(null);
+                        } else if (ModBlocks.BOX_BLOCKS.containsKey(packet.collectionId)) {
+                            // For static collections, get the specific box block
+                            boxBlock = ModBlocks.BOX_BLOCKS.get(packet.collectionId).get();
+                        } else {
+                            // For other dynamic collections, use the default box block as fallback
+                            LOGGER.info("Using default box block for dynamic collection: {}", packet.collectionId);
+                            boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.values().stream()
+                                .findFirst()
+                                .map(supplier -> supplier.get())
+                                .orElse(null);
+                        }
+
+                        if (boxBlock != null) {
+                            // Create an ItemStack from the box block
+                            ItemStack boxItem = new ItemStack(boxBlock);
 
                             // Create unique figure ID for discovery tracking
                             String uniqueFigureId = packet.collectionId + ":" + selectedFigure.getId();
@@ -215,25 +226,25 @@ public class DropBoxPacket {
                             LOGGER.info("Selected figure '{}' ({}) from collection '{}' using {} token",
                                        selectedFigure.getId(), selectedFigure.getName(),
                                        packet.collectionId, packet.tokenType);
+
+                            // Spawn the item entity at the claw machine position (slightly above)
+                            double x = packet.pos.getX() + 0.5;
+                            double y = packet.pos.getY() + 1.0; // Spawn above the lower block
+                            double z = packet.pos.getZ() + 0.5;
+
+                            ItemEntity itemEntity = new ItemEntity(player.level(), x, y, z, boxItem);
+                            // Add a slight upward velocity for a nice drop effect
+                            itemEntity.setDeltaMovement(0, 0.2, 0);
+                            player.level().addFreshEntity(itemEntity);
+
+                            LOGGER.info("Dropped box item for collection '{}' at position {}", packet.collectionId, packet.pos);
                         } else {
-                            LOGGER.warn("Collection '{}' has no figures", packet.collectionId);
+                            LOGGER.warn("Could not find box block for collection: {}", packet.collectionId);
                         }
-                    });
-
-                    // Spawn the item entity at the claw machine position (slightly above)
-                    double x = packet.pos.getX() + 0.5;
-                    double y = packet.pos.getY() + 1.0; // Spawn above the lower block
-                    double z = packet.pos.getZ() + 0.5;
-
-                    ItemEntity itemEntity = new ItemEntity(player.level(), x, y, z, boxItem);
-                    // Add a slight upward velocity for a nice drop effect
-                    itemEntity.setDeltaMovement(0, 0.2, 0);
-                    player.level().addFreshEntity(itemEntity);
-
-                    LOGGER.info("Dropped box item for collection '{}' at position {}", packet.collectionId, packet.pos);
-                } else {
-                    LOGGER.warn("Could not find box block for collection: {}", packet.collectionId);
-                }
+                    } else {
+                        LOGGER.warn("Collection '{}' has no figures", packet.collectionId);
+                    }
+                });
     }
 
     /**

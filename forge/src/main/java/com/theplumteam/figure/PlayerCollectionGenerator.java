@@ -2,6 +2,10 @@ package com.theplumteam.figure;
 
 import com.mojang.authlib.GameProfile;
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.block.PopBlockColor;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.players.GameProfileCache;
@@ -73,13 +77,39 @@ public class PlayerCollectionGenerator {
                         }
                     }
 
-                    // Create a player figure definition
+                    // Load player NBT to get favorite color
+                    PopBlockColor favoriteColor = PopBlockColor.ORIGINAL; // Default to ORIGINAL
+                    try {
+                        // Read the player data file directly
+                        File playerDataFile = new File(playerdataDir, uuidString + ".dat");
+                        if (playerDataFile.exists()) {
+                            CompoundTag playerData = NbtIo.readCompressed(playerDataFile);
+                            if (playerData != null) {
+                                CompoundTag capabilities = playerData.getCompound("ForgeCaps");
+                                if (capabilities.contains("blockpops:player_discovery")) {
+                                    CompoundTag discoveryTag = capabilities.getCompound("blockpops:player_discovery");
+                                    if (discoveryTag.contains("FavoriteColor", Tag.TAG_STRING)) {
+                                        try {
+                                            favoriteColor = PopBlockColor.valueOf(discoveryTag.getString("FavoriteColor").toUpperCase());
+                                        } catch (IllegalArgumentException e) {
+                                            BlockPopsMod.LOGGER.warn("Invalid favorite color found for player {}, defaulting to ORIGINAL", playerUUID);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        BlockPopsMod.LOGGER.warn("Failed to load favorite color for player {}, defaulting to ORIGINAL: {}", playerUUID, e.getMessage());
+                    }
+
+                    // Create a player figure definition WITH the color
                     FigureDefinition playerFigure = new FigureDefinition(
                         uuidString,  // Use UUID as the figure ID
                         playerName,
                         defaultModel,
                         defaultAnimation,
-                        playerUUID
+                        playerUUID,
+                        favoriteColor  // Pass the color
                     );
 
                     playerFigures.add(playerFigure);

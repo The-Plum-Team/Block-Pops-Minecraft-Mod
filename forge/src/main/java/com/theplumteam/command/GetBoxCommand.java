@@ -4,11 +4,13 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.capability.IPlayerDiscovery;
 import com.theplumteam.capability.PlayerDiscoveryProvider;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.figure.PlayerCollectionGenerator;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.network.TokenType;
 import com.theplumteam.network.UnlockFigurePacket;
@@ -133,37 +135,46 @@ public class GetBoxCommand {
      * Process the box drop - replicates logic from DropBoxPacket without token verification
      */
     private static void processBoxDrop(ServerPlayer player, String collectionId, TokenType tokenType, IPlayerDiscovery discovery) {
-        // Get the box block for this collection
-        Block boxBlock = null;
-        if (collectionId.equals("default")) {
-            // For default collection, use the first color variant (white)
-            boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.values().stream()
-                .findFirst()
-                .map(supplier -> supplier.get())
-                .orElse(null);
-        } else if (ModBlocks.BOX_BLOCKS.containsKey(collectionId)) {
-            // For static collections, get the specific box block
-            boxBlock = ModBlocks.BOX_BLOCKS.get(collectionId).get();
-        } else {
-            // For dynamic collections (like world_players), use the default box block as fallback
-            LOGGER.info("Using default box block for dynamic collection: {}", collectionId);
-            boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.values().stream()
-                .findFirst()
-                .map(supplier -> supplier.get())
-                .orElse(null);
-        }
+        // Get the collection and select a figure based on token type FIRST
+        // This is necessary to determine the box color for world_players
+        CollectionRegistry.getCollection(collectionId).ifPresent(collection -> {
+            List<FigureDefinition> figures = collection.getFigures();
+            if (!figures.isEmpty()) {
+                // Select figure based on token type
+                FigureDefinition selectedFigure = selectFigure(figures, tokenType,
+                        discovery, collectionId);
 
-        if (boxBlock != null) {
-            // Create an ItemStack from the box block
-            ItemStack boxItem = new ItemStack(boxBlock);
+                // Now determine the box block to use
+                Block boxBlock = null;
 
-            // Get the collection and select a figure based on token type
-            CollectionRegistry.getCollection(collectionId).ifPresent(collection -> {
-                List<FigureDefinition> figures = collection.getFigures();
-                if (!figures.isEmpty()) {
-                    // Select figure based on token type
-                    FigureDefinition selectedFigure = selectFigure(figures, tokenType,
-                            discovery, collectionId);
+                if (collectionId.equals(PlayerCollectionGenerator.getCollectionId())) {
+                    // It's a world_players figure, use their favorite color
+                    PopBlockColor color = selectedFigure.getFavoriteColor();
+                    if (color == null) color = PopBlockColor.ORIGINAL; // Safety default
+
+                    boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.get(color).get();
+                    LOGGER.info("Using {} color box for world_players figure", color.getSerializedName());
+                } else if (collectionId.equals("default")) {
+                    // For default collection, use the first color variant (white)
+                    boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.values().stream()
+                        .findFirst()
+                        .map(supplier -> supplier.get())
+                        .orElse(null);
+                } else if (ModBlocks.BOX_BLOCKS.containsKey(collectionId)) {
+                    // For static collections, get the specific box block
+                    boxBlock = ModBlocks.BOX_BLOCKS.get(collectionId).get();
+                } else {
+                    // For other dynamic collections, use the default box block as fallback
+                    LOGGER.info("Using default box block for dynamic collection: {}", collectionId);
+                    boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.values().stream()
+                        .findFirst()
+                        .map(supplier -> supplier.get())
+                        .orElse(null);
+                }
+
+                if (boxBlock != null) {
+                    // Create an ItemStack from the box block
+                    ItemStack boxItem = new ItemStack(boxBlock);
 
                     // Create unique figure ID for discovery tracking
                     String uniqueFigureId = collectionId + ":" + selectedFigure.getId();
@@ -199,26 +210,26 @@ public class GetBoxCommand {
                     LOGGER.info("Selected figure '{}' ({}) from collection '{}' using {} token logic",
                                selectedFigure.getId(), selectedFigure.getName(),
                                collectionId, tokenType);
+
+                    // Spawn the item entity at the player's position
+                    BlockPos playerPos = player.blockPosition();
+                    double x = playerPos.getX() + 0.5;
+                    double y = playerPos.getY() + 1.0; // Spawn above the player
+                    double z = playerPos.getZ() + 0.5;
+
+                    ItemEntity itemEntity = new ItemEntity(player.level(), x, y, z, boxItem);
+                    // Add a slight upward velocity for a nice drop effect
+                    itemEntity.setDeltaMovement(0, 0.2, 0);
+                    player.level().addFreshEntity(itemEntity);
+
+                    LOGGER.info("Dropped box item for collection '{}' at player position {}", collectionId, playerPos);
                 } else {
-                    LOGGER.warn("Collection '{}' has no figures", collectionId);
+                    LOGGER.warn("Could not find box block for collection: {}", collectionId);
                 }
-            });
-
-            // Spawn the item entity at the player's position
-            BlockPos playerPos = player.blockPosition();
-            double x = playerPos.getX() + 0.5;
-            double y = playerPos.getY() + 1.0; // Spawn above the player
-            double z = playerPos.getZ() + 0.5;
-
-            ItemEntity itemEntity = new ItemEntity(player.level(), x, y, z, boxItem);
-            // Add a slight upward velocity for a nice drop effect
-            itemEntity.setDeltaMovement(0, 0.2, 0);
-            player.level().addFreshEntity(itemEntity);
-
-            LOGGER.info("Dropped box item for collection '{}' at player position {}", collectionId, playerPos);
-        } else {
-            LOGGER.warn("Could not find box block for collection: {}", collectionId);
-        }
+            } else {
+                LOGGER.warn("Collection '{}' has no figures", collectionId);
+            }
+        });
     }
 
     /**

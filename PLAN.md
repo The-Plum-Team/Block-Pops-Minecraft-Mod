@@ -1,264 +1,360 @@
-Of course. This is an excellent feature that adds a lot of value and collectibility without cluttering the game with dozens of separate items. Here is a very detailed, step-by-step plan to implement the alternative figure system.
+Of course. This is an excellent idea that adds a great layer of personalization to the mod. Here is a super detailed, step-by-step plan to implement the "Favorite Color" selection feature for the `world_players` collection.
 
 ### **High-Level Goal**
 
-Transform the current system where alternative skins are separate figures into a unified system where a single figure can have multiple, switchable appearances. The player will interact with placed figures (in boxes or standalone) using a Stick to cycle through these alternatives.
+When a player joins a world for the first time, present them with a UI to choose their favorite box color from the 16 available variants. This choice will be saved and used to determine the appearance of their specific figure box when it's obtained from the `world_players` collection by any player in that world.
 
 ---
 
-### **Phase 1: Redesigning the Data Structure**
+### **Detailed Implementation Plan**
 
-The foundation of this system is how you define and load the alternative skins. This requires changes to your JSON collection format and the Java classes that represent them.
+#### **Phase 1: Data Storage & Player State Management (Capability)**
 
-#### **1.1. Modify the Collection JSON Format**
+The foundation of this feature is storing whether a player has chosen a color and what that color is. The existing `IPlayerDiscovery` capability is the perfect place for this.
 
-Currently, your `jojos.json` has entries like `jotaro_part3` and `jotaro_part3_alt`. We will merge these. The "main" figure will now contain an array of its alternatives.
+1.  **Modify `IPlayerDiscovery.java`:**
+    *   Add two new methods to the interface to track the player's choice.
 
-**Before (Example from `jojos.json`):**
-
-```json
-// ...
-{
-  "id": "jotaro_part3",
-  "name": "Jotaro Kujo (Part 3)",
-  "model": "blockpops:geo/figure/box_figure_default.geo.json",
-  "texture": "blockpops:textures/figure/jojos/jotaro_part3.png",
-  "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-},
-// ...
-{
-  "id": "jotaro_part3_alt",
-  "name": "Jotaro Kujo (Part 3 Alt)",
-  "model": "blockpops:geo/figure/box_figure_default.geo.json",
-  "texture": "blockpops:textures/figure/jojos/jotaro_part3_alt.png",
-  "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-}
-// ...
-```
-
-**After (Proposed new structure):**
-
-```json
-// ...
-{
-  "id": "jotaro_part3",
-  "name": "Jotaro Kujo (Part 3)",
-  "model": "blockpops:geo/figure/box_figure_default.geo.json",
-  "texture": "blockpops:textures/figure/jojos/jotaro_part3.png",
-  "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-  "alternatives": [
-    {
-      "name": "Jotaro Kujo (Part 3 Alt)",
-      "texture": "blockpops:textures/figure/jojos/jotaro_part3_alt.png"
-    }
-    // You could add more alternatives here
-  ]
-}
-// ... (The separate "jotaro_part3_alt" figure is now removed)
-```
-
-**Why this structure?**
-*   **Scalable:** You can add any number of alternatives without creating new top-level figure definitions.
-*   **Efficient:** Alternatives often share the same model and animation, so we only need to specify what changes (the texture and display name).
-*   **Clear:** It logically groups variants under a single primary figure.
-
-#### **1.2. Update the Java Data Classes**
-
-1.  **Create an `AlternativeSkin` class/record:** This will represent a single alternative.
     ```java
-    // In figure package, maybe as a nested class or standalone file.
-    // A record is perfect for this immutable data structure.
-    public record AlternativeSkin(String name, ResourceLocation texture) {
-        public static AlternativeSkin fromJson(JsonObject json) {
-            String name = json.get("name").getAsString();
-            ResourceLocation texture = new ResourceLocation(json.get("texture").getAsString());
-            return new AlternativeSkin(name, texture);
-        }
-    }
+    // In IPlayerDiscovery.java
+
+    /**
+     * Checks if the player has chosen their favorite color.
+     * @return true if a color has been chosen, false otherwise
+     */
+    boolean hasChosenFavoriteColor();
+
+    /**
+     * Sets whether the player has chosen their favorite color.
+     * @param hasChosen true to mark as chosen
+     */
+    void setHasChosenFavoriteColor(boolean hasChosen);
+
+    /**
+     * Gets the player's chosen favorite color.
+     * @return The PopBlockColor enum, or null if not chosen.
+     */
+    @Nullable
+    PopBlockColor getFavoriteColor();
+
+    /**
+     * Sets the player's favorite color.
+     * @param color The chosen color
+     */
+    void setFavoriteColor(@Nullable PopBlockColor color);
     ```
 
-2.  **Modify `FigureDefinition.java`:** Add a list to hold the alternatives.
-    *   Add a new field: `private final List<AlternativeSkin> alternatives;`
-    *   Update the constructor to accept this list and initialize it.
-    *   Add a getter: `public List<AlternativeSkin> getAlternatives()`.
-    *   Add a helper method: `public boolean hasAlternatives()`.
+2.  **Implement in `PlayerDiscovery.java`:**
+    *   Add fields to store the new data and implement the methods. The color should be stored as a string in NBT for safety and portability.
 
-3.  **Modify `FigureCollection.java`:** Update the `fromJson` parsing logic.
-    *   Inside the `FigureDefinition.fromJson` method (or wherever you parse individual figures), check if the JSON object has an `"alternatives"` array.
-    *   If it does, loop through the array, create `AlternativeSkin` objects using `AlternativeSkin.fromJson()`, and add them to a list.
-    *   Pass this list to the `FigureDefinition` constructor.
-
----
-
-### **Phase 2: Block Entity State Management**
-
-The `BlockEntity` for both the box and the figure needs to store which alternative is currently active.
-
-1.  **Add State Field:**
-    *   In `BoxBlockEntity.java` and `FigureBlockEntity.java`, add a new field:
-        ```java
-        private int alternativeSkinIndex = 0; // 0 is default, 1+ are from the alternatives list
-        ```
-
-2.  **Persist State (NBT):**
-    *   In both `BlockEntity` classes, update the NBT methods to save and load this index.
-    *   **`saveAdditional(CompoundTag tag)`:** `tag.putInt("AlternativeSkinIndex", this.alternativeSkinIndex);`
-    *   **`load(CompoundTag tag)`:** `this.alternativeSkinIndex = tag.getInt("AlternativeSkinIndex");`
-    *   **Crucially, also update `getUpdateTag()` and `handleUpdateTag()`** to ensure this data is sent to the client on chunk load and block updates. The current implementation where `getUpdateTag` calls `saveAdditional` is perfect and will handle this automatically.
-
-3.  **Create Cycling Logic:**
-    *   In both `BlockEntity` classes, add a new public method to cycle through the skins.
     ```java
-    public void cycleAlternativeSkin() {
-        FigureDefinition def = getFigureDefinition();
-        if (def == null || !def.hasAlternatives()) {
-            return; // No figure or no alternatives to cycle.
-        }
+    // In PlayerDiscovery.java
 
-        int totalSkins = 1 + def.getAlternatives().size(); // 1 for the default skin
-        this.alternativeSkinIndex = (this.alternativeSkinIndex + 1) % totalSkins;
+    private boolean hasChosenFavoriteColor = false;
+    private String favoriteColor = null; // Store as string name
 
-        // Mark for saving and send an update to the client.
-        setChanged();
-        if (level != null && !level.isClientSide) {
-            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
-        }
-    }
-    ```
-4.  **Add Getter:**
-    *   Add a getter `public int getAlternativeSkinIndex()` in both `BlockEntity` classes.
+    // ... existing methods ...
 
----
-
-### **Phase 3: Player Interaction Logic**
-
-Implement the right-click-with-a-stick mechanic. This happens in the `Block` classes.
-
-1.  **Modify `BoxBlock.java`:**
-    *   In the `use` method, add a new check at the beginning.
-    ```java
     @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-        ItemStack heldItem = player.getItemInHand(hand);
+    public boolean hasChosenFavoriteColor() {
+        return this.hasChosenFavoriteColor;
+    }
 
-        // --- NEW LOGIC START ---
-        if (heldItem.is(net.minecraft.world.item.Items.STICK)) {
-            if (!level.isClientSide()) {
-                if (level.getBlockEntity(pos) instanceof BoxBlockEntity boxBlockEntity && boxBlockEntity.hasFigure()) {
-                    boxBlockEntity.cycleAlternativeSkin();
+    @Override
+    public void setHasChosenFavoriteColor(boolean hasChosen) {
+        this.hasChosenFavoriteColor = hasChosen;
+    }
+
+    @Override
+    @Nullable
+    public PopBlockColor getFavoriteColor() {
+        if (this.favoriteColor == null) {
+            return null;
+        }
+        try {
+            return PopBlockColor.valueOf(this.favoriteColor.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return null; // Invalid color name stored
+        }
+    }
+
+    @Override
+    public void setFavoriteColor(@Nullable PopBlockColor color) {
+        this.favoriteColor = (color != null) ? color.name() : null;
+    }
+
+    @Override
+    public CompoundTag serializeNBT() {
+        CompoundTag tag = new CompoundTag();
+        // ... existing serialization ...
+
+        // Serialize favorite color data
+        tag.putBoolean("HasChosenFavoriteColor", this.hasChosenFavoriteColor);
+        if (this.favoriteColor != null) {
+            tag.putString("FavoriteColor", this.favoriteColor);
+        }
+        return tag;
+    }
+
+    @Override
+    public void deserializeNBT(CompoundTag tag) {
+        // ... existing deserialization ...
+
+        // Deserialize favorite color data
+        this.hasChosenFavoriteColor = tag.getBoolean("HasChosenFavoriteColor");
+        if (tag.contains("FavoriteColor", Tag.TAG_STRING)) {
+            this.favoriteColor = tag.getString("FavoriteColor");
+        } else {
+            this.favoriteColor = null;
+        }
+    }
+    ```
+
+#### **Phase 2: Networking**
+
+We need two new network packets: one for the server to tell the client to open the screen, and one for the client to tell the server the player's choice.
+
+1.  **S2C: `OpenFavoriteColorScreenPacket`**
+    *   **Purpose:** Sent from server to a specific client on their first join to trigger the UI.
+    *   **Data:** None needed. Its arrival is the trigger.
+    *   **File:** `forge/src/main/java/com/theplumteam/network/OpenFavoriteColorScreenPacket.java`
+    *   **Handler Logic (Client):**
+        *   `Minecraft.getInstance().setScreen(new FavoriteColorSelectionScreen());`
+
+2.  **C2S: `SetFavoriteColorPacket`**
+    *   **Purpose:** Sent from the client to the server after the player confirms their color choice.
+    *   **Data:** `String colorName` (the serialized name of the `PopBlockColor` enum).
+    *   **File:** `forge/src/main/java/com/theplumteam/network/SetFavoriteColorPacket.java`
+    *   **Handler Logic (Server):**
+        *   Get the `ServerPlayer` from the context.
+        *   Get their `IPlayerDiscovery` capability.
+        *   Parse the color string back to a `PopBlockColor` enum.
+        *   Call `setFavoriteColor()` and `setHasChosenFavoriteColor(true)` on the capability.
+
+3.  **Register Packets in `BlockPopsModForge.java`:**
+    *   Add the two new packets to the `registerNetworkPackets` method, incrementing the `packetId`.
+
+#### **Phase 3: Server-Side Logic**
+
+The server needs to control when the screen is shown and how the color choice affects the `world_players` collection.
+
+1.  **Trigger UI on First Join (`BlockPopsModForge.java`)**
+    *   Modify the `PlayerEvent.PLAYER_JOIN` listener.
+
+    ```java
+    // In BlockPopsModForge.java, inside PlayerEvent.PLAYER_JOIN.register(...)
+    serverPlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
+        // Sync discovery data and token data (existing logic)
+        // ...
+
+        // NEW: Check if favorite color needs to be chosen
+        if (!discovery.hasChosenFavoriteColor()) {
+            BlockPopsMod.LOGGER.info("Player {} has not chosen a favorite color. Sending packet to open selection screen.", serverPlayer.getName().getString());
+            NETWORK_CHANNEL.send(PacketDistributor.PLAYER.with(() -> serverPlayer), new OpenFavoriteColorScreenPacket());
+        }
+    });
+    ```
+
+2.  **Incorporate Color into `FigureDefinition`**
+    *   The `FigureDefinition` for a player needs to hold their chosen color so it can be accessed when generating a box.
+
+    ```java
+    // In FigureDefinition.java
+    private final PopBlockColor favoriteColor; // Add this field
+
+    // Modify constructors to accept this. For STATIC figures, it can be null.
+    // For PLAYER figures, it should be required.
+    public FigureDefinition(String id, String name, ResourceLocation modelPath,
+                           ResourceLocation animationPath, UUID playerUUID, PopBlockColor favoriteColor) {
+        // ... existing assignments ...
+        this.type = FigureType.PLAYER;
+        this.playerUUID = playerUUID;
+        this.favoriteColor = favoriteColor; // Assign it
+    }
+
+    public PopBlockColor getFavoriteColor() {
+        return favoriteColor;
+    }
+    ```
+
+3.  **Update `PlayerCollectionGenerator.java`**
+    *   This is a critical step. The generator must now read the player's favorite color from their NBT data.
+
+    ```java
+    // In PlayerCollectionGenerator.java
+    
+    // Inside the loop over playerFiles
+    // ...
+    UUID playerUUID = UUID.fromString(uuidString);
+    // ... get playerName ...
+    
+    // NEW: Load player NBT to get favorite color
+    PopBlockColor favoriteColor = PopBlockColor.ORIGINAL; // Default to ORIGINAL
+    CompoundTag playerData = server.playerDataStorage.load(playerUUID);
+    if (playerData != null) {
+        CompoundTag capabilities = playerData.getCompound("ForgeCaps");
+        if (capabilities.contains("blockpops:player_discovery")) {
+            CompoundTag discoveryTag = capabilities.getCompound("blockpops:player_discovery");
+            if (discoveryTag.contains("FavoriteColor")) {
+                try {
+                    favoriteColor = PopBlockColor.valueOf(discoveryTag.getString("FavoriteColor").toUpperCase());
+                } catch (Exception e) {
+                    BlockPopsMod.LOGGER.warn("Invalid favorite color found for player {}, defaulting.", playerUUID);
                 }
             }
-            return InteractionResult.sidedSuccess(level.isClientSide());
         }
-        // --- NEW LOGIC END ---
-
-        // Shift-right-click to open adjustment screen
-        if (level.isClientSide && player.isShiftKeyDown()) {
-            // ... existing code
-        }
-        // ... rest of the existing use method
     }
+
+    // Create a player figure definition WITH the color
+    FigureDefinition playerFigure = new FigureDefinition(
+        uuidString,
+        playerName,
+        defaultModel,
+        defaultAnimation,
+        playerUUID,
+        favoriteColor // Pass the color
+    );
+    playerFigures.add(playerFigure);
+    //...
     ```
 
-2.  **Create `FigureBlock.java`'s `use` method:**
-    *   `FigureBlock` currently lacks a `use` method. You need to add it.
+4.  **Update Box Spawning Logic (`DropBoxPacket.java` & `GetBoxCommand.java`)**
+    *   When a figure from `world_players` is selected, instead of using a hardcoded box, use the color from the `FigureDefinition` to get the correct colored box item.
+
     ```java
-    @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-        ItemStack heldItem = player.getItemInHand(hand);
-        if (heldItem.is(net.minecraft.world.item.Items.STICK)) {
-            if (!level.isClientSide()) {
-                if (level.getBlockEntity(pos) instanceof FigureBlockEntity figureBlockEntity && figureBlockEntity.hasFigure()) {
-                    figureBlockEntity.cycleAlternativeSkin();
+    // In DropBoxPacket.handle() and GetBoxCommand.processBoxDrop()
+    
+    // ... after a FigureDefinition `selectedFigure` has been chosen ...
+    
+    ItemStack boxItem;
+    Block boxBlock;
+    
+    if (packet.collectionId.equals(PlayerCollectionGenerator.getCollectionId())) {
+        // It's a world_players figure, use their favorite color
+        PopBlockColor color = selectedFigure.getFavoriteColor();
+        if (color == null) color = PopBlockColor.ORIGINAL; // Safety default
+        
+        boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.get(color).get();
+        boxItem = new ItemStack(boxBlock);
+    } else {
+        // Existing logic for other collections
+        boxBlock = ModBlocks.BOX_BLOCKS.get(packet.collectionId).get(); // etc.
+        boxItem = new ItemStack(boxBlock);
+    }
+    
+    // ... continue with populating NBT for the boxItem ...
+    ```
+
+#### **Phase 4: Client-Side UI**
+
+This is the most visible part. We will create a new screen that mimics the style of `CollectionSelectionScreen`.
+
+1.  **Create `FavoriteColorSelectionScreen.java`:**
+    *   **File:** `forge/src/main/java/com/theplumteam/client/gui/FavoriteColorSelectionScreen.java`
+    *   **Layout:**
+        *   It should extend `Screen`.
+        *   It will have the same panel background and border rendering as `CollectionSelectionScreen`.
+        *   **Title:** "Choose Your Favorite Color"
+        *   **Description:** "This color will be used for your figure box in the World Players collection."
+        *   **Grid of Colors:** A 4x4 grid displaying each of the 16 colored boxes.
+        *   **"Done" Button:** Centered at the bottom. It should be disabled until a color is selected.
+
+2.  **Implement the Color Grid:**
+    *   This can be done with a loop that creates 16 custom `Button` widgets.
+    *   For each color, create an `ItemStack` of the corresponding box block (e.g., `new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(color).get())`).
+    *   The button's rendering logic will use `GuiGraphics.renderItem` to draw the 3D spinning box model. We can even borrow logic from `BoxBlockItemRenderer` to make them spin or position them nicely.
+    *   When a color button is clicked, store the selection locally in the screen and visually highlight it (e.g., with a bright border). Enable the "Done" button.
+
+3.  **Screen Logic (`FavoriteColorSelectionScreen.java`):**
+
+    ```java
+    // Simplified structure of FavoriteColorSelectionScreen
+
+    public class FavoriteColorSelectionScreen extends Screen {
+        private PopBlockColor selectedColor = null;
+        private Button doneButton;
+        
+        // ... constructor ...
+
+        @Override
+        protected void init() {
+            // ... calculate panel dimensions ...
+            
+            // Add title and description text
+            
+            // Create 4x4 grid of color selection buttons
+            int startX = ...;
+            int startY = ...;
+            int buttonSize = 40;
+            int padding = 5;
+            int i = 0;
+            for (PopBlockColor color : PopBlockColor.values()) {
+                int row = i / 4;
+                int col = i % 4;
+                int x = startX + col * (buttonSize + padding);
+                int y = startY + row * (buttonSize + padding);
+                
+                // This will be a custom button class
+                this.addRenderableWidget(new ColorSelectionButton(x, y, buttonSize, color, this));
+                i++;
+            }
+            
+            // Done button
+            doneButton = Button.builder(Component.literal("Done"), button -> {
+                if (selectedColor != null) {
+                    // Send packet to server
+                    SetFavoriteColorPacket packet = new SetFavoriteColorPacket(selectedColor.getSerializedName());
+                    BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
+                    this.onClose(); // Close the screen
                 }
-            }
-            return InteractionResult.sidedSuccess(level.isClientSide());
+            }).bounds(...).build();
+            doneButton.active = false; // Initially disabled
+            this.addRenderableWidget(doneButton);
         }
-        return InteractionResult.PASS; // Pass to allow other interactions if needed
+        
+        public void setSelectedColor(PopBlockColor color) {
+            this.selectedColor = color;
+            this.doneButton.active = true; // Enable button
+            // Potentially re-render to update highlights
+        }
+        
+        @Override
+        public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+            renderBackground(graphics);
+            // ... render panel, title, description ...
+            super.render(graphics, mouseX, mouseY, partialTick);
+        }
+        
+        // Prevent closing with ESC
+        @Override
+        public boolean shouldCloseOnEsc() {
+            return false;
+        }
     }
     ```
+
+4.  **Create a `ColorSelectionButton` Widget:**
+    *   This custom widget will render the colored box `ItemStack`. When hovered, it can have a highlight. When selected, it can have a persistent, brighter highlight.
+    *   Its `onPress` action will call `parentScreen.setSelectedColor(this.color)`.
 
 ---
 
-### **Phase 4: Rendering Logic**
+### **Summary of File Changes/Creations**
 
-This is where the client uses the synced `alternativeSkinIndex` to render the correct texture.
+*   **Modified Files:**
+    *   `capability/IPlayerDiscovery.java`: Add new methods.
+    *   `capability/PlayerDiscovery.java`: Implement new methods and NBT logic.
+    *   `forge/BlockPopsModForge.java`: Add player join logic and register new packets.
+    *   `figure/FigureDefinition.java`: Add `favoriteColor` field and update constructor.
+    *   `figure/PlayerCollectionGenerator.java`: Load player color from NBT and pass it to `FigureDefinition`.
+    *   `network/DropBoxPacket.java`: Modify logic to use the correct colored box for `world_players`.
+    *   `command/GetBoxCommand.java`: Same modification as `DropBoxPacket`.
+    *   `lang/en_us.json`: Add a new entry for `block.blockpops.box_block_supermario`.
 
-1.  **Modify `FigureModel.java`:**
-    *   The `getTextureResource` method is the key. It needs to read the index from the `BoxBlockEntity`.
-    ```java
-    @Override
-    public ResourceLocation getTextureResource(BoxBlockEntity animatable) {
-        FigureDefinition figure = animatable.getFigureDefinition();
-        if (figure == null) {
-            return FALLBACK_TEXTURE;
-        }
+*   **New Files:**
+    *   `network/OpenFavoriteColorScreenPacket.java`: (S2C)
+    *   `network/SetFavoriteColorPacket.java`: (C2S)
+    *   `client/gui/FavoriteColorSelectionScreen.java`: The main UI screen.
+    *   `client/gui/widget/ColorSelectionButton.java`: A custom button for the color grid (optional, can be done with `Button` but a custom class is cleaner).
 
-        // --- NEW LOGIC START ---
-        int skinIndex = animatable.getAlternativeSkinIndex();
-
-        if (skinIndex == 0) {
-            // Default skin
-        } else if (skinIndex > 0 && figure.hasAlternatives()) {
-            int altListIndex = skinIndex - 1;
-            if (altListIndex < figure.getAlternatives().size()) {
-                // Return the alternative texture
-                return figure.getAlternatives().get(altListIndex).texture();
-            }
-        }
-        // --- NEW LOGIC END ---
-
-        // Check for player figure (dynamic skin) - This should come AFTER alt check
-        if (figure.getType() == FigureType.PLAYER && figure.getPlayerUUID() != null) {
-            // ... existing player skin logic
-        }
-
-        // Static figure - use the predefined texture path
-        ResourceLocation texturePath = figure.getTexturePath();
-        return texturePath != null ? texturePath : FALLBACK_TEXTURE;
-    }
-    ```
-
-2.  **Modify `FigureBlockModel.java`:**
-    *   Apply the exact same logic change to `getTextureResource(FigureBlockEntity animatable)`. The code will be nearly identical, just using `FigureBlockEntity` instead of `BoxBlockEntity`.
-
----
-
-### **Phase 5: UI and Tooltip Enhancements (Polish)**
-
-Inform the player that a figure has alternatives.
-
-1.  **Modify `GeoBlockItem.java`:**
-    *   In `appendHoverText`, when you have determined the `figure` within the item's NBT, check if it has alternatives.
-    ```java
-    // Inside appendHoverText, after getting the FigureDefinition
-    if (figure != null && figure.hasAlternatives()) {
-        tooltip.add(Component.translatable("tooltip.blockpops.has_alternatives")
-            .withStyle(ChatFormatting.DARK_PURPLE, ChatFormatting.ITALIC));
-    }
-    ```
-    *   Add the corresponding entry to `en_us.json`:
-        ```json
-        "tooltip.blockpops.has_alternatives": "Has alternative skins! (Right-click with a stick)"
-        ```
-
-2.  **Modify `CollectionSelectionScreen` (Optional but recommended):**
-    *   In `FigureEntry.java`, when rendering a figure cell, you can add a small visual indicator (e.g., a "+" icon or a sparkle) in the corner if the figure has alternatives.
-    *   In the `render` method of `FigureEntry`:
-        ```java
-        // After rendering the figure cell background
-        if (figure.hasAlternatives()) {
-            // Render your indicator icon at a corner of the cell
-            // e.g., graphics.drawString(mc.font, "+", figureX + FIGURE_SIZE - 8, y + 2, 0xFFD700);
-        }
-        ```
-
-### **Summary of Plan**
-
-1.  **Data:** Change JSON to nest alternatives under a primary figure. Update `FigureDefinition` to store a `List<AlternativeSkin>`.
-2.  **State:** Add `alternativeSkinIndex` to `BoxBlockEntity` and `FigureBlockEntity`, sync it via existing NBT mechanisms.
-3.  **Interaction:** Modify the `use` method in `BoxBlock` and `FigureBlock` to detect a Stick right-click, which calls `cycleAlternativeSkin()` on the server.
-4.  **Rendering:** Update `getTextureResource` in `FigureModel` and `FigureBlockModel` to select the texture based on the `alternativeSkinIndex` from the `BlockEntity`.
-5.  **UX:** Add tooltips to items and visual cues in the GUI to notify players about available alternatives.
-
-This plan provides a robust, scalable, and user-friendly system for alternative figures, neatly integrating into your existing architecture.
+This comprehensive plan covers the data persistence, server logic, networking, and client UI needed to implement this feature in a robust and polished way that fits perfectly with your mod's existing architecture.

@@ -1,11 +1,13 @@
 package com.theplumteam.capability;
 
+import com.theplumteam.block.PopBlockColor;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraftforge.common.util.INBTSerializable;
 
+import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -23,6 +25,10 @@ public class PlayerDiscovery implements IPlayerDiscovery, INBTSerializable<Compo
     private long nextRegularTokenTime = 0;
     private long lastSpecialTokenResetTimestamp = 0;
     private boolean usedTodaySpecialToken = false;
+
+    // Favorite color fields
+    private boolean hasChosenFavoriteColor = false;
+    private String favoriteColor = null; // Store as string name
 
     @Override
     public boolean isDiscovered(String figureId) {
@@ -87,6 +93,36 @@ public class PlayerDiscovery implements IPlayerDiscovery, INBTSerializable<Compo
         this.usedTodaySpecialToken = used;
     }
 
+    // Favorite Color Implementation
+
+    @Override
+    public boolean hasChosenFavoriteColor() {
+        return this.hasChosenFavoriteColor;
+    }
+
+    @Override
+    public void setHasChosenFavoriteColor(boolean hasChosen) {
+        this.hasChosenFavoriteColor = hasChosen;
+    }
+
+    @Override
+    @Nullable
+    public PopBlockColor getFavoriteColor() {
+        if (this.favoriteColor == null) {
+            return null;
+        }
+        try {
+            return PopBlockColor.valueOf(this.favoriteColor.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return null; // Invalid color name stored
+        }
+    }
+
+    @Override
+    public void setFavoriteColor(@Nullable PopBlockColor color) {
+        this.favoriteColor = (color != null) ? color.name() : null;
+    }
+
     @Override
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
@@ -103,6 +139,12 @@ public class PlayerDiscovery implements IPlayerDiscovery, INBTSerializable<Compo
         tag.putLong("NextRegularTokenTime", this.nextRegularTokenTime);
         tag.putLong("LastSpecialTokenResetTimestamp", this.lastSpecialTokenResetTimestamp);
         tag.putBoolean("UsedTodaySpecialToken", this.usedTodaySpecialToken);
+
+        // Serialize favorite color data
+        tag.putBoolean("HasChosenFavoriteColor", this.hasChosenFavoriteColor);
+        if (this.favoriteColor != null) {
+            tag.putString("FavoriteColor", this.favoriteColor);
+        }
 
         return tag;
     }
@@ -130,6 +172,14 @@ public class PlayerDiscovery implements IPlayerDiscovery, INBTSerializable<Compo
         }
         if (tag.contains("UsedTodaySpecialToken")) {
             this.usedTodaySpecialToken = tag.getBoolean("UsedTodaySpecialToken");
+        }
+
+        // Deserialize favorite color data
+        this.hasChosenFavoriteColor = tag.getBoolean("HasChosenFavoriteColor");
+        if (tag.contains("FavoriteColor", Tag.TAG_STRING)) {
+            this.favoriteColor = tag.getString("FavoriteColor");
+        } else {
+            this.favoriteColor = null;
         }
     }
 }

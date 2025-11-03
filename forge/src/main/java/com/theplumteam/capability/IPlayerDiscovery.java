@@ -1,5 +1,7 @@
 package com.theplumteam.capability;
 
+import com.theplumteam.block.PopBlockColor;
+import javax.annotation.Nullable;
 import java.util.Set;
 
 /**
@@ -82,4 +84,31 @@ public interface IPlayerDiscovery {
      * @param used true if used, false if available
      */
     void setUsedTodaySpecialToken(boolean used);
+
+    // Favorite Color Methods
+
+    /**
+     * Checks if the player has chosen their favorite color.
+     * @return true if a color has been chosen, false otherwise
+     */
+    boolean hasChosenFavoriteColor();
+
+    /**
+     * Sets whether the player has chosen their favorite color.
+     * @param hasChosen true to mark as chosen
+     */
+    void setHasChosenFavoriteColor(boolean hasChosen);
+
+    /**
+     * Gets the player's chosen favorite color.
+     * @return The PopBlockColor enum, or null if not chosen.
+     */
+    @Nullable
+    PopBlockColor getFavoriteColor();
+
+    /**
+     * Sets the player's favorite color.
+     * @param color The chosen color
+     */
+    void setFavoriteColor(@Nullable PopBlockColor color);
 }

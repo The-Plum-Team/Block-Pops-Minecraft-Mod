@@ -2,8 +2,10 @@ package com.theplumteam.figure;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.theplumteam.block.PopBlockColor;
 import net.minecraft.resources.ResourceLocation;
 
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -34,6 +36,7 @@ public class FigureDefinition {
     private final FigureType type;
     private final UUID playerUUID;
     private final List<AlternativeSkin> alternatives;
+    private final PopBlockColor favoriteColor; // For player figures, stores their chosen color
 
     public FigureDefinition(String id, String name, ResourceLocation modelPath,
                            ResourceLocation texturePath, ResourceLocation animationPath) {
@@ -51,13 +54,14 @@ public class FigureDefinition {
         this.type = FigureType.STATIC;
         this.playerUUID = null;
         this.alternatives = new ArrayList<>(alternatives);
+        this.favoriteColor = null; // Static figures don't have favorite colors
     }
 
     /**
      * Constructor for player figures (dynamic figures using player skins)
      */
     public FigureDefinition(String id, String name, ResourceLocation modelPath,
-                           ResourceLocation animationPath, UUID playerUUID) {
+                           ResourceLocation animationPath, UUID playerUUID, PopBlockColor favoriteColor) {
         this.id = id;
         this.name = name;
         this.modelPath = modelPath;
@@ -66,6 +70,7 @@ public class FigureDefinition {
         this.type = FigureType.PLAYER;
         this.playerUUID = playerUUID;
         this.alternatives = Collections.emptyList();
+        this.favoriteColor = favoriteColor;
     }
 
     /**
@@ -126,6 +131,11 @@ public class FigureDefinition {
 
     public boolean hasAlternatives() {
         return !alternatives.isEmpty();
+    }
+
+    @Nullable
+    public PopBlockColor getFavoriteColor() {
+        return favoriteColor;
     }
 
     @Override
