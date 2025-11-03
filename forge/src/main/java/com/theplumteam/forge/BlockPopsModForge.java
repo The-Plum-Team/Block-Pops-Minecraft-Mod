@@ -4,6 +4,7 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.capability.PlayerDiscoveryProvider;
 import com.theplumteam.command.ChangeFavoriteColorCommand;
 import com.theplumteam.command.GetBoxCommand;
+import com.theplumteam.command.GetFavoriteColorCommand;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.PlayerCollectionGenerator;
@@ -75,7 +76,8 @@ public final class BlockPopsModForge {
     public void onRegisterCommands(RegisterCommandsEvent event) {
         GetBoxCommand.register(event.getDispatcher());
         ChangeFavoriteColorCommand.register(event.getDispatcher());
-        BlockPopsMod.LOGGER.info("Registered /blockpops getbox and changefavoritecolor commands");
+        GetFavoriteColorCommand.register(event.getDispatcher());
+        BlockPopsMod.LOGGER.info("Registered /blockpops commands: getbox, changefavoritecolor, getfavoritecolor");
     }
 
     private void registerServerEvents() {

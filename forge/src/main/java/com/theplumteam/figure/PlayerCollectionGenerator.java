@@ -3,11 +3,13 @@ package com.theplumteam.figure;
 import com.mojang.authlib.GameProfile;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
+import com.theplumteam.capability.PlayerDiscoveryProvider;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.GameProfileCache;
 
 import java.io.File;
@@ -16,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Generates a dynamic figure collection based on players who have joined the world.
@@ -77,29 +80,46 @@ public class PlayerCollectionGenerator {
                         }
                     }
 
-                    // Load player NBT to get favorite color
+                    // Load player's favorite color - check if they're online first
                     PopBlockColor favoriteColor = PopBlockColor.ORIGINAL; // Default to ORIGINAL
-                    try {
-                        // Read the player data file directly
-                        File playerDataFile = new File(playerdataDir, uuidString + ".dat");
-                        if (playerDataFile.exists()) {
-                            CompoundTag playerData = NbtIo.readCompressed(playerDataFile);
-                            if (playerData != null) {
-                                CompoundTag capabilities = playerData.getCompound("ForgeCaps");
-                                if (capabilities.contains("blockpops:player_discovery")) {
-                                    CompoundTag discoveryTag = capabilities.getCompound("blockpops:player_discovery");
-                                    if (discoveryTag.contains("FavoriteColor", Tag.TAG_STRING)) {
-                                        try {
-                                            favoriteColor = PopBlockColor.valueOf(discoveryTag.getString("FavoriteColor").toUpperCase());
-                                        } catch (IllegalArgumentException e) {
-                                            BlockPopsMod.LOGGER.warn("Invalid favorite color found for player {}, defaulting to ORIGINAL", playerUUID);
+
+                    // Try to get the color from the online player's in-memory capability first
+                    ServerPlayer onlinePlayer = server.getPlayerList().getPlayer(playerUUID);
+                    if (onlinePlayer != null) {
+                        // Player is online, read from their in-memory capability
+                        AtomicReference<PopBlockColor> colorRef = new AtomicReference<>(PopBlockColor.ORIGINAL);
+                        onlinePlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
+                            PopBlockColor color = discovery.getFavoriteColor();
+                            if (color != null) {
+                                colorRef.set(color);
+                            }
+                        });
+                        favoriteColor = colorRef.get();
+                        BlockPopsMod.LOGGER.debug("Loaded favorite color from online player {}: {}", playerName, favoriteColor.getSerializedName());
+                    } else {
+                        // Player is offline, read from disk
+                        try {
+                            File playerDataFile = new File(playerdataDir, uuidString + ".dat");
+                            if (playerDataFile.exists()) {
+                                CompoundTag playerData = NbtIo.readCompressed(playerDataFile);
+                                if (playerData != null) {
+                                    CompoundTag capabilities = playerData.getCompound("ForgeCaps");
+                                    if (capabilities.contains("blockpops:player_discovery")) {
+                                        CompoundTag discoveryTag = capabilities.getCompound("blockpops:player_discovery");
+                                        if (discoveryTag.contains("FavoriteColor", Tag.TAG_STRING)) {
+                                            try {
+                                                favoriteColor = PopBlockColor.valueOf(discoveryTag.getString("FavoriteColor").toUpperCase());
+                                            } catch (IllegalArgumentException e) {
+                                                BlockPopsMod.LOGGER.warn("Invalid favorite color found for player {}, defaulting to ORIGINAL", playerUUID);
+                                            }
                                         }
                                     }
                                 }
                             }
+                            BlockPopsMod.LOGGER.debug("Loaded favorite color from disk for offline player {}: {}", playerName, favoriteColor.getSerializedName());
+                        } catch (Exception e) {
+                            BlockPopsMod.LOGGER.warn("Failed to load favorite color for player {}, defaulting to ORIGINAL: {}", playerUUID, e.getMessage());
                         }
-                    } catch (Exception e) {
-                        BlockPopsMod.LOGGER.warn("Failed to load favorite color for player {}, defaulting to ORIGINAL: {}", playerUUID, e.getMessage());
                     }
 
                     // Create a player figure definition WITH the color

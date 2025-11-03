@@ -2,6 +2,9 @@ package com.theplumteam.network;
 
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.capability.PlayerDiscoveryProvider;
+import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.figure.FigureCollection;
+import com.theplumteam.figure.PlayerCollectionGenerator;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
@@ -49,6 +52,14 @@ public class SetFavoriteColorPacket {
 
                         LOGGER.info("Player {} chose favorite color: {}",
                                 player.getName().getString(), color.getSerializedName());
+
+                        // Regenerate the World Players collection to reflect the updated color
+                        if (player.getServer() != null) {
+                            FigureCollection updatedCollection = PlayerCollectionGenerator.generate(player.getServer());
+                            CollectionRegistry.registerDynamicCollection(updatedCollection);
+                            LOGGER.info("Regenerated World Players collection after {} changed their favorite color",
+                                    player.getName().getString());
+                        }
                     } catch (IllegalArgumentException e) {
                         LOGGER.warn("Player {} sent invalid color name: {}",
                                 player.getName().getString(), packet.colorName);
