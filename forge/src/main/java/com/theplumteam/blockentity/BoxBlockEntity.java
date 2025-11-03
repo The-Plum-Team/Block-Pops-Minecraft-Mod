@@ -482,6 +482,8 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     public void saveToItem(net.minecraft.world.item.ItemStack stack) {
         CompoundTag tag = new CompoundTag();
         saveAdditional(tag);
+        // Always drop the box in closed state
+        tag.putBoolean("IsOpen", false);
         stack.addTagElement("BlockEntityTag", tag);
     }
 
