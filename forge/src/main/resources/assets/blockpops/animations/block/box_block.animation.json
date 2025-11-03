@@ -1,43 +1,19 @@
 {
 	"format_version": "1.8.0",
 	"animations": {
-		"animation.box_block.idle": {
-			"loop": true,
-			"animation_length": 2.0,
-			"bones": {
-				"block": {
-					"scale": {
-						"0.0": [1.0, 1.0, 1.0],
-						"1.0": [1.05, 1.05, 1.05],
-						"2.0": [1.0, 1.0, 1.0]
-					}
-				},
-				"bb_main2": {
-					"rotation": {
-						"0.0": [90, -179, 90]
-					}
-				}
-			}
-		},
 		"animation.box_block.open": {
-			"loop": false,
-			"animation_length": 0.875,
+			"animation_length": 0.625,
 			"bones": {
 				"bb_main2": {
 					"rotation": {
-						"0.0": {
-							"vector": [90, -179, 90]
-						},
-						"0.375": {
-							"vector": [90, -80, 90]
-						},
-						"0.5": {
-							"vector": [90, -95, 90],
-							"easing": "linear"
-						},
-						"0.625": {
-							"vector": [90, -80, 90]
-						}
+						"0.0": [90, -179, 90],
+						"0.375": [90, -80, 90],
+						"0.5": [90, -95, 90],
+						"0.625": [90, -80, 90]
+					},
+					"position": {
+						"0.0": [0, 0.1, 9],
+						"0.625": [0, 0.025, 9.05]
 					}
 				}
 			}
@@ -47,34 +23,42 @@
 			"animation_length": 0.0417,
 			"bones": {
 				"bb_main2": {
-					"rotation": {
-						"0.0": [90, -80, 90]
-					}
+					"rotation": [90, -80, 90],
+					"position": [0, 0, 9]
 				}
 			}
 		},
 		"animation.box_block.close": {
-			"loop": false,
-			"animation_length": 1.4583,
+			"animation_length": 0.875,
 			"bones": {
 				"bb_main2": {
-					"relative_to": {
-						"rotation": "entity"
-					},
 					"rotation": {
-						"0.0": {
-							"vector": [90, -80, 90]
-						},
-						"0.5417": {
-							"vector": [90, -179.9, 90]
-						},
-						"0.7083": {
-							"vector": [90, -172.9, 90]
-						},
-						"0.875": {
-							"vector": [90, -179.9, 90]
-						}
+						"0.0": [90, -80, 90],
+						"0.5417": [90, -179.9, 90],
+						"0.7083": [90, -172.9, 90],
+						"0.875": [90, -179.9, 90]
+					},
+					"position": {
+						"0.0": [0, 0.025, 9.05],
+						"0.875": [0, 0.1, 9]
 					}
+				}
+			}
+		},
+		"animation.box_block.idle": {
+			"loop": true,
+			"animation_length": 2,
+			"bones": {
+				"block": {
+					"scale": {
+						"0.0": [1, 1, 1],
+						"1.0": [1.05, 1.05, 1.05],
+						"2.0": [1, 1, 1]
+					}
+				},
+				"bb_main2": {
+					"rotation": [90, -179, 90],
+					"position": [0, 0, 9]
 				}
 			}
 		}

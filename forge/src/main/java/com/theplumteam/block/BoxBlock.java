@@ -180,11 +180,20 @@ public class BoxBlock extends BaseEntityBlock {
             return InteractionResult.sidedSuccess(level.isClientSide());
         }
 
-        // Shift-right-click to open adjustment screen
-        if (level.isClientSide && player.isShiftKeyDown()) {
-            BlockEntity blockEntity = level.getBlockEntity(pos);
-            if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
-                // Open the figure position adjustment screen
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        if (!(blockEntity instanceof BoxBlockEntity boxBlockEntity)) {
+            return InteractionResult.PASS;
+        }
+
+        // Shift-right-click behavior
+        if (player.isShiftKeyDown()) {
+            // If box is open, close it (server side)
+            if (boxBlockEntity.isOpen() && !level.isClientSide) {
+                boxBlockEntity.toggleOpen();
+                return InteractionResult.SUCCESS;
+            }
+            // If box is closed, open adjustment screen (client side)
+            else if (!boxBlockEntity.isOpen() && level.isClientSide) {
                 Minecraft.getInstance().setScreen(new FigurePositionScreen(
                     pos,
                     boxBlockEntity.getFigureOffsetX(),
@@ -206,75 +215,68 @@ public class BoxBlock extends BaseEntityBlock {
                 ));
                 return InteractionResult.SUCCESS;
             }
+            return InteractionResult.sidedSuccess(level.isClientSide);
         }
 
-        // Regular right-click for opening/closing the box
+        // Regular right-click (no shift) - server side only
         if (!level.isClientSide) {
-            BlockEntity blockEntity = level.getBlockEntity(pos);
-            if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
-                // If the box is open
-                if (boxBlockEntity.isOpen()) {
-                    // Empty hand extracts the figure
-                    if (heldItem.isEmpty() && boxBlockEntity.hasFigure() && !boxBlockEntity.isFigureExtracted()) {
-                        // Create a figure block item with the figure data
-                        ItemStack figureBlockItem = new ItemStack(ModItems.FIGURE_BLOCK_ITEM.get());
-                        CompoundTag blockEntityTag = new CompoundTag();
-                        blockEntityTag.putString("FigureId", boxBlockEntity.getFigureId());
-                        blockEntityTag.putString("CollectionId", boxBlockEntity.getCollectionId());
-                        blockEntityTag.putInt("AlternativeSkinIndex", boxBlockEntity.getAlternativeSkinIndex());
-                        // Copy figure positioning data
-                        blockEntityTag.putDouble("FigureOffsetX", boxBlockEntity.getFigureOffsetX());
-                        blockEntityTag.putDouble("FigureOffsetY", boxBlockEntity.getFigureOffsetY());
-                        blockEntityTag.putDouble("FigureOffsetZ", boxBlockEntity.getFigureOffsetZ());
-                        blockEntityTag.putDouble("FigureScale", boxBlockEntity.getFigureScale());
-                        figureBlockItem.addTagElement("BlockEntityTag", blockEntityTag);
+            // If the box is open
+            if (boxBlockEntity.isOpen()) {
+                // Holding a figure block - try to put it back in the box
+                if (heldItem.getItem() == ModItems.FIGURE_BLOCK_ITEM.get() && boxBlockEntity.isFigureExtracted()) {
+                    // Check if the figure matches this box
+                    CompoundTag blockEntityTag = heldItem.getTagElement("BlockEntityTag");
+                    if (blockEntityTag != null) {
+                        String heldFigureId = blockEntityTag.getString("FigureId");
+                        String heldCollectionId = blockEntityTag.getString("CollectionId");
 
-                        // Give the player the figure block item
-                        if (!player.getInventory().add(figureBlockItem)) {
-                            // If inventory is full, drop it
-                            player.drop(figureBlockItem, false);
+                        // Verify it's the same figure that was in this box
+                        if (heldFigureId.equals(boxBlockEntity.getFigureId()) &&
+                            heldCollectionId.equals(boxBlockEntity.getCollectionId())) {
+
+                            // Put the figure back in the box
+                            boxBlockEntity.setFigureExtracted(false);
+
+                            // Close the box
+                            boxBlockEntity.toggleOpen();
+
+                            // Remove one figure item from player's hand
+                            heldItem.shrink(1);
+
+                            return InteractionResult.SUCCESS;
                         }
-
-                        // Mark the figure as extracted
-                        boxBlockEntity.setFigureExtracted(true);
-                        return InteractionResult.SUCCESS;
-                    }
-                    // Holding a figure block - try to put it back in the box
-                    else if (heldItem.getItem() == ModItems.FIGURE_BLOCK_ITEM.get() && boxBlockEntity.isFigureExtracted()) {
-                        // Check if the figure matches this box
-                        CompoundTag blockEntityTag = heldItem.getTagElement("BlockEntityTag");
-                        if (blockEntityTag != null) {
-                            String heldFigureId = blockEntityTag.getString("FigureId");
-                            String heldCollectionId = blockEntityTag.getString("CollectionId");
-
-                            // Verify it's the same figure that was in this box
-                            if (heldFigureId.equals(boxBlockEntity.getFigureId()) &&
-                                heldCollectionId.equals(boxBlockEntity.getCollectionId())) {
-
-                                // Put the figure back in the box
-                                boxBlockEntity.setFigureExtracted(false);
-
-                                // Close the box
-                                boxBlockEntity.toggleOpen();
-
-                                // Remove one figure item from player's hand
-                                heldItem.shrink(1);
-
-                                return InteractionResult.SUCCESS;
-                            }
-                        }
-                    }
-                    // Slime ball closes the box
-                    else if (heldItem.getItem() == net.minecraft.world.item.Items.SLIME_BALL) {
-                        boxBlockEntity.toggleOpen();
-                        return InteractionResult.SUCCESS;
                     }
                 }
-                // If the box is closed, only scissors can open it
-                else if (heldItem.getItem() == net.minecraft.world.item.Items.SHEARS) {
-                    boxBlockEntity.toggleOpen();
+                // Any other item or empty hand - extract the figure
+                else if (boxBlockEntity.hasFigure() && !boxBlockEntity.isFigureExtracted()) {
+                    // Create a figure block item with the figure data
+                    ItemStack figureBlockItem = new ItemStack(ModItems.FIGURE_BLOCK_ITEM.get());
+                    CompoundTag blockEntityTag = new CompoundTag();
+                    blockEntityTag.putString("FigureId", boxBlockEntity.getFigureId());
+                    blockEntityTag.putString("CollectionId", boxBlockEntity.getCollectionId());
+                    blockEntityTag.putInt("AlternativeSkinIndex", boxBlockEntity.getAlternativeSkinIndex());
+                    // Copy figure positioning data
+                    blockEntityTag.putDouble("FigureOffsetX", boxBlockEntity.getFigureOffsetX());
+                    blockEntityTag.putDouble("FigureOffsetY", boxBlockEntity.getFigureOffsetY());
+                    blockEntityTag.putDouble("FigureOffsetZ", boxBlockEntity.getFigureOffsetZ());
+                    blockEntityTag.putDouble("FigureScale", boxBlockEntity.getFigureScale());
+                    figureBlockItem.addTagElement("BlockEntityTag", blockEntityTag);
+
+                    // Give the player the figure block item
+                    if (!player.getInventory().add(figureBlockItem)) {
+                        // If inventory is full, drop it
+                        player.drop(figureBlockItem, false);
+                    }
+
+                    // Mark the figure as extracted
+                    boxBlockEntity.setFigureExtracted(true);
                     return InteractionResult.SUCCESS;
                 }
+            }
+            // If the box is closed, only shears can open it
+            else if (heldItem.getItem() == net.minecraft.world.item.Items.SHEARS) {
+                boxBlockEntity.toggleOpen();
+                return InteractionResult.SUCCESS;
             }
         }
 
