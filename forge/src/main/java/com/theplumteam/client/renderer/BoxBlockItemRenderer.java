@@ -28,16 +28,21 @@ public class BoxBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
         if (stack.getItem() instanceof GeoBlockItem geoBlockItem) {
             BoxBlock boxBlock = geoBlockItem.getBoxBlock();
 
-            if (renderEntity == null || !renderEntity.getBlockState().is(boxBlock)) {
-                renderEntity = new BoxBlockEntity(BlockPos.ZERO, boxBlock.defaultBlockState());
-            }
+            // Always create a fresh entity to avoid state pollution from previous renders
+            // This prevents issues like closed boxes appearing open in inventory
+            renderEntity = new BoxBlockEntity(BlockPos.ZERO, boxBlock.defaultBlockState());
 
-            // Load NBT data from ItemStack to ensure figure data is available for rendering
+            // Load NBT data from ItemStack FIRST before any rendering
+            // This ensures isOpen is set correctly before the animation controller evaluates
             if (stack.hasTag()) {
                 CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
                 if (blockEntityTag != null) {
                     renderEntity.load(blockEntityTag);
                 }
+            } else {
+                // If no NBT, ensure it's explicitly closed
+                // This handles brand new boxes from creative menu
+                renderEntity.load(new CompoundTag());
             }
 
             // Apply transformations for item rendering
