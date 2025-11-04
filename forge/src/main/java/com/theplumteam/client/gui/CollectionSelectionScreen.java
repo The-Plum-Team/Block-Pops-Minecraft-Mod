@@ -71,6 +71,7 @@ public class CollectionSelectionScreen extends Screen {
     private float targetColorB;
     private float colorTransitionProgress = 1.0f; // 0.0 = current, 1.0 = target
     private static final float COLOR_TRANSITION_SPEED = 0.05f; // Higher = faster transition
+    private static final float COLOR_SNAP_THRESHOLD = 0.95f; // Snap to target when progress >= this value
 
     // Icon textures
     private static final ResourceLocation DISCORD_ICON = new ResourceLocation("blockpops", "textures/gui/discord_icon.png");
@@ -407,23 +408,39 @@ public class CollectionSelectionScreen extends Screen {
      * Render animated starry background
      */
     private void renderBackgroundEffects(GuiGraphics graphics, float partialTick) {
+        ClientConfig config = ClientConfig.getInstance();
+
         // Update color transition progress
         if (colorTransitionProgress < 1.0f) {
             colorTransitionProgress = Math.min(1.0f, colorTransitionProgress + COLOR_TRANSITION_SPEED);
 
+            // Snap to target when close enough to avoid imperceptible changes
+            if (colorTransitionProgress >= COLOR_SNAP_THRESHOLD) {
+                colorTransitionProgress = 1.0f;
+            }
+
             // If transition is complete, update the ClientConfig
             if (colorTransitionProgress >= 1.0f) {
-                ClientConfig config = ClientConfig.getInstance();
                 config.backgroundColorR = targetColorR;
                 config.backgroundColorG = targetColorG;
                 config.backgroundColorB = targetColorB;
             }
         }
 
-        // Interpolate between current and target colors
-        float lerpedR = Mth.lerp(colorTransitionProgress, currentColorR, targetColorR);
-        float lerpedG = Mth.lerp(colorTransitionProgress, currentColorG, targetColorG);
-        float lerpedB = Mth.lerp(colorTransitionProgress, currentColorB, targetColorB);
+        // Determine which color to use
+        float lerpedR, lerpedG, lerpedB;
+
+        if (colorTransitionProgress >= 1.0f) {
+            // No transition active - read directly from config for real-time updates from settings
+            lerpedR = config.backgroundColorR;
+            lerpedG = config.backgroundColorG;
+            lerpedB = config.backgroundColorB;
+        } else {
+            // Transition in progress - interpolate between current and target colors
+            lerpedR = Mth.lerp(colorTransitionProgress, currentColorR, targetColorR);
+            lerpedG = Mth.lerp(colorTransitionProgress, currentColorG, targetColorG);
+            lerpedB = Mth.lerp(colorTransitionProgress, currentColorB, targetColorB);
+        }
 
         // 1. Fill with interpolated background color as a base layer
         int bgRed = (int)(lerpedR * 255);
@@ -550,8 +567,17 @@ public class CollectionSelectionScreen extends Screen {
                 this.targetColorG = bgColor[1] / 255.0f;
                 this.targetColorB = bgColor[2] / 255.0f;
 
-                // Reset transition progress to start the animation
-                this.colorTransitionProgress = 0.0f;
+                // Check if transition animation is enabled
+                if (config.enableColorTransition) {
+                    // Reset transition progress to start the animation
+                    this.colorTransitionProgress = 0.0f;
+                } else {
+                    // Instantly change color (no animation)
+                    this.colorTransitionProgress = 1.0f;
+                    config.backgroundColorR = this.targetColorR;
+                    config.backgroundColorG = this.targetColorG;
+                    config.backgroundColorB = this.targetColorB;
+                }
             }
 
             // Update figure list widget

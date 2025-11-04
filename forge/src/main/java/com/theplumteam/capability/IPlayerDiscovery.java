@@ -2,6 +2,7 @@ package com.theplumteam.capability;
 
 import com.theplumteam.block.PopBlockColor;
 import javax.annotation.Nullable;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -111,4 +112,28 @@ public interface IPlayerDiscovery {
      * @param color The chosen color
      */
     void setFavoriteColor(@Nullable PopBlockColor color);
+
+    // Player Figure Skin Snapshot Methods
+
+    /**
+     * Saves a snapshot of a player figure's skin URL when discovered.
+     * This preserves the skin as it was when the figure was obtained.
+     * @param figureId The unique figure identifier in format "collectionId:figureId"
+     * @param skinUrl The skin texture URL to save
+     */
+    void saveFigureSkin(String figureId, String skinUrl);
+
+    /**
+     * Gets the saved skin URL for a player figure.
+     * @param figureId The unique figure identifier in format "collectionId:figureId"
+     * @return The saved skin URL, or null if not saved
+     */
+    @Nullable
+    String getFigureSkin(String figureId);
+
+    /**
+     * Gets all saved figure skins.
+     * @return An unmodifiable map of figure IDs to skin URLs
+     */
+    Map<String, String> getAllFigureSkins();
 }

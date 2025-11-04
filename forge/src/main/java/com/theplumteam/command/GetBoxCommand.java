@@ -184,6 +184,16 @@ public class GetBoxCommand {
                         // Mark as discovered on the server
                         discovery.discover(uniqueFigureId);
 
+                        // If this is a player figure, save a reference to load the skin from their UUID
+                        // The skin will be resolved on the client side using the saved UUID
+                        if (selectedFigure.getType() == com.theplumteam.figure.FigureType.PLAYER && selectedFigure.getPlayerUUID() != null) {
+                            // Store a marker indicating this is a player figure with a specific UUID
+                            // Format: "player:<uuid>" which the client can parse
+                            String skinRef = "player:" + selectedFigure.getPlayerUUID().toString();
+                            discovery.saveFigureSkin(uniqueFigureId, skinRef);
+                            LOGGER.debug("Saved skin reference for player figure {}: {}", uniqueFigureId, skinRef);
+                        }
+
                         // Notify the client of the new discovery
                         UnlockFigurePacket unlockPacket = new UnlockFigurePacket(uniqueFigureId, selectedFigure.getName());
                         BlockPopsModForge.NETWORK_CHANNEL.send(

@@ -20,14 +20,15 @@ public class SettingsScreen extends Screen {
     private static final int TITLE_COLOR = 0xFFFFFF;          // White title
 
     // Panel dimensions
-    private int panelWidth = 400;
-    private int panelHeight = 540;
+    private int panelWidth = 650;
+    private int panelHeight = 350;
     private int panelX;
     private int panelY;
 
     // Buttons and sliders
     private Button closeButton;
     private Button resetButton;
+    private Button colorTransitionToggle;
 
     // Star color sliders
     private ColorSlider starRedSlider;
@@ -56,128 +57,126 @@ public class SettingsScreen extends Screen {
         this.panelX = (this.width - this.panelWidth) / 2;
         this.panelY = (this.height - this.panelHeight) / 2;
 
-        // Settings content area
-        int contentX = this.panelX + 20;
-        int contentY = this.panelY + 50;
-        int sliderWidth = this.panelWidth - 40;
+        // Settings content area - 3 column layout
+        int padding = 20;
+        int columnSpacing = 15;
         int sliderHeight = 20;
-        int spacing = 28;
-        int sectionSpacing = 15;
+        int verticalSpacing = 28;
+
+        // Calculate column widths and positions
+        int availableWidth = this.panelWidth - (padding * 2) - (columnSpacing * 2);
+        int columnWidth = availableWidth / 3;
+
+        int col1X = this.panelX + padding;
+        int col2X = col1X + columnWidth + columnSpacing;
+        int col3X = col2X + columnWidth + columnSpacing;
+
+        int startY = this.panelY + 50;
 
         ClientConfig config = ClientConfig.getInstance();
 
-        // === STAR COLOR SECTION ===
-        contentY += sectionSpacing;
+        // Reset background color to black when opening settings
+        config.backgroundColorR = 0.0f;
+        config.backgroundColorG = 0.0f;
+        config.backgroundColorB = 0.0f;
 
-        // Star Red slider
+        // === COLUMN 1: STAR COLOR ===
+        int col1Y = startY;
+
         this.starRedSlider = new ColorSlider(
-                contentX, contentY,
-                sliderWidth, sliderHeight,
+                col1X, col1Y,
+                columnWidth, sliderHeight,
                 Component.literal("Red: "),
                 config.starColorR,
-                value -> {
-                    config.starColorR = value.floatValue();
-                }
+                value -> config.starColorR = value.floatValue()
         );
         this.addRenderableWidget(this.starRedSlider);
-        contentY += spacing;
+        col1Y += verticalSpacing;
 
-        // Star Green slider
         this.starGreenSlider = new ColorSlider(
-                contentX, contentY,
-                sliderWidth, sliderHeight,
+                col1X, col1Y,
+                columnWidth, sliderHeight,
                 Component.literal("Green: "),
                 config.starColorG,
-                value -> {
-                    config.starColorG = value.floatValue();
-                }
+                value -> config.starColorG = value.floatValue()
         );
         this.addRenderableWidget(this.starGreenSlider);
-        contentY += spacing;
+        col1Y += verticalSpacing;
 
-        // Star Blue slider
         this.starBlueSlider = new ColorSlider(
-                contentX, contentY,
-                sliderWidth, sliderHeight,
+                col1X, col1Y,
+                columnWidth, sliderHeight,
                 Component.literal("Blue: "),
                 config.starColorB,
-                value -> {
-                    config.starColorB = value.floatValue();
-                }
+                value -> config.starColorB = value.floatValue()
         );
         this.addRenderableWidget(this.starBlueSlider);
-        contentY += spacing;
+        col1Y += verticalSpacing;
 
-        // Star Opacity slider
         this.starOpacitySlider = new OpacitySlider(
-                contentX, contentY,
-                sliderWidth, sliderHeight,
+                col1X, col1Y,
+                columnWidth, sliderHeight,
                 Component.literal("Opacity: "),
                 config.starOpacity,
-                value -> {
-                    config.starOpacity = value.floatValue();
-                }
+                value -> config.starOpacity = value.floatValue()
         );
         this.addRenderableWidget(this.starOpacitySlider);
-        contentY += spacing + sectionSpacing;
 
-        // === BACKGROUND COLOR SECTION ===
-        contentY += sectionSpacing;
+        // === COLUMN 2: BACKGROUND COLOR ===
+        int col2Y = startY;
 
-        // Background Red slider
         this.bgRedSlider = new ColorSlider(
-                contentX, contentY,
-                sliderWidth, sliderHeight,
+                col2X, col2Y,
+                columnWidth, sliderHeight,
                 Component.literal("Red: "),
                 config.backgroundColorR,
-                value -> {
-                    config.backgroundColorR = value.floatValue();
-                }
+                value -> config.backgroundColorR = value.floatValue()
         );
         this.addRenderableWidget(this.bgRedSlider);
-        contentY += spacing;
+        col2Y += verticalSpacing;
 
-        // Background Green slider
         this.bgGreenSlider = new ColorSlider(
-                contentX, contentY,
-                sliderWidth, sliderHeight,
+                col2X, col2Y,
+                columnWidth, sliderHeight,
                 Component.literal("Green: "),
                 config.backgroundColorG,
-                value -> {
-                    config.backgroundColorG = value.floatValue();
-                }
+                value -> config.backgroundColorG = value.floatValue()
         );
         this.addRenderableWidget(this.bgGreenSlider);
-        contentY += spacing;
+        col2Y += verticalSpacing;
 
-        // Background Blue slider
         this.bgBlueSlider = new ColorSlider(
-                contentX, contentY,
-                sliderWidth, sliderHeight,
+                col2X, col2Y,
+                columnWidth, sliderHeight,
                 Component.literal("Blue: "),
                 config.backgroundColorB,
-                value -> {
-                    config.backgroundColorB = value.floatValue();
-                }
+                value -> config.backgroundColorB = value.floatValue()
         );
         this.addRenderableWidget(this.bgBlueSlider);
-        contentY += spacing + sectionSpacing;
 
-        // === PANEL OPACITY SECTION ===
-        contentY += sectionSpacing;
+        // === COLUMN 3: PANEL & ANIMATION ===
+        int col3Y = startY;
 
-        // Panel Opacity slider
         this.panelOpacitySlider = new OpacitySlider(
-                contentX, contentY,
-                sliderWidth, sliderHeight,
+                col3X, col3Y,
+                columnWidth, sliderHeight,
                 Component.literal("Panel Opacity: "),
                 config.panelOpacity,
-                value -> {
-                    config.panelOpacity = value.floatValue();
-                }
+                value -> config.panelOpacity = value.floatValue()
         );
         this.addRenderableWidget(this.panelOpacitySlider);
-        contentY += spacing + 20;
+        col3Y += verticalSpacing;
+
+        this.colorTransitionToggle = Button.builder(
+                Component.literal("Transition: " + (config.enableColorTransition ? "ON" : "OFF")),
+                button -> {
+                    config.enableColorTransition = !config.enableColorTransition;
+                    button.setMessage(Component.literal("Transition: " + (config.enableColorTransition ? "ON" : "OFF")));
+                }
+        )
+                .bounds(col3X, col3Y, columnWidth, sliderHeight)
+                .build();
+        this.addRenderableWidget(this.colorTransitionToggle);
 
         // Color preview boxes
         // (rendered in render method)
@@ -206,6 +205,8 @@ public class SettingsScreen extends Screen {
             this.bgBlueSlider.setValue(0.0);
             // Reset panel opacity slider
             this.panelOpacitySlider.setValue(0.90);
+            // Reset color transition toggle
+            this.colorTransitionToggle.setMessage(Component.literal("Transition: ON"));
         })
                 .bounds(buttonsStartX, buttonY, buttonWidth, buttonHeight)
                 .build();
@@ -272,31 +273,37 @@ public class SettingsScreen extends Screen {
                                    this.panelY + 15,
                                    TITLE_COLOR);
 
-        // Draw section titles
-        int sectionY = this.panelY + 35;
+        // Draw column headers
+        int padding = 20;
+        int columnSpacing = 15;
+        int availableWidth = this.panelWidth - (padding * 2) - (columnSpacing * 2);
+        int columnWidth = availableWidth / 3;
+
+        int col1X = this.panelX + padding;
+        int col2X = col1X + columnWidth + columnSpacing;
+        int col3X = col2X + columnWidth + columnSpacing;
+        int headerY = this.panelY + 35;
+
         graphics.drawString(this.font, "Star Color",
-                           this.panelX + 20,
-                           sectionY,
+                           col1X,
+                           headerY,
                            0xFFFFFF);
 
-        int bgSectionY = this.panelY + 170;
         graphics.drawString(this.font, "Background Color",
-                           this.panelX + 20,
-                           bgSectionY,
+                           col2X,
+                           headerY,
                            0xFFFFFF);
 
-        int panelSectionY = this.panelY + 305;
-        graphics.drawString(this.font, "Panel Opacity",
-                           this.panelX + 20,
-                           panelSectionY,
+        graphics.drawString(this.font, "Panel & Animation",
+                           col3X,
+                           headerY,
                            0xFFFFFF);
 
         // Draw color preview boxes
-        // Reuse config variable from above
         int previewSize = 35;
         int previewSpacing = 50;
         int previewStartX = this.panelX + (this.panelWidth - (previewSize * 2 + previewSpacing)) / 2;
-        int previewY = this.panelY + 320;
+        int previewY = this.panelY + 210;
 
         // Star color preview
         int starRed = (int)(config.starColorR * 255);

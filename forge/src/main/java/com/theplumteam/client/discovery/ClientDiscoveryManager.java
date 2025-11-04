@@ -3,8 +3,11 @@ package com.theplumteam.client.discovery;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -14,17 +17,29 @@ import java.util.Set;
 public class ClientDiscoveryManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(ClientDiscoveryManager.class);
     private static final Set<String> discoveredFigures = new HashSet<>();
+    private static final Map<String, String> figureSkins = new HashMap<>();
 
     /**
      * Replace the entire discovered set with new data from the server.
      * Called when the SyncDiscoveryDataPacket is received on login.
      *
      * @param figures The complete set of discovered figure IDs
+     * @param skins Map of figure IDs to skin URLs
      */
-    public static void setData(Set<String> figures) {
+    public static void setData(Set<String> figures, Map<String, String> skins) {
         discoveredFigures.clear();
         discoveredFigures.addAll(figures);
-        LOGGER.debug("Discovery data synced: {} figures", discoveredFigures.size());
+        figureSkins.clear();
+        figureSkins.putAll(skins);
+        LOGGER.debug("Discovery data synced: {} figures, {} skins", discoveredFigures.size(), figureSkins.size());
+    }
+
+    /**
+     * Legacy method for backward compatibility
+     */
+    @Deprecated
+    public static void setData(Set<String> figures) {
+        setData(figures, Collections.emptyMap());
     }
 
     /**
@@ -66,6 +81,28 @@ public class ClientDiscoveryManager {
      */
     public static void clear() {
         discoveredFigures.clear();
+        figureSkins.clear();
         LOGGER.debug("Discovery data cleared");
+    }
+
+    /**
+     * Save a skin URL for a figure.
+     *
+     * @param figureId The unique figure identifier in format "collectionId:figureId"
+     * @param skinUrl The skin URL to save
+     */
+    public static void saveFigureSkin(String figureId, String skinUrl) {
+        figureSkins.put(figureId, skinUrl);
+    }
+
+    /**
+     * Get the saved skin URL for a figure.
+     *
+     * @param figureId The unique figure identifier in format "collectionId:figureId"
+     * @return The saved skin URL, or null if not saved
+     */
+    @Nullable
+    public static String getFigureSkin(String figureId) {
+        return figureSkins.get(figureId);
     }
 }

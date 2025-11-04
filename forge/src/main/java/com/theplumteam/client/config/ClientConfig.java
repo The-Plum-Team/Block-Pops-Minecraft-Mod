@@ -21,6 +21,9 @@ public class ClientConfig {
     // Panel opacity (0.0-1.0)
     public float panelOpacity = 0.90f;  // Default 90%
 
+    // Color transition animation toggle
+    public boolean enableColorTransition = true;  // Default enabled
+
     private ClientConfig() {
         // Private constructor for singleton
     }
@@ -81,5 +84,8 @@ public class ClientConfig {
 
         // Reset panel opacity
         this.panelOpacity = 0.90f;
+
+        // Reset color transition toggle
+        this.enableColorTransition = true;
     }
 }

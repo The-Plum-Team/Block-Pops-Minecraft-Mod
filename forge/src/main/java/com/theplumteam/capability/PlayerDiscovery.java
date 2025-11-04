@@ -9,7 +9,9 @@ import net.minecraftforge.common.util.INBTSerializable;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -29,6 +31,10 @@ public class PlayerDiscovery implements IPlayerDiscovery, INBTSerializable<Compo
     // Favorite color fields
     private boolean hasChosenFavoriteColor = false;
     private String favoriteColor = null; // Store as string name
+
+    // Player figure skin snapshots - maps figureId to skin texture URL
+    private final Map<String, String> figureSkins = new HashMap<>();
+    private static final String NBT_FIGURE_SKINS_KEY = "FigureSkins";
 
     @Override
     public boolean isDiscovered(String figureId) {
@@ -123,6 +129,24 @@ public class PlayerDiscovery implements IPlayerDiscovery, INBTSerializable<Compo
         this.favoriteColor = (color != null) ? color.name() : null;
     }
 
+    // Player Figure Skin Snapshot Implementation
+
+    @Override
+    public void saveFigureSkin(String figureId, String skinUrl) {
+        figureSkins.put(figureId, skinUrl);
+    }
+
+    @Override
+    @Nullable
+    public String getFigureSkin(String figureId) {
+        return figureSkins.get(figureId);
+    }
+
+    @Override
+    public Map<String, String> getAllFigureSkins() {
+        return Collections.unmodifiableMap(figureSkins);
+    }
+
     @Override
     public CompoundTag serializeNBT() {
         CompoundTag tag = new CompoundTag();
@@ -144,6 +168,15 @@ public class PlayerDiscovery implements IPlayerDiscovery, INBTSerializable<Compo
         tag.putBoolean("HasChosenFavoriteColor", this.hasChosenFavoriteColor);
         if (this.favoriteColor != null) {
             tag.putString("FavoriteColor", this.favoriteColor);
+        }
+
+        // Serialize figure skins
+        if (!figureSkins.isEmpty()) {
+            CompoundTag skinsTag = new CompoundTag();
+            for (Map.Entry<String, String> entry : figureSkins.entrySet()) {
+                skinsTag.putString(entry.getKey(), entry.getValue());
+            }
+            tag.put(NBT_FIGURE_SKINS_KEY, skinsTag);
         }
 
         return tag;
@@ -180,6 +213,15 @@ public class PlayerDiscovery implements IPlayerDiscovery, INBTSerializable<Compo
             this.favoriteColor = tag.getString("FavoriteColor");
         } else {
             this.favoriteColor = null;
+        }
+
+        // Deserialize figure skins
+        figureSkins.clear();
+        if (tag.contains(NBT_FIGURE_SKINS_KEY, Tag.TAG_COMPOUND)) {
+            CompoundTag skinsTag = tag.getCompound(NBT_FIGURE_SKINS_KEY);
+            for (String key : skinsTag.getAllKeys()) {
+                figureSkins.put(key, skinsTag.getString(key));
+            }
         }
     }
 }

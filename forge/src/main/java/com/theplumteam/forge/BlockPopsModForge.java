@@ -117,11 +117,16 @@ public final class BlockPopsModForge {
                     }
 
                     serverPlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
-                        // Sync discovered figures
-                        SyncDiscoveryDataPacket discoveryPacket = new SyncDiscoveryDataPacket(discovery.getDiscoveredSet());
+                        // Sync discovered figures and their skins
+                        SyncDiscoveryDataPacket discoveryPacket = new SyncDiscoveryDataPacket(
+                                discovery.getDiscoveredSet(),
+                                discovery.getAllFigureSkins()
+                        );
                         NETWORK_CHANNEL.send(PacketDistributor.PLAYER.with(() -> serverPlayer), discoveryPacket);
-                        BlockPopsMod.LOGGER.info("Synced {} discovered figures to {}",
-                                discovery.getDiscoveredSet().size(), serverPlayer.getName().getString());
+                        BlockPopsMod.LOGGER.info("Synced {} discovered figures and {} skins to {}",
+                                discovery.getDiscoveredSet().size(),
+                                discovery.getAllFigureSkins().size(),
+                                serverPlayer.getName().getString());
 
                         // Sync token data
                         long gameTime = serverPlayer.serverLevel().getGameTime();

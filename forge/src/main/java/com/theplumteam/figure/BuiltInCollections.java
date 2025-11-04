@@ -14,7 +14,8 @@ public class BuiltInCollections {
         "adventuretime",
         "supermario",
         "starwars",
-        "fnaf"
+        "fnaf",
+        "onepiece"
         // Add more collections as needed
     );
 
@@ -29,6 +30,7 @@ public class BuiltInCollections {
             case "supermario" -> "Super Mario";
             case "starwars" -> "Star Wars";
             case "fnaf" -> "FNAF";
+            case "onepiece" -> "One Piece";
             default -> collectionId;
         };
     }
