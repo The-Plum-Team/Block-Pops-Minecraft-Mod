@@ -74,7 +74,10 @@ public class CollectionSelectionScreen extends Screen {
         super(Component.literal("Claw Machine Configuration"));
         this.blockPos = blockPos;
         this.selectedCollectionId = currentCollectionId;
-        this.collections = new ArrayList<>(CollectionRegistry.getAllCollections());
+        // Filter out the default collection from the menu
+        this.collections = CollectionRegistry.getAllCollections().stream()
+                .filter(c -> !"default".equals(c.getId()))
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
 
         // Sort collections to show players' collection first
         this.collections.sort((c1, c2) -> {
