@@ -72,8 +72,9 @@ public class FigureCollection {
     private final ResourceLocation boxTexture;
     private final LogoConfig logoConfig; // Optional: logo configuration for display on the box
     private final List<FigureDefinition> figures;
+    private final int[] backgroundColor; // Optional: RGB color for background (0-255 each)
 
-    public FigureCollection(String id, String name, String author, String authorUrl, ResourceLocation boxTexture, LogoConfig logoConfig, List<FigureDefinition> figures) {
+    public FigureCollection(String id, String name, String author, String authorUrl, ResourceLocation boxTexture, LogoConfig logoConfig, List<FigureDefinition> figures, int[] backgroundColor) {
         this.id = id;
         this.name = name;
         this.author = author;
@@ -81,6 +82,7 @@ public class FigureCollection {
         this.boxTexture = boxTexture;
         this.logoConfig = logoConfig;
         this.figures = new ArrayList<>(figures);
+        this.backgroundColor = backgroundColor;
     }
 
     /**
@@ -131,7 +133,17 @@ public class FigureCollection {
             figures.add(FigureDefinition.fromJson(figureJson));
         }
 
-        return new FigureCollection(id, name, author, authorUrl, boxTexture, logoConfig, figures);
+        // Parse background color (optional)
+        int[] backgroundColor = null;
+        if (json.has("background_color")) {
+            JsonObject bgColorJson = json.getAsJsonObject("background_color");
+            int r = bgColorJson.has("r") ? bgColorJson.get("r").getAsInt() : 0;
+            int g = bgColorJson.has("g") ? bgColorJson.get("g").getAsInt() : 0;
+            int b = bgColorJson.has("b") ? bgColorJson.get("b").getAsInt() : 0;
+            backgroundColor = new int[]{r, g, b};
+        }
+
+        return new FigureCollection(id, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor);
     }
 
     public String getId() {
@@ -168,6 +180,21 @@ public class FigureCollection {
 
     public List<FigureDefinition> getFigures() {
         return Collections.unmodifiableList(figures);
+    }
+
+    /**
+     * Gets the background color for this collection (RGB 0-255)
+     * @return int array [r, g, b] or null if not specified
+     */
+    public int[] getBackgroundColor() {
+        return backgroundColor;
+    }
+
+    /**
+     * Checks if this collection has a custom background color
+     */
+    public boolean hasBackgroundColor() {
+        return backgroundColor != null;
     }
 
     /**

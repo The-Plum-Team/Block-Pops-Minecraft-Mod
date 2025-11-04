@@ -13,6 +13,11 @@
     "scale_y": 5.000,
     "scale_z": 1.0
   },
+  "background_color": {
+    "r": 14,
+    "g": 138,
+    "b": 222
+  },
   "figures": [
     {
       "id": "ice_king",

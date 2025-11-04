@@ -13,6 +13,11 @@
     "scale_y": 4.156,
     "scale_z": 1.0
   },
+  "background_color": {
+    "r": 166,
+    "g": 136,
+    "b": 63
+  },
   "figures": [
     {
       "id": "nabbit",

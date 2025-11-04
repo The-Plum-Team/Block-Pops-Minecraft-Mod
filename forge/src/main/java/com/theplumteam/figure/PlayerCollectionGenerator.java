@@ -196,7 +196,8 @@ public class PlayerCollectionGenerator {
                 null,  // No URL for player collection
                 boxTexture,
                 logoConfig,  // Logo configuration
-                playerFigures
+                playerFigures,
+                new int[]{152, 48, 167}  // Purple background color
             );
 
         } catch (Exception e) {
@@ -230,7 +231,8 @@ public class PlayerCollectionGenerator {
             null,  // No URL for player collection
             boxTexture,
             logoConfig,  // Logo configuration
-            new ArrayList<>()
+            new ArrayList<>(),
+            new int[]{152, 48, 167}  // Purple background color
         );
     }
 

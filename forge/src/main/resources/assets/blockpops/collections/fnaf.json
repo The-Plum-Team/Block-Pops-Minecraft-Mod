@@ -13,6 +13,11 @@
     "scale_y": 5.000,
     "scale_z": 1.0
   },
+  "background_color": {
+    "r": 27,
+    "g": 18,
+    "b": 19
+  },
   "figures": [
     {
       "id": "freddy",

@@ -1,6 +1,8 @@
 package com.theplumteam.client.gui;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.block.PopBlockColor;
+import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.gui.widget.ColorSelectionButton;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.network.SetFavoriteColorPacket;
@@ -8,6 +10,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -40,6 +43,9 @@ public class FavoriteColorSelectionScreen extends Screen {
     private static final int MIN_PANEL_WIDTH = 400;
     private static final int MAX_PANEL_WIDTH = 600;
     private static final int MIN_PANEL_HEIGHT = 450;
+
+    // Background textures
+    private static final ResourceLocation STAR_PATTERN_TEXTURE = new ResourceLocation("blockpops", "textures/gui/background/star_pattern.png");
 
     // Transformation values for box rendering
     private float rotationX = 342.3f;  // Default rotation
@@ -174,8 +180,8 @@ public class FavoriteColorSelectionScreen extends Screen {
 
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // Render background (darken screen)
-        renderBackground(graphics);
+        // Render animated starry background
+        renderBackgroundEffects(graphics, partialTick);
 
         // Render panel background (frosted glass effect)
         renderPanel(graphics);
@@ -188,14 +194,85 @@ public class FavoriteColorSelectionScreen extends Screen {
     }
 
     /**
+     * Render animated starry background
+     */
+    private void renderBackgroundEffects(GuiGraphics graphics, float partialTick) {
+        // 1. Fill with configured background color as a base layer
+        ClientConfig config = ClientConfig.getInstance();
+        int bgRed = (int)(config.backgroundColorR * 255);
+        int bgGreen = (int)(config.backgroundColorG * 255);
+        int bgBlue = (int)(config.backgroundColorB * 255);
+        int bgColor = 0xFF000000 | (bgRed << 16) | (bgGreen << 8) | bgBlue;
+        graphics.fill(0, 0, this.width, this.height, bgColor);
+
+        // 2. Render the moving star pattern
+        renderStarPattern(graphics, partialTick);
+    }
+
+    /**
+     * Render the animated star pattern
+     */
+    private void renderStarPattern(GuiGraphics graphics, float partialTick) {
+        // Actual texture size
+        int textureSize = 1024;
+        // The size to render each tile (smaller = more stars visible)
+        int tileSize = 55;
+        // Animation speed: pixels per second
+        double pixelsPerSecond = 8.0;
+
+        // Use Minecraft's smooth game time for smooth animation
+        int tickCount = this.minecraft != null ? this.minecraft.gui.getGuiTicks() : 0;
+        double smoothTime = (tickCount + partialTick) / 20.0; // Convert to seconds
+        double offset = (smoothTime * pixelsPerSecond) % tileSize;
+
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+
+        // Apply star color tint and opacity from config
+        ClientConfig config = ClientConfig.getInstance();
+        RenderSystem.setShaderColor(config.starColorR, config.starColorG, config.starColorB, config.starOpacity);
+
+        // Calculate how many tiles are needed to cover the screen
+        int xTiles = Mth.ceil((float) this.width / tileSize) + 2;
+        int yTiles = Mth.ceil((float) this.height / tileSize) + 1;
+
+        var pose = graphics.pose();
+        pose.pushPose();
+
+        for (int y = 0; y < yTiles; ++y) {
+            for (int x = 0; x < xTiles; ++x) {
+                // Draw each tile, applying the horizontal scroll offset
+                double drawX = x * tileSize - offset;
+                double drawY = y * tileSize;
+
+                // Draw the full texture scaled down to tileSize x tileSize
+                pose.pushPose();
+                pose.translate(drawX, drawY, 0);
+                pose.scale(tileSize / (float)textureSize, tileSize / (float)textureSize, 1.0f);
+                graphics.blit(STAR_PATTERN_TEXTURE, 0, 0, 0, 0.0f, 0.0f, textureSize, textureSize, textureSize, textureSize);
+                pose.popPose();
+            }
+        }
+
+        pose.popPose();
+
+        RenderSystem.disableBlend();
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+    }
+
+    /**
      * Render the main panel with frosted glass effect
      */
     private void renderPanel(GuiGraphics graphics) {
-        // Panel background (dark semi-transparent)
+        // Panel background (dark semi-transparent with configurable opacity)
+        ClientConfig config = ClientConfig.getInstance();
+        int alpha = (int)(config.panelOpacity * 255);
+        int panelBgColor = (alpha << 24) | 0x000000;  // Black with configurable alpha
+
         graphics.fill(
                 panelX, panelY,
                 panelX + panelWidth, panelY + panelHeight,
-                0xB0000000
+                panelBgColor
         );
 
         // Panel outline (subtle white)
