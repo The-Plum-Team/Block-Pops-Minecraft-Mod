@@ -79,22 +79,40 @@ public class FigureDefinition {
     public static FigureDefinition fromJson(JsonObject json) {
         String id = json.get("id").getAsString();
         String name = json.get("name").getAsString();
-
         ResourceLocation modelPath = new ResourceLocation(json.get("model").getAsString());
-        ResourceLocation texturePath = new ResourceLocation(json.get("texture").getAsString());
         ResourceLocation animationPath = new ResourceLocation(json.get("animation").getAsString());
 
-        // Parse alternative skins if present
-        List<AlternativeSkin> alternatives = new ArrayList<>();
-        if (json.has("alternatives")) {
-            JsonArray alternativesArray = json.getAsJsonArray("alternatives");
-            for (int i = 0; i < alternativesArray.size(); i++) {
-                JsonObject altJson = alternativesArray.get(i).getAsJsonObject();
-                alternatives.add(AlternativeSkin.fromJson(altJson));
-            }
-        }
+        // Check if this is a player figure
+        String type = json.has("type") ? json.get("type").getAsString() : "static";
 
-        return new FigureDefinition(id, name, modelPath, texturePath, animationPath, alternatives);
+        if ("player".equals(type)) {
+            // Parse player figure
+            UUID playerUUID = json.has("player_uuid") ? UUID.fromString(json.get("player_uuid").getAsString()) : null;
+            PopBlockColor favoriteColor = null;
+            if (json.has("favorite_color")) {
+                try {
+                    favoriteColor = PopBlockColor.valueOf(json.get("favorite_color").getAsString().toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    favoriteColor = PopBlockColor.ORIGINAL; // Default if invalid
+                }
+            }
+            return new FigureDefinition(id, name, modelPath, animationPath, playerUUID, favoriteColor);
+        } else {
+            // Parse static figure
+            ResourceLocation texturePath = new ResourceLocation(json.get("texture").getAsString());
+
+            // Parse alternative skins if present
+            List<AlternativeSkin> alternatives = new ArrayList<>();
+            if (json.has("alternatives")) {
+                JsonArray alternativesArray = json.getAsJsonArray("alternatives");
+                for (int i = 0; i < alternativesArray.size(); i++) {
+                    JsonObject altJson = alternativesArray.get(i).getAsJsonObject();
+                    alternatives.add(AlternativeSkin.fromJson(altJson));
+                }
+            }
+
+            return new FigureDefinition(id, name, modelPath, texturePath, animationPath, alternatives);
+        }
     }
 
     public String getId() {
@@ -136,6 +154,47 @@ public class FigureDefinition {
     @Nullable
     public PopBlockColor getFavoriteColor() {
         return favoriteColor;
+    }
+
+    /**
+     * Serializes this FigureDefinition to a JSON object
+     */
+    public JsonObject toJson() {
+        JsonObject json = new JsonObject();
+        json.addProperty("id", id);
+        json.addProperty("name", name);
+        json.addProperty("model", modelPath.toString());
+        json.addProperty("animation", animationPath.toString());
+
+        if (type == FigureType.PLAYER) {
+            // For player figures, include player UUID and favorite color
+            json.addProperty("type", "player");
+            if (playerUUID != null) {
+                json.addProperty("player_uuid", playerUUID.toString());
+            }
+            if (favoriteColor != null) {
+                json.addProperty("favorite_color", favoriteColor.getSerializedName());
+            }
+        } else {
+            // For static figures, include texture and alternatives
+            json.addProperty("type", "static");
+            if (texturePath != null) {
+                json.addProperty("texture", texturePath.toString());
+            }
+
+            if (!alternatives.isEmpty()) {
+                JsonArray alternativesArray = new JsonArray();
+                for (AlternativeSkin alt : alternatives) {
+                    JsonObject altJson = new JsonObject();
+                    altJson.addProperty("name", alt.name());
+                    altJson.addProperty("texture", alt.texture().toString());
+                    alternativesArray.add(altJson);
+                }
+                json.add("alternatives", alternativesArray);
+            }
+        }
+
+        return json;
     }
 
     @Override

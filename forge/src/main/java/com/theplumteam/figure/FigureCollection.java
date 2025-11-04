@@ -213,6 +213,51 @@ public class FigureCollection {
         return !figures.isEmpty();
     }
 
+    /**
+     * Serializes this FigureCollection to a JSON object
+     */
+    public JsonObject toJson() {
+        JsonObject json = new JsonObject();
+        json.addProperty("id", id);
+        json.addProperty("name", name);
+        json.addProperty("author", author);
+        if (authorUrl != null) {
+            json.addProperty("author_url", authorUrl);
+        }
+        json.addProperty("box_texture", boxTexture.toString());
+
+        // Serialize logo configuration
+        if (logoConfig != null) {
+            JsonObject logoJson = new JsonObject();
+            logoJson.addProperty("texture", logoConfig.getTexture().toString());
+            logoJson.addProperty("position_x", logoConfig.getPositionX());
+            logoJson.addProperty("position_y", logoConfig.getPositionY());
+            logoJson.addProperty("position_z", logoConfig.getPositionZ());
+            logoJson.addProperty("scale_x", logoConfig.getScaleX());
+            logoJson.addProperty("scale_y", logoConfig.getScaleY());
+            logoJson.addProperty("scale_z", logoConfig.getScaleZ());
+            json.add("logo", logoJson);
+        }
+
+        // Serialize figures
+        JsonArray figuresArray = new JsonArray();
+        for (FigureDefinition figure : figures) {
+            figuresArray.add(figure.toJson());
+        }
+        json.add("figures", figuresArray);
+
+        // Serialize background color
+        if (backgroundColor != null) {
+            JsonObject bgColorJson = new JsonObject();
+            bgColorJson.addProperty("r", backgroundColor[0]);
+            bgColorJson.addProperty("g", backgroundColor[1]);
+            bgColorJson.addProperty("b", backgroundColor[2]);
+            json.add("background_color", bgColorJson);
+        }
+
+        return json;
+    }
+
     @Override
     public String toString() {
         return "FigureCollection{id='" + id + "', name='" + name + "', figures=" + figures.size() + "}";
