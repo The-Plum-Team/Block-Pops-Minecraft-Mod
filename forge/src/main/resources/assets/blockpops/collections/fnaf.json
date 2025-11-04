@@ -1,0 +1,95 @@
+{
+  "id": "fnaf",
+  "name": "Five Nights at Freddy's Collection",
+  "author": "strawbrysage",
+  "author_url": "https://www.planetminecraft.com/member/strawbrysage",
+  "box_texture": "blockpops:textures/block/box/fnaf.png",
+  "logo": {
+    "texture": "blockpops:textures/block/box/logo/logo_fnaf.png",
+    "position_x": -1.818,
+    "position_y": -0.229,
+    "position_z": 0.0,
+    "scale_x": 6.969,
+    "scale_y": 5.000,
+    "scale_z": 1.0
+  },
+  "figures": [
+    {
+      "id": "freddy",
+      "name": "Freddy Fazbear",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/fnaf/freddy.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "bonnie",
+      "name": "Bonnie",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/fnaf/bonnie.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "chica",
+      "name": "Chica",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/fnaf/chica.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "foxy",
+      "name": "Foxy",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/fnaf/foxy.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "golden_freddy",
+      "name": "Golden Freddy",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/fnaf/golden_freddy.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "withered_freddy",
+      "name": "Withered Freddy",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/fnaf/withered_freddy.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "withered_bonnie",
+      "name": "Withered Bonnie",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/fnaf/withered_bonnie.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "withered_chica",
+      "name": "Withered Chica",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/fnaf/withered_chica.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "withered_foxy",
+      "name": "Withered Foxy",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/fnaf/withered_foxy.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "mangle",
+      "name": "Mangle",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/fnaf/mangle.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "endoskeleton",
+      "name": "Endoskeleton",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/fnaf/endoskeleton.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    }
+  ]
+}

@@ -13,7 +13,8 @@ public class BuiltInCollections {
         "jujutsukaisen",
         "adventuretime",
         "supermario",
-        "starwars"
+        "starwars",
+        "fnaf"
         // Add more collections as needed
     );
 
@@ -27,6 +28,7 @@ public class BuiltInCollections {
             case "adventuretime" -> "Adventure Time";
             case "supermario" -> "Super Mario";
             case "starwars" -> "Star Wars";
+            case "fnaf" -> "FNAF";
             default -> collectionId;
         };
     }

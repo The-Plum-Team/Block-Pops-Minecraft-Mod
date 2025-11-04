@@ -5,7 +5,6 @@ import com.theplumteam.client.gui.widget.ColorSelectionButton;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.network.SetFavoriteColorPacket;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -102,64 +101,6 @@ public class FavoriteColorSelectionScreen extends Screen {
             this.addRenderableWidget(colorButton);
             colorButtons.add(colorButton);
         }
-
-        // Add transformation sliders on the right side of the screen
-        int sliderWidth = 150;
-        int sliderHeight = 20;
-        int sliderX = panelX + panelWidth + 30; // 30 pixels to the right of the panel
-        int sliderY = panelY + scaledPadding;
-        int sliderSpacing = sliderHeight + 8;
-
-        // Container Scale slider (0.5 to 2.0) - at the top
-        this.addRenderableWidget(new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Container Scale: "), 0.5, 2.0, containerScale,
-            value -> {
-                containerScale = value.floatValue();
-                // Reinitialize the screen to recalculate grid positions
-                this.init();
-            }));
-        sliderY += sliderSpacing + 10; // Extra spacing after container scale
-
-        // Rotation X slider (0 to 360 degrees)
-        this.addRenderableWidget(new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Rotation X: "), 0.0, 360.0, rotationX,
-            value -> { rotationX = value.floatValue(); updateButtonTransforms(); }));
-        sliderY += sliderSpacing;
-
-        // Rotation Y slider (0 to 360 degrees)
-        this.addRenderableWidget(new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Rotation Y: "), 0.0, 360.0, rotationY,
-            value -> { rotationY = value.floatValue(); updateButtonTransforms(); }));
-        sliderY += sliderSpacing;
-
-        // Rotation Z slider (0 to 360 degrees)
-        this.addRenderableWidget(new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Rotation Z: "), 0.0, 360.0, rotationZ,
-            value -> { rotationZ = value.floatValue(); updateButtonTransforms(); }));
-        sliderY += sliderSpacing;
-
-        // Scale slider (0.5 to 2.0)
-        this.addRenderableWidget(new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Scale: "), 0.5, 2.0, scale,
-            value -> { scale = value.floatValue(); updateButtonTransforms(); }));
-        sliderY += sliderSpacing;
-
-        // Position X slider (-300 to 300)
-        this.addRenderableWidget(new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Position X: "), -300.0, 300.0, offsetX,
-            value -> { offsetX = value.floatValue(); updateButtonTransforms(); }));
-        sliderY += sliderSpacing;
-
-        // Position Y slider (-300 to 300)
-        this.addRenderableWidget(new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Position Y: "), -300.0, 300.0, offsetY,
-            value -> { offsetY = value.floatValue(); updateButtonTransforms(); }));
-        sliderY += sliderSpacing;
-
-        // Position Z slider (-300 to 300)
-        this.addRenderableWidget(new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Position Z: "), -300.0, 300.0, offsetZ,
-            value -> { offsetZ = value.floatValue(); updateButtonTransforms(); }));
 
         // Done button at the bottom, centered
         int buttonWidth = 200;
@@ -302,36 +243,4 @@ public class FavoriteColorSelectionScreen extends Screen {
         return false;
     }
 
-    /**
-     * Custom slider for transformation values
-     */
-    private static class TransformSlider extends AbstractSliderButton {
-        private final Component prefix;
-        private final double minValue;
-        private final double maxValue;
-        private final java.util.function.Consumer<Double> onValueChange;
-
-        public TransformSlider(int x, int y, int width, int height, Component prefix,
-                             double minValue, double maxValue, double initialValue,
-                             java.util.function.Consumer<Double> onValueChange) {
-            super(x, y, width, height, Component.empty(), (initialValue - minValue) / (maxValue - minValue));
-            this.prefix = prefix;
-            this.minValue = minValue;
-            this.maxValue = maxValue;
-            this.onValueChange = onValueChange;
-            updateMessage();
-        }
-
-        @Override
-        protected void updateMessage() {
-            double currentValue = minValue + (value * (maxValue - minValue));
-            this.setMessage(Component.literal(prefix.getString() + String.format("%.1f", currentValue)));
-        }
-
-        @Override
-        protected void applyValue() {
-            double currentValue = minValue + (value * (maxValue - minValue));
-            onValueChange.accept(currentValue);
-        }
-    }
 }
