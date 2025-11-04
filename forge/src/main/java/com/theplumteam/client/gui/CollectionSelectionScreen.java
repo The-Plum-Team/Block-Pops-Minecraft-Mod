@@ -62,6 +62,16 @@ public class CollectionSelectionScreen extends Screen {
     private static final int MAX_PANEL_WIDTH = 1200;
     private static final int MIN_PANEL_HEIGHT = 400;
 
+    // Color transition fields
+    private float currentColorR;
+    private float currentColorG;
+    private float currentColorB;
+    private float targetColorR;
+    private float targetColorG;
+    private float targetColorB;
+    private float colorTransitionProgress = 1.0f; // 0.0 = current, 1.0 = target
+    private static final float COLOR_TRANSITION_SPEED = 0.05f; // Higher = faster transition
+
     // Icon textures
     private static final ResourceLocation DISCORD_ICON = new ResourceLocation("blockpops", "textures/gui/discord_icon.png");
     private static final ResourceLocation CURSEFORGE_ICON = new ResourceLocation("blockpops", "textures/gui/curseforge_icon.png");
@@ -93,6 +103,16 @@ public class CollectionSelectionScreen extends Screen {
             if (!c1IsPlayers && c2IsPlayers) return 1;
             return 0; // Keep original order for other collections
         });
+
+        // Initialize color transition with current background color
+        ClientConfig config = ClientConfig.getInstance();
+        this.currentColorR = config.backgroundColorR;
+        this.currentColorG = config.backgroundColorG;
+        this.currentColorB = config.backgroundColorB;
+        this.targetColorR = config.backgroundColorR;
+        this.targetColorG = config.backgroundColorG;
+        this.targetColorB = config.backgroundColorB;
+        this.colorTransitionProgress = 1.0f; // Start with no transition
 
         LOGGER.info("CollectionSelectionScreen opened at {} with current collection: {}",
                     blockPos, currentCollectionId);
@@ -387,11 +407,28 @@ public class CollectionSelectionScreen extends Screen {
      * Render animated starry background
      */
     private void renderBackgroundEffects(GuiGraphics graphics, float partialTick) {
-        // 1. Fill with configured background color as a base layer
-        ClientConfig config = ClientConfig.getInstance();
-        int bgRed = (int)(config.backgroundColorR * 255);
-        int bgGreen = (int)(config.backgroundColorG * 255);
-        int bgBlue = (int)(config.backgroundColorB * 255);
+        // Update color transition progress
+        if (colorTransitionProgress < 1.0f) {
+            colorTransitionProgress = Math.min(1.0f, colorTransitionProgress + COLOR_TRANSITION_SPEED);
+
+            // If transition is complete, update the ClientConfig
+            if (colorTransitionProgress >= 1.0f) {
+                ClientConfig config = ClientConfig.getInstance();
+                config.backgroundColorR = targetColorR;
+                config.backgroundColorG = targetColorG;
+                config.backgroundColorB = targetColorB;
+            }
+        }
+
+        // Interpolate between current and target colors
+        float lerpedR = Mth.lerp(colorTransitionProgress, currentColorR, targetColorR);
+        float lerpedG = Mth.lerp(colorTransitionProgress, currentColorG, targetColorG);
+        float lerpedB = Mth.lerp(colorTransitionProgress, currentColorB, targetColorB);
+
+        // 1. Fill with interpolated background color as a base layer
+        int bgRed = (int)(lerpedR * 255);
+        int bgGreen = (int)(lerpedG * 255);
+        int bgBlue = (int)(lerpedB * 255);
         int bgColor = 0xFF000000 | (bgRed << 16) | (bgGreen << 8) | bgBlue;
         graphics.fill(0, 0, this.width, this.height, bgColor);
 
@@ -498,13 +535,23 @@ public class CollectionSelectionScreen extends Screen {
             FigureCollection collection = entry.getCollection();
             selectedCollectionId = collection.getId();
 
-            // Update background color if collection has one
+            // Start color transition if collection has a background color
             if (collection.hasBackgroundColor()) {
                 int[] bgColor = collection.getBackgroundColor();
+
+                // Store current color as the starting point
                 ClientConfig config = ClientConfig.getInstance();
-                config.backgroundColorR = bgColor[0] / 255.0f;
-                config.backgroundColorG = bgColor[1] / 255.0f;
-                config.backgroundColorB = bgColor[2] / 255.0f;
+                this.currentColorR = config.backgroundColorR;
+                this.currentColorG = config.backgroundColorG;
+                this.currentColorB = config.backgroundColorB;
+
+                // Set target color
+                this.targetColorR = bgColor[0] / 255.0f;
+                this.targetColorG = bgColor[1] / 255.0f;
+                this.targetColorB = bgColor[2] / 255.0f;
+
+                // Reset transition progress to start the animation
+                this.colorTransitionProgress = 0.0f;
             }
 
             // Update figure list widget
