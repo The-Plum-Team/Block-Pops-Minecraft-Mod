@@ -14,10 +14,7 @@ import net.minecraft.server.players.GameProfileCache;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -41,103 +38,138 @@ public class PlayerCollectionGenerator {
             Path worldPath = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT);
             File playerdataDir = worldPath.resolve("playerdata").toFile();
 
-            if (!playerdataDir.exists() || !playerdataDir.isDirectory()) {
-                BlockPopsMod.LOGGER.warn("Playerdata directory not found, World Players collection will be empty");
-                return createEmptyCollection();
-            }
-
-            // Get all .dat files (each represents a player)
-            File[] playerFiles = playerdataDir.listFiles((dir, name) -> name.endsWith(".dat"));
-
-            if (playerFiles == null || playerFiles.length == 0) {
-                BlockPopsMod.LOGGER.info("No player data files found, World Players collection will be empty");
-                return createEmptyCollection();
-            }
-
             List<FigureDefinition> playerFigures = new ArrayList<>();
+            Set<UUID> processedPlayers = new HashSet<>(); // Track which players we've already added
             GameProfileCache profileCache = server.getProfileCache();
 
             // Use default model and animation paths
             ResourceLocation defaultModel = new ResourceLocation("blockpops", "geo/figure/box_figure_default.geo.json");
             ResourceLocation defaultAnimation = new ResourceLocation("blockpops", "animations/figure/box_figure_default.animation.json");
 
-            for (File playerFile : playerFiles) {
-                try {
-                    // Extract UUID from filename (remove .dat extension)
-                    String filename = playerFile.getName();
-                    String uuidString = filename.substring(0, filename.length() - 4);
-                    UUID playerUUID = UUID.fromString(uuidString);
+            // First, process existing .dat files (if directory exists)
+            if (playerdataDir.exists() && playerdataDir.isDirectory()) {
+                File[] playerFiles = playerdataDir.listFiles((dir, name) -> name.endsWith(".dat"));
 
-                    // Try to get the player's name from the profile cache
-                    String playerName = "Unknown Player";
-                    if (profileCache != null) {
-                        Optional<GameProfile> profile = profileCache.get(playerUUID);
-                        if (profile.isPresent()) {
-                            playerName = profile.get().getName();
-                        } else {
-                            // Fallback: use a shortened UUID if name not found
-                            playerName = "Player " + uuidString.substring(0, 8);
-                        }
-                    }
-
-                    // Load player's favorite color - check if they're online first
-                    PopBlockColor favoriteColor = PopBlockColor.ORIGINAL; // Default to ORIGINAL
-
-                    // Try to get the color from the online player's in-memory capability first
-                    ServerPlayer onlinePlayer = server.getPlayerList().getPlayer(playerUUID);
-                    if (onlinePlayer != null) {
-                        // Player is online, read from their in-memory capability
-                        AtomicReference<PopBlockColor> colorRef = new AtomicReference<>(PopBlockColor.ORIGINAL);
-                        onlinePlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
-                            PopBlockColor color = discovery.getFavoriteColor();
-                            if (color != null) {
-                                colorRef.set(color);
-                            }
-                        });
-                        favoriteColor = colorRef.get();
-                        BlockPopsMod.LOGGER.debug("Loaded favorite color from online player {}: {}", playerName, favoriteColor.getSerializedName());
-                    } else {
-                        // Player is offline, read from disk
+                if (playerFiles != null && playerFiles.length > 0) {
+                    for (File playerFile : playerFiles) {
                         try {
-                            File playerDataFile = new File(playerdataDir, uuidString + ".dat");
-                            if (playerDataFile.exists()) {
-                                CompoundTag playerData = NbtIo.readCompressed(playerDataFile);
-                                if (playerData != null) {
-                                    CompoundTag capabilities = playerData.getCompound("ForgeCaps");
-                                    if (capabilities.contains("blockpops:player_discovery")) {
-                                        CompoundTag discoveryTag = capabilities.getCompound("blockpops:player_discovery");
-                                        if (discoveryTag.contains("FavoriteColor", Tag.TAG_STRING)) {
-                                            try {
-                                                favoriteColor = PopBlockColor.valueOf(discoveryTag.getString("FavoriteColor").toUpperCase());
-                                            } catch (IllegalArgumentException e) {
-                                                BlockPopsMod.LOGGER.warn("Invalid favorite color found for player {}, defaulting to ORIGINAL", playerUUID);
+                            // Extract UUID from filename (remove .dat extension)
+                            String filename = playerFile.getName();
+                            String uuidString = filename.substring(0, filename.length() - 4);
+                            UUID playerUUID = UUID.fromString(uuidString);
+
+                            // Try to get the player's name from the profile cache
+                            String playerName = "Unknown Player";
+                            if (profileCache != null) {
+                                Optional<GameProfile> profile = profileCache.get(playerUUID);
+                                if (profile.isPresent()) {
+                                    playerName = profile.get().getName();
+                                } else {
+                                    // Fallback: use a shortened UUID if name not found
+                                    playerName = "Player " + uuidString.substring(0, 8);
+                                }
+                            }
+
+                            // Load player's favorite color - check if they're online first
+                            PopBlockColor favoriteColor = PopBlockColor.ORIGINAL; // Default to ORIGINAL
+
+                            // Try to get the color from the online player's in-memory capability first
+                            ServerPlayer onlinePlayer = server.getPlayerList().getPlayer(playerUUID);
+                            if (onlinePlayer != null) {
+                                // Player is online, read from their in-memory capability
+                                AtomicReference<PopBlockColor> colorRef = new AtomicReference<>(PopBlockColor.ORIGINAL);
+                                onlinePlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
+                                    PopBlockColor color = discovery.getFavoriteColor();
+                                    if (color != null) {
+                                        colorRef.set(color);
+                                    }
+                                });
+                                favoriteColor = colorRef.get();
+                                BlockPopsMod.LOGGER.debug("Loaded favorite color from online player {}: {}", playerName, favoriteColor.getSerializedName());
+                            } else {
+                                // Player is offline, read from disk
+                                try {
+                                    File playerDataFile = new File(playerdataDir, uuidString + ".dat");
+                                    if (playerDataFile.exists()) {
+                                        CompoundTag playerData = NbtIo.readCompressed(playerDataFile);
+                                        if (playerData != null) {
+                                            CompoundTag capabilities = playerData.getCompound("ForgeCaps");
+                                            if (capabilities.contains("blockpops:player_discovery")) {
+                                                CompoundTag discoveryTag = capabilities.getCompound("blockpops:player_discovery");
+                                                if (discoveryTag.contains("FavoriteColor", Tag.TAG_STRING)) {
+                                                    try {
+                                                        favoriteColor = PopBlockColor.valueOf(discoveryTag.getString("FavoriteColor").toUpperCase());
+                                                    } catch (IllegalArgumentException e) {
+                                                        BlockPopsMod.LOGGER.warn("Invalid favorite color found for player {}, defaulting to ORIGINAL", playerUUID);
+                                                    }
+                                                }
                                             }
                                         }
                                     }
+                                    BlockPopsMod.LOGGER.debug("Loaded favorite color from disk for offline player {}: {}", playerName, favoriteColor.getSerializedName());
+                                } catch (Exception e) {
+                                    BlockPopsMod.LOGGER.warn("Failed to load favorite color for player {}, defaulting to ORIGINAL: {}", playerUUID, e.getMessage());
                                 }
                             }
-                            BlockPopsMod.LOGGER.debug("Loaded favorite color from disk for offline player {}: {}", playerName, favoriteColor.getSerializedName());
-                        } catch (Exception e) {
-                            BlockPopsMod.LOGGER.warn("Failed to load favorite color for player {}, defaulting to ORIGINAL: {}", playerUUID, e.getMessage());
+
+                            // Create a player figure definition WITH the color
+                            FigureDefinition playerFigure = new FigureDefinition(
+                                uuidString,  // Use UUID as the figure ID
+                                playerName,
+                                defaultModel,
+                                defaultAnimation,
+                                playerUUID,
+                                favoriteColor  // Pass the color
+                            );
+
+                            playerFigures.add(playerFigure);
+                            processedPlayers.add(playerUUID);
+                            BlockPopsMod.LOGGER.debug("Added player figure from .dat file: {} ({})", playerName, playerUUID);
+
+                        } catch (IllegalArgumentException e) {
+                            BlockPopsMod.LOGGER.warn("Failed to parse player UUID from file: {}", playerFile.getName());
                         }
                     }
-
-                    // Create a player figure definition WITH the color
-                    FigureDefinition playerFigure = new FigureDefinition(
-                        uuidString,  // Use UUID as the figure ID
-                        playerName,
-                        defaultModel,
-                        defaultAnimation,
-                        playerUUID,
-                        favoriteColor  // Pass the color
-                    );
-
-                    playerFigures.add(playerFigure);
-                    BlockPopsMod.LOGGER.debug("Added player figure: {} ({})", playerName, playerUUID);
-
-                } catch (IllegalArgumentException e) {
-                    BlockPopsMod.LOGGER.warn("Failed to parse player UUID from file: {}", playerFile.getName());
                 }
+            }
+
+            // Second, add any online players who don't have .dat files yet (e.g., first-time joiners)
+            List<ServerPlayer> onlinePlayers = server.getPlayerList().getPlayers();
+            for (ServerPlayer onlinePlayer : onlinePlayers) {
+                UUID playerUUID = onlinePlayer.getUUID();
+
+                // Skip if we already processed this player from a .dat file
+                if (processedPlayers.contains(playerUUID)) {
+                    continue;
+                }
+
+                String playerName = onlinePlayer.getName().getString();
+                String uuidString = playerUUID.toString();
+
+                // Get favorite color from online player's capability
+                PopBlockColor favoriteColor = PopBlockColor.ORIGINAL;
+                AtomicReference<PopBlockColor> colorRef = new AtomicReference<>(PopBlockColor.ORIGINAL);
+                onlinePlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
+                    PopBlockColor color = discovery.getFavoriteColor();
+                    if (color != null) {
+                        colorRef.set(color);
+                    }
+                });
+                favoriteColor = colorRef.get();
+
+                // Create a player figure definition
+                FigureDefinition playerFigure = new FigureDefinition(
+                    uuidString,  // Use UUID as the figure ID
+                    playerName,
+                    defaultModel,
+                    defaultAnimation,
+                    playerUUID,
+                    favoriteColor  // Pass the color
+                );
+
+                playerFigures.add(playerFigure);
+                processedPlayers.add(playerUUID);
+                BlockPopsMod.LOGGER.debug("Added online player figure (no .dat file yet): {} ({})", playerName, playerUUID);
             }
 
             BlockPopsMod.LOGGER.info("Generated World Players collection with {} figures", playerFigures.size());
