@@ -64,6 +64,7 @@ public class CollectionSelectionScreen extends Screen {
     private static final ResourceLocation DISCORD_ICON = new ResourceLocation("blockpops", "textures/gui/discord_icon.png");
     private static final ResourceLocation CURSEFORGE_ICON = new ResourceLocation("blockpops", "textures/gui/curseforge_icon.png");
     private static final ResourceLocation MODRINTH_ICON = new ResourceLocation("blockpops", "textures/gui/modrinth_icon.png");
+    private static final ResourceLocation SETTINGS_ICON = new ResourceLocation("blockpops", "textures/gui/settings_icon.png");
 
     // URLs
     private static final String DISCORD_URL = "https://discord.gg/yGxdvA7qej";
@@ -202,12 +203,29 @@ public class CollectionSelectionScreen extends Screen {
 
         updateTokenButtonStates();
 
-        // --- Top-Right Link Buttons (Discord, CurseForge, Modrinth) ---
+        // --- Top-Right Link Buttons (Settings, Discord, CurseForge, Modrinth) ---
         int buttonSize = 24; // Larger button size (previously scaledComponentHeight which was 20)
         int linkButtonY = panelY + scaledPadding;
 
-        // Discord button (far right)
-        int discordButtonX = panelX + panelWidth - buttonSize - scaledPadding;
+        // Settings button (far right)
+        int settingsButtonX = panelX + panelWidth - buttonSize - scaledPadding;
+        this.addRenderableWidget(new LinkButton(
+                settingsButtonX,
+                linkButtonY,
+                buttonSize,
+                buttonSize,
+                SETTINGS_ICON,
+                null, // No URL, will be handled differently
+                Component.literal("Settings")
+        ) {
+            @Override
+            public void onPress() {
+                openSettingsScreen();
+            }
+        });
+
+        // Discord button (left of Settings)
+        int discordButtonX = settingsButtonX - buttonSize - scaledSpacing;
         this.addRenderableWidget(new LinkButton(
                 discordButtonX,
                 linkButtonY,
@@ -521,6 +539,13 @@ public class CollectionSelectionScreen extends Screen {
                     blockPos, selectedCollectionId);
         ClawMachineCollectionPacket packet = new ClawMachineCollectionPacket(blockPos, selectedCollectionId);
         BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
+    }
+
+    /**
+     * Opens the settings screen as a modal overlay
+     */
+    private void openSettingsScreen() {
+        this.minecraft.setScreen(new com.theplumteam.client.gui.SettingsScreen(this));
     }
 
     @Override
