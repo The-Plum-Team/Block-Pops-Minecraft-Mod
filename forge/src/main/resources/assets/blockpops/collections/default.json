@@ -1,0 +1,16 @@
+{
+  "id": "default",
+  "name": "Default Collection",
+  "author": "BlockPops",
+  "box_texture": "blockpops:textures/block/box/original.png",
+  "logo": {
+    "texture": "blockpops:textures/block/box/logo/logo_worldplayers.png",
+    "position_x": -0.915,
+    "position_y": -0.165,
+    "position_z": -0.001,
+    "scale_x": 4.004,
+    "scale_y": 4.503,
+    "scale_z": 1.0
+  },
+  "figures": []
+}
