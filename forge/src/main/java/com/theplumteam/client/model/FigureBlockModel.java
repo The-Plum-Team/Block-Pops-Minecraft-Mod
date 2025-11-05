@@ -9,6 +9,7 @@ import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.model.GeoModel;
@@ -49,22 +50,29 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
         }
 
         if (figure.getType() == FigureType.PLAYER && figure.getPlayerUUID() != null) {
-            // 1. ALWAYS prioritize the snapshot stored in NBT for placed blocks and items.
+            // 1. Prioritize snapshot in NBT (placed blocks/items)
             String blockSnapshot = animatable.getSkinSnapshot();
             if (blockSnapshot != null && !blockSnapshot.isEmpty()) {
                 return getSkinLocationFromSnapshot(figure, blockSnapshot);
             }
 
-            // 2. If NO NBT snapshot exists, it's likely a legacy block. Fallback to discovery manager.
-            // Note: FigureBlock items are not used for live previews, so we don't need the BlockPos.ZERO check here.
+            // 2. Fallback for legacy blocks
             String uniqueFigureId = animatable.getCollectionId() + ":" + animatable.getFigureId();
             String discoverySnapshot = ClientDiscoveryManager.getFigureSkin(uniqueFigureId);
             if (discoverySnapshot != null && !discoverySnapshot.isEmpty()) {
                 return getSkinLocationFromSnapshot(figure, discoverySnapshot);
             }
 
-            // 3. Final, absolute fallback: fetch the live skin.
+            // 3. Fallback to live skin. Try getting from player info first.
+            if (Minecraft.getInstance().getConnection() != null) {
+                PlayerInfo playerInfo = Minecraft.getInstance().getConnection().getPlayerInfo(figure.getPlayerUUID());
+                if (playerInfo != null) {
+                    return playerInfo.getSkinLocation();
+                }
+            }
+
             GameProfile finalFallbackProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
+            Minecraft.getInstance().getSkinManager().registerSkins(finalFallbackProfile, (type, location, profile) -> {}, true);
             return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(finalFallbackProfile);
         }
 
