@@ -68,7 +68,7 @@ public class GetBoxCommand {
     }
     private static final SuggestionProvider<CommandSourceStack> COLLECTION_SUGGESTIONS = (context, builder) -> {
         Set<String> collectionIds = CollectionRegistry.getCollectionIds();
-        return SharedSuggestionProvider.suggest(collectionIds, builder);
+        return SharedSuggestionProvider.suggest(collectionIds.stream().filter(id -> !id.equals("default")), builder);
     };
     private static final SuggestionProvider<CommandSourceStack> TOKEN_TYPE_SUGGESTIONS = (context, builder) -> {
         return SharedSuggestionProvider.suggest(new String[]{"regular", "guaranteed"}, builder);
