@@ -5,6 +5,7 @@ import com.theplumteam.capability.IPlayerDiscovery;
 import com.theplumteam.capability.PlayerDiscoveryProvider;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.network.SyncTokenDataPacket;
+import com.theplumteam.server.config.ServerConfig;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.TickEvent;
@@ -27,9 +28,6 @@ public class ServerTickHandler {
 
     // Maximum regular tokens a player can have
     private static final int MAX_REGULAR_TOKENS = 3;
-
-    // Daily reset hour in UTC (6 PM UTC)
-    private static final int RESET_HOUR_UTC = 18;
 
     // Track last tick to avoid processing every tick
     private static long lastCheckTick = 0;
@@ -117,10 +115,13 @@ public class ServerTickHandler {
                 ZoneId.of("UTC")
         );
 
+        // Get configured reset hour from server config
+        int resetHour = ServerConfig.getInstance().getGuaranteedTokenResetHour();
+
         // Check if it's past reset hour and a new day
-        boolean isPastResetHour = now.getHour() >= RESET_HOUR_UTC;
+        boolean isPastResetHour = now.getHour() >= resetHour;
         boolean isDifferentDay = !now.toLocalDate().equals(lastReset.toLocalDate());
-        boolean wasBeforeResetHour = lastReset.getHour() < RESET_HOUR_UTC;
+        boolean wasBeforeResetHour = lastReset.getHour() < resetHour;
 
         // Reset if:
         // 1. We're on a different day and past reset hour
@@ -132,7 +133,7 @@ public class ServerTickHandler {
             capability.setUsedTodaySpecialToken(false);
             capability.setLastSpecialTokenResetTimestamp(currentTimeMillis);
 
-            BlockPopsMod.LOGGER.debug("Reset special token (daily reset at {}:00 UTC)", RESET_HOUR_UTC);
+            BlockPopsMod.LOGGER.debug("Reset special token (daily reset at {}:00 UTC)", resetHour);
 
             return true;
         }
@@ -168,14 +169,15 @@ public class ServerTickHandler {
     }
 
     /**
-     * Calculate milliseconds until the next daily reset at RESET_HOUR_UTC.
+     * Calculate milliseconds until the next daily reset at the configured reset hour.
      */
     private static long calculateMillisUntilNextReset() {
+        int resetHour = ServerConfig.getInstance().getGuaranteedTokenResetHour();
         ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
-        ZonedDateTime nextReset = now.withHour(RESET_HOUR_UTC).withMinute(0).withSecond(0).withNano(0);
+        ZonedDateTime nextReset = now.withHour(resetHour).withMinute(0).withSecond(0).withNano(0);
 
         // If we're past reset hour today, next reset is tomorrow
-        if (now.getHour() >= RESET_HOUR_UTC) {
+        if (now.getHour() >= resetHour) {
             nextReset = nextReset.plusDays(1);
         }
 
