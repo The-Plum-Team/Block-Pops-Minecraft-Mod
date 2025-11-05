@@ -35,6 +35,7 @@ import net.minecraft.client.particle.ParticleEngine;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraftforge.client.extensions.common.IClientBlockExtensions;
+import net.minecraftforge.fml.loading.FMLLoader;
 import org.jetbrains.annotations.Nullable;
 import java.util.function.Consumer;
 
@@ -200,26 +201,29 @@ public class BoxBlock extends BaseEntityBlock {
             }
             // If box is closed, open adjustment screen (client side)
             else if (!boxBlockEntity.isOpen() && level.isClientSide) {
-                Minecraft.getInstance().setScreen(new FigurePositionScreen(
-                        pos,
-                        boxBlockEntity.getFigureOffsetX(),
-                        boxBlockEntity.getFigureOffsetY(),
-                        boxBlockEntity.getFigureOffsetZ(),
-                        boxBlockEntity.getFigureScale(),
-                        boxBlockEntity.getHitboxOffsetX(),
-                        boxBlockEntity.getHitboxOffsetY(),
-                        boxBlockEntity.getHitboxOffsetZ(),
-                        boxBlockEntity.getHitboxScaleX(),
-                        boxBlockEntity.getHitboxScaleY(),
-                        boxBlockEntity.getHitboxScaleZ(),
-                        boxBlockEntity.getLogoPositionX(),
-                        boxBlockEntity.getLogoPositionY(),
-                        boxBlockEntity.getLogoPositionZ(),
-                        boxBlockEntity.getLogoScaleX(),
-                        boxBlockEntity.getLogoScaleY(),
-                        boxBlockEntity.getLogoScaleZ()
-                ));
-                return InteractionResult.SUCCESS;
+                // Only allow access in dev mode or creative mode
+                if (!FMLLoader.isProduction()) {
+                    Minecraft.getInstance().setScreen(new FigurePositionScreen(
+                            pos,
+                            boxBlockEntity.getFigureOffsetX(),
+                            boxBlockEntity.getFigureOffsetY(),
+                            boxBlockEntity.getFigureOffsetZ(),
+                            boxBlockEntity.getFigureScale(),
+                            boxBlockEntity.getHitboxOffsetX(),
+                            boxBlockEntity.getHitboxOffsetY(),
+                            boxBlockEntity.getHitboxOffsetZ(),
+                            boxBlockEntity.getHitboxScaleX(),
+                            boxBlockEntity.getHitboxScaleY(),
+                            boxBlockEntity.getHitboxScaleZ(),
+                            boxBlockEntity.getLogoPositionX(),
+                            boxBlockEntity.getLogoPositionY(),
+                            boxBlockEntity.getLogoPositionZ(),
+                            boxBlockEntity.getLogoScaleX(),
+                            boxBlockEntity.getLogoScaleY(),
+                            boxBlockEntity.getLogoScaleZ()
+                    ));
+                    return InteractionResult.SUCCESS;
+                }
             }
             return InteractionResult.sidedSuccess(level.isClientSide);
         }
