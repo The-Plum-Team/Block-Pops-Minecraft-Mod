@@ -144,22 +144,11 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                 renderRecursively(poseStack, animatable, bone, figureRenderType, bufferSource, figureBuffer,
                                 true, partialTick, packedLight, packedOverlay, 1, 1, 1, 1);
                 poseStack.popPose();
-            } else if (bone.getName().equals("figure_head_3d") && figureHeadBone != null) {
-                // Render 3D head layer at the bone's position
+            } else if (bone.getName().equals("figure_face_3d")) {
+                // Render 3D layer (second skin layer)
                 poseStack.pushPose();
-
-                // Translate to the bone's pivot point (as defined in the model)
-                poseStack.translate(bone.getPivotX() / 16.0f, bone.getPivotY() / 16.0f, bone.getPivotZ() / 16.0f);
-
-                // Scale the head to fit nicely
-                float headScale = 0.3f;
-                poseStack.scale(headScale, headScale, headScale);
-
-                // Render the figure's head bone with the figure texture
-                figureRenderer.renderRecursively(poseStack, animatable, figureHeadBone, figureRenderType,
-                                                bufferSource, figureBuffer, false, partialTick,
-                                                packedLight, packedOverlay, 1, 1, 1, 1);
-
+                renderRecursively(poseStack, animatable, bone, figureRenderType, bufferSource, figureBuffer,
+                                true, partialTick, packedLight, packedOverlay, 1, 1, 1, 1);
                 poseStack.popPose();
             }
         }
@@ -227,7 +216,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         // They will be rendered separately with their own textures
         // When isReRender is true, we're rendering them with the appropriate texture
         String boneName = bone.getName();
-        if ((boneName.equals("figure_face") || boneName.equals("figure_head_3d") || boneName.equals("logo")) && !isReRender) {
+        if ((boneName.equals("figure_face") || boneName.equals("figure_face_3d") || boneName.equals("logo")) && !isReRender) {
             return;
         }
 
