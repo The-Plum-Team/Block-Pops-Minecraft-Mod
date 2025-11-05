@@ -23,6 +23,7 @@ import net.minecraftforge.network.PacketDistributor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -58,7 +59,7 @@ public class DropBoxPacket {
     public static void handle(DropBoxPacket packet, Supplier<NetworkEvent.Context> contextSupplier) {
         NetworkEvent.Context context = contextSupplier.get();
         LOGGER.info("Received drop box packet on server - Position: {}, Collection ID: {}, Token Type: {}",
-                    packet.pos, packet.collectionId, packet.tokenType);
+                packet.pos, packet.collectionId, packet.tokenType);
         context.enqueueWork(() -> {
             ServerPlayer player = context.getSender();
             if (player != null) {
@@ -85,9 +86,89 @@ public class DropBoxPacket {
     }
 
     /**
-     * Verify that the player has the requested token and consume it.
-     * @return true if token was valid and consumed, false otherwise
+     * Always fetches a fresh GameProfile from the session service to avoid using stale, cached skins.
      */
+    @Nullable
+    private static GameProfile getFreshGameProfile(ServerPlayer player, FigureDefinition figure) {
+        if (figure.getPlayerUUID() == null) return null;
+        try {
+            // Create a shell profile and force the session service to fill it with fresh, signed properties.
+            GameProfile freshProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
+            return player.getServer().getSessionService().fillProfileProperties(freshProfile, true);
+        } catch (Exception e) {
+            LOGGER.error("Failed to fetch fresh GameProfile for {}: {}", figure.getName(), e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Process the actual box drop after token verification
+     */
+    private static void processBoxDrop(ServerPlayer player, DropBoxPacket packet, IPlayerDiscovery discovery) {
+        CollectionRegistry.getCollection(packet.collectionId).ifPresent(collection -> {
+            List<FigureDefinition> figures = collection.getFigures();
+            if (!figures.isEmpty()) {
+                FigureDefinition selectedFigure = selectFigure(figures, packet.tokenType,
+                        discovery, packet.collectionId);
+
+                Block boxBlock = null;
+
+                if (packet.collectionId.equals(PlayerCollectionGenerator.getCollectionId())) {
+                    PopBlockColor color = selectedFigure.getFavoriteColor();
+                    if (color == null) color = PopBlockColor.ORIGINAL;
+                    boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.get(color).get();
+                } else if (ModBlocks.BOX_BLOCKS.containsKey(packet.collectionId)) {
+                    boxBlock = ModBlocks.BOX_BLOCKS.get(packet.collectionId).get();
+                } else {
+                    boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.get(PopBlockColor.ORIGINAL).get();
+                }
+
+                if (boxBlock != null) {
+                    ItemStack boxItem = new ItemStack(boxBlock);
+                    String uniqueFigureId = packet.collectionId + ":" + selectedFigure.getId();
+                    String skinSnapshot = null;
+
+                    if (selectedFigure.getType() == com.theplumteam.figure.FigureType.PLAYER) {
+                        GameProfile freshProfile = getFreshGameProfile(player, selectedFigure);
+                        if (freshProfile != null && !freshProfile.getProperties().get("textures").isEmpty()) {
+                            skinSnapshot = freshProfile.getProperties().get("textures").iterator().next().getValue();
+                            discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
+                            LOGGER.info("Saved/updated fresh skin snapshot for {}.", uniqueFigureId);
+                        }
+                    }
+
+                    if (!discovery.isDiscovered(uniqueFigureId)) {
+                        discovery.discover(uniqueFigureId);
+                        UnlockFigurePacket unlockPacket = new UnlockFigurePacket(uniqueFigureId, selectedFigure.getName(), skinSnapshot);
+                        BlockPopsModForge.NETWORK_CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), unlockPacket);
+                        LOGGER.info("Player {} discovered new figure: {} ({})", player.getName().getString(), selectedFigure.getName(), uniqueFigureId);
+                    }
+
+                    CompoundTag blockEntityTag = new CompoundTag();
+                    blockEntityTag.putString("FigureId", selectedFigure.getId());
+                    blockEntityTag.putString("CollectionId", packet.collectionId);
+
+                    if (skinSnapshot != null && !skinSnapshot.isEmpty()) {
+                        blockEntityTag.putString("SkinSnapshot", skinSnapshot);
+                        LOGGER.info("Added fresh skin snapshot to box item NBT for figure: {}", uniqueFigureId);
+                    } else if (selectedFigure.getType() == com.theplumteam.figure.FigureType.PLAYER) {
+                        String oldSnapshot = discovery.getFigureSkin(uniqueFigureId);
+                        if (oldSnapshot != null && !oldSnapshot.isEmpty()) {
+                            blockEntityTag.putString("SkinSnapshot", oldSnapshot);
+                        }
+                    }
+
+                    boxItem.getOrCreateTag().put("BlockEntityTag", blockEntityTag);
+
+                    ItemEntity itemEntity = new ItemEntity(player.level(), packet.pos.getX() + 0.5, packet.pos.getY() + 1.0, packet.pos.getZ() + 0.5, boxItem);
+                    itemEntity.setDeltaMovement(0, 0.2, 0);
+                    player.level().addFreshEntity(itemEntity);
+                }
+            }
+        });
+    }
+
+    // ... The rest of the file (verifyAndConsumeToken, syncTokenDataToClient, etc.) remains unchanged ...
     private static boolean verifyAndConsumeToken(ServerPlayer player, IPlayerDiscovery discovery, TokenType tokenType) {
         if (tokenType == TokenType.REGULAR) {
             if (discovery.getRegularTokens() > 0) {
@@ -112,10 +193,6 @@ public class DropBoxPacket {
         }
         return false;
     }
-
-    /**
-     * Sync token data back to the client after consumption
-     */
     private static void syncTokenDataToClient(ServerPlayer player, IPlayerDiscovery discovery) {
         long gameTime = player.serverLevel().getGameTime();
         long nextRegularTime = discovery.getNextRegularTokenTime();
@@ -134,10 +211,6 @@ public class DropBoxPacket {
                 packet
         );
     }
-
-    /**
-     * Calculate milliseconds until the next daily reset at 18:00 UTC
-     */
     private static long calculateMillisUntilNextReset() {
         java.time.ZonedDateTime now = java.time.ZonedDateTime.now(java.time.ZoneId.of("UTC"));
         java.time.ZonedDateTime nextReset = now.withHour(18).withMinute(0).withSecond(0).withNano(0);
@@ -148,146 +221,8 @@ public class DropBoxPacket {
 
         return nextReset.toInstant().toEpochMilli() - now.toInstant().toEpochMilli();
     }
-
-    /**
-     * Process the actual box drop after token verification
-     */
-    private static void processBoxDrop(ServerPlayer player, DropBoxPacket packet, IPlayerDiscovery discovery) {
-                // Get the collection and select a figure based on token type FIRST
-                // This is necessary to determine the box color for world_players
-                CollectionRegistry.getCollection(packet.collectionId).ifPresent(collection -> {
-                    List<FigureDefinition> figures = collection.getFigures();
-                    if (!figures.isEmpty()) {
-                        // Select figure based on token type
-                        FigureDefinition selectedFigure = selectFigure(figures, packet.tokenType,
-                                discovery, packet.collectionId);
-
-                        // Now determine the box block to use
-                        Block boxBlock = null;
-
-                        if (packet.collectionId.equals(PlayerCollectionGenerator.getCollectionId())) {
-                            // It's a world_players figure, use their favorite color
-                            PopBlockColor color = selectedFigure.getFavoriteColor();
-                            if (color == null) color = PopBlockColor.ORIGINAL; // Safety default
-
-                            boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.get(color).get();
-                            LOGGER.info("Using {} color box for world_players figure", color.getSerializedName());
-                        } else if (packet.collectionId.equals("default")) {
-                            // For default collection, use the first color variant (white)
-                            boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.values().stream()
-                                .findFirst()
-                                .map(supplier -> supplier.get())
-                                .orElse(null);
-                        } else if (ModBlocks.BOX_BLOCKS.containsKey(packet.collectionId)) {
-                            // For static collections, get the specific box block
-                            boxBlock = ModBlocks.BOX_BLOCKS.get(packet.collectionId).get();
-                        } else {
-                            // For other dynamic collections, use the default box block as fallback
-                            LOGGER.info("Using default box block for dynamic collection: {}", packet.collectionId);
-                            boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.values().stream()
-                                .findFirst()
-                                .map(supplier -> supplier.get())
-                                .orElse(null);
-                        }
-
-                        if (boxBlock != null) {
-                            // Create an ItemStack from the box block
-                            ItemStack boxItem = new ItemStack(boxBlock);
-
-                            // Create unique figure ID for discovery tracking
-                            String uniqueFigureId = packet.collectionId + ":" + selectedFigure.getId();
-
-                            // Check if this is a new discovery
-                            if (!discovery.isDiscovered(uniqueFigureId)) {
-                                // Mark as discovered on the server
-                                discovery.discover(uniqueFigureId);
-
-                                String skinSnapshot = null;
-                                // If this is a player figure, snapshot their skin
-                                if (selectedFigure.getType() == com.theplumteam.figure.FigureType.PLAYER && selectedFigure.getPlayerUUID() != null) {
-                                    GameProfile profile = null;
-
-                                    // First, try to get the profile from an online player (most reliable)
-                                    ServerPlayer targetPlayer = player.getServer().getPlayerList().getPlayer(selectedFigure.getPlayerUUID());
-                                    if (targetPlayer != null) {
-                                        profile = targetPlayer.getGameProfile();
-                                        LOGGER.debug("Found online player profile for {}", selectedFigure.getName());
-                                    } else {
-                                        // Player is offline, fetch from session service
-                                        try {
-                                            GameProfile baseProfile = new GameProfile(selectedFigure.getPlayerUUID(), selectedFigure.getName());
-                                            profile = player.getServer().getSessionService().fillProfileProperties(baseProfile, true);
-                                            LOGGER.debug("Fetched profile from session service for {}", selectedFigure.getName());
-                                        } catch (Exception e) {
-                                            LOGGER.error("Failed to fetch profile from session service for {}", selectedFigure.getName(), e);
-                                        }
-                                    }
-
-                                    if (profile != null && !profile.getProperties().get("textures").isEmpty()) {
-                                        // The snapshot is the Base64 value of the texture property
-                                        skinSnapshot = profile.getProperties().get("textures").iterator().next().getValue();
-                                        discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
-                                        LOGGER.info("Saved skin snapshot for player figure {}: {} bytes", uniqueFigureId, skinSnapshot.length());
-                                    } else {
-                                        LOGGER.warn("Could not find GameProfile or texture property for player {} (UUID: {})",
-                                                selectedFigure.getName(), selectedFigure.getPlayerUUID());
-                                    }
-                                }
-
-                                // Notify the client of the new discovery, including the skin snapshot if available
-                                UnlockFigurePacket unlockPacket = new UnlockFigurePacket(uniqueFigureId, selectedFigure.getName(), skinSnapshot);
-                                BlockPopsModForge.NETWORK_CHANNEL.send(
-                                    PacketDistributor.PLAYER.with(() -> player),
-                                    unlockPacket
-                                );
-
-                                LOGGER.info("Player {} discovered new figure: {} ({})",
-                                        player.getName().getString(), selectedFigure.getName(), uniqueFigureId);
-                            } else {
-                                LOGGER.debug("Player {} received duplicate figure: {} ({})",
-                                        player.getName().getString(), selectedFigure.getName(), uniqueFigureId);
-                            }
-
-                            // Create NBT data for the box with the selected figure
-                            CompoundTag blockEntityTag = new CompoundTag();
-                            blockEntityTag.putString("FigureId", selectedFigure.getId());
-                            // Store the collection ID so dynamic collections work correctly
-                            blockEntityTag.putString("CollectionId", packet.collectionId);
-
-                            // Set the BlockEntityTag on the item
-                            boxItem.getOrCreateTag().put("BlockEntityTag", blockEntityTag);
-
-                            LOGGER.info("Selected figure '{}' ({}) from collection '{}' using {} token",
-                                       selectedFigure.getId(), selectedFigure.getName(),
-                                       packet.collectionId, packet.tokenType);
-
-                            // Spawn the item entity at the claw machine position (slightly above)
-                            double x = packet.pos.getX() + 0.5;
-                            double y = packet.pos.getY() + 1.0; // Spawn above the lower block
-                            double z = packet.pos.getZ() + 0.5;
-
-                            ItemEntity itemEntity = new ItemEntity(player.level(), x, y, z, boxItem);
-                            // Add a slight upward velocity for a nice drop effect
-                            itemEntity.setDeltaMovement(0, 0.2, 0);
-                            player.level().addFreshEntity(itemEntity);
-
-                            LOGGER.info("Dropped box item for collection '{}' at position {}", packet.collectionId, packet.pos);
-                        } else {
-                            LOGGER.warn("Could not find box block for collection: {}", packet.collectionId);
-                        }
-                    } else {
-                        LOGGER.warn("Collection '{}' has no figures", packet.collectionId);
-                    }
-                });
-    }
-
-    /**
-     * Select a figure based on the token type.
-     * REGULAR: Random figure from collection
-     * GUARANTEED: Random undiscovered figure, or random figure if collection is complete
-     */
     private static FigureDefinition selectFigure(List<FigureDefinition> figures, TokenType tokenType,
-                                                  IPlayerDiscovery discovery, String collectionId) {
+                                                 IPlayerDiscovery discovery, String collectionId) {
         Random random = new Random();
 
         if (tokenType == TokenType.GUARANTEED) {

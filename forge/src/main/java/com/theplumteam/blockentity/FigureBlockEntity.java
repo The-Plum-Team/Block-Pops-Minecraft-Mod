@@ -30,6 +30,7 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     private String figureId = "";
     private String collectionId = "";
     private int alternativeSkinIndex = 0; // 0 is default, 1+ are from the alternatives list
+    private String skinSnapshot = null; // Saved skin snapshot URL for player figures
 
     // Figure positioning - matches BoxBlockEntity for consistent display
     private double figureOffsetX = -0.60;
@@ -146,6 +147,14 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     /**
+     * Gets the saved skin snapshot URL for this figure.
+     * @return The skin snapshot URL, or null if not set.
+     */
+    public String getSkinSnapshot() {
+        return skinSnapshot;
+    }
+
+    /**
      * Cycles to the next alternative skin
      */
     public void cycleAlternativeSkin() {
@@ -170,6 +179,9 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         tag.putString("FigureId", figureId);
         tag.putString("CollectionId", collectionId);
         tag.putInt("AlternativeSkinIndex", alternativeSkinIndex);
+        if (skinSnapshot != null) {
+            tag.putString("SkinSnapshot", skinSnapshot);
+        }
         tag.putDouble("FigureOffsetX", figureOffsetX);
         tag.putDouble("FigureOffsetY", figureOffsetY);
         tag.putDouble("FigureOffsetZ", figureOffsetZ);
@@ -187,6 +199,11 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
         if (tag.contains("AlternativeSkinIndex")) {
             this.alternativeSkinIndex = tag.getInt("AlternativeSkinIndex");
+        }
+        if (tag.contains("SkinSnapshot", 8)) { // 8 is Tag.TAG_STRING
+            this.skinSnapshot = tag.getString("SkinSnapshot");
+        } else {
+            this.skinSnapshot = null;
         }
         if (tag.contains("FigureOffsetX")) {
             this.figureOffsetX = tag.getDouble("FigureOffsetX");

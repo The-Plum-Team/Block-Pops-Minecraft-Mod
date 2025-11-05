@@ -44,12 +44,12 @@ public class BoxBlock extends BaseEntityBlock {
     // Hitbox matching the actual box model size
     // Width: 10 units, Height: 14 units, Depth: 10 units
     private static final VoxelShape SHAPE = Block.box(
-        3,    // minX - 10 units width centered
-        0,    // minY - starts at ground
-        3,    // minZ - 10 units depth centered
-        13,   // maxX
-        14,   // maxY - full height of box
-        13    // maxZ
+            3,    // minX - 10 units width centered
+            0,    // minY - starts at ground
+            3,    // minZ - 10 units depth centered
+            13,   // maxX
+            14,   // maxY - full height of box
+            13    // maxZ
     );
 
     private final String collectionId;
@@ -201,23 +201,23 @@ public class BoxBlock extends BaseEntityBlock {
             // If box is closed, open adjustment screen (client side)
             else if (!boxBlockEntity.isOpen() && level.isClientSide) {
                 Minecraft.getInstance().setScreen(new FigurePositionScreen(
-                    pos,
-                    boxBlockEntity.getFigureOffsetX(),
-                    boxBlockEntity.getFigureOffsetY(),
-                    boxBlockEntity.getFigureOffsetZ(),
-                    boxBlockEntity.getFigureScale(),
-                    boxBlockEntity.getHitboxOffsetX(),
-                    boxBlockEntity.getHitboxOffsetY(),
-                    boxBlockEntity.getHitboxOffsetZ(),
-                    boxBlockEntity.getHitboxScaleX(),
-                    boxBlockEntity.getHitboxScaleY(),
-                    boxBlockEntity.getHitboxScaleZ(),
-                    boxBlockEntity.getLogoPositionX(),
-                    boxBlockEntity.getLogoPositionY(),
-                    boxBlockEntity.getLogoPositionZ(),
-                    boxBlockEntity.getLogoScaleX(),
-                    boxBlockEntity.getLogoScaleY(),
-                    boxBlockEntity.getLogoScaleZ()
+                        pos,
+                        boxBlockEntity.getFigureOffsetX(),
+                        boxBlockEntity.getFigureOffsetY(),
+                        boxBlockEntity.getFigureOffsetZ(),
+                        boxBlockEntity.getFigureScale(),
+                        boxBlockEntity.getHitboxOffsetX(),
+                        boxBlockEntity.getHitboxOffsetY(),
+                        boxBlockEntity.getHitboxOffsetZ(),
+                        boxBlockEntity.getHitboxScaleX(),
+                        boxBlockEntity.getHitboxScaleY(),
+                        boxBlockEntity.getHitboxScaleZ(),
+                        boxBlockEntity.getLogoPositionX(),
+                        boxBlockEntity.getLogoPositionY(),
+                        boxBlockEntity.getLogoPositionZ(),
+                        boxBlockEntity.getLogoScaleX(),
+                        boxBlockEntity.getLogoScaleY(),
+                        boxBlockEntity.getLogoScaleZ()
                 ));
                 return InteractionResult.SUCCESS;
             }
@@ -238,7 +238,7 @@ public class BoxBlock extends BaseEntityBlock {
 
                         // Verify it's the same figure that was in this box
                         if (heldFigureId.equals(boxBlockEntity.getFigureId()) &&
-                            heldCollectionId.equals(boxBlockEntity.getCollectionId())) {
+                                heldCollectionId.equals(boxBlockEntity.getCollectionId())) {
 
                             // Put the figure back in the box
                             boxBlockEntity.setFigureExtracted(false);
@@ -266,6 +266,17 @@ public class BoxBlock extends BaseEntityBlock {
                     blockEntityTag.putDouble("FigureOffsetY", boxBlockEntity.getFigureOffsetY());
                     blockEntityTag.putDouble("FigureOffsetZ", boxBlockEntity.getFigureOffsetZ());
                     blockEntityTag.putDouble("FigureScale", boxBlockEntity.getFigureScale());
+
+                    // If it's a player figure, attach the skin snapshot stored on this box entity
+                    com.theplumteam.figure.FigureDefinition figureDef = boxBlockEntity.getFigureDefinition();
+                    if (figureDef != null && figureDef.getType() == com.theplumteam.figure.FigureType.PLAYER) {
+                        // Get the skin snapshot stored on this specific box entity to ensure it's preserved
+                        String snapshot = boxBlockEntity.getSkinSnapshot();
+                        if (snapshot != null && !snapshot.isEmpty()) {
+                            blockEntityTag.putString("SkinSnapshot", snapshot);
+                        }
+                    }
+
                     figureBlockItem.addTagElement("BlockEntityTag", blockEntityTag);
 
                     // Give the player the figure block item
@@ -394,13 +405,13 @@ public class BoxBlock extends BaseEntityBlock {
         if (level.isClientSide()) {
             BlockState woolState = getWoolBlockState();
             level.addParticle(
-                new BlockParticleOption(ParticleTypes.BLOCK, woolState),
-                entity.getX() + ((Math.random() - 0.5) * entity.getBbWidth()),
-                entity.getY() + 0.1,
-                entity.getZ() + ((Math.random() - 0.5) * entity.getBbWidth()),
-                (Math.random() - 0.5) * 0.15,
-                0.05,
-                (Math.random() - 0.5) * 0.15
+                    new BlockParticleOption(ParticleTypes.BLOCK, woolState),
+                    entity.getX() + ((Math.random() - 0.5) * entity.getBbWidth()),
+                    entity.getY() + 0.1,
+                    entity.getZ() + ((Math.random() - 0.5) * entity.getBbWidth()),
+                    (Math.random() - 0.5) * 0.15,
+                    0.05,
+                    (Math.random() - 0.5) * 0.15
             );
         }
         return true;
@@ -425,11 +436,11 @@ public class BoxBlock extends BaseEntityBlock {
                             double z = pos.getZ() + (k + 0.5) / 4.0;
 
                             level.addParticle(
-                                new BlockParticleOption(ParticleTypes.BLOCK, woolState),
-                                x, y, z,
-                                (Math.random() - 0.5) * 0.8,
-                                (Math.random() - 0.5) * 0.8,
-                                (Math.random() - 0.5) * 0.8
+                                    new BlockParticleOption(ParticleTypes.BLOCK, woolState),
+                                    x, y, z,
+                                    (Math.random() - 0.5) * 0.8,
+                                    (Math.random() - 0.5) * 0.8,
+                                    (Math.random() - 0.5) * 0.8
                             );
                         }
                     }
@@ -454,11 +465,11 @@ public class BoxBlock extends BaseEntityBlock {
                     double z = pos.getZ() + 0.5 + (side.getStepZ() * 0.5) + (Math.random() - 0.5) * 0.4;
 
                     level.addParticle(
-                        new BlockParticleOption(ParticleTypes.BLOCK, woolState),
-                        x, y, z,
-                        side.getStepX() * 0.01,
-                        side.getStepY() * 0.01,
-                        side.getStepZ() * 0.01
+                            new BlockParticleOption(ParticleTypes.BLOCK, woolState),
+                            x, y, z,
+                            side.getStepX() * 0.01,
+                            side.getStepY() * 0.01,
+                            side.getStepZ() * 0.01
                     );
                 }
                 return true;
