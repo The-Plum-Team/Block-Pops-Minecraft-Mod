@@ -116,38 +116,27 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure == null) return;
 
-        // Get the figure texture using the FigureModel which handles dynamic player skins
-        ResourceLocation figureTexture = figureRenderer.getGeoModel().getTextureResource(animatable);
-        if (figureTexture == null) return; // Safety check
-        RenderType figureRenderType = RenderType.entityCutoutNoCull(figureTexture);
-        VertexConsumer figureBuffer = bufferSource.getBuffer(figureRenderType);
+        // Get the player skin texture directly (bypassing figure model)
+        ResourceLocation skinTexture = figureRenderer.getGeoModel().getTextureResource(animatable);
+        if (skinTexture == null) return; // Safety check
 
-        // Get the figure model to access the head bone
-        BakedGeoModel figureModel = figureRenderer.getGeoModel().getBakedModel(
-            figureRenderer.getGeoModel().getModelResource(animatable)
-        );
+        // Render both the base skin layer and 3D overlay layer directly from player skin
+        // Use entityTranslucentCull for proper alpha blending with face culling (like player rendering)
+        RenderType skinRenderType = RenderType.entityTranslucentCull(skinTexture);
+        VertexConsumer skinBuffer = bufferSource.getBuffer(skinRenderType);
 
-        // Find the head bone in the figure model
-        GeoBone figureHeadBone = null;
-        for (GeoBone bone : figureModel.topLevelBones()) {
-            if (bone.getName().equals("head")) {
-                figureHeadBone = bone;
-                break;
-            }
-        }
-
-        // Render both the flat texture layer and 3D head layer
         for (GeoBone bone : model.topLevelBones()) {
             if (bone.getName().equals("figure_face")) {
-                // Render flat texture layer
+                // Render base skin layer (head front: UV 8,8 to 16,16 on 64x64 skin)
                 poseStack.pushPose();
-                renderRecursively(poseStack, animatable, bone, figureRenderType, bufferSource, figureBuffer,
+                renderRecursively(poseStack, animatable, bone, skinRenderType, bufferSource, skinBuffer,
                                 true, partialTick, packedLight, packedOverlay, 1, 1, 1, 1);
                 poseStack.popPose();
             } else if (bone.getName().equals("figure_face_3d")) {
-                // Render 3D layer (second skin layer)
+                // Render hat/overlay layer (hat front: UV 40,8 to 48,16 on 64x64 skin)
+                // Same render type for consistency with player rendering
                 poseStack.pushPose();
-                renderRecursively(poseStack, animatable, bone, figureRenderType, bufferSource, figureBuffer,
+                renderRecursively(poseStack, animatable, bone, skinRenderType, bufferSource, skinBuffer,
                                 true, partialTick, packedLight, packedOverlay, 1, 1, 1, 1);
                 poseStack.popPose();
             }

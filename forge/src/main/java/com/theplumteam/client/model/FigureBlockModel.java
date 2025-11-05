@@ -1,14 +1,19 @@
 package com.theplumteam.client.model;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.properties.Property;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.blockentity.FigureBlockEntity;
+import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.model.GeoModel;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * GeoModel for rendering figures in standalone figure blocks
@@ -18,6 +23,15 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     private static final ResourceLocation FALLBACK_MODEL = new ResourceLocation(BlockPopsMod.MOD_ID, "geo/block/box_block.geo.json");
     private static final ResourceLocation FALLBACK_TEXTURE = new ResourceLocation("minecraft", "textures/entity/steve.png");
     private static final ResourceLocation FALLBACK_ANIMATION = new ResourceLocation(BlockPopsMod.MOD_ID, "animations/block/box_block.animation.json");
+
+    // Cache for GameProfiles created from skin snapshots to improve performance
+    private static final Map<String, GameProfile> snapshotProfileCache = new ConcurrentHashMap<>();
+
+    // Cache to track which player UUIDs have had their skins requested for live rendering
+    private static final Map<java.util.UUID, Boolean> skinLoadRequests = new ConcurrentHashMap<>();
+
+    // Cache to track which snapshot skins have been registered
+    private static final Map<String, Boolean> snapshotRegistrationCache = new ConcurrentHashMap<>();
 
     @Override
     public ResourceLocation getModelResource(FigureBlockEntity animatable) {
@@ -50,10 +64,68 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
 
         // Check if this is a player figure (dynamic skin)
         if (figure.getType() == FigureType.PLAYER && figure.getPlayerUUID() != null) {
-            // Use Minecraft's skin manager to get the player's skin dynamically
-            GameProfile gameProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
+            // Check if this is a preview entity (rendered at BlockPos.ZERO in UI)
+            // Preview entities should always show the live skin, not the snapshot
+            boolean isPreview = animatable.getBlockPos().equals(net.minecraft.core.BlockPos.ZERO);
+
+            if (!isPreview) {
+                // This is a real placed figure block - check for snapshot
+                String uniqueFigureId = animatable.getCollectionId() + ":" + animatable.getFigureId();
+                String skinSnapshot = ClientDiscoveryManager.getFigureSkin(uniqueFigureId);
+
+                // If a snapshot exists, use it for permanent skin
+                if (skinSnapshot != null && !skinSnapshot.isEmpty()) {
+                    GameProfile profile = snapshotProfileCache.computeIfAbsent(uniqueFigureId, id -> {
+                        GameProfile newProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
+                        newProfile.getProperties().put("textures", new Property("textures", skinSnapshot));
+                        return newProfile;
+                    });
+
+                    // Register skin only once to avoid ConcurrentModificationException
+                    snapshotRegistrationCache.computeIfAbsent(uniqueFigureId, id -> {
+                        // Schedule registration on main thread to avoid threading issues
+                        Minecraft.getInstance().execute(() -> {
+                            Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, texture) -> {
+                                // Skin loaded callback
+                            }, true);
+                        });
+                        return true;
+                    });
+
+                    return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
+                }
+            }
+
+            // Preview entity or no snapshot - show the live skin
+            java.util.UUID playerUUID = figure.getPlayerUUID();
+
+            // Try to get the profile from online players first (most reliable for live skin)
+            if (Minecraft.getInstance().getConnection() != null) {
+                var playerInfo = Minecraft.getInstance().getConnection().getPlayerInfo(playerUUID);
+                if (playerInfo != null) {
+                    // Player is online, use their skin directly
+                    ResourceLocation skinLocation = playerInfo.getSkinLocation();
+                    if (skinLocation != null) {
+                        return skinLocation;
+                    }
+                }
+            }
+
+            // Player not online, request skin loading from Mojang
+            skinLoadRequests.computeIfAbsent(playerUUID, uuid -> {
+                // Schedule skin loading on the main thread
+                Minecraft.getInstance().execute(() -> {
+                    GameProfile profileForLoading = new GameProfile(uuid, figure.getName());
+                    Minecraft.getInstance().getSkinManager().registerSkins(profileForLoading, (type, location, texture) -> {
+                        // Skin loaded callback
+                    }, true);
+                });
+                return true;
+            });
+
+            // Get the skin location - will use default until loaded
+            GameProfile gameProfile = new GameProfile(playerUUID, figure.getName());
             ResourceLocation playerSkin = Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(gameProfile);
-            // Return fallback if skin is null (shouldn't happen but safety first)
             return playerSkin != null ? playerSkin : FALLBACK_TEXTURE;
         }
 

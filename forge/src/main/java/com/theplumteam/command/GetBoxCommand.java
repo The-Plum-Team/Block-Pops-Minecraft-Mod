@@ -1,5 +1,6 @@
 package com.theplumteam.command;
 
+import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -184,18 +185,40 @@ public class GetBoxCommand {
                         // Mark as discovered on the server
                         discovery.discover(uniqueFigureId);
 
-                        // If this is a player figure, save a reference to load the skin from their UUID
-                        // The skin will be resolved on the client side using the saved UUID
+                        String skinSnapshot = null;
+                        // If this is a player figure, snapshot their skin
                         if (selectedFigure.getType() == com.theplumteam.figure.FigureType.PLAYER && selectedFigure.getPlayerUUID() != null) {
-                            // Store a marker indicating this is a player figure with a specific UUID
-                            // Format: "player:<uuid>" which the client can parse
-                            String skinRef = "player:" + selectedFigure.getPlayerUUID().toString();
-                            discovery.saveFigureSkin(uniqueFigureId, skinRef);
-                            LOGGER.debug("Saved skin reference for player figure {}: {}", uniqueFigureId, skinRef);
+                            GameProfile profile = null;
+
+                            // First, try to get the profile from an online player (most reliable)
+                            ServerPlayer targetPlayer = player.getServer().getPlayerList().getPlayer(selectedFigure.getPlayerUUID());
+                            if (targetPlayer != null) {
+                                profile = targetPlayer.getGameProfile();
+                                LOGGER.debug("Found online player profile for {}", selectedFigure.getName());
+                            } else {
+                                // Player is offline, fetch from session service
+                                try {
+                                    GameProfile baseProfile = new GameProfile(selectedFigure.getPlayerUUID(), selectedFigure.getName());
+                                    profile = player.getServer().getSessionService().fillProfileProperties(baseProfile, true);
+                                    LOGGER.debug("Fetched profile from session service for {}", selectedFigure.getName());
+                                } catch (Exception e) {
+                                    LOGGER.error("Failed to fetch profile from session service for {}", selectedFigure.getName(), e);
+                                }
+                            }
+
+                            if (profile != null && !profile.getProperties().get("textures").isEmpty()) {
+                                // The snapshot is the Base64 value of the texture property
+                                skinSnapshot = profile.getProperties().get("textures").iterator().next().getValue();
+                                discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
+                                LOGGER.info("Saved skin snapshot for player figure {}: {} bytes", uniqueFigureId, skinSnapshot.length());
+                            } else {
+                                LOGGER.warn("Could not find GameProfile or texture property for player {} (UUID: {})",
+                                        selectedFigure.getName(), selectedFigure.getPlayerUUID());
+                            }
                         }
 
-                        // Notify the client of the new discovery
-                        UnlockFigurePacket unlockPacket = new UnlockFigurePacket(uniqueFigureId, selectedFigure.getName());
+                        // Notify the client of the new discovery, including skin snapshot if available
+                        UnlockFigurePacket unlockPacket = new UnlockFigurePacket(uniqueFigureId, selectedFigure.getName(), skinSnapshot);
                         BlockPopsModForge.NETWORK_CHANNEL.send(
                             PacketDistributor.PLAYER.with(() -> player),
                             unlockPacket

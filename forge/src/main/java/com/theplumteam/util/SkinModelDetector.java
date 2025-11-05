@@ -82,14 +82,42 @@ public class SkinModelDetector {
 
         LOGGER.debug("Attempting to detect skin model for texture: {}", textureLocation);
         try {
-            // Try to get texture from texture manager first (for player skins)
+            // First, check if this is a player skin by looking through online players
+            if (Minecraft.getInstance().getConnection() != null) {
+                var playerListEntries = Minecraft.getInstance().getConnection().getOnlinePlayers();
+                for (var playerInfo : playerListEntries) {
+                    if (playerInfo.getSkinLocation().equals(textureLocation)) {
+                        // Found matching player - get their model type directly
+                        String modelName = playerInfo.getModelName();
+                        SkinModel model = "slim".equals(modelName) ? SkinModel.SLIM : SkinModel.CLASSIC;
+                        LOGGER.info("Detected {} skin from PlayerInfo for texture: {}", model, textureLocation);
+                        DETECTION_CACHE.put(textureLocation, model);
+                        return model;
+                    }
+                }
+            }
+
+            // Try to get texture from texture manager (for downloaded player skins)
             var textureManager = Minecraft.getInstance().getTextureManager();
             var abstractTexture = textureManager.getTexture(textureLocation);
 
-            LOGGER.debug("Texture from manager: {}", abstractTexture);
+            if (abstractTexture instanceof net.minecraft.client.renderer.texture.HttpTexture httpTexture) {
+                // This is a downloaded player skin - try to access the loaded image
+                try {
+                    // Use reflection to get the NativeImage from HttpTexture
+                    var textureImageField = net.minecraft.client.renderer.texture.HttpTexture.class.getDeclaredField("textureImage");
+                    textureImageField.setAccessible(true);
+                    NativeImage image = (NativeImage) textureImageField.get(httpTexture);
 
-            if (abstractTexture instanceof net.minecraft.client.renderer.texture.AbstractTexture) {
-                LOGGER.debug("Found texture in texture manager, falling back to resource manager");
+                    if (image != null) {
+                        SkinModel model = detectSkinModel(image);
+                        LOGGER.info("Detected {} skin from HttpTexture for texture: {}", model, textureLocation);
+                        DETECTION_CACHE.put(textureLocation, model);
+                        return model;
+                    }
+                } catch (Exception reflectionEx) {
+                    LOGGER.debug("Could not access HttpTexture image via reflection: {}", reflectionEx.getMessage());
+                }
             }
 
             // Try resource manager (for static textures in resources)
