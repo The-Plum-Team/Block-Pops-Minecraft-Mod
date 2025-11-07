@@ -139,8 +139,8 @@ public class SettingsScreen extends Screen {
             nextTabX += TAB_WIDTH + TAB_SPACING;
         }
 
-        // Cheats tab (only in development mode)
-        if (isDevelopmentMode()) {
+        // Cheats tab (for admins and in development mode)
+        if (canAccessCheats()) {
             cheatsTabButton = (TabButton) ButtonFactory.createTab(
                 nextTabX, tabY,
                 TAB_WIDTH, TAB_HEIGHT,
@@ -159,8 +159,8 @@ public class SettingsScreen extends Screen {
             createDevelopSettings();
         }
 
-        // Create cheats settings (only in development mode)
-        if (isDevelopmentMode()) {
+        // Create cheats settings (for admins and in development mode)
+        if (canAccessCheats()) {
             createCheatsSettings();
         }
 
@@ -310,7 +310,7 @@ public class SettingsScreen extends Screen {
             }
         }
 
-        // Draw cheats tab content
+        // Draw cheats tab content (for admins)
         if (activeTab == Tab.CHEATS) {
             int headerY = this.panelY + TAB_HEIGHT + 10;
             graphics.drawCenteredString(this.font, "Collection Cheats",
@@ -403,6 +403,21 @@ public class SettingsScreen extends Screen {
      */
     private static boolean isDevelopmentMode() {
         return !FMLLoader.isProduction();
+    }
+
+    /**
+     * Check if the current player can access cheats.
+     * Returns true if in development mode OR if player is an admin (permission level 2+)
+     */
+    private boolean canAccessCheats() {
+        if (isDevelopmentMode()) {
+            return true;
+        }
+        // Check if player has admin permissions (level 2, same as /blockpops getbox command)
+        if (this.minecraft != null && this.minecraft.player != null) {
+            return this.minecraft.player.hasPermissions(2);
+        }
+        return false;
     }
 
     /**
