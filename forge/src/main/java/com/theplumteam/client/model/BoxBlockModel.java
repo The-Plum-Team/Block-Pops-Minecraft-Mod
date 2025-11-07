@@ -25,13 +25,12 @@ public class BoxBlockModel extends GeoModel<BoxBlockEntity> {
     @Override
     public ResourceLocation getTextureResource(BoxBlockEntity animatable) {
         // Check if this box has a specific color (default collection only)
-        if (animatable.getBlockState().getBlock() instanceof BoxBlock boxBlock) {
-            PopBlockColor color = boxBlock.getColor();
-            if (color != null) {
-                // Use color-based texture for default collection
-                return new ResourceLocation(BlockPopsMod.MOD_ID,
-                    "textures/block/box/" + color.getTextureName() + ".png");
-            }
+        // Color is now stored in NBT on the block entity
+        PopBlockColor color = animatable.getColor();
+        if (color != null) {
+            // Use color-based texture for default collection
+            return new ResourceLocation(BlockPopsMod.MOD_ID,
+                "textures/block/box/" + color.getTextureName() + ".png");
         }
 
         // Otherwise, get texture from the collection

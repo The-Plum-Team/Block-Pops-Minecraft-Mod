@@ -56,12 +56,7 @@ public class GeoBlockItem extends BlockItem {
                 }
             }
 
-            // If no collection ID in NBT, get from the block
-            if (collectionId == null || collectionId.isEmpty()) {
-                collectionId = boxBlock.getCollectionId();
-            }
-
-            // If still no collection ID, use default naming
+            // If still no collection ID in NBT, use default naming
             if (collectionId == null || collectionId.isEmpty()) {
                 return super.getName(stack);
             }
@@ -142,10 +137,6 @@ public class GeoBlockItem extends BlockItem {
                 if (blockEntityTag.contains("FigureId")) {
                     figureId = blockEntityTag.getString("FigureId");
                 }
-            }
-
-            if (collectionId == null || collectionId.isEmpty()) {
-                collectionId = boxBlock.getCollectionId();
             }
 
         } else if (getBlock() instanceof FigureBlock) {

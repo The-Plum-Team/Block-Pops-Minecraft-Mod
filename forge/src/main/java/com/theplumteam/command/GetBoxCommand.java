@@ -15,7 +15,7 @@ import com.theplumteam.figure.PlayerCollectionGenerator;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.network.TokenType;
 import com.theplumteam.network.UnlockFigurePacket;
-import com.theplumteam.registry.ModBlocks;
+import com.theplumteam.registry.ModItems;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -25,7 +25,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Block;
 import net.minecraftforge.network.PacketDistributor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -121,19 +120,19 @@ public class GetBoxCommand {
             if (!figures.isEmpty()) {
                 FigureDefinition selectedFigure = selectFigure(figures, tokenType, discovery, collectionId);
 
-                Block boxBlock = null;
+                // Get the appropriate box item - collection/color is already preset in NBT by BoxBlockItem
+                ItemStack boxItem = null;
                 if (collectionId.equals(PlayerCollectionGenerator.getCollectionId())) {
                     PopBlockColor color = selectedFigure.getFavoriteColor();
                     if (color == null) color = PopBlockColor.ORIGINAL;
-                    boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.get(color).get();
-                } else if (ModBlocks.BOX_BLOCKS.containsKey(collectionId)) {
-                    boxBlock = ModBlocks.BOX_BLOCKS.get(collectionId).get();
+                    boxItem = new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(color).get());
+                } else if (ModItems.BOX_BLOCK_ITEMS.containsKey(collectionId)) {
+                    boxItem = new ItemStack(ModItems.BOX_BLOCK_ITEMS.get(collectionId).get());
                 } else {
-                    boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.get(PopBlockColor.ORIGINAL).get();
+                    boxItem = new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(PopBlockColor.ORIGINAL).get());
                 }
 
-                if (boxBlock != null) {
-                    ItemStack boxItem = new ItemStack(boxBlock);
+                if (boxItem != null) {
                     String uniqueFigureId = collectionId + ":" + selectedFigure.getId();
                     String skinSnapshot = null;
 

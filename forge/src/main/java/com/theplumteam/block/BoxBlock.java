@@ -53,27 +53,9 @@ public class BoxBlock extends BaseEntityBlock {
             13    // maxZ
     );
 
-    private final String collectionId;
-    private final PopBlockColor color; // Optional: only used for default collection
-
-    public BoxBlock(Properties properties, String collectionId) {
-        this(properties, collectionId, null);
-    }
-
-    public BoxBlock(Properties properties, String collectionId, PopBlockColor color) {
+    public BoxBlock(Properties properties) {
         super(properties);
-        this.collectionId = collectionId;
-        this.color = color;
         this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
-    }
-
-    public String getCollectionId() {
-        return collectionId;
-    }
-
-    @Nullable
-    public PopBlockColor getColor() {
-        return color;
     }
 
     @Override
@@ -324,11 +306,14 @@ public class BoxBlock extends BaseEntityBlock {
         if (!level.isClientSide) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
-                // Determine which item to drop based on color or collectionId
+                // Get the collection/color from NBT to determine which item to drop
+                String collectionId = boxBlockEntity.getCollectionId();
+                PopBlockColor color = boxBlockEntity.getColor();
+
                 ItemStack dropStack;
                 if (color != null) {
                     dropStack = new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(color).get());
-                } else if (collectionId != null) {
+                } else if (collectionId != null && !collectionId.isEmpty()) {
                     dropStack = new ItemStack(ModItems.BOX_BLOCK_ITEMS.get(collectionId).get());
                 } else {
                     // Fallback to the block's item (shouldn't happen in normal gameplay)
@@ -359,42 +344,49 @@ public class BoxBlock extends BaseEntityBlock {
     /**
      * Get the wool block state corresponding to this box's color or collection background color
      */
-    private BlockState getWoolBlockState() {
-        // For default collection boxes (with colors), use the color to determine wool
-        if (color != null) {
-            return switch (color) {
-                case ORIGINAL -> net.minecraft.world.level.block.Blocks.WHITE_WOOL.defaultBlockState();
-                case BLACK -> net.minecraft.world.level.block.Blocks.BLACK_WOOL.defaultBlockState();
-                case BLUE -> net.minecraft.world.level.block.Blocks.BLUE_WOOL.defaultBlockState();
-                case BROWN -> net.minecraft.world.level.block.Blocks.BROWN_WOOL.defaultBlockState();
-                case CYAN -> net.minecraft.world.level.block.Blocks.CYAN_WOOL.defaultBlockState();
-                case GRAY -> net.minecraft.world.level.block.Blocks.GRAY_WOOL.defaultBlockState();
-                case GREEN -> net.minecraft.world.level.block.Blocks.GREEN_WOOL.defaultBlockState();
-                case LIGHT_BLUE -> net.minecraft.world.level.block.Blocks.LIGHT_BLUE_WOOL.defaultBlockState();
-                case LIGHT_GRAY -> net.minecraft.world.level.block.Blocks.LIGHT_GRAY_WOOL.defaultBlockState();
-                case LIME -> net.minecraft.world.level.block.Blocks.LIME_WOOL.defaultBlockState();
-                case MAGENTA -> net.minecraft.world.level.block.Blocks.MAGENTA_WOOL.defaultBlockState();
-                case ORANGE -> net.minecraft.world.level.block.Blocks.ORANGE_WOOL.defaultBlockState();
-                case PINK -> net.minecraft.world.level.block.Blocks.PINK_WOOL.defaultBlockState();
-                case PURPLE -> net.minecraft.world.level.block.Blocks.PURPLE_WOOL.defaultBlockState();
-                case RED -> net.minecraft.world.level.block.Blocks.RED_WOOL.defaultBlockState();
-                case YELLOW -> net.minecraft.world.level.block.Blocks.YELLOW_WOOL.defaultBlockState();
-            };
-        }
+    private BlockState getWoolBlockState(Level level, BlockPos pos) {
+        // Get color/collection from the block entity
+        if (level.getBlockEntity(pos) instanceof BoxBlockEntity boxBlockEntity) {
+            PopBlockColor color = boxBlockEntity.getColor();
+            String collectionId = boxBlockEntity.getCollectionId();
 
-        // For other collections, map collection background color to closest wool color
-        if (collectionId != null) {
-            return switch (collectionId) {
-                case "adventuretime" -> net.minecraft.world.level.block.Blocks.LIGHT_BLUE_WOOL.defaultBlockState();
-                case "fnaf" -> net.minecraft.world.level.block.Blocks.BLACK_WOOL.defaultBlockState();
-                case "jojos" -> net.minecraft.world.level.block.Blocks.MAGENTA_WOOL.defaultBlockState();
-                case "jujutsukaisen" -> net.minecraft.world.level.block.Blocks.BLACK_WOOL.defaultBlockState();
-                case "onepiece" -> net.minecraft.world.level.block.Blocks.BLUE_WOOL.defaultBlockState();
-                case "starwars" -> net.minecraft.world.level.block.Blocks.BLACK_WOOL.defaultBlockState();
-                case "supermario" -> net.minecraft.world.level.block.Blocks.BROWN_WOOL.defaultBlockState();
-                case "world_players" -> net.minecraft.world.level.block.Blocks.WHITE_WOOL.defaultBlockState(); // Default for player collection
-                default -> net.minecraft.world.level.block.Blocks.WHITE_WOOL.defaultBlockState();
-            };
+            // For default collection boxes (with colors), use the color to determine wool
+            if (color != null) {
+                return switch (color) {
+                    case ORIGINAL -> net.minecraft.world.level.block.Blocks.WHITE_WOOL.defaultBlockState();
+                    case BLACK -> net.minecraft.world.level.block.Blocks.BLACK_WOOL.defaultBlockState();
+                    case BLUE -> net.minecraft.world.level.block.Blocks.BLUE_WOOL.defaultBlockState();
+                    case BROWN -> net.minecraft.world.level.block.Blocks.BROWN_WOOL.defaultBlockState();
+                    case CYAN -> net.minecraft.world.level.block.Blocks.CYAN_WOOL.defaultBlockState();
+                    case GRAY -> net.minecraft.world.level.block.Blocks.GRAY_WOOL.defaultBlockState();
+                    case GREEN -> net.minecraft.world.level.block.Blocks.GREEN_WOOL.defaultBlockState();
+                    case LIGHT_BLUE -> net.minecraft.world.level.block.Blocks.LIGHT_BLUE_WOOL.defaultBlockState();
+                    case LIGHT_GRAY -> net.minecraft.world.level.block.Blocks.LIGHT_GRAY_WOOL.defaultBlockState();
+                    case LIME -> net.minecraft.world.level.block.Blocks.LIME_WOOL.defaultBlockState();
+                    case MAGENTA -> net.minecraft.world.level.block.Blocks.MAGENTA_WOOL.defaultBlockState();
+                    case ORANGE -> net.minecraft.world.level.block.Blocks.ORANGE_WOOL.defaultBlockState();
+                    case PINK -> net.minecraft.world.level.block.Blocks.PINK_WOOL.defaultBlockState();
+                    case PURPLE -> net.minecraft.world.level.block.Blocks.PURPLE_WOOL.defaultBlockState();
+                    case RED -> net.minecraft.world.level.block.Blocks.RED_WOOL.defaultBlockState();
+                    case YELLOW -> net.minecraft.world.level.block.Blocks.YELLOW_WOOL.defaultBlockState();
+                };
+            }
+
+            // For other collections, map collection background color to closest wool color
+            if (collectionId != null && !collectionId.isEmpty()) {
+                return switch (collectionId) {
+                    case "adventuretime" -> net.minecraft.world.level.block.Blocks.LIGHT_BLUE_WOOL.defaultBlockState();
+                    case "fnaf" -> net.minecraft.world.level.block.Blocks.BLACK_WOOL.defaultBlockState();
+                    case "jojos" -> net.minecraft.world.level.block.Blocks.MAGENTA_WOOL.defaultBlockState();
+                    case "jujutsukaisen" -> net.minecraft.world.level.block.Blocks.BLACK_WOOL.defaultBlockState();
+                    case "onepiece" -> net.minecraft.world.level.block.Blocks.BLUE_WOOL.defaultBlockState();
+                    case "starwars" -> net.minecraft.world.level.block.Blocks.BLACK_WOOL.defaultBlockState();
+                    case "supermario" -> net.minecraft.world.level.block.Blocks.BROWN_WOOL.defaultBlockState();
+                    case "deltarune" -> net.minecraft.world.level.block.Blocks.PURPLE_WOOL.defaultBlockState();
+                    case "world_players" -> net.minecraft.world.level.block.Blocks.WHITE_WOOL.defaultBlockState(); // Default for player collection
+                    default -> net.minecraft.world.level.block.Blocks.WHITE_WOOL.defaultBlockState();
+                };
+            }
         }
 
         // Fallback to white wool
@@ -407,7 +399,7 @@ public class BoxBlock extends BaseEntityBlock {
     @Override
     public boolean addRunningEffects(BlockState state, Level level, BlockPos pos, Entity entity) {
         if (level.isClientSide()) {
-            BlockState woolState = getWoolBlockState();
+            BlockState woolState = getWoolBlockState(level, pos);
             level.addParticle(
                     new BlockParticleOption(ParticleTypes.BLOCK, woolState),
                     entity.getX() + ((Math.random() - 0.5) * entity.getBbWidth()),
@@ -429,7 +421,7 @@ public class BoxBlock extends BaseEntityBlock {
         consumer.accept(new IClientBlockExtensions() {
             @Override
             public boolean addDestroyEffects(BlockState state, Level level, BlockPos pos, ParticleEngine particleEngine) {
-                BlockState woolState = getWoolBlockState();
+                BlockState woolState = getWoolBlockState(level, pos);
 
                 // Spawn multiple particles in a grid pattern similar to default block breaking
                 for (int i = 0; i < 4; ++i) {
@@ -458,8 +450,8 @@ public class BoxBlock extends BaseEntityBlock {
                     return false;
                 }
 
-                BlockState woolState = getWoolBlockState();
                 BlockPos pos = blockHit.getBlockPos();
+                BlockState woolState = getWoolBlockState(level, pos);
                 Direction side = blockHit.getDirection();
 
                 // Spawn a few particles on the side that was hit
