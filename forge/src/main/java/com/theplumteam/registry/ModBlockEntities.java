@@ -15,27 +15,12 @@ public class ModBlockEntities {
         DeferredRegister.create(BlockPopsMod.MOD_ID, Registries.BLOCK_ENTITY_TYPE);
 
     public static final RegistrySupplier<BlockEntityType<BoxBlockEntity>> BOX_BLOCK =
-        BLOCK_ENTITIES.register("box_block", () -> {
-            // Extract blocks array inside the lambda, after blocks are registered
-            // Include both default color variants AND themed collection blocks
-            Block[] defaultBlocks = ModBlocks.DEFAULT_BOX_BLOCKS.values().stream()
-                .map(RegistrySupplier::get)
-                .toArray(Block[]::new);
-
-            Block[] collectionBlocks = ModBlocks.BOX_BLOCKS.values().stream()
-                .map(RegistrySupplier::get)
-                .toArray(Block[]::new);
-
-            // Combine both arrays
-            Block[] allBlocks = new Block[defaultBlocks.length + collectionBlocks.length];
-            System.arraycopy(defaultBlocks, 0, allBlocks, 0, defaultBlocks.length);
-            System.arraycopy(collectionBlocks, 0, allBlocks, defaultBlocks.length, collectionBlocks.length);
-
-            return BlockEntityType.Builder.of(
+        BLOCK_ENTITIES.register("box_block", () ->
+            BlockEntityType.Builder.of(
                 BoxBlockEntity::new,
-                allBlocks
-            ).build(null);
-        });
+                ModBlocks.BOX_BLOCK.get()
+            ).build(null)
+        );
 
     public static final RegistrySupplier<BlockEntityType<ClawMachineBlockEntity>> CLAW_MACHINE_BLOCK =
         BLOCK_ENTITIES.register("claw_machine_block", () ->

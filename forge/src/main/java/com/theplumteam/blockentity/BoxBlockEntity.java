@@ -38,6 +38,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     // Collection and figure data
     private String figureId = ""; // Empty means no figure
     private String collectionIdOverride = null; // For dynamic collections using default box blocks
+    private String colorOverride = null; // For color variant boxes
     private boolean isFigureExtracted = false; // Whether the figure has been taken out
     private int alternativeSkinIndex = 0; // 0 is default, 1+ are from the alternatives list
     private String skinSnapshot = null; // Saved skin snapshot URL for player figures
@@ -106,26 +107,34 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     /**
-     * Gets the collection ID from the block this entity belongs to.
-     * If a collection ID override is set in NBT (for dynamic collections), that takes precedence.
+     * Gets the collection ID stored in NBT.
+     * Collection is now determined by NBT data, not by block type.
      */
     public String getCollectionId() {
-        // Check if there's an override from NBT (for dynamic collections like world_players)
+        // Return the stored collection ID (may be null/empty)
         if (collectionIdOverride != null && !collectionIdOverride.isEmpty()) {
             return collectionIdOverride;
         }
-        // Otherwise, get from the block
-        if (getBlockState().getBlock() instanceof BoxBlock boxBlock) {
-            String collectionId = boxBlock.getCollectionId();
-            // Color variant boxes have null collection ID - return first available collection
-            if (collectionId == null) {
-                return CollectionRegistry.getDefaultCollection()
-                    .map(collection -> collection.getId())
-                    .orElse("");
+        // If no collection is set, return default collection
+        return CollectionRegistry.getDefaultCollection()
+                .map(collection -> collection.getId())
+                .orElse("");
+    }
+
+    /**
+     * Gets the color stored in NBT for this box.
+     * @return The PopBlockColor, or null if not set
+     */
+    @Nullable
+    public com.theplumteam.block.PopBlockColor getColor() {
+        if (colorOverride != null && !colorOverride.isEmpty()) {
+            try {
+                return com.theplumteam.block.PopBlockColor.valueOf(colorOverride.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                return null;
             }
-            return collectionId;
         }
-        return "";
+        return null;
     }
 
     /**
@@ -328,6 +337,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         if (collectionIdOverride != null) {
             tag.putString("CollectionId", collectionIdOverride);
         }
+        if (colorOverride != null) {
+            tag.putString("Color", colorOverride);
+        }
         tag.putDouble("FigureOffsetX", figureOffsetX);
         tag.putDouble("FigureOffsetY", figureOffsetY);
         tag.putDouble("FigureOffsetZ", figureOffsetZ);
@@ -378,6 +390,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
         if (tag.contains("CollectionId")) {
             this.collectionIdOverride = tag.getString("CollectionId");
+        }
+        if (tag.contains("Color")) {
+            this.colorOverride = tag.getString("Color");
         }
         if (tag.contains("FigureOffsetX")) {
             this.figureOffsetX = tag.getDouble("FigureOffsetX");

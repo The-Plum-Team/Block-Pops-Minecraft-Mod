@@ -3,6 +3,7 @@ package com.theplumteam.registry;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.figure.BuiltInCollections;
+import com.theplumteam.item.BoxBlockItem;
 import com.theplumteam.item.GeoBlockItem;
 import dev.architectury.registry.registries.DeferredRegister;
 import dev.architectury.registry.registries.RegistrySupplier;
@@ -33,19 +34,21 @@ public class ModItems {
     );
 
     static {
-        // Register 16 color variant box block items (collection-independent)
+        // Register 16 color variant box block items
+        // All items reference the same BOX_BLOCK but with different colors pre-set in NBT
         for (PopBlockColor color : PopBlockColor.values()) {
             DEFAULT_BOX_BLOCK_ITEMS.put(color, ITEMS.register(
                 "box_block_" + color.getSerializedName(),
-                () -> new GeoBlockItem(ModBlocks.DEFAULT_BOX_BLOCKS.get(color).get(), new Item.Properties())
+                () -> new BoxBlockItem(ModBlocks.BOX_BLOCK.get(), new Item.Properties(), color)
             ));
         }
 
         // Register box block items for each collection
+        // All items reference the same BOX_BLOCK but with different collections pre-set in NBT
         for (String collectionId : BuiltInCollections.COLLECTION_IDS) {
             BOX_BLOCK_ITEMS.put(collectionId, ITEMS.register(
                 "box_block_" + collectionId,
-                () -> new GeoBlockItem(ModBlocks.BOX_BLOCKS.get(collectionId).get(), new Item.Properties())
+                () -> new BoxBlockItem(ModBlocks.BOX_BLOCK.get(), new Item.Properties(), collectionId)
             ));
         }
     }
