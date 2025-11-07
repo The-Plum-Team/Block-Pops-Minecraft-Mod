@@ -155,6 +155,13 @@ public class GetBoxCommand {
                     blockEntityTag.putString("FigureId", selectedFigure.getId());
                     blockEntityTag.putString("CollectionId", collectionId);
 
+                    // For world_players collection, also set the color in NBT so the box uses the right texture
+                    if (collectionId.equals(PlayerCollectionGenerator.getCollectionId())) {
+                        PopBlockColor color = selectedFigure.getFavoriteColor();
+                        if (color == null) color = PopBlockColor.ORIGINAL;
+                        blockEntityTag.putString("Color", color.name());
+                    }
+
                     if (skinSnapshot != null && !skinSnapshot.isEmpty()) {
                         blockEntityTag.putString("SkinSnapshot", skinSnapshot);
                     } else if (selectedFigure.getType() == com.theplumteam.figure.FigureType.PLAYER) {

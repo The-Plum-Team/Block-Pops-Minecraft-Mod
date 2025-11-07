@@ -136,6 +136,13 @@ public class UnlockCollectionPacket {
         blockEntityTag.putString("FigureId", figure.getId());
         blockEntityTag.putString("CollectionId", collectionId);
 
+        // For world_players collection, also set the color in NBT so the box uses the right texture
+        if (collectionId.equals(PlayerCollectionGenerator.getCollectionId())) {
+            PopBlockColor color = figure.getFavoriteColor();
+            if (color == null) color = PopBlockColor.ORIGINAL;
+            blockEntityTag.putString("Color", color.name());
+        }
+
         if (skinSnapshot != null && !skinSnapshot.isEmpty()) {
             blockEntityTag.putString("SkinSnapshot", skinSnapshot);
         } else if (figure.getType() == com.theplumteam.figure.FigureType.PLAYER) {

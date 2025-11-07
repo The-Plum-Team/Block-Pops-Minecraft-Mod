@@ -23,6 +23,8 @@ import software.bernie.geckolib.core.animation.RawAnimation;
 import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
+import javax.annotation.Nullable;
+
 public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     private static final Logger LOGGER = LoggerFactory.getLogger(BoxBlockEntity.class);
 
