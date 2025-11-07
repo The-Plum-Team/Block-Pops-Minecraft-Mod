@@ -4,6 +4,10 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.gui.util.ButtonFactory;
 import com.theplumteam.client.gui.widget.TabButton;
+import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.figure.FigureCollection;
+import com.theplumteam.forge.BlockPopsModForge;
+import com.theplumteam.network.UnlockCollectionPacket;
 import com.theplumteam.server.config.ServerConfig;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
@@ -45,7 +49,8 @@ public class SettingsScreen extends Screen {
     // Tab system
     private enum Tab {
         SERVER("Server"),
-        DEVELOP("Develop");
+        DEVELOP("Develop"),
+        CHEATS("Cheats");
 
         private final String displayName;
 
@@ -61,8 +66,10 @@ public class SettingsScreen extends Screen {
     private Tab activeTab = Tab.SERVER;
     private TabButton serverTabButton;
     private TabButton developTabButton;
+    private TabButton cheatsTabButton;
     private final List<AbstractWidget> serverSettingWidgets = new ArrayList<>();
     private final List<AbstractWidget> developSettingWidgets = new ArrayList<>();
+    private final List<AbstractWidget> cheatsSettingWidgets = new ArrayList<>();
 
     // Buttons and sliders
     private Button closeButton;
@@ -98,6 +105,7 @@ public class SettingsScreen extends Screen {
         // Clear widget lists to prevent duplication on resize
         serverSettingWidgets.clear();
         developSettingWidgets.clear();
+        cheatsSettingWidgets.clear();
 
         // Calculate centered panel position
         this.panelX = (this.width - this.panelWidth) / 2;
@@ -118,15 +126,29 @@ public class SettingsScreen extends Screen {
         this.addRenderableWidget(serverTabButton);
 
         // Develop tab (only in development mode)
+        int nextTabX = tabStartX + TAB_WIDTH + TAB_SPACING;
         if (isDevelopmentMode()) {
             developTabButton = (TabButton) ButtonFactory.createTab(
-                tabStartX + TAB_WIDTH + TAB_SPACING, tabY,
+                nextTabX, tabY,
                 TAB_WIDTH, TAB_HEIGHT,
                 Component.literal(Tab.DEVELOP.getDisplayName()),
                 activeTab == Tab.DEVELOP,
                 btn -> switchTab(Tab.DEVELOP)
             );
             this.addRenderableWidget(developTabButton);
+            nextTabX += TAB_WIDTH + TAB_SPACING;
+        }
+
+        // Cheats tab (for admins and in development mode)
+        if (canAccessCheats()) {
+            cheatsTabButton = (TabButton) ButtonFactory.createTab(
+                nextTabX, tabY,
+                TAB_WIDTH, TAB_HEIGHT,
+                Component.literal(Tab.CHEATS.getDisplayName()),
+                activeTab == Tab.CHEATS,
+                btn -> switchTab(Tab.CHEATS)
+            );
+            this.addRenderableWidget(cheatsTabButton);
         }
 
         // Create server settings
@@ -135,6 +157,11 @@ public class SettingsScreen extends Screen {
         // Create development settings (only in development mode)
         if (isDevelopmentMode()) {
             createDevelopSettings();
+        }
+
+        // Create cheats settings (for admins and in development mode)
+        if (canAccessCheats()) {
+            createCheatsSettings();
         }
 
         // Show initial tab
@@ -283,6 +310,24 @@ public class SettingsScreen extends Screen {
             }
         }
 
+        // Draw cheats tab content (for admins)
+        if (activeTab == Tab.CHEATS) {
+            int headerY = this.panelY + TAB_HEIGHT + 10;
+            graphics.drawCenteredString(this.font, "Collection Cheats",
+                                       this.panelX + this.panelWidth / 2,
+                                       headerY,
+                                       0xFFFFFF);
+
+            // Draw explanation text
+            int explanationY = this.panelY + TAB_HEIGHT + 30;
+            String explanationText = "Click a button to unlock all figures in that collection and receive all boxes.";
+            int lineWidth = this.font.width(explanationText);
+            graphics.drawString(this.font, explanationText,
+                               this.panelX + (this.panelWidth - lineWidth) / 2,
+                               explanationY,
+                               0xAAAAAA);
+        }
+
         // Draw color preview boxes (only in Develop tab)
         if (isDevelopmentMode() && activeTab == Tab.DEVELOP) {
             int previewSize = 35;
@@ -358,6 +403,21 @@ public class SettingsScreen extends Screen {
      */
     private static boolean isDevelopmentMode() {
         return !FMLLoader.isProduction();
+    }
+
+    /**
+     * Check if the current player can access cheats.
+     * Returns true if in development mode OR if player is an admin (permission level 2+)
+     */
+    private boolean canAccessCheats() {
+        if (isDevelopmentMode()) {
+            return true;
+        }
+        // Check if player has admin permissions (level 2, same as /blockpops getbox command)
+        if (this.minecraft != null && this.minecraft.player != null) {
+            return this.minecraft.player.hasPermissions(2);
+        }
+        return false;
     }
 
     /**
@@ -552,6 +612,73 @@ public class SettingsScreen extends Screen {
     }
 
     /**
+     * Create cheats settings widgets (collection unlock buttons)
+     */
+    private void createCheatsSettings() {
+        int padding = 20;
+        int buttonWidth = 180;
+        int buttonHeight = 24;
+        int verticalSpacing = 30;
+        int horizontalSpacing = 15;
+        int buttonsPerRow = 3;
+
+        int startY = this.panelY + TAB_HEIGHT + 50;
+        int startX = this.panelX + padding;
+
+        // Get all collections
+        java.util.Collection<FigureCollection> collections = CollectionRegistry.getAllCollections();
+
+        // Filter out the default collection if it exists
+        java.util.List<FigureCollection> filteredCollections = collections.stream()
+            .filter(collection -> !collection.getId().equals("default"))
+            .collect(java.util.stream.Collectors.toList());
+
+        int row = 0;
+        int col = 0;
+
+        for (FigureCollection collection : filteredCollections) {
+            int buttonX = startX + (col * (buttonWidth + horizontalSpacing));
+            int buttonY = startY + (row * verticalSpacing);
+
+            Button unlockButton = Button.builder(
+                Component.literal("Unlock " + collection.getName()),
+                button -> {
+                    // Send packet to server to unlock this collection
+                    UnlockCollectionPacket packet = new UnlockCollectionPacket(collection.getId());
+                    BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
+
+                    // Provide visual feedback
+                    button.setMessage(Component.literal("Unlocking..."));
+                    button.active = false;
+
+                    // Re-enable button after a short delay
+                    new Thread(() -> {
+                        try {
+                            Thread.sleep(1000);
+                            this.minecraft.execute(() -> {
+                                button.setMessage(Component.literal("Unlock " + collection.getName()));
+                                button.active = true;
+                            });
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }).start();
+                }
+            )
+            .bounds(buttonX, buttonY, buttonWidth, buttonHeight)
+            .build();
+
+            cheatsSettingWidgets.add(unlockButton);
+
+            col++;
+            if (col >= buttonsPerRow) {
+                col = 0;
+                row++;
+            }
+        }
+    }
+
+    /**
      * Switch to a different tab
      */
     private void switchTab(Tab tab) {
@@ -564,6 +691,9 @@ public class SettingsScreen extends Screen {
         for (AbstractWidget widget : developSettingWidgets) {
             this.removeWidget(widget);
         }
+        for (AbstractWidget widget : cheatsSettingWidgets) {
+            this.removeWidget(widget);
+        }
 
         // Add widgets for active tab
         List<AbstractWidget> activeWidgets;
@@ -571,6 +701,8 @@ public class SettingsScreen extends Screen {
             activeWidgets = serverSettingWidgets;
         } else if (tab == Tab.DEVELOP) {
             activeWidgets = developSettingWidgets;
+        } else if (tab == Tab.CHEATS) {
+            activeWidgets = cheatsSettingWidgets;
         } else {
             activeWidgets = new ArrayList<>();
         }
@@ -583,6 +715,9 @@ public class SettingsScreen extends Screen {
         serverTabButton.setSelected(tab == Tab.SERVER);
         if (developTabButton != null) {
             developTabButton.setSelected(tab == Tab.DEVELOP);
+        }
+        if (cheatsTabButton != null) {
+            cheatsTabButton.setSelected(tab == Tab.CHEATS);
         }
     }
 
