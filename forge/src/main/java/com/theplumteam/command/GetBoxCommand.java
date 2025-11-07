@@ -15,7 +15,6 @@ import com.theplumteam.figure.PlayerCollectionGenerator;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.network.TokenType;
 import com.theplumteam.network.UnlockFigurePacket;
-import com.theplumteam.registry.ModBlocks;
 import com.theplumteam.registry.ModItems;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
