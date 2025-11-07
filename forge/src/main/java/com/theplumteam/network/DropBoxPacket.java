@@ -65,6 +65,14 @@ public class DropBoxPacket {
                 LOGGER.info("Player: {} - Processing {} token request",
                         player.getName().getString(), packet.tokenType);
 
+                // Check if player has inventory space before consuming token
+                if (player.getInventory().getFreeSlot() == -1) {
+                    // Inventory is full, send message and don't consume token
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cInventory is full! Cannot receive figure box."));
+                    LOGGER.info("Player {} inventory is full, token not consumed", player.getName().getString());
+                    return;
+                }
+
                 // Get player capability and verify token
                 player.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
                     // Verify and consume token
@@ -166,9 +174,8 @@ public class DropBoxPacket {
 
                     boxItem.getOrCreateTag().put("BlockEntityTag", blockEntityTag);
 
-                    ItemEntity itemEntity = new ItemEntity(player.level(), packet.pos.getX() + 0.5, packet.pos.getY() + 1.0, packet.pos.getZ() + 0.5, boxItem);
-                    itemEntity.setDeltaMovement(0, 0.2, 0);
-                    player.level().addFreshEntity(itemEntity);
+                    // Add to player's inventory (inventory space already verified before token consumption)
+                    player.getInventory().add(boxItem);
                 }
             }
         });
