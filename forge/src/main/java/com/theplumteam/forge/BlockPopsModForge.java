@@ -16,6 +16,7 @@ import com.theplumteam.network.SetFavoriteColorPacket;
 import com.theplumteam.network.SyncDiscoveryDataPacket;
 import com.theplumteam.network.SyncDynamicCollectionsPacket;
 import com.theplumteam.network.SyncTokenDataPacket;
+import com.theplumteam.network.UnlockCollectionPacket;
 import com.theplumteam.network.UnlockFigurePacket;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModBlocks;
@@ -216,6 +217,12 @@ public final class BlockPopsModForge {
                 SyncDynamicCollectionsPacket::encode,
                 SyncDynamicCollectionsPacket::decode,
                 SyncDynamicCollectionsPacket::handle
+        );
+        NETWORK_CHANNEL.registerMessage(packetId++,
+                UnlockCollectionPacket.class,
+                UnlockCollectionPacket::encode,
+                UnlockCollectionPacket::decode,
+                UnlockCollectionPacket::handle
         );
     }
 
