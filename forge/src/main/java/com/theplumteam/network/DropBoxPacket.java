@@ -11,13 +11,13 @@ import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.PlayerCollectionGenerator;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.registry.ModBlocks;
+import com.theplumteam.registry.ModItems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Block;
 import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.PacketDistributor;
 import org.slf4j.Logger;
@@ -111,20 +111,20 @@ public class DropBoxPacket {
                 FigureDefinition selectedFigure = selectFigure(figures, packet.tokenType,
                         discovery, packet.collectionId);
 
-                Block boxBlock = null;
+                // Get the appropriate box item - collection/color is already preset in NBT by BoxBlockItem
+                ItemStack boxItem = null;
 
                 if (packet.collectionId.equals(PlayerCollectionGenerator.getCollectionId())) {
                     PopBlockColor color = selectedFigure.getFavoriteColor();
                     if (color == null) color = PopBlockColor.ORIGINAL;
-                    boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.get(color).get();
-                } else if (ModBlocks.BOX_BLOCKS.containsKey(packet.collectionId)) {
-                    boxBlock = ModBlocks.BOX_BLOCKS.get(packet.collectionId).get();
+                    boxItem = new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(color).get());
+                } else if (ModItems.BOX_BLOCK_ITEMS.containsKey(packet.collectionId)) {
+                    boxItem = new ItemStack(ModItems.BOX_BLOCK_ITEMS.get(packet.collectionId).get());
                 } else {
-                    boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.get(PopBlockColor.ORIGINAL).get();
+                    boxItem = new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(PopBlockColor.ORIGINAL).get());
                 }
 
-                if (boxBlock != null) {
-                    ItemStack boxItem = new ItemStack(boxBlock);
+                if (boxItem != null) {
                     String uniqueFigureId = packet.collectionId + ":" + selectedFigure.getId();
                     String skinSnapshot = null;
 

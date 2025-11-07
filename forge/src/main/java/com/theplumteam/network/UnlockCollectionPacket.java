@@ -10,12 +10,12 @@ import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.PlayerCollectionGenerator;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.registry.ModBlocks;
+import com.theplumteam.registry.ModItems;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Block;
 import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.PacketDistributor;
 import org.slf4j.Logger;
@@ -95,24 +95,22 @@ public class UnlockCollectionPacket {
      */
     private static void giveBoxForFigure(ServerPlayer player, String collectionId,
                                          FigureDefinition figure, IPlayerDiscovery discovery) {
-        // Determine which box block to use
-        Block boxBlock = null;
+        // Get the appropriate box item - collection/color is already preset in NBT by BoxBlockItem
+        ItemStack boxItem = null;
         if (collectionId.equals(PlayerCollectionGenerator.getCollectionId())) {
             PopBlockColor color = figure.getFavoriteColor();
             if (color == null) color = PopBlockColor.ORIGINAL;
-            boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.get(color).get();
-        } else if (ModBlocks.BOX_BLOCKS.containsKey(collectionId)) {
-            boxBlock = ModBlocks.BOX_BLOCKS.get(collectionId).get();
+            boxItem = new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(color).get());
+        } else if (ModItems.BOX_BLOCK_ITEMS.containsKey(collectionId)) {
+            boxItem = new ItemStack(ModItems.BOX_BLOCK_ITEMS.get(collectionId).get());
         } else {
-            boxBlock = ModBlocks.DEFAULT_BOX_BLOCKS.get(PopBlockColor.ORIGINAL).get();
+            boxItem = new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(PopBlockColor.ORIGINAL).get());
         }
 
-        if (boxBlock == null) {
-            LOGGER.warn("Could not find box block for collection {}", collectionId);
+        if (boxItem == null) {
+            LOGGER.warn("Could not find box item for collection {}", collectionId);
             return;
         }
-
-        ItemStack boxItem = new ItemStack(boxBlock);
         String uniqueFigureId = collectionId + ":" + figure.getId();
         String skinSnapshot = null;
 
