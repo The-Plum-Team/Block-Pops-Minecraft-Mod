@@ -5,6 +5,8 @@ import com.theplumteam.capability.PlayerDiscoveryProvider;
 import com.theplumteam.command.ChangeFavoriteColorCommand;
 import com.theplumteam.command.GetBoxCommand;
 import com.theplumteam.command.GetFavoriteColorCommand;
+import com.theplumteam.command.ReloadRegularTokensCommand;
+import com.theplumteam.command.ReloadGuaranteedTokenCommand;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.PlayerCollectionGenerator;
@@ -12,6 +14,7 @@ import com.theplumteam.network.ClawMachineCollectionPacket;
 import com.theplumteam.network.DropBoxPacket;
 import com.theplumteam.network.FigurePositionPacket;
 import com.theplumteam.network.OpenFavoriteColorScreenPacket;
+import com.theplumteam.network.ReloadTokensPacket;
 import com.theplumteam.network.SetFavoriteColorPacket;
 import com.theplumteam.network.SyncDiscoveryDataPacket;
 import com.theplumteam.network.SyncDynamicCollectionsPacket;
@@ -79,7 +82,9 @@ public final class BlockPopsModForge {
         GetBoxCommand.register(event.getDispatcher());
         ChangeFavoriteColorCommand.register(event.getDispatcher());
         GetFavoriteColorCommand.register(event.getDispatcher());
-        BlockPopsMod.LOGGER.info("Registered /blockpops commands: getbox, changefavoritecolor, getfavoritecolor");
+        ReloadRegularTokensCommand.register(event.getDispatcher());
+        ReloadGuaranteedTokenCommand.register(event.getDispatcher());
+        BlockPopsMod.LOGGER.info("Registered /blockpops commands: getbox, changefavoritecolor, getfavoritecolor, reloadregular, reloadguaranteed");
     }
 
     private void registerServerEvents() {
@@ -223,6 +228,12 @@ public final class BlockPopsModForge {
                 UnlockCollectionPacket::encode,
                 UnlockCollectionPacket::decode,
                 UnlockCollectionPacket::handle
+        );
+        NETWORK_CHANNEL.registerMessage(packetId++,
+                ReloadTokensPacket.class,
+                ReloadTokensPacket::encode,
+                ReloadTokensPacket::decode,
+                ReloadTokensPacket::handle
         );
     }
 

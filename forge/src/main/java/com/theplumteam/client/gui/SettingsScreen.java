@@ -8,6 +8,7 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.network.UnlockCollectionPacket;
+import com.theplumteam.network.ReloadTokensPacket;
 import com.theplumteam.server.config.ServerConfig;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
@@ -320,12 +321,17 @@ public class SettingsScreen extends Screen {
 
             // Draw explanation text
             int explanationY = this.panelY + TAB_HEIGHT + 30;
-            String explanationText = "Click a button to unlock all figures in that collection and receive all boxes.";
-            int lineWidth = this.font.width(explanationText);
-            graphics.drawString(this.font, explanationText,
-                               this.panelX + (this.panelWidth - lineWidth) / 2,
-                               explanationY,
-                               0xAAAAAA);
+            String[] explanationLines = {
+                "Use the token reload buttons to restore your tokens.",
+                "Click a collection button to unlock all figures and receive all boxes."
+            };
+            for (int i = 0; i < explanationLines.length; i++) {
+                int lineWidth = this.font.width(explanationLines[i]);
+                graphics.drawString(this.font, explanationLines[i],
+                                   this.panelX + (this.panelWidth - lineWidth) / 2,
+                                   explanationY + (i * 12),
+                                   0xAAAAAA);
+            }
         }
 
         // Draw color preview boxes (only in Develop tab)
@@ -624,6 +630,75 @@ public class SettingsScreen extends Screen {
 
         int startY = this.panelY + TAB_HEIGHT + 50;
         int startX = this.panelX + padding;
+
+        // Add token reload buttons at the top
+        int tokenButtonWidth = 200;
+        int tokenButtonSpacing = 15;
+        int tokenButtonsStartX = this.panelX + (this.panelWidth - (tokenButtonWidth * 2 + tokenButtonSpacing)) / 2;
+        int tokenButtonY = startY;
+
+        // Reload Regular Tokens button
+        Button reloadRegularButton = Button.builder(
+            Component.literal("Reload Regular Tokens"),
+            button -> {
+                // Send packet to server to reload regular tokens
+                ReloadTokensPacket packet = new ReloadTokensPacket(true, false);
+                BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
+
+                // Provide visual feedback
+                button.setMessage(Component.literal("Reloading..."));
+                button.active = false;
+
+                // Re-enable button after a short delay
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(500);
+                        this.minecraft.execute(() -> {
+                            button.setMessage(Component.literal("Reload Regular Tokens"));
+                            button.active = true;
+                        });
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }).start();
+            }
+        )
+        .bounds(tokenButtonsStartX, tokenButtonY, tokenButtonWidth, buttonHeight)
+        .build();
+        cheatsSettingWidgets.add(reloadRegularButton);
+
+        // Reload Guaranteed Token button
+        Button reloadGuaranteedButton = Button.builder(
+            Component.literal("Reload Guaranteed Token"),
+            button -> {
+                // Send packet to server to reload guaranteed token
+                ReloadTokensPacket packet = new ReloadTokensPacket(false, true);
+                BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
+
+                // Provide visual feedback
+                button.setMessage(Component.literal("Reloading..."));
+                button.active = false;
+
+                // Re-enable button after a short delay
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(500);
+                        this.minecraft.execute(() -> {
+                            button.setMessage(Component.literal("Reload Guaranteed Token"));
+                            button.active = true;
+                        });
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }).start();
+            }
+        )
+        .bounds(tokenButtonsStartX + tokenButtonWidth + tokenButtonSpacing, tokenButtonY, tokenButtonWidth, buttonHeight)
+        .build();
+        cheatsSettingWidgets.add(reloadGuaranteedButton);
+
+        // Adjust startY for collection unlock buttons to be below token buttons
+        startY += verticalSpacing + 20;
 
         // Get all collections
         java.util.Collection<FigureCollection> collections = CollectionRegistry.getAllCollections();
