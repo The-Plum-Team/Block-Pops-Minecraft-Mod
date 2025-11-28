@@ -76,12 +76,13 @@ public class SettingsScreen extends Screen {
 
     // Buttons and sliders
     private Button closeButton;
-    private Button resetButton;
+    private Button actionButton; // Context-sensitive button (Reset Colors / Change Time)
     private Button colorTransitionToggle;
 
     // Server settings
     private HourSlider resetHourSlider;
-    private int lastSentHour = -1; // Track the last hour value sent to avoid packet spam
+    private int loadedServerHourLocal; // The hour currently saved/loaded
+    private int pendingServerHourLocal; // The hour currently selected on slider
 
     // Star color sliders (Develop tab)
     private ColorSlider starRedSlider;
@@ -155,58 +156,97 @@ public class SettingsScreen extends Screen {
             this.addRenderableWidget(cheatsTabButton);
         }
 
-        // Create server settings
-        createServerSettings();
-
-        // Create development settings (only in development mode)
-        if (isDevelopmentMode()) {
-            createDevelopSettings();
-        }
-
-        // Create cheats settings (for admins and in development mode)
-        if (canAccessCheats()) {
-            createCheatsSettings();
-        }
-
-        // Show initial tab
-        switchTab(activeTab);
-
-        // Button dimensions
+        // Create button instances
         int buttonWidth = 100;
         int buttonHeight = 20;
         int buttonY = this.panelY + this.panelHeight - buttonHeight - 20;
         int buttonSpacing = 10;
-
-        // Calculate button positions (two buttons side by side)
         int totalButtonWidth = (buttonWidth * 2) + buttonSpacing;
         int buttonsStartX = this.panelX + (this.panelWidth - totalButtonWidth) / 2;
 
-        // Reset button (left)
-        this.resetButton = Button.builder(Component.literal("Reset"), button -> {
-                    ClientConfig.getInstance().resetColors();
-                    // Reset star color sliders
-                    this.starRedSlider.setValue(1.0);
-                    this.starGreenSlider.setValue(1.0);
-                    this.starBlueSlider.setValue(1.0);
-                    this.starOpacitySlider.setValue(0.20);
-                    // Reset background color sliders
-                    this.bgRedSlider.setValue(0.0);
-                    this.bgGreenSlider.setValue(0.0);
-                    this.bgBlueSlider.setValue(0.0);
-                    // Reset panel opacity slider
-                    this.panelOpacitySlider.setValue(0.90);
-                    // Reset color transition toggle
-                    this.colorTransitionToggle.setMessage(Component.literal("Transition: ON"));
-                })
+        // Close button (Left)
+        this.closeButton = Button.builder(Component.literal("Close"), button -> this.onClose())
                 .bounds(buttonsStartX, buttonY, buttonWidth, buttonHeight)
                 .build();
-        this.addRenderableWidget(this.resetButton);
+        this.addRenderableWidget(this.closeButton);
 
-        // Close button (right)
-        this.closeButton = Button.builder(Component.literal("Close"), button -> this.onClose())
+        // Action button (Right) - Text and behavior depend on tab
+        this.actionButton = Button.builder(Component.literal("Action"), button -> handleActionClick())
                 .bounds(buttonsStartX + buttonWidth + buttonSpacing, buttonY, buttonWidth, buttonHeight)
                 .build();
-        this.addRenderableWidget(this.closeButton);
+        this.addRenderableWidget(this.actionButton);
+
+        // Create settings for all tabs
+        createServerSettings();
+
+        if (isDevelopmentMode()) {
+            createDevelopSettings();
+        }
+
+        if (canAccessCheats()) {
+            createCheatsSettings();
+        }
+
+        // Show initial tab and update action button state
+        switchTab(activeTab);
+    }
+
+    /**
+     * Handles the click of the context-sensitive action button
+     */
+    private void handleActionClick() {
+        if (activeTab == Tab.SERVER) {
+            // "Change Time" logic
+            int utcValue = convertLocalToUtc(pendingServerHourLocal);
+
+            // Update local config immediately for responsiveness
+            ServerConfig.getInstance().setGuaranteedTokenResetHour(utcValue);
+
+            // Send packet to server
+            BlockPopsModForge.NETWORK_CHANNEL.sendToServer(
+                    new UpdateGuaranteedResetHourPacket(utcValue)
+            );
+
+            // Update loaded value to current and refresh button state
+            this.loadedServerHourLocal = pendingServerHourLocal;
+            updateActionButtonState();
+
+        } else if (activeTab == Tab.DEVELOP) {
+            // "Reset Colors" logic
+            ClientConfig.getInstance().resetColors();
+            // Reset star color sliders
+            this.starRedSlider.setValue(1.0);
+            this.starGreenSlider.setValue(1.0);
+            this.starBlueSlider.setValue(1.0);
+            this.starOpacitySlider.setValue(0.20);
+            // Reset background color sliders
+            this.bgRedSlider.setValue(0.0);
+            this.bgGreenSlider.setValue(0.0);
+            this.bgBlueSlider.setValue(0.0);
+            // Reset panel opacity slider
+            this.panelOpacitySlider.setValue(0.90);
+            // Reset color transition toggle
+            this.colorTransitionToggle.setMessage(Component.literal("Transition: ON"));
+        }
+    }
+
+    /**
+     * Updates the text and active state of the action button based on current tab
+     */
+    private void updateActionButtonState() {
+        if (activeTab == Tab.SERVER) {
+            this.actionButton.setMessage(Component.literal("Change time"));
+            // Locked until slider is moved to a different value
+            this.actionButton.active = (pendingServerHourLocal != loadedServerHourLocal);
+            this.actionButton.visible = true;
+        } else if (activeTab == Tab.DEVELOP) {
+            this.actionButton.setMessage(Component.literal("Reset Colors"));
+            this.actionButton.active = true;
+            this.actionButton.visible = true;
+        } else {
+            // Cheats tab doesn't use the main action button
+            this.actionButton.visible = false;
+        }
     }
 
     @Override
@@ -244,7 +284,7 @@ public class SettingsScreen extends Screen {
                 panelBgColor);
 
         // Draw outline around content panel
-        // Top line (connects tabs to content if in dev mode)
+        // Top line
         graphics.fill(this.panelX, contentPanelY,
                 this.panelX + this.panelWidth, contentPanelY + 1,
                 PANEL_OUTLINE);
@@ -448,8 +488,9 @@ public class SettingsScreen extends Screen {
         int utcHour = config.getGuaranteedTokenResetHour();
         int localHour = convertUtcToLocal(utcHour);
 
-        // Initialize the last sent hour to the current config value to prevent unnecessary packets on init
-        this.lastSentHour = utcHour;
+        // Initialize tracking variables
+        this.loadedServerHourLocal = localHour;
+        this.pendingServerHourLocal = localHour;
 
         // Reset hour slider (0-23 in local time)
         this.resetHourSlider = new HourSlider(
@@ -458,19 +499,10 @@ public class SettingsScreen extends Screen {
                 Component.literal("Guaranteed Token Reset Hour (" + timezoneName + "): "),
                 localHour,
                 localValue -> {
-                    // Convert local time back to UTC before saving
-                    int utcValue = convertLocalToUtc(localValue);
-
-                    // Only send packet if value changed
-                    if (utcValue != this.lastSentHour) {
-                        this.lastSentHour = utcValue;
-                        // Update local config immediately for responsiveness
-                        config.setGuaranteedTokenResetHour(utcValue);
-                        // Send packet to server to update authoritative config and resync clients
-                        BlockPopsModForge.NETWORK_CHANNEL.sendToServer(
-                                new UpdateGuaranteedResetHourPacket(utcValue)
-                        );
-                    }
+                    // Update pending value
+                    this.pendingServerHourLocal = localValue;
+                    // Update button state (check if changed)
+                    updateActionButtonState();
                 }
         );
         serverSettingWidgets.add(this.resetHourSlider);
@@ -808,6 +840,9 @@ public class SettingsScreen extends Screen {
         if (cheatsTabButton != null) {
             cheatsTabButton.setSelected(tab == Tab.CHEATS);
         }
+
+        // Update action button text/state/visibility based on new tab
+        updateActionButtonState();
     }
 
     /**
