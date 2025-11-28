@@ -4,10 +4,12 @@ import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.gui.FigurePositionScreen;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModItems;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
@@ -285,14 +287,20 @@ public class BoxBlock extends BaseEntityBlock {
                     return InteractionResult.SUCCESS;
                 }
             }
-            // If the box is closed, only shears can open it
-            else if (heldItem.getItem() == net.minecraft.world.item.Items.SHEARS) {
-                boxBlockEntity.toggleOpen();
+            // If the box is closed
+            else {
+                if (heldItem.getItem() == net.minecraft.world.item.Items.SHEARS) {
+                    boxBlockEntity.toggleOpen();
 
-                // Play shears opening sound
-                level.playSound(null, pos, SoundEvents.SHEEP_SHEAR, SoundSource.BLOCKS, 1.0F, 1.0F);
+                    // Play shears opening sound
+                    level.playSound(null, pos, SoundEvents.SHEEP_SHEAR, SoundSource.BLOCKS, 1.0F, 1.0F);
 
-                return InteractionResult.SUCCESS;
+                    return InteractionResult.SUCCESS;
+                } else {
+                    // Display message on action bar
+                    player.displayClientMessage(Component.literal("Use Shears to open").withStyle(ChatFormatting.GRAY), true);
+                    return InteractionResult.SUCCESS;
+                }
             }
         }
 

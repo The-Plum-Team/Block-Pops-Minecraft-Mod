@@ -116,7 +116,7 @@ public class CollectionSelectionScreen extends Screen {
         this.colorTransitionProgress = 1.0f; // Start with no transition
 
         LOGGER.info("CollectionSelectionScreen opened at {} with current collection: {}",
-                    blockPos, currentCollectionId);
+                blockPos, currentCollectionId);
     }
 
     @Override
@@ -149,12 +149,12 @@ public class CollectionSelectionScreen extends Screen {
         // Create collection list on the left (full height - header will render on top)
         int collectionHeaderHeight = 30; // Space for "Collections" header (for rendering only)
         collectionListWidget = new CollectionListWidget(
-            this,
-            this.minecraft,
-            leftPanelWidth,
-            listHeight, // Full height - allow scrolling under header
-            yPos, // Start at same Y as before
-            55 // Entry height - adjusted for optimal spacing
+                this,
+                this.minecraft,
+                leftPanelWidth,
+                listHeight, // Full height - allow scrolling under header
+                yPos, // Start at same Y as before
+                55 // Entry height - adjusted for optimal spacing
         );
         collectionListWidget.setLeftPos(componentX);
         collectionListWidget.setRenderBackground(false);
@@ -171,11 +171,11 @@ public class CollectionSelectionScreen extends Screen {
         int figureListHeight = listHeight; // Full height - allow scrolling under header
 
         figureListWidget = new FigureListWidget(
-            this.minecraft,
-            rightPanelWidth,
-            figureListHeight,
-            figureListY,
-            90 // Entry height for figure cells
+                this.minecraft,
+                rightPanelWidth,
+                figureListHeight,
+                figureListY,
+                90 // Entry height for figure cells
         );
         figureListWidget.setLeftPos(previewX);
         figureListWidget.setRenderBackground(false);
@@ -213,6 +213,7 @@ public class CollectionSelectionScreen extends Screen {
                 LOGGER.info("Using regular token for collection: {}", selectedCollectionId);
                 DropBoxPacket packet = new DropBoxPacket(blockPos, selectedCollectionId, TokenType.REGULAR);
                 BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
+                this.onClose(); // Close the screen immediately after using a token
             }
         }).bounds(fullWidthX, bottomY, buttonWidth, scaledComponentHeight).build();
         this.addRenderableWidget(useRegularButton);
@@ -223,6 +224,7 @@ public class CollectionSelectionScreen extends Screen {
                 LOGGER.info("Using guaranteed token for collection: {}", selectedCollectionId);
                 DropBoxPacket packet = new DropBoxPacket(blockPos, selectedCollectionId, TokenType.GUARANTEED);
                 BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
+                this.onClose(); // Close the screen immediately after using a token
             }
         }).bounds(fullWidthX + buttonWidth + scaledSpacing, bottomY, buttonWidth, scaledComponentHeight).build();
         this.addRenderableWidget(useSpecialButton);
@@ -295,15 +297,15 @@ public class CollectionSelectionScreen extends Screen {
         int desiredHeight = (int)(this.height * 0.85f); // Increased from 0.8 to 0.85 (5% increase)
 
         panelWidth = Mth.clamp(
-            desiredWidth,
-            MIN_PANEL_WIDTH,
-            Math.min(MAX_PANEL_WIDTH, this.width - 60)
+                desiredWidth,
+                MIN_PANEL_WIDTH,
+                Math.min(MAX_PANEL_WIDTH, this.width - 60)
         );
 
         panelHeight = Mth.clamp(
-            desiredHeight,
-            MIN_PANEL_HEIGHT,
-            this.height - 60
+                desiredHeight,
+                MIN_PANEL_HEIGHT,
+                this.height - 60
         );
 
         // Center the panel
@@ -353,13 +355,13 @@ public class CollectionSelectionScreen extends Screen {
 
         // Collection list title
         graphics.drawString(this.font, "Collections",
-                          componentX + 8, currentY, 0xFFFFFF, false);
+                componentX + 8, currentY, 0xFFFFFF, false);
         currentY += font.lineHeight + 4;
 
         // Collection count
         String collectionCount = collections.size() + " collections available";
         graphics.drawString(this.font, collectionCount,
-                          componentX + 8, currentY, 0xAAAAAA, false);
+                componentX + 8, currentY, 0xAAAAAA, false);
 
         // Separator line (below the collection count)
         currentY += font.lineHeight + 4;
@@ -391,13 +393,13 @@ public class CollectionSelectionScreen extends Screen {
 
         // Collection name
         graphics.drawString(this.font, collection.getName(),
-                          previewX + 8, currentY, 0xFFFFFF, false);
+                previewX + 8, currentY, 0xFFFFFF, false);
         currentY += font.lineHeight + 4;
 
         // Figure count
         String figureCount = collection.getFigures().size() + " figures in this collection";
         graphics.drawString(this.font, figureCount,
-                          previewX + 8, currentY, 0xAAAAAA, false);
+                previewX + 8, currentY, 0xAAAAAA, false);
 
         // Separator line (full width - will render on top of buttons)
         currentY += font.lineHeight + 4;
@@ -694,7 +696,7 @@ public class CollectionSelectionScreen extends Screen {
      */
     private void sendUpdate() {
         LOGGER.info("Sending collection update - Position: {}, Collection ID: {}",
-                    blockPos, selectedCollectionId);
+                blockPos, selectedCollectionId);
         ClawMachineCollectionPacket packet = new ClawMachineCollectionPacket(blockPos, selectedCollectionId);
         BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
     }
