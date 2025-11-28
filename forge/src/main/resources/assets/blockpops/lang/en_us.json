@@ -19,6 +19,12 @@
   "block.blockpops.box_block_jojos": "JoJo's Box",
   "block.blockpops.box_block_jujutsukaisen": "Jujutsu Kaisen Box",
   "block.blockpops.box_block_adventuretime": "Adventure Time Box",
+  "block.blockpops.box_block_supermario": "Super Mario Box",
+  "block.blockpops.box_block_starwars": "Star Wars Box",
+  "block.blockpops.box_block_fnaf": "FNAF Box",
+  "block.blockpops.box_block_onepiece": "One Piece Box",
+  "block.blockpops.box_block_deltarune": "Deltarune Box",
+  "block.blockpops.box_block_alienstage": "Alien Stage Box",
   "block.blockpops.claw_machine_block": "Arcade Claw Machine",
   "tooltip.blockpops.has_alternatives": "Has alternative skins! (Right-click with a stick)"
 }
