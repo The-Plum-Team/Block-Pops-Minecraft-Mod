@@ -1,3 +1,4 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\forge\BlockPopsModForge.java ==========
 package com.theplumteam.forge;
 
 import com.theplumteam.BlockPopsMod;
@@ -21,6 +22,7 @@ import com.theplumteam.network.SyncDynamicCollectionsPacket;
 import com.theplumteam.network.SyncTokenDataPacket;
 import com.theplumteam.network.UnlockCollectionPacket;
 import com.theplumteam.network.UnlockFigurePacket;
+import com.theplumteam.network.UpdateGuaranteedResetHourPacket;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModBlocks;
 import com.theplumteam.registry.ModCreativeTabs;
@@ -234,6 +236,12 @@ public final class BlockPopsModForge {
                 ReloadTokensPacket::encode,
                 ReloadTokensPacket::decode,
                 ReloadTokensPacket::handle
+        );
+        NETWORK_CHANNEL.registerMessage(packetId++,
+                UpdateGuaranteedResetHourPacket.class,
+                UpdateGuaranteedResetHourPacket::encode,
+                UpdateGuaranteedResetHourPacket::decode,
+                UpdateGuaranteedResetHourPacket::handle
         );
     }
 

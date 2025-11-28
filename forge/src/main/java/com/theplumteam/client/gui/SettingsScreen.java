@@ -1,3 +1,4 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\client\gui\SettingsScreen.java ==========
 package com.theplumteam.client.gui;
 
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -9,6 +10,7 @@ import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.network.UnlockCollectionPacket;
 import com.theplumteam.network.ReloadTokensPacket;
+import com.theplumteam.network.UpdateGuaranteedResetHourPacket;
 import com.theplumteam.server.config.ServerConfig;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
@@ -79,6 +81,7 @@ public class SettingsScreen extends Screen {
 
     // Server settings
     private HourSlider resetHourSlider;
+    private int lastSentHour = -1; // Track the last hour value sent to avoid packet spam
 
     // Star color sliders (Develop tab)
     private ColorSlider starRedSlider;
@@ -118,11 +121,11 @@ public class SettingsScreen extends Screen {
 
         // Server tab (always shown)
         serverTabButton = (TabButton) ButtonFactory.createTab(
-            tabStartX, tabY,
-            TAB_WIDTH, TAB_HEIGHT,
-            Component.literal(Tab.SERVER.getDisplayName()),
-            activeTab == Tab.SERVER,
-            btn -> switchTab(Tab.SERVER)
+                tabStartX, tabY,
+                TAB_WIDTH, TAB_HEIGHT,
+                Component.literal(Tab.SERVER.getDisplayName()),
+                activeTab == Tab.SERVER,
+                btn -> switchTab(Tab.SERVER)
         );
         this.addRenderableWidget(serverTabButton);
 
@@ -130,11 +133,11 @@ public class SettingsScreen extends Screen {
         int nextTabX = tabStartX + TAB_WIDTH + TAB_SPACING;
         if (isDevelopmentMode()) {
             developTabButton = (TabButton) ButtonFactory.createTab(
-                nextTabX, tabY,
-                TAB_WIDTH, TAB_HEIGHT,
-                Component.literal(Tab.DEVELOP.getDisplayName()),
-                activeTab == Tab.DEVELOP,
-                btn -> switchTab(Tab.DEVELOP)
+                    nextTabX, tabY,
+                    TAB_WIDTH, TAB_HEIGHT,
+                    Component.literal(Tab.DEVELOP.getDisplayName()),
+                    activeTab == Tab.DEVELOP,
+                    btn -> switchTab(Tab.DEVELOP)
             );
             this.addRenderableWidget(developTabButton);
             nextTabX += TAB_WIDTH + TAB_SPACING;
@@ -143,11 +146,11 @@ public class SettingsScreen extends Screen {
         // Cheats tab (for admins and in development mode)
         if (canAccessCheats()) {
             cheatsTabButton = (TabButton) ButtonFactory.createTab(
-                nextTabX, tabY,
-                TAB_WIDTH, TAB_HEIGHT,
-                Component.literal(Tab.CHEATS.getDisplayName()),
-                activeTab == Tab.CHEATS,
-                btn -> switchTab(Tab.CHEATS)
+                    nextTabX, tabY,
+                    TAB_WIDTH, TAB_HEIGHT,
+                    Component.literal(Tab.CHEATS.getDisplayName()),
+                    activeTab == Tab.CHEATS,
+                    btn -> switchTab(Tab.CHEATS)
             );
             this.addRenderableWidget(cheatsTabButton);
         }
@@ -180,21 +183,21 @@ public class SettingsScreen extends Screen {
 
         // Reset button (left)
         this.resetButton = Button.builder(Component.literal("Reset"), button -> {
-            ClientConfig.getInstance().resetColors();
-            // Reset star color sliders
-            this.starRedSlider.setValue(1.0);
-            this.starGreenSlider.setValue(1.0);
-            this.starBlueSlider.setValue(1.0);
-            this.starOpacitySlider.setValue(0.20);
-            // Reset background color sliders
-            this.bgRedSlider.setValue(0.0);
-            this.bgGreenSlider.setValue(0.0);
-            this.bgBlueSlider.setValue(0.0);
-            // Reset panel opacity slider
-            this.panelOpacitySlider.setValue(0.90);
-            // Reset color transition toggle
-            this.colorTransitionToggle.setMessage(Component.literal("Transition: ON"));
-        })
+                    ClientConfig.getInstance().resetColors();
+                    // Reset star color sliders
+                    this.starRedSlider.setValue(1.0);
+                    this.starGreenSlider.setValue(1.0);
+                    this.starBlueSlider.setValue(1.0);
+                    this.starOpacitySlider.setValue(0.20);
+                    // Reset background color sliders
+                    this.bgRedSlider.setValue(0.0);
+                    this.bgGreenSlider.setValue(0.0);
+                    this.bgBlueSlider.setValue(0.0);
+                    // Reset panel opacity slider
+                    this.panelOpacitySlider.setValue(0.90);
+                    // Reset color transition toggle
+                    this.colorTransitionToggle.setMessage(Component.literal("Transition: ON"));
+                })
                 .bounds(buttonsStartX, buttonY, buttonWidth, buttonHeight)
                 .build();
         this.addRenderableWidget(this.resetButton);
@@ -236,27 +239,27 @@ public class SettingsScreen extends Screen {
         int panelBgColor = (alpha << 24) | 0x000000;  // Black with configurable alpha
 
         graphics.fill(this.panelX, contentPanelY,
-                     this.panelX + this.panelWidth,
-                     contentPanelY + contentPanelHeight,
-                     panelBgColor);
+                this.panelX + this.panelWidth,
+                contentPanelY + contentPanelHeight,
+                panelBgColor);
 
         // Draw outline around content panel
         // Top line (connects tabs to content if in dev mode)
         graphics.fill(this.panelX, contentPanelY,
-                     this.panelX + this.panelWidth, contentPanelY + 1,
-                     PANEL_OUTLINE);
+                this.panelX + this.panelWidth, contentPanelY + 1,
+                PANEL_OUTLINE);
         // Bottom
         graphics.fill(this.panelX, contentPanelY + contentPanelHeight - 1,
-                     this.panelX + this.panelWidth, contentPanelY + contentPanelHeight,
-                     PANEL_OUTLINE);
+                this.panelX + this.panelWidth, contentPanelY + contentPanelHeight,
+                PANEL_OUTLINE);
         // Left
         graphics.fill(this.panelX, contentPanelY,
-                     this.panelX + 1, contentPanelY + contentPanelHeight,
-                     PANEL_OUTLINE);
+                this.panelX + 1, contentPanelY + contentPanelHeight,
+                PANEL_OUTLINE);
         // Right
         graphics.fill(this.panelX + this.panelWidth - 1, contentPanelY,
-                     this.panelX + this.panelWidth, contentPanelY + contentPanelHeight,
-                     PANEL_OUTLINE);
+                this.panelX + this.panelWidth, contentPanelY + contentPanelHeight,
+                PANEL_OUTLINE);
 
         // Draw column headers (only in Develop tab)
         if (isDevelopmentMode() && activeTab == Tab.DEVELOP) {
@@ -271,43 +274,43 @@ public class SettingsScreen extends Screen {
             int headerY = this.panelY + TAB_HEIGHT + 5;
 
             graphics.drawString(this.font, "Star Color",
-                               col1X,
-                               headerY,
-                               0xFFFFFF);
+                    col1X,
+                    headerY,
+                    0xFFFFFF);
 
             graphics.drawString(this.font, "Background Color",
-                               col2X,
-                               headerY,
-                               0xFFFFFF);
+                    col2X,
+                    headerY,
+                    0xFFFFFF);
 
             graphics.drawString(this.font, "Panel & Animation",
-                               col3X,
-                               headerY,
-                               0xFFFFFF);
+                    col3X,
+                    headerY,
+                    0xFFFFFF);
         }
 
         // Draw server tab content
         if (activeTab == Tab.SERVER) {
             int headerY = this.panelY + TAB_HEIGHT + 10;
             graphics.drawCenteredString(this.font, "Token Reset Settings",
-                                       this.panelX + this.panelWidth / 2,
-                                       headerY,
-                                       0xFFFFFF);
+                    this.panelX + this.panelWidth / 2,
+                    headerY,
+                    0xFFFFFF);
 
             // Draw explanation text
             int explanationY = this.panelY + TAB_HEIGHT + 80;
             String[] explanationLines = {
-                "The guaranteed token grants an undiscovered figure from the collection.",
-                "This token resets daily at the hour specified above (in your local time).",
-                "Set this to a time that works best for your server's player base."
+                    "The guaranteed token grants an undiscovered figure from the collection.",
+                    "This token resets daily at the hour specified above (in your local time).",
+                    "Set this to a time that works best for your server's player base."
             };
 
             for (int i = 0; i < explanationLines.length; i++) {
                 int lineWidth = this.font.width(explanationLines[i]);
                 graphics.drawString(this.font, explanationLines[i],
-                                   this.panelX + (this.panelWidth - lineWidth) / 2,
-                                   explanationY + (i * 12),
-                                   0xAAAAAA);
+                        this.panelX + (this.panelWidth - lineWidth) / 2,
+                        explanationY + (i * 12),
+                        0xAAAAAA);
             }
         }
 
@@ -315,22 +318,22 @@ public class SettingsScreen extends Screen {
         if (activeTab == Tab.CHEATS) {
             int headerY = this.panelY + TAB_HEIGHT + 10;
             graphics.drawCenteredString(this.font, "Collection Cheats",
-                                       this.panelX + this.panelWidth / 2,
-                                       headerY,
-                                       0xFFFFFF);
+                    this.panelX + this.panelWidth / 2,
+                    headerY,
+                    0xFFFFFF);
 
             // Draw explanation text
             int explanationY = this.panelY + TAB_HEIGHT + 30;
             String[] explanationLines = {
-                "Use the token reload buttons to restore your tokens.",
-                "Click a collection button to unlock all figures and receive all boxes."
+                    "Use the token reload buttons to restore your tokens.",
+                    "Click a collection button to unlock all figures and receive all boxes."
             };
             for (int i = 0; i < explanationLines.length; i++) {
                 int lineWidth = this.font.width(explanationLines[i]);
                 graphics.drawString(this.font, explanationLines[i],
-                                   this.panelX + (this.panelWidth - lineWidth) / 2,
-                                   explanationY + (i * 12),
-                                   0xAAAAAA);
+                        this.panelX + (this.panelWidth - lineWidth) / 2,
+                        explanationY + (i * 12),
+                        0xAAAAAA);
             }
         }
 
@@ -350,9 +353,9 @@ public class SettingsScreen extends Screen {
             graphics.fill(previewStartX - 1, previewY - 1, previewStartX + previewSize + 1, previewY + previewSize + 1, 0xFFFFFFFF);
             graphics.fill(previewStartX, previewY, previewStartX + previewSize, previewY + previewSize, starColor);
             graphics.drawCenteredString(this.font, "Stars",
-                                       previewStartX + previewSize / 2,
-                                       previewY + previewSize + 5,
-                                       0xAAAAAA);
+                    previewStartX + previewSize / 2,
+                    previewY + previewSize + 5,
+                    0xAAAAAA);
 
             // Background color preview
             int bgPreviewX = previewStartX + previewSize + previewSpacing;
@@ -364,9 +367,9 @@ public class SettingsScreen extends Screen {
             graphics.fill(bgPreviewX - 1, previewY - 1, bgPreviewX + previewSize + 1, previewY + previewSize + 1, 0xFFFFFFFF);
             graphics.fill(bgPreviewX, previewY, bgPreviewX + previewSize, previewY + previewSize, bgColor);
             graphics.drawCenteredString(this.font, "Background",
-                                       bgPreviewX + previewSize / 2,
-                                       previewY + previewSize + 5,
-                                       0xAAAAAA);
+                    bgPreviewX + previewSize / 2,
+                    previewY + previewSize + 5,
+                    0xAAAAAA);
         }
 
         // Render our modal buttons and widgets
@@ -377,7 +380,7 @@ public class SettingsScreen extends Screen {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         // Check if click is outside the panel (including tabs)
         if (mouseX < this.panelX || mouseX > this.panelX + this.panelWidth ||
-            mouseY < this.panelY || mouseY > this.panelY + this.panelHeight) {
+                mouseY < this.panelY || mouseY > this.panelY + this.panelHeight) {
             // Click outside panel - close the modal
             this.onClose();
             return true;
@@ -388,8 +391,6 @@ public class SettingsScreen extends Screen {
 
     @Override
     public void onClose() {
-        // TODO: Save any settings changes here
-
         // Return to parent screen
         this.minecraft.setScreen(this.parent);
     }
@@ -447,6 +448,9 @@ public class SettingsScreen extends Screen {
         int utcHour = config.getGuaranteedTokenResetHour();
         int localHour = convertUtcToLocal(utcHour);
 
+        // Initialize the last sent hour to the current config value to prevent unnecessary packets on init
+        this.lastSentHour = utcHour;
+
         // Reset hour slider (0-23 in local time)
         this.resetHourSlider = new HourSlider(
                 sliderX, startY,
@@ -456,7 +460,17 @@ public class SettingsScreen extends Screen {
                 localValue -> {
                     // Convert local time back to UTC before saving
                     int utcValue = convertLocalToUtc(localValue);
-                    config.setGuaranteedTokenResetHour(utcValue);
+
+                    // Only send packet if value changed
+                    if (utcValue != this.lastSentHour) {
+                        this.lastSentHour = utcValue;
+                        // Update local config immediately for responsiveness
+                        config.setGuaranteedTokenResetHour(utcValue);
+                        // Send packet to server to update authoritative config and resync clients
+                        BlockPopsModForge.NETWORK_CHANNEL.sendToServer(
+                                new UpdateGuaranteedResetHourPacket(utcValue)
+                        );
+                    }
                 }
         );
         serverSettingWidgets.add(this.resetHourSlider);
@@ -606,12 +620,12 @@ public class SettingsScreen extends Screen {
         col3Y += verticalSpacing;
 
         this.colorTransitionToggle = Button.builder(
-                Component.literal("Transition: " + (config.enableColorTransition ? "ON" : "OFF")),
-                button -> {
-                    config.enableColorTransition = !config.enableColorTransition;
-                    button.setMessage(Component.literal("Transition: " + (config.enableColorTransition ? "ON" : "OFF")));
-                }
-        )
+                        Component.literal("Transition: " + (config.enableColorTransition ? "ON" : "OFF")),
+                        button -> {
+                            config.enableColorTransition = !config.enableColorTransition;
+                            button.setMessage(Component.literal("Transition: " + (config.enableColorTransition ? "ON" : "OFF")));
+                        }
+                )
                 .bounds(col3X, col3Y, columnWidth, sliderHeight)
                 .build();
         developSettingWidgets.add(this.colorTransitionToggle);
@@ -639,62 +653,62 @@ public class SettingsScreen extends Screen {
 
         // Reload Regular Tokens button
         Button reloadRegularButton = Button.builder(
-            Component.literal("Reload Regular Tokens"),
-            button -> {
-                // Send packet to server to reload regular tokens
-                ReloadTokensPacket packet = new ReloadTokensPacket(true, false);
-                BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
+                        Component.literal("Reload Regular Tokens"),
+                        button -> {
+                            // Send packet to server to reload regular tokens
+                            ReloadTokensPacket packet = new ReloadTokensPacket(true, false);
+                            BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
 
-                // Provide visual feedback
-                button.setMessage(Component.literal("Reloading..."));
-                button.active = false;
+                            // Provide visual feedback
+                            button.setMessage(Component.literal("Reloading..."));
+                            button.active = false;
 
-                // Re-enable button after a short delay
-                new Thread(() -> {
-                    try {
-                        Thread.sleep(500);
-                        this.minecraft.execute(() -> {
-                            button.setMessage(Component.literal("Reload Regular Tokens"));
-                            button.active = true;
-                        });
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }).start();
-            }
-        )
-        .bounds(tokenButtonsStartX, tokenButtonY, tokenButtonWidth, buttonHeight)
-        .build();
+                            // Re-enable button after a short delay
+                            new Thread(() -> {
+                                try {
+                                    Thread.sleep(500);
+                                    this.minecraft.execute(() -> {
+                                        button.setMessage(Component.literal("Reload Regular Tokens"));
+                                        button.active = true;
+                                    });
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
+                            }).start();
+                        }
+                )
+                .bounds(tokenButtonsStartX, tokenButtonY, tokenButtonWidth, buttonHeight)
+                .build();
         cheatsSettingWidgets.add(reloadRegularButton);
 
         // Reload Guaranteed Token button
         Button reloadGuaranteedButton = Button.builder(
-            Component.literal("Reload Guaranteed Token"),
-            button -> {
-                // Send packet to server to reload guaranteed token
-                ReloadTokensPacket packet = new ReloadTokensPacket(false, true);
-                BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
+                        Component.literal("Reload Guaranteed Token"),
+                        button -> {
+                            // Send packet to server to reload guaranteed token
+                            ReloadTokensPacket packet = new ReloadTokensPacket(false, true);
+                            BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
 
-                // Provide visual feedback
-                button.setMessage(Component.literal("Reloading..."));
-                button.active = false;
+                            // Provide visual feedback
+                            button.setMessage(Component.literal("Reloading..."));
+                            button.active = false;
 
-                // Re-enable button after a short delay
-                new Thread(() -> {
-                    try {
-                        Thread.sleep(500);
-                        this.minecraft.execute(() -> {
-                            button.setMessage(Component.literal("Reload Guaranteed Token"));
-                            button.active = true;
-                        });
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }).start();
-            }
-        )
-        .bounds(tokenButtonsStartX + tokenButtonWidth + tokenButtonSpacing, tokenButtonY, tokenButtonWidth, buttonHeight)
-        .build();
+                            // Re-enable button after a short delay
+                            new Thread(() -> {
+                                try {
+                                    Thread.sleep(500);
+                                    this.minecraft.execute(() -> {
+                                        button.setMessage(Component.literal("Reload Guaranteed Token"));
+                                        button.active = true;
+                                    });
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
+                            }).start();
+                        }
+                )
+                .bounds(tokenButtonsStartX + tokenButtonWidth + tokenButtonSpacing, tokenButtonY, tokenButtonWidth, buttonHeight)
+                .build();
         cheatsSettingWidgets.add(reloadGuaranteedButton);
 
         // Adjust startY for collection unlock buttons to be below token buttons
@@ -705,8 +719,8 @@ public class SettingsScreen extends Screen {
 
         // Filter out the default collection if it exists
         java.util.List<FigureCollection> filteredCollections = collections.stream()
-            .filter(collection -> !collection.getId().equals("default"))
-            .collect(java.util.stream.Collectors.toList());
+                .filter(collection -> !collection.getId().equals("default"))
+                .collect(java.util.stream.Collectors.toList());
 
         int row = 0;
         int col = 0;
@@ -716,32 +730,32 @@ public class SettingsScreen extends Screen {
             int buttonY = startY + (row * verticalSpacing);
 
             Button unlockButton = Button.builder(
-                Component.literal("Unlock " + collection.getName()),
-                button -> {
-                    // Send packet to server to unlock this collection
-                    UnlockCollectionPacket packet = new UnlockCollectionPacket(collection.getId());
-                    BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
+                            Component.literal("Unlock " + collection.getName()),
+                            button -> {
+                                // Send packet to server to unlock this collection
+                                UnlockCollectionPacket packet = new UnlockCollectionPacket(collection.getId());
+                                BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
 
-                    // Provide visual feedback
-                    button.setMessage(Component.literal("Unlocking..."));
-                    button.active = false;
+                                // Provide visual feedback
+                                button.setMessage(Component.literal("Unlocking..."));
+                                button.active = false;
 
-                    // Re-enable button after a short delay
-                    new Thread(() -> {
-                        try {
-                            Thread.sleep(1000);
-                            this.minecraft.execute(() -> {
-                                button.setMessage(Component.literal("Unlock " + collection.getName()));
-                                button.active = true;
-                            });
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    }).start();
-                }
-            )
-            .bounds(buttonX, buttonY, buttonWidth, buttonHeight)
-            .build();
+                                // Re-enable button after a short delay
+                                new Thread(() -> {
+                                    try {
+                                        Thread.sleep(1000);
+                                        this.minecraft.execute(() -> {
+                                            button.setMessage(Component.literal("Unlock " + collection.getName()));
+                                            button.active = true;
+                                        });
+                                    } catch (InterruptedException e) {
+                                        e.printStackTrace();
+                                    }
+                                }).start();
+                            }
+                    )
+                    .bounds(buttonX, buttonY, buttonWidth, buttonHeight)
+                    .build();
 
             cheatsSettingWidgets.add(unlockButton);
 
@@ -804,7 +818,7 @@ public class SettingsScreen extends Screen {
         private final java.util.function.Consumer<Double> onValueChange;
 
         public ColorSlider(int x, int y, int width, int height, Component prefix,
-                          double initialValue, java.util.function.Consumer<Double> onValueChange) {
+                           double initialValue, java.util.function.Consumer<Double> onValueChange) {
             super(x, y, width, height, Component.empty(), initialValue);
             this.prefix = prefix;
             this.onValueChange = onValueChange;
@@ -836,7 +850,7 @@ public class SettingsScreen extends Screen {
         private final java.util.function.Consumer<Double> onValueChange;
 
         public OpacitySlider(int x, int y, int width, int height, Component prefix,
-                            double initialValue, java.util.function.Consumer<Double> onValueChange) {
+                             double initialValue, java.util.function.Consumer<Double> onValueChange) {
             super(x, y, width, height, Component.empty(), initialValue);
             this.prefix = prefix;
             this.onValueChange = onValueChange;
@@ -868,7 +882,7 @@ public class SettingsScreen extends Screen {
         private final java.util.function.Consumer<Integer> onValueChange;
 
         public HourSlider(int x, int y, int width, int height, Component prefix,
-                         int initialValue, java.util.function.Consumer<Integer> onValueChange) {
+                          int initialValue, java.util.function.Consumer<Integer> onValueChange) {
             super(x, y, width, height, Component.empty(), initialValue / 23.0);
             this.prefix = prefix;
             this.onValueChange = onValueChange;
