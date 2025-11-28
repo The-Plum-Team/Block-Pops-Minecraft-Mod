@@ -8,6 +8,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -235,6 +237,9 @@ public class BoxBlock extends BaseEntityBlock {
                             // Remove one figure item from player's hand
                             heldItem.shrink(1);
 
+                            // Play putting figure back sound
+                            level.playSound(null, pos, SoundEvents.ITEM_FRAME_ADD_ITEM, SoundSource.BLOCKS, 1.0F, 1.0F);
+
                             return InteractionResult.SUCCESS;
                         }
                     }
@@ -273,12 +278,20 @@ public class BoxBlock extends BaseEntityBlock {
 
                     // Mark the figure as extracted
                     boxBlockEntity.setFigureExtracted(true);
+
+                    // Play taking figure out sound
+                    level.playSound(null, pos, SoundEvents.ITEM_FRAME_REMOVE_ITEM, SoundSource.BLOCKS, 1.0F, 1.0F);
+
                     return InteractionResult.SUCCESS;
                 }
             }
             // If the box is closed, only shears can open it
             else if (heldItem.getItem() == net.minecraft.world.item.Items.SHEARS) {
                 boxBlockEntity.toggleOpen();
+
+                // Play shears opening sound
+                level.playSound(null, pos, SoundEvents.SHEEP_SHEAR, SoundSource.BLOCKS, 1.0F, 1.0F);
+
                 return InteractionResult.SUCCESS;
             }
         }
