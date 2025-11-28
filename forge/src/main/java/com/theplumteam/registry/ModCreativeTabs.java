@@ -1,3 +1,4 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\registry\ModCreativeTabs.java ==========
 package com.theplumteam.registry;
 
 import com.theplumteam.BlockPopsMod;
@@ -12,30 +13,34 @@ import net.minecraft.world.item.ItemStack;
 
 public class ModCreativeTabs {
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS =
-        DeferredRegister.create(BlockPopsMod.MOD_ID, Registries.CREATIVE_MODE_TAB);
+            DeferredRegister.create(BlockPopsMod.MOD_ID, Registries.CREATIVE_MODE_TAB);
 
     public static final RegistrySupplier<CreativeModeTab> BLOCKPOPS_TAB = CREATIVE_TABS.register(
-        "blockpops_tab",
-        () -> CreativeModeTab.builder(CreativeModeTab.Row.TOP, 0)
-            .title(Component.translatable("itemGroup.blockpops.blockpops_tab"))
-            .icon(() -> new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(PopBlockColor.ORIGINAL).get()))
-            .displayItems((parameters, output) -> {
-                // Add claw machine
-                output.accept(ModItems.CLAW_MACHINE_BLOCK_ITEM.get());
+            "blockpops_tab",
+            () -> CreativeModeTab.builder(CreativeModeTab.Row.TOP, 0)
+                    .title(Component.translatable("itemGroup.blockpops.blockpops_tab"))
+                    // Use getDefaultInstance() to ensure NBT data (like texture/color) is applied to the icon
+                    .icon(() -> ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(PopBlockColor.ORIGINAL).get().getDefaultInstance())
+                    .displayItems((parameters, output) -> {
+                        // Add claw machine
+                        output.accept(ModItems.CLAW_MACHINE_BLOCK_ITEM.get());
 
-                // Add the original color variant box block
-                output.accept(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(PopBlockColor.ORIGINAL).get());
+                        // Add the original color variant box block
+                        // Use getDefaultInstance() to ensure NBT data (Color) is applied to the ItemStack
+                        output.accept(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(PopBlockColor.ORIGINAL).get().getDefaultInstance());
 
-                // Add collection box blocks
-                for (String collectionId : BuiltInCollections.COLLECTION_IDS) {
-                    output.accept(ModItems.BOX_BLOCK_ITEMS.get(collectionId).get());
-                }
-            })
-            .build()
+                        // Add collection box blocks
+                        // Use getDefaultInstance() to ensure NBT data (CollectionId) is applied to the ItemStack
+                        for (String collectionId : BuiltInCollections.COLLECTION_IDS) {
+                            if (ModItems.BOX_BLOCK_ITEMS.containsKey(collectionId)) {
+                                output.accept(ModItems.BOX_BLOCK_ITEMS.get(collectionId).get().getDefaultInstance());
+                            }
+                        }
+                    })
+                    .build()
     );
 
     public static void register() {
         CREATIVE_TABS.register();
     }
 }
-

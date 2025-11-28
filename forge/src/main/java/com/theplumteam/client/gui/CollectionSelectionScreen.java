@@ -1,9 +1,11 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\client\gui\CollectionSelectionScreen.java ==========
 package com.theplumteam.client.gui;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
+import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.client.gui.widget.CollectionEntry;
 import com.theplumteam.client.gui.widget.CollectionListWidget;
 import com.theplumteam.client.gui.widget.FigureListWidget;
@@ -121,6 +123,12 @@ public class CollectionSelectionScreen extends Screen {
 
     @Override
     protected void init() {
+        // Enforce GUI Scale
+        if (GuiScaleManager.setMenuGuiScale(GuiScaleManager.getOptimalMenuScale())) {
+            // If scale changed, the screen will be re-initialized by the engine
+            return;
+        }
+
         super.init();
         clearWidgets();
 
@@ -311,6 +319,13 @@ public class CollectionSelectionScreen extends Screen {
         // Center the panel
         panelX = (this.width - panelWidth) / 2;
         panelY = (this.height - panelHeight) / 2;
+    }
+
+    @Override
+    public void removed() {
+        // Restore original GUI scale when screen is closed/removed
+        GuiScaleManager.restoreOriginalGuiScale();
+        super.removed();
     }
 
     @Override

@@ -1,8 +1,10 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\client\gui\FavoriteColorSelectionScreen.java ==========
 package com.theplumteam.client.gui;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.client.config.ClientConfig;
+import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.client.gui.widget.ColorSelectionButton;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.network.SetFavoriteColorPacket;
@@ -66,6 +68,12 @@ public class FavoriteColorSelectionScreen extends Screen {
 
     @Override
     protected void init() {
+        // Enforce GUI Scale
+        if (GuiScaleManager.setMenuGuiScale(GuiScaleManager.getOptimalMenuScale())) {
+            // If scale changed, the screen will be re-initialized by the engine
+            return;
+        }
+
         super.init();
         clearWidgets();
         colorButtons.clear();
@@ -147,15 +155,15 @@ public class FavoriteColorSelectionScreen extends Screen {
         int desiredHeight = (int)(this.height * 0.7f);
 
         panelWidth = Mth.clamp(
-            desiredWidth,
-            MIN_PANEL_WIDTH,
-            Math.min(MAX_PANEL_WIDTH, this.width - 60)
+                desiredWidth,
+                MIN_PANEL_WIDTH,
+                Math.min(MAX_PANEL_WIDTH, this.width - 60)
         );
 
         panelHeight = Mth.clamp(
-            desiredHeight,
-            MIN_PANEL_HEIGHT,
-            this.height - 60
+                desiredHeight,
+                MIN_PANEL_HEIGHT,
+                this.height - 60
         );
 
         // Center the panel
@@ -176,6 +184,13 @@ public class FavoriteColorSelectionScreen extends Screen {
         }
 
         LOGGER.debug("Selected color: {}", color.getSerializedName());
+    }
+
+    @Override
+    public void removed() {
+        // Restore original GUI scale when screen is closed/removed
+        GuiScaleManager.restoreOriginalGuiScale();
+        super.removed();
     }
 
     @Override
