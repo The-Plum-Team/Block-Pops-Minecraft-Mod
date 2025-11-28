@@ -1,5 +1,7 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\client\gui\FigurePositionScreen.java ==========
 package com.theplumteam.client.gui;
 
+import com.mojang.authlib.GameProfile;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.FigureBlockEntity;
 import com.theplumteam.figure.FigureDefinition;
@@ -19,8 +21,50 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
 public class FigurePositionScreen extends Screen {
     private static final Logger LOGGER = LoggerFactory.getLogger(FigurePositionScreen.class);
+
+    // Cache for UI skin lookups to support Quick Skin compatibility
+    private static final Map<UUID, GameProfile> profileCache = new ConcurrentHashMap<>();
+    private static final Set<UUID> registeredSkins = Collections.newSetFromMap(new ConcurrentHashMap<>());
+
+    // QuickSkin Reflection Helper
+    private static boolean checkedQuickSkin = false;
+    private static boolean quickSkinAvailable = false;
+    private static java.lang.reflect.Method getSkinLocationMethod;
+    private static Object playerAppearanceServiceInstance;
+
+    private static ResourceLocation getQuickSkinLocation(UUID uuid) {
+        if (!checkedQuickSkin) {
+            try {
+                Class<?> serviceClass = Class.forName("com.quickskin.mod.client.services.PlayerAppearanceService");
+                java.lang.reflect.Method getInstanceMethod = serviceClass.getMethod("getInstance");
+                playerAppearanceServiceInstance = getInstanceMethod.invoke(null);
+                getSkinLocationMethod = serviceClass.getMethod("getSkinLocation", UUID.class);
+                quickSkinAvailable = true;
+            } catch (Exception e) {
+                quickSkinAvailable = false;
+            }
+            checkedQuickSkin = true;
+        }
+
+        if (quickSkinAvailable && playerAppearanceServiceInstance != null) {
+            try {
+                return (ResourceLocation) getSkinLocationMethod.invoke(playerAppearanceServiceInstance, uuid);
+            } catch (Exception e) {
+                // Ignore
+            }
+        }
+        return null;
+    }
 
     private final BlockPos blockPos;
     private double offsetX;
@@ -81,9 +125,9 @@ public class FigurePositionScreen extends Screen {
         this.logoScaleY = logoScaleY;
         this.logoScaleZ = logoScaleZ;
         LOGGER.info("FigurePositionScreen opened at {} with offsets: X={}, Y={}, Z={}, Scale={}, HitboxOffsets: X={}, Y={}, Z={}, HitboxScale: X={}, Y={}, Z={}, LogoPos: X={}, Y={}, Z={}, LogoScale: X={}, Y={}, Z={}",
-                    blockPos, offsetX, offsetY, offsetZ, scale, hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ,
-                    hitboxScaleX, hitboxScaleY, hitboxScaleZ,
-                    logoPositionX, logoPositionY, logoPositionZ, logoScaleX, logoScaleY, logoScaleZ);
+                blockPos, offsetX, offsetY, offsetZ, scale, hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ,
+                hitboxScaleX, hitboxScaleY, hitboxScaleZ,
+                logoPositionX, logoPositionY, logoPositionZ, logoScaleX, logoScaleY, logoScaleZ);
     }
 
     // Helper method to add fine-tune buttons next to a slider
@@ -140,8 +184,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderX);
         addFineTuneButtons(col1X + sliderWidth + 2, startY,
-            () -> { offsetX = Math.max(-1.0, offsetX - 0.001); sendUpdate(); },
-            () -> { offsetX = Math.min(1.0, offsetX + 0.001); sendUpdate(); });
+                () -> { offsetX = Math.max(-1.0, offsetX - 0.001); sendUpdate(); },
+                () -> { offsetX = Math.min(1.0, offsetX + 0.001); sendUpdate(); });
 
         // Y Offset Slider (-1 to 1)
         this.sliderY = new AbstractSliderButton(col1X, startY + 25, sliderWidth, 20,
@@ -162,8 +206,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderY);
         addFineTuneButtons(col1X + sliderWidth + 2, startY + 25,
-            () -> { offsetY = Math.max(-1.0, offsetY - 0.001); sendUpdate(); },
-            () -> { offsetY = Math.min(1.0, offsetY + 0.001); sendUpdate(); });
+                () -> { offsetY = Math.max(-1.0, offsetY - 0.001); sendUpdate(); },
+                () -> { offsetY = Math.min(1.0, offsetY + 0.001); sendUpdate(); });
 
         // Z Offset Slider (-1 to 1)
         this.sliderZ = new AbstractSliderButton(col1X, startY + 50, sliderWidth, 20,
@@ -184,8 +228,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderZ);
         addFineTuneButtons(col1X + sliderWidth + 2, startY + 50,
-            () -> { offsetZ = Math.max(-1.0, offsetZ - 0.001); sendUpdate(); },
-            () -> { offsetZ = Math.min(1.0, offsetZ + 0.001); sendUpdate(); });
+                () -> { offsetZ = Math.max(-1.0, offsetZ - 0.001); sendUpdate(); },
+                () -> { offsetZ = Math.min(1.0, offsetZ + 0.001); sendUpdate(); });
 
         // Scale Slider (0.1 to 2.0)
         this.sliderScale = new AbstractSliderButton(col1X, startY + 75, sliderWidth, 20,
@@ -206,8 +250,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderScale);
         addFineTuneButtons(col1X + sliderWidth + 2, startY + 75,
-            () -> { scale = Math.max(0.1, scale - 0.001); sendUpdate(); },
-            () -> { scale = Math.min(2.0, scale + 0.001); sendUpdate(); });
+                () -> { scale = Math.max(0.1, scale - 0.001); sendUpdate(); },
+                () -> { scale = Math.min(2.0, scale + 0.001); sendUpdate(); });
 
         // === COLUMN 2: HITBOX CONTROLS ===
         // Section header is drawn in render() method
@@ -231,8 +275,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderHitboxX);
         addFineTuneButtons(col2X + sliderWidth + 2, startY,
-            () -> { hitboxOffsetX = Math.max(-1.0, hitboxOffsetX - 0.001); sendUpdate(); },
-            () -> { hitboxOffsetX = Math.min(1.0, hitboxOffsetX + 0.001); sendUpdate(); });
+                () -> { hitboxOffsetX = Math.max(-1.0, hitboxOffsetX - 0.001); sendUpdate(); },
+                () -> { hitboxOffsetX = Math.min(1.0, hitboxOffsetX + 0.001); sendUpdate(); });
 
         // Hitbox Y Offset Slider (-1 to 1)
         this.sliderHitboxY = new AbstractSliderButton(col2X, startY + 25, sliderWidth, 20,
@@ -253,8 +297,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderHitboxY);
         addFineTuneButtons(col2X + sliderWidth + 2, startY + 25,
-            () -> { hitboxOffsetY = Math.max(-1.0, hitboxOffsetY - 0.001); sendUpdate(); },
-            () -> { hitboxOffsetY = Math.min(1.0, hitboxOffsetY + 0.001); sendUpdate(); });
+                () -> { hitboxOffsetY = Math.max(-1.0, hitboxOffsetY - 0.001); sendUpdate(); },
+                () -> { hitboxOffsetY = Math.min(1.0, hitboxOffsetY + 0.001); sendUpdate(); });
 
         // Hitbox Z Offset Slider (-1 to 1)
         this.sliderHitboxZ = new AbstractSliderButton(col2X, startY + 50, sliderWidth, 20,
@@ -275,8 +319,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderHitboxZ);
         addFineTuneButtons(col2X + sliderWidth + 2, startY + 50,
-            () -> { hitboxOffsetZ = Math.max(-1.0, hitboxOffsetZ - 0.001); sendUpdate(); },
-            () -> { hitboxOffsetZ = Math.min(1.0, hitboxOffsetZ + 0.001); sendUpdate(); });
+                () -> { hitboxOffsetZ = Math.max(-1.0, hitboxOffsetZ - 0.001); sendUpdate(); },
+                () -> { hitboxOffsetZ = Math.min(1.0, hitboxOffsetZ + 0.001); sendUpdate(); });
 
         // Hitbox Scale X Slider (0.5 to 2.0)
         this.sliderHitboxScaleX = new AbstractSliderButton(col2X, startY + 75, sliderWidth, 20,
@@ -297,8 +341,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderHitboxScaleX);
         addFineTuneButtons(col2X + sliderWidth + 2, startY + 75,
-            () -> { hitboxScaleX = Math.max(0.5, hitboxScaleX - 0.01); sendUpdate(); },
-            () -> { hitboxScaleX = Math.min(2.0, hitboxScaleX + 0.01); sendUpdate(); });
+                () -> { hitboxScaleX = Math.max(0.5, hitboxScaleX - 0.01); sendUpdate(); },
+                () -> { hitboxScaleX = Math.min(2.0, hitboxScaleX + 0.01); sendUpdate(); });
 
         // Hitbox Scale Y Slider (0.5 to 2.0)
         this.sliderHitboxScaleY = new AbstractSliderButton(col2X, startY + 100, sliderWidth, 20,
@@ -319,8 +363,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderHitboxScaleY);
         addFineTuneButtons(col2X + sliderWidth + 2, startY + 100,
-            () -> { hitboxScaleY = Math.max(0.5, hitboxScaleY - 0.01); sendUpdate(); },
-            () -> { hitboxScaleY = Math.min(2.0, hitboxScaleY + 0.01); sendUpdate(); });
+                () -> { hitboxScaleY = Math.max(0.5, hitboxScaleY - 0.01); sendUpdate(); },
+                () -> { hitboxScaleY = Math.min(2.0, hitboxScaleY + 0.01); sendUpdate(); });
 
         // Hitbox Scale Z Slider (0.5 to 2.0)
         this.sliderHitboxScaleZ = new AbstractSliderButton(col2X, startY + 125, sliderWidth, 20,
@@ -341,8 +385,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderHitboxScaleZ);
         addFineTuneButtons(col2X + sliderWidth + 2, startY + 125,
-            () -> { hitboxScaleZ = Math.max(0.5, hitboxScaleZ - 0.01); sendUpdate(); },
-            () -> { hitboxScaleZ = Math.min(2.0, hitboxScaleZ + 0.01); sendUpdate(); });
+                () -> { hitboxScaleZ = Math.max(0.5, hitboxScaleZ - 0.01); sendUpdate(); },
+                () -> { hitboxScaleZ = Math.min(2.0, hitboxScaleZ + 0.01); sendUpdate(); });
 
         // === COLUMN 3: LOGO CONTROLS ===
         // Section header is drawn in render() method
@@ -367,8 +411,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderLogoX);
         addFineTuneButtons(col3X + sliderWidth + 2, startY,
-            () -> { logoPositionX = Math.max(-10.0, (logoPositionX != null ? logoPositionX : 0.0) - 0.001); sendUpdate(); },
-            () -> { logoPositionX = Math.min(10.0, (logoPositionX != null ? logoPositionX : 0.0) + 0.001); sendUpdate(); });
+                () -> { logoPositionX = Math.max(-10.0, (logoPositionX != null ? logoPositionX : 0.0) - 0.001); sendUpdate(); },
+                () -> { logoPositionX = Math.min(10.0, (logoPositionX != null ? logoPositionX : 0.0) + 0.001); sendUpdate(); });
 
         // Logo Y Position Slider (Vertical: up-down) (-10 to 10 model units)
         double logoY = logoPositionY != null ? logoPositionY : 0.0;
@@ -390,8 +434,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderLogoY);
         addFineTuneButtons(col3X + sliderWidth + 2, startY + 25,
-            () -> { logoPositionY = Math.max(-10.0, (logoPositionY != null ? logoPositionY : 0.0) - 0.001); sendUpdate(); },
-            () -> { logoPositionY = Math.min(10.0, (logoPositionY != null ? logoPositionY : 0.0) + 0.001); sendUpdate(); });
+                () -> { logoPositionY = Math.max(-10.0, (logoPositionY != null ? logoPositionY : 0.0) - 0.001); sendUpdate(); },
+                () -> { logoPositionY = Math.min(10.0, (logoPositionY != null ? logoPositionY : 0.0) + 0.001); sendUpdate(); });
 
         // Logo Z Position Slider (Horizontal: left-right) (-10 to 10 model units)
         double logoZ = logoPositionZ != null ? logoPositionZ : 0.0;
@@ -413,8 +457,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderLogoZ);
         addFineTuneButtons(col3X + sliderWidth + 2, startY + 50,
-            () -> { logoPositionZ = Math.max(-10.0, (logoPositionZ != null ? logoPositionZ : 0.0) - 0.001); sendUpdate(); },
-            () -> { logoPositionZ = Math.min(10.0, (logoPositionZ != null ? logoPositionZ : 0.0) + 0.001); sendUpdate(); });
+                () -> { logoPositionZ = Math.max(-10.0, (logoPositionZ != null ? logoPositionZ : 0.0) - 0.001); sendUpdate(); },
+                () -> { logoPositionZ = Math.min(10.0, (logoPositionZ != null ? logoPositionZ : 0.0) + 0.001); sendUpdate(); });
 
         // Logo X Scale Slider (0.5 to 10)
         double scaleX = logoScaleX != null ? logoScaleX : 5.0;
@@ -436,8 +480,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderLogoScaleX);
         addFineTuneButtons(col3X + sliderWidth + 2, startY + 75,
-            () -> { logoScaleX = Math.max(0.5, (logoScaleX != null ? logoScaleX : 5.0) - 0.001); sendUpdate(); },
-            () -> { logoScaleX = Math.min(10.0, (logoScaleX != null ? logoScaleX : 5.0) + 0.001); sendUpdate(); });
+                () -> { logoScaleX = Math.max(0.5, (logoScaleX != null ? logoScaleX : 5.0) - 0.001); sendUpdate(); },
+                () -> { logoScaleX = Math.min(10.0, (logoScaleX != null ? logoScaleX : 5.0) + 0.001); sendUpdate(); });
 
         // Logo Y Scale Slider (0.5 to 10)
         double scaleY = logoScaleY != null ? logoScaleY : 5.0;
@@ -459,8 +503,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderLogoScaleY);
         addFineTuneButtons(col3X + sliderWidth + 2, startY + 100,
-            () -> { logoScaleY = Math.max(0.5, (logoScaleY != null ? logoScaleY : 5.0) - 0.001); sendUpdate(); },
-            () -> { logoScaleY = Math.min(10.0, (logoScaleY != null ? logoScaleY : 5.0) + 0.001); sendUpdate(); });
+                () -> { logoScaleY = Math.max(0.5, (logoScaleY != null ? logoScaleY : 5.0) - 0.001); sendUpdate(); },
+                () -> { logoScaleY = Math.min(10.0, (logoScaleY != null ? logoScaleY : 5.0) + 0.001); sendUpdate(); });
 
         // Logo Z Scale Slider (0.5 to 10)
         double scaleZ = logoScaleZ != null ? logoScaleZ : 1.0;
@@ -482,8 +526,8 @@ public class FigurePositionScreen extends Screen {
         };
         this.addRenderableWidget(sliderLogoScaleZ);
         addFineTuneButtons(col3X + sliderWidth + 2, startY + 125,
-            () -> { logoScaleZ = Math.max(0.5, (logoScaleZ != null ? logoScaleZ : 1.0) - 0.001); sendUpdate(); },
-            () -> { logoScaleZ = Math.min(10.0, (logoScaleZ != null ? logoScaleZ : 1.0) + 0.001); sendUpdate(); });
+                () -> { logoScaleZ = Math.max(0.5, (logoScaleZ != null ? logoScaleZ : 1.0) - 0.001); sendUpdate(); },
+                () -> { logoScaleZ = Math.min(10.0, (logoScaleZ != null ? logoScaleZ : 1.0) + 0.001); sendUpdate(); });
 
         // === COPY BUTTONS ===
         int copyButtonY = startY + 160;
@@ -492,26 +536,26 @@ public class FigurePositionScreen extends Screen {
         // Copy Figure Position
         this.addRenderableWidget(Button.builder(Component.literal("Copy Figure"), button -> {
             String data = String.format("Figure: X=%.3f Y=%.3f Z=%.3f Scale=%.3f",
-                offsetX, offsetY, offsetZ, scale);
+                    offsetX, offsetY, offsetZ, scale);
             minecraft.keyboardHandler.setClipboard(data);
         }).bounds(centerX - 100, copyButtonY, copyButtonWidth, 20).build());
 
         // Copy Hitbox
         this.addRenderableWidget(Button.builder(Component.literal("Copy Hitbox"), button -> {
             String data = String.format("Hitbox: X=%.3f Y=%.3f Z=%.3f",
-                hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ);
+                    hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ);
             minecraft.keyboardHandler.setClipboard(data);
         }).bounds(centerX + 5, copyButtonY, copyButtonWidth, 20).build());
 
         // Copy Logo
         this.addRenderableWidget(Button.builder(Component.literal("Copy Logo"), button -> {
             String data = String.format("Logo: X=%.3f Y=%.3f Z=%.3f Width=%.3f Height=%.3f Depth=%.3f",
-                logoPositionX != null ? logoPositionX : 0.0,
-                logoPositionY != null ? logoPositionY : 0.0,
-                logoPositionZ != null ? logoPositionZ : 0.0,
-                logoScaleX != null ? logoScaleX : 5.0,
-                logoScaleY != null ? logoScaleY : 5.0,
-                logoScaleZ != null ? logoScaleZ : 1.0);
+                    logoPositionX != null ? logoPositionX : 0.0,
+                    logoPositionY != null ? logoPositionY : 0.0,
+                    logoPositionZ != null ? logoPositionZ : 0.0,
+                    logoScaleX != null ? logoScaleX : 5.0,
+                    logoScaleY != null ? logoScaleY : 5.0,
+                    logoScaleZ != null ? logoScaleZ : 1.0);
             minecraft.keyboardHandler.setClipboard(data);
         }).bounds(centerX - 45, copyButtonY + 25, copyButtonWidth, 20).build());
 
@@ -644,8 +688,23 @@ public class FigurePositionScreen extends Screen {
 
             // Check if this is a player figure
             if (figure.getType() == com.theplumteam.figure.FigureType.PLAYER && figure.getPlayerUUID() != null) {
-                com.mojang.authlib.GameProfile gameProfile = new com.mojang.authlib.GameProfile(figure.getPlayerUUID(), figure.getName());
-                return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(gameProfile);
+                // Check QuickSkin (Live Override)
+                ResourceLocation quickSkinLoc = getQuickSkinLocation(figure.getPlayerUUID());
+                if (quickSkinLoc != null) {
+                    return quickSkinLoc;
+                }
+
+                // Fallback to Mojang/Live Skins
+                GameProfile profile = profileCache.computeIfAbsent(figure.getPlayerUUID(), uuid ->
+                        new GameProfile(uuid, figure.getName()));
+
+                // Only trigger registration once per UUID locally
+                if (registeredSkins.add(figure.getPlayerUUID())) {
+                    // Pass 'false' for requireSecure to allow skins from Quick Skin / local server / offline mode
+                    Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, p) -> {}, false);
+                }
+
+                return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
             }
 
             // Static figure
@@ -665,14 +724,14 @@ public class FigurePositionScreen extends Screen {
     private void sendUpdate() {
         // Send packet to server with new values
         LOGGER.info("Sending update - Position: {}, Offsets: X={}, Y={}, Z={}, Scale={}, HitboxOffsets: X={}, Y={}, Z={}, HitboxScale: X={}, Y={}, Z={}, LogoPos: X={}, Y={}, Z={}, LogoScale: X={}, Y={}, Z={}",
-                    blockPos, offsetX, offsetY, offsetZ, scale, hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ,
-                    hitboxScaleX, hitboxScaleY, hitboxScaleZ,
-                    logoPositionX, logoPositionY, logoPositionZ, logoScaleX, logoScaleY, logoScaleZ);
+                blockPos, offsetX, offsetY, offsetZ, scale, hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ,
+                hitboxScaleX, hitboxScaleY, hitboxScaleZ,
+                logoPositionX, logoPositionY, logoPositionZ, logoScaleX, logoScaleY, logoScaleZ);
         FigurePositionPacket packet = new FigurePositionPacket(blockPos, offsetX, offsetY, offsetZ, scale,
-                                                               hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ,
-                                                               hitboxScaleX, hitboxScaleY, hitboxScaleZ,
-                                                               logoPositionX, logoPositionY, logoPositionZ,
-                                                               logoScaleX, logoScaleY, logoScaleZ);
+                hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ,
+                hitboxScaleX, hitboxScaleY, hitboxScaleZ,
+                logoPositionX, logoPositionY, logoPositionZ,
+                logoScaleX, logoScaleY, logoScaleZ);
         BlockPopsModForge.NETWORK_CHANNEL.sendToServer(packet);
     }
 

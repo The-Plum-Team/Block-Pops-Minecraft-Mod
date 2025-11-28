@@ -1,3 +1,4 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\blockentity\BoxBlockEntity.java ==========
 package com.theplumteam.blockentity;
 
 import com.theplumteam.block.BoxBlock;
@@ -43,7 +44,8 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     private String colorOverride = null; // For color variant boxes
     private boolean isFigureExtracted = false; // Whether the figure has been taken out
     private int alternativeSkinIndex = 0; // 0 is default, 1+ are from the alternatives list
-    private String skinSnapshot = null; // Saved skin snapshot URL for player figures
+    private String skinSnapshot = null; // Saved skin snapshot URL for player figures (Mojang)
+    private String quickSkinId = null; // Saved Quick Skin ID (for Quick Skin mod compatibility)
 
     // Figure positioning - correct values found through testing
     private double figureOffsetX = -0.53;
@@ -82,8 +84,6 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         // Controller for the box model animations with state-based logic
         controllers.add(new AnimationController<>(this, "box_controller", 0, state -> {
             // Skip animations for UI rendering (entities at BlockPos.ZERO)
-            // This prevents "Unable to find animation" warnings in inventory/GUI
-            // The visual state is determined by the model's default pose
             if (getBlockPos().equals(BlockPos.ZERO)) {
                 return PlayState.STOP;
             }
@@ -95,12 +95,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
             // If the box is closed, play the idle animation
             return state.setAndContinue(IDLE_ANIMATION);
         })
-        .triggerableAnim("open", OPEN_ANIMATION)
-        .triggerableAnim("close", CLOSE_ANIMATION)
-        .setAnimationSpeed(1.2)); // 20% faster animations
-
-        // Note: Figure animations are handled by the separate figure renderer
-        // No controller needed here since we're using a separate GeoBlockRenderer for the figure
+                .triggerableAnim("open", OPEN_ANIMATION)
+                .triggerableAnim("close", CLOSE_ANIMATION)
+                .setAnimationSpeed(1.2)); // 20% faster animations
     }
 
     @Override
@@ -110,23 +107,16 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     /**
      * Gets the collection ID stored in NBT.
-     * Collection is now determined by NBT data, not by block type.
      */
     public String getCollectionId() {
-        // Return the stored collection ID (may be null/empty)
         if (collectionIdOverride != null && !collectionIdOverride.isEmpty()) {
             return collectionIdOverride;
         }
-        // If no collection is set, return default collection
         return CollectionRegistry.getDefaultCollection()
                 .map(collection -> collection.getId())
                 .orElse("");
     }
 
-    /**
-     * Gets the color stored in NBT for this box.
-     * @return The PopBlockColor, or null if not set
-     */
     @Nullable
     public com.theplumteam.block.PopBlockColor getColor() {
         if (colorOverride != null && !colorOverride.isEmpty()) {
@@ -139,16 +129,10 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         return null;
     }
 
-    /**
-     * Gets the ID of the figure currently in this box
-     */
     public String getFigureId() {
         return figureId;
     }
 
-    /**
-     * Sets which figure is in this box (by figure ID within the collection)
-     */
     public void setFigureId(String figureId) {
         this.figureId = figureId != null ? figureId : "";
         setChanged();
@@ -157,9 +141,6 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
     }
 
-    /**
-     * Gets the full FigureDefinition for the current figure
-     */
     public FigureDefinition getFigureDefinition() {
         if (figureId.isEmpty()) {
             return null;
@@ -167,23 +148,14 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         return CollectionRegistry.getFigure(getCollectionId(), figureId).orElse(null);
     }
 
-    /**
-     * Checks if this box currently contains a figure
-     */
     public boolean hasFigure() {
         return !figureId.isEmpty() && getFigureDefinition() != null;
     }
 
-    /**
-     * Checks if the figure has been extracted from the box
-     */
     public boolean isFigureExtracted() {
         return isFigureExtracted;
     }
 
-    /**
-     * Sets whether the figure has been extracted from the box
-     */
     public void setFigureExtracted(boolean extracted) {
         this.isFigureExtracted = extracted;
         setChanged();
@@ -192,21 +164,10 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
     }
 
-    public double getFigureOffsetX() {
-        return figureOffsetX;
-    }
-
-    public double getFigureOffsetY() {
-        return figureOffsetY;
-    }
-
-    public double getFigureOffsetZ() {
-        return figureOffsetZ;
-    }
-
-    public double getFigureScale() {
-        return figureScale;
-    }
+    public double getFigureOffsetX() { return figureOffsetX; }
+    public double getFigureOffsetY() { return figureOffsetY; }
+    public double getFigureOffsetZ() { return figureOffsetZ; }
+    public double getFigureScale() { return figureScale; }
 
     public void setFigureOffset(double x, double y, double z) {
         this.figureOffsetX = x;
@@ -226,29 +187,12 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
     }
 
-    public double getHitboxOffsetX() {
-        return hitboxOffsetX;
-    }
-
-    public double getHitboxOffsetY() {
-        return hitboxOffsetY;
-    }
-
-    public double getHitboxOffsetZ() {
-        return hitboxOffsetZ;
-    }
-
-    public double getHitboxScaleX() {
-        return hitboxScaleX;
-    }
-
-    public double getHitboxScaleY() {
-        return hitboxScaleY;
-    }
-
-    public double getHitboxScaleZ() {
-        return hitboxScaleZ;
-    }
+    public double getHitboxOffsetX() { return hitboxOffsetX; }
+    public double getHitboxOffsetY() { return hitboxOffsetY; }
+    public double getHitboxOffsetZ() { return hitboxOffsetZ; }
+    public double getHitboxScaleX() { return hitboxScaleX; }
+    public double getHitboxScaleY() { return hitboxScaleY; }
+    public double getHitboxScaleZ() { return hitboxScaleZ; }
 
     public void setHitboxOffset(double x, double y, double z) {
         this.hitboxOffsetX = x;
@@ -270,33 +214,13 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
     }
 
-    public Double getLogoPositionX() {
-        return logoPositionX;
-    }
-
-    public Double getLogoPositionY() {
-        return logoPositionY;
-    }
-
-    public Double getLogoPositionZ() {
-        return logoPositionZ;
-    }
-
-    public Double getLogoScaleX() {
-        return logoScaleX;
-    }
-
-    public Double getLogoScaleY() {
-        return logoScaleY;
-    }
-
-    public Double getLogoScaleZ() {
-        return logoScaleZ;
-    }
-
-    public boolean isHideLogo() {
-        return hideLogo;
-    }
+    public Double getLogoPositionX() { return logoPositionX; }
+    public Double getLogoPositionY() { return logoPositionY; }
+    public Double getLogoPositionZ() { return logoPositionZ; }
+    public Double getLogoScaleX() { return logoScaleX; }
+    public Double getLogoScaleY() { return logoScaleY; }
+    public Double getLogoScaleZ() { return logoScaleZ; }
+    public boolean isHideLogo() { return hideLogo; }
 
     public void setLogoPosition(Double x, Double y, Double z) {
         this.logoPositionX = x;
@@ -318,12 +242,83 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
     }
 
-    /**
-     * Sets the collection ID override (used for dynamic collections like world_players)
-     */
     public void setCollectionIdOverride(String collectionId) {
         this.collectionIdOverride = collectionId;
         setChanged();
+    }
+
+    public int getAlternativeSkinIndex() {
+        return alternativeSkinIndex;
+    }
+
+    public String getSkinSnapshot() {
+        return skinSnapshot;
+    }
+
+    public void setSkinSnapshot(String skinSnapshot) {
+        this.skinSnapshot = skinSnapshot;
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        }
+    }
+
+    /**
+     * Gets the stored Quick Skin ID for this figure.
+     * @return The Quick Skin ID string (e.g. "local_skin:HASH"), or null if not set.
+     */
+    public String getQuickSkinId() {
+        return quickSkinId;
+    }
+
+    /**
+     * Sets the Quick Skin ID for this figure.
+     */
+    public void setQuickSkinId(String quickSkinId) {
+        this.quickSkinId = quickSkinId;
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        }
+    }
+
+    public void cycleAlternativeSkin() {
+        FigureDefinition def = getFigureDefinition();
+        if (def == null || !def.hasAlternatives()) {
+            return;
+        }
+        int totalSkins = 1 + def.getAlternatives().size();
+        this.alternativeSkinIndex = (this.alternativeSkinIndex + 1) % totalSkins;
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        }
+    }
+
+    public boolean isOpen() {
+        return isOpen;
+    }
+
+    public void toggleOpen() {
+        if (level != null && !level.isClientSide) {
+            isOpen = !isOpen;
+            if (isOpen) {
+                triggerAnim("box_controller", "open");
+            } else {
+                triggerAnim("box_controller", "close");
+            }
+            setChanged();
+            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        }
+    }
+
+    @Deprecated
+    public void triggerOpenAnimation() {
+        if (level != null && !level.isClientSide) {
+            if (!isOpen) {
+                toggleOpen();
+            }
+        }
     }
 
     @Override
@@ -333,15 +328,10 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         tag.putString("FigureId", figureId);
         tag.putBoolean("IsFigureExtracted", isFigureExtracted);
         tag.putInt("AlternativeSkinIndex", alternativeSkinIndex);
-        if (skinSnapshot != null) {
-            tag.putString("SkinSnapshot", skinSnapshot);
-        }
-        if (collectionIdOverride != null) {
-            tag.putString("CollectionId", collectionIdOverride);
-        }
-        if (colorOverride != null) {
-            tag.putString("Color", colorOverride);
-        }
+        if (skinSnapshot != null) tag.putString("SkinSnapshot", skinSnapshot);
+        if (quickSkinId != null) tag.putString("QuickSkinId", quickSkinId);
+        if (collectionIdOverride != null) tag.putString("CollectionId", collectionIdOverride);
+        if (colorOverride != null) tag.putString("Color", colorOverride);
         tag.putDouble("FigureOffsetX", figureOffsetX);
         tag.putDouble("FigureOffsetY", figureOffsetY);
         tag.putDouble("FigureOffsetZ", figureOffsetZ);
@@ -352,119 +342,45 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         tag.putDouble("HitboxScaleX", hitboxScaleX);
         tag.putDouble("HitboxScaleY", hitboxScaleY);
         tag.putDouble("HitboxScaleZ", hitboxScaleZ);
-        if (logoPositionX != null) {
-            tag.putDouble("LogoPositionX", logoPositionX);
-        }
-        if (logoPositionY != null) {
-            tag.putDouble("LogoPositionY", logoPositionY);
-        }
-        if (logoPositionZ != null) {
-            tag.putDouble("LogoPositionZ", logoPositionZ);
-        }
-        if (logoScaleX != null) {
-            tag.putDouble("LogoScaleX", logoScaleX);
-        }
-        if (logoScaleY != null) {
-            tag.putDouble("LogoScaleY", logoScaleY);
-        }
+        if (logoPositionX != null) tag.putDouble("LogoPositionX", logoPositionX);
+        if (logoPositionY != null) tag.putDouble("LogoPositionY", logoPositionY);
+        if (logoPositionZ != null) tag.putDouble("LogoPositionZ", logoPositionZ);
+        if (logoScaleX != null) tag.putDouble("LogoScaleX", logoScaleX);
+        if (logoScaleY != null) tag.putDouble("LogoScaleY", logoScaleY);
         tag.putBoolean("HideLogo", hideLogo);
     }
 
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
-        // Always set values explicitly to avoid state pollution
         this.isOpen = tag.contains("IsOpen") ? tag.getBoolean("IsOpen") : false;
-
-        if (tag.contains("FigureId")) {
-            this.figureId = tag.getString("FigureId");
-        }
-        if (tag.contains("IsFigureExtracted")) {
-            this.isFigureExtracted = tag.getBoolean("IsFigureExtracted");
-        }
-        if (tag.contains("AlternativeSkinIndex")) {
-            this.alternativeSkinIndex = tag.getInt("AlternativeSkinIndex");
-        }
-        if (tag.contains("SkinSnapshot", 8)) { // 8 is Tag.TAG_STRING
-            this.skinSnapshot = tag.getString("SkinSnapshot");
-        } else {
-            this.skinSnapshot = null;
-        }
-        if (tag.contains("CollectionId")) {
-            this.collectionIdOverride = tag.getString("CollectionId");
-        }
-        if (tag.contains("Color")) {
-            this.colorOverride = tag.getString("Color");
-        }
-        if (tag.contains("FigureOffsetX")) {
-            this.figureOffsetX = tag.getDouble("FigureOffsetX");
-        }
-        if (tag.contains("FigureOffsetY")) {
-            this.figureOffsetY = tag.getDouble("FigureOffsetY");
-        }
-        if (tag.contains("FigureOffsetZ")) {
-            this.figureOffsetZ = tag.getDouble("FigureOffsetZ");
-        }
-        if (tag.contains("FigureScale")) {
-            this.figureScale = tag.getDouble("FigureScale");
-        }
-        if (tag.contains("HitboxOffsetX")) {
-            this.hitboxOffsetX = tag.getDouble("HitboxOffsetX");
-        }
-        if (tag.contains("HitboxOffsetY")) {
-            this.hitboxOffsetY = tag.getDouble("HitboxOffsetY");
-        }
-        if (tag.contains("HitboxOffsetZ")) {
-            this.hitboxOffsetZ = tag.getDouble("HitboxOffsetZ");
-        }
-        if (tag.contains("HitboxScaleX")) {
-            this.hitboxScaleX = tag.getDouble("HitboxScaleX");
-        }
-        if (tag.contains("HitboxScaleY")) {
-            this.hitboxScaleY = tag.getDouble("HitboxScaleY");
-        }
-        if (tag.contains("HitboxScaleZ")) {
-            this.hitboxScaleZ = tag.getDouble("HitboxScaleZ");
-        }
-        if (tag.contains("LogoPositionX")) {
-            this.logoPositionX = tag.getDouble("LogoPositionX");
-        } else {
-            this.logoPositionX = null;
-        }
-        if (tag.contains("LogoPositionY")) {
-            this.logoPositionY = tag.getDouble("LogoPositionY");
-        } else {
-            this.logoPositionY = null;
-        }
-        if (tag.contains("LogoPositionZ")) {
-            this.logoPositionZ = tag.getDouble("LogoPositionZ");
-        } else {
-            this.logoPositionZ = null;
-        }
-        if (tag.contains("LogoScaleX")) {
-            this.logoScaleX = tag.getDouble("LogoScaleX");
-        } else {
-            this.logoScaleX = null;
-        }
-        if (tag.contains("LogoScaleY")) {
-            this.logoScaleY = tag.getDouble("LogoScaleY");
-        } else {
-            this.logoScaleY = null;
-        }
-        if (tag.contains("HideLogo")) {
-            this.hideLogo = tag.getBoolean("HideLogo");
-        }
+        if (tag.contains("FigureId")) this.figureId = tag.getString("FigureId");
+        if (tag.contains("IsFigureExtracted")) this.isFigureExtracted = tag.getBoolean("IsFigureExtracted");
+        if (tag.contains("AlternativeSkinIndex")) this.alternativeSkinIndex = tag.getInt("AlternativeSkinIndex");
+        this.skinSnapshot = tag.contains("SkinSnapshot", 8) ? tag.getString("SkinSnapshot") : null;
+        this.quickSkinId = tag.contains("QuickSkinId", 8) ? tag.getString("QuickSkinId") : null;
+        if (tag.contains("CollectionId")) this.collectionIdOverride = tag.getString("CollectionId");
+        if (tag.contains("Color")) this.colorOverride = tag.getString("Color");
+        if (tag.contains("FigureOffsetX")) this.figureOffsetX = tag.getDouble("FigureOffsetX");
+        if (tag.contains("FigureOffsetY")) this.figureOffsetY = tag.getDouble("FigureOffsetY");
+        if (tag.contains("FigureOffsetZ")) this.figureOffsetZ = tag.getDouble("FigureOffsetZ");
+        if (tag.contains("FigureScale")) this.figureScale = tag.getDouble("FigureScale");
+        if (tag.contains("HitboxOffsetX")) this.hitboxOffsetX = tag.getDouble("HitboxOffsetX");
+        if (tag.contains("HitboxOffsetY")) this.hitboxOffsetY = tag.getDouble("HitboxOffsetY");
+        if (tag.contains("HitboxOffsetZ")) this.hitboxOffsetZ = tag.getDouble("HitboxOffsetZ");
+        if (tag.contains("HitboxScaleX")) this.hitboxScaleX = tag.getDouble("HitboxScaleX");
+        if (tag.contains("HitboxScaleY")) this.hitboxScaleY = tag.getDouble("HitboxScaleY");
+        if (tag.contains("HitboxScaleZ")) this.hitboxScaleZ = tag.getDouble("HitboxScaleZ");
+        this.logoPositionX = tag.contains("LogoPositionX") ? tag.getDouble("LogoPositionX") : null;
+        this.logoPositionY = tag.contains("LogoPositionY") ? tag.getDouble("LogoPositionY") : null;
+        this.logoPositionZ = tag.contains("LogoPositionZ") ? tag.getDouble("LogoPositionZ") : null;
+        this.logoScaleX = tag.contains("LogoScaleX") ? tag.getDouble("LogoScaleX") : null;
+        this.logoScaleY = tag.contains("LogoScaleY") ? tag.getDouble("LogoScaleY") : null;
+        if (tag.contains("HideLogo")) this.hideLogo = tag.getBoolean("HideLogo");
     }
-
-    // ===== CHUNK LOAD SYNCHRONIZATION =====
-    // getUpdateTag() and handleUpdateTag() are used when chunks are loaded
-    // NOTE: getUpdateTag() is ALSO used by getUpdatePacket() for real-time sync!
-    // These ensure the client has the correct data when entering the area
 
     @Override
     public CompoundTag getUpdateTag() {
-        // This is sent to the client when the chunk loads AND for real-time updates
-        // ClientboundBlockEntityDataPacket.create(this) internally calls this method
         CompoundTag tag = super.getUpdateTag();
         saveAdditional(tag);
         return tag;
@@ -472,129 +388,30 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     @Override
     public void handleUpdateTag(CompoundTag tag) {
-        // This is received on the client during chunk load
         load(tag);
     }
 
-    // ===== REAL-TIME SYNCHRONIZATION =====
-    // getUpdatePacket() and onDataPacket() are used for real-time updates
-    // These are triggered by level.sendBlockUpdated() and deliver changes immediately
-
     @Override
     public Packet<ClientGamePacketListener> getUpdatePacket() {
-        // Creates a packet for real-time synchronization
-        // Called on the server when level.sendBlockUpdated() is invoked
-        // ClientboundBlockEntityDataPacket.create(this) calls getUpdateTag() to get the data
         return ClientboundBlockEntityDataPacket.create(this);
     }
 
     @Override
     public void onDataPacket(Connection connection, ClientboundBlockEntityDataPacket packet) {
-        // Receives the packet on the client for real-time updates
-        // This is what actually makes the changes appear immediately
         CompoundTag tag = packet.getTag();
         if (tag != null) {
             load(tag);
-            // Request a render update so the changes are visible immediately
             if (level != null && level.isClientSide) {
                 level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
             }
         }
     }
 
-    /**
-     * Saves this block entity's data to an ItemStack
-     */
     public void saveToItem(net.minecraft.world.item.ItemStack stack) {
         CompoundTag tag = new CompoundTag();
         saveAdditional(tag);
-        // Always drop the box in closed state
         tag.putBoolean("IsOpen", false);
         stack.addTagElement("BlockEntityTag", tag);
-    }
-
-    /**
-     * Gets the current alternative skin index
-     */
-    public int getAlternativeSkinIndex() {
-        return alternativeSkinIndex;
-    }
-
-    /**
-     * Gets the saved skin snapshot URL for this figure.
-     * @return The skin snapshot URL, or null if not set.
-     */
-    public String getSkinSnapshot() {
-        return skinSnapshot;
-    }
-
-    /**
-     * Sets the skin snapshot URL for this figure.
-     */
-    public void setSkinSnapshot(String skinSnapshot) {
-        this.skinSnapshot = skinSnapshot;
-        setChanged();
-        if (level != null && !level.isClientSide) {
-            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
-        }
-    }
-
-    /**
-     * Cycles to the next alternative skin
-     */
-    public void cycleAlternativeSkin() {
-        FigureDefinition def = getFigureDefinition();
-        if (def == null || !def.hasAlternatives()) {
-            return; // No figure or no alternatives to cycle.
-        }
-
-        int totalSkins = 1 + def.getAlternatives().size(); // 1 for the default skin
-        this.alternativeSkinIndex = (this.alternativeSkinIndex + 1) % totalSkins;
-
-        // Mark for saving and send an update to the client.
-        setChanged();
-        if (level != null && !level.isClientSide) {
-            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
-        }
-    }
-
-    /**
-     * Checks if the box is currently open
-     */
-    public boolean isOpen() {
-        return isOpen;
-    }
-
-    /**
-     * Toggles the box between open and closed states
-     */
-    public void toggleOpen() {
-        if (level != null && !level.isClientSide) {
-            isOpen = !isOpen;
-
-            // Trigger the appropriate animation
-            if (isOpen) {
-                triggerAnim("box_controller", "open");
-            } else {
-                triggerAnim("box_controller", "close");
-            }
-
-            setChanged();
-            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
-        }
-    }
-
-    /**
-     * Triggers the box opening animation (legacy method for compatibility)
-     * @deprecated Use toggleOpen() instead
-     */
-    @Deprecated
-    public void triggerOpenAnimation() {
-        if (level != null && !level.isClientSide) {
-            if (!isOpen) {
-                toggleOpen();
-            }
-        }
     }
 
     public static <T extends BlockEntity> void tick(Level level, BlockPos pos, BlockState state, T blockEntity) {

@@ -1,15 +1,15 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\client\model\FigureModel.java ==========
 package com.theplumteam.client.model;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
-import com.theplumteam.BlockPopsMod;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.model.GeoModel;
@@ -20,8 +20,56 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class FigureModel extends GeoModel<BoxBlockEntity> {
     private static final ResourceLocation FALLBACK_TEXTURE = new ResourceLocation("minecraft", "textures/entity/steve.png");
+
     private static final Map<String, GameProfile> snapshotProfileCache = new ConcurrentHashMap<>();
     private static final Map<String, Boolean> snapshotRegistrationCache = new ConcurrentHashMap<>();
+    private static final Map<UUID, GameProfile> liveProfileCache = new ConcurrentHashMap<>();
+    private static final Map<UUID, Boolean> liveRegistrationCache = new ConcurrentHashMap<>();
+
+    // QuickSkin Reflection
+    private static boolean checkedQuickSkin = false;
+    private static boolean quickSkinAvailable = false;
+    private static java.lang.reflect.Method getSkinLocationMethod; // From SkinService
+    private static Object skinServiceInstance;
+
+    private static ResourceLocation resolveQuickSkinId(String skinId) {
+        if (!checkedQuickSkin) {
+            try {
+                // Use SkinService to resolve arbitrary skin IDs (local_skin:HASH)
+                Class<?> serviceClass = Class.forName("com.quickskin.mod.client.services.SkinService");
+                java.lang.reflect.Method getInstanceMethod = serviceClass.getMethod("getInstance");
+                skinServiceInstance = getInstanceMethod.invoke(null);
+                // getSkinLocation(UUID, String) - UUID can be null for local skins
+                getSkinLocationMethod = serviceClass.getMethod("getSkinLocation", UUID.class, String.class);
+                quickSkinAvailable = true;
+            } catch (Exception e) {
+                quickSkinAvailable = false;
+            }
+            checkedQuickSkin = true;
+        }
+
+        if (quickSkinAvailable && skinServiceInstance != null && skinId != null) {
+            try {
+                return (ResourceLocation) getSkinLocationMethod.invoke(skinServiceInstance, null, skinId);
+            } catch (Exception e) {
+                // Ignore
+            }
+        }
+        return null;
+    }
+
+    // Helper for live lookup (via PlayerAppearanceService)
+    private static ResourceLocation getLiveQuickSkin(UUID uuid) {
+        try {
+            Class<?> serviceClass = Class.forName("com.quickskin.mod.client.services.PlayerAppearanceService");
+            java.lang.reflect.Method getInstanceMethod = serviceClass.getMethod("getInstance");
+            Object instance = getInstanceMethod.invoke(null);
+            java.lang.reflect.Method getLocMethod = serviceClass.getMethod("getSkinLocation", UUID.class);
+            return (ResourceLocation) getLocMethod.invoke(instance, uuid);
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
     @Override
     public ResourceLocation getModelResource(BoxBlockEntity animatable) {
@@ -43,46 +91,48 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
         }
 
         if (figure.getType() == FigureType.PLAYER && figure.getPlayerUUID() != null) {
-            // 1. ALWAYS prioritize the snapshot stored in NBT for placed blocks and items.
+            // 1. Quick Skin Snapshot (from NBT) - PRIORITY #1
+            // If the box was created while the player had a Quick Skin, use that stored ID.
+            String qsId = animatable.getQuickSkinId();
+            if (qsId != null && !qsId.isEmpty()) {
+                ResourceLocation loc = resolveQuickSkinId(qsId);
+                if (loc != null) return loc;
+            }
+
+            // 2. Mojang Snapshot (from NBT) - PRIORITY #2
             String nbtSnapshot = animatable.getSkinSnapshot();
             if (nbtSnapshot != null && !nbtSnapshot.isEmpty()) {
                 return getSkinLocationFromSnapshot(figure, nbtSnapshot);
             }
 
-            // 2. For UI previews (BlockPos.ZERO), we want the live skin.
-            if (animatable.getBlockPos().equals(BlockPos.ZERO)) {
-                // First, check if we can find the live player info (most reliable)
-                if (Minecraft.getInstance().getConnection() != null) {
-                    PlayerInfo playerInfo = Minecraft.getInstance().getConnection().getPlayerInfo(figure.getPlayerUUID());
-                    if (playerInfo != null) {
-                        return playerInfo.getSkinLocation();
-                    }
-                }
-
-                // If not found live, try falling back to the discovery snapshot so we at least show something custom in the menu
-                String uniqueFigureId = animatable.getCollectionId() + ":" + animatable.getFigureId();
-                String discoverySnapshot = ClientDiscoveryManager.getFigureSkin(uniqueFigureId);
-                if (discoverySnapshot != null && !discoverySnapshot.isEmpty()) {
-                    return getSkinLocationFromSnapshot(figure, discoverySnapshot);
-                }
-
-                // Final fallback: Create profile and force registration (will eventually load)
-                GameProfile liveProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
-                Minecraft.getInstance().getSkinManager().registerSkins(liveProfile, (type, location, profile) -> {}, true);
-                return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(liveProfile);
+            // 3. Live Quick Skin - PRIORITY #3
+            // Fallback if no snapshot exists (e.g. preview before drop).
+            if (quickSkinAvailable) {
+                ResourceLocation liveQS = getLiveQuickSkin(figure.getPlayerUUID());
+                if (liveQS != null) return liveQS;
             }
 
-            // 3. Fallback for legacy placed blocks that have no snapshot in NBT.
+            // 4. Live Mojang Skin - PRIORITY #4
+            if (animatable.getBlockPos().equals(BlockPos.ZERO) && Minecraft.getInstance().getConnection() != null) {
+                PlayerInfo info = Minecraft.getInstance().getConnection().getPlayerInfo(figure.getPlayerUUID());
+                if (info != null) return info.getSkinLocation();
+            }
+
+            // 5. Discovery Snapshot Fallback
             String uniqueFigureId = animatable.getCollectionId() + ":" + animatable.getFigureId();
             String discoverySnapshot = ClientDiscoveryManager.getFigureSkin(uniqueFigureId);
             if (discoverySnapshot != null && !discoverySnapshot.isEmpty()) {
                 return getSkinLocationFromSnapshot(figure, discoverySnapshot);
             }
 
-            // 4. Final, absolute fallback: fetch the live skin.
-            GameProfile finalFallbackProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
-            Minecraft.getInstance().getSkinManager().registerSkins(finalFallbackProfile, (type, location, profile) -> {}, true);
-            return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(finalFallbackProfile);
+            // 6. Absolute Fallback
+            GameProfile profile = liveProfileCache.computeIfAbsent(figure.getPlayerUUID(), uuid ->
+                    new GameProfile(uuid, figure.getName()));
+            liveRegistrationCache.computeIfAbsent(figure.getPlayerUUID(), uuid -> {
+                Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, p) -> {}, false);
+                return true;
+            });
+            return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
         }
 
         return figure.getTexturePath() != null ? figure.getTexturePath() : FALLBACK_TEXTURE;
@@ -91,36 +141,29 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
     private ResourceLocation getSkinLocationFromSnapshot(FigureDefinition figure, String snapshot) {
         UUID snapshotUUID = UUID.nameUUIDFromBytes((figure.getPlayerUUID().toString() + snapshot).getBytes());
         String uniqueCacheKey = snapshotUUID.toString();
-
         GameProfile profile = snapshotProfileCache.computeIfAbsent(uniqueCacheKey, id -> {
             GameProfile newProfile = new GameProfile(snapshotUUID, figure.getName());
             newProfile.getProperties().put("textures", new Property("textures", snapshot));
             return newProfile;
         });
-
         snapshotRegistrationCache.computeIfAbsent(uniqueCacheKey, id -> {
             Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, texture) -> {}, false);
             return true;
         });
-
         return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
     }
 
     @Override
     public ResourceLocation getAnimationResource(BoxBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
-        if (figure == null) {
-            return null;
-        }
+        if (figure == null) return null;
         return figure.getAnimationPath();
     }
 
     @Override
     public RenderType getRenderType(BoxBlockEntity animatable, ResourceLocation texture) {
         ResourceLocation textureToUse = getTextureResource(animatable);
-        if (textureToUse == null) {
-            textureToUse = FALLBACK_TEXTURE;
-        }
+        if (textureToUse == null) textureToUse = FALLBACK_TEXTURE;
         return RenderType.entityCutoutNoCull(textureToUse);
     }
 }

@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 public class DropBoxPacket {
@@ -66,24 +67,18 @@ public class DropBoxPacket {
                 LOGGER.info("Player: {} - Processing {} token request",
                         player.getName().getString(), packet.tokenType);
 
-                // Check if player has inventory space before consuming token
                 if (player.getInventory().getFreeSlot() == -1) {
-                    // Inventory is full, send message and don't consume token
                     player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cInventory is full! Cannot receive figure box."));
                     LOGGER.info("Player {} inventory is full, token not consumed", player.getName().getString());
                     return;
                 }
 
-                // Get player capability and verify token
                 player.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
-                    // Verify and consume token
                     if (!verifyAndConsumeToken(player, discovery, packet.tokenType)) {
                         LOGGER.warn("Player {} tried to use unavailable {} token",
                                 player.getName().getString(), packet.tokenType);
                         return;
                     }
-
-                    // Token verified and consumed, proceed with drop
                     processBoxDrop(player, packet, discovery);
                 });
             } else {
@@ -93,14 +88,10 @@ public class DropBoxPacket {
         context.setPacketHandled(true);
     }
 
-    /**
-     * Always fetches a fresh GameProfile from the session service to avoid using stale, cached skins.
-     */
     @Nullable
     private static GameProfile getFreshGameProfile(ServerPlayer player, FigureDefinition figure) {
         if (figure.getPlayerUUID() == null) return null;
         try {
-            // Create a shell profile and force the session service to fill it with fresh, signed properties.
             GameProfile freshProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
             return player.getServer().getSessionService().fillProfileProperties(freshProfile, true);
         } catch (Exception e) {
@@ -109,9 +100,28 @@ public class DropBoxPacket {
         }
     }
 
-    /**
-     * Process the actual box drop after token verification
-     */
+    // Helper to reflectively get Quick Skin ID from server repo
+    @Nullable
+    private static String getQuickSkinIdFromServer(UUID playerId) {
+        try {
+            Class<?> repoClass = Class.forName("com.quickskin.mod.server.data.ServerPlayerAppearanceRepository");
+            java.lang.reflect.Method getInstanceMethod = repoClass.getMethod("getInstance");
+            Object repoInstance = getInstanceMethod.invoke(null);
+
+            java.lang.reflect.Method getAppearanceMethod = repoClass.getMethod("getAppearance", UUID.class);
+            Object appearance = getAppearanceMethod.invoke(repoInstance, playerId);
+
+            if (appearance != null) {
+                Class<?> appearanceClass = appearance.getClass();
+                java.lang.reflect.Method getSkinIdMethod = appearanceClass.getMethod("getSkinId");
+                return (String) getSkinIdMethod.invoke(appearance);
+            }
+        } catch (Exception e) {
+            // Quick Skin not installed or error accessing
+        }
+        return null;
+    }
+
     private static void processBoxDrop(ServerPlayer player, DropBoxPacket packet, IPlayerDiscovery discovery) {
         CollectionRegistry.getCollection(packet.collectionId).ifPresent(collection -> {
             List<FigureDefinition> figures = collection.getFigures();
@@ -119,9 +129,7 @@ public class DropBoxPacket {
                 FigureDefinition selectedFigure = selectFigure(figures, packet.tokenType,
                         discovery, packet.collectionId);
 
-                // Get the appropriate box item - collection/color is already preset in NBT by BoxBlockItem
                 ItemStack boxItem = null;
-
                 if (packet.collectionId.equals(PlayerCollectionGenerator.getCollectionId())) {
                     PopBlockColor color = selectedFigure.getFavoriteColor();
                     if (color == null) color = PopBlockColor.ORIGINAL;
@@ -135,13 +143,26 @@ public class DropBoxPacket {
                 if (boxItem != null) {
                     String uniqueFigureId = packet.collectionId + ":" + selectedFigure.getId();
                     String skinSnapshot = null;
+                    String quickSkinSnapshot = null;
 
                     if (selectedFigure.getType() == com.theplumteam.figure.FigureType.PLAYER) {
+                        // Capture Mojang Snapshot
                         GameProfile freshProfile = getFreshGameProfile(player, selectedFigure);
                         if (freshProfile != null && !freshProfile.getProperties().get("textures").isEmpty()) {
                             skinSnapshot = freshProfile.getProperties().get("textures").iterator().next().getValue();
                             discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
                             LOGGER.info("Saved/updated fresh skin snapshot for {}.", uniqueFigureId);
+                        }
+
+                        // Capture Quick Skin Snapshot
+                        // Only applicable if the figure represents the current player (usually World Players collection)
+                        // or if we could look up other players' quick skins (ServerPlayerAppearanceRepository does hold all players)
+                        if (selectedFigure.getPlayerUUID() != null) {
+                            String qsId = getQuickSkinIdFromServer(selectedFigure.getPlayerUUID());
+                            if (qsId != null && !qsId.isEmpty()) {
+                                quickSkinSnapshot = qsId;
+                                LOGGER.info("Captured Quick Skin ID for figure {}: {}", uniqueFigureId, qsId);
+                            }
                         }
                     }
 
@@ -156,7 +177,6 @@ public class DropBoxPacket {
                     blockEntityTag.putString("FigureId", selectedFigure.getId());
                     blockEntityTag.putString("CollectionId", packet.collectionId);
 
-                    // For world_players collection, also set the color in NBT so the box uses the right texture
                     if (packet.collectionId.equals(PlayerCollectionGenerator.getCollectionId())) {
                         PopBlockColor color = selectedFigure.getFavoriteColor();
                         if (color == null) color = PopBlockColor.ORIGINAL;
@@ -165,7 +185,6 @@ public class DropBoxPacket {
 
                     if (skinSnapshot != null && !skinSnapshot.isEmpty()) {
                         blockEntityTag.putString("SkinSnapshot", skinSnapshot);
-                        LOGGER.info("Added fresh skin snapshot to box item NBT for figure: {}", uniqueFigureId);
                     } else if (selectedFigure.getType() == com.theplumteam.figure.FigureType.PLAYER) {
                         String oldSnapshot = discovery.getFigureSkin(uniqueFigureId);
                         if (oldSnapshot != null && !oldSnapshot.isEmpty()) {
@@ -173,9 +192,13 @@ public class DropBoxPacket {
                         }
                     }
 
+                    // Save Quick Skin ID to NBT if found
+                    if (quickSkinSnapshot != null) {
+                        blockEntityTag.putString("QuickSkinId", quickSkinSnapshot);
+                    }
+
                     boxItem.getOrCreateTag().put("BlockEntityTag", blockEntityTag);
 
-                    // Add to player's inventory (inventory space already verified before token consumption)
                     player.getInventory().add(boxItem);
                 }
             }
@@ -188,8 +211,6 @@ public class DropBoxPacket {
                 discovery.setRegularTokens(discovery.getRegularTokens() - 1);
                 LOGGER.info("Player {} used a regular token. Remaining: {}",
                         player.getName().getString(), discovery.getRegularTokens());
-
-                // Sync token data to client
                 syncTokenDataToClient(player, discovery);
                 return true;
             }
@@ -198,8 +219,6 @@ public class DropBoxPacket {
                 discovery.setUsedTodaySpecialToken(true);
                 LOGGER.info("Player {} used their guaranteed token",
                         player.getName().getString());
-
-                // Sync token data to client
                 syncTokenDataToClient(player, discovery);
                 return true;
             }
@@ -231,10 +250,7 @@ public class DropBoxPacket {
         Random random = new Random();
 
         if (tokenType == TokenType.GUARANTEED) {
-            // Get all discovered figures for this collection
             Set<String> discoveredSet = discovery.getDiscoveredSet();
-
-            // Build list of undiscovered figures
             List<FigureDefinition> undiscoveredFigures = new ArrayList<>();
             for (FigureDefinition figure : figures) {
                 String figureId = collectionId + ":" + figure.getId();
@@ -243,19 +259,15 @@ public class DropBoxPacket {
                 }
             }
 
-            // If there are undiscovered figures, pick one randomly
             if (!undiscoveredFigures.isEmpty()) {
                 FigureDefinition selected = undiscoveredFigures.get(random.nextInt(undiscoveredFigures.size()));
-                LOGGER.info("Guaranteed token: Selected undiscovered figure '{}' from {} options",
-                        selected.getId(), undiscoveredFigures.size());
+                LOGGER.info("Guaranteed token logic: Selected undiscovered figure '{}'", selected.getId());
                 return selected;
             } else {
-                // Collection is complete, give a random duplicate as fallback
-                LOGGER.info("Guaranteed token: Collection complete, giving random duplicate");
+                LOGGER.info("Guaranteed token logic: Collection complete, giving random duplicate");
                 return figures.get(random.nextInt(figures.size()));
             }
         } else {
-            // REGULAR token: just pick any random figure
             return figures.get(random.nextInt(figures.size()));
         }
     }

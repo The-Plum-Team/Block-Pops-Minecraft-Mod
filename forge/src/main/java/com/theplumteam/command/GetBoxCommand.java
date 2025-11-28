@@ -1,3 +1,4 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\command\GetBoxCommand.java ==========
 package com.theplumteam.command;
 
 import com.mojang.authlib.GameProfile;
@@ -34,21 +35,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.UUID;
 
 public class GetBoxCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(GetBoxCommand.class);
 
-    // ... register() and suggestion providers are unchanged ...
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("blockpops")
                 .then(Commands.literal("getbox")
-                        .requires(source -> source.hasPermission(2)) // Requires operator permission
+                        .requires(source -> source.hasPermission(2))
                         .then(Commands.argument("collection_id", StringArgumentType.string())
                                 .suggests(COLLECTION_SUGGESTIONS)
-                                .executes(context -> {
-                                    // Default to REGULAR token type
-                                    return executeCommand(context, TokenType.REGULAR);
-                                })
+                                .executes(context -> executeCommand(context, TokenType.REGULAR))
                                 .then(Commands.argument("token_type", StringArgumentType.string())
                                         .suggests(TOKEN_TYPE_SUGGESTIONS)
                                         .executes(context -> {
@@ -114,13 +112,33 @@ public class GetBoxCommand {
         }
     }
 
+    @Nullable
+    private static String getQuickSkinIdFromServer(UUID playerId) {
+        try {
+            Class<?> repoClass = Class.forName("com.quickskin.mod.server.data.ServerPlayerAppearanceRepository");
+            java.lang.reflect.Method getInstanceMethod = repoClass.getMethod("getInstance");
+            Object repoInstance = getInstanceMethod.invoke(null);
+
+            java.lang.reflect.Method getAppearanceMethod = repoClass.getMethod("getAppearance", UUID.class);
+            Object appearance = getAppearanceMethod.invoke(repoInstance, playerId);
+
+            if (appearance != null) {
+                Class<?> appearanceClass = appearance.getClass();
+                java.lang.reflect.Method getSkinIdMethod = appearanceClass.getMethod("getSkinId");
+                return (String) getSkinIdMethod.invoke(appearance);
+            }
+        } catch (Exception e) {
+            // Quick Skin not installed or error
+        }
+        return null;
+    }
+
     private static void processBoxDrop(ServerPlayer player, String collectionId, TokenType tokenType, IPlayerDiscovery discovery) {
         CollectionRegistry.getCollection(collectionId).ifPresent(collection -> {
             List<FigureDefinition> figures = collection.getFigures();
             if (!figures.isEmpty()) {
                 FigureDefinition selectedFigure = selectFigure(figures, tokenType, discovery, collectionId);
 
-                // Get the appropriate box item - collection/color is already preset in NBT by BoxBlockItem
                 ItemStack boxItem = null;
                 if (collectionId.equals(PlayerCollectionGenerator.getCollectionId())) {
                     PopBlockColor color = selectedFigure.getFavoriteColor();
@@ -135,6 +153,7 @@ public class GetBoxCommand {
                 if (boxItem != null) {
                     String uniqueFigureId = collectionId + ":" + selectedFigure.getId();
                     String skinSnapshot = null;
+                    String quickSkinSnapshot = null;
 
                     if (selectedFigure.getType() == com.theplumteam.figure.FigureType.PLAYER) {
                         GameProfile freshProfile = getFreshGameProfile(player, selectedFigure);
@@ -142,6 +161,14 @@ public class GetBoxCommand {
                             skinSnapshot = freshProfile.getProperties().get("textures").iterator().next().getValue();
                             discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
                             LOGGER.info("Saved/updated fresh skin snapshot for {}.", uniqueFigureId);
+                        }
+
+                        if (selectedFigure.getPlayerUUID() != null) {
+                            String qsId = getQuickSkinIdFromServer(selectedFigure.getPlayerUUID());
+                            if (qsId != null && !qsId.isEmpty()) {
+                                quickSkinSnapshot = qsId;
+                                LOGGER.info("Captured Quick Skin ID for figure {}: {}", uniqueFigureId, qsId);
+                            }
                         }
                     }
 
@@ -155,7 +182,6 @@ public class GetBoxCommand {
                     blockEntityTag.putString("FigureId", selectedFigure.getId());
                     blockEntityTag.putString("CollectionId", collectionId);
 
-                    // For world_players collection, also set the color in NBT so the box uses the right texture
                     if (collectionId.equals(PlayerCollectionGenerator.getCollectionId())) {
                         PopBlockColor color = selectedFigure.getFavoriteColor();
                         if (color == null) color = PopBlockColor.ORIGINAL;
@@ -171,6 +197,10 @@ public class GetBoxCommand {
                         }
                     }
 
+                    if (quickSkinSnapshot != null) {
+                        blockEntityTag.putString("QuickSkinId", quickSkinSnapshot);
+                    }
+
                     boxItem.getOrCreateTag().put("BlockEntityTag", blockEntityTag);
 
                     ItemEntity itemEntity = new ItemEntity(player.level(), player.getX(), player.getY() + 1.0, player.getZ(), boxItem);
@@ -181,16 +211,11 @@ public class GetBoxCommand {
         });
     }
 
-    // ... selectFigure() is unchanged ...
     private static FigureDefinition selectFigure(List<FigureDefinition> figures, TokenType tokenType,
                                                  IPlayerDiscovery discovery, String collectionId) {
         Random random = new Random();
-
         if (tokenType == TokenType.GUARANTEED) {
-            // Get all discovered figures for this collection
             Set<String> discoveredSet = discovery.getDiscoveredSet();
-
-            // Build list of undiscovered figures
             List<FigureDefinition> undiscoveredFigures = new ArrayList<>();
             for (FigureDefinition figure : figures) {
                 String figureId = collectionId + ":" + figure.getId();
@@ -198,20 +223,12 @@ public class GetBoxCommand {
                     undiscoveredFigures.add(figure);
                 }
             }
-
-            // If there are undiscovered figures, pick one randomly
             if (!undiscoveredFigures.isEmpty()) {
-                FigureDefinition selected = undiscoveredFigures.get(random.nextInt(undiscoveredFigures.size()));
-                LOGGER.info("Guaranteed token logic: Selected undiscovered figure '{}' from {} options",
-                        selected.getId(), undiscoveredFigures.size());
-                return selected;
+                return undiscoveredFigures.get(random.nextInt(undiscoveredFigures.size()));
             } else {
-                // Collection is complete, give a random duplicate as fallback
-                LOGGER.info("Guaranteed token logic: Collection complete, giving random duplicate");
                 return figures.get(random.nextInt(figures.size()));
             }
         } else {
-            // REGULAR token: just pick any random figure
             return figures.get(random.nextInt(figures.size()));
         }
     }

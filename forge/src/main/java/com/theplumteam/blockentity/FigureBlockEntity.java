@@ -1,3 +1,4 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\blockentity\FigureBlockEntity.java ==========
 package com.theplumteam.blockentity;
 
 import com.theplumteam.figure.CollectionRegistry;
@@ -30,7 +31,8 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     private String figureId = "";
     private String collectionId = "";
     private int alternativeSkinIndex = 0; // 0 is default, 1+ are from the alternatives list
-    private String skinSnapshot = null; // Saved skin snapshot URL for player figures
+    private String skinSnapshot = null; // Saved skin snapshot URL for player figures (Mojang)
+    private String quickSkinId = null; // Saved Quick Skin ID
 
     // Figure positioning - matches BoxBlockEntity for consistent display
     private double figureOffsetX = -0.60;
@@ -52,125 +54,71 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         return cache;
     }
 
-    /**
-     * Gets the collection ID for this figure
-     */
-    public String getCollectionId() {
-        return collectionId;
-    }
-
-    /**
-     * Sets the collection ID for this figure
-     */
+    public String getCollectionId() { return collectionId; }
     public void setCollectionId(String collectionId) {
         this.collectionId = collectionId != null ? collectionId : "";
         setChanged();
-        if (level != null && !level.isClientSide) {
-            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
-        }
+        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
-    /**
-     * Gets the ID of the figure
-     */
-    public String getFigureId() {
-        return figureId;
-    }
-
-    /**
-     * Sets which figure this is (by figure ID within the collection)
-     */
+    public String getFigureId() { return figureId; }
     public void setFigureId(String figureId) {
         this.figureId = figureId != null ? figureId : "";
         setChanged();
-        if (level != null && !level.isClientSide) {
-            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
-        }
+        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
-    /**
-     * Gets the full FigureDefinition for the current figure
-     */
     public FigureDefinition getFigureDefinition() {
-        if (figureId.isEmpty() || collectionId.isEmpty()) {
-            return null;
-        }
+        if (figureId.isEmpty() || collectionId.isEmpty()) return null;
         return CollectionRegistry.getFigure(collectionId, figureId).orElse(null);
     }
 
-    /**
-     * Checks if this block currently has a valid figure
-     */
     public boolean hasFigure() {
         return !figureId.isEmpty() && !collectionId.isEmpty() && getFigureDefinition() != null;
     }
 
-    public double getFigureOffsetX() {
-        return figureOffsetX;
-    }
-
-    public double getFigureOffsetY() {
-        return figureOffsetY;
-    }
-
-    public double getFigureOffsetZ() {
-        return figureOffsetZ;
-    }
-
-    public double getFigureScale() {
-        return figureScale;
-    }
+    public double getFigureOffsetX() { return figureOffsetX; }
+    public double getFigureOffsetY() { return figureOffsetY; }
+    public double getFigureOffsetZ() { return figureOffsetZ; }
+    public double getFigureScale() { return figureScale; }
 
     public void setFigureOffset(double x, double y, double z) {
         this.figureOffsetX = x;
         this.figureOffsetY = y;
         this.figureOffsetZ = z;
         setChanged();
-        if (level != null && !level.isClientSide) {
-            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
-        }
+        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
     public void setFigureScale(double scale) {
         this.figureScale = scale;
         setChanged();
-        if (level != null && !level.isClientSide) {
-            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
-        }
+        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
-    /**
-     * Gets the current alternative skin index
-     */
-    public int getAlternativeSkinIndex() {
-        return alternativeSkinIndex;
+    public int getAlternativeSkinIndex() { return alternativeSkinIndex; }
+
+    public String getSkinSnapshot() { return skinSnapshot; }
+    public void setSkinSnapshot(String skinSnapshot) {
+        this.skinSnapshot = skinSnapshot;
+        setChanged();
+        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
-    /**
-     * Gets the saved skin snapshot URL for this figure.
-     * @return The skin snapshot URL, or null if not set.
-     */
-    public String getSkinSnapshot() {
-        return skinSnapshot;
+    public String getQuickSkinId() { return quickSkinId; }
+    public void setQuickSkinId(String quickSkinId) {
+        this.quickSkinId = quickSkinId;
+        setChanged();
+        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
-    /**
-     * Cycles to the next alternative skin
-     */
     public void cycleAlternativeSkin() {
         FigureDefinition def = getFigureDefinition();
-        if (def == null || !def.hasAlternatives()) {
-            return; // No figure or no alternatives to cycle.
-        }
-
-        int totalSkins = 1 + def.getAlternatives().size(); // 1 for the default skin
+        if (def == null || !def.hasAlternatives()) return;
+        int totalSkins = 1 + def.getAlternatives().size();
         this.alternativeSkinIndex = (this.alternativeSkinIndex + 1) % totalSkins;
-
-        // Mark for saving and send an update to the client.
         setChanged();
-        if (level != null && !level.isClientSide) {
-            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
-        }
+        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
     @Override
@@ -179,9 +127,8 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         tag.putString("FigureId", figureId);
         tag.putString("CollectionId", collectionId);
         tag.putInt("AlternativeSkinIndex", alternativeSkinIndex);
-        if (skinSnapshot != null) {
-            tag.putString("SkinSnapshot", skinSnapshot);
-        }
+        if (skinSnapshot != null) tag.putString("SkinSnapshot", skinSnapshot);
+        if (quickSkinId != null) tag.putString("QuickSkinId", quickSkinId);
         tag.putDouble("FigureOffsetX", figureOffsetX);
         tag.putDouble("FigureOffsetY", figureOffsetY);
         tag.putDouble("FigureOffsetZ", figureOffsetZ);
@@ -191,35 +138,17 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
-        if (tag.contains("FigureId")) {
-            this.figureId = tag.getString("FigureId");
-        }
-        if (tag.contains("CollectionId")) {
-            this.collectionId = tag.getString("CollectionId");
-        }
-        if (tag.contains("AlternativeSkinIndex")) {
-            this.alternativeSkinIndex = tag.getInt("AlternativeSkinIndex");
-        }
-        if (tag.contains("SkinSnapshot", 8)) { // 8 is Tag.TAG_STRING
-            this.skinSnapshot = tag.getString("SkinSnapshot");
-        } else {
-            this.skinSnapshot = null;
-        }
-        if (tag.contains("FigureOffsetX")) {
-            this.figureOffsetX = tag.getDouble("FigureOffsetX");
-        }
-        if (tag.contains("FigureOffsetY")) {
-            this.figureOffsetY = tag.getDouble("FigureOffsetY");
-        }
-        if (tag.contains("FigureOffsetZ")) {
-            this.figureOffsetZ = tag.getDouble("FigureOffsetZ");
-        }
-        if (tag.contains("FigureScale")) {
-            this.figureScale = tag.getDouble("FigureScale");
-        }
+        if (tag.contains("FigureId")) this.figureId = tag.getString("FigureId");
+        if (tag.contains("CollectionId")) this.collectionId = tag.getString("CollectionId");
+        if (tag.contains("AlternativeSkinIndex")) this.alternativeSkinIndex = tag.getInt("AlternativeSkinIndex");
+        this.skinSnapshot = tag.contains("SkinSnapshot", 8) ? tag.getString("SkinSnapshot") : null;
+        this.quickSkinId = tag.contains("QuickSkinId", 8) ? tag.getString("QuickSkinId") : null;
+        if (tag.contains("FigureOffsetX")) this.figureOffsetX = tag.getDouble("FigureOffsetX");
+        if (tag.contains("FigureOffsetY")) this.figureOffsetY = tag.getDouble("FigureOffsetY");
+        if (tag.contains("FigureOffsetZ")) this.figureOffsetZ = tag.getDouble("FigureOffsetZ");
+        if (tag.contains("FigureScale")) this.figureScale = tag.getDouble("FigureScale");
     }
 
-    // ===== CHUNK LOAD SYNCHRONIZATION =====
     @Override
     public CompoundTag getUpdateTag() {
         CompoundTag tag = super.getUpdateTag();
@@ -232,7 +161,6 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         load(tag);
     }
 
-    // ===== REAL-TIME SYNCHRONIZATION =====
     @Override
     public Packet<ClientGamePacketListener> getUpdatePacket() {
         return ClientboundBlockEntityDataPacket.create(this);
@@ -249,9 +177,6 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
     }
 
-    /**
-     * Saves this block entity's data to an ItemStack
-     */
     public void saveToItem(net.minecraft.world.item.ItemStack stack) {
         CompoundTag tag = new CompoundTag();
         saveAdditional(tag);

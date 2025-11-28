@@ -101,7 +101,18 @@ public class SkinModelDetector {
             var textureManager = Minecraft.getInstance().getTextureManager();
             var abstractTexture = textureManager.getTexture(textureLocation);
 
-            if (abstractTexture instanceof net.minecraft.client.renderer.texture.HttpTexture httpTexture) {
+            // Handle DynamicTexture (used by QuickSkin for local skins)
+            if (abstractTexture instanceof net.minecraft.client.renderer.texture.DynamicTexture dynamicTexture) {
+                NativeImage image = dynamicTexture.getPixels();
+                if (image != null) {
+                    SkinModel model = detectSkinModel(image);
+                    LOGGER.info("Detected {} skin from DynamicTexture for texture: {}", model, textureLocation);
+                    DETECTION_CACHE.put(textureLocation, model);
+                    return model;
+                }
+            }
+            // Handle HttpTexture (standard downloaded skins)
+            else if (abstractTexture instanceof net.minecraft.client.renderer.texture.HttpTexture httpTexture) {
                 // This is a downloaded player skin - try to access the loaded image
                 try {
                     // Use reflection to get the NativeImage from HttpTexture
@@ -123,10 +134,10 @@ public class SkinModelDetector {
             // Try resource manager (for static textures in resources)
             try {
                 InputStream inputStream = Minecraft.getInstance()
-                    .getResourceManager()
-                    .getResource(textureLocation)
-                    .orElseThrow()
-                    .open();
+                        .getResourceManager()
+                        .getResource(textureLocation)
+                        .orElseThrow()
+                        .open();
 
                 NativeImage image = NativeImage.read(inputStream);
                 SkinModel model = detectSkinModel(image);
