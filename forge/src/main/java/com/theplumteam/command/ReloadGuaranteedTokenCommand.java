@@ -1,3 +1,4 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\command\ReloadGuaranteedTokenCommand.java ==========
 package com.theplumteam.command;
 
 import com.mojang.brigadier.CommandDispatcher;
@@ -5,6 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.theplumteam.capability.PlayerDiscoveryProvider;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.network.SyncTokenDataPacket;
+import com.theplumteam.server.ServerTickHandler;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -12,9 +14,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.PacketDistributor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 
 public class ReloadGuaranteedTokenCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(ReloadGuaranteedTokenCommand.class);
@@ -43,8 +42,8 @@ public class ReloadGuaranteedTokenCommand {
                 long nextRegularTime = discovery.getNextRegularTokenTime();
                 long ticksUntilNext = Math.max(0, nextRegularTime - gameTime);
 
-                // Calculate millis until next special reset
-                long millisUntilReset = calculateMillisUntilNextReset();
+                // Calculate millis until next special reset using central helper
+                long millisUntilReset = ServerTickHandler.calculateMillisUntilNextReset();
 
                 SyncTokenDataPacket tokenPacket = new SyncTokenDataPacket(
                         discovery.getRegularTokens(),
@@ -62,21 +61,5 @@ public class ReloadGuaranteedTokenCommand {
             LOGGER.error("Error executing reloadguaranteed command", e);
             return 0;
         }
-    }
-
-    /**
-     * Calculate milliseconds until the next daily reset at the configured hour.
-     */
-    private static long calculateMillisUntilNextReset() {
-        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
-        int resetHour = com.theplumteam.server.config.ServerConfig.getInstance().getGuaranteedTokenResetHour();
-        ZonedDateTime nextReset = now.withHour(resetHour).withMinute(0).withSecond(0).withNano(0);
-
-        // If we're past reset hour today, next reset is tomorrow
-        if (now.getHour() >= resetHour) {
-            nextReset = nextReset.plusDays(1);
-        }
-
-        return nextReset.toInstant().toEpochMilli() - now.toInstant().toEpochMilli();
     }
 }

@@ -15,7 +15,6 @@ import net.minecraftforge.network.PacketDistributor;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Server-side tick handler for managing token generation and cooldown logic.
@@ -99,42 +98,47 @@ public class ServerTickHandler {
      * @return true if token was reset and sync is needed
      */
     private static boolean processSpecialTokenReset(IPlayerDiscovery capability) {
-        long currentTimeMillis = System.currentTimeMillis();
-        long lastResetMillis = capability.getLastSpecialTokenResetTimestamp();
+        long lastUpdateMillis = capability.getLastSpecialTokenResetTimestamp();
 
-        // If this is the first time, initialize the timestamp
-        if (lastResetMillis == 0) {
-            capability.setLastSpecialTokenResetTimestamp(currentTimeMillis);
+        // If this is the first time (timestamp is 0), initialize it to now and don't reset yet
+        if (lastUpdateMillis == 0) {
+            capability.setLastSpecialTokenResetTimestamp(System.currentTimeMillis());
             return false;
         }
 
-        // Get current time in UTC
+        // 1. Get current time in UTC
         ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
-        ZonedDateTime lastReset = ZonedDateTime.ofInstant(
-                java.time.Instant.ofEpochMilli(lastResetMillis),
-                ZoneId.of("UTC")
-        );
 
-        // Get configured reset hour from server config
+        // 2. Get the reset hour from config
         int resetHour = ServerConfig.getInstance().getGuaranteedTokenResetHour();
 
-        // Check if it's past reset hour and a new day
-        boolean isPastResetHour = now.getHour() >= resetHour;
-        boolean isDifferentDay = !now.toLocalDate().equals(lastReset.toLocalDate());
-        boolean wasBeforeResetHour = lastReset.getHour() < resetHour;
+        // 3. Calculate the target reset time for TODAY
+        ZonedDateTime todayReset = now.withHour(resetHour).withMinute(0).withSecond(0).withNano(0);
 
-        // Reset if:
-        // 1. We're on a different day and past reset hour
-        // 2. OR we're on the same day but last reset was before reset hour and now we're past it
-        boolean shouldReset = (isDifferentDay && isPastResetHour)
-                || (!isDifferentDay && wasBeforeResetHour && isPastResetHour);
+        // 4. Determine the *most recent* reset point that has occurred in the past
+        ZonedDateTime mostRecentReset;
+        if (now.isBefore(todayReset)) {
+            // We haven't reached today's reset hour yet, so the last reset was yesterday
+            mostRecentReset = todayReset.minusDays(1);
+        } else {
+            // We are past today's reset hour, so the last reset was today
+            mostRecentReset = todayReset;
+        }
 
-        if (shouldReset && capability.hasUsedTodaySpecialToken()) {
-            capability.setUsedTodaySpecialToken(false);
-            capability.setLastSpecialTokenResetTimestamp(currentTimeMillis);
+        // 5. Compare the player's last update timestamp with the most recent reset point.
+        // If the player hasn't been updated since the most recent reset point, we need to reset.
+        if (lastUpdateMillis < mostRecentReset.toInstant().toEpochMilli()) {
 
-            BlockPopsMod.LOGGER.debug("Reset special token (daily reset at {}:00 UTC)", resetHour);
+            // Update the timestamp to NOW so we don't trigger this logic again until the next reset point
+            capability.setLastSpecialTokenResetTimestamp(System.currentTimeMillis());
 
+            // If the user has used their token, reset it
+            if (capability.hasUsedTodaySpecialToken()) {
+                capability.setUsedTodaySpecialToken(false);
+                BlockPopsMod.LOGGER.debug("Daily token reset for player (Reset point was: {})", mostRecentReset);
+            }
+
+            // Always return true to trigger a sync, ensuring the client has the correct state and cooldown timer
             return true;
         }
 
@@ -169,9 +173,10 @@ public class ServerTickHandler {
     }
 
     /**
-     * Calculate milliseconds until the next daily reset at the configured reset hour.
+     * Public helper to calculate milliseconds until the next daily reset.
+     * Used by this handler and various commands/packets to ensure consistency.
      */
-    private static long calculateMillisUntilNextReset() {
+    public static long calculateMillisUntilNextReset() {
         int resetHour = ServerConfig.getInstance().getGuaranteedTokenResetHour();
         ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
         ZonedDateTime nextReset = now.withHour(resetHour).withMinute(0).withSecond(0).withNano(0);

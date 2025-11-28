@@ -1,7 +1,7 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\network\DropBoxPacket.java ==========
 package com.theplumteam.network;
 
 import com.mojang.authlib.GameProfile;
-import com.mojang.authlib.properties.Property;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.capability.IPlayerDiscovery;
 import com.theplumteam.capability.PlayerDiscoveryProvider;
@@ -11,6 +11,7 @@ import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.PlayerCollectionGenerator;
 import com.theplumteam.forge.BlockPopsModForge;
 import com.theplumteam.registry.ModItems;
+import com.theplumteam.server.ServerTickHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
@@ -181,7 +182,6 @@ public class DropBoxPacket {
         });
     }
 
-    // ... The rest of the file (verifyAndConsumeToken, syncTokenDataToClient, etc.) remains unchanged ...
     private static boolean verifyAndConsumeToken(ServerPlayer player, IPlayerDiscovery discovery, TokenType tokenType) {
         if (tokenType == TokenType.REGULAR) {
             if (discovery.getRegularTokens() > 0) {
@@ -206,11 +206,12 @@ public class DropBoxPacket {
         }
         return false;
     }
+
     private static void syncTokenDataToClient(ServerPlayer player, IPlayerDiscovery discovery) {
         long gameTime = player.serverLevel().getGameTime();
         long nextRegularTime = discovery.getNextRegularTokenTime();
         long ticksUntilNext = Math.max(0, nextRegularTime - gameTime);
-        long millisUntilReset = calculateMillisUntilNextReset();
+        long millisUntilReset = ServerTickHandler.calculateMillisUntilNextReset();
 
         SyncTokenDataPacket packet = new SyncTokenDataPacket(
                 discovery.getRegularTokens(),
@@ -224,16 +225,7 @@ public class DropBoxPacket {
                 packet
         );
     }
-    private static long calculateMillisUntilNextReset() {
-        java.time.ZonedDateTime now = java.time.ZonedDateTime.now(java.time.ZoneId.of("UTC"));
-        java.time.ZonedDateTime nextReset = now.withHour(18).withMinute(0).withSecond(0).withNano(0);
 
-        if (now.getHour() >= 18) {
-            nextReset = nextReset.plusDays(1);
-        }
-
-        return nextReset.toInstant().toEpochMilli() - now.toInstant().toEpochMilli();
-    }
     private static FigureDefinition selectFigure(List<FigureDefinition> figures, TokenType tokenType,
                                                  IPlayerDiscovery discovery, String collectionId) {
         Random random = new Random();

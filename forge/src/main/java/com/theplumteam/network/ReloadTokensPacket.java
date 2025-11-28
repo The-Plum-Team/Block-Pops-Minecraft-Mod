@@ -1,7 +1,9 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\network\ReloadTokensPacket.java ==========
 package com.theplumteam.network;
 
 import com.theplumteam.capability.PlayerDiscoveryProvider;
 import com.theplumteam.forge.BlockPopsModForge;
+import com.theplumteam.server.ServerTickHandler;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
@@ -65,8 +67,8 @@ public class ReloadTokensPacket {
                     long nextRegularTime = discovery.getNextRegularTokenTime();
                     long ticksUntilNext = Math.max(0, nextRegularTime - gameTime);
 
-                    // Calculate millis until next special reset
-                    long millisUntilReset = calculateMillisUntilNextReset();
+                    // Calculate millis until next special reset using central helper
+                    long millisUntilReset = ServerTickHandler.calculateMillisUntilNextReset();
 
                     SyncTokenDataPacket tokenPacket = new SyncTokenDataPacket(
                             discovery.getRegularTokens(),
@@ -81,22 +83,5 @@ public class ReloadTokensPacket {
             }
         });
         context.setPacketHandled(true);
-    }
-
-    /**
-     * Calculate milliseconds until the next daily reset at the configured hour.
-     * This is duplicated from BlockPopsModForge for encapsulation.
-     */
-    private static long calculateMillisUntilNextReset() {
-        java.time.ZonedDateTime now = java.time.ZonedDateTime.now(java.time.ZoneId.of("UTC"));
-        int resetHour = com.theplumteam.server.config.ServerConfig.getInstance().getGuaranteedTokenResetHour();
-        java.time.ZonedDateTime nextReset = now.withHour(resetHour).withMinute(0).withSecond(0).withNano(0);
-
-        // If we're past reset hour today, next reset is tomorrow
-        if (now.getHour() >= resetHour) {
-            nextReset = nextReset.plusDays(1);
-        }
-
-        return nextReset.toInstant().toEpochMilli() - now.toInstant().toEpochMilli();
     }
 }
