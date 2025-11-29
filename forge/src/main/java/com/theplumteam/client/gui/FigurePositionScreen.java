@@ -394,12 +394,12 @@ public class FigurePositionScreen extends Screen {
         // Logo X Position Slider (Depth: forward-back) (-10 to 10 model units)
         double logoX = logoPositionX != null ? logoPositionX : 0.0;
         this.sliderLogoX = new AbstractSliderButton(col3X, startY, sliderWidth, 20,
-                Component.literal("Logo Depth: " + String.format("%.2f", logoX)),
+                Component.literal("Logo X (Depth): " + String.format("%.2f", logoX)),
                 (logoX + 10.0) / 20.0) {
             @Override
             protected void updateMessage() {
                 logoPositionX = (this.value * 20.0) - 10.0;
-                this.setMessage(Component.literal("Logo Depth: " + String.format("%.2f", logoPositionX)));
+                this.setMessage(Component.literal("Logo X (Depth): " + String.format("%.2f", logoPositionX)));
                 sendUpdate();
             }
 
@@ -417,12 +417,12 @@ public class FigurePositionScreen extends Screen {
         // Logo Y Position Slider (Vertical: up-down) (-10 to 10 model units)
         double logoY = logoPositionY != null ? logoPositionY : 0.0;
         this.sliderLogoY = new AbstractSliderButton(col3X, startY + 25, sliderWidth, 20,
-                Component.literal("Logo Vertical: " + String.format("%.2f", logoY)),
+                Component.literal("Logo Y (Vertical): " + String.format("%.2f", logoY)),
                 (logoY + 10.0) / 20.0) {
             @Override
             protected void updateMessage() {
                 logoPositionY = (this.value * 20.0) - 10.0;
-                this.setMessage(Component.literal("Logo Vertical: " + String.format("%.2f", logoPositionY)));
+                this.setMessage(Component.literal("Logo Y (Vertical): " + String.format("%.2f", logoPositionY)));
                 sendUpdate();
             }
 
@@ -440,12 +440,12 @@ public class FigurePositionScreen extends Screen {
         // Logo Z Position Slider (Horizontal: left-right) (-10 to 10 model units)
         double logoZ = logoPositionZ != null ? logoPositionZ : 0.0;
         this.sliderLogoZ = new AbstractSliderButton(col3X, startY + 50, sliderWidth, 20,
-                Component.literal("Logo Horizontal: " + String.format("%.2f", logoZ)),
+                Component.literal("Logo Z (Horizontal): " + String.format("%.2f", logoZ)),
                 (logoZ + 10.0) / 20.0) {
             @Override
             protected void updateMessage() {
                 logoPositionZ = (this.value * 20.0) - 10.0;
-                this.setMessage(Component.literal("Logo Horizontal: " + String.format("%.2f", logoPositionZ)));
+                this.setMessage(Component.literal("Logo Z (Horizontal): " + String.format("%.2f", logoPositionZ)));
                 sendUpdate();
             }
 
@@ -463,12 +463,12 @@ public class FigurePositionScreen extends Screen {
         // Logo X Scale Slider (0.5 to 10)
         double scaleX = logoScaleX != null ? logoScaleX : 5.0;
         this.sliderLogoScaleX = new AbstractSliderButton(col3X, startY + 75, sliderWidth, 20,
-                Component.literal("Logo Width: " + String.format("%.2f", scaleX)),
+                Component.literal("Logo Width (X): " + String.format("%.2f", scaleX)),
                 (scaleX - 0.5) / 9.5) {
             @Override
             protected void updateMessage() {
                 logoScaleX = 0.5 + (this.value * 9.5);
-                this.setMessage(Component.literal("Logo Width: " + String.format("%.2f", logoScaleX)));
+                this.setMessage(Component.literal("Logo Width (X): " + String.format("%.2f", logoScaleX)));
                 sendUpdate();
             }
 
@@ -486,12 +486,12 @@ public class FigurePositionScreen extends Screen {
         // Logo Y Scale Slider (0.5 to 10)
         double scaleY = logoScaleY != null ? logoScaleY : 5.0;
         this.sliderLogoScaleY = new AbstractSliderButton(col3X, startY + 100, sliderWidth, 20,
-                Component.literal("Logo Height: " + String.format("%.2f", scaleY)),
+                Component.literal("Logo Height (Y): " + String.format("%.2f", scaleY)),
                 (scaleY - 0.5) / 9.5) {
             @Override
             protected void updateMessage() {
                 logoScaleY = 0.5 + (this.value * 9.5);
-                this.setMessage(Component.literal("Logo Height: " + String.format("%.2f", logoScaleY)));
+                this.setMessage(Component.literal("Logo Height (Y): " + String.format("%.2f", logoScaleY)));
                 sendUpdate();
             }
 
@@ -509,12 +509,12 @@ public class FigurePositionScreen extends Screen {
         // Logo Z Scale Slider (0.5 to 10)
         double scaleZ = logoScaleZ != null ? logoScaleZ : 1.0;
         this.sliderLogoScaleZ = new AbstractSliderButton(col3X, startY + 125, sliderWidth, 20,
-                Component.literal("Logo Depth Scale: " + String.format("%.2f", scaleZ)),
+                Component.literal("Logo Depth (Z): " + String.format("%.2f", scaleZ)),
                 (scaleZ - 0.5) / 9.5) {
             @Override
             protected void updateMessage() {
                 logoScaleZ = 0.5 + (this.value * 9.5);
-                this.setMessage(Component.literal("Logo Depth Scale: " + String.format("%.2f", logoScaleZ)));
+                this.setMessage(Component.literal("Logo Depth (Z): " + String.format("%.2f", logoScaleZ)));
                 sendUpdate();
             }
 

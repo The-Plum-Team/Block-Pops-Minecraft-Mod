@@ -24,21 +24,17 @@
       "name": "Monkey D. Luffy",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
       "texture": "blockpops:textures/figure/onepiece/monkey_d_luffy.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "monkey_d_luffy_gear_5",
-      "name": "Monkey D. Luffy (Gear 5)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/onepiece/monkey_d_luffy_gear_5.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "monkey_d_luffy_boundman",
-      "name": "Monkey D. Luffy (Boundman)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/onepiece/monkey_d_luffy_boundman.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Monkey D. Luffy (Gear 5)",
+          "texture": "blockpops:textures/figure/onepiece/monkey_d_luffy_gear_5.png"
+        },
+        {
+          "name": "Monkey D. Luffy (Boundman)",
+          "texture": "blockpops:textures/figure/onepiece/monkey_d_luffy_boundman.png"
+        }
+      ]
     },
     {
       "id": "roronoa_zoro",

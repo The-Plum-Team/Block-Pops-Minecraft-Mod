@@ -6,11 +6,11 @@
   "box_texture": "blockpops:textures/block/box/fnaf.png",
   "logo": {
     "texture": "blockpops:textures/block/box/logo/logo_fnaf.png",
-    "position_x": -1.818,
-    "position_y": -0.229,
+    "position_x": -1.76,
+    "position_y": -0.37,
     "position_z": 0.0,
-    "scale_x": 6.969,
-    "scale_y": 5.000,
+    "scale_x": 6.80,
+    "scale_y": 6.47,
     "scale_z": 1.0
   },
   "background_color": {
