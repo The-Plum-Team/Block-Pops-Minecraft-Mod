@@ -1,3 +1,4 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\block\BoxBlock.java ==========
 package com.theplumteam.block;
 
 import com.theplumteam.blockentity.BoxBlockEntity;
@@ -248,6 +249,12 @@ public class BoxBlock extends BaseEntityBlock {
                         String snapshot = boxBlockEntity.getSkinSnapshot();
                         if (snapshot != null && !snapshot.isEmpty()) {
                             blockEntityTag.putString("SkinSnapshot", snapshot);
+                        }
+
+                        // Get the QuickSkin ID stored on this specific box entity to ensure it's preserved
+                        String quickSkinId = boxBlockEntity.getQuickSkinId();
+                        if (quickSkinId != null && !quickSkinId.isEmpty()) {
+                            blockEntityTag.putString("QuickSkinId", quickSkinId);
                         }
                     }
 

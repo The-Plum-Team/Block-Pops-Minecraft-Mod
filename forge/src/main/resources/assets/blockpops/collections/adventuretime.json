@@ -51,14 +51,13 @@
       "name": "Prince Bubblegum",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
       "texture": "blockpops:textures/figure/adventuretime/prince_bubblegum.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "gary",
-      "name": "Gary",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/adventuretime/gary.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Gary",
+          "texture": "blockpops:textures/figure/adventuretime/gary.png"
+        }
+      ]
     },
     {
       "id": "finn_and_jake_1",

@@ -99,21 +99,17 @@
       "name": "Yoshikage Kira",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
       "texture": "blockpops:textures/figure/jojos/kira_yoshikage.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "kira_kosaku",
-      "name": "Kosaku Kawajiri (Kira)",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/jojos/kira_kosaku.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "killer_queen",
-      "name": "Killer Queen",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/jojos/killer_queen.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Kosaku Kawajiri (Kira)",
+          "texture": "blockpops:textures/figure/jojos/kira_kosaku.png"
+        },
+        {
+          "name": "Killer Queen",
+          "texture": "blockpops:textures/figure/jojos/killer_queen.png"
+        }
+      ]
     },
     {
       "id": "kakyoin",

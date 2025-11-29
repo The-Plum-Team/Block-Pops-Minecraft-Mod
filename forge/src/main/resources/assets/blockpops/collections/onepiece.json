@@ -241,42 +241,29 @@
       "name": "Punk-01 Shaka",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
       "texture": "blockpops:textures/figure/onepiece/punk_01_shaka.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "punk_02_lilith",
-      "name": "Punk-02 Lilith",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/onepiece/punk_02_lilith.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "punk_03_edison",
-      "name": "Punk-03 Edison",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/onepiece/punk_03_edison.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "punk_04_pythagoras",
-      "name": "Punk-04 Pythagoras",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/onepiece/punk_04_pythagoras.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "punk_05_atlas",
-      "name": "Punk-05 Atlas",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/onepiece/punk_05_atlas.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "punk_06_york",
-      "name": "Punk-06 York",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/onepiece/punk_06_york.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Punk-02 Lilith",
+          "texture": "blockpops:textures/figure/onepiece/punk_02_lilith.png"
+        },
+        {
+          "name": "Punk-03 Edison",
+          "texture": "blockpops:textures/figure/onepiece/punk_03_edison.png"
+        },
+        {
+          "name": "Punk-04 Pythagoras",
+          "texture": "blockpops:textures/figure/onepiece/punk_04_pythagoras.png"
+        },
+        {
+          "name": "Punk-05 Atlas",
+          "texture": "blockpops:textures/figure/onepiece/punk_05_atlas.png"
+        },
+        {
+          "name": "Punk-06 York",
+          "texture": "blockpops:textures/figure/onepiece/punk_06_york.png"
+        }
+      ]
     },
     {
       "id": "buggy_the_clown",
