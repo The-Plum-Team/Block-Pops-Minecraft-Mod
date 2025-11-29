@@ -1,4 +1,3 @@
-// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\forge\BlockPopsModForge.java ==========
 package com.theplumteam.forge;
 
 import com.theplumteam.BlockPopsMod;
@@ -106,23 +105,23 @@ public final class BlockPopsModForge {
                 CollectionRegistry.registerDynamicCollection(updatedCollection);
                 BlockPopsMod.LOGGER.debug("Updated World Players collection after player join: {}", player.getName().getString());
 
-                // Sync dynamic collections, discovery data, and token data to the client when they join
+                // Broadcast dynamic collections to ALL players to ensure everyone sees the new player
+                java.util.List<FigureCollection> dynamicCollections = new java.util.ArrayList<>();
+                CollectionRegistry.getAllCollections().forEach(collection -> {
+                    if ("world_players".equals(collection.getId())) {
+                        dynamicCollections.add(collection);
+                    }
+                });
+
+                if (!dynamicCollections.isEmpty()) {
+                    SyncDynamicCollectionsPacket collectionsPacket = new SyncDynamicCollectionsPacket(dynamicCollections);
+                    NETWORK_CHANNEL.send(PacketDistributor.ALL.noArg(), collectionsPacket);
+                    BlockPopsMod.LOGGER.info("Synced {} dynamic collections to all players", dynamicCollections.size());
+                }
+
+                // Sync discovery data and token data to the SPECIFIC client when they join
                 if (player instanceof ServerPlayer) {
                     ServerPlayer serverPlayer = (ServerPlayer) player;
-
-                    // Sync dynamic collections (like World Players)
-                    java.util.List<FigureCollection> dynamicCollections = new java.util.ArrayList<>();
-                    CollectionRegistry.getAllCollections().forEach(collection -> {
-                        if ("world_players".equals(collection.getId())) {
-                            dynamicCollections.add(collection);
-                        }
-                    });
-                    if (!dynamicCollections.isEmpty()) {
-                        SyncDynamicCollectionsPacket collectionsPacket = new SyncDynamicCollectionsPacket(dynamicCollections);
-                        NETWORK_CHANNEL.send(PacketDistributor.PLAYER.with(() -> serverPlayer), collectionsPacket);
-                        BlockPopsMod.LOGGER.info("Synced {} dynamic collections to {}",
-                                dynamicCollections.size(), serverPlayer.getName().getString());
-                    }
 
                     serverPlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
                         // Sync discovered figures and their skins

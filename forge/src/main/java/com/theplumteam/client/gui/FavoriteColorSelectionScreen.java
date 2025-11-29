@@ -212,12 +212,10 @@ public class FavoriteColorSelectionScreen extends Screen {
      * Render animated starry background
      */
     private void renderBackgroundEffects(GuiGraphics graphics, float partialTick) {
-        // 1. Fill with configured background color as a base layer
-        ClientConfig config = ClientConfig.getInstance();
-        int bgRed = (int)(config.backgroundColorR * 255);
-        int bgGreen = (int)(config.backgroundColorG * 255);
-        int bgBlue = (int)(config.backgroundColorB * 255);
-        int bgColor = 0xFF000000 | (bgRed << 16) | (bgGreen << 8) | bgBlue;
+        // 1. Fill with black background as a base layer
+        // Modified to force default black background (ignoring ClientConfig which may carry over
+        // colors from the Claw Machine/Collection screen).
+        int bgColor = 0xFF000000;
         graphics.fill(0, 0, this.width, this.height, bgColor);
 
         // 2. Render the moving star pattern

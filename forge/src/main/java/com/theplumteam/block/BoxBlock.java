@@ -1,11 +1,9 @@
 package com.theplumteam.block;
 
 import com.theplumteam.blockentity.BoxBlockEntity;
-import com.theplumteam.client.gui.FigurePositionScreen;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModItems;
 import net.minecraft.ChatFormatting;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -35,7 +33,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.client.particle.ParticleEngine;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraftforge.client.extensions.common.IClientBlockExtensions;
@@ -189,25 +186,9 @@ public class BoxBlock extends BaseEntityBlock {
             else if (!boxBlockEntity.isOpen() && level.isClientSide) {
                 // Only allow access in dev mode or creative mode
                 if (!FMLLoader.isProduction()) {
-                    Minecraft.getInstance().setScreen(new FigurePositionScreen(
-                            pos,
-                            boxBlockEntity.getFigureOffsetX(),
-                            boxBlockEntity.getFigureOffsetY(),
-                            boxBlockEntity.getFigureOffsetZ(),
-                            boxBlockEntity.getFigureScale(),
-                            boxBlockEntity.getHitboxOffsetX(),
-                            boxBlockEntity.getHitboxOffsetY(),
-                            boxBlockEntity.getHitboxOffsetZ(),
-                            boxBlockEntity.getHitboxScaleX(),
-                            boxBlockEntity.getHitboxScaleY(),
-                            boxBlockEntity.getHitboxScaleZ(),
-                            boxBlockEntity.getLogoPositionX(),
-                            boxBlockEntity.getLogoPositionY(),
-                            boxBlockEntity.getLogoPositionZ(),
-                            boxBlockEntity.getLogoScaleX(),
-                            boxBlockEntity.getLogoScaleY(),
-                            boxBlockEntity.getLogoScaleZ()
-                    ));
+                    net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT, () -> () ->
+                            com.theplumteam.client.ClientHelpers.openBoxFigureScreen(pos, boxBlockEntity)
+                    );
                     return InteractionResult.SUCCESS;
                 }
             }
@@ -441,7 +422,7 @@ public class BoxBlock extends BaseEntityBlock {
     public void initializeClient(Consumer<IClientBlockExtensions> consumer) {
         consumer.accept(new IClientBlockExtensions() {
             @Override
-            public boolean addDestroyEffects(BlockState state, Level level, BlockPos pos, ParticleEngine particleEngine) {
+            public boolean addDestroyEffects(BlockState state, Level level, BlockPos pos, net.minecraft.client.particle.ParticleEngine particleEngine) {
                 BlockState woolState = getWoolBlockState(level, pos);
 
                 // Spawn multiple particles in a grid pattern similar to default block breaking
@@ -466,7 +447,7 @@ public class BoxBlock extends BaseEntityBlock {
             }
 
             @Override
-            public boolean addHitEffects(BlockState state, Level level, HitResult target, ParticleEngine particleEngine) {
+            public boolean addHitEffects(BlockState state, Level level, HitResult target, net.minecraft.client.particle.ParticleEngine particleEngine) {
                 if (!(target instanceof BlockHitResult blockHit)) {
                     return false;
                 }

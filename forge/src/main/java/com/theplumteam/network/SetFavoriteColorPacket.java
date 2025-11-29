@@ -5,12 +5,16 @@ import com.theplumteam.capability.PlayerDiscoveryProvider;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.PlayerCollectionGenerator;
+import com.theplumteam.forge.BlockPopsModForge;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.network.PacketDistributor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Supplier;
 
 /**
@@ -59,6 +63,12 @@ public class SetFavoriteColorPacket {
                             CollectionRegistry.registerDynamicCollection(updatedCollection);
                             LOGGER.info("Regenerated World Players collection after {} changed their favorite color",
                                     player.getName().getString());
+
+                            // Broadcast update to all players to ensure everyone sees the color change
+                            List<FigureCollection> dynamicCollections = new ArrayList<>();
+                            dynamicCollections.add(updatedCollection);
+                            SyncDynamicCollectionsPacket collectionsPacket = new SyncDynamicCollectionsPacket(dynamicCollections);
+                            BlockPopsModForge.NETWORK_CHANNEL.send(PacketDistributor.ALL.noArg(), collectionsPacket);
                         }
                     } catch (IllegalArgumentException e) {
                         LOGGER.warn("Player {} sent invalid color name: {}",

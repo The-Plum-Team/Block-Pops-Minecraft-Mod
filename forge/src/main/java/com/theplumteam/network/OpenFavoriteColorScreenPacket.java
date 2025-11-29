@@ -1,8 +1,9 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\network\OpenFavoriteColorScreenPacket.java ==========
 package com.theplumteam.network;
 
-import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,10 +32,20 @@ public class OpenFavoriteColorScreenPacket {
     public static void handle(OpenFavoriteColorScreenPacket packet, Supplier<NetworkEvent.Context> contextSupplier) {
         NetworkEvent.Context context = contextSupplier.get();
         context.enqueueWork(() -> {
-            // This runs on the client thread
-            LOGGER.info("Opening favorite color selection screen");
-            Minecraft.getInstance().setScreen(new FavoriteColorSelectionScreen());
+            // Use DistExecutor to safely run client-side code only on the client
+            // This prevents class loading errors on the dedicated server
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> ClientHandler::handle);
         });
         context.setPacketHandled(true);
+    }
+
+    // Inner class to isolate client-side logic and imports.
+    // This class will not be loaded on the server, preventing the crash.
+    private static class ClientHandler {
+        public static void handle() {
+            LOGGER.info("Opening favorite color selection screen");
+            // Use fully qualified names or ensure imports are only used within this isolated class
+            net.minecraft.client.Minecraft.getInstance().setScreen(new com.theplumteam.client.gui.FavoriteColorSelectionScreen());
+        }
     }
 }

@@ -1,9 +1,7 @@
 package com.theplumteam.block;
 
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
-import com.theplumteam.client.gui.CollectionSelectionScreen;
 import com.theplumteam.registry.ModBlockEntities;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
@@ -37,8 +35,8 @@ public class ClawMachineBlock extends BaseEntityBlock {
     public ClawMachineBlock(Properties properties) {
         super(properties);
         this.registerDefaultState(this.stateDefinition.any()
-            .setValue(FACING, Direction.NORTH)
-            .setValue(HALF, DoubleBlockHalf.LOWER));
+                .setValue(FACING, Direction.NORTH)
+                .setValue(HALF, DoubleBlockHalf.LOWER));
     }
 
     @Nullable
@@ -46,20 +44,20 @@ public class ClawMachineBlock extends BaseEntityBlock {
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         // Only create block entity for the lower half
         return state.getValue(HALF) == DoubleBlockHalf.LOWER
-            ? new ClawMachineBlockEntity(pos, state)
-            : null;
+                ? new ClawMachineBlockEntity(pos, state)
+                : null;
     }
 
     @Nullable
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state,
-                                                                   BlockEntityType<T> blockEntityType) {
+                                                                  BlockEntityType<T> blockEntityType) {
         // Only tick the lower half
         if (state.getValue(HALF) == DoubleBlockHalf.LOWER) {
             return level.isClientSide
-                ? createTickerHelper(blockEntityType, ModBlockEntities.CLAW_MACHINE_BLOCK.get(),
-                                    ClawMachineBlockEntity::tick)
-                : null;
+                    ? createTickerHelper(blockEntityType, ModBlockEntities.CLAW_MACHINE_BLOCK.get(),
+                    ClawMachineBlockEntity::tick)
+                    : null;
         }
         return null;
     }
@@ -74,17 +72,16 @@ public class ClawMachineBlock extends BaseEntityBlock {
                                  InteractionHand hand, BlockHitResult hit) {
         // Get the lower block position regardless of which half was clicked
         BlockPos lowerPos = state.getValue(HALF) == DoubleBlockHalf.LOWER
-            ? pos
-            : pos.below();
+                ? pos
+                : pos.below();
 
         if (level.isClientSide) {
             BlockEntity blockEntity = level.getBlockEntity(lowerPos);
             if (blockEntity instanceof ClawMachineBlockEntity clawMachineBlockEntity) {
-                // Open the collection selection screen
-                Minecraft.getInstance().setScreen(new CollectionSelectionScreen(
-                    lowerPos,
-                    clawMachineBlockEntity.getCollectionId()
-                ));
+                // Open the collection selection screen safely on client side
+                net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT, () -> () ->
+                        com.theplumteam.client.ClientHelpers.openClawMachineScreen(lowerPos, clawMachineBlockEntity)
+                );
                 return InteractionResult.SUCCESS;
             }
         }
@@ -99,22 +96,22 @@ public class ClawMachineBlock extends BaseEntityBlock {
 
         // Check if there's enough space above for the upper block
         if (pos.getY() < level.getMaxBuildHeight() - 1
-            && level.getBlockState(pos.above()).canBeReplaced(context)) {
+                && level.getBlockState(pos.above()).canBeReplaced(context)) {
 
             // Face the player directly (opposite of player's facing direction)
             Direction playerFacing = context.getHorizontalDirection();
             Direction blockFacing = playerFacing.getOpposite();
 
             return this.defaultBlockState()
-                .setValue(FACING, blockFacing)
-                .setValue(HALF, DoubleBlockHalf.LOWER);
+                    .setValue(FACING, blockFacing)
+                    .setValue(HALF, DoubleBlockHalf.LOWER);
         }
         return null;
     }
 
     @Override
     public void setPlacedBy(Level level, BlockPos pos, BlockState state,
-                           @Nullable LivingEntity placer, ItemStack stack) {
+                            @Nullable LivingEntity placer, ItemStack stack) {
         // Place the upper half
         level.setBlock(pos.above(), state.setValue(HALF, DoubleBlockHalf.UPPER), 3);
     }
@@ -135,7 +132,7 @@ public class ClawMachineBlock extends BaseEntityBlock {
 
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos,
-                        BlockState newState, boolean isMoving) {
+                         BlockState newState, boolean isMoving) {
         if (!state.is(newState.getBlock())) {
             // Remove the other half when one half is broken
             DoubleBlockHalf half = state.getValue(HALF);
@@ -157,11 +154,11 @@ public class ClawMachineBlock extends BaseEntityBlock {
             BlockPos lowerPos = pos.below();
             BlockState lowerState = level.getBlockState(lowerPos);
             if (lowerState.is(state.getBlock())
-                && lowerState.getValue(HALF) == DoubleBlockHalf.LOWER) {
+                    && lowerState.getValue(HALF) == DoubleBlockHalf.LOWER) {
                 BlockState airState = lowerState.hasProperty(BlockStateProperties.WATERLOGGED)
-                    && lowerState.getValue(BlockStateProperties.WATERLOGGED)
-                    ? Blocks.WATER.defaultBlockState()
-                    : Blocks.AIR.defaultBlockState();
+                        && lowerState.getValue(BlockStateProperties.WATERLOGGED)
+                        ? Blocks.WATER.defaultBlockState()
+                        : Blocks.AIR.defaultBlockState();
                 level.setBlock(lowerPos, airState, 35);
                 level.levelEvent(player, 2001, lowerPos, Block.getId(lowerState));
             }

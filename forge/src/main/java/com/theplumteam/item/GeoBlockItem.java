@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public class GeoBlockItem extends BlockItem {
-    private BlockEntityWithoutLevelRenderer renderer;
 
     public GeoBlockItem(Block block, Properties properties) {
         super(block, properties);
@@ -167,7 +166,7 @@ public class GeoBlockItem extends BlockItem {
             FigureDefinition figure = collection.getFigure(figureId).orElse(null);
             if (figure != null && figure.hasAlternatives()) {
                 tooltip.add(Component.translatable("tooltip.blockpops.has_alternatives")
-                    .withStyle(ChatFormatting.DARK_PURPLE, ChatFormatting.ITALIC));
+                        .withStyle(ChatFormatting.DARK_PURPLE, ChatFormatting.ITALIC));
             }
         }
     }
@@ -175,6 +174,8 @@ public class GeoBlockItem extends BlockItem {
     @Override
     public void initializeClient(Consumer<IClientItemExtensions> consumer) {
         consumer.accept(new IClientItemExtensions() {
+            private BlockEntityWithoutLevelRenderer renderer;
+
             @Override
             public BlockEntityWithoutLevelRenderer getCustomRenderer() {
                 if (renderer == null) {
