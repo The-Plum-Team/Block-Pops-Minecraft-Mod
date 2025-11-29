@@ -1,3 +1,4 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\block\ClawMachineBlock.java ==========
 package com.theplumteam.block;
 
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
@@ -82,15 +83,16 @@ public class ClawMachineBlock extends BaseEntityBlock {
                 ? pos
                 : pos.below();
 
-        if (level.isClientSide) {
-            BlockEntity blockEntity = level.getBlockEntity(lowerPos);
-            if (blockEntity instanceof ClawMachineBlockEntity clawMachineBlockEntity) {
+        BlockEntity blockEntity = level.getBlockEntity(lowerPos);
+        if (blockEntity instanceof ClawMachineBlockEntity clawMachineBlockEntity) {
+            if (level.isClientSide) {
                 // Open the collection selection screen safely on client side
                 net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT, () -> () ->
                         com.theplumteam.client.ClientHelpers.openClawMachineScreen(lowerPos, clawMachineBlockEntity)
                 );
-                return InteractionResult.SUCCESS;
             }
+            // Return SUCCESS on client (to handle animation/prediction) and CONSUME on server (to prevent item use)
+            return InteractionResult.sidedSuccess(level.isClientSide);
         }
         return InteractionResult.PASS;
     }

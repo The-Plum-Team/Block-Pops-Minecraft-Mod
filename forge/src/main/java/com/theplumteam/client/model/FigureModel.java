@@ -113,7 +113,9 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
             }
 
             // 4. Live Mojang Skin - PRIORITY #4
-            if (animatable.getBlockPos().equals(BlockPos.ZERO) && Minecraft.getInstance().getConnection() != null) {
+            // Check PlayerInfo for both items AND placed blocks.
+            // This allows client-side skin mods that update the player's connection info to work.
+            if (Minecraft.getInstance().getConnection() != null) {
                 PlayerInfo info = Minecraft.getInstance().getConnection().getPlayerInfo(figure.getPlayerUUID());
                 if (info != null) return info.getSkinLocation();
             }

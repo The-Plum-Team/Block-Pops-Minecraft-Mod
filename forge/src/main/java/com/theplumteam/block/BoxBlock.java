@@ -212,6 +212,16 @@ public class BoxBlock extends BaseEntityBlock {
                         if (heldFigureId.equals(boxBlockEntity.getFigureId()) &&
                                 heldCollectionId.equals(boxBlockEntity.getCollectionId())) {
 
+                            // --- Update Box Data from Item ---
+                            // This ensures the box gets the skin data from the item if it was missing
+                            if (blockEntityTag.contains("QuickSkinId")) {
+                                boxBlockEntity.setQuickSkinId(blockEntityTag.getString("QuickSkinId"));
+                            }
+                            if (blockEntityTag.contains("SkinSnapshot")) {
+                                boxBlockEntity.setSkinSnapshot(blockEntityTag.getString("SkinSnapshot"));
+                            }
+                            // ---------------------------------
+
                             // Put the figure back in the box
                             boxBlockEntity.setFigureExtracted(false);
 
@@ -302,6 +312,27 @@ public class BoxBlock extends BaseEntityBlock {
         Direction playerFacing = context.getHorizontalDirection();
         Direction blockFacing = playerFacing.getOpposite();
         return this.defaultBlockState().setValue(FACING, blockFacing);
+    }
+
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
+        super.setPlacedBy(level, pos, state, placer, stack);
+
+        // Ensure critical skin data is synced to client immediately upon placement.
+        if (!level.isClientSide) {
+            BlockEntity blockEntity = level.getBlockEntity(pos);
+            if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
+                CompoundTag tag = stack.getTagElement("BlockEntityTag");
+                if (tag != null) {
+                    if (tag.contains("QuickSkinId")) {
+                        boxBlockEntity.setQuickSkinId(tag.getString("QuickSkinId"));
+                    }
+                    if (tag.contains("SkinSnapshot")) {
+                        boxBlockEntity.setSkinSnapshot(tag.getString("SkinSnapshot"));
+                    }
+                }
+            }
+        }
     }
 
     @Override

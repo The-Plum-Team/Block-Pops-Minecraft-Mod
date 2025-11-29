@@ -1,3 +1,4 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\network\UnlockCollectionPacket.java ==========
 package com.theplumteam.network;
 
 import com.mojang.authlib.GameProfile;
@@ -22,6 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
@@ -52,7 +54,7 @@ public class UnlockCollectionPacket {
             ServerPlayer player = context.getSender();
             if (player != null) {
                 LOGGER.info("Player {} requested to unlock collection: {}",
-                    player.getName().getString(), packet.collectionId);
+                        player.getName().getString(), packet.collectionId);
 
                 player.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
                     unlockEntireCollection(player, packet.collectionId, discovery);
@@ -77,7 +79,7 @@ public class UnlockCollectionPacket {
             }
 
             LOGGER.info("Unlocking {} figures from collection {} for player {}",
-                figures.size(), collectionId, player.getName().getString());
+                    figures.size(), collectionId, player.getName().getString());
 
             // Unlock and give each figure
             for (FigureDefinition figure : figures) {
@@ -85,8 +87,32 @@ public class UnlockCollectionPacket {
             }
 
             LOGGER.info("Successfully unlocked all figures from collection {} for player {}",
-                collectionId, player.getName().getString());
+                    collectionId, player.getName().getString());
         });
+    }
+
+    /**
+     * Helper to reflectively get Quick Skin ID from server repo
+     */
+    @Nullable
+    private static String getQuickSkinIdFromServer(UUID playerId) {
+        try {
+            Class<?> repoClass = Class.forName("com.quickskin.mod.server.data.ServerPlayerAppearanceRepository");
+            java.lang.reflect.Method getInstanceMethod = repoClass.getMethod("getInstance");
+            Object repoInstance = getInstanceMethod.invoke(null);
+
+            java.lang.reflect.Method getAppearanceMethod = repoClass.getMethod("getAppearance", UUID.class);
+            Object appearance = getAppearanceMethod.invoke(repoInstance, playerId);
+
+            if (appearance != null) {
+                Class<?> appearanceClass = appearance.getClass();
+                java.lang.reflect.Method getSkinIdMethod = appearanceClass.getMethod("getSkinId");
+                return (String) getSkinIdMethod.invoke(appearance);
+            }
+        } catch (Exception e) {
+            // Quick Skin not installed or error accessing
+        }
+        return null;
     }
 
     /**
@@ -112,14 +138,25 @@ public class UnlockCollectionPacket {
         }
         String uniqueFigureId = collectionId + ":" + figure.getId();
         String skinSnapshot = null;
+        String quickSkinSnapshot = null;
 
         // Handle player figures with fresh skin data
         if (figure.getType() == com.theplumteam.figure.FigureType.PLAYER) {
+            // Mojang Snapshot
             GameProfile freshProfile = getFreshGameProfile(player, figure);
             if (freshProfile != null && !freshProfile.getProperties().get("textures").isEmpty()) {
                 skinSnapshot = freshProfile.getProperties().get("textures").iterator().next().getValue();
                 discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
                 LOGGER.debug("Saved skin snapshot for player figure: {}", uniqueFigureId);
+            }
+
+            // Quick Skin Snapshot
+            if (figure.getPlayerUUID() != null) {
+                String qsId = getQuickSkinIdFromServer(figure.getPlayerUUID());
+                if (qsId != null && !qsId.isEmpty()) {
+                    quickSkinSnapshot = qsId;
+                    LOGGER.info("Captured Quick Skin ID for figure {}: {}", uniqueFigureId, qsId);
+                }
             }
         }
 
@@ -152,15 +189,20 @@ public class UnlockCollectionPacket {
             }
         }
 
+        // Save Quick Skin ID to NBT if found
+        if (quickSkinSnapshot != null) {
+            blockEntityTag.putString("QuickSkinId", quickSkinSnapshot);
+        }
+
         boxItem.getOrCreateTag().put("BlockEntityTag", blockEntityTag);
 
         // Drop the box near the player
         ItemEntity itemEntity = new ItemEntity(
-            player.level(),
-            player.getX(),
-            player.getY() + 1.0,
-            player.getZ(),
-            boxItem
+                player.level(),
+                player.getX(),
+                player.getY() + 1.0,
+                player.getZ(),
+                boxItem
         );
         itemEntity.setDeltaMovement(0, 0.2, 0);
         player.level().addFreshEntity(itemEntity);

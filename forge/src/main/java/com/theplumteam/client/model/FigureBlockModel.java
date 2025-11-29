@@ -116,12 +116,13 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
                 return getSkinLocationFromSnapshot(figure, discoverySnapshot);
             }
 
-            // 5. Live Mojang Fallback
+            // 5. Live Mojang Fallback - Check PlayerInfo even for blocks
             if (Minecraft.getInstance().getConnection() != null) {
                 PlayerInfo playerInfo = Minecraft.getInstance().getConnection().getPlayerInfo(figure.getPlayerUUID());
                 if (playerInfo != null) return playerInfo.getSkinLocation();
             }
 
+            // 6. Absolute Fallback
             GameProfile profile = liveProfileCache.computeIfAbsent(figure.getPlayerUUID(), uuid ->
                     new GameProfile(uuid, figure.getName()));
             liveRegistrationCache.computeIfAbsent(figure.getPlayerUUID(), uuid -> {
