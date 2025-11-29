@@ -1,3 +1,4 @@
+// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\block\FigureBlock.java ==========
 package com.theplumteam.block;
 
 import com.theplumteam.block.PopBlockColor;
@@ -11,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
@@ -102,6 +104,27 @@ public class FigureBlock extends BaseEntityBlock {
         Direction playerFacing = context.getHorizontalDirection();
         Direction blockFacing = playerFacing.getOpposite();
         return this.defaultBlockState().setValue(FACING, blockFacing);
+    }
+
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
+        super.setPlacedBy(level, pos, state, placer, stack);
+
+        // Ensure critical skin data is synced to client immediately upon placement.
+        if (!level.isClientSide) {
+            BlockEntity blockEntity = level.getBlockEntity(pos);
+            if (blockEntity instanceof FigureBlockEntity figureBlockEntity) {
+                CompoundTag tag = stack.getTagElement("BlockEntityTag");
+                if (tag != null) {
+                    if (tag.contains("QuickSkinId")) {
+                        figureBlockEntity.setQuickSkinId(tag.getString("QuickSkinId"));
+                    }
+                    if (tag.contains("SkinSnapshot")) {
+                        figureBlockEntity.setSkinSnapshot(tag.getString("SkinSnapshot"));
+                    }
+                }
+            }
+        }
     }
 
     @Override
