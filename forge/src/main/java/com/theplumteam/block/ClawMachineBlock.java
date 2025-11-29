@@ -28,6 +28,13 @@ import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
+import net.minecraft.core.particles.BlockParticleOption;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraftforge.client.extensions.common.IClientBlockExtensions;
+import net.minecraft.world.phys.HitResult;
+import java.util.function.Consumer;
+import net.minecraft.client.particle.ParticleEngine;
+
 public class ClawMachineBlock extends BaseEntityBlock {
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
     public static final EnumProperty<DoubleBlockHalf> HALF = BlockStateProperties.DOUBLE_BLOCK_HALF;
@@ -168,5 +175,65 @@ public class ClawMachineBlock extends BaseEntityBlock {
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         builder.add(FACING, HALF);
+    }
+
+    /**
+     * Register client-side block extensions for custom particles
+     */
+    @Override
+    public void initializeClient(Consumer<IClientBlockExtensions> consumer) {
+        consumer.accept(new IClientBlockExtensions() {
+            @Override
+            public boolean addDestroyEffects(BlockState state, Level level, BlockPos pos, ParticleEngine particleEngine) {
+                BlockState woolState = Blocks.PURPLE_WOOL.defaultBlockState();
+
+                // Spawn multiple particles in a grid pattern similar to default block breaking
+                for (int i = 0; i < 4; ++i) {
+                    for (int j = 0; j < 4; ++j) {
+                        for (int k = 0; k < 4; ++k) {
+                            double x = pos.getX() + (i + 0.5) / 4.0;
+                            double y = pos.getY() + (j + 0.5) / 4.0;
+                            double z = pos.getZ() + (k + 0.5) / 4.0;
+
+                            level.addParticle(
+                                    new BlockParticleOption(ParticleTypes.BLOCK, woolState),
+                                    x, y, z,
+                                    (Math.random() - 0.5) * 0.8,
+                                    (Math.random() - 0.5) * 0.8,
+                                    (Math.random() - 0.5) * 0.8
+                            );
+                        }
+                    }
+                }
+                return true;
+            }
+
+            @Override
+            public boolean addHitEffects(BlockState state, Level level, HitResult target, ParticleEngine particleEngine) {
+                if (!(target instanceof BlockHitResult blockHit)) {
+                    return false;
+                }
+
+                BlockState woolState = Blocks.PURPLE_WOOL.defaultBlockState();
+                BlockPos pos = blockHit.getBlockPos();
+                Direction side = blockHit.getDirection();
+
+                // Spawn a few particles on the side that was hit
+                for (int i = 0; i < 4; ++i) {
+                    double x = pos.getX() + 0.5 + (side.getStepX() * 0.5) + (Math.random() - 0.5) * 0.4;
+                    double y = pos.getY() + 0.5 + (side.getStepY() * 0.5) + (Math.random() - 0.5) * 0.4;
+                    double z = pos.getZ() + 0.5 + (side.getStepZ() * 0.5) + (Math.random() - 0.5) * 0.4;
+
+                    level.addParticle(
+                            new BlockParticleOption(ParticleTypes.BLOCK, woolState),
+                            x, y, z,
+                            side.getStepX() * 0.01,
+                            side.getStepY() * 0.01,
+                            side.getStepZ() * 0.01
+                    );
+                }
+                return true;
+            }
+        });
     }
 }
