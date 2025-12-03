@@ -2,6 +2,10 @@
 package com.theplumteam.client.gui;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
@@ -21,6 +25,7 @@ import com.theplumteam.network.TokenType;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -80,8 +85,7 @@ public class CollectionSelectionScreen extends Screen {
     private static final ResourceLocation CURSEFORGE_ICON = new ResourceLocation("blockpops", "textures/gui/curseforge_icon.png");
     private static final ResourceLocation MODRINTH_ICON = new ResourceLocation("blockpops", "textures/gui/modrinth_icon.png");
 
-    // Background textures
-    private static final ResourceLocation STAR_PATTERN_TEXTURE = new ResourceLocation("blockpops", "textures/gui/background/star_pattern.png");
+    // Icon textures
     private static final ResourceLocation SETTINGS_ICON = new ResourceLocation("blockpops", "textures/gui/settings_icon.png");
 
     // URLs
@@ -471,20 +475,16 @@ public class CollectionSelectionScreen extends Screen {
     }
 
     /**
-     * Render the animated star pattern
+     * Render the animated star pattern (OPTIMIZED - pre-tiled texture cache, 1 draw call)
      */
     private void renderStarPattern(GuiGraphics graphics, float partialTick) {
-        // Actual texture size
-        int textureSize = 1024;
-        // The size to render each tile (smaller = more stars visible)
-        int tileSize = 55;
-        // Animation speed: pixels per second
-        double pixelsPerSecond = 8.0;
+        double pixelsPerSecond = 5.0;
+        int tileSize = StarPatternCache.getTileSize();
 
-        // Use Minecraft's smooth game time for smooth animation
+        // Calculate smooth scrolling offset
         int tickCount = this.minecraft != null ? this.minecraft.gui.getGuiTicks() : 0;
-        double smoothTime = (tickCount + partialTick) / 20.0; // Convert to seconds
-        double offset = (smoothTime * pixelsPerSecond) % tileSize;
+        double smoothTime = (tickCount + partialTick) / 20.0;
+        double offsetX = (smoothTime * pixelsPerSecond) % tileSize;
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
@@ -493,27 +493,34 @@ public class CollectionSelectionScreen extends Screen {
         ClientConfig config = ClientConfig.getInstance();
         RenderSystem.setShaderColor(config.starColorR, config.starColorG, config.starColorB, config.starOpacity);
 
-        // Calculate how many tiles are needed to cover the screen
-        int xTiles = Mth.ceil((float) this.width / tileSize) + 2;
-        int yTiles = Mth.ceil((float) this.height / tileSize) + 1;
+        // Use the pre-tiled cached texture
+        ResourceLocation cacheTexture = StarPatternCache.getTextureLocation();
+        int cacheWidth = StarPatternCache.getTextureWidth();
+        int cacheHeight = StarPatternCache.getTextureHeight();
 
+        // Calculate UV coordinates for smooth sub-pixel scrolling
+        // The offset creates the scrolling effect via UV manipulation
+        float u0 = (float) offsetX / (float) cacheWidth;
+        float v0 = 0.0f;
+        float u1 = u0 + ((float) this.width / (float) cacheWidth);
+        float v1 = (float) this.height / (float) cacheHeight;
+
+        // Render a single quad with the scrolling UV coordinates
         var pose = graphics.pose();
         pose.pushPose();
 
-        for (int y = 0; y < yTiles; ++y) {
-            for (int x = 0; x < xTiles; ++x) {
-                // Draw each tile, applying the horizontal scroll offset
-                double drawX = x * tileSize - offset;
-                double drawY = y * tileSize;
+        RenderSystem.setShaderTexture(0, cacheTexture);
+        RenderSystem.setShader(GameRenderer::getPositionTexShader);
 
-                // Draw the full texture scaled down to tileSize x tileSize
-                pose.pushPose();
-                pose.translate(drawX, drawY, 0);
-                pose.scale(tileSize / (float)textureSize, tileSize / (float)textureSize, 1.0f);
-                graphics.blit(STAR_PATTERN_TEXTURE, 0, 0, 0, 0.0f, 0.0f, textureSize, textureSize, textureSize, textureSize);
-                pose.popPose();
-            }
-        }
+        Tesselator tesselator = Tesselator.getInstance();
+        BufferBuilder bufferBuilder = tesselator.getBuilder();
+
+        bufferBuilder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        bufferBuilder.vertex(pose.last().pose(), 0, this.height, 0).uv(u0, v1).endVertex();
+        bufferBuilder.vertex(pose.last().pose(), this.width, this.height, 0).uv(u1, v1).endVertex();
+        bufferBuilder.vertex(pose.last().pose(), this.width, 0, 0).uv(u1, v0).endVertex();
+        bufferBuilder.vertex(pose.last().pose(), 0, 0, 0).uv(u0, v0).endVertex();
+        tesselator.end();
 
         pose.popPose();
 
