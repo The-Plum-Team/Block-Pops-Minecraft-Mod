@@ -247,6 +247,11 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         setChanged();
     }
 
+    public void setColorOverride(String color) {
+        this.colorOverride = color;
+        setChanged();
+    }
+
     public int getAlternativeSkinIndex() {
         return alternativeSkinIndex;
     }

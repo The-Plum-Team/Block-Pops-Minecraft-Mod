@@ -39,23 +39,24 @@ public enum PopBlockColor implements StringRepresentable {
     }
 
     public String getTextureName() {
+        // File names use capitalized names (e.g., Black.png, Blue.png)
         return switch (this) {
-            case ORIGINAL -> "original";
-            case BLACK -> "black";
-            case BLUE -> "blue";
-            case BROWN -> "brown";
-            case CYAN -> "cyan";
-            case GRAY -> "gray";
-            case GREEN -> "green";
+            case ORIGINAL -> "Original";
+            case BLACK -> "Black";
+            case BLUE -> "Blue";
+            case BROWN -> "Brown";
+            case CYAN -> "Cyan";
+            case GRAY -> "Gray";
+            case GREEN -> "Green";
             case LIGHT_BLUE -> "light_blue";
             case LIGHT_GRAY -> "light_gray";
-            case LIME -> "lime";
-            case MAGENTA -> "magenta";
-            case ORANGE -> "orange";
-            case PINK -> "pink";
-            case PURPLE -> "purple";
-            case RED -> "red";
-            case YELLOW -> "yellow";
+            case LIME -> "Lime";
+            case MAGENTA -> "Magenta";
+            case ORANGE -> "Orange";
+            case PINK -> "Pink";
+            case PURPLE -> "Purple";
+            case RED -> "Red";
+            case YELLOW -> "Yellow";
         };
     }
 }

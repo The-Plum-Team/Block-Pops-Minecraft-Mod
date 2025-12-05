@@ -1,8 +1,10 @@
 package com.theplumteam.client.renderer;
 
+import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.model.FigureModel;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.figure.FigureType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
@@ -94,6 +96,15 @@ public final class FigureWidgetRenderer {
                 BoxBlockEntity entity = new BoxBlockEntity(BlockPos.ZERO, Blocks.AIR.defaultBlockState());
                 entity.setFigureId(figure.getId());
                 entity.setCollectionIdOverride(collectionId);
+
+                // For player figures, set the color override from their favorite color
+                if (figure.getType() == FigureType.PLAYER) {
+                    PopBlockColor favoriteColor = figure.getFavoriteColor();
+                    if (favoriteColor != null) {
+                        entity.setColorOverride(favoriteColor.name());
+                    }
+                }
+
                 return entity;
             } catch (Exception e) {
                 return null;
