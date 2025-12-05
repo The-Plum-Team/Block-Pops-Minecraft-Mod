@@ -125,7 +125,6 @@ public class CollectionListWidget extends ObjectSelectionList<CollectionEntry> {
         if (GuiScaleManager.isUsingInverseScale()) {
             float scale = GuiScaleManager.getRenderScaleFactor();
 
-            // Store and scale bounds (same as render)
             int origX0 = this.x0, origX1 = this.x1, origY0 = this.y0, origY1 = this.y1;
             int origWidth = this.width, origHeight = this.height;
             double origScroll = this.getScrollAmount();
@@ -138,10 +137,8 @@ public class CollectionListWidget extends ObjectSelectionList<CollectionEntry> {
             this.height = (int)(origHeight * scale);
             this.setScrollAmount(origScroll * scale);
 
-            // Scale mouse coords (same as render)
             boolean result = super.mouseClicked(mouseX * scale, mouseY * scale, button);
 
-            // Restore
             this.x0 = origX0; this.x1 = origX1; this.y0 = origY0; this.y1 = origY1;
             this.width = origWidth; this.height = origHeight;
             this.setScrollAmount(origScroll);

@@ -158,6 +158,29 @@ public class FigureListWidget extends ObjectSelectionList<FigureEntry> {
         return this.width - 8;
     }
 
+    /**
+     * Get the scaled item height when inverse scale is active.
+     * This ensures entry spacing matches the scaled coordinate space.
+     */
+    private int getScaledItemHeight() {
+        if (GuiScaleManager.isUsingInverseScale()) {
+            return (int)(this.itemHeight * GuiScaleManager.getRenderScaleFactor());
+        }
+        return this.itemHeight;
+    }
+
+    @Override
+    protected int getRowTop(int index) {
+        // Use scaled itemHeight for consistent spacing in scaled coordinate space
+        return this.y0 + 4 - (int)this.getScrollAmount() + index * getScaledItemHeight() + this.headerHeight;
+    }
+
+    @Override
+    protected int getMaxPosition() {
+        // Use scaled itemHeight for correct scroll limits
+        return this.headerHeight + this.getItemCount() * getScaledItemHeight();
+    }
+
     @Override
     protected int getScrollbarPosition() {
         return this.x1 - 6;
@@ -170,28 +193,8 @@ public class FigureListWidget extends ObjectSelectionList<FigureEntry> {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (GuiScaleManager.isUsingInverseScale()) {
-            float scale = GuiScaleManager.getRenderScaleFactor();
-
-            int origX0 = this.x0, origX1 = this.x1, origY0 = this.y0, origY1 = this.y1;
-            int origWidth = this.width, origHeight = this.height;
-            double origScroll = this.getScrollAmount();
-
-            this.x0 = (int)(origX0 * scale);
-            this.x1 = (int)(origX1 * scale);
-            this.y0 = (int)(origY0 * scale);
-            this.y1 = (int)(origY1 * scale);
-            this.width = (int)(origWidth * scale);
-            this.height = (int)(origHeight * scale);
-            this.setScrollAmount(origScroll * scale);
-
-            boolean result = super.mouseClicked(mouseX * scale, mouseY * scale, button);
-
-            this.x0 = origX0; this.x1 = origX1; this.y0 = origY0; this.y1 = origY1;
-            this.width = origWidth; this.height = origHeight;
-            this.setScrollAmount(origScroll);
-            return result;
-        }
+        // Use virtual coordinates directly - screen already transforms mouse coords
+        // Virtual bounds + virtual mouse + virtual itemHeight = correct entry detection
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
@@ -205,28 +208,7 @@ public class FigureListWidget extends ObjectSelectionList<FigureEntry> {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (GuiScaleManager.isUsingInverseScale()) {
-            float scale = GuiScaleManager.getRenderScaleFactor();
-
-            int origX0 = this.x0, origX1 = this.x1, origY0 = this.y0, origY1 = this.y1;
-            int origWidth = this.width, origHeight = this.height;
-            double origScroll = this.getScrollAmount();
-
-            this.x0 = (int)(origX0 * scale);
-            this.x1 = (int)(origX1 * scale);
-            this.y0 = (int)(origY0 * scale);
-            this.y1 = (int)(origY1 * scale);
-            this.width = (int)(origWidth * scale);
-            this.height = (int)(origHeight * scale);
-            this.setScrollAmount(origScroll * scale);
-
-            boolean result = super.mouseDragged(mouseX * scale, mouseY * scale, button, dragX * scale, dragY * scale);
-
-            this.x0 = origX0; this.x1 = origX1; this.y0 = origY0; this.y1 = origY1;
-            this.width = origWidth; this.height = origHeight;
-            this.setScrollAmount(origScroll);
-            return result;
-        }
+        // Use virtual coordinates directly - screen already transforms mouse coords
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 }

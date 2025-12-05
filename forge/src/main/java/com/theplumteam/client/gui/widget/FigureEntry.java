@@ -121,20 +121,23 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 // Render the 3D figure model for discovered figures
                 render3DFigure(graphics, figure, figureX, y, effectiveFigureSize, partialTick);
 
-                // Draw figure name
-                Component figureName = Component.literal(figure.getName());
-                int nameWidth = mc.font.width(figureName);
-                if (nameWidth > effectiveFigureSize - 4) {
-                    String truncated = figure.getName();
-                    while (mc.font.width(truncated + "...") > effectiveFigureSize - 4 && truncated.length() > 0) {
-                        truncated = truncated.substring(0, truncated.length() - 1);
+                // Draw figure name only if GUI scale is less than 3
+                int guiScale = mc.options.guiScale().get();
+                if (guiScale < 3) {
+                    Component figureName = Component.literal(figure.getName());
+                    int nameWidth = mc.font.width(figureName);
+                    if (nameWidth > effectiveFigureSize - 4) {
+                        String truncated = figure.getName();
+                        while (mc.font.width(truncated + "...") > effectiveFigureSize - 4 && truncated.length() > 0) {
+                            truncated = truncated.substring(0, truncated.length() - 1);
+                        }
+                        figureName = Component.literal(truncated + "...");
                     }
-                    figureName = Component.literal(truncated + "...");
-                }
 
-                int nameX = figureX + (effectiveFigureSize - mc.font.width(figureName)) / 2;
-                int nameY = y + effectiveFigureSize - mc.font.lineHeight - 2;
-                graphics.drawString(mc.font, figureName, nameX, nameY, 0xFFFFFF, true);
+                    int nameX = figureX + (effectiveFigureSize - mc.font.width(figureName)) / 2;
+                    int nameY = y + effectiveFigureSize - mc.font.lineHeight - 2;
+                    graphics.drawString(mc.font, figureName, nameX, nameY, 0xFFFFFF, true);
+                }
             } else {
                 // Draw a question mark for undiscovered figures
                 Component questionMark = Component.literal("?");
@@ -166,7 +169,9 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
         float centerX = (x + size / 2.0f) + xOffset;
         float centerY = (y + size * 0.6f) + yOffset;
-        float centerZ = 100.0f + zOffset; // Increased from 50.0f to prevent near-plane clipping
+        // Scale Z position proportionally to prevent clipping at large scales (GUI scale 1)
+        float baseZ = 100.0f + zOffset;
+        float centerZ = baseZ * (size / (float)FIGURE_SIZE);
 
         Lighting.setupForFlatItems();
 
