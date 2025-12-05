@@ -1,13 +1,14 @@
 package com.theplumteam.client.model;
 
 import com.theplumteam.BlockPopsMod;
-import com.theplumteam.block.BoxBlock;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.model.GeoModel;
+
+import java.util.Locale;
 
 /**
  * GeoModel for box blocks - texture is determined by the collection or color
@@ -29,8 +30,9 @@ public class BoxBlockModel extends GeoModel<BoxBlockEntity> {
         PopBlockColor color = animatable.getColor();
         if (color != null) {
             // Use color-based texture for default collection
+            // We explicitly force lowercase here as a safety measure against ResourceLocationException
             return new ResourceLocation(BlockPopsMod.MOD_ID,
-                "textures/block/box/" + color.getTextureName() + ".png");
+                "textures/block/box/" + color.getTextureName().toLowerCase(Locale.ROOT) + ".png");
         }
 
         // Otherwise, get texture from the collection
