@@ -34,6 +34,16 @@ public class GuiScaleManager {
      */
     public static boolean setMenuGuiScale(int targetScale, boolean force) {
         try {
+            Minecraft mc = Minecraft.getInstance();
+            OptionInstance<Integer> guiScaleOption = mc.options.guiScale();
+            int currentScale = guiScaleOption.get();
+
+            // If GUI scale is already at target, do nothing at all
+            if (currentScale == targetScale) {
+                usingInverseScale = false;
+                return false;
+            }
+
             // Check if shaders are active - if so, use inverse scaling approach
             // Unless forced, in which case we proceed with resize
             if (!force && areShadersActive()) {
@@ -43,25 +53,20 @@ public class GuiScaleManager {
             }
 
             usingInverseScale = false;
-            Minecraft mc = Minecraft.getInstance();
-            OptionInstance<Integer> guiScaleOption = mc.options.guiScale();
 
             // Store the original scale if we haven't already
             if (originalGuiScale == null) {
-                originalGuiScale = guiScaleOption.get();
+                originalGuiScale = currentScale;
             }
 
-            // Only change if different from current
-            int currentScale = guiScaleOption.get();
-            if (currentScale != targetScale) {
-                guiScaleOption.set(targetScale);
-                scaleChanged = true;
+            // Change the scale
+            guiScaleOption.set(targetScale);
+            scaleChanged = true;
 
-                // Force window to recalculate scaled dimensions
-                mc.resizeDisplay();
+            // Force window to recalculate scaled dimensions
+            mc.resizeDisplay();
 
-                return true;
-            }
+            return true;
         } catch (Exception e) {
             BlockPopsMod.LOGGER.error("Failed to set menu GUI scale", e);
         }
