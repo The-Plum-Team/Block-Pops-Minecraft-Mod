@@ -1,4 +1,3 @@
-// ========== C:\Users\nebur\Documents\GitHub\BlockPops\forge\src\main\java\com\theplumteam\client\gui\FavoriteColorSelectionScreen.java ==========
 package com.theplumteam.client.gui;
 
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -70,8 +69,8 @@ public class FavoriteColorSelectionScreen extends Screen {
 
     @Override
     protected void init() {
-        // Enforce GUI Scale
-        if (GuiScaleManager.setMenuGuiScale(GuiScaleManager.getOptimalMenuScale())) {
+        // Enforce GUI Scale - Force it even if shaders are detected (true parameter)
+        if (GuiScaleManager.setMenuGuiScale(GuiScaleManager.getOptimalMenuScale(), true)) {
             // If scale changed, the screen will be re-initialized by the engine
             return;
         }

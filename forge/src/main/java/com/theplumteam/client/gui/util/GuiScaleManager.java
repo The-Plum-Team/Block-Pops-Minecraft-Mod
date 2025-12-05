@@ -23,9 +23,20 @@ public class GuiScaleManager {
      * @return true if a screen resize was triggered, false otherwise.
      */
     public static boolean setMenuGuiScale(int targetScale) {
+        return setMenuGuiScale(targetScale, false);
+    }
+
+    /**
+     * Force set the GUI scale for the BlockPops menus.
+     * @param targetScale The desired GUI scale (1-4, where 0 = Auto)
+     * @param force If true, forces the scale change even if shaders are detected.
+     * @return true if a screen resize was triggered, false otherwise.
+     */
+    public static boolean setMenuGuiScale(int targetScale, boolean force) {
         try {
             // Check if shaders are active - if so, use inverse scaling approach
-            if (areShadersActive()) {
+            // Unless forced, in which case we proceed with resize
+            if (!force && areShadersActive()) {
                 BlockPopsMod.LOGGER.info("Shaders detected, using inverse scale transformation");
                 usingInverseScale = true;
                 return false; // No resize triggered, will use inverse scale in render
@@ -68,12 +79,9 @@ public class GuiScaleManager {
                 return; // Nothing to restore
             }
 
-            // Skip resize if shaders are active (we didn't change scale anyway)
-            if (areShadersActive()) {
-                originalGuiScale = null;
-                scaleChanged = false;
-                return;
-            }
+            // Previously we skipped resize if shaders were active.
+            // However, if we forced a change (scaleChanged is true), we MUST restore it
+            // regardless of shader status to return to the correct state.
 
             Minecraft mc = Minecraft.getInstance();
             OptionInstance<Integer> guiScaleOption = mc.options.guiScale();
