@@ -2,6 +2,7 @@ package com.theplumteam.client.gui.widget;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
+import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.client.Minecraft;
@@ -37,12 +38,19 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
     @Override
     public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth,
                       int entryHeight, int mouseX, int mouseY, boolean isMouseOver, float partialTick) {
+        // Calculate effective sizes - scale when using inverse scale mode
+        float scale = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getRenderScaleFactor() : 1.0f;
+        int effectivePadding = (int)(PADDING * scale);
+        int effectiveTopPadding = (int)(TOP_PADDING * scale);
+        int effectiveLogoMaxSize = (int)(LOGO_MAX_SIZE * scale);
+        int effectiveLinkButtonSize = (int)(LINK_BUTTON_SIZE * scale);
+
         // Check if this entry is selected
         boolean isSelected = parent.getSelected() == this;
 
         // Selection and hover highlight with padding
-        int highlightPaddingH = 4;
-        int highlightPaddingV = 2;
+        int highlightPaddingH = (int)(4 * scale);
+        int highlightPaddingV = (int)(2 * scale);
         int highlightLeft = x - highlightPaddingH;
         int highlightRight = x + entryWidth - 10;
         int highlightTop = y - highlightPaddingV;
@@ -60,12 +68,12 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
 
         // Draw logo on the left if available
         // All logos get the same container width for alignment
-        int logoContainerX = x + PADDING;
-        int logoContainerWidth = LOGO_MAX_SIZE; // Fixed container width
+        int logoContainerX = x + effectivePadding;
+        int logoContainerWidth = effectiveLogoMaxSize; // Fixed container width
         ResourceLocation logoTexture = collection.getLogoTexture();
 
         // Text always starts at the same position for all entries
-        int textStartX = logoContainerX + logoContainerWidth + PADDING;
+        int textStartX = logoContainerX + logoContainerWidth + effectivePadding;
 
         if (logoTexture != null) {
             // Enable blending for transparent logos
@@ -95,7 +103,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             int logoHeight;
 
             // Use smaller size for World Players collection
-            int maxSize = "world_players".equals(collection.getId()) ? 40 : LOGO_MAX_SIZE;
+            int maxSize = "world_players".equals(collection.getId()) ? 40 : effectiveLogoMaxSize;
 
             if (aspectRatio > 1.0f) {
                 // Wider than tall - constrain width
@@ -123,7 +131,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
 
         // Draw collection name
         int textX = textStartX;
-        int textY = y + TOP_PADDING;
+        int textY = y + effectiveTopPadding;
         int textColor = isSelected ? 0xFFFFFF : 0xE0E0E0;
 
         graphics.drawString(mc.font, collection.getName(), textX, textY, textColor, false);
@@ -163,26 +171,26 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         this.isLinkHovered = false;
         if (isMouseOver && collection.getAuthorUrl() != null && !collection.getAuthorUrl().isEmpty()) {
             int margin = 4;
-            this.linkButtonX = highlightRight - LINK_BUTTON_SIZE - margin;
+            this.linkButtonX = highlightRight - effectiveLinkButtonSize - margin;
             this.linkButtonY = highlightTop + margin;
 
-            boolean linkHovered = mouseX >= linkButtonX && mouseX < linkButtonX + LINK_BUTTON_SIZE &&
-                                 mouseY >= linkButtonY && mouseY < linkButtonY + LINK_BUTTON_SIZE;
+            boolean linkHovered = mouseX >= linkButtonX && mouseX < linkButtonX + effectiveLinkButtonSize &&
+                                 mouseY >= linkButtonY && mouseY < linkButtonY + effectiveLinkButtonSize;
 
             // Draw button background (square) with shadow/depth - darker gold colored
             graphics.fill(linkButtonX, linkButtonY,
-                linkButtonX + LINK_BUTTON_SIZE, linkButtonY + LINK_BUTTON_SIZE,
+                linkButtonX + effectiveLinkButtonSize, linkButtonY + effectiveLinkButtonSize,
                 linkHovered ? 0xFFB8860B : 0xC0997000); // Darker gold colors
 
             // Draw button outline for depth - darker gold
-            graphics.renderOutline(linkButtonX, linkButtonY, LINK_BUTTON_SIZE, LINK_BUTTON_SIZE,
+            graphics.renderOutline(linkButtonX, linkButtonY, effectiveLinkButtonSize, effectiveLinkButtonSize,
                 linkHovered ? 0xFFDAA520 : 0xFFB8860B);
 
             // Draw planet emoji centered
             String planetEmoji = "🌐";
             int emojiWidth = mc.font.width(planetEmoji);
-            int emojiX = linkButtonX + (LINK_BUTTON_SIZE - emojiWidth) / 2; // Moved 1px left
-            int emojiY = linkButtonY + (LINK_BUTTON_SIZE - 8) / 2; // Moved 1px up (8 is approximate emoji height)
+            int emojiX = linkButtonX + (effectiveLinkButtonSize - emojiWidth) / 2; // Moved 1px left
+            int emojiY = linkButtonY + (effectiveLinkButtonSize - 8) / 2; // Moved 1px up (8 is approximate emoji height)
             graphics.drawString(mc.font, planetEmoji, emojiX, emojiY, 0xFFFFFF, false);
 
             this.isLinkHovered = linkHovered;

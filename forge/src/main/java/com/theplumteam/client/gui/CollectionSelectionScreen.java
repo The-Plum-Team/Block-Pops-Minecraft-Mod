@@ -14,6 +14,7 @@ import com.theplumteam.client.gui.widget.CollectionEntry;
 import com.theplumteam.client.gui.widget.CollectionListWidget;
 import com.theplumteam.client.gui.widget.FigureListWidget;
 import com.theplumteam.client.gui.widget.LinkButton;
+import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.client.token.ClientTokenManager;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
@@ -80,6 +81,10 @@ public class CollectionSelectionScreen extends Screen {
     private static final float COLOR_TRANSITION_SPEED = 0.05f; // Higher = faster transition
     private static final float COLOR_SNAP_THRESHOLD = 0.95f; // Snap to target when progress >= this value
 
+    // GUI scale management
+    private boolean guiScaleForced = false;
+    private boolean isClosing = false;
+
     // Icon textures
     private static final ResourceLocation DISCORD_ICON = new ResourceLocation("blockpops", "textures/gui/discord_icon.png");
     private static final ResourceLocation CURSEFORGE_ICON = new ResourceLocation("blockpops", "textures/gui/curseforge_icon.png");
@@ -127,10 +132,17 @@ public class CollectionSelectionScreen extends Screen {
 
     @Override
     protected void init() {
-        // Enforce GUI Scale
-        if (GuiScaleManager.setMenuGuiScale(GuiScaleManager.getOptimalMenuScale())) {
-            // If scale changed, the screen will be re-initialized by the engine
-            return;
+        // Pre-initialize the shared figure renderer to avoid lag on first render
+        FigureWidgetRenderer.ensureInitialized();
+
+        // Force GUI scale for consistent appearance
+        if (!guiScaleForced && !isClosing) {
+            guiScaleForced = true;
+            int optimalScale = GuiScaleManager.getOptimalMenuScale();
+            if (GuiScaleManager.setMenuGuiScale(optimalScale)) {
+                // Scale was changed and resizeDisplay() was called, which will trigger init() again
+                return;
+            }
         }
 
         super.init();
@@ -171,7 +183,8 @@ public class CollectionSelectionScreen extends Screen {
         collectionListWidget.setLeftPos(componentX);
         collectionListWidget.setRenderBackground(false);
         collectionListWidget.setRenderTopAndBottom(false);
-        this.addRenderableWidget(collectionListWidget);
+        // Add for input handling only - we'll render manually outside the scaled pose
+        this.addWidget(collectionListWidget);
 
         // Load collections
         loadCollections();
@@ -192,7 +205,8 @@ public class CollectionSelectionScreen extends Screen {
         figureListWidget.setLeftPos(previewX);
         figureListWidget.setRenderBackground(false);
         figureListWidget.setRenderTopAndBottom(false);
-        this.addRenderableWidget(figureListWidget);
+        // Add for input handling only - we'll render manually outside the scaled pose
+        this.addWidget(figureListWidget);
 
         // Update preview if there's a selected collection
         if (selectedCollectionId != null && !selectedCollectionId.isEmpty()) {
@@ -302,46 +316,87 @@ public class CollectionSelectionScreen extends Screen {
     }
 
     /**
-     * Calculate panel dimensions based on screen size
+     * Calculate panel dimensions based on screen size.
+     * Uses virtual dimensions when inverse scale is active (shaders).
      */
     private void calculatePanelDimensions() {
-        int desiredWidth = (int)(this.width * 0.8f);  // Increased from 0.7 to 0.8 (10% increase)
-        int desiredHeight = (int)(this.height * 0.85f); // Increased from 0.8 to 0.85 (5% increase)
+        // Use virtual dimensions when shaders are active for consistent layout
+        int screenWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
+        int screenHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
+
+        int desiredWidth = (int)(screenWidth * 0.8f);
+        int desiredHeight = (int)(screenHeight * 0.85f);
 
         panelWidth = Mth.clamp(
                 desiredWidth,
                 MIN_PANEL_WIDTH,
-                Math.min(MAX_PANEL_WIDTH, this.width - 60)
+                Math.min(MAX_PANEL_WIDTH, screenWidth - 60)
         );
 
         panelHeight = Mth.clamp(
                 desiredHeight,
                 MIN_PANEL_HEIGHT,
-                this.height - 60
+                screenHeight - 60
         );
 
         // Center the panel
-        panelX = (this.width - panelWidth) / 2;
-        panelY = (this.height - panelHeight) / 2;
+        panelX = (screenWidth - panelWidth) / 2;
+        panelY = (screenHeight - panelHeight) / 2;
     }
 
     @Override
     public void removed() {
-        // Restore original GUI scale when screen is closed/removed
-        GuiScaleManager.restoreOriginalGuiScale();
         super.removed();
+        // Only restore GUI scale if we are actually closing (not just opening a modal)
+        if (isClosing) {
+            restoreGuiScaleIfNeeded();
+        }
+    }
+
+    @Override
+    public void onClose() {
+        // Mark that we are truly closing (not just opening a modal)
+        isClosing = true;
+        // Restore GUI scale before closing
+        restoreGuiScaleIfNeeded();
+        super.onClose();
+    }
+
+    /**
+     * Restore the original GUI scale if it was forced by this screen.
+     */
+    private void restoreGuiScaleIfNeeded() {
+        if (guiScaleForced) {
+            guiScaleForced = false;
+            GuiScaleManager.restoreOriginalGuiScale();
+        }
     }
 
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // Transform mouse coordinates if using inverse scale (shaders active)
+        int adjustedMouseX = mouseX;
+        int adjustedMouseY = mouseY;
+        if (GuiScaleManager.isUsingInverseScale()) {
+            adjustedMouseX = (int) GuiScaleManager.transformMouseX(mouseX);
+            adjustedMouseY = (int) GuiScaleManager.transformMouseY(mouseY);
+        }
+
+        // Apply inverse scale transformation if shaders are active
+        if (GuiScaleManager.isUsingInverseScale()) {
+            graphics.pose().pushPose();
+            float scale = GuiScaleManager.getRenderScaleFactor();
+            graphics.pose().scale(scale, scale, 1.0f);
+        }
+
         // Render animated starry background
         renderBackgroundEffects(graphics, partialTick);
 
         // Render panel background (frosted glass effect)
         renderPanel(graphics);
 
-        // Render widgets (buttons, lists, etc.)
-        super.render(graphics, mouseX, mouseY, partialTick);
+        // Render widgets (buttons, etc. - lists are rendered separately)
+        super.render(graphics, adjustedMouseX, adjustedMouseY, partialTick);
 
         // Render token information header (replacing title)
         renderTokenInfo(graphics);
@@ -351,6 +406,20 @@ public class CollectionSelectionScreen extends Screen {
 
         // Render figure panel header (after widgets so it appears on top of scrollable content)
         renderFigurePanelHeader(graphics);
+
+        // Pop the inverse scale transformation before rendering lists
+        if (GuiScaleManager.isUsingInverseScale()) {
+            graphics.pose().popPose();
+        }
+
+        // Render lists OUTSIDE the scaled pose - they handle their own scaling
+        // Pass virtual mouse coordinates (same as mouseClicked) for consistency
+        if (collectionListWidget != null) {
+            collectionListWidget.render(graphics, adjustedMouseX, adjustedMouseY, partialTick);
+        }
+        if (figureListWidget != null) {
+            figureListWidget.render(graphics, adjustedMouseX, adjustedMouseY, partialTick);
+        }
     }
 
     /**
@@ -468,7 +537,9 @@ public class CollectionSelectionScreen extends Screen {
         int bgGreen = (int)(lerpedG * 255);
         int bgBlue = (int)(lerpedB * 255);
         int bgColor = 0xFF000000 | (bgRed << 16) | (bgGreen << 8) | bgBlue;
-        graphics.fill(0, 0, this.width, this.height, bgColor);
+        int bgWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
+        int bgHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
+        graphics.fill(0, 0, bgWidth, bgHeight, bgColor);
 
         // 2. Render the moving star pattern
         renderStarPattern(graphics, partialTick);
@@ -502,8 +573,8 @@ public class CollectionSelectionScreen extends Screen {
         // The offset creates the scrolling effect via UV manipulation
         float u0 = (float) offsetX / (float) cacheWidth;
         float v0 = 0.0f;
-        float u1 = u0 + ((float) this.width / (float) cacheWidth);
-        float v1 = (float) this.height / (float) cacheHeight;
+        float u1 = u0 + ((float) (GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width) / (float) cacheWidth);
+        float v1 = (float) (GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height) / (float) cacheHeight;
 
         // Render a single quad with the scrolling UV coordinates
         var pose = graphics.pose();
@@ -516,9 +587,11 @@ public class CollectionSelectionScreen extends Screen {
         BufferBuilder bufferBuilder = tesselator.getBuilder();
 
         bufferBuilder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        bufferBuilder.vertex(pose.last().pose(), 0, this.height, 0).uv(u0, v1).endVertex();
-        bufferBuilder.vertex(pose.last().pose(), this.width, this.height, 0).uv(u1, v1).endVertex();
-        bufferBuilder.vertex(pose.last().pose(), this.width, 0, 0).uv(u1, v0).endVertex();
+        int starHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
+        int starWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
+        bufferBuilder.vertex(pose.last().pose(), 0, starHeight, 0).uv(u0, v1).endVertex();
+        bufferBuilder.vertex(pose.last().pose(), starWidth, starHeight, 0).uv(u1, v1).endVertex();
+        bufferBuilder.vertex(pose.last().pose(), starWidth, 0, 0).uv(u1, v0).endVertex();
         bufferBuilder.vertex(pose.last().pose(), 0, 0, 0).uv(u0, v0).endVertex();
         tesselator.end();
 
@@ -728,6 +801,54 @@ public class CollectionSelectionScreen extends Screen {
      */
     private void openSettingsScreen() {
         this.minecraft.setScreen(new com.theplumteam.client.gui.SettingsScreen(this));
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (GuiScaleManager.isUsingInverseScale()) {
+            mouseX = GuiScaleManager.transformMouseX(mouseX);
+            mouseY = GuiScaleManager.transformMouseY(mouseY);
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (GuiScaleManager.isUsingInverseScale()) {
+            mouseX = GuiScaleManager.transformMouseX(mouseX);
+            mouseY = GuiScaleManager.transformMouseY(mouseY);
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (GuiScaleManager.isUsingInverseScale()) {
+            mouseX = GuiScaleManager.transformMouseX(mouseX);
+            mouseY = GuiScaleManager.transformMouseY(mouseY);
+            float scale = GuiScaleManager.getMouseScaleFactor();
+            dragX = dragX * scale;
+            dragY = dragY * scale;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (GuiScaleManager.isUsingInverseScale()) {
+            mouseX = GuiScaleManager.transformMouseX(mouseX);
+            mouseY = GuiScaleManager.transformMouseY(mouseY);
+        }
+        return super.mouseScrolled(mouseX, mouseY, delta);
+    }
+
+    @Override
+    public void mouseMoved(double mouseX, double mouseY) {
+        if (GuiScaleManager.isUsingInverseScale()) {
+            mouseX = GuiScaleManager.transformMouseX(mouseX);
+            mouseY = GuiScaleManager.transformMouseY(mouseY);
+        }
+        super.mouseMoved(mouseX, mouseY);
     }
 
     @Override

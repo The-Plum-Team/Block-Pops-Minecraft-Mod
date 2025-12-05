@@ -1,8 +1,10 @@
 package com.theplumteam.client.gui.widget;
 
+import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ObjectSelectionList;
 import org.jetbrains.annotations.Nullable;
 
@@ -104,6 +106,54 @@ public class FigureListWidget extends ObjectSelectionList<FigureEntry> {
     }
 
     @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        if (GuiScaleManager.isUsingInverseScale()) {
+            float scale = GuiScaleManager.getRenderScaleFactor();
+
+            // Store original values (virtual coordinates)
+            int origX0 = this.x0;
+            int origX1 = this.x1;
+            int origY0 = this.y0;
+            int origY1 = this.y1;
+            int origWidth = this.width;
+            int origHeight = this.height;
+            // Note: itemHeight is final, entries handle their own scaling
+
+            // Scale bounds for correct scissor positioning
+            this.x0 = (int)(origX0 * scale);
+            this.x1 = (int)(origX1 * scale);
+            this.y0 = (int)(origY0 * scale);
+            this.y1 = (int)(origY1 * scale);
+            this.width = (int)(origWidth * scale);
+            this.height = (int)(origHeight * scale);
+            
+
+            // Transform mouse coordinates for hit detection
+            int scaledMouseX = (int)(mouseX * scale);
+            int scaledMouseY = (int)(mouseY * scale);
+
+            // Scale scroll amount for correct entry positioning
+            double origScroll = this.getScrollAmount();
+            this.setScrollAmount(origScroll * scale);
+
+            // Render with scaled values
+            super.render(graphics, scaledMouseX, scaledMouseY, partialTick);
+
+            // Restore original values
+            this.x0 = origX0;
+            this.x1 = origX1;
+            this.y0 = origY0;
+            this.y1 = origY1;
+            this.width = origWidth;
+            this.height = origHeight;
+            
+            this.setScrollAmount(origScroll);
+        } else {
+            super.render(graphics, mouseX, mouseY, partialTick);
+        }
+    }
+
+    @Override
     public int getRowWidth() {
         return this.width - 8;
     }
@@ -114,16 +164,69 @@ public class FigureListWidget extends ObjectSelectionList<FigureEntry> {
     }
 
     @Override
-    protected void renderBackground(net.minecraft.client.gui.GuiGraphics graphics) {
+    protected void renderBackground(GuiGraphics graphics) {
         // Don't render default background
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (GuiScaleManager.isUsingInverseScale()) {
+            float scale = GuiScaleManager.getRenderScaleFactor();
+
+            int origX0 = this.x0, origX1 = this.x1, origY0 = this.y0, origY1 = this.y1;
+            int origWidth = this.width, origHeight = this.height;
+            double origScroll = this.getScrollAmount();
+
+            this.x0 = (int)(origX0 * scale);
+            this.x1 = (int)(origX1 * scale);
+            this.y0 = (int)(origY0 * scale);
+            this.y1 = (int)(origY1 * scale);
+            this.width = (int)(origWidth * scale);
+            this.height = (int)(origHeight * scale);
+            this.setScrollAmount(origScroll * scale);
+
+            boolean result = super.mouseClicked(mouseX * scale, mouseY * scale, button);
+
+            this.x0 = origX0; this.x1 = origX1; this.y0 = origY0; this.y1 = origY1;
+            this.width = origWidth; this.height = origHeight;
+            this.setScrollAmount(origScroll);
+            return result;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
         // Smooth scrolling: use fixed pixel amount instead of itemHeight-based
-        // Default scrolls by itemHeight/2 (45 pixels for 90px items) which is too jerky
         // We use 20 pixels per scroll tick for smooth, precise control
         this.setScrollAmount(this.getScrollAmount() - amount * 20.0);
         return true;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (GuiScaleManager.isUsingInverseScale()) {
+            float scale = GuiScaleManager.getRenderScaleFactor();
+
+            int origX0 = this.x0, origX1 = this.x1, origY0 = this.y0, origY1 = this.y1;
+            int origWidth = this.width, origHeight = this.height;
+            double origScroll = this.getScrollAmount();
+
+            this.x0 = (int)(origX0 * scale);
+            this.x1 = (int)(origX1 * scale);
+            this.y0 = (int)(origY0 * scale);
+            this.y1 = (int)(origY1 * scale);
+            this.width = (int)(origWidth * scale);
+            this.height = (int)(origHeight * scale);
+            this.setScrollAmount(origScroll * scale);
+
+            boolean result = super.mouseDragged(mouseX * scale, mouseY * scale, button, dragX * scale, dragY * scale);
+
+            this.x0 = origX0; this.x1 = origX1; this.y0 = origY0; this.y1 = origY1;
+            this.width = origWidth; this.height = origHeight;
+            this.setScrollAmount(origScroll);
+            return result;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 }
