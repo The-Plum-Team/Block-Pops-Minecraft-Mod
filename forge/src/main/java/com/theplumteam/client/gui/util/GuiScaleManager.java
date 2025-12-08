@@ -3,6 +3,7 @@ package com.theplumteam.client.gui.util;
 import com.theplumteam.BlockPopsMod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.OptionInstance;
+import net.minecraftforge.fml.ModList;
 
 /**
  * Manages GUI scaling for BlockPops menus.
@@ -44,13 +45,15 @@ public class GuiScaleManager {
                 return false;
             }
 
-            // Check if shaders are active - if so, use inverse scaling approach
-            // Unless forced, in which case we proceed with resize
-            if (!force && areShadersActive()) {
-                BlockPopsMod.LOGGER.info("Shaders detected, using inverse scale transformation");
-                usingInverseScale = true;
-                return false; // No resize triggered, will use inverse scale in render
+            // Special case: if BOTH shaders AND Distant Horizons are active, skip GUI scale changes entirely
+            // This combination causes issues, so we leave the GUI scale unchanged
+            if (!force && areShadersActive() && isDistantHorizonsInstalled()) {
+                BlockPopsMod.LOGGER.info("Shaders + Distant Horizons detected, skipping GUI scale change");
+                usingInverseScale = false;
+                return false; // Don't change anything when DH + shaders are both present
             }
+
+            // For all other cases (no shaders, or shaders without DH), proceed with normal GUI scale change
 
             usingInverseScale = false;
 
@@ -246,5 +249,12 @@ public class GuiScaleManager {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /**
+     * Check if Distant Horizons mod is installed
+     */
+    private static boolean isDistantHorizonsInstalled() {
+        return ModList.get().isLoaded("distanthorizons");
     }
 }
