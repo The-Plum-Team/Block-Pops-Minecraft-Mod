@@ -17,7 +17,8 @@ public class BuiltInCollections {
         "fnaf",
         "onepiece",
         "deltarune",
-        "alienstage"
+        "alienstage",
+        "strangerthings"
         // Add more collections as needed
     );
 
@@ -35,6 +36,7 @@ public class BuiltInCollections {
             case "onepiece" -> "One Piece";
             case "deltarune" -> "Deltarune";
             case "alienstage" -> "Alien Stage";
+            case "strangerthings" -> "Stranger Things";
             default -> collectionId;
         };
     }

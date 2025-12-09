@@ -35,15 +35,36 @@ file ModelToProcess/*
 - Box.png/box.png is missing
 - Any file is WebP format instead of PNG (convert using: `ffmpeg -y -i "input.png" -update 1 -frames:v 1 "output.png"`)
 
-### Step 2: Determine Collection ID
+### Step 2: Compare Logo Dimensions
+
+Check the new logo's dimensions and compare with existing logos to find similar aspect ratios:
+
+```bash
+# Check new logo dimensions
+file ModelToProcess/logo.png
+
+# Check all existing logo dimensions
+for f in forge/src/main/resources/assets/blockpops/textures/block/box/logo/*.png; do file "$f"; done
+```
+
+Calculate the aspect ratio (width/height) of the new logo and find the existing logo with the closest aspect ratio. Then read that collection's JSON to copy its logo position/scale settings:
+
+```bash
+# Example: Read a similar collection's settings
+cat forge/src/main/resources/assets/blockpops/collections/{similar_collection}.json
+```
+
+Use the `position_x`, `position_y`, `position_z`, `scale_x`, `scale_y`, `scale_z` values from the most similar logo for the new collection.
+
+### Step 3: Determine Collection ID
 
 Convert the collection name to a lowercase ID with no spaces:
 - "Alien Stage" → "alienstage"
 - "My Cool Collection" → "mycoolcollection"
 
-### Step 3: Create Collection JSON
+### Step 4: Create Collection JSON
 
-Create `forge/src/main/resources/assets/blockpops/collections/{id}.json`:
+Create `forge/src/main/resources/assets/blockpops/collections/{id}.json` (use logo settings from similar collection found in Step 2):
 
 ```json
 {
@@ -82,14 +103,14 @@ Extract figure names from the PNG files:
 - `1_mizi.png` → id: "mizi", name: "Mizi"
 - `character_name.png` → id: "character_name", name: "Character Name"
 
-### Step 4: Update BuiltInCollections.java
+### Step 5: Update BuiltInCollections.java
 
 Edit `forge/src/main/java/com/theplumteam/figure/BuiltInCollections.java`:
 
 1. Add the collection ID to `COLLECTION_IDS` list
 2. Add a case to `getDisplayName()` switch statement
 
-### Step 5: Copy Assets
+### Step 6: Copy Assets
 
 1. **Create figure textures directory:**
    ```bash
@@ -111,7 +132,7 @@ Edit `forge/src/main/java/com/theplumteam/figure/BuiltInCollections.java`:
    cp "ModelToProcess/Box.png" "forge/src/main/resources/assets/blockpops/textures/block/box/{id}.png"
    ```
 
-### Step 6: Create Item Model
+### Step 7: Create Item Model
 
 Create `forge/src/main/resources/assets/blockpops/models/item/box_block_{id}.json`:
 
@@ -122,14 +143,14 @@ Create `forge/src/main/resources/assets/blockpops/models/item/box_block_{id}.jso
 }
 ```
 
-### Step 7: Add Language Entry
+### Step 8: Add Language Entry
 
 Edit `forge/src/main/resources/assets/blockpops/lang/en_us.json` and add:
 ```json
 "block.blockpops.box_block_{id}": "{Name} Box",
 ```
 
-### Step 8: Verify All Files
+### Step 9: Verify All Files
 
 Confirm all files are in place:
 - `collections/{id}.json`
@@ -140,7 +161,7 @@ Confirm all files are in place:
 - Lang entry in `en_us.json`
 - Entry in `BuiltInCollections.java`
 
-### Step 9: Summary
+### Step 10: Summary
 
 Report to the user:
 - Collection name and ID
@@ -153,4 +174,4 @@ Report to the user:
 - All textures MUST be actual PNG files (64x64 for skins, any size for logo/box)
 - WebP files disguised as PNG will cause missing textures (magenta/black)
 - The author can be changed from "The Plum Team" if needed
-- Logo position/scale may need adjustment after testing in-game
+- Logo position/scale should be copied from an existing collection with similar logo dimensions (Step 2), but may still need minor adjustment after testing in-game
