@@ -6,11 +6,11 @@
   "box_texture": "blockpops:textures/block/box/dispatch.png",
   "logo": {
     "texture": "blockpops:textures/block/box/logo/logo_dispatch.png",
-    "position_x": -1.5,
-    "position_y": -0.14,
-    "position_z": -1.52,
-    "scale_x": 6.0,
-    "scale_y": 4.0,
+    "position_x": -1.713,
+    "position_y": -0.083,
+    "position_z": -0.002,
+    "scale_x": 6.581,
+    "scale_y": 3.019,
     "scale_z": 1.0
   },
   "background_color": {
