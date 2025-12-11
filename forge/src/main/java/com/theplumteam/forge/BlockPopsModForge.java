@@ -7,6 +7,7 @@ import com.theplumteam.command.GetBoxCommand;
 import com.theplumteam.command.GetFavoriteColorCommand;
 import com.theplumteam.command.ReloadRegularTokensCommand;
 import com.theplumteam.command.ReloadGuaranteedTokenCommand;
+import com.theplumteam.command.SetDefaultColorCommand;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.PlayerCollectionGenerator;
@@ -85,7 +86,8 @@ public final class BlockPopsModForge {
         GetFavoriteColorCommand.register(event.getDispatcher());
         ReloadRegularTokensCommand.register(event.getDispatcher());
         ReloadGuaranteedTokenCommand.register(event.getDispatcher());
-        BlockPopsMod.LOGGER.info("Registered /blockpops commands: getbox, changefavoritecolor, getfavoritecolor, reloadregular, reloadguaranteed");
+        SetDefaultColorCommand.register(event.getDispatcher());
+        BlockPopsMod.LOGGER.info("Registered /blockpops commands: getbox, changefavoritecolor, getfavoritecolor, reloadregular, reloadguaranteed, setdefaultcolor");
     }
 
     private void registerServerEvents() {

@@ -4,17 +4,16 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.FigureBlockEntity;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
-import net.minecraftforge.eventbus.api.Event;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 /**
  * Event handler for figure pose changes.
- * Uses Forge's event system to intercept shift+right-click with stick,
+ * Uses Forge's event system to intercept shift+right-click,
  * which doesn't trigger the normal block use() method when sneaking.
  */
 @Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.FORGE, modid = BlockPopsMod.MOD_ID)
@@ -22,12 +21,13 @@ public class FigurePoseEventHandler {
 
     @SubscribeEvent
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
-        // Only handle if player is sneaking and holding a stick
-        if (!event.getEntity().isShiftKeyDown()) {
+        // Only handle main hand to prevent double-firing
+        if (event.getHand() != InteractionHand.MAIN_HAND) {
             return;
         }
 
-        if (!event.getItemStack().is(Items.STICK)) {
+        // Only handle if player is sneaking (shift+right-click)
+        if (!event.getEntity().isShiftKeyDown()) {
             return;
         }
 

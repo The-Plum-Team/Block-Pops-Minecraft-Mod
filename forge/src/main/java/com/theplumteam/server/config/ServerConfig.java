@@ -3,6 +3,7 @@ package com.theplumteam.server.config;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.block.PopBlockColor;
 import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.io.IOException;
@@ -19,6 +20,9 @@ public class ServerConfig {
 
     // Guaranteed token reset hour (0-23 in UTC)
     public int guaranteedTokenResetHour = 18;  // Default: 6 PM UTC
+
+    // Default player color for World Players collection (when player hasn't chosen a favorite)
+    public String defaultPlayerColor = "original";
 
     private ServerConfig() {
         // Private constructor for singleton
@@ -43,6 +47,26 @@ public class ServerConfig {
      */
     public void setGuaranteedTokenResetHour(int hour) {
         this.guaranteedTokenResetHour = Math.max(0, Math.min(23, hour));
+        save();
+    }
+
+    /**
+     * Get the default player color setting as an Enum.
+     * Safely falls back to ORIGINAL if config is corrupted/invalid.
+     */
+    public PopBlockColor getDefaultPlayerColor() {
+        try {
+            return PopBlockColor.valueOf(defaultPlayerColor.toUpperCase());
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return PopBlockColor.ORIGINAL;
+        }
+    }
+
+    /**
+     * Set the default player color.
+     */
+    public void setDefaultPlayerColor(PopBlockColor color) {
+        this.defaultPlayerColor = color.name().toLowerCase();
         save();
     }
 

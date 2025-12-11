@@ -84,11 +84,9 @@ public class FigureBlock extends BaseEntityBlock {
 
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-        ItemStack heldItem = player.getItemInHand(hand);
-
-        // Right-click with stick (no shift) to cycle alternative skins
+        // Right-click (no shift) to cycle alternative skins
         // Shift+click is handled by FigurePoseEventHandler for pose changes
-        if (heldItem.is(net.minecraft.world.item.Items.STICK) && !player.isShiftKeyDown()) {
+        if (!player.isShiftKeyDown()) {
             if (!level.isClientSide()) {
                 if (level.getBlockEntity(pos) instanceof FigureBlockEntity figureBlockEntity && figureBlockEntity.hasFigure()) {
                     figureBlockEntity.cycleAlternativeSkin();

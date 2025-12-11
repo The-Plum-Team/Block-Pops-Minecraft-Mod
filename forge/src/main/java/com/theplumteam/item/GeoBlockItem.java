@@ -168,6 +168,12 @@ public class GeoBlockItem extends BlockItem {
                 tooltip.add(Component.translatable("tooltip.blockpops.has_alternatives")
                         .withStyle(ChatFormatting.DARK_PURPLE, ChatFormatting.ITALIC));
             }
+
+            // Show pose hint only for extracted figures (FigureBlock), not boxes
+            if (getBlock() instanceof FigureBlock) {
+                tooltip.add(Component.translatable("tooltip.blockpops.pose_hint")
+                        .withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
+            }
         }
     }
 

@@ -29,5 +29,6 @@
   "block.blockpops.box_block_strangerthings": "Stranger Things Box",
   "block.blockpops.box_block_dispatch": "Dispatch Box",
   "block.blockpops.claw_machine_block": "Arcade Claw Machine",
-  "tooltip.blockpops.has_alternatives": "Has alternative skins! (Right-click with a stick)"
+  "tooltip.blockpops.has_alternatives": "Has alternative skins! (Right-click to cycle)",
+  "tooltip.blockpops.pose_hint": "Shift + Right-click to change pose"
 }

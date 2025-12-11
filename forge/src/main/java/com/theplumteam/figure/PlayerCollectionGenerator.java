@@ -4,6 +4,7 @@ import com.mojang.authlib.GameProfile;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.capability.PlayerDiscoveryProvider;
+import com.theplumteam.server.config.ServerConfig;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.Tag;
@@ -71,13 +72,14 @@ public class PlayerCollectionGenerator {
                             }
 
                             // Load player's favorite color - check if they're online first
-                            PopBlockColor favoriteColor = PopBlockColor.ORIGINAL; // Default to ORIGINAL
+                            PopBlockColor defaultColor = ServerConfig.getInstance().getDefaultPlayerColor();
+                            PopBlockColor favoriteColor = defaultColor;
 
                             // Try to get the color from the online player's in-memory capability first
                             ServerPlayer onlinePlayer = server.getPlayerList().getPlayer(playerUUID);
                             if (onlinePlayer != null) {
                                 // Player is online, read from their in-memory capability
-                                AtomicReference<PopBlockColor> colorRef = new AtomicReference<>(PopBlockColor.ORIGINAL);
+                                AtomicReference<PopBlockColor> colorRef = new AtomicReference<>(defaultColor);
                                 onlinePlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
                                     PopBlockColor color = discovery.getFavoriteColor();
                                     if (color != null) {
@@ -147,8 +149,9 @@ public class PlayerCollectionGenerator {
                 String uuidString = playerUUID.toString();
 
                 // Get favorite color from online player's capability
-                PopBlockColor favoriteColor = PopBlockColor.ORIGINAL;
-                AtomicReference<PopBlockColor> colorRef = new AtomicReference<>(PopBlockColor.ORIGINAL);
+                PopBlockColor defaultColorOnline = ServerConfig.getInstance().getDefaultPlayerColor();
+                PopBlockColor favoriteColor = defaultColorOnline;
+                AtomicReference<PopBlockColor> colorRef = new AtomicReference<>(defaultColorOnline);
                 onlinePlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
                     PopBlockColor color = discovery.getFavoriteColor();
                     if (color != null) {
