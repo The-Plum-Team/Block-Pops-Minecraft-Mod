@@ -47,6 +47,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     private String skinSnapshot = null; // Saved skin snapshot URL for player figures (Mojang)
     private String quickSkinId = null; // Saved Quick Skin ID (for Quick Skin mod compatibility)
 
+    // Figure pose index (0 = standing, 1 = sitting)
+    private int poseIndex = 0;
+
     // Figure positioning - correct values found through testing
     private double figureOffsetX = -0.53;
     private double figureOffsetY = 0.01;
@@ -98,6 +101,16 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
                 .triggerableAnim("open", OPEN_ANIMATION)
                 .triggerableAnim("close", CLOSE_ANIMATION)
                 .setAnimationSpeed(1.2)); // 20% faster animations
+
+        // Controller for figure pose animations (5 ticks = 0.25 seconds transition)
+        controllers.add(new AnimationController<>(this, "figure_pose_controller", 5, state -> {
+            if (this.poseIndex == 1) {
+                // "Pose_Sit" must match the name inside the pose animation file exactly
+                return state.setAndContinue(RawAnimation.begin().thenLoop("Pose_Sit"));
+            }
+            // Default pose (standing) - play the static standing pose
+            return state.setAndContinue(RawAnimation.begin().thenLoop("Pose_Stand"));
+        }));
     }
 
     @Override
@@ -300,6 +313,19 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
     }
 
+    public int getPoseIndex() {
+        return poseIndex;
+    }
+
+    public void cyclePose() {
+        // Toggles between 0 (Standing) and 1 (Sitting)
+        this.poseIndex = (this.poseIndex + 1) % 2;
+        setChanged();
+        if (level != null && !level.isClientSide) {
+            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        }
+    }
+
     public boolean isOpen() {
         return isOpen;
     }
@@ -333,6 +359,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         tag.putString("FigureId", figureId);
         tag.putBoolean("IsFigureExtracted", isFigureExtracted);
         tag.putInt("AlternativeSkinIndex", alternativeSkinIndex);
+        tag.putInt("PoseIndex", poseIndex);
         if (skinSnapshot != null) tag.putString("SkinSnapshot", skinSnapshot);
         if (quickSkinId != null) tag.putString("QuickSkinId", quickSkinId);
         if (collectionIdOverride != null) tag.putString("CollectionId", collectionIdOverride);
@@ -362,6 +389,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         if (tag.contains("FigureId")) this.figureId = tag.getString("FigureId");
         if (tag.contains("IsFigureExtracted")) this.isFigureExtracted = tag.getBoolean("IsFigureExtracted");
         if (tag.contains("AlternativeSkinIndex")) this.alternativeSkinIndex = tag.getInt("AlternativeSkinIndex");
+        if (tag.contains("PoseIndex")) this.poseIndex = tag.getInt("PoseIndex");
         this.skinSnapshot = tag.contains("SkinSnapshot", 8) ? tag.getString("SkinSnapshot") : null;
         this.quickSkinId = tag.contains("QuickSkinId", 8) ? tag.getString("QuickSkinId") : null;
         if (tag.contains("CollectionId")) this.collectionIdOverride = tag.getString("CollectionId");

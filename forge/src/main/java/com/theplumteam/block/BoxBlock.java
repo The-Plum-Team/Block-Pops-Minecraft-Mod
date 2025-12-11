@@ -161,8 +161,9 @@ public class BoxBlock extends BaseEntityBlock {
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         ItemStack heldItem = player.getItemInHand(hand);
 
-        // Right-click with stick to cycle alternative skins
-        if (heldItem.is(net.minecraft.world.item.Items.STICK)) {
+        // Right-click with stick (no shift) to cycle alternative skins
+        // Shift+click is handled by FigurePoseEventHandler for pose changes
+        if (heldItem.is(net.minecraft.world.item.Items.STICK) && !player.isShiftKeyDown()) {
             if (!level.isClientSide()) {
                 if (level.getBlockEntity(pos) instanceof BoxBlockEntity boxBlockEntity && boxBlockEntity.hasFigure()) {
                     boxBlockEntity.cycleAlternativeSkin();
@@ -246,6 +247,7 @@ public class BoxBlock extends BaseEntityBlock {
                     blockEntityTag.putString("FigureId", boxBlockEntity.getFigureId());
                     blockEntityTag.putString("CollectionId", boxBlockEntity.getCollectionId());
                     blockEntityTag.putInt("AlternativeSkinIndex", boxBlockEntity.getAlternativeSkinIndex());
+                    blockEntityTag.putInt("PoseIndex", boxBlockEntity.getPoseIndex());
                     // Copy figure positioning data
                     blockEntityTag.putDouble("FigureOffsetX", boxBlockEntity.getFigureOffsetX());
                     blockEntityTag.putDouble("FigureOffsetY", boxBlockEntity.getFigureOffsetY());

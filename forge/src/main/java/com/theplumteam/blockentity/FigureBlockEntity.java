@@ -31,6 +31,7 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     private String figureId = "";
     private String collectionId = "";
     private int alternativeSkinIndex = 0; // 0 is default, 1+ are from the alternatives list
+    private int poseIndex = 0; // 0 = standing, 1 = sitting
     private String skinSnapshot = null; // Saved skin snapshot URL for player figures (Mojang)
     private String quickSkinId = null; // Saved Quick Skin ID
 
@@ -46,7 +47,15 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        // No animation controller needed - figures use their own animations from FigureDefinition
+        // Animation controller for figure poses (5 ticks = 0.25 seconds transition)
+        controllers.add(new AnimationController<>(this, "pose_controller", 5, state -> {
+            if (this.poseIndex == 1) {
+                // "Pose_Sit" must match the name inside the pose animation file exactly
+                return state.setAndContinue(RawAnimation.begin().thenLoop("Pose_Sit"));
+            }
+            // Default pose (standing) - play the static standing pose
+            return state.setAndContinue(RawAnimation.begin().thenLoop("Pose_Stand"));
+        }));
     }
 
     @Override
@@ -121,12 +130,24 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
+    public int getPoseIndex() {
+        return poseIndex;
+    }
+
+    public void cyclePose() {
+        // Toggles between 0 (Standing) and 1 (Sitting)
+        this.poseIndex = (this.poseIndex + 1) % 2;
+        setChanged();
+        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+    }
+
     @Override
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
         tag.putString("FigureId", figureId);
         tag.putString("CollectionId", collectionId);
         tag.putInt("AlternativeSkinIndex", alternativeSkinIndex);
+        tag.putInt("PoseIndex", poseIndex);
         if (skinSnapshot != null) tag.putString("SkinSnapshot", skinSnapshot);
         if (quickSkinId != null) tag.putString("QuickSkinId", quickSkinId);
         tag.putDouble("FigureOffsetX", figureOffsetX);
@@ -141,6 +162,7 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         if (tag.contains("FigureId")) this.figureId = tag.getString("FigureId");
         if (tag.contains("CollectionId")) this.collectionId = tag.getString("CollectionId");
         if (tag.contains("AlternativeSkinIndex")) this.alternativeSkinIndex = tag.getInt("AlternativeSkinIndex");
+        if (tag.contains("PoseIndex")) this.poseIndex = tag.getInt("PoseIndex");
         this.skinSnapshot = tag.contains("SkinSnapshot", 8) ? tag.getString("SkinSnapshot") : null;
         this.quickSkinId = tag.contains("QuickSkinId", 8) ? tag.getString("QuickSkinId") : null;
         if (tag.contains("FigureOffsetX")) this.figureOffsetX = tag.getDouble("FigureOffsetX");

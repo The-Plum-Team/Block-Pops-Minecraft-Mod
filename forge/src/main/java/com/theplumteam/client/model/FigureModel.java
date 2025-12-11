@@ -3,6 +3,7 @@ package com.theplumteam.client.model;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
+import com.theplumteam.BlockPopsMod;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.figure.FigureDefinition;
@@ -20,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class FigureModel extends GeoModel<BoxBlockEntity> {
     private static final ResourceLocation FALLBACK_TEXTURE = new ResourceLocation("minecraft", "textures/entity/steve.png");
+    private static final ResourceLocation POSE_ANIMATION = new ResourceLocation(BlockPopsMod.MOD_ID, "animations/figure/figure_poses.animation.json");
 
     private static final Map<String, GameProfile> snapshotProfileCache = new ConcurrentHashMap<>();
     private static final Map<String, Boolean> snapshotRegistrationCache = new ConcurrentHashMap<>();
@@ -157,9 +159,8 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
 
     @Override
     public ResourceLocation getAnimationResource(BoxBlockEntity animatable) {
-        FigureDefinition figure = animatable.getFigureDefinition();
-        if (figure == null) return null;
-        return figure.getAnimationPath();
+        // Always return the pose animation file which contains both Pose_Stand and Pose_Sit
+        return POSE_ANIMATION;
     }
 
     @Override

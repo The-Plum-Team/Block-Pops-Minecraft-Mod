@@ -68,6 +68,16 @@
 					}
 				}
 			}
+		},
+		"Pose_Stand": {
+			"loop": true,
+			"animation_length": 0.01,
+			"bones": {}
+		},
+		"Pose_Sit": {
+			"loop": true,
+			"animation_length": 0.01,
+			"bones": {}
 		}
 	}
 }
