@@ -95,6 +95,19 @@
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
       "texture": "blockpops:textures/figure/strangerthings/will_byers.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "demogorgon",
+      "name": "Demogorgon",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/strangerthings/demogorgon.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Demogorgon (Open)",
+          "texture": "blockpops:textures/figure/strangerthings/demogorgon_open.png"
+        }
+      ]
     }
   ]
 }

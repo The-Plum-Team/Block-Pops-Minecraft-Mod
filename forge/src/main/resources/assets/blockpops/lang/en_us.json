@@ -27,6 +27,7 @@
   "block.blockpops.box_block_deltarune": "Deltarune Box",
   "block.blockpops.box_block_alienstage": "Alien Stage Box",
   "block.blockpops.box_block_strangerthings": "Stranger Things Box",
+  "block.blockpops.box_block_dispatch": "Dispatch Box",
   "block.blockpops.claw_machine_block": "Arcade Claw Machine",
   "tooltip.blockpops.has_alternatives": "Has alternative skins! (Right-click with a stick)"
 }

@@ -1,0 +1,93 @@
+{
+  "id": "dispatch",
+  "name": "Dispatch Collection",
+  "author": "Unknown",
+  "author_url": "",
+  "box_texture": "blockpops:textures/block/box/dispatch.png",
+  "logo": {
+    "texture": "blockpops:textures/block/box/logo/logo_dispatch.png",
+    "position_x": -1.5,
+    "position_y": -0.14,
+    "position_z": -1.52,
+    "scale_x": 6.0,
+    "scale_y": 4.0,
+    "scale_z": 1.0
+  },
+  "background_color": {
+    "r": 30,
+    "g": 30,
+    "b": 50
+  },
+  "figures": [
+    {
+      "id": "blonde_blazer",
+      "name": "Blonde Blazer",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/dispatch/blonde_blazer.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "malevola_gibb",
+      "name": "Malevola Gibb",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/dispatch/malevola_gibb.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "prism_alice",
+      "name": "Prism Alice",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/dispatch/prism_alice.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "punch_up_colm",
+      "name": "Punch Up Colm",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/dispatch/punch_up_colm.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "flambae",
+      "name": "Flambae",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/dispatch/flambae.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "half_man_half_bat",
+      "name": "Half Man Half Bat",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/dispatch/half_man_half_bat.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "invisigal",
+      "name": "Invisigal",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/dispatch/invisigal.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "phenomaman",
+      "name": "Phenomaman",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/dispatch/phenomaman.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "robert_robertson_iii",
+      "name": "Robert Robertson III",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/dispatch/robert_robertson_iii.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "waterboy",
+      "name": "Waterboy",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/dispatch/waterboy.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    }
+  ]
+}
