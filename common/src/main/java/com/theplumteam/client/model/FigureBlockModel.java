@@ -18,10 +18,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
-    private static final ResourceLocation FALLBACK_MODEL = new ResourceLocation(BlockPopsMod.MOD_ID, "geo/block/box_block.geo.json");
-    private static final ResourceLocation FALLBACK_TEXTURE = new ResourceLocation("minecraft", "textures/entity/steve.png");
-    private static final ResourceLocation FALLBACK_ANIMATION = new ResourceLocation(BlockPopsMod.MOD_ID, "animations/block/box_block.animation.json");
-    private static final ResourceLocation POSE_ANIMATION = new ResourceLocation(BlockPopsMod.MOD_ID, "animations/figure/figure_poses.animation.json");
+    private static final ResourceLocation FALLBACK_MODEL = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "geo/block/box_block.geo.json");
+    private static final ResourceLocation FALLBACK_TEXTURE = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/entity/steve.png");
+    private static final ResourceLocation FALLBACK_ANIMATION = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "animations/block/box_block.animation.json");
+    private static final ResourceLocation POSE_ANIMATION = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "animations/figure/figure_poses.animation.json");
 
     private static final Map<String, GameProfile> snapshotProfileCache = new ConcurrentHashMap<>();
     private static final Map<String, Boolean> snapshotRegistrationCache = new ConcurrentHashMap<>();
@@ -119,35 +119,22 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
             // 5. Live Mojang Fallback - Check PlayerInfo even for blocks
             if (Minecraft.getInstance().getConnection() != null) {
                 PlayerInfo playerInfo = Minecraft.getInstance().getConnection().getPlayerInfo(figure.getPlayerUUID());
-                if (playerInfo != null) return playerInfo.getSkinLocation();
+                if (playerInfo != null) return playerInfo.getSkin().texture();
             }
 
-            // 6. Absolute Fallback
-            GameProfile profile = liveProfileCache.computeIfAbsent(figure.getPlayerUUID(), uuid ->
-                    new GameProfile(uuid, figure.getName()));
-            liveRegistrationCache.computeIfAbsent(figure.getPlayerUUID(), uuid -> {
-                Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, p) -> {}, false);
-                return true;
-            });
-            return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
+            // 6. Absolute Fallback - use the default Steve texture
+            // In 1.21.1+, async skin loading would be required for proper profile-based loading
+            return FALLBACK_TEXTURE;
         }
 
         return figure.getTexturePath() != null ? figure.getTexturePath() : FALLBACK_TEXTURE;
     }
 
     private ResourceLocation getSkinLocationFromSnapshot(FigureDefinition figure, String snapshot) {
-        UUID snapshotUUID = UUID.nameUUIDFromBytes((figure.getPlayerUUID().toString() + snapshot).getBytes());
-        String uniqueCacheKey = snapshotUUID.toString();
-        GameProfile profile = snapshotProfileCache.computeIfAbsent(uniqueCacheKey, id -> {
-            GameProfile newProfile = new GameProfile(snapshotUUID, figure.getName());
-            newProfile.getProperties().put("textures", new Property("textures", snapshot));
-            return newProfile;
-        });
-        snapshotRegistrationCache.computeIfAbsent(uniqueCacheKey, id -> {
-            Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, texture) -> {}, false);
-            return true;
-        });
-        return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
+        // In 1.21.1+, skin snapshot loading requires async handling
+        // For now, return fallback - the snapshot system would need to be reworked
+        // to use the new PlayerSkin async loading API
+        return FALLBACK_TEXTURE;
     }
 
     @Override

@@ -4,7 +4,9 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
@@ -17,7 +19,7 @@ import org.slf4j.LoggerFactory;
  */
 public class UnlockFigurePacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(UnlockFigurePacket.class);
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "unlock_figure");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "unlock_figure");
 
     private final String figureId;
     private final String figureName;
@@ -34,8 +36,8 @@ public class UnlockFigurePacket {
         this.skinSnapshot = skinSnapshot;
     }
 
-    public FriendlyByteBuf encode() {
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+    public RegistryFriendlyByteBuf encode() {
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         buffer.writeUtf(figureId);
         buffer.writeUtf(figureName);
         buffer.writeBoolean(skinSnapshot != null);

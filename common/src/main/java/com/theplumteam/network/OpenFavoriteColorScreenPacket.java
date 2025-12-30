@@ -7,7 +7,9 @@ import dev.architectury.utils.Env;
 import dev.architectury.utils.EnvExecutor;
 import io.netty.buffer.Unpooled;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
@@ -19,7 +21,7 @@ import org.slf4j.LoggerFactory;
  */
 public class OpenFavoriteColorScreenPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenFavoriteColorScreenPacket.class);
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "open_favorite_color_screen");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "open_favorite_color_screen");
 
     public OpenFavoriteColorScreenPacket() {
         // No data needed - the packet's arrival is the trigger
@@ -28,9 +30,9 @@ public class OpenFavoriteColorScreenPacket {
     /**
      * Encode the packet to a buffer
      */
-    public FriendlyByteBuf encode() {
+    public RegistryFriendlyByteBuf encode() {
         // No data to encode
-        return new FriendlyByteBuf(Unpooled.buffer());
+        return new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
     }
 
     /**

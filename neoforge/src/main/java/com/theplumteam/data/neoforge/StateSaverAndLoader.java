@@ -1,4 +1,4 @@
-package com.theplumteam.data.fabric;
+package com.theplumteam.data.neoforge;
 
 import com.theplumteam.BlockPopsMod;
 import net.minecraft.core.HolderLookup;
@@ -12,7 +12,7 @@ import java.util.HashMap;
 import java.util.UUID;
 
 /**
- * Fabric's built-in PersistentState for saving player data.
+ * NeoForge SavedData for saving player data.
  * Data is stored per-world and persists across server restarts.
  */
 public class StateSaverAndLoader extends SavedData {
@@ -52,8 +52,7 @@ public class StateSaverAndLoader extends SavedData {
         StateSaverAndLoader state = persistentStateManager.computeIfAbsent(
                 new SavedData.Factory<>(
                         StateSaverAndLoader::new,
-                        StateSaverAndLoader::createFromTag,
-                        null // DataFixTypes - null for no data fixing
+                        StateSaverAndLoader::createFromTag
                 ),
                 BlockPopsMod.MOD_ID + "_player_data"
         );

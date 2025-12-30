@@ -1,19 +1,22 @@
 package com.theplumteam.block;
 
+import com.mojang.serialization.MapCodec;
 import com.theplumteam.blockentity.FigureBlockEntity;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModItems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
@@ -30,6 +33,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
 public class FigureBlock extends BaseEntityBlock {
+    public static final MapCodec<FigureBlock> CODEC = simpleCodec(FigureBlock::new);
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
 
     private static final VoxelShape SHAPE = Block.box(5, 0, 5, 11, 12, 11);
@@ -37,6 +41,11 @@ public class FigureBlock extends BaseEntityBlock {
     public FigureBlock(Properties properties) {
         super(properties);
         this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
+    }
+
+    @Override
+    protected MapCodec<? extends BaseEntityBlock> codec() {
+        return CODEC;
     }
 
     @Override
@@ -62,7 +71,7 @@ public class FigureBlock extends BaseEntityBlock {
     }
 
     @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         // Right-click (no shift) to cycle alternative skins
         if (!player.isShiftKeyDown()) {
             if (!level.isClientSide()) {
@@ -90,8 +99,9 @@ public class FigureBlock extends BaseEntityBlock {
         if (!level.isClientSide) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof FigureBlockEntity figureBlockEntity) {
-                CompoundTag tag = stack.getTagElement("BlockEntityTag");
-                if (tag != null) {
+                CustomData customData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
+                if (customData != null) {
+                    CompoundTag tag = customData.copyTag();
                     if (tag.contains("QuickSkinId")) {
                         figureBlockEntity.setQuickSkinId(tag.getString("QuickSkinId"));
                     }
@@ -109,7 +119,7 @@ public class FigureBlock extends BaseEntityBlock {
     }
 
     @Override
-    public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+    public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
         if (!level.isClientSide) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof FigureBlockEntity figureBlockEntity) {
@@ -119,11 +129,11 @@ public class FigureBlock extends BaseEntityBlock {
             }
         }
 
-        super.playerWillDestroy(level, pos, state, player);
+        return super.playerWillDestroy(level, pos, state, player);
     }
 
     @Override
-    public ItemStack getCloneItemStack(BlockGetter level, BlockPos pos, BlockState state) {
+    public ItemStack getCloneItemStack(LevelReader level, BlockPos pos, BlockState state) {
         ItemStack stack = super.getCloneItemStack(level, pos, state);
         if (level.getBlockEntity(pos) instanceof FigureBlockEntity figureBlockEntity) {
             figureBlockEntity.saveToItem(stack);

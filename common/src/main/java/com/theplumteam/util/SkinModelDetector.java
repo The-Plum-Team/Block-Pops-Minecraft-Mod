@@ -2,6 +2,7 @@ package com.theplumteam.util;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.PlayerSkin;
 import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,10 +86,10 @@ public class SkinModelDetector {
             if (Minecraft.getInstance().getConnection() != null) {
                 var playerListEntries = Minecraft.getInstance().getConnection().getOnlinePlayers();
                 for (var playerInfo : playerListEntries) {
-                    if (playerInfo.getSkinLocation().equals(textureLocation)) {
+                    PlayerSkin skin = playerInfo.getSkin();
+                    if (skin.texture().equals(textureLocation)) {
                         // Found matching player - get their model type directly
-                        String modelName = playerInfo.getModelName();
-                        SkinModel model = "slim".equals(modelName) ? SkinModel.SLIM : SkinModel.CLASSIC;
+                        SkinModel model = skin.model() == PlayerSkin.Model.SLIM ? SkinModel.SLIM : SkinModel.CLASSIC;
                         LOGGER.info("Detected {} skin from PlayerInfo for texture: {}", model, textureLocation);
                         DETECTION_CACHE.put(textureLocation, model);
                         return model;

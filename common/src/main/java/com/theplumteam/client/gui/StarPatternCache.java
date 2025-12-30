@@ -18,7 +18,7 @@ import java.io.InputStream;
  * The texture was pre-generated externally to eliminate runtime generation overhead.
  */
 public class StarPatternCache {
-    private static final ResourceLocation STAR_PATTERN_CACHE = new ResourceLocation(BlockPopsMod.MOD_ID, "textures/gui/background/star_pattern_cache_generated.png");
+    private static final ResourceLocation STAR_PATTERN_CACHE = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "textures/gui/background/star_pattern_cache_generated.png");
     private static final int TILE_SIZE = 55; // Match the original tile size
     private static final int CACHE_TILES_WIDTH = 64; // Pre-generated texture has 64 tiles width
     private static final int CACHE_TILES_HEIGHT = 32; // Pre-generated texture has 32 tiles height

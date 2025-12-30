@@ -1,6 +1,7 @@
 package com.theplumteam.command;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.yggdrasil.ProfileResult;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -18,8 +19,10 @@ import com.theplumteam.registry.ModItems;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
@@ -110,8 +113,8 @@ public class GetBoxCommand {
     private static GameProfile getFreshGameProfile(ServerPlayer player, FigureDefinition figure) {
         if (figure.getPlayerUUID() == null) return null;
         try {
-            GameProfile freshProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
-            return player.getServer().getSessionService().fillProfileProperties(freshProfile, true);
+            ProfileResult result = player.getServer().getSessionService().fetchProfile(figure.getPlayerUUID(), true);
+            return result != null ? result.profile() : null;
         } catch (Exception e) {
             LOGGER.error("Failed to fetch fresh GameProfile for {}: {}", figure.getName(), e.getMessage());
             return null;
@@ -164,7 +167,7 @@ public class GetBoxCommand {
                     if (selectedFigure.getType() == FigureType.PLAYER) {
                         GameProfile freshProfile = getFreshGameProfile(player, selectedFigure);
                         if (freshProfile != null && !freshProfile.getProperties().get("textures").isEmpty()) {
-                            skinSnapshot = freshProfile.getProperties().get("textures").iterator().next().getValue();
+                            skinSnapshot = freshProfile.getProperties().get("textures").iterator().next().value();
                             discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
                             LOGGER.info("Saved/updated fresh skin snapshot for {}.", uniqueFigureId);
                         }
@@ -207,7 +210,7 @@ public class GetBoxCommand {
                         blockEntityTag.putString("QuickSkinId", quickSkinSnapshot);
                     }
 
-                    boxItem.getOrCreateTag().put("BlockEntityTag", blockEntityTag);
+                    boxItem.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(blockEntityTag));
 
                     ItemEntity itemEntity = new ItemEntity(player.level(), player.getX(), player.getY() + 1.0, player.getZ(), boxItem);
                     itemEntity.setDeltaMovement(0, 0.2, 0);

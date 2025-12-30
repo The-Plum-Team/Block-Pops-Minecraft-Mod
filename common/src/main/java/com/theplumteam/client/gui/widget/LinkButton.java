@@ -11,6 +11,8 @@ import net.minecraft.resources.ResourceLocation;
 
 public class LinkButton extends Button {
 
+    private static final ResourceLocation WIDGETS_LOCATION = ResourceLocation.withDefaultNamespace("textures/gui/widgets.png");
+
     private final ResourceLocation texture;
     private final int textureWidth;
     private final int textureHeight;
@@ -33,9 +35,16 @@ public class LinkButton extends Button {
 
     @Override
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
-        // Use the standard button background for the rounded shape.
-        // We always use the "normal" (not hovered) state texture. The V-offset for this is 46 + 1 * 20 = 66.
-        graphics.blitNineSliced(WIDGETS_LOCATION, this.getX(), this.getY(), this.getWidth(), this.getHeight(), 20, 4, 200, 20, 0, 46 + 1 * 20);
+        // Draw a simple rounded background
+        int bgColor = this.isHoveredOrFocused() ? 0x80FFFFFF : 0x60FFFFFF;
+        graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + this.getHeight(), bgColor);
+
+        // Draw border
+        int borderColor = 0x80FFFFFF;
+        graphics.fill(this.getX(), this.getY(), this.getX() + this.getWidth(), this.getY() + 1, borderColor);
+        graphics.fill(this.getX(), this.getY() + this.getHeight() - 1, this.getX() + this.getWidth(), this.getY() + this.getHeight(), borderColor);
+        graphics.fill(this.getX(), this.getY() + 1, this.getX() + 1, this.getY() + this.getHeight() - 1, borderColor);
+        graphics.fill(this.getX() + this.getWidth() - 1, this.getY() + 1, this.getX() + this.getWidth(), this.getY() + this.getHeight() - 1, borderColor);
 
         // Enable blending for the transparent logo.
         RenderSystem.enableBlend();
@@ -54,6 +63,9 @@ public class LinkButton extends Button {
                 this.textureWidth, this.textureHeight,                   // Region in texture to draw (the whole image)
                 this.textureWidth, this.textureHeight                    // Total texture size
         );
+
+        // Reset shader color
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     private static void openLink(String url) {

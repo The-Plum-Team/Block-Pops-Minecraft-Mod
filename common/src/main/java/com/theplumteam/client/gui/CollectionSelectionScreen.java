@@ -2,6 +2,7 @@ package com.theplumteam.client.gui;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -84,12 +85,12 @@ public class CollectionSelectionScreen extends Screen {
     private boolean isClosing = false;
 
     // Icon textures
-    private static final ResourceLocation DISCORD_ICON = new ResourceLocation("blockpops", "textures/gui/discord_icon.png");
-    private static final ResourceLocation CURSEFORGE_ICON = new ResourceLocation("blockpops", "textures/gui/curseforge_icon.png");
-    private static final ResourceLocation MODRINTH_ICON = new ResourceLocation("blockpops", "textures/gui/modrinth_icon.png");
+    private static final ResourceLocation DISCORD_ICON = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/gui/discord_icon.png");
+    private static final ResourceLocation CURSEFORGE_ICON = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/gui/curseforge_icon.png");
+    private static final ResourceLocation MODRINTH_ICON = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/gui/modrinth_icon.png");
 
     // Icon textures
-    private static final ResourceLocation SETTINGS_ICON = new ResourceLocation("blockpops", "textures/gui/settings_icon.png");
+    private static final ResourceLocation SETTINGS_ICON = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/gui/settings_icon.png");
 
     // URLs
     private static final String DISCORD_URL = "https://discord.gg/yGxdvA7qej";
@@ -178,9 +179,7 @@ public class CollectionSelectionScreen extends Screen {
                 yPos, // Start at same Y as before
                 55 // Entry height - adjusted for optimal spacing
         );
-        collectionListWidget.setLeftPos(componentX);
-        collectionListWidget.setRenderBackground(false);
-        collectionListWidget.setRenderTopAndBottom(false);
+        collectionListWidget.setXPosition(componentX);
         // Add for input handling only - we'll render manually outside the scaled pose
         this.addWidget(collectionListWidget);
 
@@ -200,9 +199,7 @@ public class CollectionSelectionScreen extends Screen {
                 figureListY,
                 90 // Entry height for figure cells
         );
-        figureListWidget.setLeftPos(previewX);
-        figureListWidget.setRenderBackground(false);
-        figureListWidget.setRenderTopAndBottom(false);
+        figureListWidget.setXPosition(previewX);
         // Add for input handling only - we'll render manually outside the scaled pose
         this.addWidget(figureListWidget);
 
@@ -581,17 +578,15 @@ public class CollectionSelectionScreen extends Screen {
         RenderSystem.setShaderTexture(0, cacheTexture);
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
 
-        Tesselator tesselator = Tesselator.getInstance();
-        BufferBuilder bufferBuilder = tesselator.getBuilder();
-
-        bufferBuilder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
         int starHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
         int starWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
-        bufferBuilder.vertex(pose.last().pose(), 0, starHeight, 0).uv(u0, v1).endVertex();
-        bufferBuilder.vertex(pose.last().pose(), starWidth, starHeight, 0).uv(u1, v1).endVertex();
-        bufferBuilder.vertex(pose.last().pose(), starWidth, 0, 0).uv(u1, v0).endVertex();
-        bufferBuilder.vertex(pose.last().pose(), 0, 0, 0).uv(u0, v0).endVertex();
-        tesselator.end();
+
+        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        bufferBuilder.addVertex(pose.last().pose(), 0, starHeight, 0).setUv(u0, v1);
+        bufferBuilder.addVertex(pose.last().pose(), starWidth, starHeight, 0).setUv(u1, v1);
+        bufferBuilder.addVertex(pose.last().pose(), starWidth, 0, 0).setUv(u1, v0);
+        bufferBuilder.addVertex(pose.last().pose(), 0, 0, 0).setUv(u0, v0);
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
 
         pose.popPose();
 
@@ -832,12 +827,12 @@ public class CollectionSelectionScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (GuiScaleManager.isUsingInverseScale()) {
             mouseX = GuiScaleManager.transformMouseX(mouseX);
             mouseY = GuiScaleManager.transformMouseY(mouseY);
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     @Override

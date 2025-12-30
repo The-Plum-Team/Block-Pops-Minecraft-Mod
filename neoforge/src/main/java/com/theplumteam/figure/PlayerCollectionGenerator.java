@@ -3,7 +3,8 @@ package com.theplumteam.figure;
 import com.mojang.authlib.GameProfile;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
-import com.theplumteam.capability.PlayerDiscoveryProvider;
+import com.theplumteam.data.IPlayerDiscovery;
+import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.server.config.ServerConfig;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
@@ -16,7 +17,6 @@ import net.minecraft.server.players.GameProfileCache;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Generates a dynamic figure collection based on players who have joined the world.
@@ -44,8 +44,8 @@ public class PlayerCollectionGenerator {
             GameProfileCache profileCache = server.getProfileCache();
 
             // Use default model and animation paths
-            ResourceLocation defaultModel = new ResourceLocation("blockpops", "geo/figure/box_figure_default.geo.json");
-            ResourceLocation defaultAnimation = new ResourceLocation("blockpops", "animations/figure/box_figure_default.animation.json");
+            ResourceLocation defaultModel = ResourceLocation.fromNamespaceAndPath("blockpops", "geo/figure/box_figure_default.geo.json");
+            ResourceLocation defaultAnimation = ResourceLocation.fromNamespaceAndPath("blockpops", "animations/figure/box_figure_default.animation.json");
 
             // First, process existing .dat files (if directory exists)
             if (playerdataDir.exists() && playerdataDir.isDirectory()) {
@@ -75,35 +75,29 @@ public class PlayerCollectionGenerator {
                             PopBlockColor defaultColor = ServerConfig.getInstance().getDefaultPlayerColor();
                             PopBlockColor favoriteColor = defaultColor;
 
-                            // Try to get the color from the online player's in-memory capability first
+                            // Try to get the color from the online player's data first
                             ServerPlayer onlinePlayer = server.getPlayerList().getPlayer(playerUUID);
                             if (onlinePlayer != null) {
-                                // Player is online, read from their in-memory capability
-                                AtomicReference<PopBlockColor> colorRef = new AtomicReference<>(defaultColor);
-                                onlinePlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
-                                    PopBlockColor color = discovery.getFavoriteColor();
-                                    if (color != null) {
-                                        colorRef.set(color);
-                                    }
-                                });
-                                favoriteColor = colorRef.get();
+                                // Player is online, read from their SavedData
+                                IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(onlinePlayer);
+                                if (discovery.hasChosenFavoriteColor() && discovery.getFavoriteColor() != null) {
+                                    favoriteColor = discovery.getFavoriteColor();
+                                }
                                 BlockPopsMod.LOGGER.debug("Loaded favorite color from online player {}: {}", playerName, favoriteColor.getSerializedName());
                             } else {
                                 // Player is offline, read from disk
                                 try {
                                     File playerDataFile = new File(playerdataDir, uuidString + ".dat");
                                     if (playerDataFile.exists()) {
-                                        CompoundTag playerData = NbtIo.readCompressed(playerDataFile);
+                                        CompoundTag playerData = NbtIo.readCompressed(playerDataFile.toPath(), net.minecraft.nbt.NbtAccounter.unlimitedHeap());
                                         if (playerData != null) {
-                                            CompoundTag capabilities = playerData.getCompound("ForgeCaps");
-                                            if (capabilities.contains("blockpops:player_discovery")) {
-                                                CompoundTag discoveryTag = capabilities.getCompound("blockpops:player_discovery");
-                                                if (discoveryTag.contains("FavoriteColor", Tag.TAG_STRING)) {
-                                                    try {
-                                                        favoriteColor = PopBlockColor.valueOf(discoveryTag.getString("FavoriteColor").toUpperCase());
-                                                    } catch (IllegalArgumentException e) {
-                                                        BlockPopsMod.LOGGER.warn("Invalid favorite color found for player {}, defaulting to ORIGINAL", playerUUID);
-                                                    }
+                                            // Check for our mod's saved data format
+                                            CompoundTag modData = playerData.getCompound("blockpops_data");
+                                            if (modData.contains("FavoriteColor", Tag.TAG_STRING)) {
+                                                try {
+                                                    favoriteColor = PopBlockColor.valueOf(modData.getString("FavoriteColor").toUpperCase());
+                                                } catch (IllegalArgumentException e) {
+                                                    BlockPopsMod.LOGGER.warn("Invalid favorite color found for player {}, defaulting to ORIGINAL", playerUUID);
                                                 }
                                             }
                                         }
@@ -148,17 +142,11 @@ public class PlayerCollectionGenerator {
                 String playerName = onlinePlayer.getName().getString();
                 String uuidString = playerUUID.toString();
 
-                // Get favorite color from online player's capability
+                // Get favorite color from online player's data
                 PopBlockColor defaultColorOnline = ServerConfig.getInstance().getDefaultPlayerColor();
-                PopBlockColor favoriteColor = defaultColorOnline;
-                AtomicReference<PopBlockColor> colorRef = new AtomicReference<>(defaultColorOnline);
-                onlinePlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
-                    PopBlockColor color = discovery.getFavoriteColor();
-                    if (color != null) {
-                        colorRef.set(color);
-                    }
-                });
-                favoriteColor = colorRef.get();
+                IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(onlinePlayer);
+                PopBlockColor favoriteColor = (discovery.hasChosenFavoriteColor() && discovery.getFavoriteColor() != null)
+                        ? discovery.getFavoriteColor() : defaultColorOnline;
 
                 // Create a player figure definition
                 FigureDefinition playerFigure = new FigureDefinition(
@@ -178,10 +166,10 @@ public class PlayerCollectionGenerator {
             BlockPopsMod.LOGGER.info("Generated World Players collection with {} figures", playerFigures.size());
 
             // Use the default/original box texture
-            ResourceLocation boxTexture = new ResourceLocation("blockpops", "textures/block/box/default.png");
+            ResourceLocation boxTexture = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/block/box/default.png");
 
             // Create logo configuration for World Players collection
-            ResourceLocation logoTexture = new ResourceLocation("blockpops", "textures/block/box/logo/logo_worldplayers.png");
+            ResourceLocation logoTexture = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/block/box/logo/logo_worldplayers.png");
             FigureCollection.LogoConfig logoConfig = new FigureCollection.LogoConfig(
                 logoTexture,
                 -0.915f,  // positionX
@@ -213,10 +201,10 @@ public class PlayerCollectionGenerator {
      * Creates an empty World Players collection as a fallback
      */
     private static FigureCollection createEmptyCollection() {
-        ResourceLocation boxTexture = new ResourceLocation("blockpops", "textures/block/box/default.png");
+        ResourceLocation boxTexture = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/block/box/default.png");
 
         // Create logo configuration for World Players collection
-        ResourceLocation logoTexture = new ResourceLocation("blockpops", "textures/block/box/logo/logo_worldplayers.png");
+        ResourceLocation logoTexture = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/block/box/logo/logo_worldplayers.png");
         FigureCollection.LogoConfig logoConfig = new FigureCollection.LogoConfig(
             logoTexture,
             -0.915f,  // positionX

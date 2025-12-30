@@ -4,7 +4,9 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
@@ -21,7 +23,7 @@ import java.util.Set;
  */
 public class SyncDiscoveryDataPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(SyncDiscoveryDataPacket.class);
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "sync_discovery_data");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "sync_discovery_data");
 
     private final Set<String> discoveredFigures;
     private final Map<String, String> figureSkins;
@@ -31,8 +33,8 @@ public class SyncDiscoveryDataPacket {
         this.figureSkins = new HashMap<>(figureSkins);
     }
 
-    public FriendlyByteBuf encode() {
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+    public RegistryFriendlyByteBuf encode() {
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         buffer.writeInt(discoveredFigures.size());
         for (String figureId : discoveredFigures) {
             buffer.writeUtf(figureId);

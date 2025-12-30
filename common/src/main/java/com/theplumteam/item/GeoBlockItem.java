@@ -6,14 +6,15 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.level.Level;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.block.Block;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
@@ -31,12 +32,17 @@ public class GeoBlockItem extends BlockItem {
         return (BoxBlock) getBlock();
     }
 
+    private CompoundTag getBlockEntityTag(ItemStack stack) {
+        CustomData customData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
+        return customData != null ? customData.copyTag() : null;
+    }
+
     @Override
     public Component getName(ItemStack stack) {
         String collectionId = null;
 
         if (getBlock() instanceof BoxBlock boxBlock) {
-            CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
+            CompoundTag blockEntityTag = getBlockEntityTag(stack);
             String figureId = "";
 
             if (blockEntityTag != null) {
@@ -69,7 +75,7 @@ public class GeoBlockItem extends BlockItem {
             return Component.literal(collectionName + " Box");
 
         } else if (getBlock() instanceof FigureBlock) {
-            CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
+            CompoundTag blockEntityTag = getBlockEntityTag(stack);
             String figureId = "";
 
             if (blockEntityTag != null) {
@@ -100,12 +106,12 @@ public class GeoBlockItem extends BlockItem {
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
-        super.appendHoverText(stack, level, tooltip, flag);
+    public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
+        super.appendHoverText(stack, context, tooltip, flag);
 
         String collectionId = null;
         String figureId = "";
-        CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
+        CompoundTag blockEntityTag = getBlockEntityTag(stack);
 
         if (getBlock() instanceof BoxBlock boxBlock) {
             if (blockEntityTag != null) {

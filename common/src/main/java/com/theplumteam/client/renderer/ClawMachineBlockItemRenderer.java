@@ -7,9 +7,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.block.Block;
 
 public class ClawMachineBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
@@ -31,12 +33,11 @@ public class ClawMachineBlockItemRenderer extends BlockEntityWithoutLevelRendere
                 renderEntity = new ClawMachineBlockEntity(BlockPos.ZERO, clawMachineBlock.defaultBlockState());
             }
 
-            // Load NBT data from ItemStack
-            if (stack.hasTag()) {
-                CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
-                if (blockEntityTag != null) {
-                    renderEntity.load(blockEntityTag);
-                }
+            // Load component data from ItemStack
+            CustomData customData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
+            if (customData != null) {
+                CompoundTag blockEntityTag = customData.copyTag();
+                renderEntity.loadFromItemNbt(blockEntityTag);
             }
 
             // Apply transformations for item rendering
@@ -84,7 +85,7 @@ public class ClawMachineBlockItemRenderer extends BlockEntityWithoutLevelRendere
             }
 
             // Get the partial tick time for smooth animations
-            float partialTick = Minecraft.getInstance().getFrameTime();
+            float partialTick = Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true);
 
             // Render using ClawMachineBlockRenderer
             this.renderer.render(renderEntity, partialTick, poseStack, bufferSource, packedLight, packedOverlay);

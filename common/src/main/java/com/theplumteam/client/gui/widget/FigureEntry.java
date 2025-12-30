@@ -221,7 +221,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 partialTick,
                 15728880,
                 net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY,
-                1f, 1f, 1f, 1f
+                0xFFFFFFFF  // ARGB color (fully opaque white)
             );
 
             bufferSource.endBatch();

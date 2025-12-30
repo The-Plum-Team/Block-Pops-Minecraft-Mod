@@ -20,8 +20,8 @@ subprojects {
 
     base {
         // Set up named JARs for each platform
-        if (project.name == 'forge') {
-            archivesName = "BlockPops - Forge - ${rootProject.minecraft_version}"
+        if (project.name == 'neoforge') {
+            archivesName = "BlockPops - Neoforge - ${rootProject.minecraft_version}"
         } else if (project.name == 'fabric') {
             archivesName = "BlockPops - Fabric - ${rootProject.minecraft_version}"
         } else {
@@ -48,12 +48,12 @@ subprojects {
         // If you remove this line, sources will not be generated.
         withSourcesJar()
 
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     tasks.withType(JavaCompile).configureEach {
-        it.options.release = 17
+        it.options.release = 21
     }
 
     // Configure Maven publishing.

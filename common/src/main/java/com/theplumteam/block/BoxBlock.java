@@ -1,5 +1,6 @@
 package com.theplumteam.block;
 
+import com.mojang.serialization.MapCodec;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
@@ -9,18 +10,22 @@ import com.theplumteam.registry.ModItems;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
@@ -37,6 +42,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
 public class BoxBlock extends BaseEntityBlock {
+    public static final MapCodec<BoxBlock> CODEC = simpleCodec(BoxBlock::new);
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
 
     // Hitbox matching the actual box model size
@@ -53,6 +59,11 @@ public class BoxBlock extends BaseEntityBlock {
     public BoxBlock(Properties properties) {
         super(properties);
         this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
+    }
+
+    @Override
+    protected MapCodec<? extends BaseEntityBlock> codec() {
+        return CODEC;
     }
 
     @Override
@@ -144,12 +155,10 @@ public class BoxBlock extends BaseEntityBlock {
     }
 
     @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-        ItemStack heldItem = player.getItemInHand(hand);
-
+    protected ItemInteractionResult useItemOn(ItemStack heldItem, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         BlockEntity blockEntity = level.getBlockEntity(pos);
         if (!(blockEntity instanceof BoxBlockEntity boxBlockEntity)) {
-            return InteractionResult.PASS;
+            return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
 
         // Shift-right-click behavior
@@ -157,16 +166,16 @@ public class BoxBlock extends BaseEntityBlock {
             // If box is open, close it (server side)
             if (boxBlockEntity.isOpen() && !level.isClientSide) {
                 boxBlockEntity.toggleOpen();
-                return InteractionResult.SUCCESS;
+                return ItemInteractionResult.SUCCESS;
             }
             // If box is closed, open adjustment screen (client side, dev mode only)
             else if (!boxBlockEntity.isOpen() && level.isClientSide) {
                 if (PlatformHelper.isDevelopmentEnvironment()) {
                     PlatformHelper.openBoxFigureScreen(pos, boxBlockEntity);
-                    return InteractionResult.SUCCESS;
+                    return ItemInteractionResult.SUCCESS;
                 }
             }
-            return InteractionResult.sidedSuccess(level.isClientSide);
+            return ItemInteractionResult.sidedSuccess(level.isClientSide);
         }
 
         // Regular right-click (no shift) - server side only
@@ -174,8 +183,9 @@ public class BoxBlock extends BaseEntityBlock {
             if (boxBlockEntity.isOpen()) {
                 // Holding a figure block - try to put it back in the box
                 if (heldItem.getItem() == ModItems.FIGURE_BLOCK_ITEM.get() && boxBlockEntity.isFigureExtracted()) {
-                    CompoundTag blockEntityTag = heldItem.getTagElement("BlockEntityTag");
-                    if (blockEntityTag != null) {
+                    CustomData customData = heldItem.get(DataComponents.BLOCK_ENTITY_DATA);
+                    if (customData != null) {
+                        CompoundTag blockEntityTag = customData.copyTag();
                         String heldFigureId = blockEntityTag.getString("FigureId");
                         String heldCollectionId = blockEntityTag.getString("CollectionId");
 
@@ -194,7 +204,7 @@ public class BoxBlock extends BaseEntityBlock {
                             heldItem.shrink(1);
 
                             level.playSound(null, pos, SoundEvents.ITEM_FRAME_ADD_ITEM, SoundSource.BLOCKS, 1.0F, 1.0F);
-                            return InteractionResult.SUCCESS;
+                            return ItemInteractionResult.SUCCESS;
                         }
                     }
                 }
@@ -223,7 +233,7 @@ public class BoxBlock extends BaseEntityBlock {
                         }
                     }
 
-                    figureBlockItem.addTagElement("BlockEntityTag", blockEntityTag);
+                    figureBlockItem.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(blockEntityTag));
 
                     if (!player.getInventory().add(figureBlockItem)) {
                         player.drop(figureBlockItem, false);
@@ -231,16 +241,40 @@ public class BoxBlock extends BaseEntityBlock {
 
                     boxBlockEntity.setFigureExtracted(true);
                     level.playSound(null, pos, SoundEvents.ITEM_FRAME_REMOVE_ITEM, SoundSource.BLOCKS, 1.0F, 1.0F);
-                    return InteractionResult.SUCCESS;
+                    return ItemInteractionResult.SUCCESS;
                 }
             }
             else {
                 if (heldItem.getItem() == net.minecraft.world.item.Items.SHEARS) {
                     boxBlockEntity.toggleOpen();
                     level.playSound(null, pos, SoundEvents.SHEEP_SHEAR, SoundSource.BLOCKS, 1.0F, 1.0F);
-                    return InteractionResult.SUCCESS;
+                    return ItemInteractionResult.SUCCESS;
                 } else {
                     player.displayClientMessage(Component.literal("Use Shears to open").withStyle(ChatFormatting.GRAY), true);
+                    return ItemInteractionResult.SUCCESS;
+                }
+            }
+        }
+
+        return ItemInteractionResult.sidedSuccess(level.isClientSide);
+    }
+
+    @Override
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        if (!(blockEntity instanceof BoxBlockEntity boxBlockEntity)) {
+            return InteractionResult.PASS;
+        }
+
+        // Shift-right-click behavior with empty hand
+        if (player.isShiftKeyDown()) {
+            if (boxBlockEntity.isOpen() && !level.isClientSide) {
+                boxBlockEntity.toggleOpen();
+                return InteractionResult.SUCCESS;
+            }
+            else if (!boxBlockEntity.isOpen() && level.isClientSide) {
+                if (PlatformHelper.isDevelopmentEnvironment()) {
+                    PlatformHelper.openBoxFigureScreen(pos, boxBlockEntity);
                     return InteractionResult.SUCCESS;
                 }
             }
@@ -264,8 +298,9 @@ public class BoxBlock extends BaseEntityBlock {
         if (!level.isClientSide) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
-                CompoundTag tag = stack.getTagElement("BlockEntityTag");
-                if (tag != null) {
+                CustomData customData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
+                if (customData != null) {
+                    CompoundTag tag = customData.copyTag();
                     if (tag.contains("QuickSkinId")) {
                         boxBlockEntity.setQuickSkinId(tag.getString("QuickSkinId"));
                     }
@@ -283,7 +318,7 @@ public class BoxBlock extends BaseEntityBlock {
     }
 
     @Override
-    public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+    public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
         if (!level.isClientSide) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
@@ -304,11 +339,11 @@ public class BoxBlock extends BaseEntityBlock {
             }
         }
 
-        super.playerWillDestroy(level, pos, state, player);
+        return super.playerWillDestroy(level, pos, state, player);
     }
 
     @Override
-    public ItemStack getCloneItemStack(BlockGetter level, BlockPos pos, BlockState state) {
+    public ItemStack getCloneItemStack(LevelReader level, BlockPos pos, BlockState state) {
         ItemStack stack = super.getCloneItemStack(level, pos, state);
         if (level.getBlockEntity(pos) instanceof BoxBlockEntity boxBlockEntity) {
             boxBlockEntity.saveToItem(stack);

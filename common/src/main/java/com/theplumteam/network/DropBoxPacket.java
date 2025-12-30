@@ -1,6 +1,7 @@
 package com.theplumteam.network;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.yggdrasil.ProfileResult;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
@@ -14,8 +15,12 @@ import com.theplumteam.server.ServerTickHandler;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -38,7 +43,7 @@ import java.util.UUID;
  */
 public class DropBoxPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(DropBoxPacket.class);
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "drop_box");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "drop_box");
 
     private final BlockPos pos;
     private final String collectionId;
@@ -50,8 +55,8 @@ public class DropBoxPacket {
         this.tokenType = tokenType;
     }
 
-    public FriendlyByteBuf encode() {
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+    public RegistryFriendlyByteBuf encode() {
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         buffer.writeBlockPos(pos);
         buffer.writeUtf(collectionId);
         buffer.writeEnum(tokenType);
@@ -98,8 +103,8 @@ public class DropBoxPacket {
     private static GameProfile getFreshGameProfile(ServerPlayer player, FigureDefinition figure) {
         if (figure.getPlayerUUID() == null) return null;
         try {
-            GameProfile freshProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
-            return player.getServer().getSessionService().fillProfileProperties(freshProfile, true);
+            ProfileResult result = player.getServer().getSessionService().fetchProfile(figure.getPlayerUUID(), true);
+            return result != null ? result.profile() : null;
         } catch (Exception e) {
             LOGGER.error("Failed to fetch fresh GameProfile for {}: {}", figure.getName(), e.getMessage());
             return null;
@@ -153,7 +158,7 @@ public class DropBoxPacket {
                     if (selectedFigure.getType() == FigureType.PLAYER) {
                         GameProfile freshProfile = getFreshGameProfile(player, selectedFigure);
                         if (freshProfile != null && !freshProfile.getProperties().get("textures").isEmpty()) {
-                            skinSnapshot = freshProfile.getProperties().get("textures").iterator().next().getValue();
+                            skinSnapshot = freshProfile.getProperties().get("textures").iterator().next().value();
                             discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
                             LOGGER.info("Saved/updated fresh skin snapshot for {}.", uniqueFigureId);
                         }
@@ -200,7 +205,7 @@ public class DropBoxPacket {
                         blockEntityTag.putString("QuickSkinId", quickSkinSnapshot);
                     }
 
-                    boxItem.getOrCreateTag().put("BlockEntityTag", blockEntityTag);
+                    boxItem.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(blockEntityTag));
                     player.getInventory().add(boxItem);
                     PlayerDataManager.markDirty(player, discovery);
                 }

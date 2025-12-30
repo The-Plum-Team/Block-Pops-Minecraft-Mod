@@ -12,6 +12,7 @@ import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.network.SyncDynamicCollectionsPacket;
 import com.theplumteam.server.config.ServerConfig;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
@@ -47,8 +48,8 @@ public class PlayerCollectionHelperImpl {
             GameProfileCache profileCache = server.getProfileCache();
 
             // Use default model and animation paths
-            ResourceLocation defaultModel = new ResourceLocation("blockpops", "geo/figure/box_figure_default.geo.json");
-            ResourceLocation defaultAnimation = new ResourceLocation("blockpops", "animations/figure/box_figure_default.animation.json");
+            ResourceLocation defaultModel = ResourceLocation.fromNamespaceAndPath("blockpops", "geo/figure/box_figure_default.geo.json");
+            ResourceLocation defaultAnimation = ResourceLocation.fromNamespaceAndPath("blockpops", "animations/figure/box_figure_default.animation.json");
 
             // First, process existing .dat files (if directory exists)
             if (playerdataDir.exists() && playerdataDir.isDirectory()) {
@@ -92,7 +93,7 @@ public class PlayerCollectionHelperImpl {
                                 try {
                                     File playerDataFile = new File(playerdataDir, uuidString + ".dat");
                                     if (playerDataFile.exists()) {
-                                        CompoundTag playerData = NbtIo.readCompressed(playerDataFile);
+                                        CompoundTag playerData = NbtIo.readCompressed(playerDataFile.toPath(), NbtAccounter.unlimitedHeap());
                                         if (playerData != null) {
                                             // Fabric stores cardinal components data differently
                                             CompoundTag cardinalComponents = playerData.getCompound("cardinal_components");
@@ -174,10 +175,10 @@ public class PlayerCollectionHelperImpl {
             BlockPopsMod.LOGGER.info("Generated World Players collection with {} figures", playerFigures.size());
 
             // Use the default/original box texture
-            ResourceLocation boxTexture = new ResourceLocation("blockpops", "textures/block/box/default.png");
+            ResourceLocation boxTexture = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/block/box/default.png");
 
             // Create logo configuration for World Players collection
-            ResourceLocation logoTexture = new ResourceLocation("blockpops", "textures/block/box/logo/logo_worldplayers.png");
+            ResourceLocation logoTexture = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/block/box/logo/logo_worldplayers.png");
             FigureCollection.LogoConfig logoConfig = new FigureCollection.LogoConfig(
                 logoTexture,
                 -0.915f,  // positionX
@@ -209,10 +210,10 @@ public class PlayerCollectionHelperImpl {
      * Creates an empty World Players collection as a fallback
      */
     private static FigureCollection createEmptyCollection() {
-        ResourceLocation boxTexture = new ResourceLocation("blockpops", "textures/block/box/default.png");
+        ResourceLocation boxTexture = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/block/box/default.png");
 
         // Create logo configuration for World Players collection
-        ResourceLocation logoTexture = new ResourceLocation("blockpops", "textures/block/box/logo/logo_worldplayers.png");
+        ResourceLocation logoTexture = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/block/box/logo/logo_worldplayers.png");
         FigureCollection.LogoConfig logoConfig = new FigureCollection.LogoConfig(
             logoTexture,
             -0.915f,  // positionX

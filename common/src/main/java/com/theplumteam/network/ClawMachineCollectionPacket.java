@@ -4,7 +4,9 @@ import com.theplumteam.blockentity.ClawMachineBlockEntity;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import org.slf4j.Logger;
@@ -27,8 +29,8 @@ public class ClawMachineCollectionPacket {
     /**
      * Encode the packet to a buffer for sending to the server
      */
-    public FriendlyByteBuf encode() {
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+    public RegistryFriendlyByteBuf encode() {
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         buffer.writeBlockPos(pos);
         buffer.writeUtf(collectionId);
         return buffer;

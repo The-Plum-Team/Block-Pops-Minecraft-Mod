@@ -11,6 +11,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -291,7 +292,7 @@ public class FigurePositionScreen extends Screen {
 
     @Override
     public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(guiGraphics);
+        this.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
         guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 20, 0xFFFFFF);
@@ -362,11 +363,14 @@ public class FigurePositionScreen extends Screen {
             ResourceLocation quickSkinLoc = getQuickSkinLocation(figure.getPlayerUUID());
             if (quickSkinLoc != null) return quickSkinLoc;
 
-            GameProfile profile = profileCache.computeIfAbsent(figure.getPlayerUUID(), uuid -> new GameProfile(uuid, figure.getName()));
-            if (registeredSkins.add(figure.getPlayerUUID())) {
-                Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, p) -> {}, false);
+            // Check PlayerInfo for live skin
+            if (Minecraft.getInstance().getConnection() != null) {
+                PlayerInfo playerInfo = Minecraft.getInstance().getConnection().getPlayerInfo(figure.getPlayerUUID());
+                if (playerInfo != null) return playerInfo.getSkin().texture();
             }
-            return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
+
+            // Fallback to default Steve texture
+            return ResourceLocation.withDefaultNamespace("textures/entity/steve.png");
         }
 
         return figure.getTexturePath();

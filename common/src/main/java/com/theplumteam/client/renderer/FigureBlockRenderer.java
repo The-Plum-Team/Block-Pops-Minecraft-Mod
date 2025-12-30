@@ -21,10 +21,9 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
     @Override
     public void preRender(PoseStack poseStack, FigureBlockEntity animatable, BakedGeoModel model,
                          MultiBufferSource bufferSource, VertexConsumer buffer, boolean isReRender,
-                         float partialTick, int packedLight, int packedOverlay, float red, float green,
-                         float blue, float alpha) {
+                         float partialTick, int packedLight, int packedOverlay, int colour) {
         super.preRender(poseStack, animatable, model, bufferSource, buffer, isReRender, partialTick,
-                       packedLight, packedOverlay, red, green, blue, alpha);
+                       packedLight, packedOverlay, colour);
 
         // Detect skin model and show/hide appropriate arms
         if (animatable.hasFigure()) {
@@ -59,7 +58,7 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
     public void actuallyRender(PoseStack poseStack, FigureBlockEntity animatable, BakedGeoModel model,
                               RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer,
                               boolean isReRender, float partialTick, int packedLight, int packedOverlay,
-                              float red, float green, float blue, float alpha) {
+                              int colour) {
         // Only render if there's a valid figure - check before model is accessed
         // This prevents crashes when NBT data hasn't synced yet
         if (!animatable.hasFigure()) {
@@ -68,6 +67,6 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
 
         // Render the figure at default position (no offset or scale adjustments)
         super.actuallyRender(poseStack, animatable, model, renderType, bufferSource, buffer,
-                           isReRender, partialTick, packedLight, packedOverlay, red, green, blue, alpha);
+                           isReRender, partialTick, packedLight, packedOverlay, colour);
     }
 }

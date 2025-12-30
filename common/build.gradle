@@ -8,7 +8,6 @@ repositories {
         url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
         content {
             includeGroupByRegex("software\\.bernie.*")
-            includeGroup("com.eliotlash.mclib")
         }
     }
 }
@@ -22,6 +21,6 @@ dependencies {
     // Architectury API. This is optional, and you can comment it out if you don't need it.
     modImplementation "dev.architectury:architectury:$rootProject.architectury_api_version"
 
-    // GeckoLib - common API (platform-specific implementations provided by forge/fabric modules)
-    modCompileOnly "software.bernie.geckolib:geckolib-forge-1.20.1:$rootProject.geckolib_version"
+    // GeckoLib - common API (platform-specific implementations provided by neoforge/fabric modules)
+    modCompileOnly "software.bernie.geckolib:geckolib-neoforge-1.21.1:$rootProject.geckolib_version"
 }

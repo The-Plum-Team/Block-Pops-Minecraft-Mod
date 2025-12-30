@@ -6,7 +6,9 @@ import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.server.ServerTickHandler;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
@@ -18,7 +20,7 @@ import org.slf4j.LoggerFactory;
  */
 public class ReloadTokensPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(ReloadTokensPacket.class);
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "reload_tokens");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "reload_tokens");
 
     private final boolean reloadRegular;
     private final boolean reloadGuaranteed;
@@ -28,8 +30,8 @@ public class ReloadTokensPacket {
         this.reloadGuaranteed = reloadGuaranteed;
     }
 
-    public FriendlyByteBuf encode() {
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+    public RegistryFriendlyByteBuf encode() {
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         buffer.writeBoolean(reloadRegular);
         buffer.writeBoolean(reloadGuaranteed);
         return buffer;

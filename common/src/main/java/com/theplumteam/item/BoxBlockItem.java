@@ -1,8 +1,10 @@
 package com.theplumteam.item;
 
 import com.theplumteam.block.PopBlockColor;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.block.Block;
 import org.jetbrains.annotations.Nullable;
 
@@ -51,7 +53,7 @@ public class BoxBlockItem extends GeoBlockItem {
         }
 
         if (!blockEntityTag.isEmpty()) {
-            stack.addTagElement("BlockEntityTag", blockEntityTag);
+            stack.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(blockEntityTag));
         }
 
         return stack;

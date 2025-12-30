@@ -12,13 +12,13 @@ public class ModNetworking {
 
     // Client to Server packets (C2S)
     public static final ResourceLocation FIGURE_POSITION =
-        new ResourceLocation(BlockPopsMod.MOD_ID, "figure_position");
+        ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "figure_position");
 
     public static final ResourceLocation CLAW_MACHINE_COLLECTION =
-        new ResourceLocation(BlockPopsMod.MOD_ID, "claw_machine_collection");
+        ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "claw_machine_collection");
 
     public static final ResourceLocation SET_FAVORITE_COLOR =
-        new ResourceLocation(BlockPopsMod.MOD_ID, "set_favorite_color");
+        ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "set_favorite_color");
 
     /**
      * Initializes networking (registers server-side receivers)

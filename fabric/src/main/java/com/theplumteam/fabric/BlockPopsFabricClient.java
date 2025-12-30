@@ -54,7 +54,7 @@ public class BlockPopsFabricClient implements ClientModInitializer {
             new SimpleSynchronousResourceReloadListener() {
                 @Override
                 public ResourceLocation getFabricId() {
-                    return new ResourceLocation(BlockPopsMod.MOD_ID, "collection_loader");
+                    return ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "collection_loader");
                 }
 
                 @Override

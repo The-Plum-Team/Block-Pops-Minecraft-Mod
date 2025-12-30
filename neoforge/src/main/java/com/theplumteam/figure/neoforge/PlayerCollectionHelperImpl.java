@@ -1,4 +1,4 @@
-package com.theplumteam.figure.forge;
+package com.theplumteam.figure.neoforge;
 
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.figure.CollectionRegistry;
@@ -11,13 +11,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Forge implementation of PlayerCollectionHelper.
+ * NeoForge implementation of PlayerCollectionHelper.
  */
 public class PlayerCollectionHelperImpl {
 
     /**
      * Generate the World Players collection based on server players.
-     * Uses Forge capabilities to access player discovery data.
+     * Uses SavedData to access player discovery data.
      */
     public static FigureCollection generate(MinecraftServer server) {
         return PlayerCollectionGenerator.generate(server);
@@ -25,7 +25,7 @@ public class PlayerCollectionHelperImpl {
 
     /**
      * Regenerate the World Players collection and sync it to all players.
-     * Uses Forge capabilities to access player discovery data.
+     * Uses SavedData to access player discovery data.
      */
     public static void regenerateAndSyncPlayerCollection(MinecraftServer server) {
         FigureCollection updatedCollection = PlayerCollectionGenerator.generate(server);

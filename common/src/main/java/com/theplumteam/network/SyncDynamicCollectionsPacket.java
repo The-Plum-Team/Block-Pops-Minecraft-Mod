@@ -7,7 +7,9 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
@@ -23,7 +25,7 @@ import java.util.List;
 public class SyncDynamicCollectionsPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(SyncDynamicCollectionsPacket.class);
     private static final Gson GSON = new Gson();
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "sync_dynamic_collections");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "sync_dynamic_collections");
 
     private final List<String> collectionsJson;
 
@@ -39,8 +41,8 @@ public class SyncDynamicCollectionsPacket {
         this.collectionsJson = collectionsJson;
     }
 
-    public FriendlyByteBuf encode() {
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+    public RegistryFriendlyByteBuf encode() {
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         buffer.writeInt(collectionsJson.size());
         for (String json : collectionsJson) {
             buffer.writeUtf(json, 1048576); // 1MB limit for large collections
@@ -84,7 +86,7 @@ public class SyncDynamicCollectionsPacket {
 
     public static void sendToAllPlayers(net.minecraft.server.MinecraftServer server, List<FigureCollection> collections) {
         SyncDynamicCollectionsPacket packet = new SyncDynamicCollectionsPacket(collections);
-        FriendlyByteBuf buf = packet.encode();
+        RegistryFriendlyByteBuf buf = packet.encode();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             NetworkManager.sendToPlayer(player, ID, buf);
         }

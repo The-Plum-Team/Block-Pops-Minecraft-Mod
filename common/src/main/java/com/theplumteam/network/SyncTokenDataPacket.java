@@ -4,7 +4,9 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.token.ClientTokenManager;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
@@ -16,7 +18,7 @@ import org.slf4j.LoggerFactory;
  */
 public class SyncTokenDataPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(SyncTokenDataPacket.class);
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "sync_token_data");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "sync_token_data");
 
     private final int regularTokens;
     private final long ticksUntilNextRegular;
@@ -34,8 +36,8 @@ public class SyncTokenDataPacket {
     /**
      * Encode this packet to a buffer for network transmission.
      */
-    public FriendlyByteBuf encode() {
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+    public RegistryFriendlyByteBuf encode() {
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         buffer.writeInt(regularTokens);
         buffer.writeLong(ticksUntilNextRegular);
         buffer.writeBoolean(hasSpecialToken);

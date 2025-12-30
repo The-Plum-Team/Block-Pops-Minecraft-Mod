@@ -9,9 +9,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 
 public class BoxBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
     private final BoxBlockRenderer renderer;
@@ -32,17 +34,12 @@ public class BoxBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
             // This prevents issues like closed boxes appearing open in inventory
             renderEntity = new BoxBlockEntity(BlockPos.ZERO, boxBlock.defaultBlockState());
 
-            // Load NBT data from ItemStack FIRST before any rendering
+            // Load component data from ItemStack FIRST before any rendering
             // This ensures isOpen is set correctly before the animation controller evaluates
-            if (stack.hasTag()) {
-                CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
-                if (blockEntityTag != null) {
-                    renderEntity.load(blockEntityTag);
-                }
-            } else {
-                // If no NBT, ensure it's explicitly closed
-                // This handles brand new boxes from creative menu
-                renderEntity.load(new CompoundTag());
+            CustomData customData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
+            if (customData != null) {
+                CompoundTag blockEntityTag = customData.copyTag();
+                renderEntity.loadFromItemNbt(blockEntityTag);
             }
 
             // Apply transformations for item rendering
@@ -71,7 +68,7 @@ public class BoxBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
             }
 
             // Get the partial tick time for smooth animations
-            float partialTick = Minecraft.getInstance().getFrameTime();
+            float partialTick = Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true);
 
             // Render using BoxBlockRenderer which includes figure face rendering
             this.renderer.render(renderEntity, partialTick, poseStack, bufferSource, packedLight, packedOverlay);

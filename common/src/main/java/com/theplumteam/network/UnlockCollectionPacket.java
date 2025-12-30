@@ -1,6 +1,7 @@
 package com.theplumteam.network;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.yggdrasil.ProfileResult;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
@@ -12,12 +13,16 @@ import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.registry.ModItems;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +36,7 @@ import java.util.UUID;
  */
 public class UnlockCollectionPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(UnlockCollectionPacket.class);
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "unlock_collection");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "unlock_collection");
 
     private final String collectionId;
 
@@ -39,8 +44,8 @@ public class UnlockCollectionPacket {
         this.collectionId = collectionId;
     }
 
-    public FriendlyByteBuf encode() {
-        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+    public RegistryFriendlyByteBuf encode() {
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         buffer.writeUtf(collectionId);
         return buffer;
     }
@@ -132,7 +137,7 @@ public class UnlockCollectionPacket {
         if (figure.getType() == FigureType.PLAYER) {
             GameProfile freshProfile = getFreshGameProfile(player, figure);
             if (freshProfile != null && !freshProfile.getProperties().get("textures").isEmpty()) {
-                skinSnapshot = freshProfile.getProperties().get("textures").iterator().next().getValue();
+                skinSnapshot = freshProfile.getProperties().get("textures").iterator().next().value();
                 discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
                 LOGGER.debug("Saved skin snapshot for player figure: {}", uniqueFigureId);
             }
@@ -175,7 +180,7 @@ public class UnlockCollectionPacket {
             blockEntityTag.putString("QuickSkinId", quickSkinSnapshot);
         }
 
-        boxItem.getOrCreateTag().put("BlockEntityTag", blockEntityTag);
+        boxItem.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(blockEntityTag));
 
         ItemEntity itemEntity = new ItemEntity(
                 player.level(),
@@ -192,8 +197,8 @@ public class UnlockCollectionPacket {
     private static GameProfile getFreshGameProfile(ServerPlayer player, FigureDefinition figure) {
         if (figure.getPlayerUUID() == null) return null;
         try {
-            GameProfile freshProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
-            return player.getServer().getSessionService().fillProfileProperties(freshProfile, true);
+            ProfileResult result = player.getServer().getSessionService().fetchProfile(figure.getPlayerUUID(), true);
+            return result != null ? result.profile() : null;
         } catch (Exception e) {
             LOGGER.error("Failed to fetch fresh GameProfile for {}: {}", figure.getName(), e.getMessage());
             return null;

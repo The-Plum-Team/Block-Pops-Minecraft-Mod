@@ -1,16 +1,17 @@
 package com.theplumteam.client;
 
+import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 
 /**
- * Client-side event handler for FORGE bus events.
+ * Client-side event handler for NeoForge bus events.
  * Handles cleanup tasks when disconnecting from servers/worlds.
  */
-@Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.FORGE, modid = "blockpops", value = Dist.CLIENT)
+@EventBusSubscriber(bus = EventBusSubscriber.Bus.GAME, modid = BlockPopsMod.MOD_ID, value = Dist.CLIENT)
 public class ClientEventHandler {
 
     /**
