@@ -19,8 +19,14 @@ subprojects {
     apply plugin: 'maven-publish'
 
     base {
-        // Set up a suffixed format for the mod jar names, e.g. `example-fabric`.
-        archivesName = "$rootProject.archives_name-$project.name"
+        // Set up named JARs for each platform
+        if (project.name == 'forge') {
+            archivesName = "BlockPops - Forge - ${rootProject.minecraft_version}"
+        } else if (project.name == 'fabric') {
+            archivesName = "BlockPops - Fabric - ${rootProject.minecraft_version}"
+        } else {
+            archivesName = "$rootProject.archives_name-$project.name"
+        }
     }
 
     repositories {

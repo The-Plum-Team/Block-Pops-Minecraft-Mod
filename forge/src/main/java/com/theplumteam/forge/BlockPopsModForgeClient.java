@@ -4,6 +4,7 @@ import com.theplumteam.client.renderer.BoxBlockRenderer;
 import com.theplumteam.client.renderer.ClawMachineBlockRenderer;
 import com.theplumteam.client.renderer.FigureBlockRenderer;
 import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.network.ModNetworking;
 import com.theplumteam.registry.ModBlockEntities;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
@@ -13,9 +14,17 @@ import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterClientReloadListenersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 
 @Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.MOD, modid = "blockpops", value = Dist.CLIENT)
 public class BlockPopsModForgeClient {
+
+    @SubscribeEvent
+    public static void clientSetup(FMLClientSetupEvent event) {
+        // Initialize client-side networking
+        ModNetworking.initClient();
+    }
+
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(ModBlockEntities.BOX_BLOCK.get(), context -> new BoxBlockRenderer());

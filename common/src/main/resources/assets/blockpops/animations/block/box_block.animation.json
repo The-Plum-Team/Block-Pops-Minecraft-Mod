@@ -1,0 +1,83 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"animation.box_block.open": {
+			"animation_length": 0.625,
+			"bones": {
+				"bb_main2": {
+					"rotation": {
+						"0.0": {
+							"vector": [-90, 0, -90]
+						},
+						"0.625": {
+							"vector": [-90, -100, -90],
+							"easing": "easeInBounce",
+							"easingArgs": [0.25]
+						}
+					}
+				}
+			}
+		},
+		"animation.box_block.open_state": {
+			"loop": true,
+			"bones": {
+				"bb_main2": {
+					"rotation": {
+						"vector": [-90, -100, -90]
+					}
+				}
+			}
+		},
+		"animation.box_block.close": {
+			"animation_length": 0.625,
+			"bones": {
+				"bb_main2": {
+					"rotation": {
+						"0.0": {
+							"vector": [-90, -100, -90]
+						},
+						"0.625": {
+							"vector": [-90, 0, -90],
+							"easing": "easeInBounce",
+							"easingArgs": [0.25]
+						}
+					}
+				}
+			}
+		},
+		"animation.box_block.idle": {
+			"loop": true,
+			"animation_length": 2,
+			"bones": {
+				"block": {
+					"scale": {
+						"0.0": {
+							"vector": [1, 1, 1]
+						},
+						"1.0": {
+							"vector": [1.05, 1.05, 1.05]
+						},
+						"2.0": {
+							"vector": [1, 1, 1]
+						}
+					}
+				},
+				"bb_main2": {
+					"rotation": {
+						"vector": [-90, 0, -90]
+					}
+				}
+			}
+		},
+		"Pose_Stand": {
+			"loop": true,
+			"animation_length": 0.01,
+			"bones": {}
+		},
+		"Pose_Sit": {
+			"loop": true,
+			"animation_length": 0.01,
+			"bones": {}
+		}
+	}
+}

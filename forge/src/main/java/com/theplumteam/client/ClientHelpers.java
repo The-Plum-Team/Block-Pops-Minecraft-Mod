@@ -12,6 +12,7 @@ import net.minecraft.core.BlockPos;
  */
 public class ClientHelpers {
     public static void openBoxFigureScreen(BlockPos pos, BoxBlockEntity boxBlockEntity) {
+        // Use the cross-platform FigurePositionScreen from common
         Minecraft.getInstance().setScreen(new FigurePositionScreen(
                 pos,
                 boxBlockEntity.getFigureOffsetX(),
@@ -34,6 +35,7 @@ public class ClientHelpers {
     }
 
     public static void openClawMachineScreen(BlockPos pos, ClawMachineBlockEntity entity) {
+        // CollectionSelectionScreen is still Forge-only for now
         Minecraft.getInstance().setScreen(new CollectionSelectionScreen(
                 pos,
                 entity.getCollectionId()
