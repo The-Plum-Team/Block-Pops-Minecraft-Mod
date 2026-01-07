@@ -233,6 +233,8 @@ public class BoxBlock extends BaseEntityBlock {
                         }
                     }
 
+                    // Required in 1.21+ - block entity type ID must be present for serialization
+                    blockEntityTag.putString("id", "blockpops:figure_block");
                     figureBlockItem.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(blockEntityTag));
 
                     if (!player.getInventory().add(figureBlockItem)) {

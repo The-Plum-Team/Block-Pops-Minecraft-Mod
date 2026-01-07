@@ -858,4 +858,9 @@ public class CollectionSelectionScreen extends Screen {
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
+
+    @Override
+    public void renderBlurredBackground(float partialTick) {
+        // Disable the 1.21+ menu blur effect - we have our own animated starry background
+    }
 }

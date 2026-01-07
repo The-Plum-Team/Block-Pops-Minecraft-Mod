@@ -369,4 +369,9 @@ public class FavoriteColorSelectionScreen extends Screen {
         return false;
     }
 
+    @Override
+    public void renderBlurredBackground(float partialTick) {
+        // Disable the 1.21+ menu blur effect - we have our own animated starry background
+    }
+
 }

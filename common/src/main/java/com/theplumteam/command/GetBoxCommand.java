@@ -210,6 +210,8 @@ public class GetBoxCommand {
                         blockEntityTag.putString("QuickSkinId", quickSkinSnapshot);
                     }
 
+                    // Required in 1.21+ - block entity type ID must be present for serialization
+                    blockEntityTag.putString("id", "blockpops:box_block");
                     boxItem.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(blockEntityTag));
 
                     ItemEntity itemEntity = new ItemEntity(player.level(), player.getX(), player.getY() + 1.0, player.getZ(), boxItem);

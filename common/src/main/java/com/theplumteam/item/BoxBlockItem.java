@@ -53,6 +53,8 @@ public class BoxBlockItem extends GeoBlockItem {
         }
 
         if (!blockEntityTag.isEmpty()) {
+            // Required in 1.21+ - block entity type ID must be present for serialization
+            blockEntityTag.putString("id", "blockpops:box_block");
             stack.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(blockEntityTag));
         }
 
