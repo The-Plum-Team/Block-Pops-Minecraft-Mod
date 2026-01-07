@@ -1,9 +1,12 @@
 package com.theplumteam.platform;
 
+import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
 import dev.architectury.injectables.annotations.ExpectPlatform;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
 
 import java.nio.file.Path;
 
@@ -79,6 +82,32 @@ public class PlatformHelper {
      */
     @ExpectPlatform
     public static void openClawMachineScreen(BlockPos pos, ClawMachineBlockEntity clawMachineBlockEntity) {
+        throw new AssertionError();
+    }
+
+    // Item factory methods for platform-specific item implementations
+
+    /**
+     * Creates a GeoBlockItem (NeoForge/Forge adds IClientItemExtensions)
+     */
+    @ExpectPlatform
+    public static Item createGeoBlockItem(Block block, Item.Properties properties) {
+        throw new AssertionError();
+    }
+
+    /**
+     * Creates a BoxBlockItem for a collection (NeoForge/Forge adds IClientItemExtensions)
+     */
+    @ExpectPlatform
+    public static Item createBoxBlockItem(Block block, Item.Properties properties, String collectionId) {
+        throw new AssertionError();
+    }
+
+    /**
+     * Creates a BoxBlockItem for a color (NeoForge/Forge adds IClientItemExtensions)
+     */
+    @ExpectPlatform
+    public static Item createBoxBlockItemForColor(Block block, Item.Properties properties, PopBlockColor color) {
         throw new AssertionError();
     }
 }

@@ -1,10 +1,15 @@
 package com.theplumteam.platform.fabric;
 
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.item.BoxBlockItem;
+import com.theplumteam.item.GeoBlockItem;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
 
 import java.nio.file.Path;
 
@@ -74,5 +79,19 @@ public class PlatformHelperImpl {
                 clawMachineBlockEntity.getCollectionId()
             )
         );
+    }
+
+    // Item factory methods - return common items (Fabric uses BuiltinItemRendererRegistry for custom rendering)
+
+    public static Item createGeoBlockItem(Block block, Item.Properties properties) {
+        return new GeoBlockItem(block, properties);
+    }
+
+    public static Item createBoxBlockItem(Block block, Item.Properties properties, String collectionId) {
+        return new BoxBlockItem(block, properties, collectionId);
+    }
+
+    public static Item createBoxBlockItemForColor(Block block, Item.Properties properties, PopBlockColor color) {
+        return new BoxBlockItem(block, properties, color);
     }
 }

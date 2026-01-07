@@ -1,9 +1,14 @@
 package com.theplumteam.platform.forge;
 
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.item.ForgeBoxBlockItem;
+import com.theplumteam.item.ForgeGeoBlockItem;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.ModList;
@@ -56,5 +61,19 @@ public class PlatformHelperImpl {
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
             com.theplumteam.client.ClientHelpers.openClawMachineScreen(pos, clawMachineBlockEntity)
         );
+    }
+
+    // Item factory methods - return Forge-specific items with IClientItemExtensions
+
+    public static Item createGeoBlockItem(Block block, Item.Properties properties) {
+        return new ForgeGeoBlockItem(block, properties);
+    }
+
+    public static Item createBoxBlockItem(Block block, Item.Properties properties, String collectionId) {
+        return new ForgeBoxBlockItem(block, properties, collectionId);
+    }
+
+    public static Item createBoxBlockItemForColor(Block block, Item.Properties properties, PopBlockColor color) {
+        return new ForgeBoxBlockItem(block, properties, color);
     }
 }

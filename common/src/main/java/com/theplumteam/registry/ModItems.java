@@ -3,8 +3,7 @@ package com.theplumteam.registry;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.figure.BuiltInCollections;
-import com.theplumteam.item.BoxBlockItem;
-import com.theplumteam.item.GeoBlockItem;
+import com.theplumteam.platform.PlatformHelper;
 import dev.architectury.registry.registries.DeferredRegister;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.minecraft.core.registries.Registries;
@@ -25,12 +24,12 @@ public class ModItems {
 
     public static final RegistrySupplier<Item> CLAW_MACHINE_BLOCK_ITEM = ITEMS.register(
         "claw_machine_block",
-        () -> new GeoBlockItem(ModBlocks.CLAW_MACHINE_BLOCK.get(), new Item.Properties())
+        () -> PlatformHelper.createGeoBlockItem(ModBlocks.CLAW_MACHINE_BLOCK.get(), new Item.Properties())
     );
 
     public static final RegistrySupplier<Item> FIGURE_BLOCK_ITEM = ITEMS.register(
         "figure_block",
-        () -> new GeoBlockItem(ModBlocks.FIGURE_BLOCK.get(), new Item.Properties())
+        () -> PlatformHelper.createGeoBlockItem(ModBlocks.FIGURE_BLOCK.get(), new Item.Properties())
     );
 
     static {
@@ -39,7 +38,7 @@ public class ModItems {
         for (PopBlockColor color : PopBlockColor.values()) {
             DEFAULT_BOX_BLOCK_ITEMS.put(color, ITEMS.register(
                 "box_block_" + color.getSerializedName(),
-                () -> new BoxBlockItem(ModBlocks.BOX_BLOCK.get(), new Item.Properties(), color)
+                () -> PlatformHelper.createBoxBlockItemForColor(ModBlocks.BOX_BLOCK.get(), new Item.Properties(), color)
             ));
         }
 
@@ -48,7 +47,7 @@ public class ModItems {
         for (String collectionId : BuiltInCollections.COLLECTION_IDS) {
             BOX_BLOCK_ITEMS.put(collectionId, ITEMS.register(
                 "box_block_" + collectionId,
-                () -> new BoxBlockItem(ModBlocks.BOX_BLOCK.get(), new Item.Properties(), collectionId)
+                () -> PlatformHelper.createBoxBlockItem(ModBlocks.BOX_BLOCK.get(), new Item.Properties(), collectionId)
             ));
         }
     }
