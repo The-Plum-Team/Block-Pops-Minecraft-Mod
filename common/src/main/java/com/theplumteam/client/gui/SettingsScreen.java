@@ -937,4 +937,9 @@ public class SettingsScreen extends Screen {
             this.updateMessage();
         }
     }
+
+    @Override
+    public void renderBlurredBackground(float partialTick) {
+        // Disable the 1.21+ menu blur effect - we have our own modal overlay
+    }
 }
