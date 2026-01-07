@@ -462,6 +462,8 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
             saveAdditional(tag, level.registryAccess());
         }
         tag.putBoolean("IsOpen", false);
+        // Required in 1.21+ - block entity type ID must be present
+        tag.putString("id", "blockpops:box_block");
         stack.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(tag));
     }
 

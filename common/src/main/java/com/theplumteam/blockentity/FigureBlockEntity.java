@@ -206,6 +206,8 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         if (level != null) {
             saveAdditional(tag, level.registryAccess());
         }
+        // Required in 1.21+ - block entity type ID must be present
+        tag.putString("id", "blockpops:figure_block");
         stack.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(tag));
     }
 
