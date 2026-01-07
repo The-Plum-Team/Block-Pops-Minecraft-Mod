@@ -61,6 +61,11 @@ public class FavoriteColorSelectionScreen extends Screen {
     // Box container scale (scales the grid area only, not the entire panel)
     private float containerScale = 1.2f;
 
+    // Track if we forced GUI scale change
+    private boolean guiScaleForced = false;
+    // Track if the screen is in the process of closing (to prevent init() from re-applying scale)
+    private boolean isClosing = false;
+
     public FavoriteColorSelectionScreen() {
         super(Component.literal("Choose Your Favorite Color"));
         LOGGER.info("FavoriteColorSelectionScreen created");
@@ -68,10 +73,21 @@ public class FavoriteColorSelectionScreen extends Screen {
 
     @Override
     protected void init() {
-        // Enforce GUI Scale - Force it even if shaders are detected (true parameter)
-        if (GuiScaleManager.setMenuGuiScale(GuiScaleManager.getOptimalMenuScale(), true)) {
-            // If scale changed, the screen will be re-initialized by the engine
+        // Don't change scale if we're in the process of closing
+        // (resizeDisplay() during restore triggers init() again)
+        if (isClosing) {
+            super.init();
             return;
+        }
+
+        // Enforce GUI Scale - Force it even if shaders are detected (true parameter)
+        // Only attempt to change scale once per screen instance
+        if (!guiScaleForced) {
+            if (GuiScaleManager.setMenuGuiScale(GuiScaleManager.getOptimalMenuScale(), true)) {
+                guiScaleForced = true;
+                // If scale changed, the screen will be re-initialized by the engine
+                return;
+            }
         }
 
         super.init();
@@ -187,10 +203,29 @@ public class FavoriteColorSelectionScreen extends Screen {
     }
 
     @Override
+    public void onClose() {
+        // Mark as closing to prevent init() from re-applying scale during resizeDisplay()
+        isClosing = true;
+        // Restore original GUI scale when screen is closed
+        restoreGuiScaleIfNeeded();
+        super.onClose();
+    }
+
+    @Override
     public void removed() {
-        // Restore original GUI scale when screen is closed/removed
-        GuiScaleManager.restoreOriginalGuiScale();
+        // Mark as closing in case removed() is called directly
+        isClosing = true;
+        // Also restore here as a fallback
+        restoreGuiScaleIfNeeded();
         super.removed();
+    }
+
+    private void restoreGuiScaleIfNeeded() {
+        if (guiScaleForced) {
+            guiScaleForced = false;
+            GuiScaleManager.restoreOriginalGuiScale();
+            LOGGER.info("Restored original GUI scale");
+        }
     }
 
     @Override
