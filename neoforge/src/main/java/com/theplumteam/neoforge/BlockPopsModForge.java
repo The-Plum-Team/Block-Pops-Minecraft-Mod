@@ -63,8 +63,13 @@ public final class BlockPopsModForge {
     }
 
     private void registerServerEvents() {
-        // Generate World Players collection when server starts
+        // Load static collections and generate World Players collection when server starts
         LifecycleEvent.SERVER_STARTING.register(server -> {
+            // Load static collections from JSON files on the server
+            BlockPopsMod.LOGGER.info("Loading static collections on server...");
+            CollectionRegistry.loadCollections(server.getResourceManager());
+
+            // Generate dynamic World Players collection
             BlockPopsMod.LOGGER.info("Generating World Players collection...");
             FigureCollection playerCollection = PlayerCollectionGenerator.generate(server);
             CollectionRegistry.registerDynamicCollection(playerCollection);
