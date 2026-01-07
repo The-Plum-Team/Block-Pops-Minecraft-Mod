@@ -84,25 +84,29 @@ public class GuiScaleManager {
             usingInverseScale = false;
 
             if (originalGuiScale == null || !scaleChanged) {
+                BlockPopsMod.LOGGER.debug("No GUI scale to restore (originalGuiScale={}, scaleChanged={})",
+                    originalGuiScale, scaleChanged);
                 return; // Nothing to restore
             }
-
-            // Previously we skipped resize if shaders were active.
-            // However, if we forced a change (scaleChanged is true), we MUST restore it
-            // regardless of shader status to return to the correct state.
 
             Minecraft mc = Minecraft.getInstance();
             OptionInstance<Integer> guiScaleOption = mc.options.guiScale();
             int currentScale = guiScaleOption.get();
+            int targetScale = originalGuiScale;
 
-            if (currentScale != originalGuiScale) {
-                guiScaleOption.set(originalGuiScale);
-                mc.resizeDisplay();
-            }
+            BlockPopsMod.LOGGER.info("Restoring GUI scale from {} to {}", currentScale, targetScale);
 
-            // Reset tracking variables
+            // Reset tracking variables BEFORE resizeDisplay to prevent re-entry issues
             originalGuiScale = null;
             scaleChanged = false;
+
+            if (currentScale != targetScale) {
+                guiScaleOption.set(targetScale);
+                mc.resizeDisplay();
+                BlockPopsMod.LOGGER.info("GUI scale restored successfully to {}", targetScale);
+            } else {
+                BlockPopsMod.LOGGER.info("GUI scale already at target {}, no change needed", targetScale);
+            }
 
         } catch (Exception e) {
             BlockPopsMod.LOGGER.error("Failed to restore original GUI scale", e);
