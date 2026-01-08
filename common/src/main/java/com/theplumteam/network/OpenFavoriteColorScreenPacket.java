@@ -30,14 +30,18 @@ public class OpenFavoriteColorScreenPacket {
      * Encode the packet to a buffer
      */
     public FriendlyByteBuf encode() {
-        // No data to encode
-        return new FriendlyByteBuf(Unpooled.buffer());
+        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+        // Write a dummy byte - empty packets can cause issues with Architectury networking
+        buffer.writeBoolean(true);
+        return buffer;
     }
 
     /**
      * Decode a packet from a buffer
      */
     public static OpenFavoriteColorScreenPacket decode(FriendlyByteBuf buffer) {
+        // Read the dummy byte
+        buffer.readBoolean();
         return new OpenFavoriteColorScreenPacket();
     }
 

@@ -84,9 +84,9 @@ public class SyncDynamicCollectionsPacket {
 
     public static void sendToAllPlayers(net.minecraft.server.MinecraftServer server, List<FigureCollection> collections) {
         SyncDynamicCollectionsPacket packet = new SyncDynamicCollectionsPacket(collections);
-        FriendlyByteBuf buf = packet.encode();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            NetworkManager.sendToPlayer(player, ID, buf);
+            // Create a fresh buffer for each player - reusing buffers causes IndexOutOfBoundsException
+            NetworkManager.sendToPlayer(player, ID, packet.encode());
         }
     }
 
