@@ -77,25 +77,29 @@ public final class BlockPopsModForge {
 
         // Add new players to the collection when they join
         PlayerEvent.PLAYER_JOIN.register(player -> {
-            // Re-generate and update the collection to include the new player
-            // This is safe because it happens on the server thread
             if (player.getServer() != null) {
-                FigureCollection updatedCollection = PlayerCollectionGenerator.generate(player.getServer());
-                CollectionRegistry.registerDynamicCollection(updatedCollection);
+                // 1. Re-generate World Players collection to include the new player
+                FigureCollection updatedPlayerCollection = PlayerCollectionGenerator.generate(player.getServer());
+                CollectionRegistry.registerDynamicCollection(updatedPlayerCollection);
                 BlockPopsMod.LOGGER.debug("Updated World Players collection after player join: {}", player.getName().getString());
 
-                // Broadcast dynamic collections to ALL players to ensure everyone sees the new player
-                List<FigureCollection> dynamicCollections = new ArrayList<>();
-                CollectionRegistry.getAllCollections().forEach(collection -> {
-                    if ("world_players".equals(collection.getId())) {
-                        dynamicCollections.add(collection);
-                    }
-                });
+                // 2. Sync ALL collections (static + dynamic) to the JOINING player
+                // This ensures they see Adventure Time, FNAF, etc. in the menu
+                if (player instanceof ServerPlayer serverPlayer) {
+                    List<FigureCollection> allCollections = new ArrayList<>(CollectionRegistry.getAllCollections());
+                    SyncDynamicCollectionsPacket.sendToPlayer(serverPlayer, allCollections);
+                    BlockPopsMod.LOGGER.info("Synced {} collections to joining player {}", allCollections.size(), player.getName().getString());
+                }
 
-                if (!dynamicCollections.isEmpty()) {
-                    // Use cross-platform Architectury networking
-                    SyncDynamicCollectionsPacket.sendToAllPlayers(player.getServer(), dynamicCollections);
-                    BlockPopsMod.LOGGER.info("Synced {} dynamic collections to all players", dynamicCollections.size());
+                // 3. Sync ONLY the updated World Players collection to ALL OTHER players
+                // This ensures existing players see the new player's figure without resending static data
+                List<FigureCollection> dynamicUpdate = new ArrayList<>();
+                dynamicUpdate.add(updatedPlayerCollection);
+
+                for (ServerPlayer p : player.getServer().getPlayerList().getPlayers()) {
+                    if (p != player) { // Skip the joining player (they got it in step 2)
+                        SyncDynamicCollectionsPacket.sendToPlayer(p, dynamicUpdate);
+                    }
                 }
 
                 // Sync discovery data and token data to the SPECIFIC client when they join
