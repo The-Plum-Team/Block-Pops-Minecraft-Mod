@@ -32,14 +32,18 @@ public class OpenFavoriteColorScreenPacket {
      * Encode the packet to a buffer
      */
     public RegistryFriendlyByteBuf encode() {
-        // No data to encode
-        return new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+        // Write a dummy byte - empty packets can cause issues with Architectury networking
+        buffer.writeBoolean(true);
+        return buffer;
     }
 
     /**
      * Decode a packet from a buffer
      */
     public static OpenFavoriteColorScreenPacket decode(FriendlyByteBuf buffer) {
+        // Read the dummy byte
+        buffer.readBoolean();
         return new OpenFavoriteColorScreenPacket();
     }
 
