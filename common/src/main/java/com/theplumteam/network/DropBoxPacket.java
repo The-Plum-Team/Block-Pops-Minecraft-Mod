@@ -91,6 +91,8 @@ public class DropBoxPacket {
                 if (!verifyAndConsumeToken(player, discovery, packet.tokenType)) {
                     LOGGER.warn("Player {} tried to use unavailable {} token",
                             player.getName().getString(), packet.tokenType);
+                    // Force sync to correct client state to prevent "fake" token UI
+                    syncTokenDataToClient(player, discovery);
                     return;
                 }
                 PlayerDataManager.markDirty(player, discovery);

@@ -2,8 +2,12 @@ package com.theplumteam.block;
 
 import com.mojang.serialization.MapCodec;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.data.IPlayerDiscovery;
+import com.theplumteam.data.PlayerDataManager;
+import com.theplumteam.network.SyncTokenDataPacket;
 import com.theplumteam.platform.PlatformHelper;
 import com.theplumteam.registry.ModBlockEntities;
+import com.theplumteam.server.ServerTickHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionResult;
@@ -27,6 +31,7 @@ import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 public class ClawMachineBlock extends BaseEntityBlock {
@@ -82,10 +87,31 @@ public class ClawMachineBlock extends BaseEntityBlock {
         if (blockEntity instanceof ClawMachineBlockEntity clawMachineBlockEntity) {
             if (level.isClientSide) {
                 PlatformHelper.openClawMachineScreen(lowerPos, clawMachineBlockEntity);
+            } else {
+                // Server side: sync token data to ensure client UI shows correct state
+                if (player instanceof ServerPlayer serverPlayer) {
+                    syncTokenDataToClient(serverPlayer);
+                }
             }
             return InteractionResult.sidedSuccess(level.isClientSide);
         }
         return InteractionResult.PASS;
+    }
+
+    private static void syncTokenDataToClient(ServerPlayer player) {
+        IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(player);
+        long gameTime = player.serverLevel().getGameTime();
+        long nextRegularTime = discovery.getNextRegularTokenTime();
+        long ticksUntilNext = Math.max(0, nextRegularTime - gameTime);
+        long millisUntilReset = ServerTickHandler.calculateMillisUntilNextReset();
+
+        SyncTokenDataPacket.sendToPlayer(
+                player,
+                discovery.getRegularTokens(),
+                ticksUntilNext,
+                !discovery.hasUsedTodaySpecialToken(),
+                millisUntilReset
+        );
     }
 
     @Nullable
