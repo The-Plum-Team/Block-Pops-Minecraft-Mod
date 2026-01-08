@@ -39,6 +39,11 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     // Box state
     private boolean isOpen = false;
+    // Client-side: remaining ticks for transition animation (open/close)
+    // This prevents the state-based animation from interrupting the triggered animation
+    private transient int transitionAnimationTicks = 0;
+    // Duration of open/close animation in ticks (0.625s * 20 ticks/s / 1.2 speed = ~10 ticks)
+    private static final int TRANSITION_ANIMATION_DURATION = 12;
 
     // Collection and figure data
     private String figureId = ""; // Empty means no figure
@@ -93,6 +98,12 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
                 return PlayState.STOP;
             }
 
+            // If a transition animation (open/close) is playing, let it continue
+            // without interruption from the state-based logic
+            if (transitionAnimationTicks > 0) {
+                return PlayState.CONTINUE;
+            }
+
             // If the box is open, play the open state animation (holds at final frame)
             if (isOpen) {
                 return state.setAndContinue(OPEN_STATE_ANIMATION);
@@ -102,7 +113,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         })
                 .triggerableAnim("open", OPEN_ANIMATION)
                 .triggerableAnim("close", CLOSE_ANIMATION)
-                .setAnimationSpeed(1.2)); // 20% faster animations
+                .setAnimationSpeed(1.2));
 
         // Controller for figure pose animations (5 ticks = 0.25 seconds transition)
         controllers.add(new AnimationController<>(this, "figure_pose_controller", 5, state -> {
@@ -437,7 +448,21 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     // NeoForge-specific method - no @Override in common
     public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
+        // Track the previous open state to detect transitions
+        boolean wasOpen = this.isOpen;
         loadAdditional(tag, registries);
+
+        // If the open state changed, trigger the appropriate animation on the client
+        if (level != null && level.isClientSide && wasOpen != this.isOpen) {
+            // Start the transition animation timer to prevent state-based animation from interrupting
+            transitionAnimationTicks = TRANSITION_ANIMATION_DURATION;
+            // Trigger the appropriate animation
+            if (this.isOpen) {
+                triggerAnim("box_controller", "open");
+            } else {
+                triggerAnim("box_controller", "close");
+            }
+        }
     }
 
     @Override
@@ -449,8 +474,22 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     public void onDataPacket(Connection connection, ClientboundBlockEntityDataPacket packet, HolderLookup.Provider registries) {
         CompoundTag tag = packet.getTag();
         if (tag != null) {
+            // Track the previous open state to detect transitions
+            boolean wasOpen = this.isOpen;
             loadAdditional(tag, registries);
+
+            // If the open state changed, trigger the appropriate animation on the client
             if (level != null && level.isClientSide) {
+                if (wasOpen != this.isOpen) {
+                    // Start the transition animation timer to prevent state-based animation from interrupting
+                    transitionAnimationTicks = TRANSITION_ANIMATION_DURATION;
+                    // Trigger the appropriate animation
+                    if (this.isOpen) {
+                        triggerAnim("box_controller", "open");
+                    } else {
+                        triggerAnim("box_controller", "close");
+                    }
+                }
                 level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
             }
         }
@@ -469,7 +508,10 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     public static <T extends BlockEntity> void tick(Level level, BlockPos pos, BlockState state, T blockEntity) {
         if (level.isClientSide && blockEntity instanceof BoxBlockEntity boxBlockEntity) {
-            // Animation ticking handled automatically by GeckoLib
+            // Decrement the transition animation timer
+            if (boxBlockEntity.transitionAnimationTicks > 0) {
+                boxBlockEntity.transitionAnimationTicks--;
+            }
         }
     }
 }
