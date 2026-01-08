@@ -1,12 +1,10 @@
 package com.theplumteam.network;
 
 import com.theplumteam.BlockPopsMod;
-import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
 import dev.architectury.networking.NetworkManager;
 import dev.architectury.utils.Env;
 import dev.architectury.utils.EnvExecutor;
 import io.netty.buffer.Unpooled;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
@@ -16,6 +14,9 @@ import org.slf4j.LoggerFactory;
 /**
  * Server-to-client packet that triggers the favorite color selection UI.
  * Sent when a player joins a world for the first time without having chosen their favorite color.
+ *
+ * NOTE: This class must NOT import any client-side classes (Minecraft, Screens, etc.)
+ * to prevent crashes on the dedicated server.
  */
 public class OpenFavoriteColorScreenPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenFavoriteColorScreenPacket.class);
@@ -44,13 +45,18 @@ public class OpenFavoriteColorScreenPacket {
      * Handle the packet on the client side
      */
     public static void handleClient(FriendlyByteBuf buf, NetworkManager.PacketContext context) {
+        // Just decode the packet to advance the buffer, even if empty
         OpenFavoriteColorScreenPacket packet = decode(buf);
 
         context.queue(() -> {
             // Use EnvExecutor to safely run client-side code only on the client
+            // We use a Supplier<Runnable> (() -> () -> ...) so the inner class (lambda)
+            // containing the client reference is only loaded when executed on the client.
             EnvExecutor.runInEnv(Env.CLIENT, () -> () -> {
                 LOGGER.info("Opening favorite color selection screen");
-                Minecraft.getInstance().setScreen(new FavoriteColorSelectionScreen());
+                // Use fully qualified name to avoid importing ClientHelpers,
+                // which would trigger class loading of client classes on the server.
+                com.theplumteam.client.ClientHelpers.openFavoriteColorScreen();
             });
         });
     }
