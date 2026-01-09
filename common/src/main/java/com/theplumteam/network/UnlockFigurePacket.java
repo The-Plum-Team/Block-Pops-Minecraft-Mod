@@ -25,15 +25,22 @@ public class UnlockFigurePacket {
     private final String figureName;
     @Nullable
     private final String skinSnapshot;
+    @Nullable
+    private final String quickSkinId;
 
     public UnlockFigurePacket(String figureId, String figureName) {
-        this(figureId, figureName, null);
+        this(figureId, figureName, null, null);
     }
 
     public UnlockFigurePacket(String figureId, String figureName, @Nullable String skinSnapshot) {
+        this(figureId, figureName, skinSnapshot, null);
+    }
+
+    public UnlockFigurePacket(String figureId, String figureName, @Nullable String skinSnapshot, @Nullable String quickSkinId) {
         this.figureId = figureId;
         this.figureName = figureName;
         this.skinSnapshot = skinSnapshot;
+        this.quickSkinId = quickSkinId;
     }
 
     public RegistryFriendlyByteBuf encode() {
@@ -43,6 +50,10 @@ public class UnlockFigurePacket {
         buffer.writeBoolean(skinSnapshot != null);
         if (skinSnapshot != null) {
             buffer.writeUtf(skinSnapshot);
+        }
+        buffer.writeBoolean(quickSkinId != null);
+        if (quickSkinId != null) {
+            buffer.writeUtf(quickSkinId);
         }
         return buffer;
     }
@@ -54,7 +65,11 @@ public class UnlockFigurePacket {
         if (buffer.readBoolean()) {
             skinSnapshot = buffer.readUtf();
         }
-        return new UnlockFigurePacket(figureId, figureName, skinSnapshot);
+        String quickSkinId = null;
+        if (buffer.readBoolean()) {
+            quickSkinId = buffer.readUtf();
+        }
+        return new UnlockFigurePacket(figureId, figureName, skinSnapshot, quickSkinId);
     }
 
     public static void handleClient(FriendlyByteBuf buf, NetworkManager.PacketContext context) {
@@ -68,11 +83,19 @@ public class UnlockFigurePacket {
                 ClientDiscoveryManager.saveFigureSkin(packet.figureId, packet.skinSnapshot);
                 LOGGER.info("Saved skin snapshot for unlocked figure: {}", packet.figureId);
             }
+            if (packet.quickSkinId != null) {
+                ClientDiscoveryManager.saveFigureQuickSkin(packet.figureId, packet.quickSkinId);
+                LOGGER.info("Saved Quick Skin ID for unlocked figure: {}", packet.figureId);
+            }
         });
     }
 
     public static void sendToPlayer(ServerPlayer player, String figureId, String figureName, @Nullable String skinSnapshot) {
-        UnlockFigurePacket packet = new UnlockFigurePacket(figureId, figureName, skinSnapshot);
+        sendToPlayer(player, figureId, figureName, skinSnapshot, null);
+    }
+
+    public static void sendToPlayer(ServerPlayer player, String figureId, String figureName, @Nullable String skinSnapshot, @Nullable String quickSkinId) {
+        UnlockFigurePacket packet = new UnlockFigurePacket(figureId, figureName, skinSnapshot, quickSkinId);
         NetworkManager.sendToPlayer(player, ID, packet.encode());
     }
 
@@ -87,5 +110,10 @@ public class UnlockFigurePacket {
     @Nullable
     public String getSkinSnapshot() {
         return skinSnapshot;
+    }
+
+    @Nullable
+    public String getQuickSkinId() {
+        return quickSkinId;
     }
 }

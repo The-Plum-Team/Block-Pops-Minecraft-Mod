@@ -108,12 +108,14 @@ public final class BlockPopsModForge {
                     IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(serverPlayer);
                     var discoveredSet = discovery.getDiscoveredSet();
                     var figureSkins = discovery.getAllFigureSkins();
+                    var figureQuickSkins = discovery.getAllFigureQuickSkins();
 
-                    // Sync discovered figures and their skins using cross-platform networking
-                    SyncDiscoveryDataPacket.sendToPlayer(serverPlayer, discoveredSet, figureSkins);
-                    BlockPopsMod.LOGGER.info("Synced {} discovered figures and {} skins to {}",
+                    // Sync discovered figures, their skins, and Quick Skins using cross-platform networking
+                    SyncDiscoveryDataPacket.sendToPlayer(serverPlayer, discoveredSet, figureSkins, figureQuickSkins);
+                    BlockPopsMod.LOGGER.info("Synced {} discovered figures, {} skins, and {} quick skins to {}",
                             discoveredSet.size(),
                             figureSkins.size(),
+                            figureQuickSkins.size(),
                             serverPlayer.getName().getString());
 
                     // Sync token data using cross-platform networking

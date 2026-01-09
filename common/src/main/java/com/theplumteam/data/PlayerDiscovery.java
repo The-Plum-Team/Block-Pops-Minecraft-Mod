@@ -31,9 +31,13 @@ public class PlayerDiscovery implements IPlayerDiscovery {
     private boolean hasChosenFavoriteColor = false;
     private String favoriteColor = null;
 
-    // Player figure skin snapshots
+    // Player figure skin snapshots (Mojang)
     private final Map<String, String> figureSkins = new HashMap<>();
     private static final String NBT_FIGURE_SKINS_KEY = "FigureSkins";
+
+    // Quick Skin snapshots (Modded)
+    private final Map<String, String> figureQuickSkins = new HashMap<>();
+    private static final String NBT_FIGURE_QUICK_SKINS_KEY = "FigureQuickSkins";
 
     @Override
     public boolean isDiscovered(String figureId) {
@@ -146,6 +150,24 @@ public class PlayerDiscovery implements IPlayerDiscovery {
         return Collections.unmodifiableMap(figureSkins);
     }
 
+    // Quick Skin Implementation
+
+    @Override
+    public void saveFigureQuickSkin(String figureId, String quickSkinId) {
+        figureQuickSkins.put(figureId, quickSkinId);
+    }
+
+    @Override
+    @Nullable
+    public String getFigureQuickSkin(String figureId) {
+        return figureQuickSkins.get(figureId);
+    }
+
+    @Override
+    public Map<String, String> getAllFigureQuickSkins() {
+        return Collections.unmodifiableMap(figureQuickSkins);
+    }
+
     /**
      * Serialize this discovery data to NBT.
      */
@@ -178,6 +200,15 @@ public class PlayerDiscovery implements IPlayerDiscovery {
                 skinsTag.putString(entry.getKey(), entry.getValue());
             }
             tag.put(NBT_FIGURE_SKINS_KEY, skinsTag);
+        }
+
+        // Serialize Quick Skins
+        if (!figureQuickSkins.isEmpty()) {
+            CompoundTag qsTag = new CompoundTag();
+            for (Map.Entry<String, String> entry : figureQuickSkins.entrySet()) {
+                qsTag.putString(entry.getKey(), entry.getValue());
+            }
+            tag.put(NBT_FIGURE_QUICK_SKINS_KEY, qsTag);
         }
 
         return tag;
@@ -224,6 +255,15 @@ public class PlayerDiscovery implements IPlayerDiscovery {
             CompoundTag skinsTag = tag.getCompound(NBT_FIGURE_SKINS_KEY);
             for (String key : skinsTag.getAllKeys()) {
                 figureSkins.put(key, skinsTag.getString(key));
+            }
+        }
+
+        // Deserialize Quick Skins
+        figureQuickSkins.clear();
+        if (tag.contains(NBT_FIGURE_QUICK_SKINS_KEY, Tag.TAG_COMPOUND)) {
+            CompoundTag qsTag = tag.getCompound(NBT_FIGURE_QUICK_SKINS_KEY);
+            for (String key : qsTag.getAllKeys()) {
+                figureQuickSkins.put(key, qsTag.getString(key));
             }
         }
     }

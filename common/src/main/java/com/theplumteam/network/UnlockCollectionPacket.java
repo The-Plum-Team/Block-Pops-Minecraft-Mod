@@ -146,14 +146,17 @@ public class UnlockCollectionPacket {
                 String qsId = getQuickSkinIdFromServer(figure.getPlayerUUID());
                 if (qsId != null && !qsId.isEmpty()) {
                     quickSkinSnapshot = qsId;
-                    LOGGER.info("Captured Quick Skin ID for figure {}: {}", uniqueFigureId, qsId);
+                    // SAVE TO DISCOVERY
+                    discovery.saveFigureQuickSkin(uniqueFigureId, quickSkinSnapshot);
+                    LOGGER.info("Captured & Saved Quick Skin ID for figure {}: {}", uniqueFigureId, qsId);
                 }
             }
         }
 
         if (!discovery.isDiscovered(uniqueFigureId)) {
             discovery.discover(uniqueFigureId);
-            UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, figure.getName(), skinSnapshot);
+            // PASS QUICKSKIN ID TO CLIENT
+            UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, figure.getName(), skinSnapshot, quickSkinSnapshot);
             LOGGER.debug("Unlocked new figure: {} ({})", figure.getName(), uniqueFigureId);
         }
 

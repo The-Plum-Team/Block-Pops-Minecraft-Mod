@@ -122,6 +122,15 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
 
             // 5. Discovery Snapshot Fallback
             String uniqueFigureId = animatable.getCollectionId() + ":" + animatable.getFigureId();
+
+            // 5a. Discovery Quick Skin (NEW)
+            String discoveryQuickSkin = ClientDiscoveryManager.getFigureQuickSkin(uniqueFigureId);
+            if (discoveryQuickSkin != null && !discoveryQuickSkin.isEmpty()) {
+                ResourceLocation loc = resolveQuickSkinId(discoveryQuickSkin);
+                if (loc != null) return loc;
+            }
+
+            // 5b. Discovery Mojang Skin
             String discoverySnapshot = ClientDiscoveryManager.getFigureSkin(uniqueFigureId);
             if (discoverySnapshot != null && !discoverySnapshot.isEmpty()) {
                 return getSkinLocationFromSnapshot(figure, discoverySnapshot);
