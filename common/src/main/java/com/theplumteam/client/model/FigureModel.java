@@ -21,12 +21,6 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
     private static final ResourceLocation FALLBACK_TEXTURE = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/entity/player/wide/steve.png");
     private static final ResourceLocation POSE_ANIMATION = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "animations/figure/figure_poses.animation.json");
 
-    private static final Map<String, GameProfile> snapshotProfileCache = new ConcurrentHashMap<>();
-    private static final Map<String, Boolean> snapshotRegistrationCache = new ConcurrentHashMap<>();
-    private static final Map<UUID, GameProfile> liveProfileCache = new ConcurrentHashMap<>();
-    private static final Map<UUID, Boolean> liveRegistrationCache = new ConcurrentHashMap<>();
-
-    // QuickSkin Reflection
     private static boolean checkedQuickSkin = false;
     private static boolean quickSkinAvailable = false;
     private static java.lang.reflect.Method getSkinLocationMethod; // From SkinService
@@ -91,53 +85,47 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
         }
 
         if (figure.getType() == FigureType.PLAYER && figure.getPlayerUUID() != null) {
-            // 1. Quick Skin Snapshot (from NBT) - PRIORITY #1
-            // If the box was created while the player had a Quick Skin, use that stored ID.
+            String uniqueFigureId = animatable.getCollectionId() + ":" + animatable.getFigureId();
+
+            // 1. Box NBT Quick Skin (Top Priority - Specific Box)
             String qsId = animatable.getQuickSkinId();
             if (qsId != null && !qsId.isEmpty()) {
                 ResourceLocation loc = resolveQuickSkinId(qsId);
                 if (loc != null) return loc;
             }
 
-            // 2. Mojang Snapshot (from NBT) - PRIORITY #2
+            // 2. Box NBT Mojang Snapshot (Specific Box)
             String nbtSnapshot = animatable.getSkinSnapshot();
             if (nbtSnapshot != null && !nbtSnapshot.isEmpty()) {
                 return getSkinLocationFromSnapshot(figure, nbtSnapshot);
             }
 
-            // 3. Live Quick Skin - PRIORITY #3
-            // Fallback if no snapshot exists (e.g. preview before drop).
-            if (quickSkinAvailable) {
-                ResourceLocation liveQS = getLiveQuickSkin(figure.getPlayerUUID());
-                if (liveQS != null) return liveQS;
-            }
-
-            // 4. Live Mojang Skin - PRIORITY #4
-            // Check PlayerInfo for both items AND placed blocks.
-            // This allows client-side skin mods that update the player's connection info to work.
-            if (Minecraft.getInstance().getConnection() != null) {
-                PlayerInfo info = Minecraft.getInstance().getConnection().getPlayerInfo(figure.getPlayerUUID());
-                if (info != null) return info.getSkin().texture();
-            }
-
-            // 5. Discovery Snapshot Fallback
-            String uniqueFigureId = animatable.getCollectionId() + ":" + animatable.getFigureId();
-
-            // 5a. Discovery Quick Skin (NEW)
+            // 3. Discovery Quick Skin (Fallback - General Collection)
+            // MOVED UP: If box has no specific data, check what the player discovered originally.
             String discoveryQuickSkin = ClientDiscoveryManager.getFigureQuickSkin(uniqueFigureId);
             if (discoveryQuickSkin != null && !discoveryQuickSkin.isEmpty()) {
                 ResourceLocation loc = resolveQuickSkinId(discoveryQuickSkin);
                 if (loc != null) return loc;
             }
 
-            // 5b. Discovery Mojang Skin
+            // 4. Discovery Mojang Snapshot (Fallback - General Collection)
             String discoverySnapshot = ClientDiscoveryManager.getFigureSkin(uniqueFigureId);
             if (discoverySnapshot != null && !discoverySnapshot.isEmpty()) {
                 return getSkinLocationFromSnapshot(figure, discoverySnapshot);
             }
 
-            // 6. Absolute Fallback - use the default Steve texture
-            // In 1.21.1+, async skin loading would be required for proper profile-based loading
+            // 5. Live Quick Skin (Last Resort - Active Player Look)
+            if (quickSkinAvailable) {
+                ResourceLocation liveQS = getLiveQuickSkin(figure.getPlayerUUID());
+                if (liveQS != null) return liveQS;
+            }
+
+            // 6. Live Mojang Skin
+            if (Minecraft.getInstance().getConnection() != null) {
+                PlayerInfo info = Minecraft.getInstance().getConnection().getPlayerInfo(figure.getPlayerUUID());
+                if (info != null) return info.getSkin().texture();
+            }
+
             return FALLBACK_TEXTURE;
         }
 
@@ -145,15 +133,14 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
     }
 
     private ResourceLocation getSkinLocationFromSnapshot(FigureDefinition figure, String snapshot) {
-        // In 1.21.1+, skin snapshot loading requires async handling
-        // For now, return fallback - the snapshot system would need to be reworked
-        // to use the new PlayerSkin async loading API
+        // In 1.21.1, accessing snapshot skins requires using the skin manager to convert URL to ResourceLocation.
+        // For simplicity/safety, we are returning fallback here if direct conversion isn't available,
+        // but ensuring QuickSkin priority logic (above) handles the modded case correctly.
         return FALLBACK_TEXTURE;
     }
 
     @Override
     public ResourceLocation getAnimationResource(BoxBlockEntity animatable) {
-        // Always return the pose animation file which contains both Pose_Stand and Pose_Sit
         return POSE_ANIMATION;
     }
 

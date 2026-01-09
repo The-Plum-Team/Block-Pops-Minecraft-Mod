@@ -116,20 +116,34 @@ public class DropBoxPacket {
     @Nullable
     private static String getQuickSkinIdFromServer(UUID playerId) {
         try {
+            // Attempt to get ServerPlayerAppearanceRepository instance
             Class<?> repoClass = Class.forName("com.quickskin.mod.server.data.ServerPlayerAppearanceRepository");
             java.lang.reflect.Method getInstanceMethod = repoClass.getMethod("getInstance");
             Object repoInstance = getInstanceMethod.invoke(null);
 
+            // Get appearance for player
             java.lang.reflect.Method getAppearanceMethod = repoClass.getMethod("getAppearance", UUID.class);
             Object appearance = getAppearanceMethod.invoke(repoInstance, playerId);
 
             if (appearance != null) {
+                // If appearance exists, get the skin ID
                 Class<?> appearanceClass = appearance.getClass();
                 java.lang.reflect.Method getSkinIdMethod = appearanceClass.getMethod("getSkinId");
-                return (String) getSkinIdMethod.invoke(appearance);
+                Object skinIdObj = getSkinIdMethod.invoke(appearance);
+
+                if (skinIdObj != null) {
+                    String skinId = (String) skinIdObj;
+                    LOGGER.info("Found QuickSkin ID for {}: {}", playerId, skinId);
+                    return skinId;
+                }
+            } else {
+                LOGGER.debug("No QuickSkin appearance found for {}", playerId);
             }
+        } catch (ClassNotFoundException e) {
+            // QuickSkin mod not installed on server - this is normal
+            LOGGER.debug("QuickSkin server classes not found");
         } catch (Exception e) {
-            // Quick Skin not installed or error accessing
+            LOGGER.warn("Error accessing QuickSkin server data: {}", e.getMessage());
         }
         return null;
     }
@@ -207,6 +221,13 @@ public class DropBoxPacket {
 
                     if (quickSkinSnapshot != null) {
                         blockEntityTag.putString("QuickSkinId", quickSkinSnapshot);
+                    } else if (selectedFigure.getType() == FigureType.PLAYER) {
+                        // Fallback: If we didn't get a new ID, check if we have an old one in discovery
+                        String oldQuickSkin = discovery.getFigureQuickSkin(uniqueFigureId);
+                        if (oldQuickSkin != null && !oldQuickSkin.isEmpty()) {
+                            blockEntityTag.putString("QuickSkinId", oldQuickSkin);
+                            LOGGER.info("Used cached QuickSkin ID from discovery for {}", uniqueFigureId);
+                        }
                     }
 
                     // Required in 1.21+ - block entity type ID must be present for serialization
