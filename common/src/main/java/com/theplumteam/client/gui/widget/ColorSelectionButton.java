@@ -42,12 +42,36 @@ public class ColorSelectionButton extends Button {
 
         this.color = color;
         this.parentScreen = parentScreen;
+
         // Create the box item for this color
         this.boxItem = new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(color).get());
-        // Add component data to hide the logo in the color selection screen and set the color
+
+        // Configure component data to show the player inside the box
         CompoundTag blockEntityTag = new CompoundTag();
+
+        // 1. Existing settings: Set Color and Hide Logo
         blockEntityTag.putBoolean("HideLogo", true);
         blockEntityTag.putString("Color", color.name());
+
+        // 2. Set the figure to be the current player
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null) {
+            // Set collection to World Players
+            blockEntityTag.putString("CollectionId", "world_players");
+
+            // Set FigureId to the player's UUID
+            blockEntityTag.putString("FigureId", mc.player.getUUID().toString());
+
+            // Ensure the figure is marked as inside the box (not extracted)
+            blockEntityTag.putBoolean("IsFigureExtracted", false);
+
+            // Optional: Reset offsets to ensure it centers correctly inside the item
+            blockEntityTag.putDouble("FigureOffsetX", -0.53);
+            blockEntityTag.putDouble("FigureOffsetY", 0.01);
+            blockEntityTag.putDouble("FigureOffsetZ", -0.55);
+            blockEntityTag.putDouble("FigureScale", 1.0);
+        }
+
         this.boxItem.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(blockEntityTag));
     }
 
@@ -70,6 +94,39 @@ public class ColorSelectionButton extends Button {
         this.offsetX = offX;
         this.offsetY = offY;
         this.offsetZ = offZ;
+    }
+
+    /**
+     * Toggle whether the player figure is shown inside the box
+     */
+    public void setShowFigure(boolean showFigure) {
+        CompoundTag blockEntityTag = new CompoundTag();
+
+        // Always set the basic tags
+        blockEntityTag.putBoolean("HideLogo", true);
+        blockEntityTag.putString("Color", color.name());
+
+        if (showFigure) {
+            // Add figure-related tags
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null) {
+                blockEntityTag.putString("CollectionId", "world_players");
+                blockEntityTag.putString("FigureId", mc.player.getUUID().toString());
+                blockEntityTag.putBoolean("IsFigureExtracted", false);
+                blockEntityTag.putDouble("FigureOffsetX", -0.53);
+                blockEntityTag.putDouble("FigureOffsetY", 0.01);
+                blockEntityTag.putDouble("FigureOffsetZ", -0.55);
+                blockEntityTag.putDouble("FigureScale", 1.0);
+            }
+        } else {
+            // Set empty values to hide the figure
+            // (BoxBlockEntity.load() only updates fields if tag.contains() is true,
+            // so we must set empty values rather than omitting tags)
+            blockEntityTag.putString("CollectionId", "");
+            blockEntityTag.putString("FigureId", "");
+        }
+
+        this.boxItem.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(blockEntityTag));
     }
 
     @Override
