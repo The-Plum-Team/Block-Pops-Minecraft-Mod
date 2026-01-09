@@ -150,15 +150,17 @@ public class BlockPopsFabric implements ModInitializer {
                     ServerPlayer serverPlayer = (ServerPlayer) player;
                     IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(serverPlayer);
 
-                    // Sync discovered figures and their skins
+                    // Sync discovered figures, their skins, and Quick Skins
                     SyncDiscoveryDataPacket.sendToPlayer(
                             serverPlayer,
                             discovery.getDiscoveredSet(),
-                            discovery.getAllFigureSkins()
+                            discovery.getAllFigureSkins(),
+                            discovery.getAllFigureQuickSkins()
                     );
-                    BlockPopsMod.LOGGER.info("Synced {} discovered figures and {} skins to {}",
+                    BlockPopsMod.LOGGER.info("Synced {} discovered figures, {} skins, and {} quick skins to {}",
                             discovery.getDiscoveredSet().size(),
                             discovery.getAllFigureSkins().size(),
+                            discovery.getAllFigureQuickSkins().size(),
                             serverPlayer.getName().getString());
 
                     // Sync token data

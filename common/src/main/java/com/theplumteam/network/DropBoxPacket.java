@@ -164,15 +164,17 @@ public class DropBoxPacket {
                             String qsId = getQuickSkinIdFromServer(selectedFigure.getPlayerUUID());
                             if (qsId != null && !qsId.isEmpty()) {
                                 quickSkinSnapshot = qsId;
-                                LOGGER.info("Captured Quick Skin ID for figure {}: {}", uniqueFigureId, qsId);
+                                // SAVE TO DISCOVERY
+                                discovery.saveFigureQuickSkin(uniqueFigureId, quickSkinSnapshot);
+                                LOGGER.info("Captured & Saved Quick Skin ID for figure {}: {}", uniqueFigureId, qsId);
                             }
                         }
                     }
 
                     if (!discovery.isDiscovered(uniqueFigureId)) {
                         discovery.discover(uniqueFigureId);
-                        // Use cross-platform networking
-                        UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, selectedFigure.getName(), skinSnapshot);
+                        // Use cross-platform networking - PASS QUICKSKIN ID TO CLIENT
+                        UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, selectedFigure.getName(), skinSnapshot, quickSkinSnapshot);
                         LOGGER.info("Player {} discovered new figure: {} ({})", player.getName().getString(), selectedFigure.getName(), uniqueFigureId);
                         player.playNotifySound(SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1.0F, 1.0F);
                     } else {

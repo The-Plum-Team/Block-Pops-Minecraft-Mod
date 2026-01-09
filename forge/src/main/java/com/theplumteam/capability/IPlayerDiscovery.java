@@ -136,4 +136,28 @@ public interface IPlayerDiscovery {
      * @return An unmodifiable map of figure IDs to skin URLs
      */
     Map<String, String> getAllFigureSkins();
+
+    // Quick Skin (Modded) Snapshot Methods
+
+    /**
+     * Saves a Quick Skin ID for a player figure when discovered.
+     * This preserves the modded skin as it was when the figure was obtained.
+     * @param figureId The unique figure identifier in format "collectionId:figureId"
+     * @param quickSkinId The Quick Skin ID to save
+     */
+    void saveFigureQuickSkin(String figureId, String quickSkinId);
+
+    /**
+     * Gets the saved Quick Skin ID for a player figure.
+     * @param figureId The unique figure identifier in format "collectionId:figureId"
+     * @return The saved Quick Skin ID, or null if not saved
+     */
+    @Nullable
+    String getFigureQuickSkin(String figureId);
+
+    /**
+     * Gets all saved Quick Skin IDs.
+     * @return An unmodifiable map of figure IDs to Quick Skin IDs
+     */
+    Map<String, String> getAllFigureQuickSkins();
 }

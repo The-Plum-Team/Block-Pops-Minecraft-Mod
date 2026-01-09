@@ -25,10 +25,12 @@ public class SyncDiscoveryDataPacket {
 
     private final Set<String> discoveredFigures;
     private final Map<String, String> figureSkins;
+    private final Map<String, String> figureQuickSkins;
 
-    public SyncDiscoveryDataPacket(Set<String> discoveredFigures, Map<String, String> figureSkins) {
+    public SyncDiscoveryDataPacket(Set<String> discoveredFigures, Map<String, String> figureSkins, Map<String, String> figureQuickSkins) {
         this.discoveredFigures = new HashSet<>(discoveredFigures);
         this.figureSkins = new HashMap<>(figureSkins);
+        this.figureQuickSkins = new HashMap<>(figureQuickSkins);
     }
 
     public FriendlyByteBuf encode() {
@@ -40,6 +42,12 @@ public class SyncDiscoveryDataPacket {
 
         buffer.writeInt(figureSkins.size());
         for (Map.Entry<String, String> entry : figureSkins.entrySet()) {
+            buffer.writeUtf(entry.getKey());
+            buffer.writeUtf(entry.getValue());
+        }
+
+        buffer.writeInt(figureQuickSkins.size());
+        for (Map.Entry<String, String> entry : figureQuickSkins.entrySet()) {
             buffer.writeUtf(entry.getKey());
             buffer.writeUtf(entry.getValue());
         }
@@ -61,21 +69,36 @@ public class SyncDiscoveryDataPacket {
             figureSkins.put(figureId, skinUrl);
         }
 
-        return new SyncDiscoveryDataPacket(discoveredFigures, figureSkins);
+        int qsSize = buffer.readInt();
+        Map<String, String> figureQuickSkins = new HashMap<>();
+        for (int i = 0; i < qsSize; i++) {
+            String figureId = buffer.readUtf();
+            String quickSkinId = buffer.readUtf();
+            figureQuickSkins.put(figureId, quickSkinId);
+        }
+
+        return new SyncDiscoveryDataPacket(discoveredFigures, figureSkins, figureQuickSkins);
     }
 
     public static void handleClient(FriendlyByteBuf buf, NetworkManager.PacketContext context) {
         SyncDiscoveryDataPacket packet = decode(buf);
 
         context.queue(() -> {
-            LOGGER.info("Received discovery data sync: {} figures discovered, {} skins",
-                    packet.discoveredFigures.size(), packet.figureSkins.size());
-            ClientDiscoveryManager.setData(packet.discoveredFigures, packet.figureSkins);
+            LOGGER.info("Received discovery data sync: {} figures discovered, {} skins, {} quick skins",
+                    packet.discoveredFigures.size(), packet.figureSkins.size(), packet.figureQuickSkins.size());
+            ClientDiscoveryManager.setData(packet.discoveredFigures, packet.figureSkins, packet.figureQuickSkins);
         });
     }
 
+    /**
+     * Legacy method for backward compatibility (without Quick Skins)
+     */
     public static void sendToPlayer(ServerPlayer player, Set<String> discoveredFigures, Map<String, String> figureSkins) {
-        SyncDiscoveryDataPacket packet = new SyncDiscoveryDataPacket(discoveredFigures, figureSkins);
+        sendToPlayer(player, discoveredFigures, figureSkins, new HashMap<>());
+    }
+
+    public static void sendToPlayer(ServerPlayer player, Set<String> discoveredFigures, Map<String, String> figureSkins, Map<String, String> figureQuickSkins) {
+        SyncDiscoveryDataPacket packet = new SyncDiscoveryDataPacket(discoveredFigures, figureSkins, figureQuickSkins);
         NetworkManager.sendToPlayer(player, ID, packet.encode());
     }
 
@@ -85,5 +108,9 @@ public class SyncDiscoveryDataPacket {
 
     public Map<String, String> getFigureSkins() {
         return figureSkins;
+    }
+
+    public Map<String, String> getFigureQuickSkins() {
+        return figureQuickSkins;
     }
 }

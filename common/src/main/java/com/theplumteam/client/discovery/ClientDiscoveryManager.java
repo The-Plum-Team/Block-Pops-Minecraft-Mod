@@ -18,6 +18,7 @@ public class ClientDiscoveryManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(ClientDiscoveryManager.class);
     private static final Set<String> discoveredFigures = new HashSet<>();
     private static final Map<String, String> figureSkins = new HashMap<>();
+    private static final Map<String, String> figureQuickSkins = new HashMap<>();
 
     /**
      * Replace the entire discovered set with new data from the server.
@@ -25,13 +26,25 @@ public class ClientDiscoveryManager {
      *
      * @param figures The complete set of discovered figure IDs
      * @param skins Map of figure IDs to skin URLs
+     * @param quickSkins Map of figure IDs to Quick Skin IDs
      */
-    public static void setData(Set<String> figures, Map<String, String> skins) {
+    public static void setData(Set<String> figures, Map<String, String> skins, Map<String, String> quickSkins) {
         discoveredFigures.clear();
         discoveredFigures.addAll(figures);
         figureSkins.clear();
         figureSkins.putAll(skins);
-        LOGGER.debug("Discovery data synced: {} figures, {} skins", discoveredFigures.size(), figureSkins.size());
+        figureQuickSkins.clear();
+        figureQuickSkins.putAll(quickSkins);
+        LOGGER.debug("Discovery data synced: {} figures, {} skins, {} quick skins",
+            discoveredFigures.size(), figureSkins.size(), figureQuickSkins.size());
+    }
+
+    /**
+     * Legacy method for backward compatibility (without Quick Skins)
+     */
+    @Deprecated
+    public static void setData(Set<String> figures, Map<String, String> skins) {
+        setData(figures, skins, Collections.emptyMap());
     }
 
     /**
@@ -39,7 +52,7 @@ public class ClientDiscoveryManager {
      */
     @Deprecated
     public static void setData(Set<String> figures) {
-        setData(figures, Collections.emptyMap());
+        setData(figures, Collections.emptyMap(), Collections.emptyMap());
     }
 
     /**
@@ -82,6 +95,7 @@ public class ClientDiscoveryManager {
     public static void clear() {
         discoveredFigures.clear();
         figureSkins.clear();
+        figureQuickSkins.clear();
         LOGGER.debug("Discovery data cleared");
     }
 
@@ -104,5 +118,26 @@ public class ClientDiscoveryManager {
     @Nullable
     public static String getFigureSkin(String figureId) {
         return figureSkins.get(figureId);
+    }
+
+    /**
+     * Save a Quick Skin ID for a figure.
+     *
+     * @param figureId The unique figure identifier in format "collectionId:figureId"
+     * @param quickSkinId The Quick Skin ID to save
+     */
+    public static void saveFigureQuickSkin(String figureId, String quickSkinId) {
+        figureQuickSkins.put(figureId, quickSkinId);
+    }
+
+    /**
+     * Get the saved Quick Skin ID for a figure.
+     *
+     * @param figureId The unique figure identifier in format "collectionId:figureId"
+     * @return The saved Quick Skin ID, or null if not saved
+     */
+    @Nullable
+    public static String getFigureQuickSkin(String figureId) {
+        return figureQuickSkins.get(figureId);
     }
 }
