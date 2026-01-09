@@ -1,8 +1,9 @@
 package com.theplumteam.forge;
 
 import com.theplumteam.BlockPopsMod;
-import com.theplumteam.capability.PlayerDiscoveryProvider;
 import com.theplumteam.command.ModCommands;
+import com.theplumteam.data.IPlayerDiscovery;
+import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.PlayerCollectionGenerator;
@@ -104,48 +105,49 @@ public final class BlockPopsModForge {
                 if (player instanceof ServerPlayer) {
                     ServerPlayer serverPlayer = (ServerPlayer) player;
 
-                    serverPlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
-                        // Sync discovered figures, their skins, and Quick Skins using cross-platform networking
-                        SyncDiscoveryDataPacket.sendToPlayer(
-                                serverPlayer,
-                                discovery.getDiscoveredSet(),
-                                discovery.getAllFigureSkins(),
-                                discovery.getAllFigureQuickSkins()
-                        );
-                        BlockPopsMod.LOGGER.info("Synced {} discovered figures, {} skins, and {} quick skins to {}",
-                                discovery.getDiscoveredSet().size(),
-                                discovery.getAllFigureSkins().size(),
-                                discovery.getAllFigureQuickSkins().size(),
+                    // Use cross-platform PlayerDataManager to get discovery data (reads from NBT, not Capability)
+                    IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(serverPlayer);
+
+                    // Sync discovered figures, their skins, and Quick Skins using cross-platform networking
+                    SyncDiscoveryDataPacket.sendToPlayer(
+                            serverPlayer,
+                            discovery.getDiscoveredSet(),
+                            discovery.getAllFigureSkins(),
+                            discovery.getAllFigureQuickSkins()
+                    );
+                    BlockPopsMod.LOGGER.info("Synced {} discovered figures, {} skins, and {} quick skins to {}",
+                            discovery.getDiscoveredSet().size(),
+                            discovery.getAllFigureSkins().size(),
+                            discovery.getAllFigureQuickSkins().size(),
+                            serverPlayer.getName().getString());
+
+                    // Sync token data using cross-platform networking
+                    long gameTime = serverPlayer.serverLevel().getGameTime();
+                    long nextRegularTime = discovery.getNextRegularTokenTime();
+                    long ticksUntilNext = Math.max(0, nextRegularTime - gameTime);
+
+                    // Calculate millis until next special reset
+                    long millisUntilReset = calculateMillisUntilNextReset();
+
+                    SyncTokenDataPacket.sendToPlayer(
+                            serverPlayer,
+                            discovery.getRegularTokens(),
+                            ticksUntilNext,
+                            !discovery.hasUsedTodaySpecialToken(),
+                            millisUntilReset
+                    );
+                    BlockPopsMod.LOGGER.info("Synced token data to {}: {} regular tokens, special: {}",
+                            serverPlayer.getName().getString(),
+                            discovery.getRegularTokens(),
+                            !discovery.hasUsedTodaySpecialToken() ? "available" : "used");
+
+                    // Check if favorite color needs to be chosen
+                    if (!discovery.hasChosenFavoriteColor()) {
+                        BlockPopsMod.LOGGER.info("Player {} has not chosen a favorite color. Sending packet to open selection screen.",
                                 serverPlayer.getName().getString());
-
-                        // Sync token data using cross-platform networking
-                        long gameTime = serverPlayer.serverLevel().getGameTime();
-                        long nextRegularTime = discovery.getNextRegularTokenTime();
-                        long ticksUntilNext = Math.max(0, nextRegularTime - gameTime);
-
-                        // Calculate millis until next special reset
-                        long millisUntilReset = calculateMillisUntilNextReset();
-
-                        SyncTokenDataPacket.sendToPlayer(
-                                serverPlayer,
-                                discovery.getRegularTokens(),
-                                ticksUntilNext,
-                                !discovery.hasUsedTodaySpecialToken(),
-                                millisUntilReset
-                        );
-                        BlockPopsMod.LOGGER.info("Synced token data to {}: {} regular tokens, special: {}",
-                                serverPlayer.getName().getString(),
-                                discovery.getRegularTokens(),
-                                !discovery.hasUsedTodaySpecialToken() ? "available" : "used");
-
-                        // Check if favorite color needs to be chosen
-                        if (!discovery.hasChosenFavoriteColor()) {
-                            BlockPopsMod.LOGGER.info("Player {} has not chosen a favorite color. Sending packet to open selection screen.",
-                                    serverPlayer.getName().getString());
-                            // Use cross-platform Architectury networking
-                            OpenFavoriteColorScreenPacket.sendToPlayer(serverPlayer);
-                        }
-                    });
+                        // Use cross-platform Architectury networking
+                        OpenFavoriteColorScreenPacket.sendToPlayer(serverPlayer);
+                    }
                 }
             }
         });
