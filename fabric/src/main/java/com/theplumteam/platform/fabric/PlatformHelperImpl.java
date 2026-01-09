@@ -6,6 +6,7 @@ import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
 import com.theplumteam.item.BoxBlockItem;
 import com.theplumteam.item.GeoBlockItem;
+import net.fabricmc.api.EnvType;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.Item;
@@ -48,37 +49,17 @@ public class PlatformHelperImpl {
     }
 
     public static void openBoxFigureScreen(BlockPos pos, BoxBlockEntity boxBlockEntity) {
-        // Open the figure position screen (dev mode only)
-        net.minecraft.client.Minecraft.getInstance().setScreen(
-            new com.theplumteam.client.gui.FigurePositionScreen(
-                pos,
-                boxBlockEntity.getFigureOffsetX(),
-                boxBlockEntity.getFigureOffsetY(),
-                boxBlockEntity.getFigureOffsetZ(),
-                boxBlockEntity.getFigureScale(),
-                boxBlockEntity.getHitboxOffsetX(),
-                boxBlockEntity.getHitboxOffsetY(),
-                boxBlockEntity.getHitboxOffsetZ(),
-                boxBlockEntity.getHitboxScaleX(),
-                boxBlockEntity.getHitboxScaleY(),
-                boxBlockEntity.getHitboxScaleZ(),
-                boxBlockEntity.getLogoPositionX(),
-                boxBlockEntity.getLogoPositionY(),
-                boxBlockEntity.getLogoPositionZ(),
-                boxBlockEntity.getLogoScaleX(),
-                boxBlockEntity.getLogoScaleY(),
-                boxBlockEntity.getLogoScaleZ()
-            )
-        );
+        // Only call client code on the client side to avoid ClassNotFoundException on server
+        if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+            ClientPlatformHelperImpl.openBoxFigureScreen(pos, boxBlockEntity);
+        }
     }
 
     public static void openClawMachineScreen(BlockPos pos, ClawMachineBlockEntity clawMachineBlockEntity) {
-        net.minecraft.client.Minecraft.getInstance().setScreen(
-            new com.theplumteam.client.gui.CollectionSelectionScreen(
-                pos,
-                clawMachineBlockEntity.getCollectionId()
-            )
-        );
+        // Only call client code on the client side to avoid ClassNotFoundException on server
+        if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+            ClientPlatformHelperImpl.openClawMachineScreen(pos, clawMachineBlockEntity);
+        }
     }
 
     // Item factory methods - return common items (Fabric uses BuiltinItemRendererRegistry for custom rendering)
