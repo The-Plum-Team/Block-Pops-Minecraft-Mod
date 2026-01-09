@@ -2,8 +2,8 @@ package com.theplumteam.network;
 
 import com.theplumteam.BlockPopsMod;
 import dev.architectury.networking.NetworkManager;
+import dev.architectury.platform.Platform;
 import dev.architectury.utils.Env;
-import dev.architectury.utils.EnvExecutor;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -73,12 +73,14 @@ public class ModNetworking {
         );
 
         // Register S2C packets on both sides (required for Architectury 13.x / NeoForge 1.21.1)
-        // Handler only executes on client side
+        // Handler only does work on client side
         NetworkManager.registerReceiver(
             NetworkManager.s2c(),
             SyncTokenDataPacket.ID,
             (buf, context) -> {
-                EnvExecutor.runInEnv(Env.CLIENT, () -> () -> SyncTokenDataPacket.handleClient(buf, context));
+                if (Platform.getEnvironment() == Env.CLIENT) {
+                    SyncTokenDataPacket.handleClient(buf, context);
+                }
             }
         );
 
@@ -86,7 +88,9 @@ public class ModNetworking {
             NetworkManager.s2c(),
             SyncDiscoveryDataPacket.ID,
             (buf, context) -> {
-                EnvExecutor.runInEnv(Env.CLIENT, () -> () -> SyncDiscoveryDataPacket.handleClient(buf, context));
+                if (Platform.getEnvironment() == Env.CLIENT) {
+                    SyncDiscoveryDataPacket.handleClient(buf, context);
+                }
             }
         );
 
@@ -94,7 +98,9 @@ public class ModNetworking {
             NetworkManager.s2c(),
             UnlockFigurePacket.ID,
             (buf, context) -> {
-                EnvExecutor.runInEnv(Env.CLIENT, () -> () -> UnlockFigurePacket.handleClient(buf, context));
+                if (Platform.getEnvironment() == Env.CLIENT) {
+                    UnlockFigurePacket.handleClient(buf, context);
+                }
             }
         );
 
@@ -102,7 +108,9 @@ public class ModNetworking {
             NetworkManager.s2c(),
             SyncDynamicCollectionsPacket.ID,
             (buf, context) -> {
-                EnvExecutor.runInEnv(Env.CLIENT, () -> () -> SyncDynamicCollectionsPacket.handleClient(buf, context));
+                if (Platform.getEnvironment() == Env.CLIENT) {
+                    SyncDynamicCollectionsPacket.handleClient(buf, context);
+                }
             }
         );
 
@@ -110,7 +118,9 @@ public class ModNetworking {
             NetworkManager.s2c(),
             OpenFavoriteColorScreenPacket.ID,
             (buf, context) -> {
-                EnvExecutor.runInEnv(Env.CLIENT, () -> () -> OpenFavoriteColorScreenPacket.handleClient(buf, context));
+                if (Platform.getEnvironment() == Env.CLIENT) {
+                    OpenFavoriteColorScreenPacket.handleClient(buf, context);
+                }
             }
         );
 
@@ -119,7 +129,7 @@ public class ModNetworking {
 
     /**
      * Initialize client-side networking
-     * @deprecated S2C packets are now registered in init() with EnvExecutor for safety
+     * @deprecated S2C packets are now registered in init() with environment check
      */
     @Deprecated
     public static void initClient() {

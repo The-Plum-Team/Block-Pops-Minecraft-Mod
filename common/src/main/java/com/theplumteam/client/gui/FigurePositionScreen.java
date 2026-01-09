@@ -370,7 +370,7 @@ public class FigurePositionScreen extends Screen {
             }
 
             // Fallback to default Steve texture
-            return ResourceLocation.withDefaultNamespace("textures/entity/steve.png");
+            return ResourceLocation.withDefaultNamespace("textures/entity/player/wide/steve.png");
         }
 
         return figure.getTexturePath();

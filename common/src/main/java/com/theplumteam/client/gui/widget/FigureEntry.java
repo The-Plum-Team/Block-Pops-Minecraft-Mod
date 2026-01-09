@@ -151,12 +151,12 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         }
     }
 
-    private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick) {
+    private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick) { com.theplumteam.BlockPopsMod.LOGGER.info("render3DFigure called for figure: {} in collection: {}", figure.getId(), collectionId);
         PoseStack poseStack = graphics.pose();
         poseStack.pushPose();
 
         BoxBlockEntity renderEntity = FigureWidgetRenderer.getOrCreateRenderEntity(figure, collectionId);
-        if (renderEntity == null) {
+        if (renderEntity == null) { com.theplumteam.BlockPopsMod.LOGGER.warn("renderEntity is null for figure: {} in collection: {}", figure.getId(), collectionId);
             poseStack.popPose();
             return;
         }
@@ -191,7 +191,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
         try {
             ResourceLocation modelResource = figureModel.getModelResource(renderEntity);
-            if (modelResource == null) {
+            if (modelResource == null) { com.theplumteam.BlockPopsMod.LOGGER.warn("FigureEntry: modelResource is null");
                 RenderSystem.enableDepthTest();
                 graphics.disableScissor();
                 poseStack.popPose();
@@ -226,7 +226,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
             bufferSource.endBatch();
         } catch (Exception e) {
-            // Silently fail
+            com.theplumteam.BlockPopsMod.LOGGER.error("FigureEntry: Exception rendering figure: {}", e.getMessage());
         }
 
         // Re-enable depth test and disable scissor
