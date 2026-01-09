@@ -36,6 +36,8 @@ public class FavoriteColorSelectionScreen extends Screen {
     @Nullable
     private PopBlockColor selectedColor = null;
     private Button doneButton;
+    private Button toggleFigureButton;
+    private boolean showFigureInBox = true;
     private final List<ColorSelectionButton> colorButtons = new ArrayList<>();
 
     // Panel dimensions
@@ -132,11 +134,24 @@ public class FavoriteColorSelectionScreen extends Screen {
             colorButtons.add(colorButton);
         }
 
-        // Done button at the bottom, centered
+        // Bottom buttons - Toggle Figure button on left, Done button on right
         int buttonWidth = 200;
-        int doneButtonX = panelX + (panelWidth - buttonWidth) / 2;
+        int toggleButtonWidth = 120;
+        int buttonSpacing = 10;
+        int totalButtonWidth = buttonWidth + toggleButtonWidth + buttonSpacing;
+        int buttonsStartX = panelX + (panelWidth - totalButtonWidth) / 2;
         int doneButtonY = panelY + panelHeight - scaledPadding - scaledComponentHeight;
 
+        // Toggle Figure button (left of Done)
+        toggleFigureButton = Button.builder(Component.literal(showFigureInBox ? "Figure: ON" : "Figure: OFF"), button -> {
+            showFigureInBox = !showFigureInBox;
+            button.setMessage(Component.literal(showFigureInBox ? "Figure: ON" : "Figure: OFF"));
+            updateFigureVisibility();
+        }).bounds(buttonsStartX, doneButtonY, toggleButtonWidth, scaledComponentHeight).build();
+        this.addRenderableWidget(toggleFigureButton);
+
+        // Done button (right of Toggle)
+        int doneButtonX = buttonsStartX + toggleButtonWidth + buttonSpacing;
         doneButton = Button.builder(Component.literal("Done"), button -> {
             if (selectedColor != null) {
                 LOGGER.info("Player confirmed favorite color choice: {}", selectedColor.getSerializedName());
@@ -160,6 +175,15 @@ public class FavoriteColorSelectionScreen extends Screen {
     private void updateButtonTransforms() {
         for (ColorSelectionButton button : colorButtons) {
             button.setTransforms(rotationX, rotationY, rotationZ, scale, offsetX, offsetY, offsetZ);
+        }
+    }
+
+    /**
+     * Update all color buttons with current figure visibility setting
+     */
+    private void updateFigureVisibility() {
+        for (ColorSelectionButton button : colorButtons) {
+            button.setShowFigure(showFigureInBox);
         }
     }
 

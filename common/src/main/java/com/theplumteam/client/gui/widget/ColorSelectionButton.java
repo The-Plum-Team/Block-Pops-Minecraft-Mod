@@ -7,6 +7,7 @@ import com.theplumteam.registry.ModItems;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import org.joml.Quaternionf;
@@ -39,12 +40,35 @@ public class ColorSelectionButton extends Button {
 
         this.color = color;
         this.parentScreen = parentScreen;
+
         // Create the box item for this color
         this.boxItem = new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(color).get());
-        // Add NBT tag to hide the logo in the color selection screen and set the color
-        var blockEntityTag = this.boxItem.getOrCreateTagElement("BlockEntityTag");
+
+        // Configure NBT to show the player inside the box
+        CompoundTag blockEntityTag = this.boxItem.getOrCreateTagElement("BlockEntityTag");
+
+        // 1. Existing settings: Set Color and Hide Logo
         blockEntityTag.putBoolean("HideLogo", true);
         blockEntityTag.putString("Color", color.name());
+
+        // 2. NEW settings: Set the figure to be the current player
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null) {
+            // Set collection to World Players
+            blockEntityTag.putString("CollectionId", "world_players");
+
+            // Set FigureId to the player's UUID
+            blockEntityTag.putString("FigureId", mc.player.getUUID().toString());
+
+            // Ensure the figure is marked as inside the box (not extracted)
+            blockEntityTag.putBoolean("IsFigureExtracted", false);
+
+            // Optional: Reset offsets to ensure it centers correctly inside the item
+            blockEntityTag.putDouble("FigureOffsetX", -0.53);
+            blockEntityTag.putDouble("FigureOffsetY", 0.01);
+            blockEntityTag.putDouble("FigureOffsetZ", -0.55);
+            blockEntityTag.putDouble("FigureScale", 1.0);
+        }
     }
 
     public void setSelected(boolean selected) {
@@ -66,6 +90,33 @@ public class ColorSelectionButton extends Button {
         this.offsetX = offX;
         this.offsetY = offY;
         this.offsetZ = offZ;
+    }
+
+    /**
+     * Toggle whether the player figure is shown inside the box
+     */
+    public void setShowFigure(boolean showFigure) {
+        CompoundTag blockEntityTag = this.boxItem.getOrCreateTagElement("BlockEntityTag");
+
+        if (showFigure) {
+            // Add figure-related NBT tags
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null) {
+                blockEntityTag.putString("CollectionId", "world_players");
+                blockEntityTag.putString("FigureId", mc.player.getUUID().toString());
+                blockEntityTag.putBoolean("IsFigureExtracted", false);
+                blockEntityTag.putDouble("FigureOffsetX", -0.53);
+                blockEntityTag.putDouble("FigureOffsetY", 0.01);
+                blockEntityTag.putDouble("FigureOffsetZ", -0.55);
+                blockEntityTag.putDouble("FigureScale", 1.0);
+            }
+        } else {
+            // Set empty values to hide the figure
+            // (BoxBlockEntity.load() only updates fields if tag.contains() is true,
+            // so we must set empty values rather than removing tags)
+            blockEntityTag.putString("CollectionId", "");
+            blockEntityTag.putString("FigureId", "");
+        }
     }
 
     @Override
@@ -124,7 +175,6 @@ public class ColorSelectionButton extends Button {
         pose.translate(offsetX, offsetY, offsetZ);
 
         // 3. Apply rotations (these rotate around the current position - the item's center)
-        // Note: We apply rotations in the order that makes sense for 3D
         pose.mulPose(new Quaternionf().rotationXYZ(
             (float) Math.toRadians(rotationX),
             (float) Math.toRadians(rotationY),
@@ -139,6 +189,7 @@ public class ColorSelectionButton extends Button {
         pose.translate(-8, -8, 0);
 
         // 6. Render the item
+        // The BoxBlockItemRenderer will read the NBT we set above and render the player inside
         graphics.renderItem(boxItem, 0, 0);
         pose.popPose();
     }
