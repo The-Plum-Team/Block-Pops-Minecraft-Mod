@@ -6,12 +6,12 @@
   "box_texture": "blockpops:textures/block/box/alienstage.png",
   "logo": {
     "texture": "blockpops:textures/block/box/logo/logo_alienstage.png",
-    "position_x": -1.5,
-    "position_y": -0.14,
-    "position_z": -1.52,
-    "scale_x": 6.0,
-    "scale_y": 4.0,
-    "scale_z": 1.0
+    "position_x": -1.389,
+    "position_y": -0.120,
+    "position_z": -0.002,
+    "scale_x": 5.576,
+    "scale_y": 3.451,
+    "scale_z": 1.000
   },
   "background_color": {
     "r": 30,
