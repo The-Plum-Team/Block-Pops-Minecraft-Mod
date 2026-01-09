@@ -28,9 +28,14 @@ public class BoxBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
         if (stack.getItem() instanceof GeoBlockItem geoBlockItem) {
             BoxBlock boxBlock = geoBlockItem.getBoxBlock();
 
-            // Always create a fresh entity to avoid state pollution from previous renders
-            // This prevents issues like closed boxes appearing open in inventory
-            renderEntity = new BoxBlockEntity(BlockPos.ZERO, boxBlock.defaultBlockState());
+            // Reuse the entity instance if it's for the same block type
+            // This is critical for GeckoLib animation state persistence - creating a new entity each frame
+            // resets the AnimatableInstanceCache and prevents animations from playing
+            if (renderEntity == null || !renderEntity.getBlockState().is(boxBlock)) {
+                renderEntity = new BoxBlockEntity(BlockPos.ZERO, boxBlock.defaultBlockState());
+                // Set client level for GeckoLib tick delta calculations
+                renderEntity.setLevel(Minecraft.getInstance().level);
+            }
 
             // Load NBT data from ItemStack FIRST before any rendering
             // This ensures isOpen is set correctly before the animation controller evaluates

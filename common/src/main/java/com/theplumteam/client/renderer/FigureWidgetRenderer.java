@@ -5,6 +5,7 @@ import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.model.FigureModel;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
@@ -94,6 +95,11 @@ public final class FigureWidgetRenderer {
         return renderEntityCache.computeIfAbsent(cacheKey, key -> {
             try {
                 BoxBlockEntity entity = new BoxBlockEntity(BlockPos.ZERO, Blocks.AIR.defaultBlockState());
+
+                // Set client level for GeckoLib tick delta calculations
+                // Without this, animation controllers may crash when accessing level
+                entity.setLevel(Minecraft.getInstance().level);
+
                 entity.setFigureId(figure.getId());
                 entity.setCollectionIdOverride(collectionId);
 
