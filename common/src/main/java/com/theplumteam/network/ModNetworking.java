@@ -2,6 +2,8 @@ package com.theplumteam.network;
 
 import com.theplumteam.BlockPopsMod;
 import dev.architectury.networking.NetworkManager;
+import dev.architectury.utils.Env;
+import dev.architectury.utils.EnvExecutor;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -21,7 +23,7 @@ public class ModNetworking {
         ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "set_favorite_color");
 
     /**
-     * Initializes networking (registers server-side receivers)
+     * Initializes networking (registers all packet receivers)
      * Called from BlockPopsMod.init() on both client and server
      */
     public static void init() {
@@ -70,47 +72,57 @@ public class ModNetworking {
             UpdateGuaranteedResetHourPacket::handleServer
         );
 
-        BlockPopsMod.LOGGER.info("BlockPops networking initialized");
-    }
-
-    /**
-     * Initialize client-side networking (registers client-side receivers for S2C packets)
-     * Must be called from client initialization only
-     */
-    public static void initClient() {
-        BlockPopsMod.LOGGER.info("Initializing BlockPops client networking...");
-
-        // Register client-side packet receivers (S2C)
+        // Register S2C packets on both sides (required for Architectury 13.x / NeoForge 1.21.1)
+        // Handler only executes on client side
         NetworkManager.registerReceiver(
             NetworkManager.s2c(),
             SyncTokenDataPacket.ID,
-            SyncTokenDataPacket::handleClient
+            (buf, context) -> {
+                EnvExecutor.runInEnv(Env.CLIENT, () -> () -> SyncTokenDataPacket.handleClient(buf, context));
+            }
         );
 
         NetworkManager.registerReceiver(
             NetworkManager.s2c(),
             SyncDiscoveryDataPacket.ID,
-            SyncDiscoveryDataPacket::handleClient
+            (buf, context) -> {
+                EnvExecutor.runInEnv(Env.CLIENT, () -> () -> SyncDiscoveryDataPacket.handleClient(buf, context));
+            }
         );
 
         NetworkManager.registerReceiver(
             NetworkManager.s2c(),
             UnlockFigurePacket.ID,
-            UnlockFigurePacket::handleClient
+            (buf, context) -> {
+                EnvExecutor.runInEnv(Env.CLIENT, () -> () -> UnlockFigurePacket.handleClient(buf, context));
+            }
         );
 
         NetworkManager.registerReceiver(
             NetworkManager.s2c(),
             SyncDynamicCollectionsPacket.ID,
-            SyncDynamicCollectionsPacket::handleClient
+            (buf, context) -> {
+                EnvExecutor.runInEnv(Env.CLIENT, () -> () -> SyncDynamicCollectionsPacket.handleClient(buf, context));
+            }
         );
 
         NetworkManager.registerReceiver(
             NetworkManager.s2c(),
             OpenFavoriteColorScreenPacket.ID,
-            OpenFavoriteColorScreenPacket::handleClient
+            (buf, context) -> {
+                EnvExecutor.runInEnv(Env.CLIENT, () -> () -> OpenFavoriteColorScreenPacket.handleClient(buf, context));
+            }
         );
 
-        BlockPopsMod.LOGGER.info("BlockPops client networking initialized");
+        BlockPopsMod.LOGGER.info("BlockPops networking initialized");
+    }
+
+    /**
+     * Initialize client-side networking
+     * @deprecated S2C packets are now registered in init() with EnvExecutor for safety
+     */
+    @Deprecated
+    public static void initClient() {
+        BlockPopsMod.LOGGER.info("BlockPops client networking initialization (no-op, packets registered in init())");
     }
 }
