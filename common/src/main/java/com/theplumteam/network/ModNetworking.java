@@ -72,57 +72,47 @@ public class ModNetworking {
             UpdateGuaranteedResetHourPacket::handleServer
         );
 
-        // Register S2C packets on both sides (required for Architectury 13.x / NeoForge 1.21.1)
-        // Handler only does work on client side
-        NetworkManager.registerReceiver(
-            NetworkManager.s2c(),
-            SyncTokenDataPacket.ID,
-            (buf, context) -> {
-                if (Platform.getEnvironment() == Env.CLIENT) {
-                    SyncTokenDataPacket.handleClient(buf, context);
-                }
-            }
-        );
+        // Register S2C packets - use different approach for server vs client on Fabric
+        // Server: register payload type only, Client: register receiver with handler
+        if (Platform.getEnvironment() == Env.SERVER) {
+            // On server, just register the payload types so packets can be sent
+            NetworkManager.registerS2CPayloadType(SyncTokenDataPacket.ID, null);
+            NetworkManager.registerS2CPayloadType(SyncDiscoveryDataPacket.ID, null);
+            NetworkManager.registerS2CPayloadType(UnlockFigurePacket.ID, null);
+            NetworkManager.registerS2CPayloadType(SyncDynamicCollectionsPacket.ID, null);
+            NetworkManager.registerS2CPayloadType(OpenFavoriteColorScreenPacket.ID, null);
+        } else {
+            // On client, register receivers to handle incoming packets
+            NetworkManager.registerReceiver(
+                NetworkManager.s2c(),
+                SyncTokenDataPacket.ID,
+                SyncTokenDataPacket::handleClient
+            );
 
-        NetworkManager.registerReceiver(
-            NetworkManager.s2c(),
-            SyncDiscoveryDataPacket.ID,
-            (buf, context) -> {
-                if (Platform.getEnvironment() == Env.CLIENT) {
-                    SyncDiscoveryDataPacket.handleClient(buf, context);
-                }
-            }
-        );
+            NetworkManager.registerReceiver(
+                NetworkManager.s2c(),
+                SyncDiscoveryDataPacket.ID,
+                SyncDiscoveryDataPacket::handleClient
+            );
 
-        NetworkManager.registerReceiver(
-            NetworkManager.s2c(),
-            UnlockFigurePacket.ID,
-            (buf, context) -> {
-                if (Platform.getEnvironment() == Env.CLIENT) {
-                    UnlockFigurePacket.handleClient(buf, context);
-                }
-            }
-        );
+            NetworkManager.registerReceiver(
+                NetworkManager.s2c(),
+                UnlockFigurePacket.ID,
+                UnlockFigurePacket::handleClient
+            );
 
-        NetworkManager.registerReceiver(
-            NetworkManager.s2c(),
-            SyncDynamicCollectionsPacket.ID,
-            (buf, context) -> {
-                if (Platform.getEnvironment() == Env.CLIENT) {
-                    SyncDynamicCollectionsPacket.handleClient(buf, context);
-                }
-            }
-        );
+            NetworkManager.registerReceiver(
+                NetworkManager.s2c(),
+                SyncDynamicCollectionsPacket.ID,
+                SyncDynamicCollectionsPacket::handleClient
+            );
 
-        NetworkManager.registerReceiver(
-            NetworkManager.s2c(),
-            OpenFavoriteColorScreenPacket.ID,
-            (buf, context) -> {
-                if (Platform.getEnvironment() == Env.CLIENT) {
-                    OpenFavoriteColorScreenPacket.handleClient(buf, context);
-                }
-            }
-        );
+            NetworkManager.registerReceiver(
+                NetworkManager.s2c(),
+                OpenFavoriteColorScreenPacket.ID,
+                OpenFavoriteColorScreenPacket::handleClient
+            );
+        }
 
         BlockPopsMod.LOGGER.info("BlockPops networking initialized");
     }
