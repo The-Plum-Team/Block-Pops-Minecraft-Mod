@@ -13,9 +13,7 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.model.GeoModel;
 
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     private static final ResourceLocation FALLBACK_MODEL = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "geo/block/box_block.geo.json");
@@ -130,8 +128,26 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
         return figure.getTexturePath() != null ? figure.getTexturePath() : FALLBACK_TEXTURE;
     }
 
+    /**
+     * Converts the Base64 texture string back into a ResourceLocation
+     * using Minecraft's SkinManager.
+     */
     private ResourceLocation getSkinLocationFromSnapshot(FigureDefinition figure, String snapshot) {
-        return FALLBACK_TEXTURE;
+        if (snapshot == null || snapshot.isEmpty()) {
+            return FALLBACK_TEXTURE;
+        }
+
+        try {
+            // Reconstruct a temporary GameProfile with the saved texture data
+            GameProfile profile = new GameProfile(figure.getPlayerUUID(), figure.getName());
+            profile.getProperties().put("textures", new Property("textures", snapshot));
+
+            // Use Minecraft's SkinManager to process the property and get the cached skin location
+            // getInsecureSkin skips session verification, which is appropriate for stored texture data
+            return Minecraft.getInstance().getSkinManager().getInsecureSkin(profile).texture();
+        } catch (Exception e) {
+            return FALLBACK_TEXTURE;
+        }
     }
 
     @Override

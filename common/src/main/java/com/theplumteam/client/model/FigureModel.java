@@ -13,9 +13,7 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.model.GeoModel;
 
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class FigureModel extends GeoModel<BoxBlockEntity> {
     private static final ResourceLocation FALLBACK_TEXTURE = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/entity/player/wide/steve.png");
@@ -132,11 +130,26 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
         return figure.getTexturePath() != null ? figure.getTexturePath() : FALLBACK_TEXTURE;
     }
 
+    /**
+     * Converts the Base64 texture string back into a ResourceLocation
+     * using Minecraft's SkinManager.
+     */
     private ResourceLocation getSkinLocationFromSnapshot(FigureDefinition figure, String snapshot) {
-        // In 1.21.1, accessing snapshot skins requires using the skin manager to convert URL to ResourceLocation.
-        // For simplicity/safety, we are returning fallback here if direct conversion isn't available,
-        // but ensuring QuickSkin priority logic (above) handles the modded case correctly.
-        return FALLBACK_TEXTURE;
+        if (snapshot == null || snapshot.isEmpty()) {
+            return FALLBACK_TEXTURE;
+        }
+
+        try {
+            // Reconstruct a temporary GameProfile with the saved texture data
+            GameProfile profile = new GameProfile(figure.getPlayerUUID(), figure.getName());
+            profile.getProperties().put("textures", new Property("textures", snapshot));
+
+            // Use Minecraft's SkinManager to process the property and get the cached skin location
+            // getInsecureSkin skips session verification, which is appropriate for stored texture data
+            return Minecraft.getInstance().getSkinManager().getInsecureSkin(profile).texture();
+        } catch (Exception e) {
+            return FALLBACK_TEXTURE;
+        }
     }
 
     @Override
