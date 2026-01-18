@@ -29,11 +29,18 @@ public class CollectionRegistry {
      * Note: Dynamic collections are preserved across reloads
      */
     public static void loadCollections(ResourceManager resourceManager) {
+        // Log who is calling this method for debugging
+        BlockPopsMod.LOGGER.info("loadCollections called! Current dynamic collections: {}, Current collections: {}",
+            dynamicCollections.size(), collections.size());
+        BlockPopsMod.LOGGER.info("Caller stacktrace: {}",
+            java.util.Arrays.toString(Thread.currentThread().getStackTrace()).substring(0, 500));
+
         // Clear only static collections, preserve dynamic ones
         collections.clear();
         figuresById.clear();
 
         // Re-add dynamic collections after clearing
+        BlockPopsMod.LOGGER.info("Re-adding {} dynamic collections after clear", dynamicCollections.size());
         for (Map.Entry<String, FigureCollection> entry : dynamicCollections.entrySet()) {
             registerCollectionInternal(entry.getValue(), false);
         }
@@ -45,7 +52,7 @@ public class CollectionRegistry {
                     location -> location.getPath().endsWith(".json")
             );
 
-            BlockPopsMod.LOGGER.info("Loading figure collections...");
+            BlockPopsMod.LOGGER.info("Loading figure collections... Found {} JSON files in 'collections' folder", resources.size());
 
             for (Map.Entry<ResourceLocation, Resource> entry : resources.entrySet()) {
                 ResourceLocation location = entry.getKey();

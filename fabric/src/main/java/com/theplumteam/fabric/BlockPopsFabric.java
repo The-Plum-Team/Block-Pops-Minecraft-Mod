@@ -120,6 +120,13 @@ public class BlockPopsFabric implements ModInitializer {
         // Add new players to the collection when they join
         PlayerEvent.PLAYER_JOIN.register(player -> {
             if (player.getServer() != null) {
+                // FALLBACK: If collections weren't loaded during SERVER_STARTING (e.g., with Kilt),
+                // load them now. This check ensures we only load once.
+                if (!CollectionRegistry.isInitialized() || CollectionRegistry.getAllCollections().size() <= 1) {
+                    BlockPopsMod.LOGGER.info("Collections not loaded yet, loading now from PLAYER_JOIN...");
+                    CollectionRegistry.loadCollections(player.getServer().getResourceManager());
+                }
+
                 // 1. Re-generate World Players collection to include the new player
                 FigureCollection updatedPlayerCollection = PlayerCollectionHelper.generate(player.getServer());
                 CollectionRegistry.registerDynamicCollection(updatedPlayerCollection);

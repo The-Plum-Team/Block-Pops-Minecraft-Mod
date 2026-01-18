@@ -3,15 +3,10 @@ package com.theplumteam.forge;
 import com.theplumteam.client.renderer.BoxBlockRenderer;
 import com.theplumteam.client.renderer.ClawMachineBlockRenderer;
 import com.theplumteam.client.renderer.FigureBlockRenderer;
-import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.network.ModNetworking;
 import com.theplumteam.registry.ModBlockEntities;
-import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
-import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
-import net.minecraftforge.client.event.RegisterClientReloadListenersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
@@ -32,18 +27,9 @@ public class BlockPopsModForgeClient {
         event.registerBlockEntityRenderer(ModBlockEntities.FIGURE_BLOCK.get(), context -> new FigureBlockRenderer());
     }
 
-    @SubscribeEvent
-    public static void registerResourceListeners(RegisterClientReloadListenersEvent event) {
-        event.registerReloadListener(new SimplePreparableReloadListener<Void>() {
-            @Override
-            protected Void prepare(ResourceManager resourceManager, ProfilerFiller profiler) {
-                return null;
-            }
-
-            @Override
-            protected void apply(Void unused, ResourceManager resourceManager, ProfilerFiller profiler) {
-                CollectionRegistry.loadCollections(resourceManager);
-            }
-        });
-    }
+    // DO NOT add a client-side resource reload listener for collections here!
+    // In Singleplayer (and with Kilt on Fabric), the Client and Server share the same static CollectionRegistry.
+    // A client reload listener would wipe the server's data because it looks in assets/ (empty)
+    // instead of data/ where the JSONs are located.
+    // The client receives collections via SyncDynamicCollectionsPacket from the server on join.
 }

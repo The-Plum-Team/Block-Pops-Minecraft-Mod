@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     private static final ResourceLocation FALLBACK_MODEL = new ResourceLocation(BlockPopsMod.MOD_ID, "geo/block/box_block.geo.json");
-    private static final ResourceLocation FALLBACK_TEXTURE = new ResourceLocation("minecraft", "textures/entity/steve.png");
+    private static final ResourceLocation FALLBACK_TEXTURE = new ResourceLocation("minecraft", "textures/entity/player/wide/steve.png");
     private static final ResourceLocation FALLBACK_ANIMATION = new ResourceLocation(BlockPopsMod.MOD_ID, "animations/block/box_block.animation.json");
     private static final ResourceLocation POSE_ANIMATION = new ResourceLocation(BlockPopsMod.MOD_ID, "animations/figure/figure_poses.animation.json");
 
