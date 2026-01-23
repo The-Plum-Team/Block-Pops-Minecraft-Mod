@@ -25,7 +25,7 @@ public class ModCommands {
             CommandBuildContext registryAccess,
             Commands.CommandSelection environment
     ) {
-        BlockPopsMod.LOGGER.info("Registering BlockPops commands...");
+        BlockPopsMod.logDebug("Registering BlockPops commands...");
 
         // Register all commands
         GetFavoriteColorCommand.register(dispatcher);
@@ -35,6 +35,6 @@ public class ModCommands {
         GetBoxCommand.register(dispatcher);
         SetDefaultColorCommand.register(dispatcher);
 
-        BlockPopsMod.LOGGER.info("BlockPops commands registered");
+        BlockPopsMod.logDebug("BlockPops commands registered");
     }
 }

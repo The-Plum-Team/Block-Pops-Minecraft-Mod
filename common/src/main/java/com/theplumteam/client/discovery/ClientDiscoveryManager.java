@@ -63,7 +63,7 @@ public class ClientDiscoveryManager {
      */
     public static void unlock(String figureId) {
         if (discoveredFigures.add(figureId)) {
-            LOGGER.info("Figure unlocked: {}", figureId);
+            BlockPopsMod.logDebug("Figure unlocked: {}", figureId);
         }
     }
 

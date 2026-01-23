@@ -48,7 +48,7 @@ public class GuiScaleManager {
             // Special case: if BOTH shaders AND Distant Horizons are active, skip GUI scale changes entirely
             // This combination causes issues, so we leave the GUI scale unchanged
             if (!force && areShadersActive() && isDistantHorizonsInstalled()) {
-                BlockPopsMod.LOGGER.info("Shaders + Distant Horizons detected, skipping GUI scale change");
+                BlockPopsMod.logDebug("Shaders + Distant Horizons detected, skipping GUI scale change");
                 usingInverseScale = false;
                 return false; // Don't change anything when DH + shaders are both present
             }
@@ -94,7 +94,7 @@ public class GuiScaleManager {
             int currentScale = guiScaleOption.get();
             int targetScale = originalGuiScale;
 
-            BlockPopsMod.LOGGER.info("Restoring GUI scale from {} to {}", currentScale, targetScale);
+            BlockPopsMod.logDebug("Restoring GUI scale from {} to {}", currentScale, targetScale);
 
             // Reset tracking variables BEFORE resizeDisplay to prevent re-entry issues
             originalGuiScale = null;
@@ -103,9 +103,9 @@ public class GuiScaleManager {
             if (currentScale != targetScale) {
                 guiScaleOption.set(targetScale);
                 mc.resizeDisplay();
-                BlockPopsMod.LOGGER.info("GUI scale restored successfully to {}", targetScale);
+                BlockPopsMod.logDebug("GUI scale restored successfully to {}", targetScale);
             } else {
-                BlockPopsMod.LOGGER.info("GUI scale already at target {}, no change needed", targetScale);
+                BlockPopsMod.logDebug("GUI scale already at target {}, no change needed", targetScale);
             }
 
         } catch (Exception e) {

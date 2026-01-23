@@ -66,14 +66,14 @@ public class SetFavoriteColorPacket {
                     discovery.setHasChosenFavoriteColor(true);
                     PlayerDataManager.markDirty(player, discovery);
 
-                    LOGGER.info("Player {} chose favorite color: {}",
+                    BlockPopsMod.logDebug("Player {} chose favorite color: {}",
                             player.getName().getString(), color.getSerializedName());
 
                     // Regenerate the World Players collection to reflect the updated color
                     // Uses platform-specific implementation via PlayerCollectionHelper
                     if (player.getServer() != null) {
                         PlayerCollectionHelper.regenerateAndSyncPlayerCollection(player.getServer());
-                        LOGGER.info("Regenerated World Players collection after {} changed their favorite color",
+                        BlockPopsMod.logDebug("Regenerated World Players collection after {} changed their favorite color",
                                 player.getName().getString());
                     }
                 } catch (IllegalArgumentException e) {

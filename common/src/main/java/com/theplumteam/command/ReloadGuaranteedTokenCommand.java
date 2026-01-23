@@ -39,7 +39,7 @@ public class ReloadGuaranteedTokenCommand {
             discovery.setUsedTodaySpecialToken(false);
             PlayerDataManager.markDirty(player, discovery);
 
-            LOGGER.info("Reloaded guaranteed token for player {}", player.getName().getString());
+            BlockPopsMod.logDebug("Reloaded guaranteed token for player {}", player.getName().getString());
 
             // Sync token data back to client
             long gameTime = player.serverLevel().getGameTime();

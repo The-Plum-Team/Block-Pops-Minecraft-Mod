@@ -63,14 +63,14 @@ public class SyncDynamicCollectionsPacket {
         SyncDynamicCollectionsPacket packet = decode(buf);
 
         context.queue(() -> {
-            LOGGER.info("Received {} dynamic collections from server", packet.collectionsJson.size());
+            BlockPopsMod.logDebug("Received {} dynamic collections from server", packet.collectionsJson.size());
 
             for (String json : packet.collectionsJson) {
                 try {
                     JsonObject jsonObject = GSON.fromJson(json, JsonObject.class);
                     FigureCollection collection = FigureCollection.fromJson(jsonObject);
                     CollectionRegistry.registerDynamicCollection(collection);
-                    LOGGER.info("Registered dynamic collection: {} with {} figures",
+                    BlockPopsMod.logDebug("Registered dynamic collection: {} with {} figures",
                             collection.getName(), collection.getFigures().size());
                 } catch (Exception e) {
                     LOGGER.error("Failed to deserialize dynamic collection", e);

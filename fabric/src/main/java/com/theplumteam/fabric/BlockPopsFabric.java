@@ -41,7 +41,7 @@ public class BlockPopsFabric implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        BlockPopsMod.LOGGER.info("BlockPops loading on Fabric platform");
+        BlockPopsMod.logDebug("BlockPops loading on Fabric platform");
 
         // Register all content (blocks, items, block entities, creative tabs)
         ModBlocks.register();
@@ -101,18 +101,18 @@ public class BlockPopsFabric implements ModInitializer {
             return InteractionResult.PASS;
         });
 
-        BlockPopsMod.LOGGER.info("BlockPops Fabric initialization complete");
+        BlockPopsMod.logDebug("BlockPops Fabric initialization complete");
     }
 
     private void registerServerEvents() {
         // Load static collections and generate World Players collection when server starts
         LifecycleEvent.SERVER_STARTING.register(server -> {
             // Load static collections from JSON files on the server
-            BlockPopsMod.LOGGER.info("Loading static collections on server...");
+            BlockPopsMod.logDebug("Loading static collections on server...");
             CollectionRegistry.loadCollections(server.getResourceManager());
 
             // Generate dynamic World Players collection
-            BlockPopsMod.LOGGER.info("Generating World Players collection...");
+            BlockPopsMod.logDebug("Generating World Players collection...");
             FigureCollection playerCollection = PlayerCollectionHelper.generate(server);
             CollectionRegistry.registerDynamicCollection(playerCollection);
         });
@@ -120,6 +120,13 @@ public class BlockPopsFabric implements ModInitializer {
         // Add new players to the collection when they join
         PlayerEvent.PLAYER_JOIN.register(player -> {
             if (player.getServer() != null) {
+                // FALLBACK: If collections weren't loaded during SERVER_STARTING (e.g., with Kilt),
+                // load them now. This check ensures we only load once.
+                if (!CollectionRegistry.isInitialized() || CollectionRegistry.getAllCollections().size() <= 1) {
+                    BlockPopsMod.logDebug("Collections not loaded yet, loading now from PLAYER_JOIN...");
+                    CollectionRegistry.loadCollections(player.getServer().getResourceManager());
+                }
+
                 // 1. Re-generate World Players collection to include the new player
                 FigureCollection updatedPlayerCollection = PlayerCollectionHelper.generate(player.getServer());
                 CollectionRegistry.registerDynamicCollection(updatedPlayerCollection);
@@ -130,7 +137,7 @@ public class BlockPopsFabric implements ModInitializer {
                 if (player instanceof ServerPlayer serverPlayer) {
                     List<FigureCollection> allCollections = new ArrayList<>(CollectionRegistry.getAllCollections());
                     SyncDynamicCollectionsPacket.sendToPlayer(serverPlayer, allCollections);
-                    BlockPopsMod.LOGGER.info("Synced {} collections to joining player {}", allCollections.size(), player.getName().getString());
+                    BlockPopsMod.logDebug("Synced {} collections to joining player {}", allCollections.size(), player.getName().getString());
                 }
 
                 // 3. Sync ONLY the updated World Players collection to ALL OTHER players
@@ -156,7 +163,7 @@ public class BlockPopsFabric implements ModInitializer {
                             discovery.getAllFigureSkins(),
                             discovery.getAllFigureQuickSkins()
                     );
-                    BlockPopsMod.LOGGER.info("Synced {} discovered figures, {} skins, and {} quick skins to {}",
+                    BlockPopsMod.logDebug("Synced {} discovered figures, {} skins, and {} quick skins to {}",
                             discovery.getDiscoveredSet().size(),
                             discovery.getAllFigureSkins().size(),
                             discovery.getAllFigureQuickSkins().size(),
@@ -177,14 +184,14 @@ public class BlockPopsFabric implements ModInitializer {
                             !discovery.hasUsedTodaySpecialToken(),
                             millisUntilReset
                     );
-                    BlockPopsMod.LOGGER.info("Synced token data to {}: {} regular tokens, special: {}",
+                    BlockPopsMod.logDebug("Synced token data to {}: {} regular tokens, special: {}",
                             serverPlayer.getName().getString(),
                             discovery.getRegularTokens(),
                             !discovery.hasUsedTodaySpecialToken() ? "available" : "used");
 
                     // Check if favorite color needs to be chosen
                     if (!discovery.hasChosenFavoriteColor()) {
-                        BlockPopsMod.LOGGER.info("Player {} has not chosen a favorite color. Sending packet to open selection screen.",
+                        BlockPopsMod.logDebug("Player {} has not chosen a favorite color. Sending packet to open selection screen.",
                                 serverPlayer.getName().getString());
                         OpenFavoriteColorScreenPacket.sendToPlayer(serverPlayer);
                     }

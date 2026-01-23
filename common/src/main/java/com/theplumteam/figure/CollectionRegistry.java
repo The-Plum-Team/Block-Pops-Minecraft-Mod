@@ -45,7 +45,7 @@ public class CollectionRegistry {
                     location -> location.getPath().endsWith(".json")
             );
 
-            BlockPopsMod.LOGGER.info("Loading figure collections...");
+            BlockPopsMod.logDebug("Loading figure collections...");
 
             for (Map.Entry<ResourceLocation, Resource> entry : resources.entrySet()) {
                 ResourceLocation location = entry.getKey();
@@ -65,7 +65,7 @@ public class CollectionRegistry {
                         figuresById.put(fullId, figure);
                     }
 
-                    BlockPopsMod.LOGGER.info("Loaded collection '{}' with {} figures from {}",
+                    BlockPopsMod.logDebug("Loaded collection '{}' with {} figures from {}",
                             collection.getName(), collection.getFigures().size(), location);
 
                 } catch (Exception e) {
@@ -74,7 +74,7 @@ public class CollectionRegistry {
             }
 
             initialized = true;
-            BlockPopsMod.LOGGER.info("Loaded {} collections with {} total figures",
+            BlockPopsMod.logDebug("Loaded {} collections with {} total figures",
                     collections.size(), figuresById.size());
 
         } catch (Exception e) {
@@ -164,7 +164,7 @@ public class CollectionRegistry {
         }
 
         if (isDynamic) {
-            BlockPopsMod.LOGGER.info("Registered dynamic collection '{}' with {} figures",
+            BlockPopsMod.logDebug("Registered dynamic collection '{}' with {} figures",
                     collection.getName(), collection.getFigures().size());
         }
     }

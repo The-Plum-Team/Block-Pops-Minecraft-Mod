@@ -76,16 +76,16 @@ public class UnlockFigurePacket {
         UnlockFigurePacket packet = decode(buf);
 
         context.queue(() -> {
-            LOGGER.info("Unlocked new figure: {} ({})", packet.figureName, packet.figureId);
+            BlockPopsMod.logDebug("Unlocked new figure: {} ({})", packet.figureName, packet.figureId);
             ClientDiscoveryManager.unlock(packet.figureId);
 
             if (packet.skinSnapshot != null) {
                 ClientDiscoveryManager.saveFigureSkin(packet.figureId, packet.skinSnapshot);
-                LOGGER.info("Saved skin snapshot for unlocked figure: {}", packet.figureId);
+                BlockPopsMod.logDebug("Saved skin snapshot for unlocked figure: {}", packet.figureId);
             }
             if (packet.quickSkinId != null) {
                 ClientDiscoveryManager.saveFigureQuickSkin(packet.figureId, packet.quickSkinId);
-                LOGGER.info("Saved Quick Skin ID for unlocked figure: {}", packet.figureId);
+                BlockPopsMod.logDebug("Saved Quick Skin ID for unlocked figure: {}", packet.figureId);
             }
         });
     }

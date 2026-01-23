@@ -83,7 +83,7 @@ public class BlockPopsModForgeClient {
                 }
             };
             event.registerItem(boxExtensions, boxItems.toArray(new Item[0]));
-            BlockPopsMod.LOGGER.info("Registered box item renderer for {} items", boxItems.size());
+            BlockPopsMod.logDebug("Registered box item renderer for {} items", boxItems.size());
         }
 
         // Register figure block item renderer
@@ -97,7 +97,7 @@ public class BlockPopsModForgeClient {
                     return figureRenderer;
                 }
             }, ModItems.FIGURE_BLOCK_ITEM.get());
-            BlockPopsMod.LOGGER.info("Registered figure block item renderer");
+            BlockPopsMod.logDebug("Registered figure block item renderer");
         }
 
         // Register claw machine block item renderer
@@ -111,7 +111,7 @@ public class BlockPopsModForgeClient {
                     return clawRenderer;
                 }
             }, ModItems.CLAW_MACHINE_BLOCK_ITEM.get());
-            BlockPopsMod.LOGGER.info("Registered claw machine block item renderer");
+            BlockPopsMod.logDebug("Registered claw machine block item renderer");
         }
     }
 

@@ -34,7 +34,7 @@ public class ServerTickHandler {
      */
     public static void init() {
         TickEvent.SERVER_POST.register(ServerTickHandler::onServerTick);
-        BlockPopsMod.LOGGER.info("Server tick handler initialized");
+        BlockPopsMod.logDebug("Server tick handler initialized");
     }
 
     private static void onServerTick(MinecraftServer server) {

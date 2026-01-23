@@ -48,7 +48,7 @@
     },
     {
       "id": "prince_bubblegum",
-      "name": "Prince Bubblegum",
+      "name": "Prince Gumball",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
       "texture": "blockpops:textures/figure/adventuretime/prince_bubblegum.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
@@ -172,14 +172,14 @@
     },
     {
       "id": "huntress",
-      "name": "Huntress",
+      "name": "Huntress Wizard",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
       "texture": "blockpops:textures/figure/adventuretime/huntress.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "ferb",
-      "name": "Ferb",
+      "name": "Fern",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
       "texture": "blockpops:textures/figure/adventuretime/ferb.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"

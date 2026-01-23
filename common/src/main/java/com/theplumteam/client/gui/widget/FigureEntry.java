@@ -151,7 +151,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         }
     }
 
-    private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick) { com.theplumteam.BlockPopsMod.LOGGER.info("render3DFigure called for figure: {} in collection: {}", figure.getId(), collectionId);
+    private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick) { com.theplumteam.BlockPopsMod.logDebug("render3DFigure called for figure: {} in collection: {}", figure.getId(), collectionId);
         PoseStack poseStack = graphics.pose();
         poseStack.pushPose();
 

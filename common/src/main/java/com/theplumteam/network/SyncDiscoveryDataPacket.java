@@ -86,7 +86,7 @@ public class SyncDiscoveryDataPacket {
         SyncDiscoveryDataPacket packet = decode(buf);
 
         context.queue(() -> {
-            LOGGER.info("Received discovery data sync: {} figures discovered, {} skins, {} quick skins",
+            BlockPopsMod.logDebug("Received discovery data sync: {} figures discovered, {} skins, {} quick skins",
                     packet.discoveredFigures.size(), packet.figureSkins.size(), packet.figureQuickSkins.size());
             ClientDiscoveryManager.setData(packet.discoveredFigures, packet.figureSkins, packet.figureQuickSkins);
         });

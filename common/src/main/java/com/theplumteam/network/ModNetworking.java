@@ -27,7 +27,7 @@ public class ModNetworking {
      * Called from BlockPopsMod.init() on both client and server
      */
     public static void init() {
-        BlockPopsMod.LOGGER.info("Initializing BlockPops networking...");
+        BlockPopsMod.logDebug("Initializing BlockPops networking...");
 
         // Register server-side packet receivers (C2S)
         NetworkManager.registerReceiver(
@@ -114,7 +114,7 @@ public class ModNetworking {
             );
         }
 
-        BlockPopsMod.LOGGER.info("BlockPops networking initialized");
+        BlockPopsMod.logDebug("BlockPops networking initialized");
     }
 
     /**
@@ -123,6 +123,6 @@ public class ModNetworking {
      */
     @Deprecated
     public static void initClient() {
-        BlockPopsMod.LOGGER.info("BlockPops client networking initialization (no-op, packets registered in init())");
+        BlockPopsMod.logDebug("BlockPops client networking initialization (no-op, packets registered in init())");
     }
 }

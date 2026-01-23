@@ -60,7 +60,7 @@ public class UnlockCollectionPacket {
 
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
-                LOGGER.info("Player {} requested to unlock collection: {}",
+                BlockPopsMod.logDebug("Player {} requested to unlock collection: {}",
                         player.getName().getString(), packet.collectionId);
 
                 IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(player);
@@ -79,14 +79,14 @@ public class UnlockCollectionPacket {
                 return;
             }
 
-            LOGGER.info("Unlocking {} figures from collection {} for player {}",
+            BlockPopsMod.logDebug("Unlocking {} figures from collection {} for player {}",
                     figures.size(), collectionId, player.getName().getString());
 
             for (FigureDefinition figure : figures) {
                 giveBoxForFigure(player, collectionId, figure, discovery);
             }
 
-            LOGGER.info("Successfully unlocked all figures from collection {} for player {}",
+            BlockPopsMod.logDebug("Successfully unlocked all figures from collection {} for player {}",
                     collectionId, player.getName().getString());
         });
     }
@@ -148,7 +148,7 @@ public class UnlockCollectionPacket {
                     quickSkinSnapshot = qsId;
                     // SAVE TO DISCOVERY
                     discovery.saveFigureQuickSkin(uniqueFigureId, quickSkinSnapshot);
-                    LOGGER.info("Captured & Saved Quick Skin ID for figure {}: {}", uniqueFigureId, qsId);
+                    BlockPopsMod.logDebug("Captured & Saved Quick Skin ID for figure {}: {}", uniqueFigureId, qsId);
                 }
             }
         }

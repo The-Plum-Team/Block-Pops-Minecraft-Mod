@@ -172,7 +172,7 @@ public class PlayerCollectionHelperImpl {
                 BlockPopsMod.LOGGER.debug("Added online player figure (no .dat file yet): {} ({})", playerName, playerUUID);
             }
 
-            BlockPopsMod.LOGGER.info("Generated World Players collection with {} figures", playerFigures.size());
+            BlockPopsMod.logDebug("Generated World Players collection with {} figures", playerFigures.size());
 
             // Use the default/original box texture
             ResourceLocation boxTexture = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/block/box/default.png");
@@ -243,7 +243,7 @@ public class PlayerCollectionHelperImpl {
     public static void regenerateAndSyncPlayerCollection(MinecraftServer server) {
         FigureCollection updatedCollection = generate(server);
         CollectionRegistry.registerDynamicCollection(updatedCollection);
-        BlockPopsMod.LOGGER.info("Regenerated World Players collection");
+        BlockPopsMod.logDebug("Regenerated World Players collection");
 
         // Broadcast update to all players
         List<FigureCollection> dynamicCollections = new ArrayList<>();

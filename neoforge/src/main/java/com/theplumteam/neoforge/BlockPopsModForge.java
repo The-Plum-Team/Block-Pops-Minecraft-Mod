@@ -59,18 +59,18 @@ public final class BlockPopsModForge {
     public void onRegisterCommands(RegisterCommandsEvent event) {
         // Register cross-platform commands from common
         ModCommands.register(event.getDispatcher(), event.getBuildContext(), event.getCommandSelection());
-        BlockPopsMod.LOGGER.info("Registered BlockPops commands");
+        BlockPopsMod.logDebug("Registered BlockPops commands");
     }
 
     private void registerServerEvents() {
         // Load static collections and generate World Players collection when server starts
         LifecycleEvent.SERVER_STARTING.register(server -> {
             // Load static collections from JSON files on the server
-            BlockPopsMod.LOGGER.info("Loading static collections on server...");
+            BlockPopsMod.logDebug("Loading static collections on server...");
             CollectionRegistry.loadCollections(server.getResourceManager());
 
             // Generate dynamic World Players collection
-            BlockPopsMod.LOGGER.info("Generating World Players collection...");
+            BlockPopsMod.logDebug("Generating World Players collection...");
             FigureCollection playerCollection = PlayerCollectionGenerator.generate(server);
             CollectionRegistry.registerDynamicCollection(playerCollection);
         });
@@ -78,6 +78,13 @@ public final class BlockPopsModForge {
         // Add new players to the collection when they join
         PlayerEvent.PLAYER_JOIN.register(player -> {
             if (player.getServer() != null) {
+                // FALLBACK: If collections weren't loaded during SERVER_STARTING,
+                // load them now. This check ensures we only load once.
+                if (!CollectionRegistry.isInitialized() || CollectionRegistry.getAllCollections().size() <= 1) {
+                    BlockPopsMod.logDebug("Collections not loaded yet, loading now from PLAYER_JOIN...");
+                    CollectionRegistry.loadCollections(player.getServer().getResourceManager());
+                }
+
                 // 1. Re-generate World Players collection to include the new player
                 FigureCollection updatedPlayerCollection = PlayerCollectionGenerator.generate(player.getServer());
                 CollectionRegistry.registerDynamicCollection(updatedPlayerCollection);
@@ -88,7 +95,7 @@ public final class BlockPopsModForge {
                 if (player instanceof ServerPlayer serverPlayer) {
                     List<FigureCollection> allCollections = new ArrayList<>(CollectionRegistry.getAllCollections());
                     SyncDynamicCollectionsPacket.sendToPlayer(serverPlayer, allCollections);
-                    BlockPopsMod.LOGGER.info("Synced {} collections to joining player {}", allCollections.size(), player.getName().getString());
+                    BlockPopsMod.logDebug("Synced {} collections to joining player {}", allCollections.size(), player.getName().getString());
                 }
 
                 // 3. Sync ONLY the updated World Players collection to ALL OTHER players
@@ -112,7 +119,7 @@ public final class BlockPopsModForge {
 
                     // Sync discovered figures, their skins, and Quick Skins using cross-platform networking
                     SyncDiscoveryDataPacket.sendToPlayer(serverPlayer, discoveredSet, figureSkins, figureQuickSkins);
-                    BlockPopsMod.LOGGER.info("Synced {} discovered figures, {} skins, and {} quick skins to {}",
+                    BlockPopsMod.logDebug("Synced {} discovered figures, {} skins, and {} quick skins to {}",
                             discoveredSet.size(),
                             figureSkins.size(),
                             figureQuickSkins.size(),
@@ -133,14 +140,14 @@ public final class BlockPopsModForge {
                             !discovery.hasUsedTodaySpecialToken(),
                             millisUntilReset
                     );
-                    BlockPopsMod.LOGGER.info("Synced token data to {}: {} regular tokens, special: {}",
+                    BlockPopsMod.logDebug("Synced token data to {}: {} regular tokens, special: {}",
                             serverPlayer.getName().getString(),
                             discovery.getRegularTokens(),
                             !discovery.hasUsedTodaySpecialToken() ? "available" : "used");
 
                     // Check if favorite color needs to be chosen
                     if (!discovery.hasChosenFavoriteColor()) {
-                        BlockPopsMod.LOGGER.info("Player {} has not chosen a favorite color. Sending packet to open selection screen.",
+                        BlockPopsMod.logDebug("Player {} has not chosen a favorite color. Sending packet to open selection screen.",
                                 serverPlayer.getName().getString());
                         // Use cross-platform Architectury networking
                         OpenFavoriteColorScreenPacket.sendToPlayer(serverPlayer);

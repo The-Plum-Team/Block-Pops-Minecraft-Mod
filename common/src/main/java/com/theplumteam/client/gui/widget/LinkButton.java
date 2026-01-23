@@ -73,7 +73,7 @@ public class LinkButton extends Button {
         Util.getPlatform().openUri(url);
 
         // Log the action
-        BlockPopsMod.LOGGER.info("Opening link: {}", url);
+        BlockPopsMod.logDebug("Opening link: {}", url);
     }
 
     @Override

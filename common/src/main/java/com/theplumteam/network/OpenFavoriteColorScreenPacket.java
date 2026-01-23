@@ -59,7 +59,7 @@ public class OpenFavoriteColorScreenPacket {
             // We use a Supplier<Runnable> (() -> () -> ...) so the inner class (lambda)
             // containing the client reference is only loaded when executed on the client.
             EnvExecutor.runInEnv(Env.CLIENT, () -> () -> {
-                LOGGER.info("Opening favorite color selection screen");
+                BlockPopsMod.logDebug("Opening favorite color selection screen");
                 // Use fully qualified name to avoid importing ClientHelpers,
                 // which would trigger class loading of client classes on the server.
                 com.theplumteam.client.ClientHelpers.openFavoriteColorScreen();

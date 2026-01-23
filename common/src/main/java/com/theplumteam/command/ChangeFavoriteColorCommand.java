@@ -38,7 +38,7 @@ public class ChangeFavoriteColorCommand {
             OpenFavoriteColorScreenPacket.sendToPlayer(player);
 
             source.sendSuccess(() -> Component.literal("Opening favorite color selection..."), false);
-            LOGGER.info("Player {} opened the favorite color selection screen", player.getName().getString());
+            BlockPopsMod.logDebug("Player {} opened the favorite color selection screen", player.getName().getString());
             return 1;
         } catch (Exception e) {
             source.sendFailure(Component.literal("This command can only be executed by a player"));

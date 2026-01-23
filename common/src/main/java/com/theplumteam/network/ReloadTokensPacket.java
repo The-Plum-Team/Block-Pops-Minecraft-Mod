@@ -59,12 +59,12 @@ public class ReloadTokensPacket {
                 if (packet.reloadRegular) {
                     discovery.setRegularTokens(3);
                     discovery.setNextRegularTokenTime(0);
-                    LOGGER.info("Reloaded regular tokens for player {}", player.getName().getString());
+                    BlockPopsMod.logDebug("Reloaded regular tokens for player {}", player.getName().getString());
                 }
 
                 if (packet.reloadGuaranteed) {
                     discovery.setUsedTodaySpecialToken(false);
-                    LOGGER.info("Reloaded guaranteed token for player {}", player.getName().getString());
+                    BlockPopsMod.logDebug("Reloaded guaranteed token for player {}", player.getName().getString());
                 }
 
                 PlayerDataManager.markDirty(player, discovery);

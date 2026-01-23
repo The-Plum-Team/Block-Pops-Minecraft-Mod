@@ -71,7 +71,7 @@ public class FavoriteColorSelectionScreen extends Screen {
 
     public FavoriteColorSelectionScreen() {
         super(Component.literal("Choose Your Favorite Color"));
-        LOGGER.info("FavoriteColorSelectionScreen created");
+        BlockPopsMod.logDebug("FavoriteColorSelectionScreen created");
     }
 
     @Override
@@ -155,7 +155,7 @@ public class FavoriteColorSelectionScreen extends Screen {
         int doneButtonX = buttonsStartX + toggleButtonWidth + buttonSpacing;
         doneButton = Button.builder(Component.literal("Done"), button -> {
             if (selectedColor != null) {
-                LOGGER.info("Player confirmed favorite color choice: {}", selectedColor.getSerializedName());
+                BlockPopsMod.logDebug("Player confirmed favorite color choice: {}", selectedColor.getSerializedName());
                 // Send packet to server using cross-platform networking
                 SetFavoriteColorPacket packet = new SetFavoriteColorPacket(selectedColor.getSerializedName());
                 packet.sendToServer();
@@ -249,7 +249,7 @@ public class FavoriteColorSelectionScreen extends Screen {
         if (guiScaleForced) {
             guiScaleForced = false;
             GuiScaleManager.restoreOriginalGuiScale();
-            LOGGER.info("Restored original GUI scale");
+            BlockPopsMod.logDebug("Restored original GUI scale");
         }
     }
 
