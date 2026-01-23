@@ -2,6 +2,10 @@ plugins {
     id("com.gradleup.shadow")
 }
 
+@Suppress("UNCHECKED_CAST")
+val versionProp = rootProject.extra["versionProp"] as (String) -> String
+val mcVersion = rootProject.extra["mcVersion"] as String
+
 architectury {
     platformSetupLoomIde()
     fabric()
@@ -15,34 +19,22 @@ configurations["compileClasspath"].extendsFrom(common)
 configurations["runtimeClasspath"].extendsFrom(common)
 configurations.getByName("developmentFabric").extendsFrom(common)
 
-// Files in this configuration will be bundled into your mod using the Shadow plugin.
 val shadowBundle: Configuration by configurations.creating {
     isCanBeResolved = true
     isCanBeConsumed = false
 }
 
-repositories {
-    maven {
-        name = "GeckoLib"
-        url = uri("https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/")
-        content {
-            includeGroupByRegex("software\\.bernie.*")
-            includeGroup("com.eliotlash.mclib")
-        }
-    }
-}
-
 dependencies {
-    modImplementation("net.fabricmc:fabric-loader:${rootProject.property("fabric_loader_version")}")
+    modImplementation("net.fabricmc:fabric-loader:${versionProp("fabric_loader_version")}")
 
     // Fabric API
-    modImplementation("net.fabricmc.fabric-api:fabric-api:${rootProject.property("fabric_api_version")}")
+    modImplementation("net.fabricmc.fabric-api:fabric-api:${versionProp("fabric_api_version")}")
 
     // Architectury API - Fabric version
-    modImplementation("dev.architectury:architectury-fabric:${rootProject.property("architectury_api_version")}")
+    modImplementation("dev.architectury:architectury-fabric:${versionProp("architectury_api_version")}")
 
     // GeckoLib - Fabric version
-    modImplementation("software.bernie.geckolib:geckolib-fabric-1.20.1:${rootProject.property("geckolib_version")}")
+    modImplementation("software.bernie.geckolib:geckolib-fabric-$mcVersion:${versionProp("geckolib_version")}")
 
     // Common code
     common(project(path = ":common", configuration = "namedElements")) { isTransitive = false }

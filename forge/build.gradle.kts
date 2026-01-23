@@ -2,6 +2,10 @@ plugins {
     id("com.gradleup.shadow")
 }
 
+@Suppress("UNCHECKED_CAST")
+val versionProp = rootProject.extra["versionProp"] as (String) -> String
+val mcVersion = rootProject.extra["mcVersion"] as String
+
 loom {
     forge {
         mixinConfig("blockpops.mixins.json")
@@ -21,32 +25,19 @@ configurations["compileClasspath"].extendsFrom(common)
 configurations["runtimeClasspath"].extendsFrom(common)
 configurations.getByName("developmentForge").extendsFrom(common)
 
-// Files in this configuration will be bundled into your mod using the Shadow plugin.
-// Don't use the `shadow` configuration from the plugin itself as it's meant for excluding files.
 val shadowBundle: Configuration by configurations.creating {
     isCanBeResolved = true
     isCanBeConsumed = false
 }
 
-repositories {
-    maven {
-        name = "GeckoLib"
-        url = uri("https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/")
-        content {
-            includeGroupByRegex("software\\.bernie.*")
-            includeGroup("com.eliotlash.mclib")
-        }
-    }
-}
-
 dependencies {
-    forge("net.minecraftforge:forge:${rootProject.property("forge_version")}")
+    forge("net.minecraftforge:forge:${versionProp("forge_version")}")
 
-    // Architectury API. This is optional, and you can comment it out if you don't need it.
-    modImplementation("dev.architectury:architectury-forge:${rootProject.property("architectury_api_version")}")
+    // Architectury API
+    modImplementation("dev.architectury:architectury-forge:${versionProp("architectury_api_version")}")
 
-    // Geckolib and its dependency
-    modImplementation("software.bernie.geckolib:geckolib-forge-1.20.1:${rootProject.property("geckolib_version")}")
+    // GeckoLib and its dependency
+    modImplementation("software.bernie.geckolib:geckolib-forge-$mcVersion:${versionProp("geckolib_version")}")
     "forgeRuntimeLibrary"("com.eliotlash.mclib:mclib:20")
     modRuntimeOnly("com.eliotlash.mclib:mclib:20")
 
