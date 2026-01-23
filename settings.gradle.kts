@@ -9,11 +9,14 @@ pluginManagement {
     }
 }
 
-// Read minecraft version from gradle.properties
+// Read minecraft version - command line takes precedence over gradle.properties
 val props = java.util.Properties().apply {
     file("gradle.properties").inputStream().use { load(it) }
 }
-val mcVersion = props.getProperty("minecraft_version") ?: "1.20.1"
+val mcVersion = settings.extra.properties["minecraft_version"]?.toString()
+    ?: gradle.startParameter.projectProperties["minecraft_version"]
+    ?: props.getProperty("minecraft_version")
+    ?: "1.20.1"
 
 rootProject.name = "blockpops"
 
