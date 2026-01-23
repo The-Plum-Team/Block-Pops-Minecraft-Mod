@@ -88,7 +88,7 @@ public class CapabilityEvents {
                 if (hasData) {
                     // Copy capability data to new SavedData location
                     persistentData.put(PlayerDataManager.DATA_KEY, capData);
-                    LOGGER.info("Migrated discovery data for player {} - {} discovered figures, {} skin snapshots",
+                    BlockPopsMod.logDebug("Migrated discovery data for player {} - {} discovered figures, {} skin snapshots",
                         player.getName().getString(),
                         capDiscovery.getDiscoveredSet().size(),
                         capDiscovery.getAllFigureSkins().size());

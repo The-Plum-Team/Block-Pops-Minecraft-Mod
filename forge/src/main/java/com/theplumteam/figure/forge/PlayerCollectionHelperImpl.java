@@ -30,7 +30,7 @@ public class PlayerCollectionHelperImpl {
     public static void regenerateAndSyncPlayerCollection(MinecraftServer server) {
         FigureCollection updatedCollection = PlayerCollectionGenerator.generate(server);
         CollectionRegistry.registerDynamicCollection(updatedCollection);
-        BlockPopsMod.LOGGER.info("Regenerated World Players collection");
+        BlockPopsMod.logDebug("Regenerated World Players collection");
 
         // Broadcast update to all players
         List<FigureCollection> dynamicCollections = new ArrayList<>();

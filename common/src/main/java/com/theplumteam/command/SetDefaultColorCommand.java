@@ -54,7 +54,7 @@ public class SetDefaultColorCommand {
 
             // 1. Update Config
             ServerConfig.getInstance().setDefaultPlayerColor(color);
-            BlockPopsMod.LOGGER.info("Default player color set to: {}", color.getSerializedName());
+            BlockPopsMod.logDebug("Default player color set to: {}", color.getSerializedName());
 
             // 2. Regenerate World Players Collection using cross-platform helper
             if (source.getServer() != null) {
@@ -65,7 +65,7 @@ public class SetDefaultColorCommand {
                 List<FigureCollection> dynamicCollections = new ArrayList<>();
                 dynamicCollections.add(updatedCollection);
                 SyncDynamicCollectionsPacket.sendToAllPlayers(source.getServer(), dynamicCollections);
-                BlockPopsMod.LOGGER.info("Synced updated World Players collection to all players");
+                BlockPopsMod.logDebug("Synced updated World Players collection to all players");
             }
 
             source.sendSuccess(() -> Component.literal("Set default player collection color to: " + color.getSerializedName()), true);

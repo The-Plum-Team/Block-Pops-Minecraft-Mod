@@ -2,6 +2,7 @@ package com.theplumteam.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
+import com.theplumteam.BlockPopsMod;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.network.SyncTokenDataPacket;
@@ -39,7 +40,7 @@ public class ReloadGuaranteedTokenCommand {
             discovery.setUsedTodaySpecialToken(false);
             PlayerDataManager.markDirty(player, discovery);
 
-            LOGGER.info("Reloaded guaranteed token for player {}", player.getName().getString());
+            BlockPopsMod.logDebug("Reloaded guaranteed token for player {}", player.getName().getString());
 
             // Sync token data back to client
             long gameTime = player.serverLevel().getGameTime();

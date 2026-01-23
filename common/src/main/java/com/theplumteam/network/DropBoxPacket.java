@@ -68,17 +68,17 @@ public class DropBoxPacket {
     public static void handleServer(FriendlyByteBuf buf, NetworkManager.PacketContext context) {
         DropBoxPacket packet = decode(buf);
 
-        LOGGER.info("Received drop box packet on server - Position: {}, Collection ID: {}, Token Type: {}",
+        BlockPopsMod.logDebug("Received drop box packet on server - Position: {}, Collection ID: {}, Token Type: {}",
                 packet.pos, packet.collectionId, packet.tokenType);
 
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
-                LOGGER.info("Player: {} - Processing {} token request",
+                BlockPopsMod.logDebug("Player: {} - Processing {} token request",
                         player.getName().getString(), packet.tokenType);
 
                 if (player.getInventory().getFreeSlot() == -1) {
                     player.sendSystemMessage(Component.literal("\u00A7cInventory is full! Cannot receive figure box."));
-                    LOGGER.info("Player {} inventory is full, token not consumed", player.getName().getString());
+                    BlockPopsMod.logDebug("Player {} inventory is full, token not consumed", player.getName().getString());
                     return;
                 }
 
@@ -157,7 +157,7 @@ public class DropBoxPacket {
                         if (freshProfile != null && !freshProfile.getProperties().get("textures").isEmpty()) {
                             skinSnapshot = freshProfile.getProperties().get("textures").iterator().next().getValue();
                             discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
-                            LOGGER.info("Saved/updated fresh skin snapshot for {}.", uniqueFigureId);
+                            BlockPopsMod.logDebug("Saved/updated fresh skin snapshot for {}.", uniqueFigureId);
                         }
 
                         if (selectedFigure.getPlayerUUID() != null) {
@@ -166,7 +166,7 @@ public class DropBoxPacket {
                                 quickSkinSnapshot = qsId;
                                 // SAVE TO DISCOVERY
                                 discovery.saveFigureQuickSkin(uniqueFigureId, quickSkinSnapshot);
-                                LOGGER.info("Captured & Saved Quick Skin ID for figure {}: {}", uniqueFigureId, qsId);
+                                BlockPopsMod.logDebug("Captured & Saved Quick Skin ID for figure {}: {}", uniqueFigureId, qsId);
                             }
                         }
                     }
@@ -175,7 +175,7 @@ public class DropBoxPacket {
                         discovery.discover(uniqueFigureId);
                         // Use cross-platform networking - PASS QUICKSKIN ID TO CLIENT
                         UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, selectedFigure.getName(), skinSnapshot, quickSkinSnapshot);
-                        LOGGER.info("Player {} discovered new figure: {} ({})", player.getName().getString(), selectedFigure.getName(), uniqueFigureId);
+                        BlockPopsMod.logDebug("Player {} discovered new figure: {} ({})", player.getName().getString(), selectedFigure.getName(), uniqueFigureId);
                         player.playNotifySound(SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1.0F, 1.0F);
                     } else {
                         player.playNotifySound(SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 1.0F, 1.0F);
@@ -216,7 +216,7 @@ public class DropBoxPacket {
         if (tokenType == TokenType.REGULAR) {
             if (discovery.getRegularTokens() > 0) {
                 discovery.setRegularTokens(discovery.getRegularTokens() - 1);
-                LOGGER.info("Player {} used a regular token. Remaining: {}",
+                BlockPopsMod.logDebug("Player {} used a regular token. Remaining: {}",
                         player.getName().getString(), discovery.getRegularTokens());
                 syncTokenDataToClient(player, discovery);
                 return true;
@@ -224,7 +224,7 @@ public class DropBoxPacket {
         } else if (tokenType == TokenType.GUARANTEED) {
             if (!discovery.hasUsedTodaySpecialToken()) {
                 discovery.setUsedTodaySpecialToken(true);
-                LOGGER.info("Player {} used their guaranteed token",
+                BlockPopsMod.logDebug("Player {} used their guaranteed token",
                         player.getName().getString());
                 syncTokenDataToClient(player, discovery);
                 return true;
@@ -264,10 +264,10 @@ public class DropBoxPacket {
 
             if (!undiscoveredFigures.isEmpty()) {
                 FigureDefinition selected = undiscoveredFigures.get(random.nextInt(undiscoveredFigures.size()));
-                LOGGER.info("Guaranteed token logic: Selected undiscovered figure '{}'", selected.getId());
+                BlockPopsMod.logDebug("Guaranteed token logic: Selected undiscovered figure '{}'", selected.getId());
                 return selected;
             } else {
-                LOGGER.info("Guaranteed token logic: Collection complete, giving random duplicate");
+                BlockPopsMod.logDebug("Guaranteed token logic: Collection complete, giving random duplicate");
                 return figures.get(random.nextInt(figures.size()));
             }
         } else {

@@ -25,7 +25,7 @@ public class BlockPopsFabricClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        BlockPopsMod.LOGGER.info("BlockPops client initialization on Fabric");
+        BlockPopsMod.logDebug("BlockPops client initialization on Fabric");
 
         // Initialize client-side networking
         ModNetworking.initClient();
@@ -49,7 +49,7 @@ public class BlockPopsFabricClient implements ClientModInitializer {
         // instead of data/ where the JSONs are located.
         // The client receives collections via SyncDynamicCollectionsPacket from the server on join.
 
-        BlockPopsMod.LOGGER.info("BlockPops Fabric client initialization complete");
+        BlockPopsMod.logDebug("BlockPops Fabric client initialization complete");
     }
 
     private void registerItemRenderers() {
@@ -88,6 +88,6 @@ public class BlockPopsFabricClient implements ClientModInitializer {
             BuiltinItemRendererRegistry.INSTANCE.register(ModItems.CLAW_MACHINE_BLOCK_ITEM.get(), clawRenderer::renderByItem);
         }
 
-        BlockPopsMod.LOGGER.info("Registered item renderers for GeckoLib blocks");
+        BlockPopsMod.logDebug("Registered item renderers for GeckoLib blocks");
     }
 }

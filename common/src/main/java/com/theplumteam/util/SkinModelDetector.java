@@ -1,6 +1,7 @@
 package com.theplumteam.util;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import com.theplumteam.BlockPopsMod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
@@ -64,7 +65,7 @@ public class SkinModelDetector {
      */
     public static void clearCache() {
         DETECTION_CACHE.clear();
-        LOGGER.info("Skin model detection cache cleared");
+        BlockPopsMod.logDebug("Skin model detection cache cleared");
     }
 
     /**
@@ -89,7 +90,7 @@ public class SkinModelDetector {
                         // Found matching player - get their model type directly
                         String modelName = playerInfo.getModelName();
                         SkinModel model = "slim".equals(modelName) ? SkinModel.SLIM : SkinModel.CLASSIC;
-                        LOGGER.info("Detected {} skin from PlayerInfo for texture: {}", model, textureLocation);
+                        BlockPopsMod.logDebug("Detected {} skin from PlayerInfo for texture: {}", model, textureLocation);
                         DETECTION_CACHE.put(textureLocation, model);
                         return model;
                     }
@@ -105,7 +106,7 @@ public class SkinModelDetector {
                 NativeImage image = dynamicTexture.getPixels();
                 if (image != null) {
                     SkinModel model = detectSkinModel(image);
-                    LOGGER.info("Detected {} skin from DynamicTexture for texture: {}", model, textureLocation);
+                    BlockPopsMod.logDebug("Detected {} skin from DynamicTexture for texture: {}", model, textureLocation);
                     DETECTION_CACHE.put(textureLocation, model);
                     return model;
                 }
@@ -121,7 +122,7 @@ public class SkinModelDetector {
 
                     if (image != null) {
                         SkinModel model = detectSkinModel(image);
-                        LOGGER.info("Detected {} skin from HttpTexture for texture: {}", model, textureLocation);
+                        BlockPopsMod.logDebug("Detected {} skin from HttpTexture for texture: {}", model, textureLocation);
                         DETECTION_CACHE.put(textureLocation, model);
                         return model;
                     }
@@ -143,7 +144,7 @@ public class SkinModelDetector {
                 image.close();
                 inputStream.close();
 
-                LOGGER.info("Detected {} skin for texture: {}", model, textureLocation);
+                BlockPopsMod.logDebug("Detected {} skin for texture: {}", model, textureLocation);
                 // Cache the result
                 DETECTION_CACHE.put(textureLocation, model);
                 return model;

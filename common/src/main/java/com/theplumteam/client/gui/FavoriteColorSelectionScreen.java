@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.gui.util.GuiScaleManager;
@@ -70,7 +71,7 @@ public class FavoriteColorSelectionScreen extends Screen {
 
     public FavoriteColorSelectionScreen() {
         super(Component.literal("Choose Your Favorite Color"));
-        LOGGER.info("FavoriteColorSelectionScreen created");
+        BlockPopsMod.logDebug("FavoriteColorSelectionScreen created");
     }
 
     @Override
@@ -154,7 +155,7 @@ public class FavoriteColorSelectionScreen extends Screen {
         int doneButtonX = buttonsStartX + toggleButtonWidth + buttonSpacing;
         doneButton = Button.builder(Component.literal("Done"), button -> {
             if (selectedColor != null) {
-                LOGGER.info("Player confirmed favorite color choice: {}", selectedColor.getSerializedName());
+                BlockPopsMod.logDebug("Player confirmed favorite color choice: {}", selectedColor.getSerializedName());
                 // Send packet to server using cross-platform networking
                 SetFavoriteColorPacket packet = new SetFavoriteColorPacket(selectedColor.getSerializedName());
                 packet.sendToServer();
@@ -248,7 +249,7 @@ public class FavoriteColorSelectionScreen extends Screen {
         if (guiScaleForced) {
             guiScaleForced = false;
             GuiScaleManager.restoreOriginalGuiScale();
-            LOGGER.info("Restored original GUI scale");
+            BlockPopsMod.logDebug("Restored original GUI scale");
         }
     }
 

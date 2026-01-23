@@ -25,7 +25,7 @@ public class ModNetworking {
      * Called from BlockPopsMod.init() on both client and server
      */
     public static void init() {
-        BlockPopsMod.LOGGER.info("Initializing BlockPops networking...");
+        BlockPopsMod.logDebug("Initializing BlockPops networking...");
 
         // Register server-side packet receivers (C2S)
         NetworkManager.registerReceiver(
@@ -70,7 +70,7 @@ public class ModNetworking {
             UpdateGuaranteedResetHourPacket::handleServer
         );
 
-        BlockPopsMod.LOGGER.info("BlockPops networking initialized");
+        BlockPopsMod.logDebug("BlockPops networking initialized");
     }
 
     /**
@@ -78,7 +78,7 @@ public class ModNetworking {
      * Must be called from client initialization only
      */
     public static void initClient() {
-        BlockPopsMod.LOGGER.info("Initializing BlockPops client networking...");
+        BlockPopsMod.logDebug("Initializing BlockPops client networking...");
 
         // Register client-side packet receivers (S2C)
         NetworkManager.registerReceiver(
@@ -111,6 +111,6 @@ public class ModNetworking {
             OpenFavoriteColorScreenPacket::handleClient
         );
 
-        BlockPopsMod.LOGGER.info("BlockPops client networking initialized");
+        BlockPopsMod.logDebug("BlockPops client networking initialized");
     }
 }

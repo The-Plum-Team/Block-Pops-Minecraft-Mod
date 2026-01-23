@@ -24,6 +24,9 @@ public class ServerConfig {
     // Default player color for World Players collection (when player hasn't chosen a favorite)
     public String defaultPlayerColor = "original";
 
+    // Debug logging toggle - when true, shows detailed info logs for troubleshooting
+    public boolean debugLogging = false;
+
     private ServerConfig() {
         // Private constructor for singleton
     }
@@ -71,6 +74,21 @@ public class ServerConfig {
     }
 
     /**
+     * Check if debug logging is enabled.
+     */
+    public boolean isDebugLogging() {
+        return debugLogging;
+    }
+
+    /**
+     * Set the debug logging toggle.
+     */
+    public void setDebugLogging(boolean enabled) {
+        this.debugLogging = enabled;
+        save();
+    }
+
+    /**
      * Load configuration from file
      */
     private static ServerConfig load() {
@@ -80,7 +98,7 @@ public class ServerConfig {
             try {
                 String json = Files.readString(configPath);
                 ServerConfig config = GSON.fromJson(json, ServerConfig.class);
-                BlockPopsMod.LOGGER.info("Loaded server configuration");
+                BlockPopsMod.logDebug("Loaded server configuration");
                 return config;
             } catch (Exception e) {
                 BlockPopsMod.LOGGER.error("Failed to load server configuration, using defaults", e);

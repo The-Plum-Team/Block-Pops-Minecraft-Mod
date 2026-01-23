@@ -166,7 +166,7 @@ public class GetBoxCommand {
                         if (freshProfile != null && !freshProfile.getProperties().get("textures").isEmpty()) {
                             skinSnapshot = freshProfile.getProperties().get("textures").iterator().next().getValue();
                             discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
-                            LOGGER.info("Saved/updated fresh skin snapshot for {}.", uniqueFigureId);
+                            BlockPopsMod.logDebug("Saved/updated fresh skin snapshot for {}.", uniqueFigureId);
                         }
 
                         if (selectedFigure.getPlayerUUID() != null) {
@@ -175,7 +175,7 @@ public class GetBoxCommand {
                                 quickSkinSnapshot = qsId;
                                 // SAVE TO DISCOVERY
                                 discovery.saveFigureQuickSkin(uniqueFigureId, quickSkinSnapshot);
-                                LOGGER.info("Captured & Saved Quick Skin ID for figure {}: {}", uniqueFigureId, qsId);
+                                BlockPopsMod.logDebug("Captured & Saved Quick Skin ID for figure {}: {}", uniqueFigureId, qsId);
                             }
                         }
                     }

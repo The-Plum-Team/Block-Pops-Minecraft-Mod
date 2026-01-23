@@ -1,5 +1,6 @@
 package com.theplumteam.network;
 
+import com.theplumteam.BlockPopsMod;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
@@ -49,20 +50,20 @@ public class ClawMachineCollectionPacket {
     public static void handleServer(FriendlyByteBuf buf, NetworkManager.PacketContext context) {
         ClawMachineCollectionPacket packet = decode(buf);
 
-        LOGGER.info("Received ClawMachineCollectionPacket on server - Position: {}, Collection ID: {}",
+        BlockPopsMod.logDebug("Received ClawMachineCollectionPacket on server - Position: {}, Collection ID: {}",
                     packet.pos, packet.collectionId);
 
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
                 BlockEntity blockEntity = player.level().getBlockEntity(packet.pos);
                 if (blockEntity instanceof ClawMachineBlockEntity clawMachineBlockEntity) {
-                    LOGGER.info("Setting collection ID on ClawMachineBlockEntity");
+                    BlockPopsMod.logDebug("Setting collection ID on ClawMachineBlockEntity");
                     clawMachineBlockEntity.setCollectionId(packet.collectionId);
                     // Notify clients of the change
                     player.level().sendBlockUpdated(packet.pos,
                         blockEntity.getBlockState(),
                         blockEntity.getBlockState(), 3);
-                    LOGGER.info("Collection ID updated successfully");
+                    BlockPopsMod.logDebug("Collection ID updated successfully");
                 } else {
                     LOGGER.warn("BlockEntity at {} is not a ClawMachineBlockEntity", packet.pos);
                 }

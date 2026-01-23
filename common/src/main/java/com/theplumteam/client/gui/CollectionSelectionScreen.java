@@ -124,7 +124,7 @@ public class CollectionSelectionScreen extends Screen {
         this.targetColorB = config.backgroundColorB;
         this.colorTransitionProgress = 1.0f; // Start with no transition
 
-        LOGGER.info("CollectionSelectionScreen opened at {} with current collection: {}",
+        BlockPopsMod.logDebug("CollectionSelectionScreen opened at {} with current collection: {}",
                 blockPos, currentCollectionId);
     }
 
@@ -234,7 +234,7 @@ public class CollectionSelectionScreen extends Screen {
         // Use Regular Token button (left)
         useRegularButton = Button.builder(Component.literal("Use Regular Token"), button -> {
             if (selectedCollectionId != null && !selectedCollectionId.isEmpty()) {
-                LOGGER.info("Using regular token for collection: {}", selectedCollectionId);
+                BlockPopsMod.logDebug("Using regular token for collection: {}", selectedCollectionId);
                 DropBoxPacket packet = new DropBoxPacket(blockPos, selectedCollectionId, TokenType.REGULAR);
                 packet.sendToServer();
                 this.onClose(); // Close the screen immediately after using a token
@@ -245,7 +245,7 @@ public class CollectionSelectionScreen extends Screen {
         // Use Guaranteed Token button (right)
         useSpecialButton = Button.builder(Component.literal("Use Guaranteed Token"), button -> {
             if (selectedCollectionId != null && !selectedCollectionId.isEmpty()) {
-                LOGGER.info("Using guaranteed token for collection: {}", selectedCollectionId);
+                BlockPopsMod.logDebug("Using guaranteed token for collection: {}", selectedCollectionId);
                 DropBoxPacket packet = new DropBoxPacket(blockPos, selectedCollectionId, TokenType.GUARANTEED);
                 packet.sendToServer();
                 this.onClose(); // Close the screen immediately after using a token
@@ -788,7 +788,7 @@ public class CollectionSelectionScreen extends Screen {
      * Send collection update to server
      */
     private void sendUpdate() {
-        LOGGER.info("Sending collection update - Position: {}, Collection ID: {}",
+        BlockPopsMod.logDebug("Sending collection update - Position: {}, Collection ID: {}",
                 blockPos, selectedCollectionId);
         ClawMachineCollectionPacket packet = new ClawMachineCollectionPacket(blockPos, selectedCollectionId);
         packet.sendToServer();

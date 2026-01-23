@@ -61,7 +61,7 @@ public class StarPatternCache {
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_REPEAT);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL11.GL_REPEAT);
 
-            BlockPopsMod.LOGGER.info("Star pattern cache loaded: {}x{} (pre-generated texture with linear filtering)",
+            BlockPopsMod.logDebug("Star pattern cache loaded: {}x{} (pre-generated texture with linear filtering)",
                 cachedTextureWidth, cachedTextureHeight);
 
         } catch (IOException e) {

@@ -46,7 +46,7 @@ public class UpdateGuaranteedResetHourPacket {
                 if (player.hasPermissions(2)) {
                     // Update server configuration
                     ServerConfig.getInstance().setGuaranteedTokenResetHour(packet.resetHour);
-                    LOGGER.info("Player {} updated guaranteed token reset hour to {} UTC",
+                    BlockPopsMod.logDebug("Player {} updated guaranteed token reset hour to {} UTC",
                             player.getName().getString(), packet.resetHour);
 
                     // Sync updated token data to client (recalculates time based on new hour)

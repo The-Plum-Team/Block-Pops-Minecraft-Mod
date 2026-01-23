@@ -126,13 +126,13 @@ public class FigurePositionPacket {
     public static void handleServer(FriendlyByteBuf buf, NetworkManager.PacketContext context) {
         FigurePositionPacket packet = decode(buf);
 
-        LOGGER.info("Received FigurePositionPacket on server - Position: {}", packet.pos);
+        BlockPopsMod.logDebug("Received FigurePositionPacket on server - Position: {}", packet.pos);
 
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
                 BlockEntity blockEntity = player.level().getBlockEntity(packet.pos);
                 if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
-                    LOGGER.info("Setting figure offset, scale, hitbox offset, hitbox scale, and logo config");
+                    BlockPopsMod.logDebug("Setting figure offset, scale, hitbox offset, hitbox scale, and logo config");
                     boxBlockEntity.setFigureOffset(packet.offsetX, packet.offsetY, packet.offsetZ);
                     boxBlockEntity.setFigureScale(packet.scale);
                     boxBlockEntity.setHitboxOffset(packet.hitboxOffsetX, packet.hitboxOffsetY, packet.hitboxOffsetZ);
@@ -140,7 +140,7 @@ public class FigurePositionPacket {
                     boxBlockEntity.setLogoPosition(packet.logoPositionX, packet.logoPositionY, packet.logoPositionZ);
                     boxBlockEntity.setLogoScale(packet.logoScaleX, packet.logoScaleY, packet.logoScaleZ);
                     boxBlockEntity.setChanged();
-                    LOGGER.info("Figure position updated successfully");
+                    BlockPopsMod.logDebug("Figure position updated successfully");
                 } else {
                     LOGGER.warn("BlockEntity at {} is not a BoxBlockEntity", packet.pos);
                 }

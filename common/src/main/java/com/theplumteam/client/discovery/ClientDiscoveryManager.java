@@ -1,5 +1,6 @@
 package com.theplumteam.client.discovery;
 
+import com.theplumteam.BlockPopsMod;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,7 +64,7 @@ public class ClientDiscoveryManager {
      */
     public static void unlock(String figureId) {
         if (discoveredFigures.add(figureId)) {
-            LOGGER.info("Figure unlocked: {}", figureId);
+            BlockPopsMod.logDebug("Figure unlocked: {}", figureId);
         }
     }
 

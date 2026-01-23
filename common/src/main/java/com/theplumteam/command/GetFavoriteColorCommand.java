@@ -2,6 +2,7 @@ package com.theplumteam.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
+import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
@@ -36,13 +37,13 @@ public class GetFavoriteColorCommand {
 
             if (!discovery.hasChosenFavoriteColor()) {
                 source.sendSuccess(() -> Component.literal("You have not chosen a favorite color yet. Use /blockpops changefavoritecolor to choose one."), false);
-                LOGGER.info("Player {} checked their favorite color but hasn't chosen one yet", player.getName().getString());
+                BlockPopsMod.logDebug("Player {} checked their favorite color but hasn't chosen one yet", player.getName().getString());
             } else {
                 PopBlockColor favoriteColor = discovery.getFavoriteColor();
                 if (favoriteColor != null) {
                     String colorName = formatColorName(favoriteColor.getSerializedName());
                     source.sendSuccess(() -> Component.literal("Your favorite color is: " + colorName), false);
-                    LOGGER.info("Player {} checked their favorite color: {}", player.getName().getString(), favoriteColor.getSerializedName());
+                    BlockPopsMod.logDebug("Player {} checked their favorite color: {}", player.getName().getString(), favoriteColor.getSerializedName());
                 } else {
                     source.sendFailure(Component.literal("Error: Favorite color data is corrupted. Please choose a new color with /blockpops changefavoritecolor"));
                     LOGGER.warn("Player {} has chosen a favorite color but the data is null", player.getName().getString());

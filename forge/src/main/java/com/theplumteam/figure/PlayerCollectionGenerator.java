@@ -175,7 +175,7 @@ public class PlayerCollectionGenerator {
                 BlockPopsMod.LOGGER.debug("Added online player figure (no .dat file yet): {} ({})", playerName, playerUUID);
             }
 
-            BlockPopsMod.LOGGER.info("Generated World Players collection with {} figures", playerFigures.size());
+            BlockPopsMod.logDebug("Generated World Players collection with {} figures", playerFigures.size());
 
             // Use the default/original box texture
             ResourceLocation boxTexture = new ResourceLocation("blockpops", "textures/block/box/default.png");
