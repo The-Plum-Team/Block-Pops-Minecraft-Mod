@@ -1,5 +1,6 @@
 package com.theplumteam.command;
 
+import com.theplumteam.BlockPopsMod;
 import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
