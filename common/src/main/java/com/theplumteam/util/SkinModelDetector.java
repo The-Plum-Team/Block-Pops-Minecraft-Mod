@@ -1,5 +1,6 @@
 package com.theplumteam.util;
 
+import com.theplumteam.BlockPopsMod;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.PlayerSkin;

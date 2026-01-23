@@ -6,6 +6,7 @@ import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.gui.util.GuiScaleManager;

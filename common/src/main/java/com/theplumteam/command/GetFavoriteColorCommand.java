@@ -2,6 +2,7 @@ package com.theplumteam.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
+import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;

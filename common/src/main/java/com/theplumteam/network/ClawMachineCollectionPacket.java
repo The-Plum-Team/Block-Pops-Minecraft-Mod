@@ -1,5 +1,6 @@
 package com.theplumteam.network;
 
+import com.theplumteam.BlockPopsMod;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;

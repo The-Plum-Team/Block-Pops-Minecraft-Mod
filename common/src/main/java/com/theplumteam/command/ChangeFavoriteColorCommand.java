@@ -2,6 +2,7 @@ package com.theplumteam.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
+import com.theplumteam.BlockPopsMod;
 import com.theplumteam.network.OpenFavoriteColorScreenPacket;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
