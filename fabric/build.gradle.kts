@@ -1,4 +1,5 @@
 plugins {
+    id("dev.architectury.loom")
     id("com.gradleup.shadow")
 }
 
@@ -25,6 +26,9 @@ val shadowBundle: Configuration by configurations.creating {
 }
 
 dependencies {
+    minecraft("net.minecraft:minecraft:$mcVersion")
+    mappings(loom.officialMojangMappings())
+
     modImplementation("net.fabricmc:fabric-loader:${versionProp("fabric_loader_version")}")
 
     // Fabric API

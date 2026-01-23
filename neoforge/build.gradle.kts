@@ -7,15 +7,16 @@ plugins {
 val versionProp = rootProject.extra["versionProp"] as (String) -> String
 val mcVersion = rootProject.extra["mcVersion"] as String
 
+// Configure loom for NeoForge - this should create the neoForge configuration
 loom {
-    forge {
-        mixinConfig("blockpops.mixins.json")
+    neoForge {
+        // NeoForge mixin is configured via neoforge.mods.toml
     }
 }
 
 architectury {
     platformSetupLoomIde()
-    forge()
+    neoForge()
 }
 
 val common: Configuration by configurations.creating {
@@ -24,7 +25,7 @@ val common: Configuration by configurations.creating {
 }
 configurations["compileClasspath"].extendsFrom(common)
 configurations["runtimeClasspath"].extendsFrom(common)
-configurations.getByName("developmentForge").extendsFrom(common)
+configurations.getByName("developmentNeoForge").extendsFrom(common)
 
 val shadowBundle: Configuration by configurations.creating {
     isCanBeResolved = true
@@ -35,24 +36,23 @@ dependencies {
     minecraft("net.minecraft:minecraft:$mcVersion")
     mappings(loom.officialMojangMappings())
 
-    forge("net.minecraftforge:forge:${versionProp("forge_version")}")
+    // NeoForge dependency
+    "neoForge"("net.neoforged:neoforge:${versionProp("neoforge_version")}")
 
-    // Architectury API
-    modImplementation("dev.architectury:architectury-forge:${versionProp("architectury_api_version")}")
+    // Architectury API - NeoForge version
+    modImplementation("dev.architectury:architectury-neoforge:${versionProp("architectury_api_version")}")
 
-    // GeckoLib and its dependency
-    modImplementation("software.bernie.geckolib:geckolib-forge-$mcVersion:${versionProp("geckolib_version")}")
-    "forgeRuntimeLibrary"("com.eliotlash.mclib:mclib:20")
-    modRuntimeOnly("com.eliotlash.mclib:mclib:20")
+    // GeckoLib - NeoForge version
+    modImplementation("software.bernie.geckolib:geckolib-neoforge-$mcVersion:${versionProp("geckolib_version")}")
 
     common(project(path = ":common", configuration = "namedElements")) { isTransitive = false }
-    shadowBundle(project(path = ":common", configuration = "transformProductionForge"))
+    shadowBundle(project(path = ":common", configuration = "transformProductionNeoForge"))
 }
 
 tasks.processResources {
     inputs.property("version", project.version)
 
-    filesMatching("META-INF/mods.toml") {
+    filesMatching("META-INF/neoforge.mods.toml") {
         expand("version" to inputs.properties["version"])
     }
 }

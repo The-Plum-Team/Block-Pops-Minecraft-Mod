@@ -1,3 +1,7 @@
+plugins {
+    id("dev.architectury.loom")
+}
+
 @Suppress("UNCHECKED_CAST")
 val versionProp = rootProject.extra["versionProp"] as (String) -> String
 val mcVersion = rootProject.extra["mcVersion"] as String
@@ -8,6 +12,9 @@ architectury {
 }
 
 dependencies {
+    minecraft("net.minecraft:minecraft:$mcVersion")
+    mappings(loom.officialMojangMappings())
+
     // We depend on Fabric Loader here to use the Fabric @Environment annotations,
     // which get remapped to the correct annotations on each platform.
     // Do NOT use other classes from Fabric Loader.

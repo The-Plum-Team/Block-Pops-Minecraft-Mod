@@ -9,9 +9,23 @@ pluginManagement {
     }
 }
 
+// Read minecraft version from gradle.properties
+val props = java.util.Properties().apply {
+    file("gradle.properties").inputStream().use { load(it) }
+}
+val mcVersion = props.getProperty("minecraft_version") ?: "1.20.1"
+
 rootProject.name = "blockpops"
 
 include("common")
 include("fabric")
-include("forge")
-include("neoforge")
+
+// Include Forge only for 1.20.x
+if (mcVersion.startsWith("1.20")) {
+    include("forge")
+}
+
+// Include NeoForge only for 1.21.x
+if (mcVersion.startsWith("1.21")) {
+    include("neoforge")
+}

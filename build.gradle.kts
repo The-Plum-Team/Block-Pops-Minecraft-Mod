@@ -26,22 +26,6 @@ architectury {
 allprojects {
     group = property("maven_group") as String
     version = property("mod_version") as String
-}
-
-subprojects {
-    apply(plugin = "dev.architectury.loom")
-    apply(plugin = "architectury-plugin")
-    apply(plugin = "maven-publish")
-    apply(plugin = "java")
-
-    extensions.configure<BasePluginExtension> {
-        archivesName.set(when (project.name) {
-            "forge" -> "BlockPops - Forge - $mcVersion"
-            "fabric" -> "BlockPops - Fabric - $mcVersion"
-            "neoforge" -> "BlockPops - Neoforge - $mcVersion"
-            else -> "${rootProject.property("archives_name")}-${project.name}"
-        })
-    }
 
     repositories {
         maven {
@@ -57,10 +41,23 @@ subprojects {
             url = uri("https://maven.neoforged.net/releases/")
         }
     }
+}
 
-    dependencies {
-        "minecraft"("net.minecraft:minecraft:$mcVersion")
-        "mappings"(project.extensions.getByName<net.fabricmc.loom.api.LoomGradleExtensionAPI>("loom").officialMojangMappings())
+// Configure all subprojects EXCEPT the platform-specific modules
+// Platform modules (fabric, forge, neoforge) apply loom themselves with proper configuration
+subprojects {
+    // Don't apply loom here - let each subproject handle it based on its platform
+    apply(plugin = "architectury-plugin")
+    apply(plugin = "maven-publish")
+    apply(plugin = "java")
+
+    extensions.configure<BasePluginExtension> {
+        archivesName.set(when (project.name) {
+            "forge" -> "BlockPops - Forge - $mcVersion"
+            "fabric" -> "BlockPops - Fabric - $mcVersion"
+            "neoforge" -> "BlockPops - Neoforge - $mcVersion"
+            else -> "${rootProject.property("archives_name")}-${project.name}"
+        })
     }
 
     extensions.configure<JavaPluginExtension> {
