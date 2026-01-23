@@ -11,6 +11,17 @@ architectury {
     common(enabledPlatforms)
 }
 
+// Add version-specific source set for GeckoLib-dependent code
+// This allows different imports/method signatures per Minecraft version
+val versionSourceSet = if (mcVersion.startsWith("1.21")) "v1_21_1" else "v1_20_1"
+sourceSets {
+    main {
+        java {
+            srcDir("src/$versionSourceSet/java")
+        }
+    }
+}
+
 dependencies {
     minecraft("net.minecraft:minecraft:$mcVersion")
     mappings(loom.officialMojangMappings())

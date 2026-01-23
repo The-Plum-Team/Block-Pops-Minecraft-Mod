@@ -12,6 +12,16 @@ architectury {
     fabric()
 }
 
+// Add version-specific source set for Minecraft API differences
+val versionSourceSet = if (mcVersion.startsWith("1.21")) "v1_21_1" else "v1_20_1"
+sourceSets {
+    main {
+        java {
+            srcDir("src/$versionSourceSet/java")
+        }
+    }
+}
+
 val common: Configuration by configurations.creating {
     isCanBeResolved = true
     isCanBeConsumed = false

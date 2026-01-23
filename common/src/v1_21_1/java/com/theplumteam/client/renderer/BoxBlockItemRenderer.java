@@ -1,0 +1,84 @@
+package com.theplumteam.client.renderer;
+
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
+import com.theplumteam.block.BoxBlock;
+import com.theplumteam.blockentity.BoxBlockEntity;
+import com.theplumteam.item.GeoBlockItem;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.item.ItemDisplayContext;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
+
+public class BoxBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
+    private final BoxBlockRenderer renderer;
+    private BoxBlockEntity renderEntity;
+
+    public BoxBlockItemRenderer() {
+        super(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
+        this.renderer = new BoxBlockRenderer();
+    }
+
+    @Override
+    public void renderByItem(ItemStack stack, ItemDisplayContext displayContext, PoseStack poseStack,
+                            MultiBufferSource bufferSource, int packedLight, int packedOverlay) {
+        if (stack.getItem() instanceof GeoBlockItem geoBlockItem) {
+            BoxBlock boxBlock = geoBlockItem.getBoxBlock();
+
+            // Reuse the entity instance if it's for the same block type
+            // This is critical for GeckoLib animation state persistence - creating a new entity each frame
+            // resets the AnimatableInstanceCache and prevents animations from playing
+            if (renderEntity == null || !renderEntity.getBlockState().is(boxBlock)) {
+                renderEntity = new BoxBlockEntity(BlockPos.ZERO, boxBlock.defaultBlockState());
+                // Set client level for GeckoLib tick delta calculations
+                renderEntity.setLevel(Minecraft.getInstance().level);
+            }
+
+            // Load component data from ItemStack FIRST before any rendering
+            // This ensures isOpen is set correctly before the animation controller evaluates
+            CustomData customData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
+            if (customData != null) {
+                CompoundTag blockEntityTag = customData.copyTag();
+                renderEntity.loadFromItemNbt(blockEntityTag);
+            }
+
+            // Apply transformations for item rendering
+            poseStack.pushPose();
+
+            // Rotate 180 degrees in inventory/GUI
+            if (displayContext == ItemDisplayContext.GUI) {
+                poseStack.translate(0.5, 0.5, 0.5); // Move to center
+                poseStack.mulPose(Axis.YP.rotationDegrees(180)); // Rotate 180 degrees around Y axis
+                poseStack.translate(-0.5, -0.4375F, -0.5); // Move back and up 1 pixel
+            }
+
+            // Scale down ground items to 70% size
+            if (displayContext == ItemDisplayContext.GROUND) {
+                poseStack.translate(0.5, 0, 0.5); // Move to center
+                poseStack.scale(0.7F, 0.7F, 0.7F);
+                poseStack.translate(-0.5, 0.5, -0.5); // Move back and lift up
+            }
+
+            // Scale down when held in hand (third person view)
+            if (displayContext == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND ||
+                displayContext == ItemDisplayContext.THIRD_PERSON_LEFT_HAND) {
+                poseStack.translate(0.5, 0, 0.5); // Move to center
+                poseStack.scale(0.4F, 0.4F, 0.4F); // Much smaller in hand
+                poseStack.translate(-0.5, 1.0, -0.5); // Move back and up significantly
+            }
+
+            // Get the partial tick time for smooth animations
+            float partialTick = Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true);
+
+            // Render using BoxBlockRenderer which includes figure face rendering
+            this.renderer.render(renderEntity, partialTick, poseStack, bufferSource, packedLight, packedOverlay);
+
+            poseStack.popPose();
+        }
+    }
+}
