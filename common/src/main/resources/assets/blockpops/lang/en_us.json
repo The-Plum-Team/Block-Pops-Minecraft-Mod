@@ -2,6 +2,8 @@
   "itemGroup.blockpops.blockpops_tab": "BlockPops",
   "block.blockpops.box_block": "Box",
   "block.blockpops.box_block_original": "Box",
+  "item.blockpops.box_block_original": "Box",
+  "item.blockpops.claw_machine_block": "Arcade Claw Machine",
   "block.blockpops.box_block_black": "Black Box",
   "block.blockpops.box_block_blue": "Blue Box",
   "block.blockpops.box_block_brown": "Brown Box",

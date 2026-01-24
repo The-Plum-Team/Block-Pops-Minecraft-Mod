@@ -13,11 +13,18 @@ architectury {
 }
 
 // Add version-specific source set for Minecraft API differences
-val versionSourceSet = if (mcVersion.startsWith("1.21")) "v1_21_1" else "v1_20_1"
+val versionSourceSet = when {
+    mcVersion == "1.21.4" -> "v1_21_4"
+    mcVersion.startsWith("1.21") -> "v1_21_1"
+    else -> "v1_20_1"
+}
 sourceSets {
     main {
         java {
             srcDir("src/$versionSourceSet/java")
+        }
+        resources {
+            srcDir("src/$versionSourceSet/resources")
         }
     }
 }
@@ -57,9 +64,17 @@ dependencies {
 
 tasks.processResources {
     inputs.property("version", project.version)
+    inputs.property("minecraft_version", mcVersion)
+    inputs.property("architectury_version", versionProp("architectury_api_version"))
+    inputs.property("geckolib_version", versionProp("geckolib_version"))
 
     filesMatching("fabric.mod.json") {
-        expand("version" to inputs.properties["version"])
+        expand(
+            "version" to inputs.properties["version"],
+            "minecraft_version" to inputs.properties["minecraft_version"],
+            "architectury_version" to inputs.properties["architectury_version"],
+            "geckolib_version" to inputs.properties["geckolib_version"]
+        )
     }
 }
 

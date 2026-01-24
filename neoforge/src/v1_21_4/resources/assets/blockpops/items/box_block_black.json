@@ -1,0 +1,9 @@
+{
+  "model": {
+    "type": "minecraft:special",
+    "base": "blockpops:item/box_block_black",
+    "model": {
+      "type": "blockpops:box_block"
+    }
+  }
+}

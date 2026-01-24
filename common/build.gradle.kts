@@ -13,7 +13,11 @@ architectury {
 
 // Add version-specific source set for GeckoLib-dependent code
 // This allows different imports/method signatures per Minecraft version
-val versionSourceSet = if (mcVersion.startsWith("1.21")) "v1_21_1" else "v1_20_1"
+val versionSourceSet = when {
+    mcVersion == "1.21.4" -> "v1_21_4"
+    mcVersion.startsWith("1.21") -> "v1_21_1"
+    else -> "v1_20_1"
+}
 sourceSets {
     main {
         java {
@@ -36,9 +40,10 @@ dependencies {
 
     // GeckoLib - common API (platform-specific implementations provided by forge/fabric modules)
     // Use NeoForge version for 1.21+, Forge version for 1.20
+    val geckolibMcVersion = mcVersion
     if (mcVersion.startsWith("1.21")) {
-        modCompileOnly("software.bernie.geckolib:geckolib-neoforge-$mcVersion:${versionProp("geckolib_version")}")
+        modCompileOnly("software.bernie.geckolib:geckolib-neoforge-$geckolibMcVersion:${versionProp("geckolib_version")}")
     } else {
-        modCompileOnly("software.bernie.geckolib:geckolib-forge-$mcVersion:${versionProp("geckolib_version")}")
+        modCompileOnly("software.bernie.geckolib:geckolib-forge-$geckolibMcVersion:${versionProp("geckolib_version")}")
     }
 }
