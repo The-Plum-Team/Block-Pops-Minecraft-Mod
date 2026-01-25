@@ -20,6 +20,7 @@ import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
+import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -64,8 +65,12 @@ public class FigureBlock extends BaseEntityBlock {
         return level.isClientSide ? createTickerHelper(blockEntityType, ModBlockEntities.FIGURE_BLOCK.get(), FigureBlockEntity::tick) : null;
     }
 
-    // In 1.21.4, ENTITYBLOCK_ANIMATED was removed. Block entities now rely on their block models.
-    // The getRenderShape() override is no longer needed for GeckoLib blocks.
+    @Override
+    public RenderShape getRenderShape(BlockState state) {
+        // Use INVISIBLE to prevent the block model from rendering
+        // Only the GeckoLib block entity renderer should render
+        return RenderShape.INVISIBLE;
+    }
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {

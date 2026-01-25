@@ -30,6 +30,7 @@
   "block.blockpops.box_block_alienstage": "Alien Stage Box",
   "block.blockpops.box_block_strangerthings": "Stranger Things Box",
   "block.blockpops.box_block_dispatch": "Dispatch Box",
+  "block.blockpops.box_block_ultrakill": "ULTRAKILL Box",
   "block.blockpops.claw_machine_block": "Arcade Claw Machine",
   "tooltip.blockpops.has_alternatives": "Has alternative skins! (Right-click to cycle)",
   "tooltip.blockpops.pose_hint": "Shift + Right-click to change pose"

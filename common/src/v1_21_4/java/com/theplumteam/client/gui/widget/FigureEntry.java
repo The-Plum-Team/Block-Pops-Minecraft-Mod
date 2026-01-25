@@ -208,7 +208,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 return;
             }
 
-            RenderType renderType = figureModel.getRenderType(renderEntity, textureResource, figureRenderer);
+            // In GeckoLib 4.8+, getRenderType takes only 2 parameters
+            RenderType renderType = figureModel.getRenderType(renderEntity, textureResource);
             VertexConsumer buffer = bufferSource.getBuffer(renderType);
 
             figureRenderer.actuallyRender(

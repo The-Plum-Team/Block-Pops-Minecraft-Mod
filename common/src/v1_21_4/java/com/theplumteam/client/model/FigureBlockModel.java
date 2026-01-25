@@ -155,12 +155,4 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     public ResourceLocation getAnimationResource(FigureBlockEntity animatable) {
         return POSE_ANIMATION;
     }
-
-    // In GeckoLib 4.8+, getRenderType may no longer be overridable in GeoModel
-    // The render type is typically handled by the renderer itself
-    public RenderType getRenderType(FigureBlockEntity animatable, ResourceLocation texture, GeoRenderer<FigureBlockEntity> renderer) {
-        ResourceLocation textureToUse = getTextureResource(animatable, renderer);
-        if (textureToUse == null) textureToUse = FALLBACK_TEXTURE;
-        return RenderType.entityCutoutNoCull(textureToUse);
-    }
 }

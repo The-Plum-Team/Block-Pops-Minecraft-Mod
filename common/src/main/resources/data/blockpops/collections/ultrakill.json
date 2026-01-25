@@ -1,0 +1,93 @@
+{
+  "id": "ultrakill",
+  "name": "ULTRAKILL Collection",
+  "author": "The Plum Team",
+  "author_url": "",
+  "box_texture": "blockpops:textures/block/box/ultrakill.png",
+  "logo": {
+    "texture": "blockpops:textures/block/box/logo/logo_ultrakill.png",
+    "position_x": -2.05,
+    "position_y": -0.13,
+    "position_z": 0.0,
+    "scale_x": 7.70,
+    "scale_y": 3.563,
+    "scale_z": 1.0
+  },
+  "background_color": {
+    "r": 30,
+    "g": 0,
+    "b": 0
+  },
+  "figures": [
+    {
+      "id": "v1",
+      "name": "V1",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/ultrakill/v1.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "v2",
+      "name": "V2",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/ultrakill/v2.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "cerberus",
+      "name": "Cerberus",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/ultrakill/cerberus.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "filth",
+      "name": "Filth",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/ultrakill/filth.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "schism",
+      "name": "Schism",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/ultrakill/schism.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "soldier",
+      "name": "Soldier",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/ultrakill/soldier.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "stalker",
+      "name": "Stalker",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/ultrakill/stalker.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "stray",
+      "name": "Stray",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/ultrakill/stray.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "streetcleaner",
+      "name": "Streetcleaner",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/ultrakill/streetcleaner.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "swordsmachine",
+      "name": "Swordsmachine",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/ultrakill/swordsmachine.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    }
+  ]
+}
