@@ -14,6 +14,7 @@ architectury {
 // Add version-specific source set for GeckoLib-dependent code
 // This allows different imports/method signatures per Minecraft version
 val versionSourceSet = when {
+    mcVersion == "1.21.5" -> "v1_21_5"
     mcVersion == "1.21.4" -> "v1_21_4"
     mcVersion.startsWith("1.21") -> "v1_21_1"
     else -> "v1_20_1"

@@ -20,9 +20,11 @@ architectury {
 }
 
 // Add version-specific source set for Minecraft API differences
+// For 1.21.5, we replace the main source with v1_21_5 (GeckoLib 5.x)
 // For 1.21.4, we replace the main source with v1_21_4 (different API for item rendering, block entities)
 // For 1.21.1, we use the main source set as-is
 val versionSourceSet = when {
+    mcVersion == "1.21.5" -> "v1_21_5"
     mcVersion == "1.21.4" -> "v1_21_4"
     mcVersion.startsWith("1.21") -> null  // Use main source set
     else -> null  // NeoForge is for 1.21+ only
@@ -76,6 +78,7 @@ dependencies {
 
 // Calculate NeoForge loader version range based on Minecraft version
 val neoforgeLoaderVersion = when {
+    mcVersion == "1.21.5" -> "[4,)"
     mcVersion == "1.21.4" -> "[4,)"
     mcVersion.startsWith("1.21") -> "[4,)"
     else -> "[4,)"
@@ -83,6 +86,7 @@ val neoforgeLoaderVersion = when {
 
 // Calculate NeoForge version range based on Minecraft version
 val neoforgeVersionRange = when {
+    mcVersion == "1.21.5" -> "[21.5,)"
     mcVersion == "1.21.4" -> "[21.4,)"
     mcVersion.startsWith("1.21") -> "[21.1,)"
     else -> "[21.1,)"
@@ -90,6 +94,7 @@ val neoforgeVersionRange = when {
 
 // Calculate Minecraft version range
 val minecraftVersionRange = when {
+    mcVersion == "1.21.5" -> "[1.21.5,1.22)"
     mcVersion == "1.21.4" -> "[1.21.4,1.22)"
     mcVersion.startsWith("1.21") -> "[1.21.1,1.22)"
     else -> "[1.21.1,1.22)"

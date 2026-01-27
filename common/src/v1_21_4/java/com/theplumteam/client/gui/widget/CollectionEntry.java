@@ -179,9 +179,9 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         int authorY = subTextY + mc.font.lineHeight + 2;
         graphics.drawString(mc.font, authorText, textX, authorY, 0xFFFFFF, false);
 
-        // Render link button on hover if author URL is available
+        // Render link button on hover or when selected if author URL is available
         this.isLinkHovered = false;
-        if (isMouseOver && collection.getAuthorUrl() != null && !collection.getAuthorUrl().isEmpty()) {
+        if ((isMouseOver || isSelected) && collection.getAuthorUrl() != null && !collection.getAuthorUrl().isEmpty()) {
             int margin = 4;
             this.linkButtonX = highlightRight - effectiveLinkButtonSize - margin;
             this.linkButtonY = highlightTop + margin;
