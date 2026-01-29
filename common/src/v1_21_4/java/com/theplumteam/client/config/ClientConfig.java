@@ -19,7 +19,7 @@ public class ClientConfig {
     public float backgroundColorB = 0.0f;
 
     // Panel opacity (0.0-1.0)
-    public float panelOpacity = 0.90f;  // Default 90%
+    public float panelOpacity = 1.0f;  // Default 100% (fully opaque)
 
     // Color transition animation toggle
     public boolean enableColorTransition = true;  // Default enabled
@@ -83,7 +83,7 @@ public class ClientConfig {
         this.backgroundColorB = 0.0f;
 
         // Reset panel opacity
-        this.panelOpacity = 0.90f;
+        this.panelOpacity = 1.0f;
 
         // Reset color transition toggle
         this.enableColorTransition = true;

@@ -16,6 +16,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.CoreShaders;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -255,14 +256,45 @@ public class FavoriteColorSelectionScreen extends Screen {
     }
 
     @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // Override to skip the default blur - we have our own animated star background
+        // Don't render anything here - we'll render the solid background in render() instead
+    }
+
+    @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // Render animated starry background
+        // CRITICAL: Reset shader color to full opacity BEFORE rendering any UI
+        // RenderSystem.setShaderColor() is a global state that affects all subsequent rendering
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+
+        // FIRST: Render solid black background to prevent transparency
+        // Use direct Tesselator rendering with NO blending to ensure fully opaque background
+        RenderSystem.disableBlend();
+        RenderSystem.disableScissor();
+        RenderSystem.setShader(CoreShaders.POSITION_COLOR);
+
+        Tesselator tesselator = Tesselator.getInstance();
+        BufferBuilder buffer = tesselator.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+
+        // Draw solid black quad
+        buffer.addVertex(0, this.height, 0).setColor(0, 0, 0, 255);
+        buffer.addVertex(this.width, this.height, 0).setColor(0, 0, 0, 255);
+        buffer.addVertex(this.width, 0, 0).setColor(0, 0, 0, 255);
+        buffer.addVertex(0, 0, 0).setColor(0, 0, 0, 255);
+
+        BufferUploader.drawWithShader(buffer.buildOrThrow());
+
+        // Re-enable blending with default blend function for the rest of the UI
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+
+        // SECOND: Render our custom animated starry background (no blur)
         renderBackgroundEffects(graphics, partialTick);
 
-        // Render panel background (frosted glass effect)
+        // THIRD: Render panel background (frosted glass effect)
         renderPanel(graphics);
 
-        // Render widgets (buttons)
+        // Render widgets (buttons) on top of everything
         super.render(graphics, mouseX, mouseY, partialTick);
 
         // Render title and description on top
@@ -295,9 +327,6 @@ public class FavoriteColorSelectionScreen extends Screen {
         double smoothTime = (tickCount + partialTick) / 20.0;
         double offsetX = (smoothTime * pixelsPerSecond) % tileSize;
 
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-
         // Apply star color tint and opacity from config
         ClientConfig config = ClientConfig.getInstance();
         RenderSystem.setShaderColor(config.starColorR, config.starColorG, config.starColorB, config.starOpacity);
@@ -315,23 +344,9 @@ public class FavoriteColorSelectionScreen extends Screen {
         float v1 = (float) this.height / (float) cacheHeight;
 
         // Render a single quad with the scrolling UV coordinates
-        var pose = graphics.pose();
-        pose.pushPose();
+        // In 1.21.4, use graphics.blit with RenderType::guiTextured
+        graphics.blit(RenderType::guiTextured, cacheTexture, 0, 0, u0, v0, this.width, this.height, cacheWidth, cacheHeight);
 
-        RenderSystem.setShaderTexture(0, cacheTexture);
-        // In 1.21.4+, GameRenderer::getPositionTexShader replaced with CoreShaders.POSITION_TEX
-        RenderSystem.setShader(CoreShaders.POSITION_TEX);
-
-        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        bufferBuilder.addVertex(pose.last().pose(), 0, this.height, 0).setUv(u0, v1);
-        bufferBuilder.addVertex(pose.last().pose(), this.width, this.height, 0).setUv(u1, v1);
-        bufferBuilder.addVertex(pose.last().pose(), this.width, 0, 0).setUv(u1, v0);
-        bufferBuilder.addVertex(pose.last().pose(), 0, 0, 0).setUv(u0, v0);
-        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
-
-        pose.popPose();
-
-        RenderSystem.disableBlend();
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
@@ -394,8 +409,5 @@ public class FavoriteColorSelectionScreen extends Screen {
         // Prevent closing with ESC - player must make a choice
         return false;
     }
-
-    // renderBlurredBackground removed in 1.21.4 - no longer needed
-    // The menu blur effect is handled differently in 1.21.4+
 
 }

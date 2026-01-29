@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
+import software.bernie.geckolib.cache.object.GeoCube;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
 import software.bernie.geckolib.renderer.base.GeoRenderState;
 
@@ -116,10 +117,38 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     private void renderBoneWithTexture(GeoBone bone, RenderType renderType, VertexConsumer buffer,
                                       PoseStack poseStack, MultiBufferSource bufferSource,
                                       int packedLight, int packedOverlay) {
-        // TODO: GeckoLib 5 changed the bone rendering API significantly
-        // The manual bone rendering with custom textures needs to be reimplemented using the new API
-        // For now, skip this to avoid crashes - figure faces and logos won't render
-        // This should be implemented via custom GeoRenderLayers in the future
+        // Render bone cubes manually in GeckoLib 5
+        poseStack.pushPose();
+
+        // Apply bone transforms
+        bone.updateRotation(bone.getRotX(), bone.getRotY(), bone.getRotZ());
+        bone.updatePosition(bone.getPosX(), bone.getPosY(), bone.getPosZ());
+        bone.updateScale(bone.getScaleX(), bone.getScaleY(), bone.getScaleZ());
+
+        // Render all cubes in this bone
+        for (var cube : bone.getCubes()) {
+            // Render each quad in the cube
+            for (var quad : cube.quads()) {
+                for (var vertex : quad.vertices()) {
+                    var pos = vertex.position();
+                    var normal = quad.normal();
+                    buffer.addVertex(
+                        poseStack.last().pose(),
+                        (float) pos.x, (float) pos.y, (float) pos.z
+                    ).setColor(0xFFFFFFFF)
+                     .setUv(vertex.texU(), vertex.texV())
+                     .setLight(packedLight)
+                     .setNormal(poseStack.last(), normal.x, normal.y, normal.z);
+                }
+            }
+        }
+
+        // Render child bones
+        for (GeoBone childBone : bone.getChildBones()) {
+            renderBoneWithTexture(childBone, renderType, buffer, poseStack, bufferSource, packedLight, packedOverlay);
+        }
+
+        poseStack.popPose();
     }
 
     private void renderCollectionLogo(BoxBlockEntity animatable, BakedGeoModel model, PoseStack poseStack,

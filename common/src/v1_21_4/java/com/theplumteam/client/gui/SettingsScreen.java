@@ -220,7 +220,7 @@ public class SettingsScreen extends Screen {
             this.bgGreenSlider.setValue(0.0);
             this.bgBlueSlider.setValue(0.0);
             // Reset panel opacity slider
-            this.panelOpacitySlider.setValue(0.90);
+            this.panelOpacitySlider.setValue(1.0);
             // Reset color transition toggle
             this.colorTransitionToggle.setMessage(Component.literal("Transition: ON"));
         }

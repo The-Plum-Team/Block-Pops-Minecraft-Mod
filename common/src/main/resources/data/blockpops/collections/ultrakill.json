@@ -1,16 +1,16 @@
 {
   "id": "ultrakill",
   "name": "ULTRAKILL Collection",
-  "author": "The Plum Team",
+  "author": "strawbrysage",
   "author_url": "",
   "box_texture": "blockpops:textures/block/box/ultrakill.png",
   "logo": {
     "texture": "blockpops:textures/block/box/logo/logo_ultrakill.png",
-    "position_x": -2.05,
-    "position_y": -0.13,
-    "position_z": 0.0,
-    "scale_x": 7.70,
-    "scale_y": 3.563,
+    "position_x": -2.364,
+    "position_y": -0.052,
+    "position_z": -0.001,
+    "scale_x": 8.741,
+    "scale_y": 2.371,
     "scale_z": 1.0
   },
   "background_color": {
