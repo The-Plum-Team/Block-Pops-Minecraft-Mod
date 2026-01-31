@@ -1,5 +1,5 @@
 modLoader = "javafml"
-loaderVersion = "${loader_version}"
+loaderVersion = "[0,)"
 license = "All Rights Reserved"
 
 [[mods]]
@@ -18,20 +18,20 @@ config = "blockpops.mixins.json"
 [[dependencies.blockpops]]
 modId = "neoforge"
 type = "required"
-versionRange = "${neoforge_version_range}"
+versionRange = "[0,)"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.blockpops]]
 modId = "minecraft"
 type = "required"
-versionRange = "${minecraft_version_range}"
+versionRange = "[1.21,)"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.blockpops]]
 modId = "architectury"
 type = "required"
-versionRange = "[${architectury_version},)"
+versionRange = "[0,)"
 ordering = "AFTER"
 side = "BOTH"

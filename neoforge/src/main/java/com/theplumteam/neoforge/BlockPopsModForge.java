@@ -5,7 +5,7 @@ import com.theplumteam.command.ModCommands;
 import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
-import com.theplumteam.figure.PlayerCollectionGenerator;
+import com.theplumteam.figure.neoforge.PlayerCollectionGenerator;
 import com.theplumteam.network.OpenFavoriteColorScreenPacket;
 import com.theplumteam.network.SyncDiscoveryDataPacket;
 import com.theplumteam.network.SyncDynamicCollectionsPacket;

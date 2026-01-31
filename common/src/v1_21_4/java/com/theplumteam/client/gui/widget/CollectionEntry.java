@@ -27,6 +27,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
 
     // Link button state
     private static final int LINK_BUTTON_SIZE = 14; // Square button like the reference
+    private static final ResourceLocation COLLECTION_GLOBE_ICON = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/gui/search_icon.png");
     private int linkButtonX, linkButtonY;
     private boolean isLinkHovered;
 
@@ -198,12 +199,28 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             graphics.renderOutline(linkButtonX, linkButtonY, effectiveLinkButtonSize, effectiveLinkButtonSize,
                 linkHovered ? 0xFFDAA520 : 0xFFB8860B);
 
-            // Draw planet emoji centered
-            String planetEmoji = "\uD83C\uDF10";
-            int emojiWidth = mc.font.width(planetEmoji);
-            int emojiX = linkButtonX + (effectiveLinkButtonSize - emojiWidth) / 2; // Moved 1px left
-            int emojiY = linkButtonY + (effectiveLinkButtonSize - 8) / 2; // Moved 1px up (8 is approximate emoji height)
-            graphics.drawString(mc.font, planetEmoji, emojiX, emojiY, 0xFFFFFF, false);
+            // Draw globe icon centered (using settings icon as test)
+            RenderSystem.enableBlend();
+            RenderSystem.defaultBlendFunc();
+
+            int iconSize = effectiveLinkButtonSize - 4; // Smaller than button with padding
+            int iconX = linkButtonX + 2;
+            int iconY = linkButtonY + 2;
+
+            graphics.pose().pushPose();
+            graphics.pose().translate(iconX, iconY, 0);
+            float iconScale = iconSize / 256.0f;
+            graphics.pose().scale(iconScale, iconScale, 1.0f);
+
+            graphics.blit(RenderType::guiTextured, COLLECTION_GLOBE_ICON,
+                0, 0,
+                0.0f, 0.0f,
+                256, 256,
+                256, 256
+            );
+
+            graphics.pose().popPose();
+            RenderSystem.disableBlend();
 
             this.isLinkHovered = linkHovered;
         }

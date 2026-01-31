@@ -1,10 +1,12 @@
-package com.theplumteam.figure;
+package com.theplumteam.figure.neoforge;
 
 import com.mojang.authlib.GameProfile;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
+import com.theplumteam.figure.FigureCollection;
+import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.server.config.ServerConfig;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;

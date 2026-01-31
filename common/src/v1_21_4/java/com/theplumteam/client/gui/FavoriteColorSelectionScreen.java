@@ -5,7 +5,10 @@ import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.renderer.MultiBufferSource;
+import org.joml.Matrix4f;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.client.config.ClientConfig;
@@ -320,34 +323,36 @@ public class FavoriteColorSelectionScreen extends Screen {
      */
     private void renderStarPattern(GuiGraphics graphics, float partialTick) {
         double pixelsPerSecond = 5.0;
-        int tileSize = StarPatternCache.getTileSize();
 
-        // Calculate smooth scrolling offset
+        // Calculate smooth scrolling offset using cache width for seamless wrapping
         int tickCount = this.minecraft != null ? this.minecraft.gui.getGuiTicks() : 0;
         double smoothTime = (tickCount + partialTick) / 20.0;
-        double offsetX = (smoothTime * pixelsPerSecond) % tileSize;
+        int cacheW = StarPatternCache.getTextureWidth();
+        double offsetX = (smoothTime * pixelsPerSecond) % (cacheW > 0 ? cacheW : 1);
+
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
 
         // Apply star color tint and opacity from config
         ClientConfig config = ClientConfig.getInstance();
-        RenderSystem.setShaderColor(config.starColorR, config.starColorG, config.starColorB, config.starOpacity);
+        int r = (int)(config.starColorR * 255);
+        int g = (int)(config.starColorG * 255);
+        int b = (int)(config.starColorB * 255);
+        int a = (int)(config.starOpacity * 255);
+        int argbColor = (a << 24) | (r << 16) | (g << 8) | b;
 
         // Use the pre-tiled cached texture
         ResourceLocation cacheTexture = StarPatternCache.getTextureLocation();
         int cacheWidth = StarPatternCache.getTextureWidth();
         int cacheHeight = StarPatternCache.getTextureHeight();
 
-        // Calculate UV coordinates for smooth sub-pixel scrolling
-        // The offset creates the scrolling effect via UV manipulation
-        float u0 = (float) offsetX / (float) cacheWidth;
-        float v0 = 0.0f;
-        float u1 = u0 + ((float) this.width / (float) cacheWidth);
-        float v1 = (float) this.height / (float) cacheHeight;
+        // Ensure linear filtering for smooth sub-pixel scrolling
+        StarPatternCache.ensureLinearFiltering();
 
-        // Render a single quad with the scrolling UV coordinates
-        // In 1.21.4, use graphics.blit with RenderType::guiTextured
-        graphics.blit(RenderType::guiTextured, cacheTexture, 0, 0, u0, v0, this.width, this.height, cacheWidth, cacheHeight);
+        // Render with blit for smooth frame-synced rendering, passing ARGB color for opacity
+        graphics.blit(RenderType::guiTexturedOverlay, cacheTexture, 0, 0, (float) offsetX, 0.0f, this.width, this.height, cacheWidth, cacheHeight, argbColor);
 
-        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        RenderSystem.disableBlend();
     }
 
     /**

@@ -26,10 +26,10 @@
     "blockpops.mixins.json"
   ],
   "depends": {
-    "fabricloader": ">=0.17.0",
+    "fabricloader": "*",
     "fabric-api": "*",
     "minecraft": "${minecraft_version}",
-    "architectury": ">=${architectury_version}",
-    "geckolib": ">=${geckolib_version}"
+    "architectury": "*",
+    "geckolib": "*"
   }
 }

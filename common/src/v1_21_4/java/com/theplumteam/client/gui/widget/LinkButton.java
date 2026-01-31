@@ -54,8 +54,7 @@ public class LinkButton extends Button {
         int drawWidth = this.width - (padding * 2);
         int drawHeight = this.height - (padding * 2);
 
-        // In 1.21.4+, use simple blit with scaling via PoseStack
-        // The basic blit draws at uWidth x vHeight size, so we scale to fit our desired size
+        // Use PoseStack scaling for proper texture rendering
         graphics.pose().pushPose();
         graphics.pose().translate(this.getX() + padding, this.getY() + padding, 0);
 

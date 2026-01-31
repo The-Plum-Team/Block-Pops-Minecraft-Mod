@@ -33,17 +33,16 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
     private static final RawAnimation IDLE_ANIMATION = RawAnimation.begin().thenLoop("animation.box_block.idle");
-    private static final RawAnimation OPEN_ANIMATION = RawAnimation.begin().thenPlay("animation.box_block.open");
+    private static final RawAnimation OPEN_ANIMATION = RawAnimation.begin().thenPlay("animation.box_block.open").thenLoop("animation.box_block.open_state");
     private static final RawAnimation OPEN_STATE_ANIMATION = RawAnimation.begin().thenLoop("animation.box_block.open_state");
-    private static final RawAnimation CLOSE_ANIMATION = RawAnimation.begin().thenPlay("animation.box_block.close");
+    private static final RawAnimation CLOSE_ANIMATION = RawAnimation.begin().thenPlay("animation.box_block.close").thenLoop("animation.box_block.idle");
 
     // Box state
     private boolean isOpen = false;
-    // Client-side: remaining ticks for transition animation (open/close)
-    // This prevents the state-based animation from interrupting the triggered animation
-    private transient int transitionAnimationTicks = 0;
-    // Duration of open/close animation in ticks (0.625s * 20 ticks/s / 1.2 speed = ~10 ticks)
-    private static final int TRANSITION_ANIMATION_DURATION = 12;
+    private transient boolean wasOpen = false;
+    private transient boolean isTransitioning = false;
+    private transient int transitionTicks = 0;
+    private static final int TRANSITION_DURATION = 11;
 
     // Collection and figure data
     private String figureId = ""; // Empty means no figure
@@ -98,21 +97,30 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
                 return PlayState.STOP;
             }
 
-            // If a transition animation (open/close) is playing, let it continue
-            // without interruption from the state-based logic
-            if (transitionAnimationTicks > 0) {
+            // If we're currently transitioning, let the chained animation continue
+            if (isTransitioning) {
                 return PlayState.CONTINUE;
             }
 
-            // If the box is open, play the open state animation (holds at final frame)
+            // Detect state changes
+            if (isOpen != wasOpen) {
+                wasOpen = isOpen;
+                isTransitioning = true;
+                transitionTicks = TRANSITION_DURATION;
+                // Play transition animation (chained to loop the final state)
+                if (isOpen) {
+                    return state.setAndContinue(OPEN_ANIMATION);
+                } else {
+                    return state.setAndContinue(CLOSE_ANIMATION);
+                }
+            }
+
+            // No state change and not transitioning - maintain current state
             if (isOpen) {
                 return state.setAndContinue(OPEN_STATE_ANIMATION);
             }
-            // If the box is closed, play the idle animation
             return state.setAndContinue(IDLE_ANIMATION);
         })
-                .triggerableAnim("open", OPEN_ANIMATION)
-                .triggerableAnim("close", CLOSE_ANIMATION)
                 .setAnimationSpeed(1.2));
 
         // Controller for figure pose animations (5 ticks = 0.25 seconds transition)
@@ -339,11 +347,6 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     public void toggleOpen() {
         if (level != null && !level.isClientSide) {
             isOpen = !isOpen;
-            if (isOpen) {
-                triggerAnim("box_controller", "open");
-            } else {
-                triggerAnim("box_controller", "close");
-            }
             setChanged();
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
@@ -448,21 +451,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     // NeoForge-specific method - no @Override in common
     public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
-        // Track the previous open state to detect transitions
-        boolean wasOpen = this.isOpen;
         loadAdditional(tag, registries);
-
-        // If the open state changed, trigger the appropriate animation on the client
-        if (level != null && level.isClientSide && wasOpen != this.isOpen) {
-            // Start the transition animation timer to prevent state-based animation from interrupting
-            transitionAnimationTicks = TRANSITION_ANIMATION_DURATION;
-            // Trigger the appropriate animation
-            if (this.isOpen) {
-                triggerAnim("box_controller", "open");
-            } else {
-                triggerAnim("box_controller", "close");
-            }
-        }
     }
 
     @Override
@@ -474,24 +463,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     public void onDataPacket(Connection connection, ClientboundBlockEntityDataPacket packet, HolderLookup.Provider registries) {
         CompoundTag tag = packet.getTag();
         if (tag != null) {
-            // Track the previous open state to detect transitions
-            boolean wasOpen = this.isOpen;
             loadAdditional(tag, registries);
-
-            // If the open state changed, trigger the appropriate animation on the client
-            if (level != null && level.isClientSide) {
-                if (wasOpen != this.isOpen) {
-                    // Start the transition animation timer to prevent state-based animation from interrupting
-                    transitionAnimationTicks = TRANSITION_ANIMATION_DURATION;
-                    // Trigger the appropriate animation
-                    if (this.isOpen) {
-                        triggerAnim("box_controller", "open");
-                    } else {
-                        triggerAnim("box_controller", "close");
-                    }
-                }
-                level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
-            }
         }
     }
 
@@ -508,9 +480,11 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     public static <T extends BlockEntity> void tick(Level level, BlockPos pos, BlockState state, T blockEntity) {
         if (level.isClientSide && blockEntity instanceof BoxBlockEntity boxBlockEntity) {
-            // Decrement the transition animation timer
-            if (boxBlockEntity.transitionAnimationTicks > 0) {
-                boxBlockEntity.transitionAnimationTicks--;
+            if (boxBlockEntity.transitionTicks > 0) {
+                boxBlockEntity.transitionTicks--;
+                if (boxBlockEntity.transitionTicks == 0) {
+                    boxBlockEntity.isTransitioning = false;
+                }
             }
         }
     }

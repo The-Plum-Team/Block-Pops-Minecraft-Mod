@@ -3,7 +3,9 @@ package com.theplumteam.client.renderer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.theplumteam.block.BoxBlock;
+import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
+import com.theplumteam.item.BoxBlockItem;
 import com.theplumteam.item.GeoBlockItem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
@@ -30,21 +32,31 @@ public class BoxBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
         if (stack.getItem() instanceof GeoBlockItem geoBlockItem) {
             BoxBlock boxBlock = geoBlockItem.getBoxBlock();
 
-            // Reuse the entity instance if it's for the same block type
-            // This is critical for GeckoLib animation state persistence - creating a new entity each frame
-            // resets the AnimatableInstanceCache and prevents animations from playing
-            if (renderEntity == null || !renderEntity.getBlockState().is(boxBlock)) {
-                renderEntity = new BoxBlockEntity(BlockPos.ZERO, boxBlock.defaultBlockState());
-                // Set client level for GeckoLib tick delta calculations
-                renderEntity.setLevel(Minecraft.getInstance().level);
-            }
+            // Always create a fresh entity for item rendering to ensure correct texture/logo
+            // Item rendering doesn't need animation state persistence like block entities do
+            renderEntity = new BoxBlockEntity(BlockPos.ZERO, boxBlock.defaultBlockState());
+            // Set client level for GeckoLib tick delta calculations
+            renderEntity.setLevel(Minecraft.getInstance().level);
 
-            // Load component data from ItemStack FIRST before any rendering
+            // Load component data from ItemStack FIRST
             // This ensures isOpen is set correctly before the animation controller evaluates
             CustomData customData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
             if (customData != null) {
                 CompoundTag blockEntityTag = customData.copyTag();
                 renderEntity.loadFromItemNbt(blockEntityTag);
+            }
+
+            // Then extract collection/color from BoxBlockItem and apply as override
+            // This ensures creative menu boxes show correct textures even if component data is incomplete
+            if (stack.getItem() instanceof BoxBlockItem boxBlockItem) {
+                PopBlockColor color = boxBlockItem.getColor();
+                if (color != null) {
+                    renderEntity.setColorOverride(color.getSerializedName());
+                }
+                String collectionId = boxBlockItem.getCollectionId();
+                if (collectionId != null) {
+                    renderEntity.setCollectionIdOverride(collectionId);
+                }
             }
 
             // Apply transformations for item rendering

@@ -3,7 +3,6 @@ package com.theplumteam.figure.neoforge;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
-import com.theplumteam.figure.PlayerCollectionGenerator;
 import com.theplumteam.network.SyncDynamicCollectionsPacket;
 import net.minecraft.server.MinecraftServer;
 

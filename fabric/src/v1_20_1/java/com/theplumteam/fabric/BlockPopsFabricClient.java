@@ -9,6 +9,7 @@ import com.theplumteam.client.renderer.ClawMachineBlockRenderer;
 import com.theplumteam.client.renderer.FigureBlockItemRenderer;
 import com.theplumteam.client.renderer.FigureBlockRenderer;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
+import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.network.ModNetworking;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModItems;
@@ -16,6 +17,11 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.BuiltinItemRendererRegistry;
+import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.PackType;
+import net.minecraft.server.packs.resources.ResourceManager;
 
 /**
  * Fabric client entry point for BlockPops
@@ -43,11 +49,16 @@ public class BlockPopsFabricClient implements ClientModInitializer {
         // Register item renderers for GeckoLib blocks
         registerItemRenderers();
 
-        // DO NOT add a client-side resource reload listener for collections here!
-        // In Singleplayer (and with Kilt), the Client and Server share the same static CollectionRegistry.
-        // A client reload listener would wipe the server's data because it looks in assets/ (empty)
-        // instead of data/ where the JSONs are located.
-        // The client receives collections via SyncDynamicCollectionsPacket from the server on join.
+        // Register client tick event to load collections from integrated server
+        // This ensures collections are available for creative menu rendering
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            // When joining a world, collections will be synced from server
+            // But for creative menu in main menu, we need to load them ourselves
+            if (client.getSingleplayerServer() != null && !CollectionRegistry.isInitialized()) {
+                CollectionRegistry.loadCollections(client.getSingleplayerServer().getResourceManager());
+                BlockPopsMod.logDebug("Loaded collections client-side from integrated server");
+            }
+        });
 
         BlockPopsMod.logDebug("BlockPops Fabric client initialization complete");
     }

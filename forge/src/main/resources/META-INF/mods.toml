@@ -1,5 +1,5 @@
 modLoader = "javafml"
-loaderVersion = "[47,)"
+loaderVersion = "[0,)"
 #issueTrackerURL = ""
 license = "Insert License Here"
 
@@ -16,7 +16,7 @@ BlockPops - A Minecraft mod featuring animated blocks and interactive gameplay m
 [[dependencies.blockpops]]
 modId = "forge"
 mandatory = true
-versionRange = "[47,)"
+versionRange = "[0,)"
 ordering = "NONE"
 side = "BOTH"
 
@@ -30,6 +30,6 @@ side = "BOTH"
 [[dependencies.blockpops]]
 modId = "architectury"
 mandatory = true
-versionRange = "[9.2.14,)"
+versionRange = "[0,)"
 ordering = "AFTER"
 side = "BOTH"
