@@ -67,86 +67,52 @@ public class CustomCollectionListWidget extends AbstractWidget {
                 graphics.fill(entryX + 4, entryY, entryX + width - 8, entryY + entryHeight, 0x30FFFFFF);
             }
 
-            // Logo rendering with proper sizing
-            int logoMaxSize = 56;
-            int logoContainerX = entryX + 8;
-            int textStartX = logoContainerX + logoMaxSize + 8;
+            // Logo rendering - textures are 256x256, scale to 56x56 using pose stack
+            int logoDisplaySize = 56;
+            int logoX = entryX + 8;
+            int textStartX = logoX + logoDisplaySize + 8;
 
             net.minecraft.resources.ResourceLocation logoTexture = collection.getLogoTexture();
             if (logoTexture != null) {
+                // Flush before logo rendering to isolate from text
+                graphics.flush();
+
                 com.mojang.blaze3d.systems.RenderSystem.enableBlend();
-                com.mojang.blaze3d.systems.RenderSystem.defaultBlendFunc();
-                com.mojang.blaze3d.systems.RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-                com.mojang.blaze3d.systems.RenderSystem.setShaderTexture(0, logoTexture);
+                int logoY = entryY + (entryHeight - logoDisplaySize) / 2;
 
-                // Get texture dimensions
-                int textureId = com.mojang.blaze3d.systems.RenderSystem.getShaderTexture(0);
-                int[] widthArr = new int[1];
-                int[] heightArr = new int[1];
-                org.lwjgl.opengl.GL11.glBindTexture(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, textureId);
-                org.lwjgl.opengl.GL11.glGetTexLevelParameteriv(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, 0, org.lwjgl.opengl.GL11.GL_TEXTURE_WIDTH, widthArr);
-                org.lwjgl.opengl.GL11.glGetTexLevelParameteriv(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, 0, org.lwjgl.opengl.GL11.GL_TEXTURE_HEIGHT, heightArr);
-
-                int textureWidth = widthArr[0] > 0 ? widthArr[0] : 256;
-                int textureHeight = heightArr[0] > 0 ? heightArr[0] : 256;
-
-                // Calculate scaled dimensions preserving aspect ratio
-                float aspectRatio = (float) textureWidth / textureHeight;
-                int logoWidth, logoHeight;
-                int maxSize = "world_players".equals(collection.getId()) ? 40 : logoMaxSize;
-
-                if (aspectRatio > 1.0f) {
-                    logoWidth = maxSize;
-                    logoHeight = (int) (maxSize / aspectRatio);
-                } else {
-                    logoHeight = maxSize;
-                    logoWidth = (int) (maxSize * aspectRatio);
-                }
-
-                int logoX = logoContainerX + (logoMaxSize - logoWidth) / 2;
-                int logoY = entryY + (entryHeight - logoHeight) / 2;
-
+                // Use pose stack to scale 256x256 texture down to 56x56
                 graphics.pose().pushPose();
                 graphics.pose().translate(logoX, logoY, 0);
-                float scaleX = (float) logoWidth / textureWidth;
-                float scaleY = (float) logoHeight / textureHeight;
-                graphics.pose().scale(scaleX, scaleY, 1.0f);
+                float scale = (float)logoDisplaySize / 256.0f; // 56/256 = 0.21875
+                graphics.pose().scale(scale, scale, 1.0f);
+
+                // Render at 0,0 since we already translated, full 256x256 texture
                 graphics.blit(net.minecraft.client.renderer.RenderType::guiTextured, logoTexture,
-                    0, 0, 0.0f, 0.0f, textureWidth, textureHeight, textureWidth, textureHeight);
+                    0, 0, 0.0f, 0.0f, 256, 256, 256, 256);
+
                 graphics.pose().popPose();
+
+                // Flush after logo rendering to isolate from text
+                graphics.flush();
             }
 
-            // Render text with correct colors - THIS WORKS because we're not using ObjectSelectionList!
+            // Render text - THIS WORKS because we're not using ObjectSelectionList!
             int textX = textStartX;
             int textY = entryY + 12;
 
-            // Collection name (white/light gray)
-            int nameColor = isSelected ? 0xFFFFFFFF : 0xFFE0E0E0;
+            // Collection name
             graphics.drawString(Minecraft.getInstance().font, collection.getName(),
-                textX, textY, nameColor, false);
+                textX, textY, 0xFFFFFFFF, false);
 
-            // Figure count (gray)
-            int figureCountColor = isSelected ? 0xFFAAAAAA : 0xFF808080;
+            // Figure count
             String figureCount = collection.getFigures().size() + " figures";
             graphics.drawString(Minecraft.getInstance().font, figureCount,
-                textX, textY + 12, figureCountColor, false);
+                textX, textY + 12, 0xFFAAAAAA, false);
 
-            // Author (gold color)
-            String author = collection.getAuthor();
-            net.minecraft.network.chat.Component authorText;
-            if ("world_players".equals(collection.getId())) {
-                authorText = net.minecraft.network.chat.Component.literal("Auto-generated skins")
-                    .withStyle(net.minecraft.ChatFormatting.GOLD);
-            } else if ("Unknown".equals(author)) {
-                authorText = net.minecraft.network.chat.Component.literal("Collection with multiple creators")
-                    .withStyle(net.minecraft.ChatFormatting.GOLD);
-            } else {
-                authorText = net.minecraft.network.chat.Component.literal("Skin creator: ")
-                    .withStyle(net.minecraft.ChatFormatting.GOLD)
-                    .append(net.minecraft.network.chat.Component.literal(author).withStyle(net.minecraft.ChatFormatting.GOLD));
-            }
-            graphics.drawString(Minecraft.getInstance().font, authorText,
-                textX, textY + 24, 0xFFFFFFFF, false);
+            // Author
+            String author = "By " + collection.getAuthor();
+            graphics.drawString(Minecraft.getInstance().font, author,
+                textX, textY + 24, 0xFF808080, false);
         }
 
         graphics.disableScissor();
