@@ -6,11 +6,11 @@
   "box_texture": "blockpops:textures/block/box/strangerthings.png",
   "logo": {
     "texture": "blockpops:textures/block/box/logo/logo_strangerthings.png",
-    "position_x": -1.666,
-    "position_y": -0.144,
+    "position_x": -2.121,
+    "position_y": -0.492,
     "position_z": 0.0,
-    "scale_x": 6.469,
-    "scale_y": 4.156,
+    "scale_x": 7.913,
+    "scale_y": 8.381,
     "scale_z": 1.0
   },
   "background_color": {

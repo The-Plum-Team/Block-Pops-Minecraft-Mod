@@ -6,11 +6,11 @@
   "box_texture": "blockpops:textures/block/box/deltarune.png",
   "logo": {
     "texture": "blockpops:textures/block/box/logo/logo_deltarune.png",
-    "position_x": -2.05,
-    "position_y": -0.13,
+    "position_x": -2.045,
+    "position_y": -0.638,
     "position_z": 0.0,
-    "scale_x": 7.70,
-    "scale_y": 3.563,
+    "scale_x": 7.625,
+    "scale_y": 10.0,
     "scale_z": 1.0
   },
   "background_color": {
