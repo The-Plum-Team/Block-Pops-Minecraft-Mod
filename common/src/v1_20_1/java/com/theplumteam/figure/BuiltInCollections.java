@@ -20,7 +20,9 @@ public class BuiltInCollections {
         "alienstage",
         "strangerthings",
         "dispatch",
-        "ultrakill"
+        "ultrakill",
+        "doom",
+        "theamazingdigitalcircus"
         // Add more collections as needed
     );
 
@@ -41,6 +43,8 @@ public class BuiltInCollections {
             case "strangerthings" -> "Stranger Things";
             case "dispatch" -> "Dispatch";
             case "ultrakill" -> "ULTRAKILL";
+            case "doom" -> "DOOM";
+            case "theamazingdigitalcircus" -> "The Amazing Digital Circus";
             default -> collectionId;
         };
     }
