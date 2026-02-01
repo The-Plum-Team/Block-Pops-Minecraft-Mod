@@ -159,10 +159,15 @@ public class BoxBlock extends BaseEntityBlock {
                 boxBlockEntity.toggleOpen();
                 return InteractionResult.SUCCESS;
             }
-            // If box is closed, open adjustment screen (client side, dev mode only)
-            else if (!boxBlockEntity.isOpen() && level.isClientSide) {
-                if (PlatformHelper.isDevelopmentEnvironment()) {
-                    PlatformHelper.openBoxFigureScreen(pos, boxBlockEntity);
+            // If box is closed
+            else if (!boxBlockEntity.isOpen()) {
+                if (level.isClientSide) {
+                    if (PlatformHelper.isDevelopmentEnvironment()) {
+                        PlatformHelper.openBoxFigureScreen(pos, boxBlockEntity);
+                        return InteractionResult.SUCCESS;
+                    }
+                } else {
+                    boxBlockEntity.cycleAlternativeSkin();
                     return InteractionResult.SUCCESS;
                 }
             }
@@ -240,7 +245,12 @@ public class BoxBlock extends BaseEntityBlock {
                     level.playSound(null, pos, SoundEvents.SHEEP_SHEAR, SoundSource.BLOCKS, 1.0F, 1.0F);
                     return InteractionResult.SUCCESS;
                 } else {
-                    player.displayClientMessage(Component.literal("Use Shears to open").withStyle(ChatFormatting.GRAY), true);
+                    FigureDefinition figureDef = boxBlockEntity.getFigureDefinition();
+                    if (figureDef != null && figureDef.hasAlternatives()) {
+                        player.displayClientMessage(Component.literal("Use Shears to open | Shift+Right-click to change skin").withStyle(ChatFormatting.GRAY), true);
+                    } else {
+                        player.displayClientMessage(Component.literal("Use Shears to open").withStyle(ChatFormatting.GRAY), true);
+                    }
                     return InteractionResult.SUCCESS;
                 }
             }

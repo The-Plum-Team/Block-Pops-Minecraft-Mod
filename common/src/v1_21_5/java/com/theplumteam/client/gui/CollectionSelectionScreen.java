@@ -382,6 +382,12 @@ public class CollectionSelectionScreen extends Screen {
         // Render animated starry background
         renderBackgroundEffects(graphics, partialTick);
 
+        // Flush the buffer to ensure background effects (star pattern with custom color/opacity)
+        // are fully submitted before rendering text. Without this, Sodium's batching can cause
+        // the tinted render state to leak into subsequent text draws, making text dark/invisible.
+        graphics.flush();
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+
         // Render panel background (frosted glass effect)
         renderPanel(graphics);
 
@@ -433,13 +439,13 @@ public class CollectionSelectionScreen extends Screen {
 
         // Collection list title
         graphics.drawString(this.font, "Collections",
-                componentX + 8, currentY, 0xFFFFFF, false);
+                componentX + 8, currentY, 0xFFFFFFFF, false);
         currentY += font.lineHeight + 4;
 
         // Collection count
         String collectionCount = collections.size() + " collections available";
         graphics.drawString(this.font, collectionCount,
-                componentX + 8, currentY, 0xAAAAAA, false);
+                componentX + 8, currentY, 0xFFAAAAAA, false);
 
         // Separator line (below the collection count)
         currentY += font.lineHeight + 4;
@@ -471,13 +477,13 @@ public class CollectionSelectionScreen extends Screen {
 
         // Collection name
         graphics.drawString(this.font, collection.getName(),
-                previewX + 8, currentY, 0xFFFFFF, false);
+                previewX + 8, currentY, 0xFFFFFFFF, false);
         currentY += font.lineHeight + 4;
 
         // Figure count
         String figureCount = collection.getFigures().size() + " figures in this collection";
         graphics.drawString(this.font, figureCount,
-                previewX + 8, currentY, 0xAAAAAA, false);
+                previewX + 8, currentY, 0xFFAAAAAA, false);
 
         // Separator line (full width - will render on top of buttons)
         currentY += font.lineHeight + 4;
@@ -716,8 +722,8 @@ public class CollectionSelectionScreen extends Screen {
         int tokenInfoY = bottomY - font.lineHeight - scaledSpacing; // Above the token buttons
 
         // Colors
-        int blueColor = 0x5599FF;  // Blue for regular tokens
-        int goldColor = 0xFFD700;  // Gold for guaranteed tokens
+        int blueColor = 0xFF5599FF;  // Blue for regular tokens (ARGB)
+        int goldColor = 0xFFFFD700;  // Gold for guaranteed tokens (ARGB)
 
         // Calculate button positions (same as in init())
         int fullWidthX = panelX + scaledPadding;

@@ -116,8 +116,19 @@ public class FigureListWidget extends ObjectSelectionList<FigureEntry> {
     }
 
     @Override
+    protected void renderListBackground(GuiGraphics graphics) {
+        // Don't render default dark menu background - we use custom panel background
+    }
+
+    @Override
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // Sodium compatibility: flush before enabling scissor to ensure all previous draws complete
+        graphics.flush();
+
         super.renderWidget(graphics, mouseX, mouseY, partialTick);
+
+        // Sodium compatibility: flush after rendering with scissor enabled to submit batched text
+        graphics.flush();
     }
 
     @Override

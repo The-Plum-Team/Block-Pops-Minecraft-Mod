@@ -393,11 +393,9 @@ public class CollectionSelectionScreen extends Screen {
         }
 
         // CRITICAL: Reset shader color to full opacity BEFORE rendering any UI
-        // RenderSystem.setShaderColor() is a global state that affects all subsequent rendering
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 
         // FIRST: Render solid black background to prevent transparency
-        // Use direct Tesselator rendering with NO blending to ensure fully opaque background
         int bgWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
         int bgHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
 
@@ -408,7 +406,6 @@ public class CollectionSelectionScreen extends Screen {
         Tesselator tesselator = Tesselator.getInstance();
         BufferBuilder buffer = tesselator.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
 
-        // Draw solid black quad
         buffer.addVertex(0, bgHeight, 0).setColor(0, 0, 0, 255);
         buffer.addVertex(bgWidth, bgHeight, 0).setColor(0, 0, 0, 255);
         buffer.addVertex(bgWidth, 0, 0).setColor(0, 0, 0, 255);
@@ -416,12 +413,15 @@ public class CollectionSelectionScreen extends Screen {
 
         BufferUploader.drawWithShader(buffer.buildOrThrow());
 
-        // Re-enable blending with default blend function for the rest of the UI
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
 
-        // SECOND: Render our custom animated starry background (no blur)
+        // SECOND: Render animated starry background
         renderBackgroundEffects(graphics, partialTick);
+
+        // Flush and reset shader color after background rendering
+        graphics.flush();
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 
         // THIRD: Render panel background (frosted glass effect)
         renderPanel(graphics);
@@ -474,13 +474,13 @@ public class CollectionSelectionScreen extends Screen {
 
         // Collection list title
         graphics.drawString(this.font, "Collections",
-                componentX + 8, currentY, 0xFFFFFF, false);
+                componentX + 8, currentY, 0xFFFFFFFF, false);
         currentY += font.lineHeight + 4;
 
         // Collection count
         String collectionCount = collections.size() + " collections available";
         graphics.drawString(this.font, collectionCount,
-                componentX + 8, currentY, 0xAAAAAA, false);
+                componentX + 8, currentY, 0xFFAAAAAA, false);
 
         // Separator line (below the collection count)
         currentY += font.lineHeight + 4;
@@ -512,13 +512,13 @@ public class CollectionSelectionScreen extends Screen {
 
         // Collection name
         graphics.drawString(this.font, collection.getName(),
-                previewX + 8, currentY, 0xFFFFFF, false);
+                previewX + 8, currentY, 0xFFFFFFFF, false);
         currentY += font.lineHeight + 4;
 
         // Figure count
         String figureCount = collection.getFigures().size() + " figures in this collection";
         graphics.drawString(this.font, figureCount,
-                previewX + 8, currentY, 0xAAAAAA, false);
+                previewX + 8, currentY, 0xFFAAAAAA, false);
 
         // Separator line (full width - will render on top of buttons)
         currentY += font.lineHeight + 4;
@@ -611,7 +611,10 @@ public class CollectionSelectionScreen extends Screen {
         StarPatternCache.ensureLinearFiltering();
 
         // Render with blit for smooth frame-synced rendering, passing ARGB color for opacity
-        graphics.blit(RenderType::guiTexturedOverlay, cacheTexture, 0, 0, (float) offsetX, 0.0f, starWidth, starHeight, cacheWidth, cacheHeight, argbColor);
+        // Use guiTextured instead of guiTexturedOverlay for Sodium compatibility -
+        // guiTexturedOverlay uses a different shader that Sodium batches differently,
+        // causing the tint color to bleed into subsequent text rendering
+        graphics.blit(RenderType::guiTextured, cacheTexture, 0, 0, (float) offsetX, 0.0f, starWidth, starHeight, cacheWidth, cacheHeight, argbColor);
 
         RenderSystem.disableBlend();
     }
@@ -757,8 +760,8 @@ public class CollectionSelectionScreen extends Screen {
         int tokenInfoY = bottomY - font.lineHeight - scaledSpacing; // Above the token buttons
 
         // Colors
-        int blueColor = 0x5599FF;  // Blue for regular tokens
-        int goldColor = 0xFFD700;  // Gold for guaranteed tokens
+        int blueColor = 0xFF5599FF;  // Blue for regular tokens (ARGB)
+        int goldColor = 0xFFFFD700;  // Gold for guaranteed tokens (ARGB)
 
         // Calculate button positions (same as in init())
         int fullWidthX = panelX + scaledPadding;

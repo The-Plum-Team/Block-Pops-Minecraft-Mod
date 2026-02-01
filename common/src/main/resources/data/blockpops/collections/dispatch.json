@@ -88,6 +88,13 @@
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
       "texture": "blockpops:textures/figure/dispatch/waterboy.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "coupe",
+      "name": "Coupe",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/figure/dispatch/coupe.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     }
   ]
 }

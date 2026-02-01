@@ -387,6 +387,12 @@ public class CollectionSelectionScreen extends Screen {
         // Render animated starry background
         renderBackgroundEffects(graphics, partialTick);
 
+        // Flush the buffer to ensure background effects (star pattern with custom color/opacity)
+        // are fully submitted before rendering text. Without this, Sodium's batching can cause
+        // the tinted render state to leak into subsequent text draws, making text dark/invisible.
+        graphics.flush();
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+
         // Render panel background (frosted glass effect)
         renderPanel(graphics);
 

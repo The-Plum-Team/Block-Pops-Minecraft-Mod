@@ -41,6 +41,10 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
     private static final int FIGURE_SIZE = 80;
     private static final int GRID_SPACING = 4;
+    private static final int LINK_BUTTON_SIZE = 12;
+    private static final ResourceLocation LINK_ICON = new ResourceLocation("blockpops", "textures/gui/search_icon.png");
+
+    private int hoveredLinkFigureIndex = -1;
 
     public FigureEntry(List<FigureDefinition> figures, String collectionId) {
         this.mc = Minecraft.getInstance();
@@ -62,6 +66,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     @Override
     public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth,
                       int entryHeight, int mouseX, int mouseY, boolean isMouseOver, float partialTick) {
+
+        this.hoveredLinkFigureIndex = -1;
 
         // Calculate effective figure size - scale when using inverse scale mode
         int effectiveFigureSize = FIGURE_SIZE;
@@ -137,6 +143,41 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                     int nameX = figureX + (effectiveFigureSize - mc.font.width(figureName)) / 2;
                     int nameY = y + effectiveFigureSize - mc.font.lineHeight - 2;
                     graphics.drawString(mc.font, figureName, nameX, nameY, 0xFFFFFF, true);
+                }
+
+                // Draw link icon in top-right corner when hovered and figure has author URL
+                if (isFigureHovered && figure.hasAuthorUrl()) {
+                    int effectiveLinkSize = LINK_BUTTON_SIZE;
+                    if (GuiScaleManager.isUsingInverseScale()) {
+                        effectiveLinkSize = (int)(LINK_BUTTON_SIZE * GuiScaleManager.getRenderScaleFactor());
+                    }
+                    int linkX = figureX + effectiveFigureSize - effectiveLinkSize - 2;
+                    int linkY = y + 2;
+
+                    boolean linkHovered = mouseX >= linkX && mouseX < linkX + effectiveLinkSize &&
+                                         mouseY >= linkY && mouseY < linkY + effectiveLinkSize;
+
+                    graphics.fill(linkX, linkY, linkX + effectiveLinkSize, linkY + effectiveLinkSize,
+                        linkHovered ? 0xFFB8860B : 0xC0997000);
+                    graphics.renderOutline(linkX, linkY, effectiveLinkSize, effectiveLinkSize,
+                        linkHovered ? 0xFFDAA520 : 0xFFB8860B);
+
+                    RenderSystem.enableBlend();
+                    RenderSystem.defaultBlendFunc();
+                    int iconSize = effectiveLinkSize - 4;
+                    int iconX = linkX + 2;
+                    int iconY = linkY + 2;
+                    graphics.pose().pushPose();
+                    graphics.pose().translate(iconX, iconY, 0);
+                    float iconScale = iconSize / 256.0f;
+                    graphics.pose().scale(iconScale, iconScale, 1.0f);
+                    graphics.blit(LINK_ICON, 0, 0, 0, 0, 256, 256, 256, 256);
+                    graphics.pose().popPose();
+                    RenderSystem.disableBlend();
+
+                    if (linkHovered) {
+                        this.hoveredLinkFigureIndex = i;
+                    }
                 }
             } else {
                 // Draw a question mark for undiscovered figures
@@ -239,6 +280,24 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0 && hoveredLinkFigureIndex >= 0 && hoveredLinkFigureIndex < figures.size()) {
+            FigureDefinition figure = figures.get(hoveredLinkFigureIndex);
+            if (figure.hasAuthorUrl()) {
+                try {
+                    mc.screen.handleComponentClicked(
+                        net.minecraft.network.chat.Style.EMPTY.withClickEvent(
+                            new net.minecraft.network.chat.ClickEvent(
+                                net.minecraft.network.chat.ClickEvent.Action.OPEN_URL,
+                                figure.getAuthorUrl()
+                            )
+                        )
+                    );
+                } catch (Exception e) {
+                    System.err.println("Failed to open URL: " + figure.getAuthorUrl());
+                }
+                return true;
+            }
+        }
         return false;
     }
 

@@ -37,15 +37,22 @@ public class FigureDefinition {
     private final UUID playerUUID;
     private final List<AlternativeSkin> alternatives;
     private final PopBlockColor favoriteColor; // For player figures, stores their chosen color
+    @Nullable private final String authorUrl;
 
     public FigureDefinition(String id, String name, ResourceLocation modelPath,
                            ResourceLocation texturePath, ResourceLocation animationPath) {
-        this(id, name, modelPath, texturePath, animationPath, Collections.emptyList());
+        this(id, name, modelPath, texturePath, animationPath, Collections.emptyList(), null);
     }
 
     public FigureDefinition(String id, String name, ResourceLocation modelPath,
                            ResourceLocation texturePath, ResourceLocation animationPath,
                            List<AlternativeSkin> alternatives) {
+        this(id, name, modelPath, texturePath, animationPath, alternatives, null);
+    }
+
+    public FigureDefinition(String id, String name, ResourceLocation modelPath,
+                           ResourceLocation texturePath, ResourceLocation animationPath,
+                           List<AlternativeSkin> alternatives, @Nullable String authorUrl) {
         this.id = id;
         this.name = name;
         this.modelPath = modelPath;
@@ -55,6 +62,7 @@ public class FigureDefinition {
         this.playerUUID = null;
         this.alternatives = new ArrayList<>(alternatives);
         this.favoriteColor = null; // Static figures don't have favorite colors
+        this.authorUrl = authorUrl;
     }
 
     /**
@@ -71,6 +79,7 @@ public class FigureDefinition {
         this.playerUUID = playerUUID;
         this.alternatives = Collections.emptyList();
         this.favoriteColor = favoriteColor;
+        this.authorUrl = null;
     }
 
     /**
@@ -141,7 +150,9 @@ public class FigureDefinition {
                 }
             }
 
-            return new FigureDefinition(id, name, modelPath, texturePath, animationPath, alternatives);
+            String authorUrl = json.has("author_url") ? json.get("author_url").getAsString() : null;
+
+            return new FigureDefinition(id, name, modelPath, texturePath, animationPath, alternatives, authorUrl);
         }
     }
 
@@ -186,6 +197,15 @@ public class FigureDefinition {
         return favoriteColor;
     }
 
+    @Nullable
+    public String getAuthorUrl() {
+        return authorUrl;
+    }
+
+    public boolean hasAuthorUrl() {
+        return authorUrl != null && !authorUrl.isEmpty();
+    }
+
     /**
      * Serializes this FigureDefinition to a JSON object
      */
@@ -221,6 +241,10 @@ public class FigureDefinition {
                     alternativesArray.add(altJson);
                 }
                 json.add("alternatives", alternativesArray);
+            }
+
+            if (authorUrl != null && !authorUrl.isEmpty()) {
+                json.addProperty("author_url", authorUrl);
             }
         }
 

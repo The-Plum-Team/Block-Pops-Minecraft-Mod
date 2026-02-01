@@ -25,7 +25,7 @@ side = "BOTH"
 [[dependencies.blockpops]]
 modId = "minecraft"
 type = "required"
-versionRange = "[1.21,)"
+versionRange = "${minecraft_version_range}"
 ordering = "NONE"
 side = "BOTH"
 
