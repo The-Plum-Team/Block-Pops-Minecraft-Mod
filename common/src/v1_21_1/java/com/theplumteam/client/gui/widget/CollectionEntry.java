@@ -77,57 +77,30 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         int textStartX = logoContainerX + logoContainerWidth + effectivePadding;
 
         if (logoTexture != null) {
-            // Enable blending for transparent logos
+            // SODIUM FIX: Flush before logo rendering to isolate from text
+            graphics.flush();
+
+            // Logos are pre-scaled to 256x256, render at display size
+            int logoDisplaySize = effectiveLogoMaxSize;
+            int logoX = logoContainerX + (logoContainerWidth - logoDisplaySize) / 2;
+            int logoY = y + (entryHeight - logoDisplaySize) / 2;
+
             RenderSystem.enableBlend();
             RenderSystem.defaultBlendFunc();
-            RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 
-            // Bind texture first to ensure it's loaded
-            RenderSystem.setShaderTexture(0, logoTexture);
+            // Use pose stack to scale 256x256 texture down to display size
+            graphics.pose().pushPose();
+            graphics.pose().translate(logoX, logoY, 0);
+            float logoScale = (float)logoDisplaySize / 256.0f;
+            graphics.pose().scale(logoScale, logoScale, 1.0f);
 
-            // Get actual texture dimensions from OpenGL
-            int textureId = RenderSystem.getShaderTexture(0);
-            int[] width = new int[1];
-            int[] height = new int[1];
+            // Render full 256x256 texture at 0,0 (already translated)
+            graphics.blit(logoTexture, 0, 0, 0.0f, 0.0f, 256, 256, 256, 256);
 
-            // Bind and query texture dimensions
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
-            GL11.glGetTexLevelParameteriv(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH, width);
-            GL11.glGetTexLevelParameteriv(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT, height);
+            graphics.pose().popPose();
 
-            int textureWidth = width[0] > 0 ? width[0] : 256;
-            int textureHeight = height[0] > 0 ? height[0] : 256;
-
-            // Calculate scaled dimensions preserving aspect ratio
-            float aspectRatio = (float) textureWidth / textureHeight;
-            int logoWidth;
-            int logoHeight;
-
-            // Use smaller size for World Players collection
-            int maxSize = "world_players".equals(collection.getId()) ? 40 : effectiveLogoMaxSize;
-
-            if (aspectRatio > 1.0f) {
-                // Wider than tall - constrain width
-                logoWidth = maxSize;
-                logoHeight = (int) (maxSize / aspectRatio);
-            } else {
-                // Taller than wide or square - constrain height
-                logoHeight = maxSize;
-                logoWidth = (int) (maxSize * aspectRatio);
-            }
-
-            // Center the logo horizontally within the container
-            int logoX = logoContainerX + (logoContainerWidth - logoWidth) / 2;
-
-            // Center the logo vertically
-            int logoY = y + (entryHeight - logoHeight) / 2;
-
-            // Draw the logo centered within its container
-            graphics.blit(logoTexture,
-                    logoX, logoY, logoWidth, logoHeight,
-                    0.0f, 0.0f,
-                    textureWidth, textureHeight,
-                    textureWidth, textureHeight);
+            // SODIUM FIX: Flush after logo rendering to isolate from text
+            graphics.flush();
         }
 
         // Draw collection name

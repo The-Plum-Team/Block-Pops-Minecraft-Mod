@@ -78,54 +78,31 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         int textStartX = logoContainerX + logoContainerWidth + effectivePadding;
 
         if (logoTexture != null) {
-            // In 1.21.5+, assume standard texture dimensions (most logos are 256x256 or similar)
-            RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+            // SODIUM FIX: Flush before logo rendering to isolate from text
+            graphics.flush();
 
-            // Assume standard texture size (can be adjusted per collection if needed)
-            int textureWidth = 256;
-            int textureHeight = 256;
+            // Logos are pre-scaled to 256x256, render at display size
+            int logoDisplaySize = effectiveLogoMaxSize;
+            int logoX = logoContainerX + (logoContainerWidth - logoDisplaySize) / 2;
+            int logoY = y + (entryHeight - logoDisplaySize) / 2;
 
-            // Calculate scaled dimensions preserving aspect ratio
-            float aspectRatio = (float) textureWidth / textureHeight;
-            int logoWidth;
-            int logoHeight;
+            RenderSystem.enableBlend();
+            RenderSystem.defaultBlendFunc();
 
-            // Use smaller size for World Players collection
-            int maxSize = "world_players".equals(collection.getId()) ? 40 : effectiveLogoMaxSize;
-
-            if (aspectRatio > 1.0f) {
-                // Wider than tall - constrain width
-                logoWidth = maxSize;
-                logoHeight = (int) (maxSize / aspectRatio);
-            } else {
-                // Taller than wide or square - constrain height
-                logoHeight = maxSize;
-                logoWidth = (int) (maxSize * aspectRatio);
-            }
-
-            // Center the logo horizontally within the container
-            int logoX = logoContainerX + (logoContainerWidth - logoWidth) / 2;
-
-            // Center the logo vertically
-            int logoY = y + (entryHeight - logoHeight) / 2;
-
-            // In 1.21.4+, use PoseStack scaling to achieve the desired size
+            // Use pose stack to scale 256x256 texture down to display size
             graphics.pose().pushPose();
             graphics.pose().translate(logoX, logoY, 0);
+            float logoScale = (float)logoDisplaySize / 256.0f;
+            graphics.pose().scale(logoScale, logoScale, 1.0f);
 
-            // Scale from texture size to desired logo size
-            float scaleX = (float) logoWidth / textureWidth;
-            float scaleY = (float) logoHeight / textureHeight;
-            graphics.pose().scale(scaleX, scaleY, 1.0f);
-
-            // Draw at (0,0) since we've already translated, using full texture
+            // Render full 256x256 texture at 0,0 (already translated)
             graphics.blit(RenderType::guiTextured, logoTexture,
-                    0, 0,                            // Position (already translated)
-                    0.0f, 0.0f,                      // UV offset
-                    textureWidth, textureHeight,     // Region size (full texture)
-                    textureWidth, textureHeight);    // Texture dimensions
+                0, 0, 0.0f, 0.0f, 256, 256, 256, 256);
 
             graphics.pose().popPose();
+
+            // SODIUM FIX: Flush after logo rendering to isolate from text
+            graphics.flush();
         }
 
         // Draw collection name
