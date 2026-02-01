@@ -15,6 +15,7 @@ import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.client.gui.widget.CollectionEntry;
 import com.theplumteam.client.gui.widget.CollectionListWidget;
+import com.theplumteam.client.gui.widget.CustomCollectionListWidget;
 import com.theplumteam.client.gui.widget.FigureListWidget;
 import com.theplumteam.client.gui.widget.LinkButton;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
@@ -56,6 +57,8 @@ public class CollectionSelectionScreen extends Screen {
     // Widgets
     @Nullable
     private CollectionListWidget collectionListWidget;
+    @Nullable
+    private CustomCollectionListWidget customCollectionListWidget; // SODIUM TEST
     @Nullable
     private FigureListWidget figureListWidget;
     private Button useRegularButton;
@@ -171,19 +174,15 @@ public class CollectionSelectionScreen extends Screen {
         int bottomSectionHeight = tokenInfoHeight + (scaledComponentHeight * 2) + scaledSpacing + scaledPadding + extraBottomSpacing;
         int listHeight = panelHeight - topSectionHeight - bottomSectionHeight;
 
-        // Create collection list on the left (full height - header will render on top)
-        int collectionHeaderHeight = 30; // Space for "Collections" header (for rendering only)
-        collectionListWidget = new CollectionListWidget(
+        // SODIUM TEST: Use custom widget instead of ObjectSelectionList
+        customCollectionListWidget = new CustomCollectionListWidget(
                 this,
-                this.minecraft,
+                componentX,
+                yPos,
                 leftPanelWidth,
-                listHeight, // Full height - allow scrolling under header
-                yPos, // Start at same Y as before
-                55 // Entry height - adjusted for optimal spacing
+                listHeight
         );
-        collectionListWidget.setXPosition(componentX);
-        // Add for input handling only - we'll render manually outside the scaled pose
-        this.addWidget(collectionListWidget);
+        this.addRenderableWidget(customCollectionListWidget);
 
         // Load collections
         loadCollections();
@@ -443,13 +442,13 @@ public class CollectionSelectionScreen extends Screen {
             graphics.pose().popPose();
         }
 
-        // Render lists OUTSIDE the scaled pose - they handle their own scaling
-        // Pass virtual mouse coordinates (same as mouseClicked) for consistency
-        if (collectionListWidget != null) {
-            collectionListWidget.render(graphics, adjustedMouseX, adjustedMouseY, partialTick);
-        }
+        // SODIUM TEST: Custom widget is already rendered by super.render() as a renderable widget
+        // No need to manually render it here
+
+        // Still render the figure list normally
         if (figureListWidget != null) {
             figureListWidget.render(graphics, adjustedMouseX, adjustedMouseY, partialTick);
+            FigureListWidget.renderDeferredText(graphics, this.font);
         }
     }
 
@@ -645,17 +644,11 @@ public class CollectionSelectionScreen extends Screen {
      * Load collections into the list widget
      */
     private void loadCollections() {
-        if (collectionListWidget == null) {
-            return;
-        }
-
-        for (FigureCollection collection : collections) {
-            collectionListWidget.addCollectionEntry(collection);
-        }
-
-        // Select the current collection if it exists
-        if (selectedCollectionId != null && !selectedCollectionId.isEmpty()) {
-            collectionListWidget.selectByCollectionId(selectedCollectionId);
+        // SODIUM TEST: Load into custom widget
+        if (customCollectionListWidget != null) {
+            for (FigureCollection collection : collections) {
+                customCollectionListWidget.addCollection(collection);
+            }
         }
     }
 

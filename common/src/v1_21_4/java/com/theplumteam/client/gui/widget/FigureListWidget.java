@@ -18,6 +18,9 @@ public class FigureListWidget extends ObjectSelectionList<FigureEntry> {
     private FigureCollection currentCollection;
     private int xPosition;
 
+    // SODIUM FIX: Store text rendering data to render from screen instead of entry
+    public static final java.util.List<CollectionListWidget.TextRenderData> deferredTextRenders = new java.util.ArrayList<>();
+
     // Configuration values
     private float modelScale = 1.0f;
     private float xRotation = 0.0f;
@@ -122,13 +125,44 @@ public class FigureListWidget extends ObjectSelectionList<FigureEntry> {
 
     @Override
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // Sodium compatibility: flush before enabling scissor to ensure all previous draws complete
-        graphics.flush();
+        // SODIUM FIX: Clear deferred text before rendering entries
+        deferredTextRenders.clear();
 
+        // Render normally - entries will populate deferredTextRenders
         super.renderWidget(graphics, mouseX, mouseY, partialTick);
 
-        // Sodium compatibility: flush after rendering with scissor enabled to submit batched text
-        graphics.flush();
+        // SODIUM FIX: Render deferred text IMMEDIATELY after entries, while still in renderWidget context
+        renderDeferredTextImmediate(graphics, minecraft.font);
+    }
+
+    /**
+     * SODIUM FIX: Render deferred text immediately in the same context as entries
+     */
+    private void renderDeferredTextImmediate(GuiGraphics graphics, net.minecraft.client.gui.Font font) {
+        // Set explicit render states for text
+        com.mojang.blaze3d.systems.RenderSystem.enableBlend();
+        com.mojang.blaze3d.systems.RenderSystem.defaultBlendFunc();
+        com.mojang.blaze3d.systems.RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+
+        for (CollectionListWidget.TextRenderData data : deferredTextRenders) {
+            // Draw text at high Z-level
+            graphics.pose().pushPose();
+            graphics.pose().translate(0, 0, 400);
+            graphics.drawString(font, data.text, data.x, data.y, data.color, data.shadow);
+            graphics.pose().popPose();
+        }
+
+        // Reset render state
+        com.mojang.blaze3d.systems.RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+
+        deferredTextRenders.clear();
+    }
+
+    /**
+     * SODIUM FIX: Public method for screen to call (now does nothing since we render immediately)
+     */
+    public static void renderDeferredText(GuiGraphics graphics, net.minecraft.client.gui.Font font) {
+        // Text is now rendered immediately in renderWidget, this is just a no-op for compatibility
     }
 
     @Override

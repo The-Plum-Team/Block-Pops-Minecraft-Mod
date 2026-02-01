@@ -142,7 +142,10 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
                     int nameX = figureX + (effectiveFigureSize - mc.font.width(figureName)) / 2;
                     int nameY = y + effectiveFigureSize - mc.font.lineHeight - 2;
-                    graphics.drawString(mc.font, figureName, nameX, nameY, 0xFFFFFF, true);
+
+                    // SODIUM FIX: Defer text rendering to screen level
+                    FigureListWidget.deferredTextRenders.add(new CollectionListWidget.TextRenderData(
+                        figureName, nameX, nameY, 0xFFFFFFFF, true));
                 }
 
                 // Draw link icon in top-right corner when hovered and figure has author URL
@@ -185,7 +188,10 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 int qmWidth = mc.font.width(questionMark);
                 int qmX = figureX + (effectiveFigureSize - qmWidth) / 2;
                 int qmY = y + (effectiveFigureSize - mc.font.lineHeight) / 2;
-                graphics.drawString(mc.font, questionMark, qmX, qmY, 0x808080, false);
+
+                // SODIUM FIX: Defer text rendering to screen level
+                FigureListWidget.deferredTextRenders.add(new CollectionListWidget.TextRenderData(
+                    questionMark, qmX, qmY, 0xFF808080, false));
 
                 // Don't show name for undiscovered figures
             }

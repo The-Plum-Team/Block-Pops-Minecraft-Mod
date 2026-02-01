@@ -149,9 +149,14 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         int textY = y + effectiveTopPadding;
         int textColor = isSelected ? 0xFFFFFFFF : 0xFFE0E0E0;
 
-        graphics.drawString(mc.font, collection.getName(), textX, textY, textColor, false);
+        // SODIUM FIX: Defer text rendering to screen level instead of rendering here
+        // Store text data to be rendered later from CollectionSelectionScreen.render()
 
-        // Draw figure count below the name (discovered/total)
+        // Collection name
+        CollectionListWidget.deferredTextRenders.add(new CollectionListWidget.TextRenderData(
+            Component.literal(collection.getName()), textX, textY, textColor, false));
+
+        // Figure count
         int totalFigures = collection.getFigures().size();
         int discoveredCount = 0;
         for (FigureDefinition figure : collection.getFigures()) {
@@ -163,9 +168,11 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         String figureCount = discoveredCount + "/" + totalFigures + " figures";
         int subTextY = textY + mc.font.lineHeight + 2;
         int subTextColor = isSelected ? 0xFFAAAAAA : 0xFF808080;
-        graphics.drawString(mc.font, figureCount, textX, subTextY, subTextColor, false);
 
-        // Draw collection author below the figure count
+        CollectionListWidget.deferredTextRenders.add(new CollectionListWidget.TextRenderData(
+            Component.literal(figureCount), textX, subTextY, subTextColor, false));
+
+        // Collection author
         String author = collection.getAuthor();
         Component authorText;
         if ("world_players".equals(collection.getId())) {
@@ -180,7 +187,9 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
                 .append(Component.literal(author).withStyle(ChatFormatting.GOLD));
         }
         int authorY = subTextY + mc.font.lineHeight + 2;
-        graphics.drawString(mc.font, authorText, textX, authorY, 0xFFFFFFFF, false);
+
+        CollectionListWidget.deferredTextRenders.add(new CollectionListWidget.TextRenderData(
+            authorText, textX, authorY, 0xFFFFFFFF, false));
 
         // Render link button on hover or when selected if author URL is available
         this.isLinkHovered = false;
