@@ -174,15 +174,17 @@ public class CollectionSelectionScreen extends Screen {
         int bottomSectionHeight = tokenInfoHeight + (scaledComponentHeight * 2) + scaledSpacing + scaledPadding + extraBottomSpacing;
         int listHeight = panelHeight - topSectionHeight - bottomSectionHeight;
 
-        // SODIUM TEST: Use custom widget instead of ObjectSelectionList
-        customCollectionListWidget = new CustomCollectionListWidget(
+        // Try using original ObjectSelectionList with new logo approach
+        collectionListWidget = new CollectionListWidget(
                 this,
-                componentX,
-                yPos,
+                this.minecraft,
                 leftPanelWidth,
-                listHeight
+                listHeight,
+                yPos,
+                55
         );
-        this.addRenderableWidget(customCollectionListWidget);
+        collectionListWidget.setXPosition(componentX);
+        this.addWidget(collectionListWidget);
 
         // Load collections
         loadCollections();
@@ -442,13 +444,12 @@ public class CollectionSelectionScreen extends Screen {
             graphics.pose().popPose();
         }
 
-        // SODIUM TEST: Custom widget is already rendered by super.render() as a renderable widget
-        // No need to manually render it here
-
-        // Still render the figure list normally
+        // Render lists OUTSIDE the scaled pose
+        if (collectionListWidget != null) {
+            collectionListWidget.render(graphics, adjustedMouseX, adjustedMouseY, partialTick);
+        }
         if (figureListWidget != null) {
             figureListWidget.render(graphics, adjustedMouseX, adjustedMouseY, partialTick);
-            FigureListWidget.renderDeferredText(graphics, this.font);
         }
     }
 
@@ -644,11 +645,17 @@ public class CollectionSelectionScreen extends Screen {
      * Load collections into the list widget
      */
     private void loadCollections() {
-        // SODIUM TEST: Load into custom widget
-        if (customCollectionListWidget != null) {
-            for (FigureCollection collection : collections) {
-                customCollectionListWidget.addCollection(collection);
-            }
+        if (collectionListWidget == null) {
+            return;
+        }
+
+        for (FigureCollection collection : collections) {
+            collectionListWidget.addCollectionEntry(collection);
+        }
+
+        // Select the current collection if it exists
+        if (selectedCollectionId != null && !selectedCollectionId.isEmpty()) {
+            collectionListWidget.selectByCollectionId(selectedCollectionId);
         }
     }
 

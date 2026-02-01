@@ -91,15 +91,8 @@ public class CollectionListWidget extends ObjectSelectionList<CollectionEntry> {
 
     @Override
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // SODIUM FIX: Clear deferred text before rendering entries
-        deferredTextRenders.clear();
-
-        // Render normally - entries will populate deferredTextRenders
+        // Try normal rendering with new logo approach
         super.renderWidget(graphics, mouseX, mouseY, partialTick);
-
-        // SODIUM FIX: Render deferred text IMMEDIATELY after entries, while still in renderWidget context
-        // This keeps us in the same coordinate space and scissor region
-        renderDeferredTextImmediate(graphics, minecraft.font);
     }
 
     /**
