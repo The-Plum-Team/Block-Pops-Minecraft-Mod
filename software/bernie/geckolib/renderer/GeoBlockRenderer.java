@@ -15,28 +15,27 @@ import software.bernie.geckolib.renderer.base.GeoRenderer;
 import software.bernie.geckolib.renderer.layer.GeoRenderLayer;
 import software.bernie.geckolib.renderer.layer.GeoRenderLayersContainer;
 import software.bernie.geckolib.util.RenderUtil;
-
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.math.Axis;
 import java.util.List;
-import net.minecraft.class_1921;
-import net.minecraft.class_2318;
-import net.minecraft.class_2338;
-import net.minecraft.class_2350;
-import net.minecraft.class_2383;
-import net.minecraft.class_243;
-import net.minecraft.class_2586;
-import net.minecraft.class_2680;
-import net.minecraft.class_4587;
-import net.minecraft.class_4588;
-import net.minecraft.class_4597;
-import net.minecraft.class_7833;
-import net.minecraft.class_827;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.DirectionalBlock;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 
 /**
- * Base {@link GeoRenderer} class for rendering {@link class_2586 Blocks} specifically
+ * Base {@link GeoRenderer} class for rendering {@link BlockEntity Blocks} specifically
  * <p>
  * All blocks added to be rendered by GeckoLib should use an instance of this class.
  */
-public class GeoBlockRenderer<T extends class_2586 & GeoAnimatable> implements GeoRenderer<T, Void, GeoRenderState>, class_827<T> {
+public class GeoBlockRenderer<T extends BlockEntity & GeoAnimatable> implements GeoRenderer<T, Void, GeoRenderState>, BlockEntityRenderer<T> {
 	protected final GeoRenderLayersContainer<T, Void, GeoRenderState> renderLayers = new GeoRenderLayersContainer<>(this);
 	protected final GeoModel<T> model;
 
@@ -104,7 +103,7 @@ public class GeoBlockRenderer<T extends class_2586 & GeoAnimatable> implements G
 	@ApiStatus.Internal
 	@Override
 	public long getInstanceId(T animatable, Void relatedObject) {
-		return animatable.method_11016().hashCode();
+		return animatable.getBlockPos().hashCode();
 	}
 
 	@ApiStatus.Internal
@@ -112,9 +111,9 @@ public class GeoBlockRenderer<T extends class_2586 & GeoAnimatable> implements G
 	public GeoRenderState captureDefaultRenderState(T animatable, Void relatedObject, GeoRenderState renderState, float partialTick) {
 		GeoRenderer.super.captureDefaultRenderState(animatable, relatedObject, renderState, partialTick);
 
-		renderState.addGeckolibData(DataTickets.BLOCKSTATE, animatable.method_11010());
-		renderState.addGeckolibData(DataTickets.BLOCKPOS, animatable.method_11016());
-		renderState.addGeckolibData(DataTickets.POSITION, class_243.method_24953(animatable.method_11016()));
+		renderState.addGeckolibData(DataTickets.BLOCKSTATE, animatable.getBlockState());
+		renderState.addGeckolibData(DataTickets.BLOCKPOS, animatable.getBlockPos());
+		renderState.addGeckolibData(DataTickets.POSITION, Vec3.atCenterOf(animatable.getBlockPos()));
 		renderState.addGeckolibData(DataTickets.BLOCK_FACING, getFacing(animatable));
 
 		return renderState;
@@ -123,36 +122,36 @@ public class GeoBlockRenderer<T extends class_2586 & GeoAnimatable> implements G
 	/**
 	 * Called before rendering the model to buffer. Allows for render modifications and preparatory work such as scaling and translating
 	 * <p>
-	 * {@link class_4587} translations made here are kept until the end of the render process
+	 * {@link PoseStack} translations made here are kept until the end of the render process
 	 */
 	@Override
-	public void preRender(GeoRenderState renderState, class_4587 poseStack, BakedGeoModel model, @Nullable class_4597 bufferSource, @Nullable class_4588 buffer, boolean isReRender,
+	public void preRender(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel model, @Nullable MultiBufferSource bufferSource, @Nullable VertexConsumer buffer, boolean isReRender,
 						  int packedLight, int packedOverlay, int renderColor) {
 		if (!isReRender)
-			this.blockRenderTranslations = new Matrix4f(poseStack.method_23760().method_23761());
+			this.blockRenderTranslations = new Matrix4f(poseStack.last().pose());
 	}
 
 	/**
-	 * Transform the {@link class_4587} in preparation for rendering the model, excluding when re-rendering the model as part of a {@link GeoRenderLayer} or external render call
+	 * Transform the {@link PoseStack} in preparation for rendering the model, excluding when re-rendering the model as part of a {@link GeoRenderLayer} or external render call
 	 */
 	@Override
-	public void adjustPositionForRender(GeoRenderState renderState, class_4587 poseStack, BakedGeoModel model, boolean isReRender) {
+	public void adjustPositionForRender(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel model, boolean isReRender) {
 		if (!isReRender)
-			poseStack.method_22904(0.5, 0, 0.5);
+			poseStack.translate(0.5, 0, 0.5);
 	}
 
 	/**
-	 * Scales the {@link class_4587} in preparation for rendering the model, excluding when re-rendering the model as part of a {@link GeoRenderLayer} or external render call
+	 * Scales the {@link PoseStack} in preparation for rendering the model, excluding when re-rendering the model as part of a {@link GeoRenderLayer} or external render call
 	 * <p>
 	 * Override and call super with modified scale values as needed to further modify the scale of the model (E.G. child entities)
 	 */
 	@Override
-	public void scaleModelForRender(GeoRenderState renderState, float widthScale, float heightScale, class_4587 poseStack, BakedGeoModel model, boolean isReRender) {
+	public void scaleModelForRender(GeoRenderState renderState, float widthScale, float heightScale, PoseStack poseStack, BakedGeoModel model, boolean isReRender) {
 		GeoRenderer.super.scaleModelForRender(renderState, widthScale * this.scaleWidth, heightScale * this.scaleHeight, poseStack, model, isReRender);
 	}
 
 	@Override
-	public void method_3569(T animatable, float partialTick, class_4587 poseStack, class_4597 bufferSource, int packedLight, int packedOverlay, class_243 cameraPosition) {
+	public void render(T animatable, float partialTick, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, int packedOverlay, Vec3 cameraPosition) {
 		GeoRenderState renderState = fillRenderState(animatable, null, new GeoRenderState.Impl(), partialTick);
 
 		renderState.addGeckolibData(DataTickets.PACKED_LIGHT, packedLight);
@@ -166,14 +165,14 @@ public class GeoBlockRenderer<T extends class_2586 & GeoAnimatable> implements G
 	 * {@link GeoRenderer#preRender} has already been called by this stage, and {@link GeoRenderer#postRender} will be called directly after
 	 */
 	@Override
-	public void actuallyRender(GeoRenderState renderState, class_4587 poseStack, BakedGeoModel model, @Nullable class_1921 renderType,
-							   class_4597 bufferSource, @Nullable class_4588 buffer, boolean isReRender, int packedLight, int packedOverlay, int renderColor) {
+	public void actuallyRender(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel model, @Nullable RenderType renderType,
+							   MultiBufferSource bufferSource, @Nullable VertexConsumer buffer, boolean isReRender, int packedLight, int packedOverlay, int renderColor) {
 		if (!isReRender) {
 			rotateBlock(renderState.getGeckolibData(DataTickets.BLOCK_FACING), poseStack);
 			getGeoModel().handleAnimations(createAnimationState(renderState));
 		}
 
-		this.modelRenderTranslations = new Matrix4f(poseStack.method_23760().method_23761());
+		this.modelRenderTranslations = new Matrix4f(poseStack.last().pose());
 
 		if (buffer != null)
 			GeoRenderer.super.actuallyRender(renderState, poseStack, model, renderType, bufferSource, buffer, isReRender, packedLight, packedOverlay, renderColor);
@@ -194,31 +193,31 @@ public class GeoBlockRenderer<T extends class_2586 & GeoAnimatable> implements G
 	 * Renders the provided {@link GeoBone} and its associated child bones
 	 */
 	@Override
-	public void renderRecursively(GeoRenderState renderState, class_4587 poseStack, GeoBone bone, class_1921 renderType, class_4597 bufferSource, class_4588 buffer, boolean isReRender, int packedLight, int packedOverlay, int renderColor) {
+	public void renderRecursively(GeoRenderState renderState, PoseStack poseStack, GeoBone bone, RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer, boolean isReRender, int packedLight, int packedOverlay, int renderColor) {
 		if (bone.isTrackingMatrices()) {
-			Matrix4f poseState = new Matrix4f(poseStack.method_23760().method_23761());
+			Matrix4f poseState = new Matrix4f(poseStack.last().pose());
 			Matrix4f localMatrix = RenderUtil.invertAndMultiplyMatrices(poseState, this.blockRenderTranslations);
 			Matrix4f worldState = new Matrix4f(localMatrix);
-			class_2338 pos = renderState.getGeckolibData(DataTickets.BLOCKPOS);
+			BlockPos pos = renderState.getGeckolibData(DataTickets.BLOCKPOS);
 
 			bone.setModelSpaceMatrix(RenderUtil.invertAndMultiplyMatrices(poseState, this.modelRenderTranslations));
 			bone.setLocalSpaceMatrix(localMatrix);
-			bone.setWorldSpaceMatrix(worldState.translate(new Vector3f(pos.method_10263(), pos.method_10264(), pos.method_10260())));
+			bone.setWorldSpaceMatrix(worldState.translate(new Vector3f(pos.getX(), pos.getY(), pos.getZ())));
 		}
 
 		GeoRenderer.super.renderRecursively(renderState, poseStack, bone, renderType, bufferSource, buffer, isReRender, packedLight, packedOverlay, renderColor);
 	}
 
 	/**
-	 * Rotate the {@link class_4587} based on the determined {@link class_2350} the block is facing
+	 * Rotate the {@link PoseStack} based on the determined {@link Direction} the block is facing
 	 */
-	protected void rotateBlock(class_2350 facing, class_4587 poseStack) {
+	protected void rotateBlock(Direction facing, PoseStack poseStack) {
 		switch (facing) {
-			case field_11035 -> poseStack.method_22907(class_7833.field_40716.rotationDegrees(180));
-			case field_11039 -> poseStack.method_22907(class_7833.field_40716.rotationDegrees(90));
-			case field_11034 -> poseStack.method_22907(class_7833.field_40715.rotationDegrees(90));
-			case field_11036 -> poseStack.method_22907(class_7833.field_40714.rotationDegrees(90));
-			case field_11033 -> poseStack.method_22907(class_7833.field_40713.rotationDegrees(90));
+			case SOUTH -> poseStack.mulPose(Axis.YP.rotationDegrees(180));
+			case WEST -> poseStack.mulPose(Axis.YP.rotationDegrees(90));
+			case EAST -> poseStack.mulPose(Axis.YN.rotationDegrees(90));
+			case UP -> poseStack.mulPose(Axis.XP.rotationDegrees(90));
+			case DOWN -> poseStack.mulPose(Axis.XN.rotationDegrees(90));
 			default -> {}
 		}
 	}
@@ -226,16 +225,16 @@ public class GeoBlockRenderer<T extends class_2586 & GeoAnimatable> implements G
 	/**
 	 * Attempt to extract a direction from the block so that the model can be oriented correctly
 	 */
-	protected class_2350 getFacing(T blockEntity) {
-		class_2680 blockState = blockEntity.method_11010();
+	protected Direction getFacing(T blockEntity) {
+		BlockState blockState = blockEntity.getBlockState();
 
-		if (blockState.method_28498(class_2383.field_11177))
-			return blockState.method_11654(class_2383.field_11177);
+		if (blockState.hasProperty(HorizontalDirectionalBlock.FACING))
+			return blockState.getValue(HorizontalDirectionalBlock.FACING);
 
-		if (blockState.method_28498(class_2318.field_10927))
-			return blockState.method_11654(class_2318.field_10927);
+		if (blockState.hasProperty(DirectionalBlock.FACING))
+			return blockState.getValue(DirectionalBlock.FACING);
 
-		return class_2350.field_11043;
+		return Direction.NORTH;
 	}
 
 	/**
@@ -260,7 +259,7 @@ public class GeoBlockRenderer<T extends class_2586 & GeoAnimatable> implements G
 	 * @return Whether the renderer should proceed based on the cancellation state of the event
 	 */
 	@Override
-	public boolean firePreRenderEvent(GeoRenderState renderState, class_4587 poseStack, BakedGeoModel model, class_4597 bufferSource) {
+	public boolean firePreRenderEvent(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel model, MultiBufferSource bufferSource) {
 		return GeckoLibServices.Client.EVENTS.fireBlockPreRender(this, renderState, poseStack, model, bufferSource);
 	}
 
@@ -268,7 +267,7 @@ public class GeoBlockRenderer<T extends class_2586 & GeoAnimatable> implements G
 	 * Create and fire the relevant {@code Post-Render} event hook for this renderer
 	 */
 	@Override
-	public void firePostRenderEvent(GeoRenderState renderState, class_4587 poseStack, BakedGeoModel model, class_4597 bufferSource) {
+	public void firePostRenderEvent(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel model, MultiBufferSource bufferSource) {
 		GeckoLibServices.Client.EVENTS.fireBlockPostRender(this, renderState, poseStack, model, bufferSource);
 	}
 }

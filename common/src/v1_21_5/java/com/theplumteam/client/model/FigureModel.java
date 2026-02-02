@@ -84,7 +84,7 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
     }
 
     // Helper method - moved from getTextureResource for use in addAdditionalStateData
-    private ResourceLocation resolveTexture(BoxBlockEntity animatable) {
+    public ResourceLocation resolveTexture(BoxBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure == null) return FALLBACK_TEXTURE;
 

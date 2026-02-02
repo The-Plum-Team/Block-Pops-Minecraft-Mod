@@ -10,6 +10,7 @@ import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -25,49 +26,31 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     private final GeoBlockRenderer<BoxBlockEntity> figureRenderer;
     // Store current animatable for use in actuallyRender
     private BoxBlockEntity currentAnimatable;
+    private float currentPartialTick;
+    private Vec3 currentCamPos;
 
     public BoxBlockRenderer() {
         super(new BoxBlockModel());
         // Create a separate renderer instance for the figure
-        // It will inherit the default rotateBlock() behavior to rotate with the box
-        this.figureRenderer = new GeoBlockRenderer<>(new FigureModel());
+        // Override rotateBlock to no-op since the box's rotation is already applied in the PoseStack
+        this.figureRenderer = new GeoBlockRenderer<>(new FigureModel()) {
+            @Override
+            protected void rotateBlock(Direction facing, PoseStack poseStack) {
+                // Don't apply block rotation - the box's rotation is already in the PoseStack
+            }
+        };
     }
 
     @Override
     public void render(BoxBlockEntity animatable, float partialTick, PoseStack poseStack,
                       MultiBufferSource bufferSource, int packedLight, int packedOverlay, Vec3 camPos) {
-        // Store animatable for use in actuallyRender
+        // Store animatable and render params for use in actuallyRender
         this.currentAnimatable = animatable;
+        this.currentPartialTick = partialTick;
+        this.currentCamPos = camPos;
 
         // Render the box model (the main model) - this calls actuallyRender() internally
         super.render(animatable, partialTick, poseStack, bufferSource, packedLight, packedOverlay, camPos);
-
-        // Render the figure model if one exists and hasn't been extracted
-        // NOTE: This must be done AFTER super.render() completes, so we save/restore the pose stack
-        if (animatable.hasFigure() && !animatable.isFigureExtracted()) {
-            poseStack.pushPose();
-
-            // GeckoLib 5 already centered the box at (0.5, 0, 0.5)
-            // We need to position the figure relative to that center, not add another centering
-            // The figure's adjustPositionForRender will try to center it again, so we compensate
-
-            // Apply figure offset (these are relative to block origin, not box center)
-            // Since the figure renderer will add (0.5, 0, 0.5), we need to subtract it first
-            poseStack.translate(
-                animatable.getFigureOffsetX() + 0.5,  // Compensate for figure's auto-centering
-                animatable.getFigureOffsetY(),
-                animatable.getFigureOffsetZ() + 0.5
-            );
-            poseStack.scale((float) animatable.getFigureScale(),
-                          (float) animatable.getFigureScale(),
-                          (float) animatable.getFigureScale());
-
-            // Render the figure using separate renderer
-            figureRenderer.render(animatable, partialTick, poseStack, bufferSource,
-                                packedLight, packedOverlay, camPos);
-
-            poseStack.popPose();
-        }
 
         this.currentAnimatable = null;
     }
@@ -92,6 +75,29 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         if (!currentAnimatable.isHideLogo()) {
             renderCollectionLogo(renderState, poseStack, model, bufferSource, packedLight, packedOverlay);
         }
+
+        // Render the 3D figure model inside the box
+        // Done here (inside actuallyRender) so the PoseStack already has the box's centering + rotation
+        if (currentAnimatable.hasFigure() && !currentAnimatable.isFigureExtracted()) {
+            poseStack.pushPose();
+
+            // Apply figure offset relative to the box (rotation already applied by the box)
+            poseStack.translate(
+                currentAnimatable.getFigureOffsetX(),
+                currentAnimatable.getFigureOffsetY(),
+                currentAnimatable.getFigureOffsetZ()
+            );
+            poseStack.scale((float) currentAnimatable.getFigureScale(),
+                          (float) currentAnimatable.getFigureScale(),
+                          (float) currentAnimatable.getFigureScale());
+
+            // Render the figure using separate renderer
+            // figureRenderer has rotateBlock overridden to no-op since box rotation is already applied
+            figureRenderer.render(currentAnimatable, currentPartialTick, poseStack, bufferSource,
+                                packedLight, packedOverlay, currentCamPos);
+
+            poseStack.popPose();
+        }
     }
 
     private void renderFigureFace(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel model,
@@ -99,7 +105,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         FigureDefinition figure = currentAnimatable.getFigureDefinition();
         if (figure == null) return;
 
-        ResourceLocation skinTexture = figure.getTexturePath();
+        ResourceLocation skinTexture = ((FigureModel) figureRenderer.getGeoModel()).resolveTexture(currentAnimatable);
         if (skinTexture == null) return;
 
         RenderType skinRenderType = RenderType.itemEntityTranslucentCull(skinTexture);
