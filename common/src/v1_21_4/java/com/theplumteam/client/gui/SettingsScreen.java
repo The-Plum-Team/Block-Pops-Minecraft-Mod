@@ -2,19 +2,20 @@ package com.theplumteam.client.gui;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.client.config.ClientConfig;
+import com.theplumteam.client.config.ClientServerConfig;
 import com.theplumteam.client.gui.util.ButtonFactory;
 import com.theplumteam.client.gui.widget.TabButton;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.network.UnlockCollectionPacket;
 import com.theplumteam.network.ReloadTokensPacket;
-import com.theplumteam.network.UpdateGuaranteedResetHourPacket;
-import com.theplumteam.server.config.ServerConfig;
+import com.theplumteam.network.UpdateTokenSettingsPacket;
 import dev.architectury.platform.Platform;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -81,6 +82,14 @@ public class SettingsScreen extends Screen {
     private HourSlider resetHourSlider;
     private int loadedServerHourLocal; // The hour currently saved/loaded
     private int pendingServerHourLocal; // The hour currently selected on slider
+
+    // Token settings (Server tab - EditBox fields for admins, read-only for non-admins)
+    private EditBox regularCooldownBox;
+    private EditBox maxRegularBox;
+    private EditBox guaranteedCooldownBox;
+    private int loadedRegularCooldown;
+    private int loadedMaxRegular;
+    private int loadedGuaranteedCooldown;
 
     // Star color sliders (Develop tab)
     private ColorSlider starRedSlider;
@@ -190,21 +199,74 @@ public class SettingsScreen extends Screen {
     }
 
     /**
+     * Check if the current player is an admin (permission level 2+)
+     */
+    private boolean isAdmin() {
+        if (isDevelopmentMode()) {
+            return true;
+        }
+        if (this.minecraft != null && this.minecraft.player != null) {
+            return this.minecraft.player.hasPermissions(2);
+        }
+        return false;
+    }
+
+    /**
+     * Parse an integer from an EditBox value, returning a default if invalid/empty
+     */
+    private static int parseEditBoxInt(EditBox box, int defaultValue) {
+        String text = box.getValue().trim();
+        if (text.isEmpty()) return defaultValue;
+        try {
+            return Integer.parseInt(text);
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * Check if any server settings have been changed from their loaded values
+     */
+    private boolean hasServerSettingsChanged() {
+        if (!isAdmin()) return false;
+        if (regularCooldownBox == null || maxRegularBox == null || guaranteedCooldownBox == null) return false;
+        int currentRegularCooldown = parseEditBoxInt(regularCooldownBox, loadedRegularCooldown);
+        int currentMaxRegular = parseEditBoxInt(maxRegularBox, loadedMaxRegular);
+        int currentGuaranteedCooldown = parseEditBoxInt(guaranteedCooldownBox, loadedGuaranteedCooldown);
+        return currentRegularCooldown != loadedRegularCooldown
+                || currentMaxRegular != loadedMaxRegular
+                || currentGuaranteedCooldown != loadedGuaranteedCooldown
+                || pendingServerHourLocal != loadedServerHourLocal;
+    }
+
+    /**
      * Handles the click of the context-sensitive action button
      */
     private void handleActionClick() {
         if (activeTab == Tab.SERVER) {
-            // "Change Time" logic
+            // "Save Settings" logic - clamp values client-side to match server validation
+            int regularCooldown = Math.max(1, Math.min(168, parseEditBoxInt(regularCooldownBox, loadedRegularCooldown)));
+            int maxRegular = Math.max(1, Math.min(99, parseEditBoxInt(maxRegularBox, loadedMaxRegular)));
+            int guaranteedCooldown = Math.max(1, Math.min(168, parseEditBoxInt(guaranteedCooldownBox, loadedGuaranteedCooldown)));
             int utcValue = convertLocalToUtc(pendingServerHourLocal);
 
-            // Update local config immediately for responsiveness
-            ServerConfig.getInstance().setGuaranteedTokenResetHour(utcValue);
+            // Send packet to server with all 4 settings
+            new UpdateTokenSettingsPacket(regularCooldown, maxRegular, guaranteedCooldown, utcValue).sendToServer();
 
-            // Send packet to server using cross-platform networking
-            new UpdateGuaranteedResetHourPacket(utcValue).sendToServer();
-
-            // Update loaded value to current and refresh button state
+            // Update loaded values to clamped values
+            this.loadedRegularCooldown = regularCooldown;
+            this.loadedMaxRegular = maxRegular;
+            this.loadedGuaranteedCooldown = guaranteedCooldown;
             this.loadedServerHourLocal = pendingServerHourLocal;
+
+            // Update EditBox fields to show clamped values
+            this.regularCooldownBox.setValue(String.valueOf(regularCooldown));
+            this.maxRegularBox.setValue(String.valueOf(maxRegular));
+            this.guaranteedCooldownBox.setValue(String.valueOf(guaranteedCooldown));
+
+            // Update ClientServerConfig immediately for responsiveness
+            ClientServerConfig.update(regularCooldown, maxRegular, guaranteedCooldown, utcValue);
+
             updateActionButtonState();
 
         } else if (activeTab == Tab.DEVELOP) {
@@ -231,10 +293,10 @@ public class SettingsScreen extends Screen {
      */
     private void updateActionButtonState() {
         if (activeTab == Tab.SERVER) {
-            this.actionButton.setMessage(Component.literal("Change time"));
-            // Locked until slider is moved to a different value
-            this.actionButton.active = (pendingServerHourLocal != loadedServerHourLocal);
-            this.actionButton.visible = true;
+            this.actionButton.setMessage(Component.literal("Save Settings"));
+            // Only visible and active for admins when values have changed
+            this.actionButton.visible = isAdmin();
+            this.actionButton.active = isAdmin() && hasServerSettingsChanged();
         } else if (activeTab == Tab.DEVELOP) {
             this.actionButton.setMessage(Component.literal("Reset Colors"));
             this.actionButton.active = true;
@@ -259,9 +321,7 @@ public class SettingsScreen extends Screen {
         RenderSystem.disableScissor();
 
         // Re-enable depth test and clear depth buffer to force our modal on top
-        RenderSystem.enableDepthTest();
         // In 1.21.4+, RenderSystem.clear() signature changed - just use clearDepth
-        RenderSystem.clearDepth(1.0);
 
         // Draw overlay over entire screen
         graphics.fill(0, 0, this.width, this.height, 0x70000000);
@@ -329,18 +389,66 @@ public class SettingsScreen extends Screen {
         // Draw server tab content
         if (activeTab == Tab.SERVER) {
             int headerY = this.panelY + TAB_HEIGHT + 10;
-            graphics.drawCenteredString(this.font, "Token Reset Settings",
+            graphics.drawCenteredString(this.font, "Token Settings",
                     this.panelX + this.panelWidth / 2,
                     headerY,
                     0xFFFFFF);
 
-            // Draw explanation text
-            int explanationY = this.panelY + TAB_HEIGHT + 80;
-            String[] explanationLines = {
-                    "The guaranteed token grants an undiscovered figure from the collection.",
-                    "This token resets daily at the hour specified above (in your local time).",
-                    "Set this to a time that works best for your server's player base."
-            };
+            // Draw labels for the settings fields
+            int contentWidth = 400;
+            int contentX = this.panelX + (this.panelWidth - contentWidth) / 2;
+            int fieldWidth = 60;
+            int startY = this.panelY + TAB_HEIGHT + 30;
+            int verticalSpacing = 30;
+            boolean admin = isAdmin();
+
+            int labelY = startY + 6; // Vertically center with EditBox
+            graphics.drawString(this.font, "Regular Token Cooldown (hours):",
+                    contentX, labelY, 0xFFFFFF);
+            if (!admin) {
+                // Show read-only value
+                String val = String.valueOf(ClientServerConfig.getRegularTokenCooldownHours());
+                graphics.drawString(this.font, val,
+                        contentX + contentWidth - this.font.width(val), labelY, 0xAAAAAA);
+            }
+
+            labelY += verticalSpacing;
+            graphics.drawString(this.font, "Max Regular Tokens:",
+                    contentX, labelY, 0xFFFFFF);
+            if (!admin) {
+                String val = String.valueOf(ClientServerConfig.getMaxRegularTokens());
+                graphics.drawString(this.font, val,
+                        contentX + contentWidth - this.font.width(val), labelY, 0xAAAAAA);
+            }
+
+            labelY += verticalSpacing;
+            graphics.drawString(this.font, "Guaranteed Token Cooldown (hours):",
+                    contentX, labelY, 0xFFFFFF);
+            if (!admin) {
+                String val = String.valueOf(ClientServerConfig.getGuaranteedTokenCooldownHours());
+                graphics.drawString(this.font, val,
+                        contentX + contentWidth - this.font.width(val), labelY, 0xAAAAAA);
+            }
+
+            // Draw explanation text below the fields
+            int explanationY = startY + (verticalSpacing * 3) + 30;
+            if (admin && resetHourSlider != null && resetHourSlider.visible) {
+                explanationY += 30; // Push down if slider is visible
+            }
+            String[] explanationLines;
+            if (admin) {
+                explanationLines = new String[]{
+                        "Configure token generation and reset timing for all players.",
+                        "When guaranteed cooldown is 24h, the reset happens at the specified hour.",
+                        "For other cooldown values, resets happen on fixed intervals."
+                };
+            } else {
+                explanationLines = new String[]{
+                        "These settings are configured by the server administrator.",
+                        "Regular tokens regenerate every " + ClientServerConfig.getRegularTokenCooldownHours() + " hour(s), up to " + ClientServerConfig.getMaxRegularTokens() + " max.",
+                        "The guaranteed token resets every " + ClientServerConfig.getGuaranteedTokenCooldownHours() + " hour(s)."
+                };
+            }
 
             for (int i = 0; i < explanationLines.length; i++) {
                 int lineWidth = this.font.width(explanationLines[i]);
@@ -468,41 +576,102 @@ public class SettingsScreen extends Screen {
      * Create server settings widgets
      */
     private void createServerSettings() {
-        ServerConfig config = ServerConfig.getInstance();
+        boolean admin = isAdmin();
 
-        int sliderHeight = 20;
-        int sliderWidth = 400;
+        int fieldHeight = 20;
+        int fieldWidth = 60;
+        int labelFieldSpacing = 8;
+        int verticalSpacing = 30;
 
-        // Center the slider horizontally
-        int sliderX = this.panelX + (this.panelWidth - sliderWidth) / 2;
-        int startY = this.panelY + TAB_HEIGHT + 50;
+        // Center the content area
+        int contentWidth = 400;
+        int contentX = this.panelX + (this.panelWidth - contentWidth) / 2;
+        int startY = this.panelY + TAB_HEIGHT + 30;
+
+        // Load current values from ClientServerConfig
+        this.loadedRegularCooldown = ClientServerConfig.getRegularTokenCooldownHours();
+        this.loadedMaxRegular = ClientServerConfig.getMaxRegularTokens();
+        this.loadedGuaranteedCooldown = ClientServerConfig.getGuaranteedTokenCooldownHours();
 
         // Get local timezone
         ZoneId localZone = ZoneId.systemDefault();
         String timezoneName = localZone.getDisplayName(TextStyle.SHORT, Locale.getDefault());
 
         // Convert UTC hour to local hour
-        int utcHour = config.getGuaranteedTokenResetHour();
+        int utcHour = ClientServerConfig.getGuaranteedTokenResetHour();
         int localHour = convertUtcToLocal(utcHour);
 
         // Initialize tracking variables
         this.loadedServerHourLocal = localHour;
         this.pendingServerHourLocal = localHour;
 
-        // Reset hour slider (0-23 in local time)
+        int currentY = startY;
+
+        // --- Regular Token Cooldown (hours) ---
+        int fieldX = contentX + contentWidth - fieldWidth;
+        if (admin) {
+            this.regularCooldownBox = new EditBox(this.font, fieldX, currentY, fieldWidth, fieldHeight, Component.literal("Regular Cooldown"));
+            this.regularCooldownBox.setValue(String.valueOf(loadedRegularCooldown));
+            this.regularCooldownBox.setFilter(s -> s.matches("\\d*"));
+            this.regularCooldownBox.setMaxLength(3);
+            this.regularCooldownBox.setResponder(s -> updateActionButtonState());
+            serverSettingWidgets.add(this.regularCooldownBox);
+        }
+        currentY += verticalSpacing;
+
+        // --- Max Regular Tokens ---
+        if (admin) {
+            this.maxRegularBox = new EditBox(this.font, fieldX, currentY, fieldWidth, fieldHeight, Component.literal("Max Regular"));
+            this.maxRegularBox.setValue(String.valueOf(loadedMaxRegular));
+            this.maxRegularBox.setFilter(s -> s.matches("\\d*"));
+            this.maxRegularBox.setMaxLength(2);
+            this.maxRegularBox.setResponder(s -> updateActionButtonState());
+            serverSettingWidgets.add(this.maxRegularBox);
+        }
+        currentY += verticalSpacing;
+
+        // --- Guaranteed Token Cooldown (hours) ---
+        if (admin) {
+            this.guaranteedCooldownBox = new EditBox(this.font, fieldX, currentY, fieldWidth, fieldHeight, Component.literal("Guaranteed Cooldown"));
+            this.guaranteedCooldownBox.setValue(String.valueOf(loadedGuaranteedCooldown));
+            this.guaranteedCooldownBox.setFilter(s -> s.matches("\\d*"));
+            this.guaranteedCooldownBox.setMaxLength(3);
+            this.guaranteedCooldownBox.setResponder(s -> {
+                // Show/hide hour slider based on guaranteed cooldown value
+                updateHourSliderVisibility();
+                updateActionButtonState();
+            });
+            serverSettingWidgets.add(this.guaranteedCooldownBox);
+        }
+        currentY += verticalSpacing;
+
+        // --- Reset Hour Slider (only when guaranteed cooldown = 24h) ---
+        int sliderWidth = contentWidth;
         this.resetHourSlider = new HourSlider(
-                sliderX, startY,
-                sliderWidth, sliderHeight,
+                contentX, currentY,
+                sliderWidth, fieldHeight,
                 Component.literal("Guaranteed Token Reset Hour (" + timezoneName + "): "),
                 localHour,
                 localValue -> {
-                    // Update pending value
                     this.pendingServerHourLocal = localValue;
-                    // Update button state (check if changed)
                     updateActionButtonState();
                 }
         );
-        serverSettingWidgets.add(this.resetHourSlider);
+        // Only show if cooldown is 24h
+        this.resetHourSlider.visible = (loadedGuaranteedCooldown == 24);
+        if (admin) {
+            serverSettingWidgets.add(this.resetHourSlider);
+        }
+    }
+
+    /**
+     * Update the visibility of the hour slider based on the guaranteed cooldown value
+     */
+    private void updateHourSliderVisibility() {
+        if (this.resetHourSlider != null && this.guaranteedCooldownBox != null) {
+            int cooldown = parseEditBoxInt(guaranteedCooldownBox, loadedGuaranteedCooldown);
+            this.resetHourSlider.visible = (cooldown == 24);
+        }
     }
 
     /**
@@ -939,6 +1108,4 @@ public class SettingsScreen extends Screen {
         }
     }
 
-    // renderBlurredBackground removed in 1.21.4 - no longer needed
-    // The menu blur effect is handled differently in 1.21.4+
 }

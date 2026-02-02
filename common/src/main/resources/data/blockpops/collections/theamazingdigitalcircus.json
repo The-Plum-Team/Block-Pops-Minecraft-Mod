@@ -6,11 +6,11 @@
   "box_texture": "blockpops:textures/block/box/theamazingdigitalcircus.png",
   "logo": {
     "texture": "blockpops:textures/block/box/logo/logo_theamazingdigitalcircus.png",
-    "position_x": -1.815,
-    "position_y": -0.471,
+    "position_x": -1.515,
+    "position_y": -0.342,
     "position_z": 0.0,
-    "scale_x": 6.905,
-    "scale_y": 8.129,
+    "scale_x": 5.934,
+    "scale_y": 6.905,
     "scale_z": 1.0
   },
   "background_color": {

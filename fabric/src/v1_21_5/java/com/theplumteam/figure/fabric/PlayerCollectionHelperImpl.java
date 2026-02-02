@@ -48,8 +48,8 @@ public class PlayerCollectionHelperImpl {
             GameProfileCache profileCache = server.getProfileCache();
 
             // Use default model and animation paths
-            ResourceLocation defaultModel = ResourceLocation.fromNamespaceAndPath("blockpops", "geo/figure/box_figure_default.geo.json");
-            ResourceLocation defaultAnimation = ResourceLocation.fromNamespaceAndPath("blockpops", "animations/figure/box_figure_default.animation.json");
+            ResourceLocation defaultModel = ResourceLocation.fromNamespaceAndPath("blockpops", "figure/box_figure_default");
+            ResourceLocation defaultAnimation = ResourceLocation.fromNamespaceAndPath("blockpops", "figure/box_figure_default");
 
             // First, process existing .dat files (if directory exists)
             if (playerdataDir.exists() && playerdataDir.isDirectory()) {

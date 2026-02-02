@@ -3,6 +3,7 @@ package com.theplumteam.client.gui;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.config.ClientConfig;
+import com.theplumteam.client.config.ClientServerConfig;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.client.gui.widget.CollectionEntry;
@@ -80,12 +81,10 @@ public class CollectionSelectionScreen extends Screen {
     private boolean isClosing = false;
 
     // Icon textures
+    private static final ResourceLocation SETTINGS_ICON = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/gui/settings_icon.png");
     private static final ResourceLocation DISCORD_ICON = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/gui/discord_icon.png");
     private static final ResourceLocation CURSEFORGE_ICON = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/gui/curseforge_icon.png");
     private static final ResourceLocation MODRINTH_ICON = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/gui/modrinth_icon.png");
-
-    // Icon textures
-    private static final ResourceLocation SETTINGS_ICON = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/gui/settings_icon.png");
 
     // URLs
     private static final String DISCORD_URL = "https://discord.gg/yGxdvA7qej";
@@ -363,6 +362,11 @@ public class CollectionSelectionScreen extends Screen {
     }
 
     @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // Override to skip the default blur - we have our own animated star background
+    }
+
+    @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         // Transform mouse coordinates if using inverse scale (shaders active)
         int adjustedMouseX = mouseX;
@@ -546,39 +550,37 @@ public class CollectionSelectionScreen extends Screen {
      */
     private void renderStarPattern(GuiGraphics graphics, float partialTick) {
         double pixelsPerSecond = 5.0;
-        int tileSize = StarPatternCache.getTileSize();
 
-        // Calculate smooth scrolling offset
+        // Calculate smooth scrolling offset using cache width for seamless wrapping
         int tickCount = this.minecraft != null ? this.minecraft.gui.getGuiTicks() : 0;
         double smoothTime = (tickCount + partialTick) / 20.0;
-        double offsetX = (smoothTime * pixelsPerSecond) % tileSize;
+        int cacheW = StarPatternCache.getTextureWidth();
+        double offsetX = (smoothTime * pixelsPerSecond) % (cacheW > 0 ? cacheW : 1);
 
-
-        // Apply star color tint and opacity from config
+        // Apply star color tint and opacity from config as ARGB color
         ClientConfig config = ClientConfig.getInstance();
-        RenderSystem.setShaderColor(config.starColorR, config.starColorG, config.starColorB, config.starOpacity);
+        int r = (int)(config.starColorR * 255);
+        int g = (int)(config.starColorG * 255);
+        int b = (int)(config.starColorB * 255);
+        int a = (int)(config.starOpacity * 255);
+        int argbColor = (a << 24) | (r << 16) | (g << 8) | b;
 
         // Use the pre-tiled cached texture
         ResourceLocation cacheTexture = StarPatternCache.getTextureLocation();
         int cacheWidth = StarPatternCache.getTextureWidth();
         int cacheHeight = StarPatternCache.getTextureHeight();
 
-        // Calculate UV coordinates for smooth sub-pixel scrolling
-        // The offset creates the scrolling effect via UV manipulation
-        float u0 = (float) offsetX / (float) cacheWidth;
-        float v0 = 0.0f;
-        float u1 = u0 + ((float) (GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width) / (float) cacheWidth);
-        float v1 = (float) (GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height) / (float) cacheHeight;
-
-        // Render a single quad with the scrolling UV coordinates
-        // In 1.21.5+, use GuiGraphics.innerBlit instead of BufferUploader
         int starHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
         int starWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
 
-        // In 1.21.5+, use blit with RenderType::guiTextured
-        graphics.blit(RenderType::guiTextured, cacheTexture, 0, 0, u0, v0, starWidth, starHeight, cacheWidth, cacheHeight);
+        // Ensure linear filtering for smooth sub-pixel scrolling
+        StarPatternCache.ensureLinearFiltering();
 
-        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        // Render with blit for smooth frame-synced rendering, passing ARGB color for opacity
+        // Use guiTextured instead of guiTexturedOverlay for Sodium compatibility -
+        // guiTexturedOverlay uses a different shader that Sodium batches differently,
+        // causing the tint color to bleed into subsequent text rendering
+        graphics.blit(RenderType::guiTextured, cacheTexture, 0, 0, (float) offsetX, 0.0f, starWidth, starHeight, cacheWidth, cacheHeight, argbColor);
     }
 
     /**
@@ -732,8 +734,9 @@ public class CollectionSelectionScreen extends Screen {
 
         // Regular token section (centered above left button)
         int regularTokens = ClientTokenManager.getRegularTokens();
-        String regularText = "Regular Tokens: " + regularTokens + "/3";
-        if (regularTokens < 3) {
+        int maxRegularTokens = ClientServerConfig.getMaxRegularTokens();
+        String regularText = "Regular Tokens: " + regularTokens + "/" + maxRegularTokens;
+        if (regularTokens < maxRegularTokens) {
             String nextRegularTime = ClientTokenManager.formatNextRegularTime();
             regularText += " - Next: " + nextRegularTime;
         }
@@ -846,6 +849,4 @@ public class CollectionSelectionScreen extends Screen {
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
-    // renderBlurredBackground removed in 1.21.4 - no longer needed
-    // The menu blur effect is handled differently in 1.21.4+
 }

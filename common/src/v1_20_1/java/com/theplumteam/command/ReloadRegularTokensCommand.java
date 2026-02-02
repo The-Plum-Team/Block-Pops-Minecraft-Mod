@@ -7,6 +7,7 @@ import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.network.SyncTokenDataPacket;
 import com.theplumteam.server.ServerTickHandler;
+import com.theplumteam.server.config.ServerConfig;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -37,7 +38,8 @@ public class ReloadRegularTokensCommand {
             IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(player);
 
             // Reload regular tokens
-            discovery.setRegularTokens(3);
+            int maxTokens = ServerConfig.getInstance().getMaxRegularTokens();
+            discovery.setRegularTokens(maxTokens);
             discovery.setNextRegularTokenTime(0);
             PlayerDataManager.markDirty(player, discovery);
 
@@ -59,7 +61,7 @@ public class ReloadRegularTokensCommand {
                     millisUntilReset
             );
 
-            source.sendSuccess(() -> Component.literal("Reloaded regular tokens to 3"), true);
+            source.sendSuccess(() -> Component.literal("Reloaded regular tokens to " + maxTokens), true);
             return 1;
         } catch (Exception e) {
             source.sendFailure(Component.literal("This command can only be executed by a player"));

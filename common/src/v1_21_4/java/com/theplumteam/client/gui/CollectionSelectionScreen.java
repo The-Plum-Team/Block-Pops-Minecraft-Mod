@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import org.joml.Matrix4f;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.config.ClientConfig;
+import com.theplumteam.client.config.ClientServerConfig;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.client.gui.widget.CollectionEntry;
@@ -770,8 +771,9 @@ public class CollectionSelectionScreen extends Screen {
 
         // Regular token section (centered above left button)
         int regularTokens = ClientTokenManager.getRegularTokens();
-        String regularText = "Regular Tokens: " + regularTokens + "/3";
-        if (regularTokens < 3) {
+        int maxRegularTokens = ClientServerConfig.getMaxRegularTokens();
+        String regularText = "Regular Tokens: " + regularTokens + "/" + maxRegularTokens;
+        if (regularTokens < maxRegularTokens) {
             String nextRegularTime = ClientTokenManager.formatNextRegularTime();
             regularText += " - Next: " + nextRegularTime;
         }

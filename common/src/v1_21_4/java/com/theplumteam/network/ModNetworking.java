@@ -72,6 +72,12 @@ public class ModNetworking {
             UpdateGuaranteedResetHourPacket::handleServer
         );
 
+        NetworkManager.registerReceiver(
+            NetworkManager.c2s(),
+            UpdateTokenSettingsPacket.ID,
+            UpdateTokenSettingsPacket::handleServer
+        );
+
         // Register S2C packets - use different approach for server vs client on Fabric
         // Server: register payload type only, Client: register receiver with handler
         if (Platform.getEnvironment() == Env.SERVER) {
@@ -81,6 +87,7 @@ public class ModNetworking {
             NetworkManager.registerS2CPayloadType(UnlockFigurePacket.ID, null);
             NetworkManager.registerS2CPayloadType(SyncDynamicCollectionsPacket.ID, null);
             NetworkManager.registerS2CPayloadType(OpenFavoriteColorScreenPacket.ID, null);
+            NetworkManager.registerS2CPayloadType(SyncServerConfigPacket.ID, null);
         } else {
             // On client, register receivers to handle incoming packets
             NetworkManager.registerReceiver(
@@ -111,6 +118,12 @@ public class ModNetworking {
                 NetworkManager.s2c(),
                 OpenFavoriteColorScreenPacket.ID,
                 OpenFavoriteColorScreenPacket::handleClient
+            );
+
+            NetworkManager.registerReceiver(
+                NetworkManager.s2c(),
+                SyncServerConfigPacket.ID,
+                SyncServerConfigPacket::handleClient
             );
         }
 

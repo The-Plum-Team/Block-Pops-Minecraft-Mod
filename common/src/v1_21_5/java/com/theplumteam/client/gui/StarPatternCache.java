@@ -104,6 +104,16 @@ public class StarPatternCache {
     }
 
     /**
+     * Re-apply linear filtering on the cached texture.
+     * RenderType can reset texture filtering, causing pixelated scrolling.
+     */
+    public static void ensureLinearFiltering() {
+        if (cachedTexture != null) {
+            cachedTexture.setFilter(true, false);
+        }
+    }
+
+    /**
      * Clean up resources
      */
     public static void cleanup() {

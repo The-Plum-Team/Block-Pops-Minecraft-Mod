@@ -15,15 +15,9 @@ import java.time.ZonedDateTime;
 
 /**
  * Cross-platform server-side tick handler for managing token generation and cooldown logic.
- * Grants regular tokens every 3 hours (in-game time) and resets special tokens daily.
+ * Grants regular tokens based on configurable cooldown and resets special tokens on a configurable cycle.
  */
 public class ServerTickHandler {
-    // Regular token cooldown: 3 hours of in-game time = 3 * 60 * 60 * 20 ticks
-    private static final long REGULAR_TOKEN_COOLDOWN_TICKS = 3 * 60 * 60 * 20;
-
-    // Maximum regular tokens a player can have
-    private static final int MAX_REGULAR_TOKENS = 3;
-
     // Track last tick to avoid processing every tick
     private static long lastCheckTick = 0;
     private static final int CHECK_INTERVAL = 20; // Check once per second (20 ticks)
@@ -71,20 +65,24 @@ public class ServerTickHandler {
         ServerLevel world = player.serverLevel();
         long gameTime = world.getGameTime();
 
+        ServerConfig config = ServerConfig.getInstance();
+        int maxTokens = config.getMaxRegularTokens();
+        long cooldownTicks = (long) config.getRegularTokenCooldownHours() * 60 * 60 * 20;
+
         // If player has less than max tokens and enough time has passed
-        if (discovery.getRegularTokens() < MAX_REGULAR_TOKENS
+        if (discovery.getRegularTokens() < maxTokens
                 && gameTime >= discovery.getNextRegularTokenTime()) {
 
             // Grant a token
             discovery.setRegularTokens(discovery.getRegularTokens() + 1);
 
             // Set next token time
-            discovery.setNextRegularTokenTime(gameTime + REGULAR_TOKEN_COOLDOWN_TICKS);
+            discovery.setNextRegularTokenTime(gameTime + cooldownTicks);
 
             BlockPopsMod.LOGGER.debug("Granted regular token to {}. Total: {}/{}",
                     player.getName().getString(),
                     discovery.getRegularTokens(),
-                    MAX_REGULAR_TOKENS);
+                    maxTokens);
 
             return true;
         }
@@ -93,7 +91,9 @@ public class ServerTickHandler {
     }
 
     /**
-     * Process special token daily reset.
+     * Process special token reset based on configurable cooldown.
+     * When cooldown = 24h: existing daily logic using reset hour.
+     * When cooldown != 24h: epoch-based fixed interval cycle.
      * @return true if token was reset and sync is needed
      */
     private static boolean processSpecialTokenReset(IPlayerDiscovery discovery) {
@@ -105,11 +105,29 @@ public class ServerTickHandler {
             return false;
         }
 
+        ServerConfig config = ServerConfig.getInstance();
+        int cooldownHours = config.getGuaranteedTokenCooldownHours();
+
+        if (cooldownHours == 24) {
+            // Daily reset at specific hour (existing logic)
+            return processSpecialTokenResetDaily(discovery, config);
+        } else {
+            // Epoch-based fixed interval cycle
+            return processSpecialTokenResetEpoch(discovery, cooldownHours);
+        }
+    }
+
+    /**
+     * Daily reset logic: resets at a specific hour each day.
+     */
+    private static boolean processSpecialTokenResetDaily(IPlayerDiscovery discovery, ServerConfig config) {
+        long lastUpdateMillis = discovery.getLastSpecialTokenResetTimestamp();
+
         // Get current time in UTC
         ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
 
         // Get the reset hour from config
-        int resetHour = ServerConfig.getInstance().getGuaranteedTokenResetHour();
+        int resetHour = config.getGuaranteedTokenResetHour();
 
         // Calculate the target reset time for TODAY
         ZonedDateTime todayReset = now.withHour(resetHour).withMinute(0).withSecond(0).withNano(0);
@@ -144,6 +162,34 @@ public class ServerTickHandler {
     }
 
     /**
+     * Epoch-based reset logic: resets on fixed intervals from epoch.
+     */
+    private static boolean processSpecialTokenResetEpoch(IPlayerDiscovery discovery, int cooldownHours) {
+        if (cooldownHours <= 0) cooldownHours = 1; // Safety guard against invalid config
+        long lastUpdateMillis = discovery.getLastSpecialTokenResetTimestamp();
+        long now = System.currentTimeMillis();
+        long cooldownMillis = (long) cooldownHours * 3_600_000L;
+
+        // Calculate the start of the current cycle
+        long cycleStart = (now / cooldownMillis) * cooldownMillis;
+
+        if (lastUpdateMillis < cycleStart) {
+            // Update the timestamp to NOW
+            discovery.setLastSpecialTokenResetTimestamp(now);
+
+            // If the user has used their token, reset it
+            if (discovery.hasUsedTodaySpecialToken()) {
+                discovery.setUsedTodaySpecialToken(false);
+                BlockPopsMod.LOGGER.debug("Epoch-based token reset for player (Cycle start: {}, cooldown: {}h)", cycleStart, cooldownHours);
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Send a sync packet to the client with updated token data.
      */
     private static void sendSyncPacket(ServerPlayer player, IPlayerDiscovery discovery) {
@@ -167,19 +213,35 @@ public class ServerTickHandler {
     }
 
     /**
-     * Public helper to calculate milliseconds until the next daily reset.
+     * Public helper to calculate milliseconds until the next guaranteed token reset.
+     * When cooldown = 24h: daily reset at specific hour.
+     * When cooldown != 24h: epoch-based fixed interval.
      * Used by this handler and various commands/packets to ensure consistency.
      */
     public static long calculateMillisUntilNextReset() {
-        int resetHour = ServerConfig.getInstance().getGuaranteedTokenResetHour();
-        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
-        ZonedDateTime nextReset = now.withHour(resetHour).withMinute(0).withSecond(0).withNano(0);
+        ServerConfig config = ServerConfig.getInstance();
+        int cooldownHours = config.getGuaranteedTokenCooldownHours();
 
-        // If we're past reset hour today, next reset is tomorrow
-        if (now.getHour() >= resetHour) {
-            nextReset = nextReset.plusDays(1);
+        if (cooldownHours == 24) {
+            // Daily reset at specific hour
+            int resetHour = config.getGuaranteedTokenResetHour();
+            ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
+            ZonedDateTime nextReset = now.withHour(resetHour).withMinute(0).withSecond(0).withNano(0);
+
+            // If we're past reset hour today, next reset is tomorrow
+            if (now.getHour() >= resetHour) {
+                nextReset = nextReset.plusDays(1);
+            }
+
+            return nextReset.toInstant().toEpochMilli() - now.toInstant().toEpochMilli();
+        } else {
+            // Epoch-based fixed interval
+            if (cooldownHours <= 0) cooldownHours = 1; // Safety guard against invalid config
+            long now = System.currentTimeMillis();
+            long cooldownMillis = (long) cooldownHours * 3_600_000L;
+            long cycleStart = (now / cooldownMillis) * cooldownMillis;
+            long nextReset = cycleStart + cooldownMillis;
+            return nextReset - now;
         }
-
-        return nextReset.toInstant().toEpochMilli() - now.toInstant().toEpochMilli();
     }
 }

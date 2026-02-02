@@ -27,6 +27,11 @@ public class ServerConfig {
     // Debug logging toggle - when true, shows detailed info logs for troubleshooting
     public boolean debugLogging = false;
 
+    // Token settings (configurable via Settings Screen)
+    public int regularTokenCooldownHours = 3;       // Hours between earning each regular token (1-168)
+    public int maxRegularTokens = 3;                 // Maximum stackable regular tokens (1-99)
+    public int guaranteedTokenCooldownHours = 24;    // Hours between guaranteed token resets (1-168)
+
     private ServerConfig() {
         // Private constructor for singleton
     }
@@ -85,6 +90,51 @@ public class ServerConfig {
      */
     public void setDebugLogging(boolean enabled) {
         this.debugLogging = enabled;
+        save();
+    }
+
+    /**
+     * Get the regular token cooldown in hours (1-168)
+     */
+    public int getRegularTokenCooldownHours() {
+        return regularTokenCooldownHours;
+    }
+
+    /**
+     * Set the regular token cooldown in hours (clamped to 1-168)
+     */
+    public void setRegularTokenCooldownHours(int hours) {
+        this.regularTokenCooldownHours = Math.max(1, Math.min(168, hours));
+        save();
+    }
+
+    /**
+     * Get the maximum number of regular tokens (1-99)
+     */
+    public int getMaxRegularTokens() {
+        return maxRegularTokens;
+    }
+
+    /**
+     * Set the maximum number of regular tokens (clamped to 1-99)
+     */
+    public void setMaxRegularTokens(int max) {
+        this.maxRegularTokens = Math.max(1, Math.min(99, max));
+        save();
+    }
+
+    /**
+     * Get the guaranteed token cooldown in hours (1-168)
+     */
+    public int getGuaranteedTokenCooldownHours() {
+        return guaranteedTokenCooldownHours;
+    }
+
+    /**
+     * Set the guaranteed token cooldown in hours (clamped to 1-168)
+     */
+    public void setGuaranteedTokenCooldownHours(int hours) {
+        this.guaranteedTokenCooldownHours = Math.max(1, Math.min(168, hours));
         save();
     }
 

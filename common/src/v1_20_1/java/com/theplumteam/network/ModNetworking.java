@@ -70,6 +70,12 @@ public class ModNetworking {
             UpdateGuaranteedResetHourPacket::handleServer
         );
 
+        NetworkManager.registerReceiver(
+            NetworkManager.c2s(),
+            UpdateTokenSettingsPacket.ID,
+            UpdateTokenSettingsPacket::handleServer
+        );
+
         BlockPopsMod.logDebug("BlockPops networking initialized");
     }
 
@@ -109,6 +115,12 @@ public class ModNetworking {
             NetworkManager.s2c(),
             OpenFavoriteColorScreenPacket.ID,
             OpenFavoriteColorScreenPacket::handleClient
+        );
+
+        NetworkManager.registerReceiver(
+            NetworkManager.s2c(),
+            SyncServerConfigPacket.ID,
+            SyncServerConfigPacket::handleClient
         );
 
         BlockPopsMod.logDebug("BlockPops client networking initialized");

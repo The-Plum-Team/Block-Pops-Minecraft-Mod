@@ -86,9 +86,6 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             int logoX = logoContainerX + (logoContainerWidth - logoDisplaySize) / 2;
             int logoY = y + (entryHeight - logoDisplaySize) / 2;
 
-            RenderSystem.enableBlend();
-            RenderSystem.defaultBlendFunc();
-
             // Use pose stack to scale 256x256 texture down to display size
             graphics.pose().pushPose();
             graphics.pose().translate(logoX, logoY, 0);
@@ -165,9 +162,6 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
                 linkHovered ? 0xFFDAA520 : 0xFFB8860B);
 
             // Draw search icon centered
-            RenderSystem.enableBlend();
-            RenderSystem.defaultBlendFunc();
-
             int iconSize = effectiveLinkButtonSize - 4; // Smaller than button with padding
             int iconX = linkButtonX + 2;
             int iconY = linkButtonY + 2;
@@ -185,7 +179,6 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             );
 
             graphics.pose().popPose();
-            RenderSystem.disableBlend();
 
             this.isLinkHovered = linkHovered;
         }

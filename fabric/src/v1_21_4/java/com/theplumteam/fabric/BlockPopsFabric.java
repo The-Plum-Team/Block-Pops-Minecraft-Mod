@@ -28,8 +28,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -175,7 +173,7 @@ public class BlockPopsFabric implements ModInitializer {
                     long ticksUntilNext = Math.max(0, nextRegularTime - gameTime);
 
                     // Calculate millis until next special reset
-                    long millisUntilReset = calculateMillisUntilNextReset();
+                    long millisUntilReset = com.theplumteam.server.ServerTickHandler.calculateMillisUntilNextReset();
 
                     SyncTokenDataPacket.sendToPlayer(
                             serverPlayer,
@@ -189,6 +187,9 @@ public class BlockPopsFabric implements ModInitializer {
                             discovery.getRegularTokens(),
                             !discovery.hasUsedTodaySpecialToken() ? "available" : "used");
 
+                    // Sync server config to client
+                    com.theplumteam.network.SyncServerConfigPacket.sendToPlayer(serverPlayer);
+
                     // Check if favorite color needs to be chosen
                     if (!discovery.hasChosenFavoriteColor()) {
                         BlockPopsMod.logDebug("Player {} has not chosen a favorite color. Sending packet to open selection screen.",
@@ -200,18 +201,4 @@ public class BlockPopsFabric implements ModInitializer {
         });
     }
 
-    /**
-     * Calculate milliseconds until the next daily reset at 18:00 UTC (6 PM).
-     */
-    private static long calculateMillisUntilNextReset() {
-        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
-        ZonedDateTime nextReset = now.withHour(18).withMinute(0).withSecond(0).withNano(0);
-
-        // If we're past reset hour today, next reset is tomorrow
-        if (now.getHour() >= 18) {
-            nextReset = nextReset.plusDays(1);
-        }
-
-        return nextReset.toInstant().toEpochMilli() - now.toInstant().toEpochMilli();
-    }
 }

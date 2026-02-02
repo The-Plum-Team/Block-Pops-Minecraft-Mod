@@ -4,6 +4,7 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.server.ServerTickHandler;
+import com.theplumteam.server.config.ServerConfig;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
@@ -55,7 +56,7 @@ public class ReloadTokensPacket {
                 IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(player);
 
                 if (packet.reloadRegular) {
-                    discovery.setRegularTokens(3);
+                    discovery.setRegularTokens(ServerConfig.getInstance().getMaxRegularTokens());
                     discovery.setNextRegularTokenTime(0);
                     BlockPopsMod.logDebug("Reloaded regular tokens for player {}", player.getName().getString());
                 }

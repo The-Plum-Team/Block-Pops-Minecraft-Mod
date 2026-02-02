@@ -163,8 +163,6 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                     graphics.renderOutline(linkX, linkY, effectiveLinkSize, effectiveLinkSize,
                         linkHovered ? 0xFFDAA520 : 0xFFB8860B);
 
-                    RenderSystem.enableBlend();
-                    RenderSystem.defaultBlendFunc();
                     int iconSize = effectiveLinkSize - 4;
                     int iconX = linkX + 2;
                     int iconY = linkY + 2;
@@ -174,7 +172,6 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                     graphics.pose().scale(iconScale, iconScale, 1.0f);
                     graphics.blit(RenderType::guiTextured, LINK_ICON, 0, 0, 0.0f, 0.0f, 256, 256, 256, 256);
                     graphics.pose().popPose();
-                    RenderSystem.disableBlend();
 
                     if (linkHovered) {
                         this.hoveredLinkFigureIndex = i;
