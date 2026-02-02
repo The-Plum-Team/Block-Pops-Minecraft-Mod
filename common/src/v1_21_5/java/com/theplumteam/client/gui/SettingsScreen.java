@@ -86,10 +86,8 @@ public class SettingsScreen extends Screen {
     // Token settings (Server tab - EditBox fields for admins, read-only for non-admins)
     private EditBox regularCooldownBox;
     private EditBox maxRegularBox;
-    private EditBox guaranteedCooldownBox;
     private int loadedRegularCooldown;
     private int loadedMaxRegular;
-    private int loadedGuaranteedCooldown;
 
     // Star color sliders (Develop tab)
     private ColorSlider starRedSlider;
@@ -229,13 +227,11 @@ public class SettingsScreen extends Screen {
      */
     private boolean hasServerSettingsChanged() {
         if (!isAdmin()) return false;
-        if (regularCooldownBox == null || maxRegularBox == null || guaranteedCooldownBox == null) return false;
+        if (regularCooldownBox == null || maxRegularBox == null) return false;
         int currentRegularCooldown = parseEditBoxInt(regularCooldownBox, loadedRegularCooldown);
         int currentMaxRegular = parseEditBoxInt(maxRegularBox, loadedMaxRegular);
-        int currentGuaranteedCooldown = parseEditBoxInt(guaranteedCooldownBox, loadedGuaranteedCooldown);
         return currentRegularCooldown != loadedRegularCooldown
                 || currentMaxRegular != loadedMaxRegular
-                || currentGuaranteedCooldown != loadedGuaranteedCooldown
                 || pendingServerHourLocal != loadedServerHourLocal;
     }
 
@@ -247,25 +243,22 @@ public class SettingsScreen extends Screen {
             // "Save Settings" logic - clamp values client-side to match server validation
             int regularCooldown = Math.max(1, Math.min(168, parseEditBoxInt(regularCooldownBox, loadedRegularCooldown)));
             int maxRegular = Math.max(1, Math.min(99, parseEditBoxInt(maxRegularBox, loadedMaxRegular)));
-            int guaranteedCooldown = Math.max(1, Math.min(168, parseEditBoxInt(guaranteedCooldownBox, loadedGuaranteedCooldown)));
             int utcValue = convertLocalToUtc(pendingServerHourLocal);
 
-            // Send packet to server with all 4 settings
-            new UpdateTokenSettingsPacket(regularCooldown, maxRegular, guaranteedCooldown, utcValue).sendToServer();
+            // Send packet to server with all 3 settings
+            new UpdateTokenSettingsPacket(regularCooldown, maxRegular, utcValue).sendToServer();
 
             // Update loaded values to clamped values
             this.loadedRegularCooldown = regularCooldown;
             this.loadedMaxRegular = maxRegular;
-            this.loadedGuaranteedCooldown = guaranteedCooldown;
             this.loadedServerHourLocal = pendingServerHourLocal;
 
             // Update EditBox fields to show clamped values
             this.regularCooldownBox.setValue(String.valueOf(regularCooldown));
             this.maxRegularBox.setValue(String.valueOf(maxRegular));
-            this.guaranteedCooldownBox.setValue(String.valueOf(guaranteedCooldown));
 
             // Update ClientServerConfig immediately for responsiveness
-            ClientServerConfig.update(regularCooldown, maxRegular, guaranteedCooldown, utcValue);
+            ClientServerConfig.update(regularCooldown, maxRegular, utcValue);
 
             updateActionButtonState();
 
@@ -421,17 +414,9 @@ public class SettingsScreen extends Screen {
                         contentX + contentWidth - this.font.width(val), labelY, 0xAAAAAA);
             }
 
-            labelY += verticalSpacing;
-            graphics.drawString(this.font, "Guaranteed Token Cooldown (hours):",
-                    contentX, labelY, 0xFFFFFF);
-            if (!admin) {
-                String val = String.valueOf(ClientServerConfig.getGuaranteedTokenCooldownHours());
-                graphics.drawString(this.font, val,
-                        contentX + contentWidth - this.font.width(val), labelY, 0xAAAAAA);
-            }
 
             // Draw explanation text below the fields
-            int explanationY = startY + (verticalSpacing * 3) + 30;
+            int explanationY = startY + (verticalSpacing * 2) + 30;
             if (admin && resetHourSlider != null && resetHourSlider.visible) {
                 explanationY += 30; // Push down if slider is visible
             }
@@ -439,14 +424,13 @@ public class SettingsScreen extends Screen {
             if (admin) {
                 explanationLines = new String[]{
                         "Configure token generation and reset timing for all players.",
-                        "When guaranteed cooldown is 24h, the reset happens at the specified hour.",
-                        "For other cooldown values, resets happen on fixed intervals."
+                        "The guaranteed token resets daily at the specified hour."
                 };
             } else {
                 explanationLines = new String[]{
                         "These settings are configured by the server administrator.",
                         "Regular tokens regenerate every " + ClientServerConfig.getRegularTokenCooldownHours() + " hour(s), up to " + ClientServerConfig.getMaxRegularTokens() + " max.",
-                        "The guaranteed token resets every " + ClientServerConfig.getGuaranteedTokenCooldownHours() + " hour(s)."
+                        "The guaranteed token resets daily."
                 };
             }
 
@@ -546,6 +530,11 @@ public class SettingsScreen extends Screen {
     }
 
     @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // Disable the 1.21+ menu blur effect - this modal renders its own semi-transparent overlay
+    }
+
+    @Override
     public boolean isPauseScreen() {
         return false;
     }
@@ -591,7 +580,6 @@ public class SettingsScreen extends Screen {
         // Load current values from ClientServerConfig
         this.loadedRegularCooldown = ClientServerConfig.getRegularTokenCooldownHours();
         this.loadedMaxRegular = ClientServerConfig.getMaxRegularTokens();
-        this.loadedGuaranteedCooldown = ClientServerConfig.getGuaranteedTokenCooldownHours();
 
         // Get local timezone
         ZoneId localZone = ZoneId.systemDefault();
@@ -630,22 +618,7 @@ public class SettingsScreen extends Screen {
         }
         currentY += verticalSpacing;
 
-        // --- Guaranteed Token Cooldown (hours) ---
-        if (admin) {
-            this.guaranteedCooldownBox = new EditBox(this.font, fieldX, currentY, fieldWidth, fieldHeight, Component.literal("Guaranteed Cooldown"));
-            this.guaranteedCooldownBox.setValue(String.valueOf(loadedGuaranteedCooldown));
-            this.guaranteedCooldownBox.setFilter(s -> s.matches("\\d*"));
-            this.guaranteedCooldownBox.setMaxLength(3);
-            this.guaranteedCooldownBox.setResponder(s -> {
-                // Show/hide hour slider based on guaranteed cooldown value
-                updateHourSliderVisibility();
-                updateActionButtonState();
-            });
-            serverSettingWidgets.add(this.guaranteedCooldownBox);
-        }
-        currentY += verticalSpacing;
-
-        // --- Reset Hour Slider (only when guaranteed cooldown = 24h) ---
+        // --- Reset Hour Slider (always visible - guaranteed token resets daily) ---
         int sliderWidth = contentWidth;
         this.resetHourSlider = new HourSlider(
                 contentX, currentY,
@@ -657,20 +630,8 @@ public class SettingsScreen extends Screen {
                     updateActionButtonState();
                 }
         );
-        // Only show if cooldown is 24h
-        this.resetHourSlider.visible = (loadedGuaranteedCooldown == 24);
         if (admin) {
             serverSettingWidgets.add(this.resetHourSlider);
-        }
-    }
-
-    /**
-     * Update the visibility of the hour slider based on the guaranteed cooldown value
-     */
-    private void updateHourSliderVisibility() {
-        if (this.resetHourSlider != null && this.guaranteedCooldownBox != null) {
-            int cooldown = parseEditBoxInt(guaranteedCooldownBox, loadedGuaranteedCooldown);
-            this.resetHourSlider.visible = (cooldown == 24);
         }
     }
 

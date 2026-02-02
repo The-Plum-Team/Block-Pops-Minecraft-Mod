@@ -386,6 +386,11 @@ public class FigurePositionScreen extends Screen {
     }
 
     @Override
+    public void renderBlurredBackground(float partialTick) {
+        // Disable the 1.21+ menu blur effect - use semi-transparent overlay instead
+    }
+
+    @Override
     public boolean isPauseScreen() {
         return false;
     }

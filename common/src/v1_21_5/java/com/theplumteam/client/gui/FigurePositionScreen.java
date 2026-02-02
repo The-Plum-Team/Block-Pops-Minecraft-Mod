@@ -386,6 +386,12 @@ public class FigurePositionScreen extends Screen {
     }
 
     @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // Disable the 1.21+ menu blur effect - use semi-transparent overlay instead
+        graphics.fill(0, 0, this.width, this.height, 0xC0101010);
+    }
+
+    @Override
     public boolean isPauseScreen() {
         return false;
     }

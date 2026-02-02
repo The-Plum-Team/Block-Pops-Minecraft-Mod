@@ -23,14 +23,12 @@ public class SyncServerConfigPacket {
 
     private final int regularTokenCooldownHours;
     private final int maxRegularTokens;
-    private final int guaranteedTokenCooldownHours;
     private final int guaranteedTokenResetHour;
 
     public SyncServerConfigPacket(int regularTokenCooldownHours, int maxRegularTokens,
-                                  int guaranteedTokenCooldownHours, int guaranteedTokenResetHour) {
+                                  int guaranteedTokenResetHour) {
         this.regularTokenCooldownHours = regularTokenCooldownHours;
         this.maxRegularTokens = maxRegularTokens;
-        this.guaranteedTokenCooldownHours = guaranteedTokenCooldownHours;
         this.guaranteedTokenResetHour = guaranteedTokenResetHour;
     }
 
@@ -38,7 +36,6 @@ public class SyncServerConfigPacket {
         RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
         buffer.writeInt(regularTokenCooldownHours);
         buffer.writeInt(maxRegularTokens);
-        buffer.writeInt(guaranteedTokenCooldownHours);
         buffer.writeInt(guaranteedTokenResetHour);
         return buffer;
     }
@@ -46,10 +43,9 @@ public class SyncServerConfigPacket {
     public static SyncServerConfigPacket decode(FriendlyByteBuf buffer) {
         int regularTokenCooldownHours = buffer.readInt();
         int maxRegularTokens = buffer.readInt();
-        int guaranteedTokenCooldownHours = buffer.readInt();
         int guaranteedTokenResetHour = buffer.readInt();
         return new SyncServerConfigPacket(regularTokenCooldownHours, maxRegularTokens,
-                guaranteedTokenCooldownHours, guaranteedTokenResetHour);
+                guaranteedTokenResetHour);
     }
 
     public static void handleClient(FriendlyByteBuf buf, NetworkManager.PacketContext context) {
@@ -59,12 +55,11 @@ public class SyncServerConfigPacket {
             ClientServerConfig.update(
                     packet.regularTokenCooldownHours,
                     packet.maxRegularTokens,
-                    packet.guaranteedTokenCooldownHours,
                     packet.guaranteedTokenResetHour
             );
-            LOGGER.debug("Received server config sync: cooldown={}h, maxTokens={}, guaranteedCooldown={}h, resetHour={}",
+            LOGGER.debug("Received server config sync: cooldown={}h, maxTokens={}, resetHour={}",
                     packet.regularTokenCooldownHours, packet.maxRegularTokens,
-                    packet.guaranteedTokenCooldownHours, packet.guaranteedTokenResetHour);
+                    packet.guaranteedTokenResetHour);
         });
     }
 
@@ -76,7 +71,6 @@ public class SyncServerConfigPacket {
         SyncServerConfigPacket packet = new SyncServerConfigPacket(
                 config.getRegularTokenCooldownHours(),
                 config.getMaxRegularTokens(),
-                config.getGuaranteedTokenCooldownHours(),
                 config.getGuaranteedTokenResetHour()
         );
         NetworkManager.sendToPlayer(player, ID, packet.encode());

@@ -23,14 +23,12 @@ public class UpdateTokenSettingsPacket {
 
     private final int regularTokenCooldownHours;
     private final int maxRegularTokens;
-    private final int guaranteedTokenCooldownHours;
     private final int guaranteedTokenResetHour;
 
     public UpdateTokenSettingsPacket(int regularTokenCooldownHours, int maxRegularTokens,
-                                     int guaranteedTokenCooldownHours, int guaranteedTokenResetHour) {
+                                     int guaranteedTokenResetHour) {
         this.regularTokenCooldownHours = regularTokenCooldownHours;
         this.maxRegularTokens = maxRegularTokens;
-        this.guaranteedTokenCooldownHours = guaranteedTokenCooldownHours;
         this.guaranteedTokenResetHour = guaranteedTokenResetHour;
     }
 
@@ -38,7 +36,6 @@ public class UpdateTokenSettingsPacket {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeInt(regularTokenCooldownHours);
         buffer.writeInt(maxRegularTokens);
-        buffer.writeInt(guaranteedTokenCooldownHours);
         buffer.writeInt(guaranteedTokenResetHour);
         return buffer;
     }
@@ -46,10 +43,9 @@ public class UpdateTokenSettingsPacket {
     public static UpdateTokenSettingsPacket decode(FriendlyByteBuf buffer) {
         int regularTokenCooldownHours = buffer.readInt();
         int maxRegularTokens = buffer.readInt();
-        int guaranteedTokenCooldownHours = buffer.readInt();
         int guaranteedTokenResetHour = buffer.readInt();
         return new UpdateTokenSettingsPacket(regularTokenCooldownHours, maxRegularTokens,
-                guaranteedTokenCooldownHours, guaranteedTokenResetHour);
+                guaranteedTokenResetHour);
     }
 
     public static void handleServer(FriendlyByteBuf buf, NetworkManager.PacketContext context) {
@@ -69,15 +65,13 @@ public class UpdateTokenSettingsPacket {
                 // Update all settings with clamping, then save once
                 config.regularTokenCooldownHours = Math.max(1, Math.min(168, packet.regularTokenCooldownHours));
                 config.maxRegularTokens = Math.max(1, Math.min(99, packet.maxRegularTokens));
-                config.guaranteedTokenCooldownHours = Math.max(1, Math.min(168, packet.guaranteedTokenCooldownHours));
                 config.guaranteedTokenResetHour = Math.max(0, Math.min(23, packet.guaranteedTokenResetHour));
                 config.save();
 
-                BlockPopsMod.logDebug("Player {} updated token settings: cooldown={}h, maxTokens={}, guaranteedCooldown={}h, resetHour={}",
+                BlockPopsMod.logDebug("Player {} updated token settings: cooldown={}h, maxTokens={}, resetHour={}",
                         player.getName().getString(),
                         config.getRegularTokenCooldownHours(),
                         config.getMaxRegularTokens(),
-                        config.getGuaranteedTokenCooldownHours(),
                         config.getGuaranteedTokenResetHour());
 
                 // Broadcast updated config to all players

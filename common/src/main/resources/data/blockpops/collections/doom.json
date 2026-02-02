@@ -23,12 +23,12 @@
       "id": "doom-guy-doom-1993-v3",
       "name": "Doom Guy",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/doom/doom-guy-doom-1993-v3.png",
+      "texture": "blockpops:textures/figure/doom/doom-guy-doom-1993-smiling.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
       "alternatives": [
         {
-          "name": "Doom Guy (Smiling)",
-          "texture": "blockpops:textures/figure/doom/doom-guy-doom-1993-smiling.png"
+          "name": "Doom Guy (Serious)",
+          "texture": "blockpops:textures/figure/doom/doom-guy-doom-1993-v3.png"
         },
         {
           "name": "Doom Guy (Helmet)",
@@ -114,13 +114,6 @@
           "texture": "blockpops:textures/figure/doom/doom-slayer-doom-eternal-phobos.png"
         }
       ]
-    },
-    {
-      "id": "doom-eternal-crash-fan-art",
-      "name": "Crash",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/doom/doom-eternal-crash-fan-art.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "maroder-doom-eternal",

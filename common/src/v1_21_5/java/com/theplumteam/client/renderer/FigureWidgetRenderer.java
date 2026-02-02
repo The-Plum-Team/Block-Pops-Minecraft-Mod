@@ -1,5 +1,6 @@
 package com.theplumteam.client.renderer;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.model.FigureModel;
@@ -8,7 +9,10 @@ import com.theplumteam.figure.FigureType;
 import net.minecraft.client.Minecraft;
 import com.theplumteam.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
+import software.bernie.geckolib.renderer.base.GeoRenderState;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -47,7 +51,17 @@ public final class FigureWidgetRenderer {
             synchronized (FigureWidgetRenderer.class) {
                 if (!initialized) {
                     figureModel = new FigureModel();
-                    figureRenderer = new GeoBlockRenderer<>(figureModel);
+                    figureRenderer = new GeoBlockRenderer<>(figureModel) {
+                        @Override
+                        public void adjustPositionForRender(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel model, boolean isReRender) {
+                            // Don't apply block centering offset (translate 0.5, 0, 0.5) in GUI widget rendering
+                        }
+
+                        @Override
+                        protected void rotateBlock(Direction facing, PoseStack poseStack) {
+                            // Don't apply block rotation in GUI widget rendering
+                        }
+                    };
                     initialized = true;
                 }
             }
