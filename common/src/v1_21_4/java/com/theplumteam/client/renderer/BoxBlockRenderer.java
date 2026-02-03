@@ -121,9 +121,8 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         ResourceLocation skinTexture = figureRenderer.getGeoModel().getTextureResource(animatable, figureRenderer);
         if (skinTexture == null) return; // Safety check
 
-        // In 1.21.2+, entityTranslucentCull was removed. Use itemEntityTranslucentCull instead
-        // which provides proper alpha blending with backface culling for entity/item rendering
-        RenderType skinRenderType = RenderType.itemEntityTranslucentCull(skinTexture);
+        // Use entityTranslucent for proper alpha blending (supports semi-transparent pixels)
+        RenderType skinRenderType = RenderType.entityTranslucent(skinTexture);
         VertexConsumer skinBuffer = bufferSource.getBuffer(skinRenderType);
 
         for (GeoBone bone : model.topLevelBones()) {

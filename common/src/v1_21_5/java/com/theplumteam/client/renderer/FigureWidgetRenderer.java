@@ -8,8 +8,10 @@ import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import net.minecraft.client.Minecraft;
 import com.theplumteam.registry.ModBlocks;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
 import software.bernie.geckolib.renderer.base.GeoRenderState;
@@ -60,6 +62,11 @@ public final class FigureWidgetRenderer {
                         @Override
                         protected void rotateBlock(Direction facing, PoseStack poseStack) {
                             // Don't apply block rotation in GUI widget rendering
+                        }
+
+                        @Override
+                        public RenderType getRenderType(GeoRenderState renderState, ResourceLocation texture) {
+                            return RenderType.entityTranslucent(texture, true);
                         }
                     };
                     initialized = true;

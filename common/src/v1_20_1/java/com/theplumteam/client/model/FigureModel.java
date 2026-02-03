@@ -174,6 +174,6 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
     public RenderType getRenderType(BoxBlockEntity animatable, ResourceLocation texture) {
         ResourceLocation textureToUse = getTextureResource(animatable);
         if (textureToUse == null) textureToUse = FALLBACK_TEXTURE;
-        return RenderType.entityCutoutNoCull(textureToUse);
+        return RenderType.entityTranslucent(textureToUse);
     }
 }

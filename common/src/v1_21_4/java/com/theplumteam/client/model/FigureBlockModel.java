@@ -155,4 +155,9 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     public ResourceLocation getAnimationResource(FigureBlockEntity animatable) {
         return POSE_ANIMATION;
     }
+
+    @Override
+    public RenderType getRenderType(FigureBlockEntity animatable, ResourceLocation texture) {
+        return RenderType.entityTranslucent(texture, true);
+    }
 }

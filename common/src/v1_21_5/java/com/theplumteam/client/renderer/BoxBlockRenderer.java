@@ -38,6 +38,11 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
             protected void rotateBlock(Direction facing, PoseStack poseStack) {
                 // Don't apply block rotation - the box's rotation is already in the PoseStack
             }
+
+            @Override
+            public RenderType getRenderType(GeoRenderState renderState, ResourceLocation texture) {
+                return RenderType.entityTranslucent(texture, true);
+            }
         };
     }
 
@@ -108,7 +113,8 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         ResourceLocation skinTexture = ((FigureModel) figureRenderer.getGeoModel()).resolveTexture(currentAnimatable);
         if (skinTexture == null) return;
 
-        RenderType skinRenderType = RenderType.itemEntityTranslucentCull(skinTexture);
+        // Use entityTranslucent for proper alpha blending (supports semi-transparent pixels)
+        RenderType skinRenderType = RenderType.entityTranslucent(skinTexture);
         VertexConsumer skinBuffer = bufferSource.getBuffer(skinRenderType);
 
         for (GeoBone bone : model.topLevelBones()) {

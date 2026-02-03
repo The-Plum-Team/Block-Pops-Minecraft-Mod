@@ -182,4 +182,9 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
             renderState.addGeckolibData(FIGURE_TEXTURE, resolveTexture(animatable));
         }
     }
+
+    @Override
+    public RenderType getRenderType(GeoRenderState renderState, ResourceLocation texture) {
+        return RenderType.entityTranslucent(texture, true);
+    }
 }

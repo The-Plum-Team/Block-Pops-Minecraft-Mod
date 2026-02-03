@@ -7,7 +7,10 @@ import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import net.minecraft.client.Minecraft;
 import com.theplumteam.registry.ModBlocks;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
 
 import java.util.Map;

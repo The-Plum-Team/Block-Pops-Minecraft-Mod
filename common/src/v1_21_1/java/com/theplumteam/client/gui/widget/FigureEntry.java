@@ -127,9 +127,11 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 // Render the 3D figure model for discovered figures
                 render3DFigure(graphics, figure, figureX, y, effectiveFigureSize, partialTick);
 
-                // Draw figure name only if GUI scale is less than 3
+                // Draw figure name only if GUI scale is less than 3 and settings modal is not active
+                net.minecraft.client.gui.screens.Screen currentScreen = Minecraft.getInstance().screen;
+                boolean isSettingsModalActive = currentScreen instanceof com.theplumteam.client.gui.SettingsScreen;
                 int guiScale = mc.options.guiScale().get();
-                if (guiScale < 3) {
+                if (guiScale < 3 && !isSettingsModalActive) {
                     Component figureName = Component.literal(figure.getName());
                     int nameWidth = mc.font.width(figureName);
                     if (nameWidth > effectiveFigureSize - 4) {
@@ -180,12 +182,17 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                     }
                 }
             } else {
-                // Draw a question mark for undiscovered figures
-                Component questionMark = Component.literal("?");
-                int qmWidth = mc.font.width(questionMark);
-                int qmX = figureX + (effectiveFigureSize - qmWidth) / 2;
-                int qmY = y + (effectiveFigureSize - mc.font.lineHeight) / 2;
-                graphics.drawString(mc.font, questionMark, qmX, qmY, 0x808080, false);
+                // Draw a question mark for undiscovered figures (skip if settings modal is active)
+                net.minecraft.client.gui.screens.Screen currentScreen = Minecraft.getInstance().screen;
+                boolean isSettingsModalActive = currentScreen instanceof com.theplumteam.client.gui.SettingsScreen;
+
+                if (!isSettingsModalActive) {
+                    Component questionMark = Component.literal("?");
+                    int qmWidth = mc.font.width(questionMark);
+                    int qmX = figureX + (effectiveFigureSize - qmWidth) / 2;
+                    int qmY = y + (effectiveFigureSize - mc.font.lineHeight) / 2;
+                    graphics.drawString(mc.font, questionMark, qmX, qmY, 0x808080, false);
+                }
 
                 // Don't show name for undiscovered figures
             }
@@ -193,6 +200,12 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     }
 
     private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick) { com.theplumteam.BlockPopsMod.logDebug("render3DFigure called for figure: {} in collection: {}", figure.getId(), collectionId);
+        // Skip 3D rendering if settings modal is currently active (prevents z-index issues)
+        net.minecraft.client.gui.screens.Screen currentScreen = Minecraft.getInstance().screen;
+        if (currentScreen instanceof com.theplumteam.client.gui.SettingsScreen) {
+            return;
+        }
+
         PoseStack poseStack = graphics.pose();
         poseStack.pushPose();
 

@@ -197,6 +197,11 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
         }
     }
 
+    @Override
+    public RenderType getRenderType(GeoRenderState renderState, ResourceLocation texture) {
+        return RenderType.entityTranslucent(texture, true);
+    }
+
     // Note: Arm visibility would need to be handled via a custom GeoRenderLayer in GeckoLib 5
     // For now, we'll keep the basic rendering functional
 }

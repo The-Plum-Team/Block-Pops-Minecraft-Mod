@@ -4,13 +4,21 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.theplumteam.blockentity.FigureBlockEntity;
 import com.theplumteam.client.model.FigureBlockModel;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
+import software.bernie.geckolib.renderer.base.GeoRenderState;
 
 public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
 
     public FigureBlockRenderer() {
         super(new FigureBlockModel());
+    }
+
+    @Override
+    public RenderType getRenderType(GeoRenderState renderState, ResourceLocation texture) {
+        return RenderType.entityTranslucent(texture, true);
     }
 
     @Override
