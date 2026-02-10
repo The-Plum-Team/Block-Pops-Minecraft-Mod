@@ -34,6 +34,7 @@ public class ModCommands {
         ChangeFavoriteColorCommand.register(dispatcher);
         GetBoxCommand.register(dispatcher);
         SetDefaultColorCommand.register(dispatcher);
+        ShowColorSelectionOnJoinCommand.register(dispatcher);
 
         BlockPopsMod.logDebug("BlockPops commands registered");
     }

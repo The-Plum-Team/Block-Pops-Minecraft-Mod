@@ -4,8 +4,10 @@ import com.mojang.serialization.MapCodec;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
+import com.theplumteam.network.OpenFavoriteColorScreenPacket;
 import com.theplumteam.network.SyncTokenDataPacket;
 import com.theplumteam.platform.PlatformHelper;
+import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.server.ServerTickHandler;
 import net.minecraft.core.BlockPos;
@@ -86,6 +88,13 @@ public class ClawMachineBlock extends BaseEntityBlock {
             } else {
                 // Server side: sync token data to ensure client UI shows correct state
                 if (player instanceof ServerPlayer serverPlayer) {
+                    if (!ServerConfig.getInstance().isShowColorSelectionOnJoin()) {
+                        IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(serverPlayer);
+                        if (!discovery.hasChosenFavoriteColor()) {
+                            OpenFavoriteColorScreenPacket.sendToPlayer(serverPlayer);
+                            return InteractionResult.SUCCESS;
+                        }
+                    }
                     syncTokenDataToClient(serverPlayer);
                 }
             }

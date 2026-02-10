@@ -191,7 +191,7 @@ public class BlockPopsFabric implements ModInitializer {
                     com.theplumteam.network.SyncServerConfigPacket.sendToPlayer(serverPlayer);
 
                     // Check if favorite color needs to be chosen
-                    if (!discovery.hasChosenFavoriteColor()) {
+                    if (!discovery.hasChosenFavoriteColor() && com.theplumteam.server.config.ServerConfig.getInstance().isShowColorSelectionOnJoin()) {
                         BlockPopsMod.logDebug("Player {} has not chosen a favorite color. Sending packet to open selection screen.",
                                 serverPlayer.getName().getString());
                         OpenFavoriteColorScreenPacket.sendToPlayer(serverPlayer);

@@ -31,6 +31,10 @@ public class ServerConfig {
     public int regularTokenCooldownHours = 3;       // Hours between earning each regular token (1-168)
     public int maxRegularTokens = 3;                 // Maximum stackable regular tokens (1-99)
 
+    // Whether to show the favorite color selection screen when a player joins
+    // If false, the screen appears on first claw machine use instead
+    public boolean showColorSelectionOnJoin = true;
+
     private ServerConfig() {
         // Private constructor for singleton
     }
@@ -119,6 +123,15 @@ public class ServerConfig {
      */
     public void setMaxRegularTokens(int max) {
         this.maxRegularTokens = Math.max(1, Math.min(99, max));
+        save();
+    }
+
+    public boolean isShowColorSelectionOnJoin() {
+        return showColorSelectionOnJoin;
+    }
+
+    public void setShowColorSelectionOnJoin(boolean show) {
+        this.showColorSelectionOnJoin = show;
         save();
     }
 
