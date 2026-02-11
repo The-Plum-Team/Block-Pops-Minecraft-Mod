@@ -95,7 +95,6 @@ public class BoxBlockItemRenderer implements SpecialModelRenderer<BoxBlockItemRe
         float customRotX = 0;
         float customRotY = 180; // Default GUI rotation
         float customRotZ = 0;
-        float customScale = 1.0f;
 
         if (data != null && data.blockEntityData() != null) {
             CompoundTag nbt = data.blockEntityData();
@@ -103,7 +102,9 @@ public class BoxBlockItemRenderer implements SpecialModelRenderer<BoxBlockItemRe
                 customRotX = nbt.getFloatOr("CustomRotationX", 0);
                 customRotY = nbt.getFloatOr("CustomRotationY", 180);
                 customRotZ = nbt.getFloatOr("CustomRotationZ", 0);
-                customScale = nbt.getFloatOr("CustomScale", 1.0f);
+                // NOTE: CustomScale is intentionally NOT applied here.
+                // Scale must be applied OUTSIDE renderItem() via graphics.pose().scale()
+                // to avoid the 16x16 pixel clipping that the item rendering pipeline imposes.
             }
         }
 
@@ -111,15 +112,10 @@ public class BoxBlockItemRenderer implements SpecialModelRenderer<BoxBlockItemRe
         if (displayContext == ItemDisplayContext.GUI) {
             poseStack.translate(0.5, 0.5, 0.5);
 
-            // Apply custom rotations if present
+            // Apply custom rotations (scale is handled externally by ColorSelectionButton)
             poseStack.mulPose(Axis.YP.rotationDegrees(customRotY));
             poseStack.mulPose(Axis.XP.rotationDegrees(customRotX));
             poseStack.mulPose(Axis.ZP.rotationDegrees(customRotZ));
-
-            // Apply custom scale if present
-            if (customScale != 1.0f) {
-                poseStack.scale(customScale, customScale, customScale);
-            }
 
             poseStack.translate(-0.5, -0.4375F, -0.5);
         } else if (displayContext == ItemDisplayContext.GROUND) {

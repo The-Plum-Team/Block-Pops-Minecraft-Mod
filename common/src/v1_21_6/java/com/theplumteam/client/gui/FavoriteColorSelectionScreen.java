@@ -45,6 +45,7 @@ public class FavoriteColorSelectionScreen extends Screen {
     private AbstractSliderButton scaleSlider;
     private AbstractSliderButton offsetXSlider;
     private AbstractSliderButton offsetYSlider;
+    private AbstractSliderButton offsetZSlider;
     private boolean showDebugSliders = true; // Set to false to hide sliders in production
 
     // Panel dimensions
@@ -253,6 +254,16 @@ public class FavoriteColorSelectionScreen extends Screen {
                 updateButtonTransforms();
             });
         this.addRenderableWidget(offsetYSlider);
+
+        // Offset Z slider (-5.0 to 5.0)
+        sliderY += sliderSpacing;
+        offsetZSlider = new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
+            Component.literal("Offset Z: "), -5.0, 5.0, offsetZ,
+            value -> {
+                offsetZ = value.floatValue();
+                updateButtonTransforms();
+            });
+        this.addRenderableWidget(offsetZSlider);
     }
 
     /**
