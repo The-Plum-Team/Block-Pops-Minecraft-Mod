@@ -95,6 +95,10 @@ public class BoxBlockItemRenderer implements SpecialModelRenderer<BoxBlockItemRe
         float customRotX = 0;
         float customRotY = 180; // Default GUI rotation
         float customRotZ = 0;
+        float customScale = 1.0f;
+        float customOffsetX = 0;
+        float customOffsetY = 0;
+        float customOffsetZ = 0;
 
         if (data != null && data.blockEntityData() != null) {
             CompoundTag nbt = data.blockEntityData();
@@ -102,9 +106,10 @@ public class BoxBlockItemRenderer implements SpecialModelRenderer<BoxBlockItemRe
                 customRotX = nbt.getFloatOr("CustomRotationX", 0);
                 customRotY = nbt.getFloatOr("CustomRotationY", 180);
                 customRotZ = nbt.getFloatOr("CustomRotationZ", 0);
-                // NOTE: CustomScale is intentionally NOT applied here.
-                // Scale must be applied OUTSIDE renderItem() via graphics.pose().scale()
-                // to avoid the 16x16 pixel clipping that the item rendering pipeline imposes.
+                customScale = nbt.getFloatOr("CustomScale", 1.0f);
+                customOffsetX = nbt.getFloatOr("CustomOffsetX", 0);
+                customOffsetY = nbt.getFloatOr("CustomOffsetY", 0);
+                customOffsetZ = nbt.getFloatOr("CustomOffsetZ", 0);
             }
         }
 
@@ -112,10 +117,20 @@ public class BoxBlockItemRenderer implements SpecialModelRenderer<BoxBlockItemRe
         if (displayContext == ItemDisplayContext.GUI) {
             poseStack.translate(0.5, 0.5, 0.5);
 
-            // Apply custom rotations (scale is handled externally by ColorSelectionButton)
+            // Apply custom offsets (before rotation)
+            if (customOffsetX != 0 || customOffsetY != 0 || customOffsetZ != 0) {
+                poseStack.translate(customOffsetX, customOffsetY, customOffsetZ);
+            }
+
+            // Apply custom rotations
             poseStack.mulPose(Axis.YP.rotationDegrees(customRotY));
             poseStack.mulPose(Axis.XP.rotationDegrees(customRotX));
             poseStack.mulPose(Axis.ZP.rotationDegrees(customRotZ));
+
+            // Apply custom scale - now works with oversized_in_gui: true
+            if (customScale != 1.0f) {
+                poseStack.scale(customScale, customScale, customScale);
+            }
 
             poseStack.translate(-0.5, -0.4375F, -0.5);
         } else if (displayContext == ItemDisplayContext.GROUND) {

@@ -1,90 +1,106 @@
-# Scissor Clipping Issue in Color Selection Screen (Minecraft 1.21.6)
+# Color Selection Screen Rendering Solution (Minecraft 1.21.6)
 
-## Problem Description
+## Problem Summary
 
-The color selection screen in the BlockPops mod displays 16 colored boxes in a 4x4 grid. Each box is rendered as a Minecraft item using `graphics.renderItem()`. The boxes render correctly with proper colors, but they appear **clipped/cut off** - as if a small rectangular mask is being applied that only shows a portion of each box.
+The color selection screen needs to display 16 colored boxes in a 4x4 grid with custom rotations and scaling. This presents several challenges in Minecraft 1.21.6's rendering pipeline.
 
-## Current Implementation
+## Attempted Solutions
 
-**File**: `common/src/v1_21_6/java/com/theplumteam/client/gui/widget/ColorSelectionButton.java`
+### 1. ❌ Direct `graphics.renderItem()` with Internal Scale
+**Issue**: Items render to a fixed 16x16 pixel viewport. Any scale applied inside `BoxBlockItemRenderer` gets clipped to that area - only a small portion of the scaled model is visible.
 
-Each button in the grid:
-1. Creates an `ItemStack` with box block item (different color per button)
-2. Stores transformation data in NBT: `CustomRotationX`, `CustomRotationY`, `CustomRotationZ`, `CustomScale`
-3. Renders the item at button center using `graphics.renderItem(boxItem, itemX, itemY)`
+### 2. ❌ Expanded `getExtents()`
+**Issue**: Changing the extents doesn't affect the viewport/clipping - it just normalizes the model differently, making the model appear smaller.
 
-**File**: `common/src/v1_21_6/java/com/theplumteam/client/renderer/BoxBlockItemRenderer.java`
+### 3. ❌ Direct PoseStack + BoxBlockRenderer Rendering
+**Issue**: Rendering with a fresh `PoseStack` outside the item pipeline doesn't work with 1.21.6's UBO (Uniform Buffer Object) transform system. The models either don't appear or render incorrectly.
 
-The item renderer:
-1. Reads custom transformations from NBT
-2. Applies rotations and scale in `ItemDisplayContext.GUI` context
-3. Renders the box using `BoxBlockRenderer` (GeckoLib)
+### 4. ❌ PictureInPictureRenderer (PiP)
+**Issue**: Provides crisp native-resolution rendering, but uses a single shared GPU texture per renderer. When 16 colors render sequentially to the same texture, all boxes end up showing the last color rendered (GPU texture reuse conflict).
 
-## Symptoms
+**Code Evidence**: From `SCISSOR_CLIPPING_ISSUE.md` line 83:
+> "we had to abandon PiP in 1.21.6 because it couldn't handle rendering 16 different colors simultaneously (all boxes showed the same color due to GPU texture reuse in the shared PictureInPictureRenderer)."
 
-- ✅ All 16 colors display correctly (no color conflicts)
-- ✅ Debug sliders work perfectly and update transformations in real-time
-- ❌ **Boxes appear clipped** - only a small portion is visible
-- ❌ Increasing scale makes clipping worse (more of the box is cut off)
-- The visible portion seems to be limited to approximately **16x16 pixels** regardless of scale
+### 5. ✅ 2D Pose Scale Around `graphics.renderItem()` (Current Solution)
 
-## What We've Tried
+**Implementation**: Apply `graphics.pose().scale()` OUTSIDE the `renderItem()` call to scale the entire rendering area.
 
-1. **Removed `graphics.enableScissor()`** - No effect, clipping persists
-2. **Applied transformations via `GuiGraphics.pose()`** - Can't use 3D transforms (Matrix3x2fStack is 2D only)
-3. **Recreate ItemStack on every transform change** - Works, but clipping remains
-4. **Custom scissor area calculations** - Already removed, didn't help
-
-## Suspected Root Cause
-
-Minecraft's `graphics.renderItem()` method in 1.21.6 may be applying its own internal scissor/viewport that limits rendering to the default item size (16x16), ignoring custom scales applied by the SpecialModelRenderer.
-
-## Code References
-
-### ColorSelectionButton.renderWidget() - Lines ~168-173
+**File**: `ColorSelectionButton.java:148-153`
 ```java
-// Calculate item position in button center
-int itemX = getX() + (width - 16) / 2;
-int itemY = getY() + (height - 16) / 2;
-
-// Render the item - BoxBlockItemRenderer reads CustomRotationX/Y/Z and CustomScale from NBT
-graphics.renderItem(boxItem, itemX, itemY);
+graphics.pose().pushMatrix();
+graphics.pose().translate(centerX, centerY);
+graphics.pose().scale(scale, scale);
+graphics.renderItem(boxItem, -8, -8);
+graphics.pose().popMatrix();
 ```
 
-### BoxBlockItemRenderer.render() - Lines ~111-123
-```java
-if (displayContext == ItemDisplayContext.GUI) {
-    poseStack.translate(0.5, 0.5, 0.5);
+**Advantages**:
+- ✅ All 16 colors render correctly
+- ✅ No 16x16 clipping - viewport scales with the 2D transform
+- ✅ Custom rotations work (applied in `BoxBlockItemRenderer`)
 
-    // Apply custom rotations if present
-    poseStack.mulPose(Axis.YP.rotationDegrees(customRotY));
-    poseStack.mulPose(Axis.XP.rotationDegrees(customRotX));
-    poseStack.mulPose(Axis.ZP.rotationDegrees(customRotZ));
+**Disadvantages**:
+- ⚠️ Pixelation from texture stretching (16x16 internal render gets scaled up)
 
-    // Apply custom scale if present
-    if (customScale != 1.0f) {
-        poseStack.scale(customScale, customScale, customScale);
-    }
+## Current Status
 
-    poseStack.translate(-0.5, -0.4375F, -0.5);
-}
-```
+The color selection screen uses the 2D pose scale approach with the following features:
+- 16 unique colors displayed correctly in a 4x4 grid
+- Adjustable via debug sliders: Rot X/Y/Z, Scale, Offset X/Y/Z, Cam RotX
+- Players can toggle figure visibility inside boxes
+- Transformations update in real-time
 
-## Question
+## Trade-offs Analysis
 
-How can we render scaled 3D block entity models in GUI without them being clipped to the default 16x16 item rendering area? Is there a way to:
+| Approach | Colors | Clipping | Pixelation | Notes |
+|----------|--------|----------|------------|-------|
+| `renderItem()` only | ✅ | ❌ | ❌ | Clipped to 16x16 |
+| PiP | ❌ | ✅ | ✅ | GPU texture conflicts |
+| 2D Pose Scale | ✅ | ✅ | ⚠️ | **Current solution** |
 
-1. Disable the internal scissor/viewport that `graphics.renderItem()` applies?
-2. Render the item with a custom rendering context that respects our scale transforms?
-3. Or should we bypass `graphics.renderItem()` entirely and render the GeckoLib model directly with a custom PoseStack?
+## Technical Details
 
-## Working Version (1.21.5)
+### Why PiP Doesn't Work for Multiple Colors
 
-In Minecraft 1.21.5, this exact same code worked perfectly with the PiP (Picture-in-Picture) system, but we had to abandon PiP in 1.21.6 because it couldn't handle rendering 16 different colors simultaneously (all boxes showed the same color due to GPU texture reuse in the shared PictureInPictureRenderer).
+The PiP system in 1.21.6 renders to off-screen GPU textures. Multiple renderers can exist, but:
+1. Each `PictureInPictureRenderer` instance manages one texture
+2. The texture is reused across all render calls to that renderer
+3. When 16 buttons submit PiP states in the same frame, they all point to the same renderer instance
+4. The last color rendered overwrites the texture, so all 16 buttons display that color
 
-## Environment
+### Why Direct PoseStack Rendering Doesn't Work
 
-- Minecraft: 1.21.6
-- Mod Loader: Fabric
-- GeckoLib: 5.2.0
-- Architectury: 17.0.6
+Minecraft 1.21.6 uses a UBO-based transform pipeline where:
+1. Block/entity renderers expect to be called within an established rendering context
+2. The transform matrices are managed by the engine's UBO system
+3. Creating a fresh `PoseStack` outside this context doesn't properly integrate with the matrix upload pipeline
+4. Models either don't appear, or render with incorrect transforms/lighting
+
+### Why 2D Pose Scale Works
+
+The 2D `graphics.pose()` operates at the GUI layer:
+1. It's a 2D affine transform (Matrix3x2fStack) that modifies the viewport
+2. When `renderItem()` is called, the viewport is already scaled
+3. The 16x16 internal render fits the scaled viewport
+4. Each button's `ItemStack` is unique, so colors don't conflict
+
+## Future Improvements
+
+Potential approaches to reduce pixelation while maintaining correct colors:
+
+1. **Mipmap/LOD Configuration**: Investigate if item rendering can use higher-resolution mipmaps
+2. **Per-Color PiP Renderers**: Create 16 separate `PictureInPictureRenderer` instances (one per color) - would require significant architecture changes
+3. **Custom GUI Rendering Pipeline**: Implement a custom deferred rendering system outside Minecraft's standard pipelines
+4. **Shader-Based Upscaling**: Apply post-processing shaders to smooth the stretched textures
+
+## Files Modified
+
+- `ColorSelectionButton.java` - Uses 2D pose scale approach
+- `BoxBlockItemRenderer.java` - Applies rotations (scale handled externally)
+- `FavoriteColorSelectionScreen.java` - Debug sliders for tuning
+- `BoxWidgetRenderer.java` - Per-color entity cache (unused in current solution)
+- `ItemPipRenderer.java` - PiP renderer (unused due to color conflicts)
+
+## Conclusion
+
+For Minecraft 1.21.6, the 2D pose scale approach is the best available solution that correctly displays all 16 colors without clipping. The pixelation is an acceptable trade-off given the constraints of the rendering pipeline.

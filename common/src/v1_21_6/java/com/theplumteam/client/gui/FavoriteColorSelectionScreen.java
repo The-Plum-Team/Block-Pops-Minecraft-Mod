@@ -46,6 +46,7 @@ public class FavoriteColorSelectionScreen extends Screen {
     private AbstractSliderButton offsetXSlider;
     private AbstractSliderButton offsetYSlider;
     private AbstractSliderButton offsetZSlider;
+    private AbstractSliderButton camRotXSlider;
     private boolean showDebugSliders = true; // Set to false to hide sliders in production
 
     // Panel dimensions
@@ -63,7 +64,7 @@ public class FavoriteColorSelectionScreen extends Screen {
     private float rotationX = 30.0f;
     private float rotationY = 45.0f;
     private float rotationZ = 0.0f;
-    private float scale = 3.5f; // Much larger for item rendering (was 0.75f for PiP)
+    private float scale = 30.0f; // Internal 3D scale (with oversized_in_gui: true, renders crisply at native resolution)
     private float offsetX = 0.0f;
     private float offsetY = 0.0f;
     private float offsetZ = 0.0f;
@@ -225,10 +226,10 @@ public class FavoriteColorSelectionScreen extends Screen {
             });
         this.addRenderableWidget(rotZSlider);
 
-        // Scale slider (0.1-5.0)
+        // Scale slider (0.1-50.0)
         sliderY += sliderSpacing;
         scaleSlider = new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Scale: "), 0.1, 5.0, scale,
+            Component.literal("Scale: "), 0.1, 50.0, scale,
             value -> {
                 scale = value.floatValue();
                 updateButtonTransforms();
@@ -264,6 +265,16 @@ public class FavoriteColorSelectionScreen extends Screen {
                 updateButtonTransforms();
             });
         this.addRenderableWidget(offsetZSlider);
+
+        // Camera Rot X slider (0-90°)
+        sliderY += sliderSpacing;
+        camRotXSlider = new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
+            Component.literal("Cam RotX: "), 0, 90, camRotX,
+            value -> {
+                camRotX = value.floatValue();
+                updateButtonTransforms();
+            });
+        this.addRenderableWidget(camRotXSlider);
     }
 
     /**
