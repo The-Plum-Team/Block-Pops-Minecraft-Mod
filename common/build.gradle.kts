@@ -26,9 +26,14 @@ sourceSets {
             srcDir("src/$versionSourceSet/java")
         }
         resources {
-            srcDir("src/$versionSourceSet/resources")
+            // Version-specific resources override main resources
+            setSrcDirs(listOf("src/$versionSourceSet/resources", "src/main/resources"))
         }
     }
+}
+
+tasks.processResources {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 dependencies {

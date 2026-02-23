@@ -28,8 +28,9 @@
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
-      "offset_x": -0.15,
-      "offset_z": -0.20,
+      "offset_x": -0.545,
+      "offset_y": 0.008,
+      "offset_z": -0.606,
       "hidden_bones": ["ssj1", "ssj3", "head_transformation"],
       "alternatives": [
         {
@@ -55,8 +56,9 @@
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
-      "offset_x": -0.15,
-      "offset_z": -0.20,
+      "offset_x": -0.545,
+      "offset_y": 0.008,
+      "offset_z": -0.606,
       "alternatives": [
         {
           "name": "Vegeta (SSJ)",
@@ -73,8 +75,9 @@
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
-      "offset_x": -0.15,
-      "offset_z": -0.20,
+      "offset_x": -0.545,
+      "offset_y": 0.008,
+      "offset_z": -0.606,
       "alternatives": [
         {
           "name": "Gohan (SSJ)",
@@ -91,8 +94,9 @@
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
-      "offset_x": -0.15,
-      "offset_z": -0.20,
+      "offset_x": -0.545,
+      "offset_y": 0.008,
+      "offset_z": -0.606,
       "alternatives": [
         {
           "name": "Trunks (SSJ)",
@@ -109,8 +113,9 @@
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
-      "offset_x": -0.15,
-      "offset_z": -0.20
+      "offset_x": -0.545,
+      "offset_y": 0.008,
+      "offset_z": -0.606
     },
     {
       "id": "krillin",
@@ -121,8 +126,9 @@
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
-      "offset_x": -0.15,
-      "offset_z": -0.20
+      "offset_x": -0.545,
+      "offset_y": 0.008,
+      "offset_z": -0.606
     },
     {
       "id": "bulma",
@@ -133,8 +139,9 @@
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
-      "offset_x": -0.15,
-      "offset_z": -0.20
+      "offset_x": -0.545,
+      "offset_y": 0.008,
+      "offset_z": -0.606
     },
     {
       "id": "frieza",
@@ -145,8 +152,9 @@
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
-      "offset_x": -0.15,
-      "offset_z": -0.20
+      "offset_x": -0.545,
+      "offset_y": 0.008,
+      "offset_z": -0.606
     },
     {
       "id": "cell",
@@ -157,8 +165,9 @@
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
-      "offset_x": -0.15,
-      "offset_z": -0.20
+      "offset_x": -0.545,
+      "offset_y": 0.008,
+      "offset_z": -0.606
     },
     {
       "id": "android17",
@@ -169,8 +178,9 @@
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
-      "offset_x": -0.15,
-      "offset_z": -0.20
+      "offset_x": -0.545,
+      "offset_y": 0.008,
+      "offset_z": -0.606
     },
     {
       "id": "android18",
@@ -181,8 +191,9 @@
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
-      "offset_x": -0.15,
-      "offset_z": -0.20
+      "offset_x": -0.545,
+      "offset_y": 0.008,
+      "offset_z": -0.606
     },
     {
       "id": "purebuu",
@@ -193,8 +204,9 @@
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
-      "offset_x": -0.15,
-      "offset_z": -0.20
+      "offset_x": -0.545,
+      "offset_y": 0.008,
+      "offset_z": -0.606
     }
   ]
 }
