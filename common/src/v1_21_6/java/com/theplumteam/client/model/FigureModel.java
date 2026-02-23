@@ -178,7 +178,7 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
         // Resolve and store model and texture paths
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure != null) {
-            renderState.addGeckolibData(FIGURE_MODEL, figure.getModelPath());
+            renderState.addGeckolibData(FIGURE_MODEL, figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex()));
             renderState.addGeckolibData(FIGURE_TEXTURE, resolveTexture(animatable));
         }
     }

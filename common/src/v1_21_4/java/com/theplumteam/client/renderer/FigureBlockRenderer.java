@@ -4,6 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.theplumteam.blockentity.FigureBlockEntity;
 import com.theplumteam.client.model.FigureBlockModel;
+import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.util.SkinModelDetector;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -12,7 +13,11 @@ import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
 
+import java.util.Collections;
+import java.util.List;
+
 public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
+    private List<String> currentHiddenBones = Collections.emptyList();
 
     public FigureBlockRenderer() {
         super(new FigureBlockModel());
@@ -52,7 +57,43 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
             if (leftArmClassic != null) {
                 leftArmClassic.setHidden(isSlim);
             }
+
+            // Store hidden bones for use in renderRecursively
+            FigureDefinition figureDef = animatable.getFigureDefinition();
+            this.currentHiddenBones = figureDef != null ?
+                figureDef.getHiddenBonesForSkinIndex(animatable.getAlternativeSkinIndex()) :
+                Collections.emptyList();
+            // Also apply bone visibility directly on the model (redundant safety net)
+            // BakedGeoModel is cached/shared, so we must reset all variant bones first
+            if (figureDef != null) {
+                for (String boneName : figureDef.getAllVariantBoneNames()) {
+                    model.getBone(boneName).ifPresent(bone -> {
+                        bone.setHidden(false);
+                        bone.setChildrenHidden(false);
+                    });
+                }
+                for (String boneName : currentHiddenBones) {
+                    model.getBone(boneName).ifPresent(bone -> {
+                        bone.setHidden(true);
+                        bone.setChildrenHidden(true);
+                    });
+                }
+            }
+        } else {
+            this.currentHiddenBones = Collections.emptyList();
         }
+    }
+
+    @Override
+    public void renderRecursively(PoseStack poseStack, FigureBlockEntity animatable, GeoBone bone,
+                                  RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer,
+                                  boolean isReRender, float partialTick, int packedLight, int packedOverlay,
+                                  int colour) {
+        if (!currentHiddenBones.isEmpty() && currentHiddenBones.contains(bone.getName())) {
+            return;
+        }
+        super.renderRecursively(poseStack, animatable, bone, renderType, bufferSource, buffer,
+                              isReRender, partialTick, packedLight, packedOverlay, colour);
     }
 
     @Override
@@ -66,7 +107,12 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
             return;
         }
 
-        // Render the figure at default position (no offset or scale adjustments)
+        // Apply definition scale for figures with custom model sizes
+        float defScale = animatable.getFigureDefinition() != null ? animatable.getFigureDefinition().getScale() : 1.0f;
+        if (defScale != 1.0f) {
+            poseStack.scale(defScale, defScale, defScale);
+        }
+
         super.actuallyRender(poseStack, animatable, model, renderType, bufferSource, buffer,
                            isReRender, partialTick, packedLight, packedOverlay, colour);
     }

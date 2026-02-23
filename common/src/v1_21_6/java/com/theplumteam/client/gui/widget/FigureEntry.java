@@ -261,7 +261,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         ScreenRectangle scissorArea = peekScissorArea(graphics);
 
         // Scale: size * modelScale maps model units to GUI pixels
-        float pipScale = size * modelScale;
+        float pipScale = size * modelScale * figure.getGuiScale();
 
         // Create PiP render state with entity, rotations, bounds, and scale
         FigurePipRenderState renderState = new FigurePipRenderState(

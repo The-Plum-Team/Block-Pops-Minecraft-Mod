@@ -435,6 +435,19 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         this.logoScaleX = input.read("LogoScaleX", Codec.DOUBLE).orElse(null);
         this.logoScaleY = input.read("LogoScaleY", Codec.DOUBLE).orElse(null);
         this.hideLogo = input.getBooleanOr("HideLogo", false);
+        applyDefinitionDefaults();
+    }
+
+    private void applyDefinitionDefaults() {
+        FigureDefinition def = getFigureDefinition();
+        if (def != null) {
+            if (def.getOffsetX() != 0.0f && this.figureOffsetX == -0.53) {
+                this.figureOffsetX = def.getOffsetX();
+            }
+            if (def.getOffsetZ() != 0.0f && this.figureOffsetZ == -0.55) {
+                this.figureOffsetZ = def.getOffsetZ();
+            }
+        }
     }
 
     /**
@@ -456,6 +469,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         this.figureOffsetZ = tag.getDoubleOr("FigureOffsetZ", this.figureOffsetZ);
         this.figureScale = tag.getDoubleOr("FigureScale", this.figureScale);
         this.hideLogo = tag.getBooleanOr("HideLogo", false);
+        applyDefinitionDefaults();
     }
 
     @Override

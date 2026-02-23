@@ -43,6 +43,58 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
             public RenderType getRenderType(GeoRenderState renderState, ResourceLocation texture) {
                 return RenderType.entityTranslucent(texture, true);
             }
+
+            @Override
+            public void actuallyRender(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel model,
+                                      @Nullable RenderType renderType, MultiBufferSource bufferSource,
+                                      @Nullable VertexConsumer buffer, boolean isReRender,
+                                      int packedLight, int packedOverlay, int renderColor) {
+                if (currentAnimatable != null) {
+                    FigureDefinition figureDef = currentAnimatable.getFigureDefinition();
+                    float defScale = figureDef != null ? figureDef.getScale() : 1.0f;
+                    if (defScale != 1.0f) {
+                        poseStack.scale(defScale, defScale, defScale);
+                    }
+                    java.util.List<String> figureHiddenBones = figureDef != null ?
+                        figureDef.getHiddenBonesForSkinIndex(currentAnimatable.getAlternativeSkinIndex()) :
+                        java.util.Collections.emptyList();
+                    // Also apply bone visibility directly on the model (redundant safety net)
+                    // BakedGeoModel is cached/shared, so we must reset all variant bones first
+                    if (figureDef != null) {
+                        for (String boneName : figureDef.getAllVariantBoneNames()) {
+                            model.getBone(boneName).ifPresent(bone -> {
+                                bone.setHidden(false);
+                                bone.setChildrenHidden(false);
+                            });
+                        }
+                        for (String boneName : figureHiddenBones) {
+                            model.getBone(boneName).ifPresent(bone -> {
+                                bone.setHidden(true);
+                                bone.setChildrenHidden(true);
+                            });
+                        }
+                    }
+                }
+                super.actuallyRender(renderState, poseStack, model, renderType, bufferSource, buffer,
+                                   isReRender, packedLight, packedOverlay, renderColor);
+            }
+
+            @Override
+            public void renderRecursively(GeoRenderState renderState, PoseStack poseStack, GeoBone bone,
+                                          RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer,
+                                          boolean isReRender, int packedLight, int packedOverlay, int colour) {
+                if (currentAnimatable != null) {
+                    FigureDefinition fd = currentAnimatable.getFigureDefinition();
+                    if (fd != null) {
+                        java.util.List<String> hiddenBones = fd.getHiddenBonesForSkinIndex(currentAnimatable.getAlternativeSkinIndex());
+                        if (!hiddenBones.isEmpty() && hiddenBones.contains(bone.getName())) {
+                            return;
+                        }
+                    }
+                }
+                super.renderRecursively(renderState, poseStack, bone, renderType, bufferSource, buffer,
+                                      isReRender, packedLight, packedOverlay, colour);
+            }
         };
     }
 
@@ -108,7 +160,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     private void renderFigureFace(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel model,
                                   MultiBufferSource bufferSource, int packedLight, int packedOverlay) {
         FigureDefinition figure = currentAnimatable.getFigureDefinition();
-        if (figure == null) return;
+        if (figure == null || !figure.showBoxFace()) return;
 
         ResourceLocation skinTexture = ((FigureModel) figureRenderer.getGeoModel()).resolveTexture(currentAnimatable);
         if (skinTexture == null) return;

@@ -67,7 +67,10 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
     @Override
     public ResourceLocation getModelResource(BoxBlockEntity animatable, GeoRenderer<BoxBlockEntity> renderer) {
         FigureDefinition figure = animatable.getFigureDefinition();
-        return (figure != null) ? figure.getModelPath() : null;
+        if (figure != null) {
+            return figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex());
+        }
+        return null;
     }
 
     @Override

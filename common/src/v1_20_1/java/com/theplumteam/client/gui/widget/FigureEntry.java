@@ -230,7 +230,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         Lighting.setupForFlatItems();
 
         poseStack.translate(centerX, centerY, centerZ);
-        float scale = size * modelScale;
+        float scale = size * modelScale * figure.getGuiScale();
         poseStack.scale(scale, -scale, scale);
 
         poseStack.mulPose(Axis.YP.rotationDegrees(yRotation));

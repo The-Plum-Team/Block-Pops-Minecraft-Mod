@@ -22,7 +22,8 @@ public class BuiltInCollections {
         "dispatch",
         "ultrakill",
         "doom",
-        "theamazingdigitalcircus"
+        "theamazingdigitalcircus",
+        "dragonballz"
         // Add more collections as needed
     );
 
@@ -45,6 +46,7 @@ public class BuiltInCollections {
             case "ultrakill" -> "ULTRAKILL";
             case "doom" -> "DOOM";
             case "theamazingdigitalcircus" -> "The Amazing Digital Circus";
+            case "dragonballz" -> "Dragon Ball Z";
             default -> collectionId;
         };
     }

@@ -8,7 +8,9 @@ import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -20,11 +22,19 @@ public class FigureDefinition {
     /**
      * Represents an alternative skin variant for a figure
      */
-    public record AlternativeSkin(String name, ResourceLocation texture) {
+    public record AlternativeSkin(String name, @Nullable ResourceLocation model, ResourceLocation texture, List<String> hiddenBones) {
         public static AlternativeSkin fromJson(JsonObject json) {
             String name = json.get("name").getAsString();
+            ResourceLocation model = json.has("model") ? ResourceLocation.tryParse(json.get("model").getAsString()) : null;
             ResourceLocation texture = ResourceLocation.tryParse(json.get("texture").getAsString());
-            return new AlternativeSkin(name, texture);
+            List<String> hiddenBones = new ArrayList<>();
+            if (json.has("hidden_bones")) {
+                JsonArray bonesArray = json.getAsJsonArray("hidden_bones");
+                for (int i = 0; i < bonesArray.size(); i++) {
+                    hiddenBones.add(bonesArray.get(i).getAsString());
+                }
+            }
+            return new AlternativeSkin(name, model, texture, hiddenBones);
         }
     }
 
@@ -38,6 +48,12 @@ public class FigureDefinition {
     private final List<AlternativeSkin> alternatives;
     private final PopBlockColor favoriteColor; // For player figures, stores their chosen color
     @Nullable private final String authorUrl;
+    private List<String> hiddenBones = Collections.emptyList();
+    private float scale = 1.0f;
+    private float guiScale = 1.0f;
+    private boolean showBoxFace = true;
+    private float offsetX = 0.0f;
+    private float offsetZ = 0.0f;
 
     public FigureDefinition(String id, String name, ResourceLocation modelPath,
                            ResourceLocation texturePath, ResourceLocation animationPath) {
@@ -105,7 +121,14 @@ public class FigureDefinition {
                     favoriteColor = PopBlockColor.ORIGINAL; // Default if invalid
                 }
             }
-            return new FigureDefinition(id, name, modelPath, animationPath, playerUUID, favoriteColor);
+            float scale = json.has("scale") ? json.get("scale").getAsFloat() : 1.0f;
+            FigureDefinition def = new FigureDefinition(id, name, modelPath, animationPath, playerUUID, favoriteColor);
+            def.scale = scale;
+            def.offsetX = json.has("offset_x") ? json.get("offset_x").getAsFloat() : 0.0f;
+            def.offsetZ = json.has("offset_z") ? json.get("offset_z").getAsFloat() : 0.0f;
+            def.guiScale = json.has("gui_scale") ? json.get("gui_scale").getAsFloat() : 1.0f;
+            def.showBoxFace = !json.has("show_box_face") || json.get("show_box_face").getAsBoolean();
+            return def;
         } else {
             // Parse static figure
             ResourceLocation texturePath = ResourceLocation.tryParse(json.get("texture").getAsString());
@@ -122,7 +145,22 @@ public class FigureDefinition {
 
             String authorUrl = json.has("author_url") ? json.get("author_url").getAsString() : null;
 
-            return new FigureDefinition(id, name, modelPath, texturePath, animationPath, alternatives, authorUrl);
+            float scale = json.has("scale") ? json.get("scale").getAsFloat() : 1.0f;
+            FigureDefinition def = new FigureDefinition(id, name, modelPath, texturePath, animationPath, alternatives, authorUrl);
+            def.scale = scale;
+            def.offsetX = json.has("offset_x") ? json.get("offset_x").getAsFloat() : 0.0f;
+            def.offsetZ = json.has("offset_z") ? json.get("offset_z").getAsFloat() : 0.0f;
+            def.guiScale = json.has("gui_scale") ? json.get("gui_scale").getAsFloat() : 1.0f;
+            def.showBoxFace = !json.has("show_box_face") || json.get("show_box_face").getAsBoolean();
+            if (json.has("hidden_bones")) {
+                List<String> bones = new ArrayList<>();
+                JsonArray bonesArray = json.getAsJsonArray("hidden_bones");
+                for (int i = 0; i < bonesArray.size(); i++) {
+                    bones.add(bonesArray.get(i).getAsString());
+                }
+                def.hiddenBones = bones;
+            }
+            return def;
         }
     }
 
@@ -176,6 +214,68 @@ public class FigureDefinition {
         return authorUrl != null && !authorUrl.isEmpty();
     }
 
+    public float getScale() {
+        return scale;
+    }
+
+    public float getGuiScale() {
+        return guiScale;
+    }
+
+    public boolean showBoxFace() {
+        return showBoxFace;
+    }
+
+    public float getOffsetX() {
+        return offsetX;
+    }
+
+    public float getOffsetZ() {
+        return offsetZ;
+    }
+
+    public List<String> getHiddenBones() {
+        return hiddenBones;
+    }
+
+    public List<String> getHiddenBonesForSkinIndex(int skinIndex) {
+        if (skinIndex > 0 && hasAlternatives()) {
+            int altListIndex = skinIndex - 1;
+            if (altListIndex < alternatives.size()) {
+                List<String> altBones = alternatives.get(altListIndex).hiddenBones();
+                if (!altBones.isEmpty()) return altBones;
+            }
+        }
+        return hiddenBones;
+    }
+
+    /**
+     * Returns the model path for a given skin index.
+     * If the alternative has a custom model, that is returned; otherwise the figure's default model is used.
+     */
+    public ResourceLocation getModelForSkinIndex(int skinIndex) {
+        if (skinIndex > 0 && hasAlternatives()) {
+            int altListIndex = skinIndex - 1;
+            if (altListIndex < alternatives.size()) {
+                ResourceLocation altModel = alternatives.get(altListIndex).model();
+                if (altModel != null) return altModel;
+            }
+        }
+        return modelPath;
+    }
+
+    /**
+     * Returns the union of all bone names used in hidden_bones across the default and all alternatives.
+     * Used to reset bone visibility on the shared BakedGeoModel before applying the current variant's hidden bones.
+     */
+    public Set<String> getAllVariantBoneNames() {
+        Set<String> allNames = new HashSet<>(hiddenBones);
+        for (AlternativeSkin alt : alternatives) {
+            allNames.addAll(alt.hiddenBones());
+        }
+        return allNames;
+    }
+
     /**
      * Serializes this FigureDefinition to a JSON object
      */
@@ -207,6 +307,9 @@ public class FigureDefinition {
                 for (AlternativeSkin alt : alternatives) {
                     JsonObject altJson = new JsonObject();
                     altJson.addProperty("name", alt.name());
+                    if (alt.model() != null) {
+                        altJson.addProperty("model", alt.model().toString());
+                    }
                     altJson.addProperty("texture", alt.texture().toString());
                     alternativesArray.add(altJson);
                 }
@@ -216,6 +319,19 @@ public class FigureDefinition {
             if (authorUrl != null && !authorUrl.isEmpty()) {
                 json.addProperty("author_url", authorUrl);
             }
+        }
+
+        if (scale != 1.0f) {
+            json.addProperty("scale", scale);
+        }
+        if (guiScale != 1.0f) {
+            json.addProperty("gui_scale", guiScale);
+        }
+        if (offsetX != 0.0f) {
+            json.addProperty("offset_x", offsetX);
+        }
+        if (offsetZ != 0.0f) {
+            json.addProperty("offset_z", offsetZ);
         }
 
         return json;

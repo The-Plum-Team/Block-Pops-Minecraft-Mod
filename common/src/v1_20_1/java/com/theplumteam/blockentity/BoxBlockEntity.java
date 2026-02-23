@@ -402,6 +402,19 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         this.logoScaleX = tag.contains("LogoScaleX") ? tag.getDouble("LogoScaleX") : null;
         this.logoScaleY = tag.contains("LogoScaleY") ? tag.getDouble("LogoScaleY") : null;
         if (tag.contains("HideLogo")) this.hideLogo = tag.getBoolean("HideLogo");
+        applyDefinitionDefaults();
+    }
+
+    private void applyDefinitionDefaults() {
+        FigureDefinition def = getFigureDefinition();
+        if (def != null) {
+            if (def.getOffsetX() != 0.0f && this.figureOffsetX == -0.53) {
+                this.figureOffsetX = def.getOffsetX();
+            }
+            if (def.getOffsetZ() != 0.0f && this.figureOffsetZ == -0.55) {
+                this.figureOffsetZ = def.getOffsetZ();
+            }
+        }
     }
 
     @Override

@@ -161,16 +161,14 @@ public class ColorSelectionButton extends Button {
             // Apply transformations stored in the button
             // Note: We don't read from NBT here, we use the fields directly from this class
 
-            PoseStack pose = graphics.pose();
+            PoseStack pose = new PoseStack();
             pose.pushPose();
 
             // Translate to center of button
             pose.translate(getX() + width / 2.0, getY() + height / 2.0, 150.0);
 
             // Setup Lighting for UI Entity rendering
-            // 1.21.6+ equivalent of setupForFlatItems/setupFor3DItems
-            graphics.flush(); // Ensure background draws before changing lighting
-            Lighting.setupForEntityInUi();
+            Minecraft.getInstance().gameRenderer.getLighting().setupFor(Lighting.Entry.ENTITY_IN_UI);
 
             // Apply Position Offsets (X/Y inverted for screen coords if needed, usually Z is depth)
             // Standard block scale in UI is often ~16, so 30.0f makes it "oversized"
@@ -207,7 +205,7 @@ public class ColorSelectionButton extends Button {
             bufferSource.endBatch();
 
             // Restore Lighting
-            Lighting.setupFor3DItems(); // Reset to standard item lighting for other UI elements
+            Minecraft.getInstance().gameRenderer.getLighting().setupFor(Lighting.Entry.ITEMS_3D);
 
             pose.popPose();
         }

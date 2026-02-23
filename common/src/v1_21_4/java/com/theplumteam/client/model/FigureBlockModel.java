@@ -65,8 +65,10 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     @Override
     public ResourceLocation getModelResource(FigureBlockEntity animatable, GeoRenderer<FigureBlockEntity> renderer) {
         FigureDefinition figure = animatable.getFigureDefinition();
-        if (figure == null) return FALLBACK_MODEL;
-        return figure.getModelPath();
+        if (figure != null) {
+            return figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex());
+        }
+        return FALLBACK_MODEL;
     }
 
     @Override

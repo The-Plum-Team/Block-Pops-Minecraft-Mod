@@ -9,6 +9,8 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.util.SkinModelDetector;
+import java.util.Collections;
+import java.util.List;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.Direction;
@@ -22,6 +24,7 @@ import software.bernie.geckolib.renderer.GeoBlockRenderer;
 public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     private static final Logger LOGGER = LoggerFactory.getLogger(BoxBlockRenderer.class);
     private final GeoBlockRenderer<BoxBlockEntity> figureRenderer;
+    private List<String> figureHiddenBones = Collections.emptyList();
     private boolean renderingFigure = false;
 
     public BoxBlockRenderer() {
@@ -40,6 +43,12 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                                  float partialTick, int packedLight, int packedOverlay, int colour) {
                 super.preRender(poseStack, animatable, model, bufferSource, buffer, isReRender, partialTick,
                                packedLight, packedOverlay, colour);
+
+                // Apply definition scale (after GeckoLib centering, so it scales around the block center)
+                float defScale = animatable.getFigureDefinition() != null ? animatable.getFigureDefinition().getScale() : 1.0f;
+                if (defScale != 1.0f) {
+                    poseStack.scale(defScale, defScale, defScale);
+                }
 
                 // Detect skin model and show/hide appropriate arms
                 if (animatable.hasFigure()) {
@@ -67,7 +76,43 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                     if (leftArmClassic != null) {
                         leftArmClassic.setHidden(isSlim);
                     }
+
+                    // Store hidden bones for use in renderRecursively
+                    FigureDefinition figureDef = animatable.getFigureDefinition();
+                    figureHiddenBones = figureDef != null ?
+                        figureDef.getHiddenBonesForSkinIndex(animatable.getAlternativeSkinIndex()) :
+                        Collections.emptyList();
+                    // Also apply bone visibility directly on the model (redundant safety net)
+                    // BakedGeoModel is cached/shared, so we must reset all variant bones first
+                    if (figureDef != null) {
+                        for (String boneName : figureDef.getAllVariantBoneNames()) {
+                            model.getBone(boneName).ifPresent(bone -> {
+                                bone.setHidden(false);
+                                bone.setChildrenHidden(false);
+                            });
+                        }
+                        for (String boneName : figureHiddenBones) {
+                            model.getBone(boneName).ifPresent(bone -> {
+                                bone.setHidden(true);
+                                bone.setChildrenHidden(true);
+                            });
+                        }
+                    }
+                } else {
+                    figureHiddenBones = Collections.emptyList();
                 }
+            }
+
+            @Override
+            public void renderRecursively(PoseStack poseStack, BoxBlockEntity animatable, GeoBone bone,
+                                          RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer,
+                                          boolean isReRender, float partialTick, int packedLight, int packedOverlay,
+                                          int colour) {
+                if (!figureHiddenBones.isEmpty() && figureHiddenBones.contains(bone.getName())) {
+                    return;
+                }
+                super.renderRecursively(poseStack, animatable, bone, renderType, bufferSource, buffer,
+                                      isReRender, partialTick, packedLight, packedOverlay, colour);
             }
         };
     }
@@ -113,7 +158,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     private void renderFigureFace(PoseStack poseStack, BoxBlockEntity animatable, BakedGeoModel model,
                                   MultiBufferSource bufferSource, float partialTick, int packedLight, int packedOverlay) {
         FigureDefinition figure = animatable.getFigureDefinition();
-        if (figure == null) return;
+        if (figure == null || !figure.showBoxFace()) return;
 
         // Get the player skin texture directly (bypassing figure model)
         ResourceLocation skinTexture = figureRenderer.getGeoModel().getTextureResource(animatable);

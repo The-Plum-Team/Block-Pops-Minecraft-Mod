@@ -184,7 +184,7 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure != null) {
             ResourceLocation texture = resolveTexture(animatable);
-            renderState.addGeckolibData(FIGURE_MODEL, figure.getModelPath());
+            renderState.addGeckolibData(FIGURE_MODEL, figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex()));
             renderState.addGeckolibData(FIGURE_TEXTURE, texture);
 
             // Detect skin model for arm visibility

@@ -25,6 +25,9 @@ sourceSets {
         java {
             srcDir("src/$versionSourceSet/java")
         }
+        resources {
+            srcDir("src/$versionSourceSet/resources")
+        }
     }
 }
 
