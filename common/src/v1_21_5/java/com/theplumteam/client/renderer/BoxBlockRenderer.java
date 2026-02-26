@@ -117,6 +117,14 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                               @Nullable RenderType renderType, MultiBufferSource bufferSource,
                               @Nullable VertexConsumer buffer, boolean isReRender,
                               int packedLight, int packedOverlay, int renderColor) {
+        // Set figure_face bone visibility based on showBoxFace (e.g. Dragon Ball Z uses custom 3D models)
+        if (!isReRender && currentAnimatable != null) {
+            FigureDefinition figureDef = currentAnimatable.getFigureDefinition();
+            boolean hideFace = figureDef != null && !figureDef.showBoxFace();
+            model.getBone("figure_face").ifPresent(bone -> { bone.setHidden(hideFace); bone.setChildrenHidden(hideFace); });
+            model.getBone("figure_face_3d").ifPresent(bone -> { bone.setHidden(hideFace); bone.setChildrenHidden(hideFace); });
+        }
+
         // Render the box model normally
         super.actuallyRender(renderState, poseStack, model, renderType, bufferSource, buffer,
                            isReRender, packedLight, packedOverlay, renderColor);
@@ -226,7 +234,14 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         // Skip rendering special bones during normal box rendering
         // They will be rendered separately with their own textures
         String boneName = bone.getName();
-        if ((boneName.equals("figure_face") || boneName.equals("figure_face_3d") || boneName.equals("logo")) && !isReRender) {
+        if (boneName.equals("figure_face") || boneName.equals("figure_face_3d")) {
+            if (!isReRender) return;
+            if (currentAnimatable != null) {
+                FigureDefinition fd = currentAnimatable.getFigureDefinition();
+                if (fd != null && !fd.showBoxFace()) return;
+            }
+        }
+        if (boneName.equals("logo") && !isReRender) {
             return;
         }
 

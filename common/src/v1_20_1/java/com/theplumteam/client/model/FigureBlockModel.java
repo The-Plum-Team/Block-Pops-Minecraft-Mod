@@ -154,7 +154,10 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
 
     @Override
     public ResourceLocation getAnimationResource(FigureBlockEntity animatable) {
-        // Always return the pose animation file which contains both Pose_Stand and Pose_Sit
+        FigureDefinition figure = animatable.getFigureDefinition();
+        if (figure != null && figure.getPoseAnimationPath() != null) {
+            return figure.getPoseAnimationPath();
+        }
         return POSE_ANIMATION;
     }
 

@@ -30,13 +30,13 @@ public class ColorSelectionButton extends Button {
     private boolean isSelected = false;
     private boolean showFigure = true;
 
-    // Transformation values
-    private float rotationX = 30.0f;
-    private float rotationY = 45.0f;
+    // Transformation values (tuned for PiP rendering)
+    private float rotationX = 0.0f;
+    private float rotationY = 153.38f;
     private float rotationZ = 0.0f;
-    private float scale = 1.0f;
+    private float scale = 0.80f;
     private float offsetX = 0.0f;
-    private float offsetY = 0.0f;
+    private float offsetY = 0.15f;
     private float offsetZ = 0.0f;
     private float translateYRatio = 0.0f;
     private float camRotX = 0.0f;

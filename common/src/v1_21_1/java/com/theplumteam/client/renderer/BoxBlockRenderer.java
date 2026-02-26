@@ -15,14 +15,11 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
 
 public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(BoxBlockRenderer.class);
     private final GeoBlockRenderer<BoxBlockEntity> figureRenderer;
     private List<String> figureHiddenBones = Collections.emptyList();
     private boolean renderingFigure = false;
@@ -122,6 +119,14 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                               RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer,
                               boolean isReRender, float partialTick, int packedLight, int packedOverlay,
                               int colour) {
+        // Set figure_face bone visibility based on showBoxFace (e.g. Dragon Ball Z uses custom 3D models)
+        if (!isReRender) {
+            FigureDefinition figureDef = animatable.getFigureDefinition();
+            boolean hideFace = figureDef != null && !figureDef.showBoxFace();
+            model.getBone("figure_face").ifPresent(bone -> { bone.setHidden(hideFace); bone.setChildrenHidden(hideFace); });
+            model.getBone("figure_face_3d").ifPresent(bone -> { bone.setHidden(hideFace); bone.setChildrenHidden(hideFace); });
+        }
+
         // First, render the box model (the main model)
         super.actuallyRender(poseStack, animatable, model, renderType, bufferSource, buffer,
                            isReRender, partialTick, packedLight, packedOverlay, colour);
@@ -244,11 +249,13 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     public void renderRecursively(PoseStack poseStack, BoxBlockEntity animatable, GeoBone bone, RenderType renderType,
                                   MultiBufferSource bufferSource, VertexConsumer buffer, boolean isReRender,
                                   float partialTick, int packedLight, int packedOverlay, int colour) {
-        // Skip rendering the "figure_face", "figure_head_3d", and "logo" bone during normal box rendering
-        // They will be rendered separately with their own textures
-        // When isReRender is true, we're rendering them with the appropriate texture
         String boneName = bone.getName();
-        if ((boneName.equals("figure_face") || boneName.equals("figure_face_3d") || boneName.equals("logo")) && !isReRender) {
+        if (boneName.equals("figure_face") || boneName.equals("figure_face_3d")) {
+            if (!isReRender) return;
+            FigureDefinition fd = animatable.getFigureDefinition();
+            if (fd != null && !fd.showBoxFace()) return;
+        }
+        if (boneName.equals("logo") && !isReRender) {
             return;
         }
 

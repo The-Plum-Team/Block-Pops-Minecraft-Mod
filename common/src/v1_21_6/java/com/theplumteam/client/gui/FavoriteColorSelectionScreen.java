@@ -8,7 +8,6 @@ import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.client.gui.widget.ColorSelectionButton;
 import com.theplumteam.network.SetFavoriteColorPacket;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -38,17 +37,6 @@ public class FavoriteColorSelectionScreen extends Screen {
     private boolean showFigureInBox = true;
     private final List<ColorSelectionButton> colorButtons = new ArrayList<>();
 
-    // Sliders for adjusting transformations (debug mode)
-    private AbstractSliderButton rotXSlider;
-    private AbstractSliderButton rotYSlider;
-    private AbstractSliderButton rotZSlider;
-    private AbstractSliderButton scaleSlider;
-    private AbstractSliderButton offsetXSlider;
-    private AbstractSliderButton offsetYSlider;
-    private AbstractSliderButton offsetZSlider;
-    private AbstractSliderButton camRotXSlider;
-    private boolean showDebugSliders = true; // Set to false to hide sliders in production
-
     // Panel dimensions
     private int panelX;
     private int panelY;
@@ -60,18 +48,18 @@ public class FavoriteColorSelectionScreen extends Screen {
     private static final int MAX_PANEL_WIDTH = 600;
     private static final int MIN_PANEL_HEIGHT = 450;
 
-    // Transformation values for box rendering (tuned for direct item rendering)
-    private float rotationX = 30.0f;
-    private float rotationY = 45.0f;
+    // Transformation values for box rendering (tuned for PiP rendering)
+    private float rotationX = 0.0f;
+    private float rotationY = 153.38f;
     private float rotationZ = 0.0f;
-    private float scale = 30.0f; // Internal 3D scale (with oversized_in_gui: true, renders crisply at native resolution)
+    private float scale = 0.80f;
     private float offsetX = 0.0f;
-    private float offsetY = 0.0f;
+    private float offsetY = 0.15f;
     private float offsetZ = 0.0f;
 
     // Camera settings
     private float translateYRatio = 0.74f;
-    private float camRotX = 18.5f;
+    private float camRotX = 10.77f;
 
     // Box container scale (scales the grid area only, not the entire panel)
     private float containerScale = 1.2f;
@@ -178,103 +166,8 @@ public class FavoriteColorSelectionScreen extends Screen {
         doneButton.active = false; // Initially disabled
         this.addRenderableWidget(doneButton);
 
-        // Add debug sliders for adjusting transformations
-        if (showDebugSliders) {
-            addTransformSliders();
-        }
-
         // Initialize button transforms
         updateButtonTransforms();
-    }
-
-    /**
-     * Add sliders for adjusting transformations in real-time
-     */
-    private void addTransformSliders() {
-        int sliderWidth = 150;
-        int sliderHeight = 20;
-        int sliderX = panelX + 10;
-        int sliderY = panelY + panelHeight - 160; // Above bottom buttons
-        int sliderSpacing = 22;
-
-        // Rotation X slider (0-360°)
-        rotXSlider = new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Rot X: "), 0, 360, rotationX,
-            value -> {
-                rotationX = value.floatValue();
-                updateButtonTransforms();
-            });
-        this.addRenderableWidget(rotXSlider);
-
-        // Rotation Y slider (0-360°)
-        sliderY += sliderSpacing;
-        rotYSlider = new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Rot Y: "), 0, 360, rotationY,
-            value -> {
-                rotationY = value.floatValue();
-                updateButtonTransforms();
-            });
-        this.addRenderableWidget(rotYSlider);
-
-        // Rotation Z slider (0-360°)
-        sliderY += sliderSpacing;
-        rotZSlider = new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Rot Z: "), 0, 360, rotationZ,
-            value -> {
-                rotationZ = value.floatValue();
-                updateButtonTransforms();
-            });
-        this.addRenderableWidget(rotZSlider);
-
-        // Scale slider (0.1-50.0)
-        sliderY += sliderSpacing;
-        scaleSlider = new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Scale: "), 0.1, 50.0, scale,
-            value -> {
-                scale = value.floatValue();
-                updateButtonTransforms();
-            });
-        this.addRenderableWidget(scaleSlider);
-
-        // Offset X slider (-2.0 to 2.0)
-        sliderY += sliderSpacing;
-        offsetXSlider = new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Offset X: "), -2.0, 2.0, offsetX,
-            value -> {
-                offsetX = value.floatValue();
-                updateButtonTransforms();
-            });
-        this.addRenderableWidget(offsetXSlider);
-
-        // Offset Y slider (-2.0 to 2.0)
-        sliderY += sliderSpacing;
-        offsetYSlider = new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Offset Y: "), -2.0, 2.0, offsetY,
-            value -> {
-                offsetY = value.floatValue();
-                updateButtonTransforms();
-            });
-        this.addRenderableWidget(offsetYSlider);
-
-        // Offset Z slider (-5.0 to 5.0)
-        sliderY += sliderSpacing;
-        offsetZSlider = new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Offset Z: "), -5.0, 5.0, offsetZ,
-            value -> {
-                offsetZ = value.floatValue();
-                updateButtonTransforms();
-            });
-        this.addRenderableWidget(offsetZSlider);
-
-        // Camera Rot X slider (0-90°)
-        sliderY += sliderSpacing;
-        camRotXSlider = new TransformSlider(sliderX, sliderY, sliderWidth, sliderHeight,
-            Component.literal("Cam RotX: "), 0, 90, camRotX,
-            value -> {
-                camRotX = value.floatValue();
-                updateButtonTransforms();
-            });
-        this.addRenderableWidget(camRotXSlider);
     }
 
     /**
@@ -486,39 +379,5 @@ public class FavoriteColorSelectionScreen extends Screen {
         return false;
     }
 
-    /**
-     * Custom slider for transformation values
-     */
-    private static class TransformSlider extends AbstractSliderButton {
-        private final Component prefix;
-        private final double min;
-        private final double max;
-        private final java.util.function.Consumer<Double> onValueChange;
-
-        public TransformSlider(int x, int y, int width, int height, Component prefix,
-                              double min, double max, double initialValue,
-                              java.util.function.Consumer<Double> onValueChange) {
-            super(x, y, width, height, Component.empty(), (initialValue - min) / (max - min));
-            this.prefix = prefix;
-            this.min = min;
-            this.max = max;
-            this.onValueChange = onValueChange;
-            updateMessage();
-        }
-
-        @Override
-        protected void updateMessage() {
-            double currentValue = min + (max - min) * this.value;
-            this.setMessage(Component.literal(prefix.getString() + String.format("%.2f", currentValue)));
-        }
-
-        @Override
-        protected void applyValue() {
-            double currentValue = min + (max - min) * this.value;
-            if (onValueChange != null) {
-                onValueChange.accept(currentValue);
-            }
-        }
-    }
 }
 

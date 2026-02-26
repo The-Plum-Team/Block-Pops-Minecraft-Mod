@@ -11,16 +11,21 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ShearsItem;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
@@ -42,6 +47,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
 public class BoxBlock extends BaseEntityBlock {
+    private static final TagKey<Item> SHEARS_TAG = TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("blockpops", "shears"));
     public static final MapCodec<BoxBlock> CODEC = simpleCodec(BoxBlock::new);
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
 
@@ -252,7 +258,7 @@ public class BoxBlock extends BaseEntityBlock {
                 }
             }
             else {
-                if (heldItem.getItem() == net.minecraft.world.item.Items.SHEARS) {
+                if (heldItem.is(SHEARS_TAG) || heldItem.getItem() instanceof ShearsItem) {
                     boxBlockEntity.toggleOpen();
                     level.playSound(null, pos, SoundEvents.SHEEP_SHEAR, SoundSource.BLOCKS, 1.0F, 1.0F);
                     return ItemInteractionResult.SUCCESS;

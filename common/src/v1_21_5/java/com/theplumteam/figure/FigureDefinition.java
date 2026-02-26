@@ -43,6 +43,7 @@ public class FigureDefinition {
     private final ResourceLocation modelPath;
     private final ResourceLocation texturePath;
     private final ResourceLocation animationPath;
+    @Nullable private final ResourceLocation poseAnimationPath;
     private final FigureType type;
     private final UUID playerUUID;
     private final List<AlternativeSkin> alternatives;
@@ -69,11 +70,19 @@ public class FigureDefinition {
     public FigureDefinition(String id, String name, ResourceLocation modelPath,
                            ResourceLocation texturePath, ResourceLocation animationPath,
                            List<AlternativeSkin> alternatives, @Nullable String authorUrl) {
+        this(id, name, modelPath, texturePath, animationPath, null, alternatives, authorUrl);
+    }
+
+    public FigureDefinition(String id, String name, ResourceLocation modelPath,
+                           ResourceLocation texturePath, ResourceLocation animationPath,
+                           @Nullable ResourceLocation poseAnimationPath,
+                           List<AlternativeSkin> alternatives, @Nullable String authorUrl) {
         this.id = id;
         this.name = name;
         this.modelPath = modelPath;
         this.texturePath = texturePath;
         this.animationPath = animationPath;
+        this.poseAnimationPath = poseAnimationPath;
         this.type = FigureType.STATIC;
         this.playerUUID = null;
         this.alternatives = new ArrayList<>(alternatives);
@@ -91,6 +100,7 @@ public class FigureDefinition {
         this.modelPath = modelPath;
         this.texturePath = null; // Texture is handled dynamically
         this.animationPath = animationPath;
+        this.poseAnimationPath = null;
         this.type = FigureType.PLAYER;
         this.playerUUID = playerUUID;
         this.alternatives = Collections.emptyList();
@@ -136,6 +146,7 @@ public class FigureDefinition {
         String name = json.get("name").getAsString();
         ResourceLocation modelPath = convertToGeckoLib5Path(json.get("model").getAsString());
         ResourceLocation animationPath = convertToGeckoLib5Path(json.get("animation").getAsString());
+        ResourceLocation poseAnimationPath = json.has("pose_animation") ? convertToGeckoLib5Path(json.get("pose_animation").getAsString()) : null;
 
         // Check if this is a player figure
         String type = json.has("type") ? json.get("type").getAsString() : "static";
@@ -176,7 +187,7 @@ public class FigureDefinition {
             String authorUrl = json.has("author_url") ? json.get("author_url").getAsString() : null;
 
             float scale = json.has("scale") ? json.get("scale").getAsFloat() : 1.0f;
-            FigureDefinition def = new FigureDefinition(id, name, modelPath, texturePath, animationPath, alternatives, authorUrl);
+            FigureDefinition def = new FigureDefinition(id, name, modelPath, texturePath, animationPath, poseAnimationPath, alternatives, authorUrl);
             def.scale = scale;
             def.offsetX = json.has("offset_x") ? json.get("offset_x").getAsFloat() : 0.0f;
             def.offsetZ = json.has("offset_z") ? json.get("offset_z").getAsFloat() : 0.0f;
@@ -212,6 +223,11 @@ public class FigureDefinition {
 
     public ResourceLocation getAnimationPath() {
         return animationPath;
+    }
+
+    @Nullable
+    public ResourceLocation getPoseAnimationPath() {
+        return poseAnimationPath;
     }
 
     public FigureType getType() {
@@ -315,6 +331,9 @@ public class FigureDefinition {
         json.addProperty("name", name);
         json.addProperty("model", modelPath.toString());
         json.addProperty("animation", animationPath.toString());
+        if (poseAnimationPath != null) {
+            json.addProperty("pose_animation", poseAnimationPath.toString());
+        }
 
         if (type == FigureType.PLAYER) {
             // For player figures, include player UUID and favorite color
@@ -341,6 +360,13 @@ public class FigureDefinition {
                         altJson.addProperty("model", alt.model().toString());
                     }
                     altJson.addProperty("texture", alt.texture().toString());
+                    if (!alt.hiddenBones().isEmpty()) {
+                        JsonArray altBonesArray = new JsonArray();
+                        for (String bone : alt.hiddenBones()) {
+                            altBonesArray.add(bone);
+                        }
+                        altJson.add("hidden_bones", altBonesArray);
+                    }
                     alternativesArray.add(altJson);
                 }
                 json.add("alternatives", alternativesArray);
@@ -357,11 +383,21 @@ public class FigureDefinition {
         if (guiScale != 1.0f) {
             json.addProperty("gui_scale", guiScale);
         }
+        if (!showBoxFace) {
+            json.addProperty("show_box_face", false);
+        }
         if (offsetX != 0.0f) {
             json.addProperty("offset_x", offsetX);
         }
         if (offsetZ != 0.0f) {
             json.addProperty("offset_z", offsetZ);
+        }
+        if (!hiddenBones.isEmpty()) {
+            JsonArray bonesArray = new JsonArray();
+            for (String bone : hiddenBones) {
+                bonesArray.add(bone);
+            }
+            json.add("hidden_bones", bonesArray);
         }
 
         return json;
