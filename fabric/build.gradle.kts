@@ -18,6 +18,7 @@ architectury {
 
 // Add version-specific source set for Minecraft API differences
 val versionSourceSet = when {
+    mcVersion == "1.21.7" -> "v1_21_7"
     mcVersion == "1.21.6" -> "v1_21_6"
     mcVersion == "1.21.5" -> "v1_21_5"
     mcVersion == "1.21.4" -> "v1_21_4"
@@ -97,6 +98,7 @@ tasks.named<net.fabricmc.loom.task.RemapJarTask>("remapJar") {
 
 // Game versions for this build
 val supportedGameVersions = when {
+    mcVersion == "1.21.7" -> listOf("1.21.7")
     mcVersion == "1.21.6" -> listOf("1.21.6")
     mcVersion == "1.21.5" -> listOf("1.21.5")
     mcVersion == "1.21.4" -> listOf("1.21.4")

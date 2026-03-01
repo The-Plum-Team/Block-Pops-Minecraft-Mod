@@ -23,35 +23,35 @@
       "id": "pomni",
       "name": "Pomni",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/theamazingdigitalcircus/pomni.png",
+      "texture": "blockpops:textures/block/figure/theamazingdigitalcircus/pomni.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "caine",
       "name": "Caine",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/theamazingdigitalcircus/caine.png",
+      "texture": "blockpops:textures/block/figure/theamazingdigitalcircus/caine.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "jax",
       "name": "Jax",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/theamazingdigitalcircus/jax.png",
+      "texture": "blockpops:textures/block/figure/theamazingdigitalcircus/jax.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "gangle",
       "name": "Gangle",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/theamazingdigitalcircus/gangle.png",
+      "texture": "blockpops:textures/block/figure/theamazingdigitalcircus/gangle.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "kinger",
       "name": "Kinger",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/theamazingdigitalcircus/kinger.png",
+      "texture": "blockpops:textures/block/figure/theamazingdigitalcircus/kinger.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     }
   ]

@@ -150,7 +150,9 @@ public class ClawMachineBlock extends BaseEntityBlock {
             if (player.isCreative()) {
                 preventCreativeDropFromBottomPart(level, pos, state, player);
             } else {
-                dropResources(state, level, pos, null, player, player.getMainHandItem());
+                if (player.hasCorrectToolForDrops(state)) {
+                    popResource(level, pos, new ItemStack(this.asItem()));
+                }
             }
         }
         return super.playerWillDestroy(level, pos, state, player);

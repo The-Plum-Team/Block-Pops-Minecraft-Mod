@@ -23,16 +23,16 @@
       "id": "anakin_skywalker",
       "name": "Anakin Skywalker",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/anakin_skywalker.png",
+      "texture": "blockpops:textures/block/figure/starwars/anakin_skywalker.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
       "alternatives": [
         {
           "name": "Anakin Skywalker (Alt)",
-          "texture": "blockpops:textures/figure/starwars/anakin_skywalker_alt.png"
+          "texture": "blockpops:textures/block/figure/starwars/anakin_skywalker_alt.png"
         },
         {
           "name": "Anakin Skywalker (Padawan)",
-          "texture": "blockpops:textures/figure/starwars/anakin_skywalker_padawan.png"
+          "texture": "blockpops:textures/block/figure/starwars/anakin_skywalker_padawan.png"
         }
       ]
     },
@@ -40,27 +40,27 @@
       "id": "aurra_sing",
       "name": "Aurra Sing",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/aurra_sing.png",
+      "texture": "blockpops:textures/block/figure/starwars/aurra_sing.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "b1_battle_droid",
       "name": "B1 Battle Droid",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/b1_battle_droid.png",
+      "texture": "blockpops:textures/block/figure/starwars/b1_battle_droid.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
       "alternatives": [
         {
           "name": "B1 Battle Droid (Commander)",
-          "texture": "blockpops:textures/figure/starwars/b1_battle_droid_commander.png"
+          "texture": "blockpops:textures/block/figure/starwars/b1_battle_droid_commander.png"
         },
         {
           "name": "B1 Battle Droid (Pilot)",
-          "texture": "blockpops:textures/figure/starwars/b1_battle_droid_pilot.png"
+          "texture": "blockpops:textures/block/figure/starwars/b1_battle_droid_pilot.png"
         },
         {
           "name": "B1 Battle Droid (Security)",
-          "texture": "blockpops:textures/figure/starwars/b1_battle_droid_security.png"
+          "texture": "blockpops:textures/block/figure/starwars/b1_battle_droid_security.png"
         }
       ]
     },
@@ -68,40 +68,40 @@
       "id": "boss_nass",
       "name": "Boss Nass",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/boss_nass.png",
+      "texture": "blockpops:textures/block/figure/starwars/boss_nass.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "c3po",
       "name": "C-3PO",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/c3po.png",
+      "texture": "blockpops:textures/block/figure/starwars/c3po.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "captain_panaka",
       "name": "Captain Panaka",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/captain_panaka.png",
+      "texture": "blockpops:textures/block/figure/starwars/captain_panaka.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "captain_tarpals",
       "name": "Captain Tarpals",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/captain_tarpals.png",
+      "texture": "blockpops:textures/block/figure/starwars/captain_tarpals.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "darth_maul",
       "name": "Darth Maul",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/darth_maul.png",
+      "texture": "blockpops:textures/block/figure/starwars/darth_maul.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
       "alternatives": [
         {
           "name": "Darth Maul (Alt)",
-          "texture": "blockpops:textures/figure/starwars/darth_maul_alt.png"
+          "texture": "blockpops:textures/block/figure/starwars/darth_maul_alt.png"
         }
       ]
     },
@@ -109,54 +109,54 @@
       "id": "darth_sidious",
       "name": "Darth Sidious",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/darth_sidious.png",
+      "texture": "blockpops:textures/block/figure/starwars/darth_sidious.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "droideka",
       "name": "Droideka",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/droideka.png",
+      "texture": "blockpops:textures/block/figure/starwars/droideka.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "jar_jar_binks",
       "name": "Jar Jar Binks",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/jar_jar_binks.png",
+      "texture": "blockpops:textures/block/figure/starwars/jar_jar_binks.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "ki_adi_mundi",
       "name": "Ki-Adi-Mundi",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/ki_adi_mundi.png",
+      "texture": "blockpops:textures/block/figure/starwars/ki_adi_mundi.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "mace_windu",
       "name": "Mace Windu",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/mace_windu.png",
+      "texture": "blockpops:textures/block/figure/starwars/mace_windu.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "nute_gunray",
       "name": "Nute Gunray",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/nute_gunray.png",
+      "texture": "blockpops:textures/block/figure/starwars/nute_gunray.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "obi_wan_kenobi",
       "name": "Obi-Wan Kenobi",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/obi_wan_kenobi.png",
+      "texture": "blockpops:textures/block/figure/starwars/obi_wan_kenobi.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
       "alternatives": [
         {
           "name": "Obi-Wan Kenobi (Alt)",
-          "texture": "blockpops:textures/figure/starwars/obi_wan_kenobi_alt.png"
+          "texture": "blockpops:textures/block/figure/starwars/obi_wan_kenobi_alt.png"
         }
       ]
     },
@@ -164,51 +164,51 @@
       "id": "padme_amidala",
       "name": "Padmé Amidala",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/padme_amidala.png",
+      "texture": "blockpops:textures/block/figure/starwars/padme_amidala.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "padme_naberrie",
       "name": "Padmé Naberrie",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/padme_naberrie.png",
+      "texture": "blockpops:textures/block/figure/starwars/padme_naberrie.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "pit_droid",
       "name": "Pit Droid",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/pit_droid.png",
+      "texture": "blockpops:textures/block/figure/starwars/pit_droid.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "plo_koon",
       "name": "Plo Koon",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/plo_koon.png",
+      "texture": "blockpops:textures/block/figure/starwars/plo_koon.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "queen_amidala",
       "name": "Queen Amidala",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/queen_amidala.png",
+      "texture": "blockpops:textures/block/figure/starwars/queen_amidala.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "qui_gon_jinn",
       "name": "Qui-Gon Jinn",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/qui_gon_jinn.png",
+      "texture": "blockpops:textures/block/figure/starwars/qui_gon_jinn.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
       "alternatives": [
         {
           "name": "Qui-Gon Jinn (Alt)",
-          "texture": "blockpops:textures/figure/starwars/qui_gon_jinn_alt.png"
+          "texture": "blockpops:textures/block/figure/starwars/qui_gon_jinn_alt.png"
         },
         {
           "name": "Qui-Gon Jinn (Tatooine)",
-          "texture": "blockpops:textures/figure/starwars/qui_gon_jinn_tatooine.png"
+          "texture": "blockpops:textures/block/figure/starwars/qui_gon_jinn_tatooine.png"
         }
       ]
     },
@@ -216,70 +216,70 @@
       "id": "ric_olie",
       "name": "Ric Olié",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/ric_olie.png",
+      "texture": "blockpops:textures/block/figure/starwars/ric_olie.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "rune_haako",
       "name": "Rune Haako",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/rune_haako.png",
+      "texture": "blockpops:textures/block/figure/starwars/rune_haako.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "sabe",
       "name": "Sabé",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/sabe.png",
+      "texture": "blockpops:textures/block/figure/starwars/sabe.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "sebulba",
       "name": "Sebulba",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/sebulba.png",
+      "texture": "blockpops:textures/block/figure/starwars/sebulba.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "senate_guard",
       "name": "Senate Guard",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/senate_guard.png",
+      "texture": "blockpops:textures/block/figure/starwars/senate_guard.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "senator_palpatine",
       "name": "Senator Palpatine",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/senator_palpatine.png",
+      "texture": "blockpops:textures/block/figure/starwars/senator_palpatine.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "shmi_skywalker",
       "name": "Shmi Skywalker",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/shmi_skywalker.png",
+      "texture": "blockpops:textures/block/figure/starwars/shmi_skywalker.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "tc14",
       "name": "TC-14",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/tc14.png",
+      "texture": "blockpops:textures/block/figure/starwars/tc14.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "watto",
       "name": "Watto",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/watto.png",
+      "texture": "blockpops:textures/block/figure/starwars/watto.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "yoda",
       "name": "Yoda",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/starwars/yoda.png",
+      "texture": "blockpops:textures/block/figure/starwars/yoda.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     }
   ]

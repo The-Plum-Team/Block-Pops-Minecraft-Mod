@@ -23,9 +23,9 @@
       "id": "goku",
       "name": "Goku",
       "model": "blockpops:geo/figure/dragonballz/goku.geo.json",
-      "texture": "blockpops:textures/figure/dragonballz/goku.png",
+      "texture": "blockpops:textures/block/figure/dragonballz/goku.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball_goku.animation.json",
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
@@ -37,13 +37,13 @@
         {
           "name": "Goku (SSJ)",
           "model": "blockpops:geo/figure/dragonballz/goku_ssj1.geo.json",
-          "texture": "blockpops:textures/figure/dragonballz/goku_ssj1.png",
+          "texture": "blockpops:textures/block/figure/dragonballz/goku_ssj1.png",
           "hidden_bones": ["hair_normal", "ssj3", "head_transformation"]
         },
         {
           "name": "Goku (SSJ3)",
           "model": "blockpops:geo/figure/dragonballz/goku_ssj3.geo.json",
-          "texture": "blockpops:textures/figure/dragonballz/goku_ssj3.png",
+          "texture": "blockpops:textures/block/figure/dragonballz/goku_ssj3.png",
           "hidden_bones": ["hair_normal", "ssj1", "head_transformation"]
         }
       ]
@@ -52,9 +52,9 @@
       "id": "vegeta",
       "name": "Vegeta",
       "model": "blockpops:geo/figure/dragonballz/vegeta.geo.json",
-      "texture": "blockpops:textures/figure/dragonballz/vegeta.png",
+      "texture": "blockpops:textures/block/figure/dragonballz/vegeta.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball_vegeta.animation.json",
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
@@ -64,7 +64,7 @@
       "alternatives": [
         {
           "name": "Vegeta (SSJ)",
-          "texture": "blockpops:textures/figure/dragonballz/vegeta_ssj1.png"
+          "texture": "blockpops:textures/block/figure/dragonballz/vegeta_ssj1.png"
         }
       ]
     },
@@ -72,9 +72,9 @@
       "id": "gohan",
       "name": "Gohan",
       "model": "blockpops:geo/figure/dragonballz/gohan.geo.json",
-      "texture": "blockpops:textures/figure/dragonballz/gohan.png",
+      "texture": "blockpops:textures/block/figure/dragonballz/gohan.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball_gohan.animation.json",
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
@@ -84,7 +84,7 @@
       "alternatives": [
         {
           "name": "Gohan (SSJ)",
-          "texture": "blockpops:textures/figure/dragonballz/gohan_ssj1.png"
+          "texture": "blockpops:textures/block/figure/dragonballz/gohan_ssj1.png"
         }
       ]
     },
@@ -92,9 +92,9 @@
       "id": "trunks",
       "name": "Trunks",
       "model": "blockpops:geo/figure/dragonballz/trunks.geo.json",
-      "texture": "blockpops:textures/figure/dragonballz/trunks.png",
+      "texture": "blockpops:textures/block/figure/dragonballz/trunks.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball_trunks.animation.json",
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
@@ -104,7 +104,7 @@
       "alternatives": [
         {
           "name": "Trunks (SSJ)",
-          "texture": "blockpops:textures/figure/dragonballz/trunks_ssj1.png"
+          "texture": "blockpops:textures/block/figure/dragonballz/trunks_ssj1.png"
         }
       ]
     },
@@ -112,9 +112,9 @@
       "id": "piccolo",
       "name": "Piccolo",
       "model": "blockpops:geo/figure/dragonballz/piccolo.geo.json",
-      "texture": "blockpops:textures/figure/dragonballz/piccolo.png",
+      "texture": "blockpops:textures/block/figure/dragonballz/piccolo.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball_piccolo.animation.json",
       "scale": 0.27,
       "gui_scale": 0.28,
       "show_box_face": false,
@@ -126,9 +126,9 @@
       "id": "krillin",
       "name": "Krillin",
       "model": "blockpops:geo/figure/dragonballz/krillin.geo.json",
-      "texture": "blockpops:textures/figure/dragonballz/krillin.png",
+      "texture": "blockpops:textures/block/figure/dragonballz/krillin.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball_krillin.animation.json",
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
@@ -140,9 +140,9 @@
       "id": "bulma",
       "name": "Bulma",
       "model": "blockpops:geo/figure/dragonballz/bulma_lobby.geo.json",
-      "texture": "blockpops:textures/figure/dragonballz/bulma.png",
+      "texture": "blockpops:textures/block/figure/dragonballz/bulma.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball_bulma.animation.json",
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
@@ -154,9 +154,9 @@
       "id": "frieza",
       "name": "Frieza",
       "model": "blockpops:geo/figure/dragonballz/frieza.geo.json",
-      "texture": "blockpops:textures/figure/dragonballz/frieza.png",
+      "texture": "blockpops:textures/block/figure/dragonballz/frieza.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball_frieza.animation.json",
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
@@ -168,9 +168,9 @@
       "id": "cell",
       "name": "Cell",
       "model": "blockpops:geo/figure/dragonballz/cell.geo.json",
-      "texture": "blockpops:textures/figure/dragonballz/cell.png",
+      "texture": "blockpops:textures/block/figure/dragonballz/cell.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball_cell.animation.json",
       "scale": 0.26,
       "gui_scale": 0.26,
       "show_box_face": false,
@@ -182,9 +182,9 @@
       "id": "android17",
       "name": "Android 17",
       "model": "blockpops:geo/figure/dragonballz/android17.geo.json",
-      "texture": "blockpops:textures/figure/dragonballz/android17.png",
+      "texture": "blockpops:textures/block/figure/dragonballz/android17.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball_android17.animation.json",
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
@@ -196,9 +196,9 @@
       "id": "android18",
       "name": "Android 18",
       "model": "blockpops:geo/figure/dragonballz/android18.geo.json",
-      "texture": "blockpops:textures/figure/dragonballz/android18.png",
+      "texture": "blockpops:textures/block/figure/dragonballz/android18.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball_android18.animation.json",
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,
@@ -210,9 +210,9 @@
       "id": "purebuu",
       "name": "Pure Buu",
       "model": "blockpops:geo/figure/dragonballz/purebuu.geo.json",
-      "texture": "blockpops:textures/figure/dragonballz/purebuu.png",
+      "texture": "blockpops:textures/block/figure/dragonballz/purebuu.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_dragonball_purebuu.animation.json",
       "scale": 0.29,
       "gui_scale": 0.35,
       "show_box_face": false,

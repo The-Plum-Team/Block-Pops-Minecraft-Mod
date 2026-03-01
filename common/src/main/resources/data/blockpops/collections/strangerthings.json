@@ -23,89 +23,89 @@
       "id": "chrissy_cunningham",
       "name": "Chrissy Cunningham",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/strangerthings/chrissy_cunningham.png",
+      "texture": "blockpops:textures/block/figure/strangerthings/chrissy_cunningham.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "dustin_henderson",
       "name": "Dustin Henderson",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/strangerthings/dustin_henderson.png",
+      "texture": "blockpops:textures/block/figure/strangerthings/dustin_henderson.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "eddie_munson",
       "name": "Eddie Munson",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/strangerthings/eddie_munson.png",
+      "texture": "blockpops:textures/block/figure/strangerthings/eddie_munson.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "eleven",
       "name": "Eleven",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/strangerthings/eleven.png",
+      "texture": "blockpops:textures/block/figure/strangerthings/eleven.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "erica_sinclair",
       "name": "Erica Sinclair",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/strangerthings/erica_sinclair.png",
+      "texture": "blockpops:textures/block/figure/strangerthings/erica_sinclair.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "lucas_sinclair",
       "name": "Lucas Sinclair",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/strangerthings/lucas_sinclair.png",
+      "texture": "blockpops:textures/block/figure/strangerthings/lucas_sinclair.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "max_mayfield",
       "name": "Max Mayfield",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/strangerthings/max_mayfield.png",
+      "texture": "blockpops:textures/block/figure/strangerthings/max_mayfield.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "mike_wheeler",
       "name": "Mike Wheeler",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/strangerthings/mike_wheeler.png",
+      "texture": "blockpops:textures/block/figure/strangerthings/mike_wheeler.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "robin_buckley",
       "name": "Robin Buckley",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/strangerthings/robin_buckley.png",
+      "texture": "blockpops:textures/block/figure/strangerthings/robin_buckley.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "steve_harrington",
       "name": "Steve Harrington",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/strangerthings/steve_harrington.png",
+      "texture": "blockpops:textures/block/figure/strangerthings/steve_harrington.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "will_byers",
       "name": "Will Byers",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/strangerthings/will_byers.png",
+      "texture": "blockpops:textures/block/figure/strangerthings/will_byers.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "demogorgon",
       "name": "Demogorgon",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/strangerthings/demogorgon.png",
+      "texture": "blockpops:textures/block/figure/strangerthings/demogorgon.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
       "alternatives": [
         {
           "name": "Demogorgon (Open)",
-          "texture": "blockpops:textures/figure/strangerthings/demogorgon_open.png"
+          "texture": "blockpops:textures/block/figure/strangerthings/demogorgon_open.png"
         }
       ]
     }

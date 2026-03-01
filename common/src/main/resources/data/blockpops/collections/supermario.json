@@ -23,217 +23,217 @@
       "id": "nabbit",
       "name": "Nabbit",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/nabbit.png",
+      "texture": "blockpops:textures/block/figure/supermario/nabbit.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "shy_guy",
       "name": "Shy Guy",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/shy_guy.png",
+      "texture": "blockpops:textures/block/figure/supermario/shy_guy.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "lakitu",
       "name": "Lakitu",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/lakitu.png",
+      "texture": "blockpops:textures/block/figure/supermario/lakitu.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "hammer_bro",
       "name": "Hammer Bro",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/hammer_bro.png",
+      "texture": "blockpops:textures/block/figure/supermario/hammer_bro.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "dry_bones",
       "name": "Dry Bones",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/dry_bones.png",
+      "texture": "blockpops:textures/block/figure/supermario/dry_bones.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "koopa_troopa",
       "name": "Koopa Troopa",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/koopa_troopa.png",
+      "texture": "blockpops:textures/block/figure/supermario/koopa_troopa.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "ludwig_von_koopa",
       "name": "Ludwig von Koopa",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/ludwig_von_koopa.png",
+      "texture": "blockpops:textures/block/figure/supermario/ludwig_von_koopa.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "lemmy_koopa",
       "name": "Lemmy Koopa",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/lemmy_koopa.png",
+      "texture": "blockpops:textures/block/figure/supermario/lemmy_koopa.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "morton_koopa_jr",
       "name": "Morton Koopa Jr",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/morton_koopa_jr.png",
+      "texture": "blockpops:textures/block/figure/supermario/morton_koopa_jr.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "wendy_o_koopa",
       "name": "Wendy O. Koopa",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/wendy_o_koopa.png",
+      "texture": "blockpops:textures/block/figure/supermario/wendy_o_koopa.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "iggy",
       "name": "Iggy Koopa",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/iggy.png",
+      "texture": "blockpops:textures/block/figure/supermario/iggy.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "roy_koopa",
       "name": "Roy Koopa",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/roy_koopa.png",
+      "texture": "blockpops:textures/block/figure/supermario/roy_koopa.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "larry_koopa",
       "name": "Larry Koopa",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/larry_koopa.png",
+      "texture": "blockpops:textures/block/figure/supermario/larry_koopa.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "kamek",
       "name": "Kamek",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/kamek.png",
+      "texture": "blockpops:textures/block/figure/supermario/kamek.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "dry_bowser",
       "name": "Dry Bowser",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/dry_bowser.png",
+      "texture": "blockpops:textures/block/figure/supermario/dry_bowser.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "waluigi",
       "name": "Waluigi",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/waluigi.png",
+      "texture": "blockpops:textures/block/figure/supermario/waluigi.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "wario",
       "name": "Wario",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/wario.png",
+      "texture": "blockpops:textures/block/figure/supermario/wario.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "bowser_jr",
       "name": "Bowser Jr",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/bowser_jr.png",
+      "texture": "blockpops:textures/block/figure/supermario/bowser_jr.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "bowser",
       "name": "Bowser",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/bowser.png",
+      "texture": "blockpops:textures/block/figure/supermario/bowser.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "diddy_kong",
       "name": "Diddy Kong",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/diddy_kong.png",
+      "texture": "blockpops:textures/block/figure/supermario/diddy_kong.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "donkey_kong",
       "name": "Donkey Kong",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/donkey_kong.png",
+      "texture": "blockpops:textures/block/figure/supermario/donkey_kong.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "pauline",
       "name": "Pauline",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/pauline.png",
+      "texture": "blockpops:textures/block/figure/supermario/pauline.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "rosalina",
       "name": "Rosalina",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/rosalina.png",
+      "texture": "blockpops:textures/block/figure/supermario/rosalina.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "toadette",
       "name": "Toadette",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/toadette.png",
+      "texture": "blockpops:textures/block/figure/supermario/toadette.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "toad",
       "name": "Toad",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/toad.png",
+      "texture": "blockpops:textures/block/figure/supermario/toad.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "birdo",
       "name": "Birdo",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/birdo.png",
+      "texture": "blockpops:textures/block/figure/supermario/birdo.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "yoshi",
       "name": "Yoshi",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/yoshi.png",
+      "texture": "blockpops:textures/block/figure/supermario/yoshi.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "daisy",
       "name": "Daisy",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/daisy.png",
+      "texture": "blockpops:textures/block/figure/supermario/daisy.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "peach",
       "name": "Peach",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/peach.png",
+      "texture": "blockpops:textures/block/figure/supermario/peach.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "luigi",
       "name": "Luigi",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/luigi.png",
+      "texture": "blockpops:textures/block/figure/supermario/luigi.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "mario",
       "name": "Mario",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/supermario/mario.png",
+      "texture": "blockpops:textures/block/figure/supermario/mario.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     }
   ]

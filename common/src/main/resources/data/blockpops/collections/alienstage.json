@@ -23,42 +23,42 @@
       "id": "mizi",
       "name": "Mizi",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/alienstage/mizi.png",
+      "texture": "blockpops:textures/block/figure/alienstage/mizi.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "ivan",
       "name": "Ivan",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/alienstage/ivan.png",
+      "texture": "blockpops:textures/block/figure/alienstage/ivan.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "luka",
       "name": "Luka",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/alienstage/luka.png",
+      "texture": "blockpops:textures/block/figure/alienstage/luka.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "sua",
       "name": "Sua",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/alienstage/sua.png",
+      "texture": "blockpops:textures/block/figure/alienstage/sua.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "till",
       "name": "Till",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/alienstage/till.png",
+      "texture": "blockpops:textures/block/figure/alienstage/till.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "hyuna",
       "name": "Hyuna",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/alienstage/hyuna.png",
+      "texture": "blockpops:textures/block/figure/alienstage/hyuna.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     }
   ]

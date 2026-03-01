@@ -1,0 +1,9 @@
+{
+  "model": {
+    "type": "minecraft:special",
+    "base": "blockpops:item/claw_machine_block",
+    "model": {
+      "type": "blockpops:claw_machine_block"
+    }
+  }
+}

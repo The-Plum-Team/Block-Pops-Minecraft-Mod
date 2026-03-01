@@ -150,15 +150,23 @@ public class ClawMachineBlock extends BaseEntityBlock {
             if (player.isCreative()) {
                 preventCreativeDropFromBottomPart(level, pos, state, player);
             } else {
-                dropResources(state, level, pos, null, player, player.getMainHandItem());
+                if (player.hasCorrectToolForDrops(state)) {
+                    popResource(level, pos, new ItemStack(this.asItem()));
+                }
             }
         }
+
+        // Destroy the other half of the double block
+        DoubleBlockHalf half = state.getValue(HALF);
+        BlockPos otherPos = half == DoubleBlockHalf.LOWER ? pos.above() : pos.below();
+        BlockState otherState = level.getBlockState(otherPos);
+        if (otherState.is(this) && otherState.getValue(HALF) != half) {
+            level.setBlock(otherPos, Blocks.AIR.defaultBlockState(), 35);
+            level.levelEvent(player, 2001, otherPos, Block.getId(otherState));
+        }
+
         return super.playerWillDestroy(level, pos, state, player);
     }
-
-    // In 1.21.5+, handle double-block removal logic elsewhere
-    // affectNeighborsAfterRemoval is only for neighbor updates, not block removal logic
-    // The other half cleanup is now handled automatically by Minecraft
 
     protected static void preventCreativeDropFromBottomPart(Level level, BlockPos pos,
                                                             BlockState state, Player player) {

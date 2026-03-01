@@ -1,10 +1,14 @@
 ## News
-- **New version support: 1.21.6 Fabric and NeoForge**
 
-- **New Collection: Dragon Ball**
-> This collection is special and introduces the feature that they are directly custom 3D models, not just reskins
-
+- **Mod shears are now compatible to open the boxes**
+> I've only tried the ones from Botania, but they should all work without the mods if it's programmed correctly.
 
 ## Fixes:
-- **Fixed craft of the Claw Machine - 1.21.X Fabric**
-> With the internal changes to upgrade the mod to the different versions of Minecraft, the Claw machine crafting recipe had broken.
+- **Now the Dragon Ball figures should sit correctly.**
+
+- **Fixed particle texture when breaking the machine or figures**
+> The player's is still bugged, since it's dynamic, so I have to investigate that further.
+
+- **Fixed a bug that prevented the claw machine from dropping correctly when broken.**
+
+- **Fixed a bug that caused the claw machine to duplicate in newer versions of Minecraft.**

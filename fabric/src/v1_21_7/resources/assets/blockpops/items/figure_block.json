@@ -1,0 +1,9 @@
+{
+  "model": {
+    "type": "minecraft:special",
+    "base": "blockpops:item/figure_block",
+    "model": {
+      "type": "blockpops:figure_block"
+    }
+  }
+}

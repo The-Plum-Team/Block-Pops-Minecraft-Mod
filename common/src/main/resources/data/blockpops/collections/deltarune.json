@@ -23,19 +23,19 @@
       "id": "kris",
       "name": "Kris",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/deltarune/kris_darkworld.png",
+      "texture": "blockpops:textures/block/figure/deltarune/kris_darkworld.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "susie",
       "name": "Susie (Dark World)",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/deltarune/susie_darkworld.png",
+      "texture": "blockpops:textures/block/figure/deltarune/susie_darkworld.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
       "alternatives": [
         {
           "name": "Susie (Light World)",
-          "texture": "blockpops:textures/figure/deltarune/susie_lightworld.png"
+          "texture": "blockpops:textures/block/figure/deltarune/susie_lightworld.png"
         }
       ]
     },
@@ -43,12 +43,12 @@
       "id": "ralsei",
       "name": "Ralsei",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/deltarune/ralsei.png",
+      "texture": "blockpops:textures/block/figure/deltarune/ralsei.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
       "alternatives": [
         {
           "name": "Ralsei (Shadowed)",
-          "texture": "blockpops:textures/figure/deltarune/ralsei_shadowed.png"
+          "texture": "blockpops:textures/block/figure/deltarune/ralsei_shadowed.png"
         }
       ]
     },
@@ -56,35 +56,35 @@
       "id": "lancer",
       "name": "Lancer",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/deltarune/lancer.png",
+      "texture": "blockpops:textures/block/figure/deltarune/lancer.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "king",
       "name": "King",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/deltarune/king.png",
+      "texture": "blockpops:textures/block/figure/deltarune/king.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "jevil",
       "name": "Jevil",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/deltarune/jevil.png",
+      "texture": "blockpops:textures/block/figure/deltarune/jevil.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "rouxls_kaard",
       "name": "Rouxls Kaard",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/deltarune/rouxls_kaard.png",
+      "texture": "blockpops:textures/block/figure/deltarune/rouxls_kaard.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "spamton",
       "name": "Spamton",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/deltarune/spamton.png",
+      "texture": "blockpops:textures/block/figure/deltarune/spamton.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     }
   ]

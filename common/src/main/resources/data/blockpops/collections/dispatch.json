@@ -23,77 +23,77 @@
       "id": "blonde_blazer",
       "name": "Blonde Blazer",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/dispatch/blonde_blazer.png",
+      "texture": "blockpops:textures/block/figure/dispatch/blonde_blazer.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "malevola_gibb",
       "name": "Malevola Gibb",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/dispatch/malevola_gibb.png",
+      "texture": "blockpops:textures/block/figure/dispatch/malevola_gibb.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "prism_alice",
       "name": "Prism Alice",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/dispatch/prism_alice.png",
+      "texture": "blockpops:textures/block/figure/dispatch/prism_alice.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "punch_up_colm",
       "name": "Punch Up Colm",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/dispatch/punch_up_colm.png",
+      "texture": "blockpops:textures/block/figure/dispatch/punch_up_colm.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "flambae",
       "name": "Flambae",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/dispatch/flambae.png",
+      "texture": "blockpops:textures/block/figure/dispatch/flambae.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "half_man_half_bat",
       "name": "Half Man Half Bat",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/dispatch/half_man_half_bat.png",
+      "texture": "blockpops:textures/block/figure/dispatch/half_man_half_bat.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "invisigal",
       "name": "Invisigal",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/dispatch/invisigal.png",
+      "texture": "blockpops:textures/block/figure/dispatch/invisigal.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "phenomaman",
       "name": "Phenomaman",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/dispatch/phenomaman.png",
+      "texture": "blockpops:textures/block/figure/dispatch/phenomaman.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "robert_robertson_iii",
       "name": "Robert Robertson III",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/dispatch/robert_robertson_iii.png",
+      "texture": "blockpops:textures/block/figure/dispatch/robert_robertson_iii.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "waterboy",
       "name": "Waterboy",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/dispatch/waterboy.png",
+      "texture": "blockpops:textures/block/figure/dispatch/waterboy.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
       "id": "coupe",
       "name": "Coupe",
       "model": "blockpops:geo/figure/box_figure_default.geo.json",
-      "texture": "blockpops:textures/figure/dispatch/coupe.png",
+      "texture": "blockpops:textures/block/figure/dispatch/coupe.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     }
   ]

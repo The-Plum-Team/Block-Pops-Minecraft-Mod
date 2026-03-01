@@ -28,6 +28,7 @@ architectury {
 // For 1.21.4, we replace the main source with v1_21_4 (different API for item rendering, block entities)
 // For 1.21.1, we use the main source set as-is
 val versionSourceSet = when {
+    mcVersion == "1.21.7" -> "v1_21_7"
     mcVersion == "1.21.6" -> "v1_21_6"
     mcVersion == "1.21.5" -> "v1_21_5"
     mcVersion == "1.21.4" -> "v1_21_4"
@@ -83,6 +84,7 @@ dependencies {
 
 // Calculate NeoForge loader version range based on Minecraft version
 val neoforgeLoaderVersion = when {
+    mcVersion == "1.21.7" -> "[4,)"
     mcVersion == "1.21.6" -> "[4,)"
     mcVersion == "1.21.5" -> "[4,)"
     mcVersion == "1.21.4" -> "[4,)"
@@ -92,6 +94,7 @@ val neoforgeLoaderVersion = when {
 
 // Calculate NeoForge version range based on Minecraft version
 val neoforgeVersionRange = when {
+    mcVersion == "1.21.7" -> "[21.7,)"
     mcVersion == "1.21.6" -> "[21.6,)"
     mcVersion == "1.21.5" -> "[21.5,)"
     mcVersion == "1.21.4" -> "[21.4,)"
@@ -101,6 +104,7 @@ val neoforgeVersionRange = when {
 
 // Calculate Minecraft version range
 val minecraftVersionRange = when {
+    mcVersion == "1.21.7" -> "[1.21.7,1.22)"
     mcVersion == "1.21.6" -> "[1.21.6,1.22)"
     mcVersion == "1.21.5" -> "[1.21.5,1.22)"
     mcVersion == "1.21.4" -> "[1.21.4,1.22)"
@@ -139,6 +143,7 @@ tasks.named<net.fabricmc.loom.task.RemapJarTask>("remapJar") {
 
 // Game versions for this build
 val supportedGameVersions = when {
+    mcVersion == "1.21.7" -> listOf("1.21.7")
     mcVersion == "1.21.6" -> listOf("1.21.6")
     mcVersion == "1.21.5" -> listOf("1.21.5")
     mcVersion == "1.21.4" -> listOf("1.21.4")
