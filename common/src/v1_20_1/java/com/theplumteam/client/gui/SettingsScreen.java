@@ -9,6 +9,7 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.network.UnlockCollectionPacket;
 import com.theplumteam.network.ReloadTokensPacket;
+import com.theplumteam.network.UpdateHiddenCollectionsPacket;
 import com.theplumteam.network.UpdateTokenSettingsPacket;
 import dev.architectury.platform.Platform;
 import net.minecraft.client.gui.GuiGraphics;
@@ -51,6 +52,7 @@ public class SettingsScreen extends Screen {
     // Tab system
     private enum Tab {
         SERVER("Server"),
+        ADMIN("Admin"),
         DEVELOP("Develop"),
         CHEATS("Cheats");
 
@@ -67,11 +69,16 @@ public class SettingsScreen extends Screen {
 
     private Tab activeTab = Tab.SERVER;
     private TabButton serverTabButton;
+    private TabButton adminTabButton;
     private TabButton developTabButton;
     private TabButton cheatsTabButton;
     private final List<AbstractWidget> serverSettingWidgets = new ArrayList<>();
+    private final List<AbstractWidget> adminSettingWidgets = new ArrayList<>();
     private final List<AbstractWidget> developSettingWidgets = new ArrayList<>();
     private final List<AbstractWidget> cheatsSettingWidgets = new ArrayList<>();
+
+    // Admin tab - track hidden collection state locally before saving
+    private final java.util.Set<String> pendingHiddenCollections = new java.util.HashSet<>();
 
     // Buttons and sliders
     private Button closeButton;
@@ -114,6 +121,7 @@ public class SettingsScreen extends Screen {
 
         // Clear widget lists to prevent duplication on resize
         serverSettingWidgets.clear();
+        adminSettingWidgets.clear();
         developSettingWidgets.clear();
         cheatsSettingWidgets.clear();
 
@@ -135,8 +143,21 @@ public class SettingsScreen extends Screen {
         );
         this.addRenderableWidget(serverTabButton);
 
-        // Develop tab (only in development mode)
+        // Admin tab (only for admins)
         int nextTabX = tabStartX + TAB_WIDTH + TAB_SPACING;
+        if (isAdmin()) {
+            adminTabButton = (TabButton) ButtonFactory.createTab(
+                    nextTabX, tabY,
+                    TAB_WIDTH, TAB_HEIGHT,
+                    Component.literal(Tab.ADMIN.getDisplayName()),
+                    activeTab == Tab.ADMIN,
+                    btn -> switchTab(Tab.ADMIN)
+            );
+            this.addRenderableWidget(adminTabButton);
+            nextTabX += TAB_WIDTH + TAB_SPACING;
+        }
+
+        // Develop tab (only in development mode)
         if (isDevelopmentMode()) {
             developTabButton = (TabButton) ButtonFactory.createTab(
                     nextTabX, tabY,
@@ -183,6 +204,10 @@ public class SettingsScreen extends Screen {
 
         // Create settings for all tabs
         createServerSettings();
+
+        if (isAdmin()) {
+            createAdminSettings();
+        }
 
         if (isDevelopmentMode()) {
             createDevelopSettings();
@@ -262,6 +287,15 @@ public class SettingsScreen extends Screen {
 
             updateActionButtonState();
 
+        } else if (activeTab == Tab.ADMIN) {
+            // "Save Visibility" logic - send hidden collections to server
+            new UpdateHiddenCollectionsPacket(new ArrayList<>(pendingHiddenCollections)).sendToServer();
+
+            // Update client cache immediately for responsiveness
+            ClientServerConfig.updateHiddenCollections(new ArrayList<>(pendingHiddenCollections));
+
+            updateActionButtonState();
+
         } else if (activeTab == Tab.DEVELOP) {
             // "Reset Colors" logic
             ClientConfig.getInstance().resetColors();
@@ -290,6 +324,10 @@ public class SettingsScreen extends Screen {
             // Only visible and active for admins when values have changed
             this.actionButton.visible = isAdmin();
             this.actionButton.active = isAdmin() && hasServerSettingsChanged();
+        } else if (activeTab == Tab.ADMIN) {
+            this.actionButton.setMessage(Component.literal("Save Visibility"));
+            this.actionButton.visible = true;
+            this.actionButton.active = hasHiddenCollectionsChanged();
         } else if (activeTab == Tab.DEVELOP) {
             this.actionButton.setMessage(Component.literal("Reset Colors"));
             this.actionButton.active = true;
@@ -434,6 +472,28 @@ public class SettingsScreen extends Screen {
                 };
             }
 
+            for (int i = 0; i < explanationLines.length; i++) {
+                int lineWidth = this.font.width(explanationLines[i]);
+                graphics.drawString(this.font, explanationLines[i],
+                        this.panelX + (this.panelWidth - lineWidth) / 2,
+                        explanationY + (i * 12),
+                        0xAAAAAA);
+            }
+        }
+
+        // Draw admin tab content
+        if (activeTab == Tab.ADMIN) {
+            int headerY = this.panelY + TAB_HEIGHT + 10;
+            graphics.drawCenteredString(this.font, "Collection Visibility",
+                    this.panelX + this.panelWidth / 2,
+                    headerY,
+                    0xFFFFFF);
+
+            int explanationY = this.panelY + TAB_HEIGHT + 30;
+            String[] explanationLines = {
+                    "Toggle which collections are visible in the claw machine menu.",
+                    "Hidden collections will not appear for any player on this server."
+            };
             for (int i = 0; i < explanationLines.length; i++) {
                 int lineWidth = this.font.width(explanationLines[i]);
                 graphics.drawString(this.font, explanationLines[i],
@@ -786,6 +846,75 @@ public class SettingsScreen extends Screen {
     }
 
     /**
+     * Check if hidden collections have changed from the server state
+     */
+    private boolean hasHiddenCollectionsChanged() {
+        java.util.Set<String> serverHidden = ClientServerConfig.getHiddenCollections();
+        return !pendingHiddenCollections.equals(serverHidden);
+    }
+
+    /**
+     * Create admin settings widgets (collection visibility toggles)
+     */
+    private void createAdminSettings() {
+        // Initialize pending state from current server config
+        pendingHiddenCollections.clear();
+        pendingHiddenCollections.addAll(ClientServerConfig.getHiddenCollections());
+
+        int padding = 20;
+        int buttonWidth = 180;
+        int buttonHeight = 24;
+        int verticalSpacing = 30;
+        int horizontalSpacing = 15;
+        int buttonsPerRow = 3;
+
+        int startY = this.panelY + TAB_HEIGHT + 60;
+        int startX = this.panelX + padding;
+
+        // Get all collections (excluding "default")
+        java.util.Collection<FigureCollection> allCollections = CollectionRegistry.getAllCollections();
+        java.util.List<FigureCollection> filteredCollections = allCollections.stream()
+                .filter(collection -> !collection.getId().equals("default"))
+                .collect(java.util.stream.Collectors.toList());
+
+        int row = 0;
+        int col = 0;
+
+        for (FigureCollection collection : filteredCollections) {
+            int buttonX = startX + (col * (buttonWidth + horizontalSpacing));
+            int buttonY = startY + (row * verticalSpacing);
+
+            boolean isHidden = pendingHiddenCollections.contains(collection.getId());
+            String label = (isHidden ? "\u00A7c\u2716 " : "\u00A7a\u2714 ") + collection.getName();
+
+            Button toggleButton = Button.builder(
+                            Component.literal(label),
+                            button -> {
+                                String id = collection.getId();
+                                if (pendingHiddenCollections.contains(id)) {
+                                    pendingHiddenCollections.remove(id);
+                                    button.setMessage(Component.literal("\u00A7a\u2714 " + collection.getName()));
+                                } else {
+                                    pendingHiddenCollections.add(id);
+                                    button.setMessage(Component.literal("\u00A7c\u2716 " + collection.getName()));
+                                }
+                                updateActionButtonState();
+                            }
+                    )
+                    .bounds(buttonX, buttonY, buttonWidth, buttonHeight)
+                    .build();
+
+            adminSettingWidgets.add(toggleButton);
+
+            col++;
+            if (col >= buttonsPerRow) {
+                col = 0;
+                row++;
+            }
+        }
+    }
+
+    /**
      * Create cheats settings widgets (collection unlock buttons)
      */
     private void createCheatsSettings() {
@@ -931,6 +1060,9 @@ public class SettingsScreen extends Screen {
         for (AbstractWidget widget : serverSettingWidgets) {
             this.removeWidget(widget);
         }
+        for (AbstractWidget widget : adminSettingWidgets) {
+            this.removeWidget(widget);
+        }
         for (AbstractWidget widget : developSettingWidgets) {
             this.removeWidget(widget);
         }
@@ -942,6 +1074,8 @@ public class SettingsScreen extends Screen {
         List<AbstractWidget> activeWidgets;
         if (tab == Tab.SERVER) {
             activeWidgets = serverSettingWidgets;
+        } else if (tab == Tab.ADMIN) {
+            activeWidgets = adminSettingWidgets;
         } else if (tab == Tab.DEVELOP) {
             activeWidgets = developSettingWidgets;
         } else if (tab == Tab.CHEATS) {
@@ -956,6 +1090,9 @@ public class SettingsScreen extends Screen {
 
         // Update tab button selected states (visual feedback)
         serverTabButton.setSelected(tab == Tab.SERVER);
+        if (adminTabButton != null) {
+            adminTabButton.setSelected(tab == Tab.ADMIN);
+        }
         if (developTabButton != null) {
             developTabButton.setSelected(tab == Tab.DEVELOP);
         }

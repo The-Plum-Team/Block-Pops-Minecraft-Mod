@@ -13,6 +13,9 @@ import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Server-to-client packet that syncs server configuration values.
  * Sent on player join and whenever an admin changes token settings.
@@ -24,12 +27,14 @@ public class SyncServerConfigPacket {
     private final int regularTokenCooldownHours;
     private final int maxRegularTokens;
     private final int guaranteedTokenResetHour;
+    private final List<String> hiddenCollections;
 
     public SyncServerConfigPacket(int regularTokenCooldownHours, int maxRegularTokens,
-                                  int guaranteedTokenResetHour) {
+                                  int guaranteedTokenResetHour, List<String> hiddenCollections) {
         this.regularTokenCooldownHours = regularTokenCooldownHours;
         this.maxRegularTokens = maxRegularTokens;
         this.guaranteedTokenResetHour = guaranteedTokenResetHour;
+        this.hiddenCollections = hiddenCollections != null ? hiddenCollections : new ArrayList<>();
     }
 
     public RegistryFriendlyByteBuf encode() {
@@ -37,6 +42,10 @@ public class SyncServerConfigPacket {
         buffer.writeInt(regularTokenCooldownHours);
         buffer.writeInt(maxRegularTokens);
         buffer.writeInt(guaranteedTokenResetHour);
+        buffer.writeInt(hiddenCollections.size());
+        for (String id : hiddenCollections) {
+            buffer.writeUtf(id);
+        }
         return buffer;
     }
 
@@ -44,8 +53,13 @@ public class SyncServerConfigPacket {
         int regularTokenCooldownHours = buffer.readInt();
         int maxRegularTokens = buffer.readInt();
         int guaranteedTokenResetHour = buffer.readInt();
+        int hiddenCount = buffer.readInt();
+        List<String> hiddenCollections = new ArrayList<>(hiddenCount);
+        for (int i = 0; i < hiddenCount; i++) {
+            hiddenCollections.add(buffer.readUtf());
+        }
         return new SyncServerConfigPacket(regularTokenCooldownHours, maxRegularTokens,
-                guaranteedTokenResetHour);
+                guaranteedTokenResetHour, hiddenCollections);
     }
 
     public static void handleClient(FriendlyByteBuf buf, NetworkManager.PacketContext context) {
@@ -57,9 +71,10 @@ public class SyncServerConfigPacket {
                     packet.maxRegularTokens,
                     packet.guaranteedTokenResetHour
             );
-            LOGGER.debug("Received server config sync: cooldown={}h, maxTokens={}, resetHour={}",
+            ClientServerConfig.updateHiddenCollections(packet.hiddenCollections);
+            LOGGER.debug("Received server config sync: cooldown={}h, maxTokens={}, resetHour={}, hidden={}",
                     packet.regularTokenCooldownHours, packet.maxRegularTokens,
-                    packet.guaranteedTokenResetHour);
+                    packet.guaranteedTokenResetHour, packet.hiddenCollections);
         });
     }
 
@@ -71,7 +86,8 @@ public class SyncServerConfigPacket {
         SyncServerConfigPacket packet = new SyncServerConfigPacket(
                 config.getRegularTokenCooldownHours(),
                 config.getMaxRegularTokens(),
-                config.getGuaranteedTokenResetHour()
+                config.getGuaranteedTokenResetHour(),
+                config.getHiddenCollections()
         );
         NetworkManager.sendToPlayer(player, ID, packet.encode());
     }

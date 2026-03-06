@@ -9,6 +9,8 @@ import com.theplumteam.platform.PlatformHelper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Cross-platform server-side configuration for BlockPops.
@@ -34,6 +36,9 @@ public class ServerConfig {
     // Whether to show the favorite color selection screen when a player joins
     // If false, the screen appears on first claw machine use instead
     public boolean showColorSelectionOnJoin = true;
+
+    // Collections hidden by admins (not shown in claw machine menu for any player)
+    public List<String> hiddenCollections = new ArrayList<>();
 
     private ServerConfig() {
         // Private constructor for singleton
@@ -132,6 +137,24 @@ public class ServerConfig {
 
     public void setShowColorSelectionOnJoin(boolean show) {
         this.showColorSelectionOnJoin = show;
+        save();
+    }
+
+    /**
+     * Get the list of hidden collection IDs
+     */
+    public List<String> getHiddenCollections() {
+        if (hiddenCollections == null) {
+            hiddenCollections = new ArrayList<>();
+        }
+        return hiddenCollections;
+    }
+
+    /**
+     * Set the list of hidden collection IDs and save
+     */
+    public void setHiddenCollections(List<String> hidden) {
+        this.hiddenCollections = hidden != null ? new ArrayList<>(hidden) : new ArrayList<>();
         save();
     }
 

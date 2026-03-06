@@ -107,19 +107,7 @@ public class CollectionSelectionScreen extends Screen {
         super(Component.literal("Claw Machine Configuration"));
         this.blockPos = blockPos;
         this.selectedCollectionId = currentCollectionId;
-        // Filter out the default collection from the menu
-        this.collections = CollectionRegistry.getAllCollections().stream()
-                .filter(c -> !"default".equals(c.getId()))
-                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
-
-        // Sort collections to show players' collection first
-        this.collections.sort((c1, c2) -> {
-            boolean c1IsPlayers = "world_players".equals(c1.getId());
-            boolean c2IsPlayers = "world_players".equals(c2.getId());
-            if (c1IsPlayers && !c2IsPlayers) return -1;
-            if (!c1IsPlayers && c2IsPlayers) return 1;
-            return 0; // Keep original order for other collections
-        });
+        this.collections = new ArrayList<>();
 
         // Initialize color transition with current background color
         ClientConfig config = ClientConfig.getInstance();
@@ -152,6 +140,21 @@ public class CollectionSelectionScreen extends Screen {
 
         super.init();
         clearWidgets();
+
+        // Rebuild collections list each time init() is called (e.g. returning from settings)
+        // This ensures hidden collection changes take effect immediately
+        this.collections.clear();
+        CollectionRegistry.getAllCollections().stream()
+                .filter(c -> !"default".equals(c.getId()))
+                .filter(c -> !ClientServerConfig.isCollectionHidden(c.getId()))
+                .forEach(this.collections::add);
+        this.collections.sort((c1, c2) -> {
+            boolean c1IsPlayers = "world_players".equals(c1.getId());
+            boolean c2IsPlayers = "world_players".equals(c2.getId());
+            if (c1IsPlayers && !c2IsPlayers) return -1;
+            if (!c1IsPlayers && c2IsPlayers) return 1;
+            return 0;
+        });
 
         // Calculate panel dimensions
         calculatePanelDimensions();

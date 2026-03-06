@@ -76,6 +76,12 @@ public class ModNetworking {
             UpdateTokenSettingsPacket::handleServer
         );
 
+        NetworkManager.registerReceiver(
+            NetworkManager.c2s(),
+            UpdateHiddenCollectionsPacket.ID,
+            UpdateHiddenCollectionsPacket::handleServer
+        );
+
         BlockPopsMod.logDebug("BlockPops networking initialized");
     }
 
