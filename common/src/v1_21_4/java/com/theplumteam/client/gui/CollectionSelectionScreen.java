@@ -14,6 +14,7 @@ import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.config.ClientServerConfig;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.util.GuiScaleManager;
+import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
 import com.theplumteam.client.gui.widget.CollectionEntry;
 import com.theplumteam.client.gui.widget.CollectionListWidget;
 import com.theplumteam.client.gui.widget.CustomCollectionListWidget;
@@ -97,6 +98,7 @@ public class CollectionSelectionScreen extends Screen {
     private static final ResourceLocation DISCORD_ICON = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/gui/discord_icon.png");
     private static final ResourceLocation CURSEFORGE_ICON = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/gui/curseforge_icon.png");
     private static final ResourceLocation MODRINTH_ICON = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/gui/modrinth_icon.png");
+    private static final ResourceLocation PALETTE_ICON = ResourceLocation.fromNamespaceAndPath("blockpops", "textures/gui/palette_icon.png");
 
     // URLs
     private static final String DISCORD_URL = "https://discord.gg/yGxdvA7qej";
@@ -315,6 +317,23 @@ public class CollectionSelectionScreen extends Screen {
                 MODRINTH_URL,
                 Component.literal("Visit our Modrinth page")
         ));
+
+        // Favorite Color button (left of Modrinth)
+        int paletteButtonX = modrinthButtonX - buttonSize - scaledSpacing;
+        this.addRenderableWidget(new LinkButton(
+                paletteButtonX,
+                linkButtonY,
+                buttonSize,
+                buttonSize,
+                PALETTE_ICON,
+                null,
+                Component.literal("Change Favorite Color")
+        ) {
+            @Override
+            public void onPress() {
+                openFavoriteColorScreen();
+            }
+        });
     }
 
     /**
@@ -824,6 +843,13 @@ public class CollectionSelectionScreen extends Screen {
      */
     private void openSettingsScreen() {
         this.minecraft.setScreen(new SettingsScreen(this));
+    }
+
+    /**
+     * Closes the claw machine menu and opens the favorite color selection screen
+     */
+    private void openFavoriteColorScreen() {
+        this.minecraft.setScreen(new FavoriteColorSelectionScreen());
     }
 
     @Override
