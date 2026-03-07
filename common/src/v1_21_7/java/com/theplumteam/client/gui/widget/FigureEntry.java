@@ -263,9 +263,10 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         // Scale: size * modelScale maps model units to GUI pixels
         float pipScale = size * modelScale * figure.getGuiScale();
 
-        // Create PiP render state with entity, rotations, bounds, and scale
+        // Create PiP render state with entity, figure key, rotations, bounds, and scale
+        String figureKey = collectionId + ":" + figure.getId();
         FigurePipRenderState renderState = new FigurePipRenderState(
-            renderEntity, yRotation, xRotation, zRotation,
+            renderEntity, figureKey, yRotation, xRotation, zRotation,
             x, y, x + size, y + size,
             pipScale, scissorArea
         );

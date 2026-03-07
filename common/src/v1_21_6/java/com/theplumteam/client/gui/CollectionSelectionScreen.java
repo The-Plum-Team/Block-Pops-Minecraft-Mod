@@ -114,9 +114,6 @@ public class CollectionSelectionScreen extends Screen {
 
     @Override
     protected void init() {
-        // Pre-initialize the shared figure renderer to avoid lag on first render
-        FigureWidgetRenderer.ensureInitialized();
-
         // Force GUI scale for consistent appearance
         if (!guiScaleForced && !isClosing) {
             guiScaleForced = true;

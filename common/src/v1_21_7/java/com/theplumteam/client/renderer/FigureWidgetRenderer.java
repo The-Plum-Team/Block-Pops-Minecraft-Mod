@@ -18,89 +18,73 @@ import software.bernie.geckolib.renderer.base.GeoRenderState;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Singleton manager for figure widget rendering.
- * Holds shared instances of the renderer and model to avoid creating
- * duplicate heavy objects for each FigureEntry in the UI list.
- *
- * This dramatically reduces lag when opening the collection selection screen
- * by reusing a single renderer/model instance instead of creating one per row.
+ * Singleton manager for figure widget rendering in the collection selection screen.
+ * Each figure gets a dedicated renderer AND model to prevent GeckoLib render state conflicts.
  */
 public final class FigureWidgetRenderer {
 
-    // Lazy-initialized singleton instances
-    private static FigureModel figureModel;
-    private static GeoBlockRenderer<BoxBlockEntity> figureRenderer;
-
-    // Persistent cache for dummy entities used in UI rendering
+    // Cache stores renderer + entity + model per figure
     // Key format: "collectionId:figureId"
-    private static final Map<String, BoxBlockEntity> renderEntityCache = new ConcurrentHashMap<>();
-
-    // Initialization flag
-    private static volatile boolean initialized = false;
+    private static final Map<String, RendererEntityModelTriple> renderCache = new ConcurrentHashMap<>();
+    private static final AtomicLong instanceIdCounter = new AtomicLong(1);
 
     private FigureWidgetRenderer() {
-        // Private constructor to prevent instantiation
     }
 
-    /**
-     * Initializes the shared renderer and model if not already initialized.
-     * This method is thread-safe and idempotent.
-     */
-    public static void ensureInitialized() {
-        if (!initialized) {
-            synchronized (FigureWidgetRenderer.class) {
-                if (!initialized) {
-                    figureModel = new FigureModel();
-                    figureRenderer = new GeoBlockRenderer<>(figureModel) {
-                        @Override
-                        public void adjustPositionForRender(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel model, boolean isReRender) {
-                            // Don't apply block centering offset (translate 0.5, 0, 0.5) in GUI widget rendering
-                        }
+    private static class RendererEntityModelTriple {
+        final GeoBlockRenderer<BoxBlockEntity> renderer;
+        final BoxBlockEntity entity;
+        final FigureModel model;
 
-                        @Override
-                        protected void rotateBlock(Direction facing, PoseStack poseStack) {
-                            // Don't apply block rotation in GUI widget rendering
-                        }
-
-                        @Override
-                        public RenderType getRenderType(GeoRenderState renderState, ResourceLocation texture) {
-                            return RenderType.entityTranslucent(texture, true);
-                        }
-                    };
-                    initialized = true;
-                }
-            }
+        RendererEntityModelTriple(GeoBlockRenderer<BoxBlockEntity> renderer, BoxBlockEntity entity, FigureModel model) {
+            this.renderer = renderer;
+            this.entity = entity;
+            this.model = model;
         }
     }
 
-    /**
-     * Gets the shared FigureModel instance.
-     * Initializes on first access if needed.
-     *
-     * @return The shared FigureModel
-     */
-    public static FigureModel getModel() {
-        ensureInitialized();
-        return figureModel;
+    private static GeoBlockRenderer<BoxBlockEntity> createRenderer(FigureModel model, long uniqueInstanceId) {
+        return new GeoBlockRenderer<>(model) {
+            @Override
+            public long getInstanceId(BoxBlockEntity animatable, Void relatedObject) {
+                return uniqueInstanceId;
+            }
+
+            @Override
+            public void adjustPositionForRender(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel bakedModel, boolean isReRender) {
+                // Don't apply block centering offset in GUI widget rendering
+            }
+
+            @Override
+            protected void rotateBlock(Direction facing, PoseStack poseStack) {
+                // Don't apply block rotation in GUI widget rendering
+            }
+
+            @Override
+            public RenderType getRenderType(GeoRenderState renderState, ResourceLocation texture) {
+                return RenderType.entityTranslucent(texture, true);
+            }
+        };
     }
 
     /**
-     * Gets the shared GeoBlockRenderer instance.
-     * Initializes on first access if needed.
+     * Gets the dedicated renderer for the given figure key.
      *
-     * @return The shared renderer
+     * @param figureKey The cache key in format "collectionId:figureId"
+     * @return The dedicated renderer, or null if not cached
      */
-    public static GeoBlockRenderer<BoxBlockEntity> getRenderer() {
-        ensureInitialized();
-        return figureRenderer;
+    public static GeoBlockRenderer<BoxBlockEntity> getRenderer(String figureKey) {
+        if (figureKey == null) return null;
+        RendererEntityModelTriple triple = renderCache.get(figureKey);
+        return triple != null ? triple.renderer : null;
     }
 
     /**
      * Gets or creates a cached render entity for the given figure.
-     * The entity is stored in a persistent cache to avoid creating new
-     * instances every frame or when the screen is reopened.
+     * Each figure gets its own dedicated renderer, model, and entity.
      *
      * @param figure The figure definition
      * @param collectionId The collection ID
@@ -113,18 +97,18 @@ public final class FigureWidgetRenderer {
 
         String cacheKey = collectionId + ":" + figure.getId();
 
-        return renderEntityCache.computeIfAbsent(cacheKey, key -> {
+        RendererEntityModelTriple triple = renderCache.computeIfAbsent(cacheKey, key -> {
             try {
-                BoxBlockEntity entity = new BoxBlockEntity(BlockPos.ZERO, ModBlocks.BOX_BLOCK.get().defaultBlockState());
+                FigureModel dedicatedModel = new FigureModel();
+                long uniqueInstanceId = instanceIdCounter.getAndIncrement();
 
-                // Set client level for GeckoLib tick delta calculations
-                // Without this, animation controllers may crash when accessing level
+                BlockPos uniquePos = new BlockPos((int)(uniqueInstanceId % 1000), 256, (int)(uniqueInstanceId / 1000));
+                BoxBlockEntity entity = new BoxBlockEntity(uniquePos, ModBlocks.BOX_BLOCK.get().defaultBlockState());
+
                 entity.setLevel(Minecraft.getInstance().level);
-
                 entity.setFigureId(figure.getId());
                 entity.setCollectionIdOverride(collectionId);
 
-                // For player figures, set the color override from their favorite color
                 if (figure.getType() == FigureType.PLAYER) {
                     PopBlockColor favoriteColor = figure.getFavoriteColor();
                     if (favoriteColor != null) {
@@ -132,29 +116,32 @@ public final class FigureWidgetRenderer {
                     }
                 }
 
-                return entity;
+                GeoBlockRenderer<BoxBlockEntity> renderer = createRenderer(dedicatedModel, uniqueInstanceId);
+
+                return new RendererEntityModelTriple(renderer, entity, dedicatedModel);
             } catch (Exception e) {
                 return null;
             }
         });
+
+        return triple != null ? triple.entity : null;
     }
 
     /**
-     * Clears the render entity cache.
-     * Should be called when disconnecting from a world to prevent memory leaks
-     * from entities holding references to old Level instances.
+     * Clears the render cache.
+     * Should be called when disconnecting from a world to prevent memory leaks.
      */
     public static void clearCache() {
-        renderEntityCache.clear();
+        renderCache.clear();
+        instanceIdCounter.set(1);
     }
 
     /**
      * Gets the current size of the entity cache.
-     * Useful for debugging.
      *
      * @return The number of cached entities
      */
     public static int getCacheSize() {
-        return renderEntityCache.size();
+        return renderCache.size();
     }
 }
