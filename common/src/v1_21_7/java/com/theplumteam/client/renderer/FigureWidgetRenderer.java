@@ -47,7 +47,7 @@ public final class FigureWidgetRenderer {
     }
 
     private static GeoBlockRenderer<BoxBlockEntity> createRenderer(FigureModel model, long uniqueInstanceId) {
-        return new GeoBlockRenderer<>(model) {
+        GeoBlockRenderer<BoxBlockEntity> renderer = new GeoBlockRenderer<>(model) {
             @Override
             public long getInstanceId(BoxBlockEntity animatable, Void relatedObject) {
                 return uniqueInstanceId;
@@ -68,6 +68,8 @@ public final class FigureWidgetRenderer {
                 return RenderType.entityTranslucent(texture, true);
             }
         };
+        renderer.addRenderLayer(new FigureBoneTextureLayer<>(renderer));
+        return renderer;
     }
 
     /**

@@ -1077,7 +1077,13 @@ public class SettingsScreen extends Screen {
 
                             java.util.Set<String> enabled = ClientServerConfig.getEnabledRemoteCollections();
                             if (!enabled.isEmpty()) {
-                                RemoteAssetManager.syncEnabledCollections(new java.util.HashSet<>(enabled));
+                                RemoteAssetManager.syncEnabledCollections(new java.util.HashSet<>(enabled), () -> {
+                                    button.setMessage(Component.literal("Force Resync"));
+                                    button.active = true;
+                                });
+                            } else {
+                                button.setMessage(Component.literal("Force Resync"));
+                                button.active = true;
                             }
                         }
                 )

@@ -19,6 +19,24 @@ import java.util.UUID;
  * Can represent either a static figure (from JSON) or a dynamic player figure.
  */
 public class FigureDefinition {
+    /** The default skin-based figure model whose UVs match the box face bones */
+    private static final String DEFAULT_MODEL_PATH = "figure/box_figure_default";
+
+    /**
+     * Represents an extra texture layer for specific bones in a multi-texture model
+     */
+    public record ExtraTexture(ResourceLocation texture, List<String> bones) {
+        public static ExtraTexture fromJson(JsonObject json) {
+            ResourceLocation texture = ResourceLocation.tryParse(json.get("texture").getAsString());
+            List<String> bones = new ArrayList<>();
+            JsonArray bonesArray = json.getAsJsonArray("bones");
+            for (int i = 0; i < bonesArray.size(); i++) {
+                bones.add(bonesArray.get(i).getAsString());
+            }
+            return new ExtraTexture(texture, bones);
+        }
+    }
+
     /**
      * Represents an alternative skin variant for a figure
      */
@@ -50,6 +68,7 @@ public class FigureDefinition {
     private final PopBlockColor favoriteColor; // For player figures, stores their chosen color
     @Nullable private final String authorUrl;
     private List<String> hiddenBones = Collections.emptyList();
+    private List<ExtraTexture> extraTextures = Collections.emptyList();
     private float scale = 1.0f;
     private float guiScale = 1.0f;
     private boolean showBoxFace = true;
@@ -168,7 +187,9 @@ public class FigureDefinition {
             def.offsetX = json.has("offset_x") ? json.get("offset_x").getAsFloat() : 0.0f;
             def.offsetZ = json.has("offset_z") ? json.get("offset_z").getAsFloat() : 0.0f;
             def.guiScale = json.has("gui_scale") ? json.get("gui_scale").getAsFloat() : 1.0f;
-            def.showBoxFace = !json.has("show_box_face") || json.get("show_box_face").getAsBoolean();
+            // Box face UVs only work with the default skin-based model; default to false for custom models
+            boolean isDefaultModel = modelPath != null && modelPath.getPath().equals(DEFAULT_MODEL_PATH);
+            def.showBoxFace = json.has("show_box_face") ? json.get("show_box_face").getAsBoolean() : isDefaultModel;
             return def;
         } else {
             // Parse static figure
@@ -192,7 +213,9 @@ public class FigureDefinition {
             def.offsetX = json.has("offset_x") ? json.get("offset_x").getAsFloat() : 0.0f;
             def.offsetZ = json.has("offset_z") ? json.get("offset_z").getAsFloat() : 0.0f;
             def.guiScale = json.has("gui_scale") ? json.get("gui_scale").getAsFloat() : 1.0f;
-            def.showBoxFace = !json.has("show_box_face") || json.get("show_box_face").getAsBoolean();
+            // Box face UVs only work with the default skin-based model; default to false for custom models
+            boolean isDefaultModel = modelPath != null && modelPath.getPath().equals(DEFAULT_MODEL_PATH);
+            def.showBoxFace = json.has("show_box_face") ? json.get("show_box_face").getAsBoolean() : isDefaultModel;
             if (json.has("hidden_bones")) {
                 List<String> bones = new ArrayList<>();
                 JsonArray bonesArray = json.getAsJsonArray("hidden_bones");
@@ -200,6 +223,14 @@ public class FigureDefinition {
                     bones.add(bonesArray.get(i).getAsString());
                 }
                 def.hiddenBones = bones;
+            }
+            if (json.has("extra_textures")) {
+                List<ExtraTexture> extras = new ArrayList<>();
+                JsonArray extrasArray = json.getAsJsonArray("extra_textures");
+                for (int i = 0; i < extrasArray.size(); i++) {
+                    extras.add(ExtraTexture.fromJson(extrasArray.get(i).getAsJsonObject()));
+                }
+                def.extraTextures = extras;
             }
             return def;
         }
@@ -282,6 +313,10 @@ public class FigureDefinition {
 
     public List<String> getHiddenBones() {
         return hiddenBones;
+    }
+
+    public List<ExtraTexture> getExtraTextures() {
+        return extraTextures;
     }
 
     public List<String> getHiddenBonesForSkinIndex(int skinIndex) {
@@ -398,6 +433,20 @@ public class FigureDefinition {
                 bonesArray.add(bone);
             }
             json.add("hidden_bones", bonesArray);
+        }
+        if (!extraTextures.isEmpty()) {
+            JsonArray extrasArray = new JsonArray();
+            for (ExtraTexture extra : extraTextures) {
+                JsonObject extraJson = new JsonObject();
+                extraJson.addProperty("texture", extra.texture().toString());
+                JsonArray extraBonesArray = new JsonArray();
+                for (String bone : extra.bones()) {
+                    extraBonesArray.add(bone);
+                }
+                extraJson.add("bones", extraBonesArray);
+                extrasArray.add(extraJson);
+            }
+            json.add("extra_textures", extrasArray);
         }
 
         return json;

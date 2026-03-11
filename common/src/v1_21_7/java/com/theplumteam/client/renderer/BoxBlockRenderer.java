@@ -71,6 +71,15 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                                 bone.setChildrenHidden(true);
                             });
                         }
+                        // Hide bones that use extra textures - re-rendered by FigureBoneTextureLayer
+                        for (FigureDefinition.ExtraTexture extra : figureDef.getExtraTextures()) {
+                            for (String boneName : extra.bones()) {
+                                model.getBone(boneName).ifPresent(bone -> {
+                                    bone.setHidden(true);
+                                    bone.setChildrenHidden(false);
+                                });
+                            }
+                        }
                     }
                 }
                 super.actuallyRender(renderState, poseStack, model, renderType, bufferSource, buffer,
@@ -94,6 +103,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                                       isReRender, packedLight, packedOverlay, colour);
             }
         };
+        this.figureRenderer.addRenderLayer(new FigureBoneTextureLayer<>(this.figureRenderer));
     }
 
     @Override

@@ -8,6 +8,7 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import net.minecraft.client.Minecraft;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -90,12 +91,23 @@ public class RemoteAssetManager {
 
     /**
      * Downloads and registers only the collections that the server has enabled.
-     * Called when client receives SyncServerConfigPacket with enabled remote collections.
      */
     public static void syncEnabledCollections(Set<String> enabledIds) {
-        if (!initialized || enabledIds.isEmpty()) return;
+        syncEnabledCollections(enabledIds, null);
+    }
+
+    /**
+     * Downloads and registers only the collections that the server has enabled.
+     * @param onComplete optional callback run on main thread when sync finishes (success or failure)
+     */
+    public static void syncEnabledCollections(Set<String> enabledIds, @Nullable Runnable onComplete) {
+        if (!initialized || enabledIds.isEmpty()) {
+            if (onComplete != null) Minecraft.getInstance().execute(onComplete);
+            return;
+        }
         if (!syncing.compareAndSet(false, true)) {
             BlockPopsMod.LOGGER.debug("Remote sync already in progress, skipping duplicate call");
+            if (onComplete != null) Minecraft.getInstance().execute(onComplete);
             return;
         }
 
@@ -155,6 +167,9 @@ public class RemoteAssetManager {
                 BlockPopsMod.LOGGER.error("Failed to sync remote collections: {}", e.getMessage());
             } finally {
                 syncing.set(false);
+                if (onComplete != null) {
+                    Minecraft.getInstance().execute(onComplete);
+                }
             }
         });
     }
@@ -260,8 +275,9 @@ public class RemoteAssetManager {
                 }
             }
 
-            // Register collections and textures on the main thread
+            // Register models, textures, and collections on the main thread
             Minecraft.getInstance().execute(() -> {
+                RemoteModelManager.registerCachedModels(cacheDir);
                 RemoteTextureManager.registerCachedTextures(cacheDir);
 
                 for (FigureCollection collection : collections) {
@@ -294,6 +310,7 @@ public class RemoteAssetManager {
             }
         }
 
+        RemoteModelManager.clearRegisteredModels();
         RemoteTextureManager.clearRegisteredTextures();
     }
 

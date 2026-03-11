@@ -12,11 +12,14 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
+import software.bernie.geckolib.cache.GeckoLibResources;
+import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
 import software.bernie.geckolib.constant.dataticket.DataTicket;
 import software.bernie.geckolib.constant.dataticket.SerializableDataTicket;
 import software.bernie.geckolib.model.GeoModel;
 import software.bernie.geckolib.renderer.base.GeoRenderState;
+import com.theplumteam.client.renderer.FigureBoneTextureLayer;
 
 import java.util.UUID;
 
@@ -79,6 +82,16 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     @Override
     public ResourceLocation getModelResource(GeoRenderState renderState) {
         return renderState.getOrDefaultGeckolibData(FIGURE_MODEL, FALLBACK_MODEL);
+    }
+
+    @Override
+    public BakedGeoModel getBakedModel(ResourceLocation location) {
+        // Check if model exists in cache before calling super, fall back to default if missing
+        if (GeckoLibResources.getBakedModels().get(location) == null
+                && GeckoLibResources.getBakedModels().get(GeckoLibResources.stripPrefixAndSuffix(location)) == null) {
+            return super.getBakedModel(FALLBACK_MODEL);
+        }
+        return super.getBakedModel(location);
     }
 
     @Override
@@ -190,6 +203,7 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
             ResourceLocation texture = resolveTexture(animatable);
             renderState.addGeckolibData(FIGURE_MODEL, figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex()));
             renderState.addGeckolibData(FIGURE_TEXTURE, texture);
+            renderState.addGeckolibData(FigureBoneTextureLayer.FIGURE_DEF_TICKET, figure);
 
             // Detect skin model for arm visibility
             SkinModelDetector.SkinModel skinModel = SkinModelDetector.detectSkinModel(texture);

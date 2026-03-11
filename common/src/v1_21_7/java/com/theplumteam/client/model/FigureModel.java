@@ -15,11 +15,14 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
+import software.bernie.geckolib.cache.GeckoLibResources;
+import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.model.GeoModel;
 
 import java.util.UUID;
 
 public class FigureModel extends GeoModel<BoxBlockEntity> {
+    private static final ResourceLocation FALLBACK_MODEL = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "figure/box_figure_default");
     private static final ResourceLocation FALLBACK_TEXTURE = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/entity/player/wide/steve.png");
     private static final ResourceLocation POSE_ANIMATION = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "figure/figure_poses");
 
@@ -75,7 +78,16 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
 
     @Override
     public ResourceLocation getModelResource(GeoRenderState renderState) {
-        return renderState.getOrDefaultGeckolibData(FIGURE_MODEL, null);
+        return renderState.getOrDefaultGeckolibData(FIGURE_MODEL, FALLBACK_MODEL);
+    }
+
+    @Override
+    public BakedGeoModel getBakedModel(ResourceLocation location) {
+        if (GeckoLibResources.getBakedModels().get(location) == null
+                && GeckoLibResources.getBakedModels().get(GeckoLibResources.stripPrefixAndSuffix(location)) == null) {
+            return super.getBakedModel(FALLBACK_MODEL);
+        }
+        return super.getBakedModel(location);
     }
 
     @Override
@@ -184,6 +196,7 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
         if (figure != null) {
             renderState.addGeckolibData(FIGURE_MODEL, figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex()));
             renderState.addGeckolibData(FIGURE_TEXTURE, resolveTexture(animatable));
+            renderState.addGeckolibData(com.theplumteam.client.renderer.FigureBoneTextureLayer.FIGURE_DEF_TICKET, figure);
         }
     }
 
