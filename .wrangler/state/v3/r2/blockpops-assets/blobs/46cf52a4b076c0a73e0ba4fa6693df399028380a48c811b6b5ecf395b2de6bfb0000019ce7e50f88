@@ -6,11 +6,11 @@
   "box_texture": "blockpops:textures/block/box/willowmedia.png",
   "logo": {
     "texture": "blockpops:textures/block/box/logo/logo_willowmedia.png",
-    "position_x": -1.684,
-    "position_y": -0.379,
+    "position_x": -2.055,
+    "position_y": -0.517,
     "position_z": 0.0,
-    "scale_x": 6.473,
-    "scale_y": 7.445,
+    "scale_x": 7.996,
+    "scale_y": 8.920,
     "scale_z": 1.0
   },
   "background_color": {
@@ -32,7 +32,13 @@
       "model": "blockpops:geo/figure/willowmedia/alexander.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/alexander.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-      "scale": 0.21
+      "scale": 0.21,
+      "extra_textures": [
+        {
+          "texture": "blockpops:textures/block/figure/willowmedia/alexander_detail.png",
+          "bones": ["Head", "BodyDetail", "LeftEye", "RightEye", "LeftAntennae", "RightAntennae"]
+        }
+      ]
     },
     {
       "id": "herobrine",
