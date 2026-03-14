@@ -6,6 +6,7 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.theplumteam.blockentity.BoxBlockEntity;
+import com.theplumteam.mixin.client.PipRendererAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.render.pip.PictureInPictureRenderer;
 import net.minecraft.client.gui.render.state.GuiRenderState;
@@ -14,7 +15,6 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.world.phys.Vec3;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
 
-import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -35,13 +35,6 @@ public class FigurePipRenderer extends PictureInPictureRenderer<FigurePipRenderS
     // deferred blit conflicts when rendering multiple figures in the same frame
     private final Map<String, TextureBundle> texturePool = new HashMap<>();
 
-    // Reflection fields for accessing private base class texture fields
-    private static Field textureField;
-    private static Field textureViewField;
-    private static Field depthTextureField;
-    private static Field depthTextureViewField;
-    private static boolean reflectionReady = false;
-
     private static class TextureBundle {
         GpuTexture colorTexture;
         GpuTextureView colorTextureView;
@@ -49,53 +42,9 @@ public class FigurePipRenderer extends PictureInPictureRenderer<FigurePipRenderS
         GpuTextureView depthTexView;
     }
 
-    private static void initReflection() {
-        if (reflectionReady) return;
-        reflectionReady = true;
-        try {
-            textureField = PictureInPictureRenderer.class.getDeclaredField("texture");
-            textureField.setAccessible(true);
-            textureViewField = PictureInPictureRenderer.class.getDeclaredField("textureView");
-            textureViewField.setAccessible(true);
-            depthTextureField = PictureInPictureRenderer.class.getDeclaredField("depthTexture");
-            depthTextureField.setAccessible(true);
-            depthTextureViewField = PictureInPictureRenderer.class.getDeclaredField("depthTextureView");
-            depthTextureViewField.setAccessible(true);
-        } catch (Exception e) {
-            com.theplumteam.BlockPopsMod.LOGGER.error("FigurePipRenderer: Failed to initialize reflection for texture pooling", e);
-        }
-    }
-
-    private void setTexture(GpuTexture tex) {
-        try { if (textureField != null) textureField.set(this, tex); } catch (Exception ignored) {}
-    }
-
-    private GpuTexture getTexture() {
-        try { return textureField != null ? (GpuTexture) textureField.get(this) : null; } catch (Exception e) { return null; }
-    }
-
-    private void setTextureView(GpuTextureView view) {
-        try { if (textureViewField != null) textureViewField.set(this, view); } catch (Exception ignored) {}
-    }
-
-    private GpuTextureView getTextureView() {
-        try { return textureViewField != null ? (GpuTextureView) textureViewField.get(this) : null; } catch (Exception e) { return null; }
-    }
-
-    private void setDepthTexture(GpuTexture tex) {
-        try { if (depthTextureField != null) depthTextureField.set(this, tex); } catch (Exception ignored) {}
-    }
-
-    private GpuTexture getDepthTexture() {
-        try { return depthTextureField != null ? (GpuTexture) depthTextureField.get(this) : null; } catch (Exception e) { return null; }
-    }
-
-    private void setDepthTextureView(GpuTextureView view) {
-        try { if (depthTextureViewField != null) depthTextureViewField.set(this, view); } catch (Exception ignored) {}
-    }
-
-    private GpuTextureView getDepthTextureView() {
-        try { return depthTextureViewField != null ? (GpuTextureView) depthTextureViewField.get(this) : null; } catch (Exception e) { return null; }
+    /** Cast this to the mixin accessor for accessing parent class private fields. */
+    private PipRendererAccessor self() {
+        return (PipRendererAccessor) this;
     }
 
     public FigurePipRenderer(MultiBufferSource.BufferSource bufferSource) {
@@ -125,23 +74,23 @@ public class FigurePipRenderer extends PictureInPictureRenderer<FigurePipRenderS
 
     @Override
     public void prepare(FigurePipRenderState state, GuiRenderState guiState, int scaleLevel) {
-        initReflection();
+        PipRendererAccessor accessor = self();
 
         String key = state.figureKey();
         TextureBundle cached = texturePool.get(key);
 
         if (cached != null) {
             // Swap in the per-figure textures so prepare() renders to and blits from them
-            setTexture(cached.colorTexture);
-            setTextureView(cached.colorTextureView);
-            setDepthTexture(cached.depthTex);
-            setDepthTextureView(cached.depthTexView);
+            accessor.blockpops$setTexture(cached.colorTexture);
+            accessor.blockpops$setTextureView(cached.colorTextureView);
+            accessor.blockpops$setDepthTexture(cached.depthTex);
+            accessor.blockpops$setDepthTextureView(cached.depthTexView);
         } else {
             // Force the base class to create fresh textures for this new figure
-            setTexture(null);
-            setTextureView(null);
-            setDepthTexture(null);
-            setDepthTextureView(null);
+            accessor.blockpops$setTexture(null);
+            accessor.blockpops$setTextureView(null);
+            accessor.blockpops$setDepthTexture(null);
+            accessor.blockpops$setDepthTextureView(null);
         }
 
         // Base class: creates textures if needed, renders to texture, submits blit
@@ -152,10 +101,10 @@ public class FigurePipRenderer extends PictureInPictureRenderer<FigurePipRenderS
             cached = new TextureBundle();
             texturePool.put(key, cached);
         }
-        cached.colorTexture = getTexture();
-        cached.colorTextureView = getTextureView();
-        cached.depthTex = getDepthTexture();
-        cached.depthTexView = getDepthTextureView();
+        cached.colorTexture = accessor.blockpops$getTexture();
+        cached.colorTextureView = accessor.blockpops$getTextureView();
+        cached.depthTex = accessor.blockpops$getDepthTexture();
+        cached.depthTexView = accessor.blockpops$getDepthTextureView();
     }
 
     @Override

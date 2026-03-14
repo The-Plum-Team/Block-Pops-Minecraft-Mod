@@ -3,6 +3,7 @@ package com.theplumteam.network;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.config.ClientServerConfig;
 import com.theplumteam.server.config.ServerConfig;
+import com.theplumteam.server.config.WorldConfig;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.RegistryAccess;
@@ -106,12 +107,13 @@ public class SyncServerConfigPacket {
      */
     public static void sendToPlayer(ServerPlayer player) {
         ServerConfig config = ServerConfig.getInstance();
+        WorldConfig worldConfig = WorldConfig.get(player.getServer());
         SyncServerConfigPacket packet = new SyncServerConfigPacket(
                 config.getRegularTokenCooldownHours(),
                 config.getMaxRegularTokens(),
                 config.getGuaranteedTokenResetHour(),
                 config.getHiddenCollections(),
-                config.getEnabledRemoteCollections()
+                worldConfig.getEnabledRemoteCollections()
         );
         NetworkManager.sendToPlayer(player, ID, packet.encode());
     }

@@ -5,6 +5,7 @@ import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
 import com.theplumteam.client.renderer.BoxWidgetRenderer;
 import com.theplumteam.client.renderer.ItemPipRenderState;
+import com.theplumteam.mixin.client.GuiGraphicsAccessor;
 import com.theplumteam.registry.ModItems;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -147,8 +148,8 @@ public class ColorSelectionButton extends Button {
             // Enable scissor to clip rendering to the button area
             graphics.enableScissor(getX(), getY(), getX() + width, getY() + height);
 
-            // Get the current scissor area for bounds computation
-            ScreenRectangle scissorArea = peekScissorArea(graphics);
+            // Construct scissor area from known bounds (no reflection needed)
+            ScreenRectangle scissorArea = new ScreenRectangle(getX(), getY(), width, height);
 
             // Scale: width * scale maps model units to GUI pixels
             float pipScale = width * scale;
@@ -162,55 +163,17 @@ public class ColorSelectionButton extends Button {
                 pipScale, translateYRatio, scissorArea
             );
 
-            // Submit to the deferred PiP rendering system
+            // Submit to the deferred PiP rendering system via mixin accessor
             submitPipState(graphics, renderState);
 
             graphics.disableScissor();
         }
     }
 
-    // Cached reflection fields for accessing GuiGraphics internals
-    private static java.lang.reflect.Field guiRenderStateField;
-    private static java.lang.reflect.Field scissorStackField;
-    private static java.lang.reflect.Method scissorPeekMethod;
-    private static boolean reflectionInitialized = false;
-
-    private static void initReflection() {
-        if (reflectionInitialized) return;
-        reflectionInitialized = true;
-        try {
-            guiRenderStateField = GuiGraphics.class.getDeclaredField("guiRenderState");
-            guiRenderStateField.setAccessible(true);
-            scissorStackField = GuiGraphics.class.getDeclaredField("scissorStack");
-            scissorStackField.setAccessible(true);
-        } catch (Exception e) {
-            com.theplumteam.BlockPopsMod.LOGGER.warn("ColorSelectionButton: Failed to initialize reflection for PiP rendering", e);
-        }
-    }
-
-    private static ScreenRectangle peekScissorArea(GuiGraphics graphics) {
-        initReflection();
-        try {
-            if (scissorStackField != null) {
-                Object scissorStack = scissorStackField.get(graphics);
-                if (scissorPeekMethod == null) {
-                    scissorPeekMethod = scissorStack.getClass().getDeclaredMethod("peek");
-                    scissorPeekMethod.setAccessible(true);
-                }
-                ScreenRectangle result = (ScreenRectangle) scissorPeekMethod.invoke(scissorStack);
-                if (result != null) return result;
-            }
-        } catch (Exception e) {
-            // Fall through to default
-        }
-        return ScreenRectangle.empty();
-    }
-
     private static void submitPipState(GuiGraphics graphics, PictureInPictureRenderState state) {
-        initReflection();
         try {
-            if (guiRenderStateField != null) {
-                GuiRenderState guiRenderState = (GuiRenderState) guiRenderStateField.get(graphics);
+            GuiRenderState guiRenderState = ((GuiGraphicsAccessor) graphics).blockpops$getGuiRenderState();
+            if (guiRenderState != null) {
                 guiRenderState.submitPicturesInPictureState(state);
             }
         } catch (Exception e) {

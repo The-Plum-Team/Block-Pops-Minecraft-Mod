@@ -6,6 +6,7 @@ import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.client.renderer.FigurePipRenderState;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.mixin.client.GuiGraphicsAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ObjectSelectionList;
@@ -193,48 +194,10 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         }
     }
 
-    // Cached reflection fields for accessing GuiGraphics internals
-    private static java.lang.reflect.Field guiRenderStateField;
-    private static java.lang.reflect.Field scissorStackField;
-    private static java.lang.reflect.Method scissorPeekMethod;
-    private static boolean reflectionInitialized = false;
-
-    private static void initReflection() {
-        if (reflectionInitialized) return;
-        reflectionInitialized = true;
-        try {
-            guiRenderStateField = GuiGraphics.class.getDeclaredField("guiRenderState");
-            guiRenderStateField.setAccessible(true);
-            scissorStackField = GuiGraphics.class.getDeclaredField("scissorStack");
-            scissorStackField.setAccessible(true);
-        } catch (Exception e) {
-            com.theplumteam.BlockPopsMod.LOGGER.warn("FigureEntry: Failed to initialize reflection for PiP rendering", e);
-        }
-    }
-
-    private static ScreenRectangle peekScissorArea(GuiGraphics graphics) {
-        initReflection();
-        try {
-            if (scissorStackField != null) {
-                Object scissorStack = scissorStackField.get(graphics);
-                if (scissorPeekMethod == null) {
-                    scissorPeekMethod = scissorStack.getClass().getDeclaredMethod("peek");
-                    scissorPeekMethod.setAccessible(true);
-                }
-                ScreenRectangle result = (ScreenRectangle) scissorPeekMethod.invoke(scissorStack);
-                if (result != null) return result;
-            }
-        } catch (Exception e) {
-            // Fall through to default
-        }
-        return ScreenRectangle.empty();
-    }
-
     private static void submitPipState(GuiGraphics graphics, PictureInPictureRenderState state) {
-        initReflection();
         try {
-            if (guiRenderStateField != null) {
-                GuiRenderState guiRenderState = (GuiRenderState) guiRenderStateField.get(graphics);
+            GuiRenderState guiRenderState = ((GuiGraphicsAccessor) graphics).blockpops$getGuiRenderState();
+            if (guiRenderState != null) {
                 guiRenderState.submitPicturesInPictureState(state);
             }
         } catch (Exception e) {
@@ -257,8 +220,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         // Enable scissor test to clip rendering to the figure box
         graphics.enableScissor(x, y, x + size, y + size);
 
-        // Get the current scissor area for bounds computation
-        ScreenRectangle scissorArea = peekScissorArea(graphics);
+        // Construct scissor area from known bounds (no reflection needed)
+        ScreenRectangle scissorArea = new ScreenRectangle(x, y, size, size);
 
         // Scale: size * modelScale maps model units to GUI pixels
         float pipScale = size * modelScale * figure.getGuiScale();
@@ -271,7 +234,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             pipScale, scissorArea
         );
 
-        // Submit to the deferred PiP rendering system
+        // Submit to the deferred PiP rendering system via mixin accessor
         submitPipState(graphics, renderState);
 
         graphics.disableScissor();

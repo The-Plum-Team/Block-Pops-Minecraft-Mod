@@ -28,6 +28,7 @@ import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Settings screen displayed as a modal overlay with tabbed interface
@@ -55,7 +56,7 @@ public class SettingsScreen extends Screen {
     private enum Tab {
         SERVER("Server"),
         ADMIN("Admin"),
-        REMOTE("Remote"),
+        REMOTE("Custom"),
         DEVELOP("Develop"),
         CHEATS("Cheats");
 
@@ -87,12 +88,15 @@ public class SettingsScreen extends Screen {
 
     // Remote tab - track enabled remote collections before saving
     private final java.util.Set<String> pendingRemoteCollections = new java.util.HashSet<>();
-    private List<String> availableRemoteCollections = null;
-    private boolean fetchingRemote = false;
+    // Display names for added collections (id -> name)
+    private final java.util.Map<String, String> remoteCollectionNames = new java.util.LinkedHashMap<>();
+    private EditBox codeInputField;
+    private String remoteStatusMessage = null;
 
     // Buttons and sliders
     private Button closeButton;
     private Button actionButton; // Context-sensitive button (Reset Colors / Change Time)
+    private Button forceResyncButton; // Force Resync button (Remote tab only)
     private Button colorTransitionToggle;
 
     // Server settings
@@ -224,6 +228,38 @@ public class SettingsScreen extends Screen {
                 .build();
         this.addRenderableWidget(this.actionButton);
 
+        // Force Resync button (above Close + Action, spans full width, Remote tab only)
+        this.forceResyncButton = Button.builder(Component.literal("Force Resync"), button -> {
+                    button.setMessage(Component.literal("Syncing..."));
+                    button.active = false;
+
+                    RemoteAssetManager.init();
+                    RemoteAssetManager.invalidateManifest();
+
+                    java.util.Set<String> enabled = ClientServerConfig.getEnabledRemoteCollections();
+                    if (!enabled.isEmpty()) {
+                        RemoteAssetManager.syncEnabledCollections(new java.util.HashSet<>(enabled), () -> {
+                            String error = RemoteAssetManager.getLastSyncError();
+                            if (error != null) {
+                                button.setMessage(Component.literal(error));
+                                button.active = false;
+                                scheduleButtonReset(button, 3000);
+                            } else {
+                                button.setMessage(Component.literal("Synced!"));
+                                button.active = false;
+                                scheduleButtonReset(button, 2000);
+                            }
+                        });
+                    } else {
+                        button.setMessage(Component.literal("Force Resync"));
+                        button.active = true;
+                    }
+                })
+                .bounds(buttonsStartX, buttonY - buttonHeight - 4, totalButtonWidth, buttonHeight)
+                .build();
+        this.forceResyncButton.visible = false;
+        this.addRenderableWidget(this.forceResyncButton);
+
         // Create settings for all tabs
         createServerSettings();
 
@@ -281,6 +317,19 @@ public class SettingsScreen extends Screen {
         return currentRegularCooldown != loadedRegularCooldown
                 || currentMaxRegular != loadedMaxRegular
                 || pendingServerHourLocal != loadedServerHourLocal;
+    }
+
+    /**
+     * Schedules a button to reset its text back to "Force Resync" after a delay.
+     */
+    private void scheduleButtonReset(Button btn, int delayMs) {
+        CompletableFuture.runAsync(() -> {
+            try { Thread.sleep(delayMs); } catch (InterruptedException ignored) {}
+            Minecraft.getInstance().execute(() -> {
+                btn.setMessage(Component.literal("Force Resync"));
+                btn.active = true;
+            });
+        });
     }
 
     /**
@@ -362,7 +411,7 @@ public class SettingsScreen extends Screen {
             this.actionButton.visible = true;
             this.actionButton.active = hasHiddenCollectionsChanged();
         } else if (activeTab == Tab.REMOTE) {
-            this.actionButton.setMessage(Component.literal("Save Remote"));
+            this.actionButton.setMessage(Component.literal("Save Custom"));
             this.actionButton.visible = true;
             this.actionButton.active = hasRemoteCollectionsChanged();
         } else if (activeTab == Tab.DEVELOP) {
@@ -373,6 +422,9 @@ public class SettingsScreen extends Screen {
             // Cheats tab doesn't use the main action button
             this.actionButton.visible = false;
         }
+
+        // Force Resync: only visible on Remote tab when there are collections
+        this.forceResyncButton.visible = activeTab == Tab.REMOTE && !pendingRemoteCollections.isEmpty();
     }
 
     @Override
@@ -534,38 +586,35 @@ public class SettingsScreen extends Screen {
         // Draw remote tab content
         if (activeTab == Tab.REMOTE) {
             int headerY = this.panelY + TAB_HEIGHT + 10;
-            graphics.drawCenteredString(this.font, "Remote Collections (CDN)",
+            Component headerText = Component.literal("Custom Collections - ")
+                    .append(Component.literal("Coming Soon").withStyle(net.minecraft.network.chat.Style.EMPTY.withUnderlined(true)));
+            graphics.drawCenteredString(this.font, headerText,
                     this.panelX + this.panelWidth / 2,
                     headerY,
                     0xFFFFFFFF);
 
             int explanationY = this.panelY + TAB_HEIGHT + 30;
-            if (availableRemoteCollections == null) {
-                String msg = fetchingRemote ? "Fetching available collections..." : "Click 'Refresh' to load available collections.";
-                int msgWidth = this.font.width(msg);
-                graphics.drawString(this.font, msg,
-                        this.panelX + (this.panelWidth - msgWidth) / 2,
-                        explanationY,
-                        0xFFAAAAAA);
-            } else if (availableRemoteCollections.isEmpty()) {
-                String msg = "No remote collections available.";
-                int msgWidth = this.font.width(msg);
-                graphics.drawString(this.font, msg,
-                        this.panelX + (this.panelWidth - msgWidth) / 2,
-                        explanationY,
-                        0xFFAAAAAA);
-            } else {
-                String[] lines = {
-                        "Enable remote collections to download from the CDN.",
-                        "Players will receive these collections when they join."
-                };
-                for (int i = 0; i < lines.length; i++) {
-                    int lineWidth = this.font.width(lines[i]);
-                    graphics.drawString(this.font, lines[i],
-                            this.panelX + (this.panelWidth - lineWidth) / 2,
-                            explanationY + (i * 12),
-                            0xFFAAAAAA);
-                }
+            String instruction = "Enter your collection code to load it.";
+            int instrWidth = this.font.width(instruction);
+            graphics.drawString(this.font, instruction,
+                    this.panelX + (this.panelWidth - instrWidth) / 2,
+                    explanationY,
+                    0xFFAAAAAA);
+
+            // Draw status message (success/error feedback)
+            if (remoteStatusMessage != null) {
+                int statusY = explanationY + 14;
+                int statusWidth = this.font.width(remoteStatusMessage);
+                int statusColor = remoteStatusMessage.startsWith("\u00A7a") ? 0xFF55FF55 :
+                                  remoteStatusMessage.startsWith("\u00A7c") ? 0xFFFF5555 :
+                                  remoteStatusMessage.startsWith("\u00A7e") ? 0xFFFFFF55 : 0xFFAAAAAA;
+                // Strip color codes for width calculation
+                String plainMsg = remoteStatusMessage.replaceAll("\u00A7.", "");
+                int plainWidth = this.font.width(plainMsg);
+                graphics.drawString(this.font, remoteStatusMessage,
+                        this.panelX + (this.panelWidth - plainWidth) / 2,
+                        statusY,
+                        0xFFFFFFFF);
             }
         }
 
@@ -994,162 +1043,136 @@ public class SettingsScreen extends Screen {
     }
 
     /**
-     * Create remote settings widgets (remote collection toggle buttons + refresh)
+     * Create remote settings widgets (code input + collection list)
      */
     private void createRemoteSettings() {
         // Initialize pending state from current server config
         pendingRemoteCollections.clear();
         pendingRemoteCollections.addAll(ClientServerConfig.getEnabledRemoteCollections());
 
-        int padding = 20;
-        int startY = this.panelY + TAB_HEIGHT + 60;
-
-        // Add "Refresh" button to fetch available collections
-        int refreshWidth = 150;
-        int refreshX = this.panelX + (this.panelWidth - refreshWidth) / 2;
-        Button refreshButton = Button.builder(
-                        Component.literal("Refresh Available"),
-                        button -> {
-                            if (fetchingRemote) return;
-                            fetchingRemote = true;
-                            button.setMessage(Component.literal("Loading..."));
-                            button.active = false;
-
-                            RemoteAssetManager.init();
-                            RemoteAssetManager.fetchAvailableCollections().thenAccept(collections -> {
-                                // Schedule UI update on main thread
-                                Minecraft.getInstance().execute(() -> {
-                                    availableRemoteCollections = collections;
-                                    fetchingRemote = false;
-                                    // Rebuild the remote tab widgets
-                                    rebuildRemoteCollectionButtons();
-                                });
-                            });
-                        }
-                )
-                .bounds(refreshX, startY, refreshWidth, 20)
-                .build();
-
-        // If we already have fetched collections, show them; otherwise show refresh
-        if (availableRemoteCollections != null && !availableRemoteCollections.isEmpty()) {
-            rebuildRemoteCollectionButtons();
-        } else {
-            remoteSettingWidgets.add(refreshButton);
+        // Populate display names for existing collections
+        for (String id : pendingRemoteCollections) {
+            if (!remoteCollectionNames.containsKey(id)) {
+                // Capitalize first letter as fallback name
+                remoteCollectionNames.put(id, id.substring(0, 1).toUpperCase() + id.substring(1));
+            }
         }
+
+        rebuildRemoteWidgets();
     }
 
     /**
-     * Rebuilds the toggle buttons for remote collections after fetching.
+     * Rebuilds all remote tab widgets (code input + collection list).
      */
-    private void rebuildRemoteCollectionButtons() {
+    private void rebuildRemoteWidgets() {
         // Remove old remote widgets
         for (AbstractWidget widget : remoteSettingWidgets) {
             this.removeWidget(widget);
         }
         remoteSettingWidgets.clear();
 
-        if (availableRemoteCollections == null || availableRemoteCollections.isEmpty()) return;
-
         int padding = 20;
-        int buttonWidth = 180;
-        int buttonHeight = 24;
-        int verticalSpacing = 30;
-        int horizontalSpacing = 15;
-        int buttonsPerRow = 3;
+        int startY = this.panelY + TAB_HEIGHT + 55;
+        int contentWidth = this.panelWidth - padding * 2;
 
-        int startY = this.panelY + TAB_HEIGHT + 60;
-        int startX = this.panelX + padding;
+        // --- Code input row ---
+        int inputWidth = 180;
+        int addBtnWidth = 60;
+        int inputSpacing = 5;
+        int totalInputWidth = inputWidth + inputSpacing + addBtnWidth;
+        int inputX = this.panelX + (this.panelWidth - totalInputWidth) / 2;
 
-        // Add "Refresh" and "Force Resync" buttons at the top right
-        int btnWidth = 100;
-        int btnSpacing = 5;
-        int rightEdge = this.panelX + this.panelWidth - padding;
+        codeInputField = new EditBox(this.font, inputX, startY, inputWidth, 20, Component.literal("Collection Code"));
+        codeInputField.setHint(Component.literal("Enter code...").withStyle(net.minecraft.network.chat.Style.EMPTY.withColor(0x808080)));
+        codeInputField.setMaxLength(64);
+        codeInputField.setResponder(text -> remoteStatusMessage = null); // Clear status on type
+        remoteSettingWidgets.add(codeInputField);
 
-        Button forceResyncBtn = Button.builder(
-                        Component.literal("Force Resync"),
+        Button addButton = Button.builder(
+                        Component.literal("Add"),
                         button -> {
-                            if (fetchingRemote) return;
-                            button.setMessage(Component.literal("Syncing..."));
+                            String code = codeInputField.getValue().trim();
+                            if (code.isEmpty()) return;
+
                             button.active = false;
+                            button.setMessage(Component.literal("..."));
+                            remoteStatusMessage = "\u00A7eLoading...";
 
                             RemoteAssetManager.init();
-                            RemoteAssetManager.clearCache();
-
-                            java.util.Set<String> enabled = ClientServerConfig.getEnabledRemoteCollections();
-                            if (!enabled.isEmpty()) {
-                                RemoteAssetManager.syncEnabledCollections(new java.util.HashSet<>(enabled), () -> {
-                                    button.setMessage(Component.literal("Force Resync"));
-                                    button.active = true;
-                                });
-                            } else {
-                                button.setMessage(Component.literal("Force Resync"));
-                                button.active = true;
-                            }
-                        }
-                )
-                .bounds(rightEdge - btnWidth, startY, btnWidth, 20)
-                .build();
-        remoteSettingWidgets.add(forceResyncBtn);
-
-        Button refreshBtn = Button.builder(
-                        Component.literal("Refresh"),
-                        button -> {
-                            if (fetchingRemote) return;
-                            fetchingRemote = true;
-                            button.setMessage(Component.literal("..."));
-                            button.active = false;
-
-                            RemoteAssetManager.fetchAvailableCollections().thenAccept(collections -> {
+                            RemoteAssetManager.fetchCollectionByCode(code).thenAccept(result -> {
                                 Minecraft.getInstance().execute(() -> {
-                                    availableRemoteCollections = collections;
-                                    fetchingRemote = false;
-                                    rebuildRemoteCollectionButtons();
-                                    if (activeTab == Tab.REMOTE) {
-                                        switchTab(Tab.REMOTE);
+                                    if (result == null) {
+                                        remoteStatusMessage = "\u00A7cInvalid code. Collection not found.";
+                                    } else if (result.isError()) {
+                                        remoteStatusMessage = "\u00A7c" + result.error();
+                                    } else if (pendingRemoteCollections.contains(result.id())) {
+                                        remoteStatusMessage = "\u00A7e" + result.name() + " is already added.";
+                                    } else {
+                                        pendingRemoteCollections.add(result.id());
+                                        remoteCollectionNames.put(result.id(), result.name());
+                                        remoteStatusMessage = "\u00A7aAdded: " + result.name();
+                                        codeInputField.setValue("");
+                                        rebuildRemoteWidgets();
+                                        if (activeTab == Tab.REMOTE) {
+                                            switchTab(Tab.REMOTE);
+                                        }
                                     }
+                                    button.active = true;
+                                    button.setMessage(Component.literal("Add"));
+                                    updateActionButtonState();
                                 });
                             });
                         }
                 )
-                .bounds(rightEdge - btnWidth - btnSpacing - btnWidth, startY, btnWidth, 20)
+                .bounds(inputX + inputWidth + inputSpacing, startY, addBtnWidth, 20)
                 .build();
-        remoteSettingWidgets.add(refreshBtn);
+        remoteSettingWidgets.add(addButton);
 
-        startY += 30;
+        startY += 35;
 
-        int row = 0;
-        int col = 0;
+        // --- Collection list (added collections with remove buttons) ---
+        if (pendingRemoteCollections.isEmpty()) {
+            // No collections added yet - nothing to show
+        } else {
+            int buttonHeight = 24;
+            int removeWidth = 24;
+            int entrySpacing = 4;
+            int entryWidth = 250;
+            int entryX = this.panelX + (this.panelWidth - entryWidth) / 2;
 
-        for (String collectionId : availableRemoteCollections) {
-            int buttonX = startX + (col * (buttonWidth + horizontalSpacing));
-            int buttonY = startY + (row * verticalSpacing);
+            for (String collectionId : new ArrayList<>(pendingRemoteCollections)) {
+                String displayName = remoteCollectionNames.getOrDefault(collectionId,
+                        collectionId.substring(0, 1).toUpperCase() + collectionId.substring(1));
 
-            boolean isEnabled = pendingRemoteCollections.contains(collectionId);
-            String displayName = collectionId.substring(0, 1).toUpperCase() + collectionId.substring(1);
-            String label = (isEnabled ? "\u00A7a\u2714 " : "\u00A7c\u2716 ") + displayName;
+                // Collection name label button (non-interactive, just for display)
+                Button nameButton = Button.builder(
+                                Component.literal("\u00A7a\u2714 " + displayName),
+                                button -> {} // no-op
+                        )
+                        .bounds(entryX, startY, entryWidth - removeWidth - entrySpacing, buttonHeight)
+                        .build();
+                nameButton.active = false; // Display only
+                remoteSettingWidgets.add(nameButton);
 
-            Button toggleButton = Button.builder(
-                            Component.literal(label),
-                            button -> {
-                                if (pendingRemoteCollections.contains(collectionId)) {
+                // Remove "X" button
+                Button removeButton = Button.builder(
+                                Component.literal("\u00A7cX"),
+                                button -> {
                                     pendingRemoteCollections.remove(collectionId);
-                                    button.setMessage(Component.literal("\u00A7c\u2716 " + displayName));
-                                } else {
-                                    pendingRemoteCollections.add(collectionId);
-                                    button.setMessage(Component.literal("\u00A7a\u2714 " + displayName));
+                                    remoteCollectionNames.remove(collectionId);
+                                    remoteStatusMessage = null;
+                                    rebuildRemoteWidgets();
+                                    if (activeTab == Tab.REMOTE) {
+                                        switchTab(Tab.REMOTE);
+                                    }
+                                    updateActionButtonState();
                                 }
-                                updateActionButtonState();
-                            }
-                    )
-                    .bounds(buttonX, buttonY, buttonWidth, buttonHeight)
-                    .build();
+                        )
+                        .bounds(entryX + entryWidth - removeWidth, startY, removeWidth, buttonHeight)
+                        .build();
+                remoteSettingWidgets.add(removeButton);
 
-            remoteSettingWidgets.add(toggleButton);
-
-            col++;
-            if (col >= buttonsPerRow) {
-                col = 0;
-                row++;
+                startY += buttonHeight + entrySpacing;
             }
         }
 

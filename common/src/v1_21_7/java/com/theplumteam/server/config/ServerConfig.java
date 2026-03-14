@@ -40,8 +40,7 @@ public class ServerConfig {
     // Collections hidden by admins (not shown in claw machine menu for any player)
     public List<String> hiddenCollections = new ArrayList<>();
 
-    // Remote collections enabled by admins (downloaded from CDN and shown to players)
-    public List<String> enabledRemoteCollections = new ArrayList<>();
+    // Note: enabledRemoteCollections moved to WorldConfig (per-world SavedData)
 
     private ServerConfig() {
         // Private constructor for singleton
@@ -161,23 +160,7 @@ public class ServerConfig {
         save();
     }
 
-    /**
-     * Get the list of enabled remote collection IDs
-     */
-    public List<String> getEnabledRemoteCollections() {
-        if (enabledRemoteCollections == null) {
-            enabledRemoteCollections = new ArrayList<>();
-        }
-        return enabledRemoteCollections;
-    }
-
-    /**
-     * Set the list of enabled remote collection IDs and save
-     */
-    public void setEnabledRemoteCollections(List<String> enabled) {
-        this.enabledRemoteCollections = enabled != null ? new ArrayList<>(enabled) : new ArrayList<>();
-        save();
-    }
+    // enabledRemoteCollections getters/setters removed - use WorldConfig.get(server) instead
 
     /**
      * Load configuration from file

@@ -1,7 +1,8 @@
 package com.theplumteam.network;
 
 import com.theplumteam.BlockPopsMod;
-import com.theplumteam.server.config.ServerConfig;
+import com.theplumteam.server.ServerCollectionLoader;
+import com.theplumteam.server.config.WorldConfig;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.RegistryAccess;
@@ -58,11 +59,14 @@ public class UpdateRemoteCollectionsPacket {
                     return;
                 }
 
-                ServerConfig config = ServerConfig.getInstance();
-                config.setEnabledRemoteCollections(packet.enabledRemoteCollections);
+                WorldConfig worldConfig = WorldConfig.get(player.getServer());
+                worldConfig.setEnabledRemoteCollections(packet.enabledRemoteCollections);
 
                 BlockPopsMod.logDebug("Player {} updated enabled remote collections: {}",
                         player.getName().getString(), packet.enabledRemoteCollections);
+
+                // Load collections on the server so it can validate drops/unlocks
+                ServerCollectionLoader.loadCollections(new java.util.HashSet<>(packet.enabledRemoteCollections));
 
                 // Broadcast updated config to all players
                 SyncServerConfigPacket.broadcastToAll(player.getServer());

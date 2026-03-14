@@ -22,9 +22,11 @@
     {
       "id": "thomas",
       "name": "Thomas",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "model": "blockpops:geo/figure/willowmedia/skin_default.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/thomas.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_skin.animation.json",
+      "scale": 0.29
     },
     {
       "id": "alexander",
@@ -32,6 +34,7 @@
       "model": "blockpops:geo/figure/willowmedia/alexander.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/alexander.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_skin.animation.json",
       "scale": 0.21,
       "extra_textures": [
         {
@@ -43,9 +46,11 @@
     {
       "id": "herobrine",
       "name": "Herobrine",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "model": "blockpops:geo/figure/willowmedia/skin_default.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/herobrine.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_skin.animation.json",
+      "scale": 0.29
     },
     {
       "id": "admin",
@@ -53,6 +58,7 @@
       "model": "blockpops:geo/figure/willowmedia/admin.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/admin.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_skin.animation.json",
       "scale": 0.29
     },
     {
@@ -61,6 +67,7 @@
       "model": "blockpops:geo/figure/willowmedia/ori.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/ori.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_cpm.animation.json",
       "scale": 0.29
     },
     {
@@ -69,14 +76,17 @@
       "model": "blockpops:geo/figure/willowmedia/alc.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/alc.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_cpm.animation.json",
       "scale": 0.21
     },
     {
       "id": "kairos",
       "name": "Kairos",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "model": "blockpops:geo/figure/willowmedia/skin_default.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/kairos.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_skin.animation.json",
+      "scale": 0.29
     },
     {
       "id": "dark",
@@ -84,6 +94,7 @@
       "model": "blockpops:geo/figure/willowmedia/dark.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/dark.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_cpm.animation.json",
       "scale": 0.23
     },
     {
@@ -92,6 +103,7 @@
       "model": "blockpops:geo/figure/willowmedia/bush.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/bush.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_cpm.animation.json",
       "scale": 0.29
     },
     {
@@ -100,21 +112,26 @@
       "model": "blockpops:geo/figure/willowmedia/livid.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/livid.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_cpm.animation.json",
       "scale": 0.22
     },
     {
       "id": "ace",
       "name": "Ace",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "model": "blockpops:geo/figure/willowmedia/skin_default.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/ace.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_skin.animation.json",
+      "scale": 0.29
     },
     {
       "id": "venus",
       "name": "Venus",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "model": "blockpops:geo/figure/willowmedia/skin_default.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/venus.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_skin.animation.json",
+      "scale": 0.29
     },
     {
       "id": "rina",
@@ -122,6 +139,7 @@
       "model": "blockpops:geo/figure/willowmedia/rina.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/rina.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_cpm.animation.json",
       "scale": 0.22
     },
     {
@@ -130,6 +148,7 @@
       "model": "blockpops:geo/figure/willowmedia/ekko.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/ekko.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_cpm.animation.json",
       "scale": 0.18
     },
     {
@@ -138,14 +157,17 @@
       "model": "blockpops:geo/figure/willowmedia/jamie.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/jamie.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_cpm.animation.json",
       "scale": 0.26
     },
     {
       "id": "enz0",
       "name": "Enz0",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "model": "blockpops:geo/figure/willowmedia/skin_default.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/enz0.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_skin.animation.json",
+      "scale": 0.29
     },
     {
       "id": "toofion",
@@ -153,14 +175,17 @@
       "model": "blockpops:geo/figure/willowmedia/toofion.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/toofion.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_cpm.animation.json",
       "scale": 0.22
     },
     {
       "id": "hero",
       "name": "Hero",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "model": "blockpops:geo/figure/willowmedia/skin_default.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/hero.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_skin.animation.json",
+      "scale": 0.29
     },
     {
       "id": "hima",
@@ -168,6 +193,7 @@
       "model": "blockpops:geo/figure/willowmedia/hima.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/hima.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_cpm.animation.json",
       "scale": 0.24
     },
     {
@@ -176,6 +202,7 @@
       "model": "blockpops:geo/figure/willowmedia/hootandholler.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/hootandholler.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_cpm.animation.json",
       "scale": 0.18
     },
     {
@@ -184,6 +211,7 @@
       "model": "blockpops:geo/figure/willowmedia/cog.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/cog.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_cpm.animation.json",
       "scale": 0.29
     },
     {
@@ -192,6 +220,7 @@
       "model": "blockpops:geo/figure/willowmedia/atlas.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/atlas.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_cpm.animation.json",
       "scale": 0.23
     },
     {
@@ -200,21 +229,26 @@
       "model": "blockpops:geo/figure/willowmedia/ellie.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/ellie.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_cpm.animation.json",
       "scale": 0.22
     },
     {
       "id": "mc",
       "name": "MC",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "model": "blockpops:geo/figure/willowmedia/skin_default.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/mc.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_skin.animation.json",
+      "scale": 0.29
     },
     {
       "id": "lucky",
       "name": "Lucky",
-      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "model": "blockpops:geo/figure/willowmedia/skin_default.geo.json",
       "texture": "blockpops:textures/block/figure/willowmedia/lucky.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_willowmedia_skin.animation.json",
+      "scale": 0.29
     }
   ]
 }

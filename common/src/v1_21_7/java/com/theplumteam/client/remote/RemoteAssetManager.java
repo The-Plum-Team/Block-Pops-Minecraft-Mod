@@ -21,6 +21,7 @@ import java.security.MessageDigest;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Locale;
 
 /**
  * Manages downloading and caching of remote BlockPops assets from Cloudflare R2.
@@ -28,7 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class RemoteAssetManager {
     private static final Gson GSON = new Gson();
-    private static final String CDN_BASE_URL = "https://pub-6c5186db85af42818afa82b1f49fb875.r2.dev";
+    private static final String CDN_BASE_URL = "https://f003.backblazeb2.com/file/blockpops-assets";
     private static final String MANIFEST_PATH = "manifest.json";
     private static final int CONNECT_TIMEOUT = 10_000;
     private static final int READ_TIMEOUT = 30_000;
@@ -37,6 +38,7 @@ public class RemoteAssetManager {
     private static boolean initialized = false;
     private static JsonObject cachedManifest = null;
     private static final AtomicBoolean syncing = new AtomicBoolean(false);
+    private static String lastSyncError = null;
 
     /**
      * Initialize the cache directory under the game directory.
@@ -56,8 +58,59 @@ public class RemoteAssetManager {
     }
 
     /**
+     * Result of a code lookup. Contains the collection ID and display name, or an error.
+     */
+    public record CodeResult(String id, String name, @Nullable String error) {
+        public CodeResult(String id, String name) {
+            this(id, name, null);
+        }
+        public static CodeResult error(String error) {
+            return new CodeResult(null, null, error);
+        }
+        public boolean isError() {
+            return error != null;
+        }
+        public boolean isSuccess() {
+            return id != null && error == null;
+        }
+    }
+
+    /**
+     * Looks up a collection by its access code on the CDN.
+     * Fetches {@code CDN/codes/<code>.json} which contains {@code {"id": "...", "name": "..."}}.
+     * The code is case-insensitive (lowercased before lookup).
+     * Runs on a background thread.
+     *
+     * @return CodeResult with collection info, error result if CDN unreachable, or null if code not found
+     */
+    public static CompletableFuture<CodeResult> fetchCollectionByCode(String code) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                String normalizedCode = code.trim().toLowerCase(Locale.ROOT);
+                if (normalizedCode.isEmpty()) return null;
+
+                String url = CDN_BASE_URL + "/codes/" + normalizedCode + ".json";
+                String json = downloadString(url);
+                if (json == null) return null;
+
+                JsonObject obj = GSON.fromJson(json, JsonObject.class);
+                if (obj.has("id") && obj.has("name")) {
+                    return new CodeResult(obj.get("id").getAsString(), obj.get("name").getAsString());
+                }
+                return null;
+            } catch (java.net.SocketTimeoutException | java.net.ConnectException e) {
+                BlockPopsMod.LOGGER.warn("CDN unreachable looking up code '{}': {}", code, e.getMessage());
+                return CodeResult.error("CDN unreachable - check your connection");
+            } catch (Exception e) {
+                BlockPopsMod.LOGGER.warn("Failed to look up collection code '{}': {}", code, e.getMessage());
+                return CodeResult.error("Connection failed: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
      * Fetches the remote manifest and returns a list of available collection IDs.
-     * Used by the Settings UI to show what can be enabled.
+     * Used internally for downloading files. The Settings UI uses code-based lookup instead.
      * Runs on a background thread.
      */
     public static CompletableFuture<List<String>> fetchAvailableCollections() {
@@ -113,12 +166,14 @@ public class RemoteAssetManager {
 
         CompletableFuture.runAsync(() -> {
             try {
+                lastSyncError = null;
                 BlockPopsMod.LOGGER.info("Syncing {} enabled remote collection(s)...", enabledIds.size());
 
                 // 1. Get manifest (from cache or remote)
                 JsonObject manifest = getManifest();
                 if (manifest == null) {
                     BlockPopsMod.LOGGER.warn("Could not get remote manifest");
+                    lastSyncError = "Could not reach CDN - using cached data";
                     // Try loading from cache anyway
                     loadCachedCollections(enabledIds);
                     return;
@@ -128,6 +183,7 @@ public class RemoteAssetManager {
                 JsonArray files = manifest.getAsJsonArray("files");
                 int downloaded = 0;
                 int skipped = 0;
+                int failed = 0;
 
                 for (JsonElement fileElement : files) {
                     JsonObject fileInfo = fileElement.getAsJsonObject();
@@ -155,16 +211,23 @@ public class RemoteAssetManager {
                                     filePath, expectedSha256.substring(0, 8), actualHash.substring(0, 8));
                         }
                         downloaded++;
+                    } else {
+                        failed++;
                     }
                 }
 
-                BlockPopsMod.LOGGER.info("Remote sync complete: {} downloaded, {} cached", downloaded, skipped);
+                BlockPopsMod.LOGGER.info("Remote sync complete: {} downloaded, {} cached, {} failed", downloaded, skipped, failed);
+
+                if (failed > 0) {
+                    lastSyncError = failed + " file(s) failed to download";
+                }
 
                 // 3. Load and register the enabled collections
                 loadCachedCollections(enabledIds);
 
             } catch (Exception e) {
                 BlockPopsMod.LOGGER.error("Failed to sync remote collections: {}", e.getMessage());
+                lastSyncError = "Sync failed: " + e.getMessage();
             } finally {
                 syncing.set(false);
                 if (onComplete != null) {
@@ -188,7 +251,7 @@ public class RemoteAssetManager {
         // Asset files: assets/blockpops/textures/block/figure/<id>/ or box/<id>.png or box/logo/logo_<id>.png etc.
         for (String id : enabledIds) {
             if (filePath.contains("/" + id + "/") || filePath.contains("/" + id + ".")
-                    || filePath.contains("_" + id + ".")) {
+                    || filePath.contains("_" + id + ".") || filePath.contains("_" + id + "_")) {
                 return true;
             }
         }
@@ -214,15 +277,19 @@ public class RemoteAssetManager {
         }
 
         // Download
-        String manifestJson = downloadString(CDN_BASE_URL + "/" + MANIFEST_PATH);
-        if (manifestJson != null) {
-            cachedManifest = GSON.fromJson(manifestJson, JsonObject.class);
-            if (cacheDir != null) {
-                try {
-                    Files.writeString(cacheDir.resolve("manifest.json"), manifestJson, StandardCharsets.UTF_8);
-                } catch (Exception ignored) {}
+        try {
+            String manifestJson = downloadString(CDN_BASE_URL + "/" + MANIFEST_PATH);
+            if (manifestJson != null) {
+                cachedManifest = GSON.fromJson(manifestJson, JsonObject.class);
+                if (cacheDir != null) {
+                    try {
+                        Files.writeString(cacheDir.resolve("manifest.json"), manifestJson, StandardCharsets.UTF_8);
+                    } catch (Exception ignored) {}
+                }
+                return cachedManifest;
             }
-            return cachedManifest;
+        } catch (IOException e) {
+            BlockPopsMod.LOGGER.warn("Failed to download {}: {}", MANIFEST_PATH, e.getMessage());
         }
 
         return null;
@@ -275,9 +342,14 @@ public class RemoteAssetManager {
                 }
             }
 
-            // Register models, textures, and collections on the main thread
+            // Clear old GeckoLib caches and re-register from disk
             Minecraft.getInstance().execute(() -> {
+                RemoteModelManager.clearRegisteredModels();
+                RemoteAnimationManager.clearRegisteredAnimations();
+                RemoteTextureManager.clearRegisteredTextures();
+
                 RemoteModelManager.registerCachedModels(cacheDir);
+                RemoteAnimationManager.registerCachedAnimations(cacheDir);
                 RemoteTextureManager.registerCachedTextures(cacheDir);
 
                 for (FigureCollection collection : collections) {
@@ -311,7 +383,31 @@ public class RemoteAssetManager {
         }
 
         RemoteModelManager.clearRegisteredModels();
+        RemoteAnimationManager.clearRegisteredAnimations();
         RemoteTextureManager.clearRegisteredTextures();
+    }
+
+    /**
+     * Invalidates the in-memory manifest without deleting cached files.
+     * Forces a fresh manifest download on next sync while keeping existing assets intact.
+     */
+    public static void invalidateManifest() {
+        cachedManifest = null;
+        // Also clear the disk-cached manifest so getManifest() fetches from CDN
+        if (cacheDir != null) {
+            try {
+                Files.deleteIfExists(cacheDir.resolve("manifest.json"));
+            } catch (IOException ignored) {}
+        }
+        BlockPopsMod.LOGGER.info("Invalidated manifest cache (files preserved)");
+    }
+
+    /**
+     * Returns the error message from the last sync attempt, or null if it succeeded.
+     */
+    @Nullable
+    public static String getLastSyncError() {
+        return lastSyncError;
     }
 
     public static Path getCacheDir() {
@@ -320,30 +416,25 @@ public class RemoteAssetManager {
 
     // --- HTTP helpers ---
 
-    private static String downloadString(String url) {
-        try {
-            HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-            conn.setConnectTimeout(CONNECT_TIMEOUT);
-            conn.setReadTimeout(READ_TIMEOUT);
-            conn.setRequestProperty("User-Agent", "BlockPops-Mod/1.0");
+    private static String downloadString(String url) throws IOException {
+        HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+        conn.setConnectTimeout(CONNECT_TIMEOUT);
+        conn.setReadTimeout(READ_TIMEOUT);
+        conn.setRequestProperty("User-Agent", "BlockPops-Mod/1.0");
 
-            if (conn.getResponseCode() != 200) {
-                BlockPopsMod.LOGGER.warn("HTTP {} for {}", conn.getResponseCode(), url);
-                return null;
-            }
-
-            try (InputStream is = conn.getInputStream();
-                 BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-                StringBuilder sb = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    sb.append(line);
-                }
-                return sb.toString();
-            }
-        } catch (Exception e) {
-            BlockPopsMod.LOGGER.warn("Failed to download {}: {}", url, e.getMessage());
+        if (conn.getResponseCode() != 200) {
+            BlockPopsMod.LOGGER.warn("HTTP {} for {}", conn.getResponseCode(), url);
             return null;
+        }
+
+        try (InputStream is = conn.getInputStream();
+             BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line);
+            }
+            return sb.toString();
         }
     }
 

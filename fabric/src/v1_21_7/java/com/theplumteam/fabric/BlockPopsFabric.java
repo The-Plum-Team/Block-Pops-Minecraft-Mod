@@ -9,6 +9,8 @@ import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.PlayerCollectionHelper;
+import com.theplumteam.server.ServerCollectionLoader;
+import com.theplumteam.server.config.WorldConfig;
 import com.theplumteam.network.OpenFavoriteColorScreenPacket;
 import com.theplumteam.network.SyncDiscoveryDataPacket;
 import com.theplumteam.network.SyncDynamicCollectionsPacket;
@@ -113,6 +115,13 @@ public class BlockPopsFabric implements ModInitializer {
             BlockPopsMod.logDebug("Generating World Players collection...");
             FigureCollection playerCollection = PlayerCollectionHelper.generate(server);
             CollectionRegistry.registerDynamicCollection(playerCollection);
+
+            // Load enabled remote collections on the server
+            WorldConfig worldConfig = WorldConfig.get(server);
+            java.util.Set<String> enabledRemote = new java.util.HashSet<>(worldConfig.getEnabledRemoteCollections());
+            if (!enabledRemote.isEmpty()) {
+                ServerCollectionLoader.loadCollections(enabledRemote);
+            }
         });
 
         // Add new players to the collection when they join

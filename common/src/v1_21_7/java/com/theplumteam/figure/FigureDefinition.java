@@ -186,7 +186,7 @@ public class FigureDefinition {
             def.scale = scale;
             def.offsetX = json.has("offset_x") ? json.get("offset_x").getAsFloat() : 0.0f;
             def.offsetZ = json.has("offset_z") ? json.get("offset_z").getAsFloat() : 0.0f;
-            def.guiScale = json.has("gui_scale") ? json.get("gui_scale").getAsFloat() : 1.0f;
+            def.guiScale = json.has("gui_scale") ? json.get("gui_scale").getAsFloat() : scale;
             // Box face UVs only work with the default skin-based model; default to false for custom models
             boolean isDefaultModel = modelPath != null && modelPath.getPath().equals(DEFAULT_MODEL_PATH);
             def.showBoxFace = json.has("show_box_face") ? json.get("show_box_face").getAsBoolean() : isDefaultModel;
@@ -212,7 +212,7 @@ public class FigureDefinition {
             def.scale = scale;
             def.offsetX = json.has("offset_x") ? json.get("offset_x").getAsFloat() : 0.0f;
             def.offsetZ = json.has("offset_z") ? json.get("offset_z").getAsFloat() : 0.0f;
-            def.guiScale = json.has("gui_scale") ? json.get("gui_scale").getAsFloat() : 1.0f;
+            def.guiScale = json.has("gui_scale") ? json.get("gui_scale").getAsFloat() : scale;
             // Box face UVs only work with the default skin-based model; default to false for custom models
             boolean isDefaultModel = modelPath != null && modelPath.getPath().equals(DEFAULT_MODEL_PATH);
             def.showBoxFace = json.has("show_box_face") ? json.get("show_box_face").getAsBoolean() : isDefaultModel;
