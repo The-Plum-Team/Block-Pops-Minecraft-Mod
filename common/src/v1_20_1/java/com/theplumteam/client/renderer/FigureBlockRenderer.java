@@ -9,8 +9,12 @@ import com.theplumteam.util.SkinModelDetector;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
+import org.joml.Matrix4f;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
+import software.bernie.geckolib.constant.DataTickets;
+import software.bernie.geckolib.core.animation.AnimationState;
+import software.bernie.geckolib.model.GeoModel;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
 
 import java.util.Collections;
@@ -108,13 +112,38 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
             return;
         }
 
-        // Apply definition scale for figures with custom model sizes
-        float defScale = animatable.getFigureDefinition() != null ? animatable.getFigureDefinition().getScale() : 1.0f;
-        if (defScale != 1.0f) {
-            poseStack.scale(defScale, defScale, defScale);
+        if (!isReRender) {
+            // Replicate base GeoBlockRenderer.actuallyRender() logic so we can insert
+            // defScale AFTER the centering translate but BEFORE model rendering.
+            // In GeckoLib 4.7.4, centering translate(0.5, 0, 0.5) is in actuallyRender, not preRender.
+            // Applying scale before centering would scale down the centering offset, causing
+            // custom-scaled figures to appear off-center.
+            AnimationState<FigureBlockEntity> animationState = new AnimationState<>(animatable, 0, 0, partialTick, false);
+            long instanceId = getInstanceId(animatable);
+            GeoModel<FigureBlockEntity> currentModel = getGeoModel();
+
+            animationState.setData(DataTickets.TICK, animatable.getTick(animatable));
+            animationState.setData(DataTickets.BLOCK_ENTITY, animatable);
+            currentModel.addAdditionalStateData(animatable, instanceId, animationState::setData);
+            poseStack.translate(0.5, 0, 0.5);
+            rotateBlock(getFacing(animatable), poseStack);
+
+            // Apply definition scale AFTER centering so figures are properly centered on the block
+            float defScale = animatable.getFigureDefinition() != null ? animatable.getFigureDefinition().getScale() : 1.0f;
+            if (defScale != 1.0f) {
+                poseStack.scale(defScale, defScale, defScale);
+            }
+
+            currentModel.handleAnimations(animatable, instanceId, animationState);
         }
 
-        super.actuallyRender(poseStack, animatable, model, renderType, bufferSource, buffer,
-                           isReRender, partialTick, packedLight, packedOverlay, red, green, blue, alpha);
+        this.modelRenderTranslations = new Matrix4f(poseStack.last().pose());
+
+        if (renderType != null && buffer != null) {
+            for (GeoBone bone : model.topLevelBones()) {
+                renderRecursively(poseStack, animatable, bone, renderType, bufferSource, buffer,
+                                isReRender, partialTick, packedLight, packedOverlay, red, green, blue, alpha);
+            }
+        }
     }
 }

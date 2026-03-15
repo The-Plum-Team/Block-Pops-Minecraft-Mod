@@ -1,6 +1,5 @@
 package com.theplumteam.client.gui;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.config.ClientServerConfig;
 import com.theplumteam.client.gui.util.ButtonFactory;
@@ -423,14 +422,12 @@ public class SettingsScreen extends Screen {
             this.parent.render(graphics, -1, -1, partialTicks);
         }
 
-        // Flush the parent screen rendering
+        // Flush all parent rendering (including batched text) before drawing the modal overlay.
+        // Then push Z forward so the overlay and all modal content renders above the parent's
+        // text, which is drawn at a higher Z-depth than fill() in Minecraft 1.20.1.
         graphics.flush();
-
-        // Disable scissor test to ensure our overlay covers everything
-        RenderSystem.disableScissor();
-
-        // Re-enable depth test and clear depth buffer to force our modal on top
-        // In 1.21.4+, RenderSystem.clear() signature changed - just use clearDepth
+        graphics.pose().pushPose();
+        graphics.pose().translate(0, 0, 200);
 
         // Draw overlay over entire screen
         graphics.fill(0, 0, this.width, this.height, 0x70000000);
@@ -672,6 +669,8 @@ public class SettingsScreen extends Screen {
 
         // Render our modal buttons and widgets
         super.render(graphics, mouseX, mouseY, partialTicks);
+
+        graphics.pose().popPose();
     }
 
     @Override

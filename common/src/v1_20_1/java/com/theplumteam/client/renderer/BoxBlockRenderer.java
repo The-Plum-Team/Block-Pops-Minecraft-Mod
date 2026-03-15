@@ -15,10 +15,14 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
+import org.joml.Matrix4f;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
+import software.bernie.geckolib.constant.DataTickets;
+import software.bernie.geckolib.core.animation.AnimationState;
+import software.bernie.geckolib.model.GeoModel;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
 
 public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
@@ -45,11 +49,10 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                 super.preRender(poseStack, animatable, model, bufferSource, buffer, isReRender, partialTick,
                                packedLight, packedOverlay, red, green, blue, alpha);
 
-                // Apply definition scale (after GeckoLib centering, so it scales around the block center)
-                float defScale = animatable.getFigureDefinition() != null ? animatable.getFigureDefinition().getScale() : 1.0f;
-                if (defScale != 1.0f) {
-                    poseStack.scale(defScale, defScale, defScale);
-                }
+                // NOTE: Definition scale is applied in actuallyRender() AFTER GeckoLib's centering translate.
+                // In GeckoLib 4.7.4, the centering translate(0.5, 0, 0.5) happens in actuallyRender(),
+                // so applying scale here (in preRender) would cause the centering to be scaled down,
+                // making custom-scaled figures (Dragon Ball, Willow Media) appear outside the box.
 
                 // Detect skin model and show/hide appropriate arms
                 if (animatable.hasFigure()) {
@@ -102,6 +105,44 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                     }
                 } else {
                     figureHiddenBones = Collections.emptyList();
+                }
+            }
+
+            @Override
+            public void actuallyRender(PoseStack poseStack, BoxBlockEntity animatable, BakedGeoModel model,
+                                      RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer,
+                                      boolean isReRender, float partialTick, int packedLight, int packedOverlay,
+                                      float red, float green, float blue, float alpha) {
+                if (!isReRender) {
+                    // Replicate base GeoBlockRenderer.actuallyRender() logic so we can insert
+                    // defScale AFTER the centering translate but BEFORE model rendering.
+                    // In GeckoLib 4.7.4, centering is in actuallyRender, not preRender.
+                    AnimationState<BoxBlockEntity> animationState = new AnimationState<>(animatable, 0, 0, partialTick, false);
+                    long instanceId = getInstanceId(animatable);
+                    GeoModel<BoxBlockEntity> currentModel = getGeoModel();
+
+                    animationState.setData(DataTickets.TICK, animatable.getTick(animatable));
+                    animationState.setData(DataTickets.BLOCK_ENTITY, animatable);
+                    currentModel.addAdditionalStateData(animatable, instanceId, animationState::setData);
+                    poseStack.translate(0.5, 0, 0.5);
+                    rotateBlock(getFacing(animatable), poseStack);
+
+                    // Apply definition scale AFTER centering so figures are properly centered
+                    float defScale = animatable.getFigureDefinition() != null ? animatable.getFigureDefinition().getScale() : 1.0f;
+                    if (defScale != 1.0f) {
+                        poseStack.scale(defScale, defScale, defScale);
+                    }
+
+                    currentModel.handleAnimations(animatable, instanceId, animationState);
+                }
+
+                this.modelRenderTranslations = new Matrix4f(poseStack.last().pose());
+
+                if (renderType != null && buffer != null) {
+                    for (GeoBone bone : model.topLevelBones()) {
+                        renderRecursively(poseStack, animatable, bone, renderType, bufferSource, buffer,
+                                        isReRender, partialTick, packedLight, packedOverlay, red, green, blue, alpha);
+                    }
                 }
             }
 
