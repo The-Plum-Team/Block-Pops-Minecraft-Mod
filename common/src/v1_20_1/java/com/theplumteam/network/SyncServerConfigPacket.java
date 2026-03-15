@@ -3,6 +3,7 @@ package com.theplumteam.network;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.config.ClientServerConfig;
 import com.theplumteam.server.config.ServerConfig;
+import com.theplumteam.server.config.WorldConfig;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
@@ -26,13 +27,16 @@ public class SyncServerConfigPacket {
     private final int maxRegularTokens;
     private final int guaranteedTokenResetHour;
     private final List<String> hiddenCollections;
+    private final List<String> enabledRemoteCollections;
 
     public SyncServerConfigPacket(int regularTokenCooldownHours, int maxRegularTokens,
-                                  int guaranteedTokenResetHour, List<String> hiddenCollections) {
+                                  int guaranteedTokenResetHour, List<String> hiddenCollections,
+                                  List<String> enabledRemoteCollections) {
         this.regularTokenCooldownHours = regularTokenCooldownHours;
         this.maxRegularTokens = maxRegularTokens;
         this.guaranteedTokenResetHour = guaranteedTokenResetHour;
         this.hiddenCollections = hiddenCollections != null ? hiddenCollections : new ArrayList<>();
+        this.enabledRemoteCollections = enabledRemoteCollections != null ? enabledRemoteCollections : new ArrayList<>();
     }
 
     public FriendlyByteBuf encode() {
@@ -42,6 +46,10 @@ public class SyncServerConfigPacket {
         buffer.writeInt(guaranteedTokenResetHour);
         buffer.writeInt(hiddenCollections.size());
         for (String id : hiddenCollections) {
+            buffer.writeUtf(id);
+        }
+        buffer.writeInt(enabledRemoteCollections.size());
+        for (String id : enabledRemoteCollections) {
             buffer.writeUtf(id);
         }
         return buffer;
@@ -56,8 +64,15 @@ public class SyncServerConfigPacket {
         for (int i = 0; i < hiddenCount; i++) {
             hiddenCollections.add(buffer.readUtf());
         }
+        List<String> enabledRemoteCollections = new ArrayList<>();
+        if (buffer.isReadable()) {
+            int remoteCount = buffer.readInt();
+            for (int i = 0; i < remoteCount; i++) {
+                enabledRemoteCollections.add(buffer.readUtf());
+            }
+        }
         return new SyncServerConfigPacket(regularTokenCooldownHours, maxRegularTokens,
-                guaranteedTokenResetHour, hiddenCollections);
+                guaranteedTokenResetHour, hiddenCollections, enabledRemoteCollections);
     }
 
     public static void handleClient(FriendlyByteBuf buf, NetworkManager.PacketContext context) {
@@ -70,9 +85,18 @@ public class SyncServerConfigPacket {
                     packet.guaranteedTokenResetHour
             );
             ClientServerConfig.updateHiddenCollections(packet.hiddenCollections);
-            LOGGER.debug("Received server config sync: cooldown={}h, maxTokens={}, resetHour={}, hidden={}",
+            ClientServerConfig.updateEnabledRemoteCollections(packet.enabledRemoteCollections);
+
+            // If there are enabled remote collections, trigger download
+            if (!packet.enabledRemoteCollections.isEmpty()) {
+                com.theplumteam.client.remote.RemoteAssetManager.init();
+                com.theplumteam.client.remote.RemoteAssetManager.syncEnabledCollections(
+                        new java.util.HashSet<>(packet.enabledRemoteCollections));
+            }
+
+            LOGGER.debug("Received server config sync: cooldown={}h, maxTokens={}, resetHour={}, hidden={}, remote={}",
                     packet.regularTokenCooldownHours, packet.maxRegularTokens,
-                    packet.guaranteedTokenResetHour, packet.hiddenCollections);
+                    packet.guaranteedTokenResetHour, packet.hiddenCollections, packet.enabledRemoteCollections);
         });
     }
 
@@ -81,11 +105,13 @@ public class SyncServerConfigPacket {
      */
     public static void sendToPlayer(ServerPlayer player) {
         ServerConfig config = ServerConfig.getInstance();
+        WorldConfig worldConfig = WorldConfig.get(player.getServer());
         SyncServerConfigPacket packet = new SyncServerConfigPacket(
                 config.getRegularTokenCooldownHours(),
                 config.getMaxRegularTokens(),
                 config.getGuaranteedTokenResetHour(),
-                config.getHiddenCollections()
+                config.getHiddenCollections(),
+                worldConfig.getEnabledRemoteCollections()
         );
         NetworkManager.sendToPlayer(player, ID, packet.encode());
     }

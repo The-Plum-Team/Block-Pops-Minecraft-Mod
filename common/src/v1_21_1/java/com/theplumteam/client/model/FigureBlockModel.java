@@ -65,7 +65,12 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     public ResourceLocation getModelResource(FigureBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure != null) {
-            return figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex());
+            ResourceLocation model = figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex());
+            // Check if the model exists in GeckoLib's cache (remote models may not be downloaded yet)
+            if (model != null && !software.bernie.geckolib.cache.GeckoLibCache.getBakedModels().containsKey(model)) {
+                return FALLBACK_MODEL;
+            }
+            return model;
         }
         return FALLBACK_MODEL;
     }
@@ -156,7 +161,11 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     public ResourceLocation getAnimationResource(FigureBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure != null && figure.getPoseAnimationPath() != null) {
-            return figure.getPoseAnimationPath();
+            ResourceLocation anim = figure.getPoseAnimationPath();
+            if (!software.bernie.geckolib.cache.GeckoLibCache.getBakedAnimations().containsKey(anim)) {
+                return POSE_ANIMATION;
+            }
+            return anim;
         }
         return POSE_ANIMATION;
     }

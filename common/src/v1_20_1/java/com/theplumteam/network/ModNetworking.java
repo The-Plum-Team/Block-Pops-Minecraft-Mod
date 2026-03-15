@@ -82,6 +82,12 @@ public class ModNetworking {
             UpdateHiddenCollectionsPacket::handleServer
         );
 
+        NetworkManager.registerReceiver(
+            NetworkManager.c2s(),
+            UpdateRemoteCollectionsPacket.ID,
+            UpdateRemoteCollectionsPacket::handleServer
+        );
+
         BlockPopsMod.logDebug("BlockPops networking initialized");
     }
 

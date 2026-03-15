@@ -137,7 +137,7 @@ public class FigureDefinition {
             def.scale = scale;
             def.offsetX = json.has("offset_x") ? json.get("offset_x").getAsFloat() : 0.0f;
             def.offsetZ = json.has("offset_z") ? json.get("offset_z").getAsFloat() : 0.0f;
-            def.guiScale = json.has("gui_scale") ? json.get("gui_scale").getAsFloat() : 1.0f;
+            def.guiScale = json.has("gui_scale") ? json.get("gui_scale").getAsFloat() : scale;
             def.showBoxFace = !json.has("show_box_face") || json.get("show_box_face").getAsBoolean();
             return def;
         } else {
@@ -161,7 +161,7 @@ public class FigureDefinition {
             def.scale = scale;
             def.offsetX = json.has("offset_x") ? json.get("offset_x").getAsFloat() : 0.0f;
             def.offsetZ = json.has("offset_z") ? json.get("offset_z").getAsFloat() : 0.0f;
-            def.guiScale = json.has("gui_scale") ? json.get("gui_scale").getAsFloat() : 1.0f;
+            def.guiScale = json.has("gui_scale") ? json.get("gui_scale").getAsFloat() : scale;
             def.showBoxFace = !json.has("show_box_face") || json.get("show_box_face").getAsBoolean();
             if (json.has("hidden_bones")) {
                 List<String> bones = new ArrayList<>();

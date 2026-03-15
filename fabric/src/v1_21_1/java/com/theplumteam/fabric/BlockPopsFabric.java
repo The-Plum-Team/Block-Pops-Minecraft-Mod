@@ -13,6 +13,8 @@ import com.theplumteam.network.OpenFavoriteColorScreenPacket;
 import com.theplumteam.network.SyncDiscoveryDataPacket;
 import com.theplumteam.network.SyncDynamicCollectionsPacket;
 import com.theplumteam.network.SyncTokenDataPacket;
+import com.theplumteam.server.ServerCollectionLoader;
+import com.theplumteam.server.config.WorldConfig;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModBlocks;
 import com.theplumteam.registry.ModCreativeTabs;
@@ -113,6 +115,13 @@ public class BlockPopsFabric implements ModInitializer {
             BlockPopsMod.logDebug("Generating World Players collection...");
             FigureCollection playerCollection = PlayerCollectionHelper.generate(server);
             CollectionRegistry.registerDynamicCollection(playerCollection);
+
+            // Load enabled remote collections on the server
+            WorldConfig worldConfig = WorldConfig.get(server);
+            java.util.Set<String> enabledRemote = new java.util.HashSet<>(worldConfig.getEnabledRemoteCollections());
+            if (!enabledRemote.isEmpty()) {
+                ServerCollectionLoader.loadCollections(enabledRemote);
+            }
         });
 
         // Add new players to the collection when they join
@@ -133,7 +142,12 @@ public class BlockPopsFabric implements ModInitializer {
                 // 2. Sync ALL collections (static + dynamic) to the JOINING player
                 // This ensures they see Adventure Time, FNAF, etc. in the menu
                 if (player instanceof ServerPlayer serverPlayer) {
-                    List<FigureCollection> allCollections = new ArrayList<>(CollectionRegistry.getAllCollections());
+                    // Exclude remote collections - client downloads and registers them via RemoteAssetManager
+                    com.theplumteam.server.config.WorldConfig wc = com.theplumteam.server.config.WorldConfig.get(player.getServer());
+                    java.util.Set<String> remoteIds = new java.util.HashSet<>(wc.getEnabledRemoteCollections());
+                    List<FigureCollection> allCollections = CollectionRegistry.getAllCollections().stream()
+                            .filter(c -> !remoteIds.contains(c.getId()))
+                            .collect(java.util.stream.Collectors.toList());
                     SyncDynamicCollectionsPacket.sendToPlayer(serverPlayer, allCollections);
                     BlockPopsMod.logDebug("Synced {} collections to joining player {}", allCollections.size(), player.getName().getString());
                 }

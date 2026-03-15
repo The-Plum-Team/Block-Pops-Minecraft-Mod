@@ -134,12 +134,16 @@ public class CollectionSelectionScreen extends Screen {
                 .filter(c -> !"default".equals(c.getId()))
                 .filter(c -> !ClientServerConfig.isCollectionHidden(c.getId()))
                 .forEach(this.collections::add);
+        java.util.Set<String> remoteIds = ClientServerConfig.getEnabledRemoteCollections();
         this.collections.sort((c1, c2) -> {
             boolean c1IsPlayers = "world_players".equals(c1.getId());
             boolean c2IsPlayers = "world_players".equals(c2.getId());
-            if (c1IsPlayers && !c2IsPlayers) return -1;
-            if (!c1IsPlayers && c2IsPlayers) return 1;
-            return 0;
+            boolean c1IsRemote = remoteIds.contains(c1.getId());
+            boolean c2IsRemote = remoteIds.contains(c2.getId());
+            // Order: world_players first, then custom/remote, then static
+            int priority1 = c1IsPlayers ? 0 : c1IsRemote ? 1 : 2;
+            int priority2 = c2IsPlayers ? 0 : c2IsRemote ? 1 : 2;
+            return Integer.compare(priority1, priority2);
         });
 
         // Calculate panel dimensions
@@ -779,6 +783,15 @@ public class CollectionSelectionScreen extends Screen {
         super.tick();
         // Update button states each tick to reflect token changes
         updateTokenButtonStates();
+
+        // Check if remote collections have been added since we built the list
+        int currentCount = (int) CollectionRegistry.getAllCollections().stream()
+                .filter(c -> !"default".equals(c.getId()))
+                .filter(c -> !ClientServerConfig.isCollectionHidden(c.getId()))
+                .count();
+        if (currentCount != this.collections.size()) {
+            this.rebuildWidgets();
+        }
     }
 
     /**

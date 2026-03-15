@@ -84,6 +84,12 @@ public class ModNetworking {
             UpdateHiddenCollectionsPacket::handleServer
         );
 
+        NetworkManager.registerReceiver(
+            NetworkManager.c2s(),
+            UpdateRemoteCollectionsPacket.ID,
+            UpdateRemoteCollectionsPacket::handleServer
+        );
+
         // Register S2C packets - use different approach for server vs client on Fabric
         // Server: register payload type only, Client: register receiver with handler
         if (Platform.getEnvironment() == Env.SERVER) {

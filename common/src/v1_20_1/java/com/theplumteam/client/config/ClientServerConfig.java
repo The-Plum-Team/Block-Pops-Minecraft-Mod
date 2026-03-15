@@ -16,6 +16,7 @@ public class ClientServerConfig {
     private static int maxRegularTokens = 3;
     private static int guaranteedTokenResetHour = 18;
     private static Set<String> hiddenCollections = new HashSet<>();
+    private static Set<String> enabledRemoteCollections = new HashSet<>();
 
     /**
      * Update all cached values from a server config sync.
@@ -61,6 +62,27 @@ public class ClientServerConfig {
     }
 
     /**
+     * Update enabled remote collections from server sync.
+     */
+    public static void updateEnabledRemoteCollections(List<String> enabled) {
+        ClientServerConfig.enabledRemoteCollections = enabled != null ? new HashSet<>(enabled) : new HashSet<>();
+    }
+
+    /**
+     * Get all enabled remote collection IDs (unmodifiable).
+     */
+    public static Set<String> getEnabledRemoteCollections() {
+        return Collections.unmodifiableSet(enabledRemoteCollections);
+    }
+
+    /**
+     * Check if a remote collection is enabled by the server admin.
+     */
+    public static boolean isRemoteCollectionEnabled(String collectionId) {
+        return enabledRemoteCollections.contains(collectionId);
+    }
+
+    /**
      * Reset to defaults (used when disconnecting from a server).
      */
     public static void reset() {
@@ -68,5 +90,6 @@ public class ClientServerConfig {
         maxRegularTokens = 3;
         guaranteedTokenResetHour = 18;
         hiddenCollections = new HashSet<>();
+        enabledRemoteCollections = new HashSet<>();
     }
 }

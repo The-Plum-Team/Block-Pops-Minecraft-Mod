@@ -16,6 +16,7 @@ import software.bernie.geckolib.model.GeoModel;
 import java.util.UUID;
 
 public class FigureModel extends GeoModel<BoxBlockEntity> {
+    private static final ResourceLocation FALLBACK_MODEL = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "geo/block/box_block.geo.json");
     private static final ResourceLocation FALLBACK_TEXTURE = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/entity/player/wide/steve.png");
     private static final ResourceLocation POSE_ANIMATION = ResourceLocation.fromNamespaceAndPath(BlockPopsMod.MOD_ID, "animations/figure/figure_poses.animation.json");
 
@@ -67,9 +68,14 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
     public ResourceLocation getModelResource(BoxBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure != null) {
-            return figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex());
+            ResourceLocation model = figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex());
+            // Check if the model exists in GeckoLib's cache (remote models may not be downloaded yet)
+            if (model != null && !software.bernie.geckolib.cache.GeckoLibCache.getBakedModels().containsKey(model)) {
+                return FALLBACK_MODEL;
+            }
+            if (model != null) return model;
         }
-        return null;
+        return FALLBACK_MODEL;
     }
 
     @Override
@@ -159,7 +165,11 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
     public ResourceLocation getAnimationResource(BoxBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure != null && figure.getPoseAnimationPath() != null) {
-            return figure.getPoseAnimationPath();
+            ResourceLocation anim = figure.getPoseAnimationPath();
+            if (!software.bernie.geckolib.cache.GeckoLibCache.getBakedAnimations().containsKey(anim)) {
+                return POSE_ANIMATION;
+            }
+            return anim;
         }
         return POSE_ANIMATION;
     }

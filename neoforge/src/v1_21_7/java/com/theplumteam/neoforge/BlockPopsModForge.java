@@ -102,7 +102,12 @@ public final class BlockPopsModForge {
                 // 2. Sync ALL collections (static + dynamic) to the JOINING player
                 // This ensures they see Adventure Time, FNAF, etc. in the menu
                 if (player instanceof ServerPlayer serverPlayer) {
-                    List<FigureCollection> allCollections = new ArrayList<>(CollectionRegistry.getAllCollections());
+                    // Exclude remote collections - client downloads and registers them via RemoteAssetManager
+                    com.theplumteam.server.config.WorldConfig wc = com.theplumteam.server.config.WorldConfig.get(player.getServer());
+                    java.util.Set<String> remoteIds = new java.util.HashSet<>(wc.getEnabledRemoteCollections());
+                    List<FigureCollection> allCollections = CollectionRegistry.getAllCollections().stream()
+                            .filter(c -> !remoteIds.contains(c.getId()))
+                            .collect(java.util.stream.Collectors.toList());
                     SyncDynamicCollectionsPacket.sendToPlayer(serverPlayer, allCollections);
                     BlockPopsMod.logDebug("Synced {} collections to joining player {}", allCollections.size(), player.getName().getString());
                 }
