@@ -72,6 +72,7 @@ public class FigureDefinition {
     private float scale = 1.0f;
     private float guiScale = 1.0f;
     private boolean showBoxFace = true;
+    @Nullable private float[] boxFaceUV = null; // [u, v, width, height, texWidth, texHeight]
     private float offsetX = 0.0f;
     private float offsetZ = 0.0f;
 
@@ -190,6 +191,7 @@ public class FigureDefinition {
             // Box face UVs only work with the default skin-based model; default to false for custom models
             boolean isDefaultModel = modelPath != null && modelPath.getPath().equals(DEFAULT_MODEL_PATH);
             def.showBoxFace = json.has("show_box_face") ? json.get("show_box_face").getAsBoolean() : isDefaultModel;
+            def.boxFaceUV = parseBoxFaceUV(json);
             return def;
         } else {
             // Parse static figure
@@ -216,6 +218,7 @@ public class FigureDefinition {
             // Box face UVs only work with the default skin-based model; default to false for custom models
             boolean isDefaultModel = modelPath != null && modelPath.getPath().equals(DEFAULT_MODEL_PATH);
             def.showBoxFace = json.has("show_box_face") ? json.get("show_box_face").getAsBoolean() : isDefaultModel;
+            def.boxFaceUV = parseBoxFaceUV(json);
             if (json.has("hidden_bones")) {
                 List<String> bones = new ArrayList<>();
                 JsonArray bonesArray = json.getAsJsonArray("hidden_bones");
@@ -234,6 +237,24 @@ public class FigureDefinition {
             }
             return def;
         }
+    }
+
+    /**
+     * Parses box_face_uv from JSON: {"u": N, "v": N, "w": N, "h": N, "tex_width": N, "tex_height": N}
+     * Returns float[6] or null if not present.
+     */
+    @Nullable
+    private static float[] parseBoxFaceUV(JsonObject json) {
+        if (!json.has("box_face_uv")) return null;
+        JsonObject uv = json.getAsJsonObject("box_face_uv");
+        return new float[] {
+            uv.get("u").getAsFloat(),
+            uv.get("v").getAsFloat(),
+            uv.get("w").getAsFloat(),
+            uv.get("h").getAsFloat(),
+            uv.get("tex_width").getAsFloat(),
+            uv.get("tex_height").getAsFloat()
+        };
     }
 
     public String getId() {
@@ -301,6 +322,11 @@ public class FigureDefinition {
 
     public boolean showBoxFace() {
         return showBoxFace;
+    }
+
+    @Nullable
+    public float[] getBoxFaceUV() {
+        return boxFaceUV;
     }
 
     public float getOffsetX() {
@@ -420,6 +446,16 @@ public class FigureDefinition {
         }
         if (!showBoxFace) {
             json.addProperty("show_box_face", false);
+        }
+        if (boxFaceUV != null) {
+            JsonObject uvObj = new JsonObject();
+            uvObj.addProperty("u", boxFaceUV[0]);
+            uvObj.addProperty("v", boxFaceUV[1]);
+            uvObj.addProperty("w", boxFaceUV[2]);
+            uvObj.addProperty("h", boxFaceUV[3]);
+            uvObj.addProperty("tex_width", boxFaceUV[4]);
+            uvObj.addProperty("tex_height", boxFaceUV[5]);
+            json.add("box_face_uv", uvObj);
         }
         if (offsetX != 0.0f) {
             json.addProperty("offset_x", offsetX);

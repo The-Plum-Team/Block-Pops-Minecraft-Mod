@@ -92,6 +92,8 @@ public class SettingsScreen extends Screen {
     private final java.util.Map<String, String> remoteCollectionNames = new java.util.LinkedHashMap<>();
     private EditBox codeInputField;
     private String remoteStatusMessage = null;
+    private boolean remoteUpdateChecked = false;
+    private String remoteUpdateStatus = null; // null = not checked, "checking" = in progress, "update" = available, "current" = up to date
 
     // Buttons and sliders
     private Button closeButton;
@@ -586,8 +588,19 @@ public class SettingsScreen extends Screen {
         // Draw remote tab content
         if (activeTab == Tab.REMOTE) {
             int headerY = this.panelY + TAB_HEIGHT + 10;
-            Component headerText = Component.literal("Custom Collections - ")
-                    .append(Component.literal("Coming Soon").withStyle(net.minecraft.network.chat.Style.EMPTY.withUnderlined(true)));
+            // Header with update status indicator
+            Component headerText;
+            if ("update".equals(remoteUpdateStatus)) {
+                headerText = Component.literal("Custom Collections  ")
+                        .append(Component.literal("[Update Available]").withStyle(
+                                net.minecraft.network.chat.Style.EMPTY.withColor(0x55FF55).withBold(true)));
+            } else if ("checking".equals(remoteUpdateStatus)) {
+                headerText = Component.literal("Custom Collections  ")
+                        .append(Component.literal("[Checking...]").withStyle(
+                                net.minecraft.network.chat.Style.EMPTY.withColor(0xFFFF55).withItalic(true)));
+            } else {
+                headerText = Component.literal("Custom Collections");
+            }
             graphics.drawCenteredString(this.font, headerText,
                     this.panelX + this.panelWidth / 2,
                     headerY,
@@ -604,10 +617,6 @@ public class SettingsScreen extends Screen {
             // Draw status message (success/error feedback)
             if (remoteStatusMessage != null) {
                 int statusY = explanationY + 14;
-                int statusWidth = this.font.width(remoteStatusMessage);
-                int statusColor = remoteStatusMessage.startsWith("\u00A7a") ? 0xFF55FF55 :
-                                  remoteStatusMessage.startsWith("\u00A7c") ? 0xFFFF5555 :
-                                  remoteStatusMessage.startsWith("\u00A7e") ? 0xFFFFFF55 : 0xFFAAAAAA;
                 // Strip color codes for width calculation
                 String plainMsg = remoteStatusMessage.replaceAll("\u00A7.", "");
                 int plainWidth = this.font.width(plainMsg);
@@ -615,6 +624,95 @@ public class SettingsScreen extends Screen {
                         this.panelX + (this.panelWidth - plainWidth) / 2,
                         statusY,
                         0xFFFFFFFF);
+            }
+
+            // Draw collection detail info next to each entry
+            if (!pendingRemoteCollections.isEmpty()) {
+                int detailStartY = this.panelY + TAB_HEIGHT + 90;
+                int detailX = this.panelX + (this.panelWidth / 2) + 140;
+                int entryHeight = 28; // buttonHeight + entrySpacing from rebuildRemoteWidgets
+
+                for (String collectionId : new java.util.ArrayList<>(pendingRemoteCollections)) {
+                    // Try to get loaded collection info from registry
+                    FigureCollection loaded = CollectionRegistry.getCollection(collectionId).orElse(null);
+                    if (loaded != null) {
+                        // Show figure count and author
+                        String info = loaded.getFigures().size() + " figures";
+                        if (loaded.getAuthor() != null && !loaded.getAuthor().equals("Unknown")) {
+                            info += " by " + loaded.getAuthor();
+                        }
+                        graphics.drawString(this.font, info, detailX, detailStartY + 3, 0xFF88FF88);
+
+                        // Show asset counts from manifest
+                        int models = RemoteAssetManager.countManifestModelsForCollection(collectionId);
+                        int textures = RemoteAssetManager.countManifestTexturesForCollection(collectionId);
+                        if (models > 0 || textures > 0) {
+                            String assets = models + " models, " + textures + " textures";
+                            graphics.drawString(this.font, assets, detailX, detailStartY + 14, 0xFF888888);
+                        }
+                    } else {
+                        // Not yet synced
+                        graphics.drawString(this.font, "Not synced yet", detailX, detailStartY + 3, 0xFFAAAA55);
+                    }
+                    detailStartY += entryHeight;
+                }
+            }
+
+            // Draw sync info at the bottom of the content area (above buttons)
+            int syncInfoY = this.panelY + this.panelHeight - 75;
+            long lastSync = RemoteAssetManager.getLastSyncTimestamp();
+            if (lastSync > 0) {
+                long elapsed = System.currentTimeMillis() - lastSync;
+                String timeAgo;
+                if (elapsed < 60_000) {
+                    timeAgo = "just now";
+                } else if (elapsed < 3_600_000) {
+                    timeAgo = (elapsed / 60_000) + "m ago";
+                } else if (elapsed < 86_400_000) {
+                    timeAgo = (elapsed / 3_600_000) + "h ago";
+                } else {
+                    timeAgo = (elapsed / 86_400_000) + "d ago";
+                }
+
+                String syncInfo = "Last sync: " + timeAgo;
+                int totalFiles = RemoteAssetManager.getLastSyncTotalFiles();
+                if (totalFiles > 0) {
+                    int downloaded = RemoteAssetManager.getLastSyncDownloaded();
+                    int cached = RemoteAssetManager.getLastSyncCached();
+                    int failed = RemoteAssetManager.getLastSyncFailed();
+                    syncInfo += " | " + totalFiles + " files (" + downloaded + " new, " + cached + " cached";
+                    if (failed > 0) {
+                        syncInfo += ", " + failed + " failed";
+                    }
+                    syncInfo += ")";
+                }
+                int syncInfoWidth = this.font.width(syncInfo);
+                graphics.drawString(this.font, syncInfo,
+                        this.panelX + (this.panelWidth - syncInfoWidth) / 2,
+                        syncInfoY,
+                        0xFF888888);
+            } else if (RemoteAssetManager.isSyncing()) {
+                String syncingText = "Syncing...";
+                int syncingWidth = this.font.width(syncingText);
+                graphics.drawString(this.font, syncingText,
+                        this.panelX + (this.panelWidth - syncingWidth) / 2,
+                        syncInfoY,
+                        0xFFFFFF55);
+            }
+
+            // Show manifest version if available
+            int manifestVersion = RemoteAssetManager.getCachedManifestVersion();
+            if (manifestVersion >= 0) {
+                String versionText = "Manifest v" + manifestVersion;
+                int remoteVersion = RemoteAssetManager.getRemoteManifestVersion();
+                if (remoteVersion >= 0 && remoteVersion != manifestVersion) {
+                    versionText += " (remote: v" + remoteVersion + ")";
+                }
+                int versionWidth = this.font.width(versionText);
+                graphics.drawString(this.font, versionText,
+                        this.panelX + (this.panelWidth - versionWidth) / 2,
+                        syncInfoY + 12,
+                        0xFF666666);
             }
         }
 
@@ -1341,6 +1439,22 @@ public class SettingsScreen extends Screen {
         }
         for (AbstractWidget widget : cheatsSettingWidgets) {
             this.removeWidget(widget);
+        }
+
+        // Auto-check for updates when switching to Remote tab
+        if (tab == Tab.REMOTE && !remoteUpdateChecked && !pendingRemoteCollections.isEmpty()) {
+            remoteUpdateChecked = true;
+            remoteUpdateStatus = "checking";
+            RemoteAssetManager.init();
+            RemoteAssetManager.checkForUpdates(result -> {
+                if (result == null) {
+                    remoteUpdateStatus = null; // CDN unreachable, don't show anything
+                } else if (result) {
+                    remoteUpdateStatus = "update";
+                } else {
+                    remoteUpdateStatus = "current";
+                }
+            });
         }
 
         // Add widgets for active tab

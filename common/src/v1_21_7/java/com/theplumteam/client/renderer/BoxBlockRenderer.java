@@ -14,12 +14,20 @@ import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
+import org.joml.Vector4f;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
+import software.bernie.geckolib.cache.object.GeoCube;
+import software.bernie.geckolib.cache.object.GeoQuad;
+import software.bernie.geckolib.cache.object.GeoVertex;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
 import software.bernie.geckolib.renderer.base.GeoRenderState;
+import software.bernie.geckolib.util.RenderUtil;
 
 public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     private static final Logger LOGGER = LoggerFactory.getLogger(BoxBlockRenderer.class);
@@ -176,7 +184,10 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     private void renderFigureFace(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel model,
                                   MultiBufferSource bufferSource, int packedLight, int packedOverlay) {
         FigureDefinition figure = currentAnimatable.getFigureDefinition();
-        if (figure == null || !figure.showBoxFace()) return;
+        if (figure == null) return;
+
+        float[] customUV = figure.getBoxFaceUV();
+        if (customUV == null && !figure.showBoxFace()) return;
 
         ResourceLocation skinTexture = ((FigureModel) figureRenderer.getGeoModel()).resolveTexture(currentAnimatable);
         if (skinTexture == null) return;
@@ -185,14 +196,93 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         RenderType skinRenderType = RenderType.entityTranslucent(skinTexture);
         VertexConsumer skinBuffer = bufferSource.getBuffer(skinRenderType);
 
-        for (GeoBone bone : model.topLevelBones()) {
-            if (bone.getName().equals("figure_face") || bone.getName().equals("figure_face_3d")) {
-                poseStack.pushPose();
-                renderRecursively(renderState, poseStack, bone, skinRenderType, bufferSource, skinBuffer,
-                                true, packedLight, packedOverlay, 0xFFFFFFFF);
-                poseStack.popPose();
+        if (customUV != null) {
+            // Custom model: render figure_face bone with remapped UVs
+            renderFaceBoneWithCustomUV(poseStack, model, skinBuffer, customUV, packedLight, packedOverlay);
+        } else {
+            // Default skin model: render both face bones with original UVs
+            for (GeoBone bone : model.topLevelBones()) {
+                if (bone.getName().equals("figure_face") || bone.getName().equals("figure_face_3d")) {
+                    poseStack.pushPose();
+                    renderRecursively(renderState, poseStack, bone, skinRenderType, bufferSource, skinBuffer,
+                                    true, packedLight, packedOverlay, 0xFFFFFFFF);
+                    poseStack.popPose();
+                }
             }
         }
+    }
+
+    /**
+     * Renders the figure_face bone with custom UV coordinates for non-skin-based models.
+     * Uses the bone's geometry for correct positioning but remaps UVs to the face region
+     * in the custom model's texture.
+     *
+     * @param customUV [u, v, width, height, texWidth, texHeight] in pixel coordinates
+     */
+    private void renderFaceBoneWithCustomUV(PoseStack poseStack, BakedGeoModel model,
+                                             VertexConsumer buffer, float[] customUV,
+                                             int packedLight, int packedOverlay) {
+        GeoBone faceBone = null;
+        for (GeoBone bone : model.topLevelBones()) {
+            if (bone.getName().equals("figure_face")) {
+                faceBone = bone;
+                break;
+            }
+        }
+        if (faceBone == null) return;
+
+        // Target UV range (normalized to custom texture dimensions)
+        float newMinU = customUV[0] / customUV[4];
+        float newMaxU = (customUV[0] + customUV[2]) / customUV[4];
+        float newMinV = customUV[1] / customUV[5];
+        float newMaxV = (customUV[1] + customUV[3]) / customUV[5];
+
+        // Original UV range from box model (UV 8,8 size 8,8 on 64x64 texture)
+        float origMinU = 8f / 64f;  // 0.125
+        float origMaxU = 16f / 64f; // 0.25
+        float origMinV = 8f / 64f;
+        float origMaxV = 16f / 64f;
+        float origRangeU = origMaxU - origMinU;
+        float origRangeV = origMaxV - origMinV;
+
+        poseStack.pushPose();
+        RenderUtil.prepMatrixForBone(poseStack, faceBone);
+
+        for (GeoCube cube : faceBone.getCubes()) {
+            poseStack.pushPose();
+            RenderUtil.translateToPivotPoint(poseStack, cube);
+            RenderUtil.rotateMatrixAroundCube(poseStack, cube);
+            RenderUtil.translateAwayFromPivotPoint(poseStack, cube);
+
+            Matrix3f normalisedPoseState = poseStack.last().normal();
+            Matrix4f poseState = new Matrix4f(poseStack.last().pose());
+
+            for (GeoQuad quad : cube.quads()) {
+                if (quad == null) continue;
+                // Only render the EAST face (the one with actual face UV in box model)
+                if (quad.direction() != Direction.EAST) continue;
+
+                Vector3f normal = normalisedPoseState.transform(new Vector3f(quad.normal()));
+                RenderUtil.fixInvertedFlatCube(cube, normal);
+
+                for (GeoVertex vertex : quad.vertices()) {
+                    Vector4f pos = poseState.transform(new Vector4f(vertex.position(), 1));
+
+                    // Remap UV from original box model space to custom texture space
+                    float t_u = (vertex.texU() - origMinU) / origRangeU;
+                    float t_v = (vertex.texV() - origMinV) / origRangeV;
+                    float remappedU = newMinU + t_u * (newMaxU - newMinU);
+                    float remappedV = newMinV + t_v * (newMaxV - newMinV);
+
+                    buffer.addVertex(pos.x(), pos.y(), pos.z(), 0xFFFFFFFF, remappedU, remappedV,
+                                   packedOverlay, packedLight, normal.x(), normal.y(), normal.z());
+                }
+            }
+
+            poseStack.popPose();
+        }
+
+        poseStack.popPose();
     }
 
     private void renderCollectionLogo(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel model,

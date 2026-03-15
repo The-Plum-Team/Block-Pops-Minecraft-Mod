@@ -40,6 +40,18 @@ public class RemoteAssetManager {
     private static final AtomicBoolean syncing = new AtomicBoolean(false);
     private static String lastSyncError = null;
 
+    // Sync tracking
+    private static long lastSyncTimestamp = 0;
+    private static int lastSyncDownloaded = 0;
+    private static int lastSyncCached = 0;
+    private static int lastSyncFailed = 0;
+    private static int lastSyncTotalFiles = 0;
+
+    // Update check
+    private static final AtomicBoolean checking = new AtomicBoolean(false);
+    private static Boolean updateAvailable = null; // null = not checked, true/false = result
+    private static int remoteManifestVersion = -1;
+
     /**
      * Initialize the cache directory under the game directory.
      */
@@ -218,9 +230,19 @@ public class RemoteAssetManager {
 
                 BlockPopsMod.LOGGER.info("Remote sync complete: {} downloaded, {} cached, {} failed", downloaded, skipped, failed);
 
+                // Track sync stats
+                lastSyncTimestamp = System.currentTimeMillis();
+                lastSyncDownloaded = downloaded;
+                lastSyncCached = skipped;
+                lastSyncFailed = failed;
+                lastSyncTotalFiles = downloaded + skipped + failed;
+
                 if (failed > 0) {
                     lastSyncError = failed + " file(s) failed to download";
                 }
+
+                // Clear update flag since we just synced
+                updateAvailable = null;
 
                 // 3. Load and register the enabled collections
                 loadCachedCollections(enabledIds);
@@ -412,6 +434,233 @@ public class RemoteAssetManager {
 
     public static Path getCacheDir() {
         return cacheDir;
+    }
+
+    /**
+     * Returns true if a sync is currently in progress.
+     */
+    public static boolean isSyncing() {
+        return syncing.get();
+    }
+
+    /**
+     * Returns the timestamp (epoch millis) of the last successful sync, or 0 if never synced.
+     */
+    public static long getLastSyncTimestamp() {
+        return lastSyncTimestamp;
+    }
+
+    /**
+     * Returns the number of files downloaded in the last sync.
+     */
+    public static int getLastSyncDownloaded() {
+        return lastSyncDownloaded;
+    }
+
+    /**
+     * Returns the number of files that were already cached (up-to-date) in the last sync.
+     */
+    public static int getLastSyncCached() {
+        return lastSyncCached;
+    }
+
+    /**
+     * Returns the number of files that failed to download in the last sync.
+     */
+    public static int getLastSyncFailed() {
+        return lastSyncFailed;
+    }
+
+    /**
+     * Returns the total number of files processed in the last sync.
+     */
+    public static int getLastSyncTotalFiles() {
+        return lastSyncTotalFiles;
+    }
+
+    /**
+     * Checks if an update is available by comparing the remote manifest version
+     * with the cached manifest version. Runs in the background.
+     * @param onResult callback with true if update available, false if up-to-date, null on error
+     */
+    public static void checkForUpdates(@Nullable java.util.function.Consumer<Boolean> onResult) {
+        if (!initialized) {
+            if (onResult != null) onResult.accept(null);
+            return;
+        }
+        if (!checking.compareAndSet(false, true)) {
+            // Already checking
+            if (onResult != null) onResult.accept(updateAvailable);
+            return;
+        }
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                // Fetch remote manifest directly (bypass cache)
+                String manifestJson = downloadString(CDN_BASE_URL + "/" + MANIFEST_PATH);
+                if (manifestJson == null) {
+                    updateAvailable = null;
+                    if (onResult != null) {
+                        Minecraft.getInstance().execute(() -> onResult.accept(null));
+                    }
+                    return;
+                }
+
+                JsonObject remoteManifest = GSON.fromJson(manifestJson, JsonObject.class);
+                int remoteVersion = remoteManifest.has("version") ? remoteManifest.get("version").getAsInt() : -1;
+                remoteManifestVersion = remoteVersion;
+
+                // Compare with cached manifest version
+                int cachedVersion = -1;
+                if (cachedManifest != null && cachedManifest.has("version")) {
+                    cachedVersion = cachedManifest.get("version").getAsInt();
+                } else if (cacheDir != null) {
+                    // Try reading from disk
+                    Path manifestFile = cacheDir.resolve("manifest.json");
+                    if (Files.exists(manifestFile)) {
+                        try {
+                            String content = new String(Files.readAllBytes(manifestFile), StandardCharsets.UTF_8);
+                            JsonObject diskManifest = GSON.fromJson(content, JsonObject.class);
+                            if (diskManifest.has("version")) {
+                                cachedVersion = diskManifest.get("version").getAsInt();
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                }
+
+                // Also check if any files have changed hashes for enabled collections
+                boolean hasChanges = remoteVersion != cachedVersion;
+                if (!hasChanges && cachedManifest != null) {
+                    // Same version but check file hashes for differences
+                    JsonArray remoteFiles = remoteManifest.getAsJsonArray("files");
+                    JsonArray cachedFiles = cachedManifest.getAsJsonArray("files");
+                    hasChanges = remoteFiles != null && cachedFiles != null
+                            && remoteFiles.size() != cachedFiles.size();
+                }
+
+                updateAvailable = hasChanges;
+                BlockPopsMod.logDebug("Update check: remote v{}, cached v{}, update={}",
+                        remoteVersion, cachedVersion, hasChanges);
+
+                if (onResult != null) {
+                    Minecraft.getInstance().execute(() -> onResult.accept(updateAvailable));
+                }
+            } catch (Exception e) {
+                BlockPopsMod.LOGGER.warn("Failed to check for updates: {}", e.getMessage());
+                updateAvailable = null;
+                if (onResult != null) {
+                    Minecraft.getInstance().execute(() -> onResult.accept(null));
+                }
+            } finally {
+                checking.set(false);
+            }
+        });
+    }
+
+    /**
+     * Returns the cached update availability result.
+     * null = not checked yet, true = update available, false = up-to-date.
+     */
+    @Nullable
+    public static Boolean isUpdateAvailable() {
+        return updateAvailable;
+    }
+
+    /**
+     * Returns the remote manifest version from the last update check, or -1 if not checked.
+     */
+    public static int getRemoteManifestVersion() {
+        return remoteManifestVersion;
+    }
+
+    /**
+     * Returns the cached manifest version, or -1 if no manifest is loaded.
+     */
+    public static int getCachedManifestVersion() {
+        if (cachedManifest != null && cachedManifest.has("version")) {
+            return cachedManifest.get("version").getAsInt();
+        }
+        return -1;
+    }
+
+    /**
+     * Counts the number of files in the manifest for a given collection ID.
+     */
+    public static int countManifestFilesForCollection(String collectionId) {
+        JsonObject manifest = cachedManifest;
+        if (manifest == null) return 0;
+        JsonArray files = manifest.getAsJsonArray("files");
+        if (files == null) return 0;
+
+        int count = 0;
+        Set<String> singleId = Set.of(collectionId);
+        for (JsonElement el : files) {
+            String path = el.getAsJsonObject().get("path").getAsString();
+            if (isFileForEnabledCollection(path, singleId)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Counts model files (.geo.json) in the manifest for a given collection ID.
+     */
+    public static int countManifestModelsForCollection(String collectionId) {
+        JsonObject manifest = cachedManifest;
+        if (manifest == null) return 0;
+        JsonArray files = manifest.getAsJsonArray("files");
+        if (files == null) return 0;
+
+        int count = 0;
+        Set<String> singleId = Set.of(collectionId);
+        for (JsonElement el : files) {
+            String path = el.getAsJsonObject().get("path").getAsString();
+            if (path.endsWith(".geo.json") && isFileForEnabledCollection(path, singleId)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Counts texture files (.png) in the manifest for a given collection ID.
+     */
+    public static int countManifestTexturesForCollection(String collectionId) {
+        JsonObject manifest = cachedManifest;
+        if (manifest == null) return 0;
+        JsonArray files = manifest.getAsJsonArray("files");
+        if (files == null) return 0;
+
+        int count = 0;
+        Set<String> singleId = Set.of(collectionId);
+        for (JsonElement el : files) {
+            String path = el.getAsJsonObject().get("path").getAsString();
+            if (path.endsWith(".png") && isFileForEnabledCollection(path, singleId)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Counts animation files (.animation.json) in the manifest for a given collection ID.
+     */
+    public static int countManifestAnimationsForCollection(String collectionId) {
+        JsonObject manifest = cachedManifest;
+        if (manifest == null) return 0;
+        JsonArray files = manifest.getAsJsonArray("files");
+        if (files == null) return 0;
+
+        int count = 0;
+        Set<String> singleId = Set.of(collectionId);
+        for (JsonElement el : files) {
+            String path = el.getAsJsonObject().get("path").getAsString();
+            if (path.endsWith(".animation.json") && isFileForEnabledCollection(path, singleId)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     // --- HTTP helpers ---
