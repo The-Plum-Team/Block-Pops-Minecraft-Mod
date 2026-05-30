@@ -40,7 +40,8 @@ public class FigureDefinition {
     /**
      * Represents an alternative skin variant for a figure
      */
-    public record AlternativeSkin(String name, @Nullable ResourceLocation model, ResourceLocation texture, List<String> hiddenBones) {
+    public record AlternativeSkin(String name, @Nullable ResourceLocation model, ResourceLocation texture,
+                                   List<String> hiddenBones, @Nullable Boolean showBoxFace, @Nullable float[] boxFaceUV, @Nullable Float scale) {
         public static AlternativeSkin fromJson(JsonObject json) {
             String name = json.get("name").getAsString();
             ResourceLocation model = json.has("model") ? convertToGeckoLib5Path(json.get("model").getAsString()) : null;
@@ -52,7 +53,10 @@ public class FigureDefinition {
                     hiddenBones.add(bonesArray.get(i).getAsString());
                 }
             }
-            return new AlternativeSkin(name, model, texture, hiddenBones);
+            Boolean showBoxFace = json.has("show_box_face") ? json.get("show_box_face").getAsBoolean() : null;
+            float[] boxFaceUV = parseBoxFaceUV(json);
+            Float scale = json.has("scale") ? json.get("scale").getAsFloat() : null;
+            return new AlternativeSkin(name, model, texture, hiddenBones, showBoxFace, boxFaceUV, scale);
         }
     }
 
@@ -75,6 +79,7 @@ public class FigureDefinition {
     @Nullable private float[] boxFaceUV = null; // [u, v, width, height, texWidth, texHeight]
     private float offsetX = 0.0f;
     private float offsetZ = 0.0f;
+    private boolean poseLocked = false;
 
     public FigureDefinition(String id, String name, ResourceLocation modelPath,
                            ResourceLocation texturePath, ResourceLocation animationPath) {
@@ -192,6 +197,7 @@ public class FigureDefinition {
             boolean isDefaultModel = modelPath != null && modelPath.getPath().equals(DEFAULT_MODEL_PATH);
             def.showBoxFace = json.has("show_box_face") ? json.get("show_box_face").getAsBoolean() : isDefaultModel;
             def.boxFaceUV = parseBoxFaceUV(json);
+            def.poseLocked = json.has("pose_locked") && json.get("pose_locked").getAsBoolean();
             return def;
         } else {
             // Parse static figure
@@ -219,6 +225,7 @@ public class FigureDefinition {
             boolean isDefaultModel = modelPath != null && modelPath.getPath().equals(DEFAULT_MODEL_PATH);
             def.showBoxFace = json.has("show_box_face") ? json.get("show_box_face").getAsBoolean() : isDefaultModel;
             def.boxFaceUV = parseBoxFaceUV(json);
+            def.poseLocked = json.has("pose_locked") && json.get("pose_locked").getAsBoolean();
             if (json.has("hidden_bones")) {
                 List<String> bones = new ArrayList<>();
                 JsonArray bonesArray = json.getAsJsonArray("hidden_bones");
@@ -337,6 +344,58 @@ public class FigureDefinition {
         return offsetZ;
     }
 
+    public boolean isPoseLocked() {
+        return poseLocked;
+    }
+
+    /**
+     * Returns the scale for the given skin variant.
+     * If the alternative specifies a scale, uses that; otherwise falls back to the base figure's scale.
+     */
+    public float getScaleForSkinIndex(int skinIndex) {
+        if (skinIndex > 0 && hasAlternatives()) {
+            int altListIndex = skinIndex - 1;
+            if (altListIndex < alternatives.size()) {
+                Float altScale = alternatives.get(altListIndex).scale();
+                if (altScale != null) return altScale;
+            }
+        }
+        return scale;
+    }
+
+    /**
+     * Returns whether the box face should be shown for the given skin variant.
+     * If the alternative explicitly overrides show_box_face, uses that; otherwise falls back to the base figure's setting.
+     */
+    public boolean getShowBoxFaceForSkinIndex(int skinIndex) {
+        if (skinIndex > 0 && hasAlternatives()) {
+            int altListIndex = skinIndex - 1;
+            if (altListIndex < alternatives.size()) {
+                Boolean altVal = alternatives.get(altListIndex).showBoxFace();
+                if (altVal != null) return altVal;
+            }
+        }
+        return showBoxFace;
+    }
+
+    /**
+     * Returns the box face UV for the given skin variant.
+     * If the alternative overrides show_box_face (taking control of face rendering), returns the alternative's UV (may be null = default skin UVs).
+     * Otherwise falls back to the base figure's UV.
+     */
+    @Nullable
+    public float[] getBoxFaceUVForSkinIndex(int skinIndex) {
+        if (skinIndex > 0 && hasAlternatives()) {
+            int altListIndex = skinIndex - 1;
+            if (altListIndex < alternatives.size()) {
+                if (alternatives.get(altListIndex).showBoxFace() != null) {
+                    return alternatives.get(altListIndex).boxFaceUV();
+                }
+            }
+        }
+        return boxFaceUV;
+    }
+
     public List<String> getHiddenBones() {
         return hiddenBones;
     }
@@ -428,6 +487,19 @@ public class FigureDefinition {
                         }
                         altJson.add("hidden_bones", altBonesArray);
                     }
+                    if (alt.showBoxFace() != null) {
+                        altJson.addProperty("show_box_face", alt.showBoxFace());
+                    }
+                    if (alt.boxFaceUV() != null) {
+                        JsonObject uvObj = new JsonObject();
+                        uvObj.addProperty("u", alt.boxFaceUV()[0]);
+                        uvObj.addProperty("v", alt.boxFaceUV()[1]);
+                        uvObj.addProperty("w", alt.boxFaceUV()[2]);
+                        uvObj.addProperty("h", alt.boxFaceUV()[3]);
+                        uvObj.addProperty("tex_width", alt.boxFaceUV()[4]);
+                        uvObj.addProperty("tex_height", alt.boxFaceUV()[5]);
+                        altJson.add("box_face_uv", uvObj);
+                    }
                     alternativesArray.add(altJson);
                 }
                 json.add("alternatives", alternativesArray);
@@ -456,6 +528,9 @@ public class FigureDefinition {
             uvObj.addProperty("tex_width", boxFaceUV[4]);
             uvObj.addProperty("tex_height", boxFaceUV[5]);
             json.add("box_face_uv", uvObj);
+        }
+        if (poseLocked) {
+            json.addProperty("pose_locked", true);
         }
         if (offsetX != 0.0f) {
             json.addProperty("offset_x", offsetX);

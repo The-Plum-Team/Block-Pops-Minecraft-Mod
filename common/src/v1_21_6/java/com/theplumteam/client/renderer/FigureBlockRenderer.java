@@ -25,6 +25,7 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
 
     public FigureBlockRenderer() {
         super(new FigureBlockModel());
+        addRenderLayer(new FigureBoneTextureLayer<>(this));
     }
 
     @Override
@@ -43,7 +44,7 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
 
         FigureDefinition figureDef = animatable.getFigureDefinition();
         this.currentFigureDef = figureDef;
-        this.currentDefScale = figureDef != null ? figureDef.getScale() : 1.0f;
+        this.currentDefScale = figureDef != null ? figureDef.getScaleForSkinIndex(animatable.getAlternativeSkinIndex()) : 1.0f;
         this.currentHiddenBones = figureDef != null ?
             figureDef.getHiddenBonesForSkinIndex(animatable.getAlternativeSkinIndex()) :
             Collections.emptyList();
@@ -72,6 +73,17 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
                     bone.setHidden(true);
                     bone.setChildrenHidden(true);
                 });
+            }
+
+            // Hide bones that use extra textures - they'll be re-rendered by FigureBoneTextureLayer
+            // This must be done here (after bone reset) because the reset above would undo preRender hiding
+            for (FigureDefinition.ExtraTexture extra : currentFigureDef.getExtraTextures()) {
+                for (String boneName : extra.bones()) {
+                    model.getBone(boneName).ifPresent(bone -> {
+                        bone.setHidden(true);
+                        bone.setChildrenHidden(false);
+                    });
+                }
             }
         }
         super.actuallyRender(renderState, poseStack, model, renderType, bufferSource, buffer,

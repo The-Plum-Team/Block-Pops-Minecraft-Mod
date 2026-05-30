@@ -17,6 +17,7 @@ import software.bernie.geckolib.constant.dataticket.DataTicket;
 import software.bernie.geckolib.constant.dataticket.SerializableDataTicket;
 import software.bernie.geckolib.model.GeoModel;
 import software.bernie.geckolib.renderer.base.GeoRenderState;
+import com.theplumteam.client.renderer.FigureBoneTextureLayer;
 
 import java.util.UUID;
 
@@ -171,8 +172,19 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     @Override
     public ResourceLocation getAnimationResource(FigureBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
-        if (figure != null && figure.getPoseAnimationPath() != null) {
-            return figure.getPoseAnimationPath();
+        if (figure != null) {
+            // If variant uses a different model, use standard pose animation
+            int skinIndex = animatable.getAlternativeSkinIndex();
+            if (skinIndex > 0 && figure.hasAlternatives()) {
+                ResourceLocation altModel = figure.getModelForSkinIndex(skinIndex);
+                if (altModel != null && !altModel.equals(figure.getModelPath())) {
+                    return POSE_ANIMATION;
+                }
+            }
+
+            if (figure.getPoseAnimationPath() != null) {
+                return figure.getPoseAnimationPath();
+            }
         }
         return POSE_ANIMATION;
     }
@@ -190,6 +202,7 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
             ResourceLocation texture = resolveTexture(animatable);
             renderState.addGeckolibData(FIGURE_MODEL, figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex()));
             renderState.addGeckolibData(FIGURE_TEXTURE, texture);
+            renderState.addGeckolibData(FigureBoneTextureLayer.FIGURE_DEF_TICKET, figure);
 
             // Detect skin model for arm visibility
             SkinModelDetector.SkinModel skinModel = SkinModelDetector.detectSkinModel(texture);

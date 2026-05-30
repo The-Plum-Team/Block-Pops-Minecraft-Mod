@@ -348,6 +348,8 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     public void cyclePose() {
+        FigureDefinition def = getFigureDefinition();
+        if (def != null && def.isPoseLocked()) return;
         // Toggles between 0 (Standing) and 1 (Sitting)
         this.poseIndex = (this.poseIndex + 1) % 2;
         setChanged();

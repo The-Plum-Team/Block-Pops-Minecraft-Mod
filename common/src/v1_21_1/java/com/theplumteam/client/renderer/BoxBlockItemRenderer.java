@@ -38,16 +38,7 @@ public class BoxBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
             // Set client level for GeckoLib tick delta calculations
             renderEntity.setLevel(Minecraft.getInstance().level);
 
-            // Load component data from ItemStack FIRST
-            // This ensures isOpen is set correctly before the animation controller evaluates
-            CustomData customData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
-            if (customData != null) {
-                CompoundTag blockEntityTag = customData.copyTag();
-                renderEntity.loadFromItemNbt(blockEntityTag);
-            }
-
-            // Then extract collection/color from BoxBlockItem and apply as override
-            // This ensures creative menu boxes show correct textures even if component data is incomplete
+            // First extract collection/color from BoxBlockItem (creative menu defaults)
             if (stack.getItem() instanceof BoxBlockItem boxBlockItem) {
                 PopBlockColor color = boxBlockItem.getColor();
                 if (color != null) {
@@ -56,6 +47,19 @@ public class BoxBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
                 String collectionId = boxBlockItem.getCollectionId();
                 if (collectionId != null) {
                     renderEntity.setCollectionIdOverride(collectionId);
+                }
+            }
+
+            // Then load component data from ItemStack (NBT overrides BoxBlockItem defaults)
+            // This ensures remote collections with CollectionId in NBT take priority
+            CustomData customData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
+            if (customData != null) {
+                CompoundTag blockEntityTag = customData.copyTag();
+                renderEntity.loadFromItemNbt(blockEntityTag);
+                // Remote collections store CollectionId in NBT but not Color.
+                // Clear color override so the collection texture is used instead of the default box color.
+                if (blockEntityTag.contains("CollectionId") && !blockEntityTag.contains("Color")) {
+                    renderEntity.setColorOverride(null);
                 }
             }
 

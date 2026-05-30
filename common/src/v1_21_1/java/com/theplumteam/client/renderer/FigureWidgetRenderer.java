@@ -1,5 +1,7 @@
 package com.theplumteam.client.renderer;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.model.FigureModel;
@@ -7,9 +9,17 @@ import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import net.minecraft.client.Minecraft;
 import com.theplumteam.registry.ModBlocks;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.resources.ResourceLocation;
+import software.bernie.geckolib.cache.object.BakedGeoModel;
+import software.bernie.geckolib.cache.object.GeoBone;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -47,7 +57,80 @@ public final class FigureWidgetRenderer {
             synchronized (FigureWidgetRenderer.class) {
                 if (!initialized) {
                     figureModel = new FigureModel();
-                    figureRenderer = new GeoBlockRenderer<>(figureModel);
+                    figureRenderer = new GeoBlockRenderer<>(figureModel) {
+                        @Override
+                        protected void rotateBlock(Direction facing, PoseStack poseStack) {
+                            // Don't apply block rotation in GUI widget rendering
+                        }
+
+                        @Override
+                        public RenderType getRenderType(BoxBlockEntity animatable, ResourceLocation texture, MultiBufferSource bufferSource, float partialTick) {
+                            return RenderType.entityTranslucent(texture);
+                        }
+
+                        @Override
+                        public void preRender(PoseStack poseStack, BoxBlockEntity animatable, BakedGeoModel model,
+                                             MultiBufferSource bufferSource, VertexConsumer buffer, boolean isReRender,
+                                             float partialTick, int packedLight, int packedOverlay, int colour) {
+                            super.preRender(poseStack, animatable, model, bufferSource, buffer, isReRender, partialTick,
+                                           packedLight, packedOverlay, colour);
+
+                            FigureDefinition figureDef = animatable.getFigureDefinition();
+                            if (figureDef != null) {
+                                // Reset all variant bones to visible
+                                for (String boneName : figureDef.getAllVariantBoneNames()) {
+                                    model.getBone(boneName).ifPresent(bone -> {
+                                        bone.setHidden(false);
+                                        bone.setChildrenHidden(false);
+                                    });
+                                }
+                                // Hide current variant's hidden bones
+                                List<String> hiddenBones = figureDef.getHiddenBonesForSkinIndex(animatable.getAlternativeSkinIndex());
+                                for (String boneName : hiddenBones) {
+                                    model.getBone(boneName).ifPresent(bone -> {
+                                        bone.setHidden(true);
+                                        bone.setChildrenHidden(true);
+                                    });
+                                }
+                                // Hide extra texture bones - re-rendered by FigureBoneTextureLayer
+                                boolean usingAltModel = animatable.getAlternativeSkinIndex() > 0
+                                        && figureDef.getModelForSkinIndex(animatable.getAlternativeSkinIndex()) != null
+                                        && !figureDef.getModelForSkinIndex(animatable.getAlternativeSkinIndex()).equals(figureDef.getModelPath());
+                                if (!usingAltModel) {
+                                    for (FigureDefinition.ExtraTexture extra : figureDef.getExtraTextures()) {
+                                        for (String boneName : extra.bones()) {
+                                            model.getBone(boneName).ifPresent(bone -> {
+                                                bone.setHidden(true);
+                                                bone.setChildrenHidden(false);
+                                            });
+                                        }
+                                    }
+                                }
+                                // Apply definition scale
+                                float defScale = figureDef.getScaleForSkinIndex(animatable.getAlternativeSkinIndex());
+                                if (defScale != 1.0f) {
+                                    poseStack.scale(defScale, defScale, defScale);
+                                }
+                            }
+                        }
+
+                        @Override
+                        public void renderRecursively(PoseStack poseStack, BoxBlockEntity animatable, GeoBone bone,
+                                                      RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer,
+                                                      boolean isReRender, float partialTick, int packedLight, int packedOverlay,
+                                                      int colour) {
+                            FigureDefinition fd = animatable.getFigureDefinition();
+                            if (fd != null) {
+                                List<String> hiddenBones = fd.getHiddenBonesForSkinIndex(animatable.getAlternativeSkinIndex());
+                                if (!hiddenBones.isEmpty() && hiddenBones.contains(bone.getName())) {
+                                    return;
+                                }
+                            }
+                            super.renderRecursively(poseStack, animatable, bone, renderType, bufferSource, buffer,
+                                                  isReRender, partialTick, packedLight, packedOverlay, colour);
+                        }
+                    };
+                    figureRenderer.addRenderLayer(new FigureBoneTextureLayer<>(figureRenderer, BoxBlockEntity::getFigureDefinition, BoxBlockEntity::getAlternativeSkinIndex));
                     initialized = true;
                 }
             }

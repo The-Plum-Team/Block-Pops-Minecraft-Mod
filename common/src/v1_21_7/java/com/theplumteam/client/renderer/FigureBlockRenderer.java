@@ -44,7 +44,7 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
 
         FigureDefinition figureDef = animatable.getFigureDefinition();
         this.currentFigureDef = figureDef;
-        this.currentDefScale = figureDef != null ? figureDef.getScale() : 1.0f;
+        this.currentDefScale = figureDef != null ? figureDef.getScaleForSkinIndex(animatable.getAlternativeSkinIndex()) : 1.0f;
         this.currentHiddenBones = figureDef != null ?
             figureDef.getHiddenBonesForSkinIndex(animatable.getAlternativeSkinIndex()) :
             Collections.emptyList();

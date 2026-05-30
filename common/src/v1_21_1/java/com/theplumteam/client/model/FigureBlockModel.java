@@ -65,7 +65,8 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     public ResourceLocation getModelResource(FigureBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure != null) {
-            ResourceLocation model = figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex());
+            int skinIndex = animatable.getAlternativeSkinIndex();
+            ResourceLocation model = figure.getModelForSkinIndex(skinIndex);
             // Check if the model exists in GeckoLib's cache (remote models may not be downloaded yet)
             if (model != null && !software.bernie.geckolib.cache.GeckoLibCache.getBakedModels().containsKey(model)) {
                 return FALLBACK_MODEL;
@@ -160,12 +161,23 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     @Override
     public ResourceLocation getAnimationResource(FigureBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
-        if (figure != null && figure.getPoseAnimationPath() != null) {
-            ResourceLocation anim = figure.getPoseAnimationPath();
-            if (!software.bernie.geckolib.cache.GeckoLibCache.getBakedAnimations().containsKey(anim)) {
-                return POSE_ANIMATION;
+        if (figure != null) {
+            // If variant uses a different model, use standard pose animation
+            int skinIndex = animatable.getAlternativeSkinIndex();
+            if (skinIndex > 0 && figure.hasAlternatives()) {
+                ResourceLocation altModel = figure.getModelForSkinIndex(skinIndex);
+                if (altModel != null && !altModel.equals(figure.getModelPath())) {
+                    return POSE_ANIMATION;
+                }
             }
-            return anim;
+
+            if (figure.getPoseAnimationPath() != null) {
+                ResourceLocation anim = figure.getPoseAnimationPath();
+                if (!software.bernie.geckolib.cache.GeckoLibCache.getBakedAnimations().containsKey(anim)) {
+                    return POSE_ANIMATION;
+                }
+                return anim;
+            }
         }
         return POSE_ANIMATION;
     }

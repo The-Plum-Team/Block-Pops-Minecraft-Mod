@@ -1,14 +1,26 @@
 ## News
+- **New version support: 1.21.7 Fabric and NeoForge**
 
-- **Mod shears are now compatible to open the boxes**
-> I've only tried the ones from Botania, but they should all work without the mods if it's programmed correctly.
+- **New collection: Winx**
+> -# *Request from Curseforge users in the comment section*
+
+- **Hide Collection tab**
+> Now there's a tab that lets you hide specific collections from the list
+> -# *Request from users of Curseforge*
+
+- **Support faces preview in the box for Dragon Ball Collection**
 
 ## Fixes:
-- **Now the Dragon Ball figures should sit correctly.**
+- **The custom figure models were coming out in the wrong position - 1.20.1 Forge/Fabric**
+> In these versions, the figures were already out of their boxes, but that's been fixed now
 
-- **Fixed particle texture when breaking the machine or figures**
-> The player's is still bugged, since it's dynamic, so I have to investigate that further.
+- **The tabs in the settings menu now have an opaque background**
+> Depending on your background, the text might be hard to read
 
-- **Fixed a bug that prevented the claw machine from dropping correctly when broken.**
+- **The text on the buttons for using tokens should no longer appear on top of the settings modal**
 
-- **Fixed a bug that caused the claw machine to duplicate in newer versions of Minecraft.**
+- **Fixed the preview of the figures in the Claw Machine menu - +1.21.6**
+
+## Working Progress
+- **Custom Collections Tab**
+> I'm already working on a feature that will let you create your own collections. But there's still a lot of work to be done, even though you can see the tab

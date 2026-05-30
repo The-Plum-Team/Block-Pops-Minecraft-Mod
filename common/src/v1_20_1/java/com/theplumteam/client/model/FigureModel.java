@@ -76,11 +76,14 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
     public ResourceLocation getModelResource(BoxBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure != null) {
-            ResourceLocation model = figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex());
+            int skinIndex = animatable.getAlternativeSkinIndex();
+            ResourceLocation model = figure.getModelForSkinIndex(skinIndex);
             if (model != null && !software.bernie.geckolib.cache.GeckoLibCache.getBakedModels().containsKey(model)) {
                 return FALLBACK_MODEL;
             }
-            if (model != null) return model;
+            if (model != null) {
+                return model;
+            }
         }
         return FALLBACK_MODEL;
     }
@@ -175,12 +178,23 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
     @Override
     public ResourceLocation getAnimationResource(BoxBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
-        if (figure != null && figure.getPoseAnimationPath() != null) {
-            ResourceLocation anim = figure.getPoseAnimationPath();
-            if (!software.bernie.geckolib.cache.GeckoLibCache.getBakedAnimations().containsKey(anim)) {
-                return POSE_ANIMATION;
+        if (figure != null) {
+            // If variant uses a different model, use standard pose animation
+            int skinIndex = animatable.getAlternativeSkinIndex();
+            if (skinIndex > 0 && figure.hasAlternatives()) {
+                ResourceLocation altModel = figure.getModelForSkinIndex(skinIndex);
+                if (altModel != null && !altModel.equals(figure.getModelPath())) {
+                    return POSE_ANIMATION;
+                }
             }
-            return anim;
+
+            if (figure.getPoseAnimationPath() != null) {
+                ResourceLocation anim = figure.getPoseAnimationPath();
+                if (!software.bernie.geckolib.cache.GeckoLibCache.getBakedAnimations().containsKey(anim)) {
+                    return POSE_ANIMATION;
+                }
+                return anim;
+            }
         }
         return POSE_ANIMATION;
     }

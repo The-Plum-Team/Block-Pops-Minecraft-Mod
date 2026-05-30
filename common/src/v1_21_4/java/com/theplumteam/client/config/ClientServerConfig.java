@@ -1,5 +1,12 @@
 package com.theplumteam.client.config;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -16,6 +23,7 @@ public class ClientServerConfig {
     private static int maxRegularTokens = 3;
     private static int guaranteedTokenResetHour = 18;
     private static Set<String> hiddenCollections = new HashSet<>();
+    private static Set<String> localHiddenCollections = new HashSet<>();
     private static Set<String> enabledRemoteCollections = new HashSet<>();
 
     /**
@@ -48,10 +56,10 @@ public class ClientServerConfig {
     }
 
     /**
-     * Check if a collection is hidden by the server admin.
+     * Check if a collection is hidden by the server admin or locally by the user.
      */
     public static boolean isCollectionHidden(String collectionId) {
-        return hiddenCollections.contains(collectionId);
+        return hiddenCollections.contains(collectionId) || localHiddenCollections.contains(collectionId);
     }
 
     /**
@@ -80,6 +88,70 @@ public class ClientServerConfig {
      */
     public static boolean isRemoteCollectionEnabled(String collectionId) {
         return enabledRemoteCollections.contains(collectionId);
+    }
+
+    /**
+     * Get all locally hidden collection IDs (unmodifiable).
+     */
+    public static Set<String> getLocalHiddenCollections() {
+        return Collections.unmodifiableSet(localHiddenCollections);
+    }
+
+    /**
+     * Update locally hidden collections and save to disk.
+     */
+    public static void updateLocalHiddenCollections(Set<String> hidden) {
+        localHiddenCollections = hidden != null ? new HashSet<>(hidden) : new HashSet<>();
+        saveLocalHiddenCollections();
+    }
+
+    /**
+     * Check if a collection is hidden locally by the user.
+     */
+    public static boolean isLocalCollectionHidden(String collectionId) {
+        return localHiddenCollections.contains(collectionId);
+    }
+
+    private static Path getLocalHiddenPath() {
+        return com.theplumteam.platform.PlatformHelper.getConfigDirectory().resolve("blockpops-hidden.json");
+    }
+
+    /**
+     * Load locally hidden collections from disk.
+     */
+    public static void loadLocalHiddenCollections() {
+        try {
+            Path path = getLocalHiddenPath();
+            if (Files.exists(path)) {
+                String json = Files.readString(path);
+                JsonObject obj = new Gson().fromJson(json, JsonObject.class);
+                if (obj.has("hidden")) {
+                    Set<String> loaded = new HashSet<>();
+                    JsonArray arr = obj.getAsJsonArray("hidden");
+                    for (int i = 0; i < arr.size(); i++) {
+                        loaded.add(arr.get(i).getAsString());
+                    }
+                    localHiddenCollections = loaded;
+                }
+            }
+        } catch (Exception e) {
+            // Silently ignore load errors
+        }
+    }
+
+    private static void saveLocalHiddenCollections() {
+        try {
+            Path path = getLocalHiddenPath();
+            JsonObject obj = new JsonObject();
+            JsonArray arr = new JsonArray();
+            for (String id : localHiddenCollections) {
+                arr.add(id);
+            }
+            obj.add("hidden", arr);
+            Files.writeString(path, new Gson().toJson(obj));
+        } catch (Exception e) {
+            // Silently ignore save errors
+        }
     }
 
     /**

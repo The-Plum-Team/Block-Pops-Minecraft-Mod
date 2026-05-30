@@ -25,6 +25,7 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
 
     public FigureBlockRenderer() {
         super(new FigureBlockModel());
+        addRenderLayer(new FigureBoneTextureLayer<>(this, FigureBlockEntity::getFigureDefinition, FigureBlockEntity::getAlternativeSkinIndex));
     }
 
     @Override
@@ -83,6 +84,21 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
                         bone.setChildrenHidden(true);
                     });
                 }
+                // Hide bones that use extra textures - re-rendered by FigureBoneTextureLayer
+                // Only apply when using the base model, not an alternative model
+                boolean usingAltModel = animatable.getAlternativeSkinIndex() > 0
+                        && figureDef.getModelForSkinIndex(animatable.getAlternativeSkinIndex()) != null
+                        && !figureDef.getModelForSkinIndex(animatable.getAlternativeSkinIndex()).equals(figureDef.getModelPath());
+                if (!usingAltModel) {
+                    for (FigureDefinition.ExtraTexture extra : figureDef.getExtraTextures()) {
+                        for (String boneName : extra.bones()) {
+                            model.getBone(boneName).ifPresent(bone -> {
+                                bone.setHidden(true);
+                                bone.setChildrenHidden(false);
+                            });
+                        }
+                    }
+                }
             }
         } else {
             this.currentHiddenBones = Collections.emptyList();
@@ -129,7 +145,7 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
             rotateBlock(getFacing(animatable), poseStack);
 
             // Apply definition scale AFTER centering so figures are properly centered on the block
-            float defScale = animatable.getFigureDefinition() != null ? animatable.getFigureDefinition().getScale() : 1.0f;
+            float defScale = animatable.getFigureDefinition() != null ? animatable.getFigureDefinition().getScaleForSkinIndex(animatable.getAlternativeSkinIndex()) : 1.0f;
             if (defScale != 1.0f) {
                 poseStack.scale(defScale, defScale, defScale);
             }

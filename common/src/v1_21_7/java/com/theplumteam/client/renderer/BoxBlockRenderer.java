@@ -59,7 +59,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                                       int packedLight, int packedOverlay, int renderColor) {
                 if (currentAnimatable != null) {
                     FigureDefinition figureDef = currentAnimatable.getFigureDefinition();
-                    float defScale = figureDef != null ? figureDef.getScale() : 1.0f;
+                    float defScale = figureDef != null ? figureDef.getScaleForSkinIndex(currentAnimatable.getAlternativeSkinIndex()) : 1.0f;
                     if (defScale != 1.0f) {
                         poseStack.scale(defScale, defScale, defScale);
                     }
@@ -136,7 +136,8 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         // Set figure_face bone visibility based on showBoxFace (e.g. Dragon Ball Z uses custom 3D models)
         if (!isReRender && currentAnimatable != null) {
             FigureDefinition figureDef = currentAnimatable.getFigureDefinition();
-            boolean hideFace = figureDef != null && !figureDef.showBoxFace();
+            int skinIdx = currentAnimatable.getAlternativeSkinIndex();
+            boolean hideFace = figureDef != null && !figureDef.getShowBoxFaceForSkinIndex(skinIdx);
             model.getBone("figure_face").ifPresent(bone -> { bone.setHidden(hideFace); bone.setChildrenHidden(hideFace); });
             model.getBone("figure_face_3d").ifPresent(bone -> { bone.setHidden(hideFace); bone.setChildrenHidden(hideFace); });
         }
@@ -186,8 +187,9 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         FigureDefinition figure = currentAnimatable.getFigureDefinition();
         if (figure == null) return;
 
-        float[] customUV = figure.getBoxFaceUV();
-        if (customUV == null && !figure.showBoxFace()) return;
+        int skinIdx = currentAnimatable.getAlternativeSkinIndex();
+        float[] customUV = figure.getBoxFaceUVForSkinIndex(skinIdx);
+        if (customUV == null && !figure.getShowBoxFaceForSkinIndex(skinIdx)) return;
 
         ResourceLocation skinTexture = ((FigureModel) figureRenderer.getGeoModel()).resolveTexture(currentAnimatable);
         if (skinTexture == null) return;
@@ -338,7 +340,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
             if (!isReRender) return;
             if (currentAnimatable != null) {
                 FigureDefinition fd = currentAnimatable.getFigureDefinition();
-                if (fd != null && !fd.showBoxFace()) return;
+                if (fd != null && !fd.getShowBoxFaceForSkinIndex(currentAnimatable.getAlternativeSkinIndex())) return;
             }
         }
         if (boneName.equals("logo") && !isReRender) {

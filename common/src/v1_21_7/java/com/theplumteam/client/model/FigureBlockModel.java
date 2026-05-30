@@ -184,8 +184,19 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     @Override
     public ResourceLocation getAnimationResource(FigureBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
-        if (figure != null && figure.getPoseAnimationPath() != null) {
-            return figure.getPoseAnimationPath();
+        if (figure != null) {
+            // If variant uses a different model, use standard pose animation
+            int skinIndex = animatable.getAlternativeSkinIndex();
+            if (skinIndex > 0 && figure.hasAlternatives()) {
+                ResourceLocation altModel = figure.getModelForSkinIndex(skinIndex);
+                if (altModel != null && !altModel.equals(figure.getModelPath())) {
+                    return POSE_ANIMATION;
+                }
+            }
+
+            if (figure.getPoseAnimationPath() != null) {
+                return figure.getPoseAnimationPath();
+            }
         }
         return POSE_ANIMATION;
     }

@@ -56,7 +56,7 @@ public class SettingsScreen extends Screen {
     // Tab system
     private enum Tab {
         SERVER("Server"),
-        ADMIN("Admin"),
+        ADMIN("Hide"),
         REMOTE("Custom"),
         DEVELOP("Develop"),
         CHEATS("Cheats");
@@ -161,19 +161,19 @@ public class SettingsScreen extends Screen {
         );
         this.addRenderableWidget(serverTabButton);
 
-        // Admin tab (only for admins)
+        // Hide tab (available to all users)
         int nextTabX = tabStartX + TAB_WIDTH + TAB_SPACING;
-        if (isAdmin()) {
-            adminTabButton = (TabButton) ButtonFactory.createTab(
-                    nextTabX, tabY,
-                    TAB_WIDTH, TAB_HEIGHT,
-                    Component.literal(Tab.ADMIN.getDisplayName()),
-                    activeTab == Tab.ADMIN,
-                    btn -> switchTab(Tab.ADMIN)
-            );
-            this.addRenderableWidget(adminTabButton);
-            nextTabX += TAB_WIDTH + TAB_SPACING;
+        adminTabButton = (TabButton) ButtonFactory.createTab(
+                nextTabX, tabY,
+                TAB_WIDTH, TAB_HEIGHT,
+                Component.literal(Tab.ADMIN.getDisplayName()),
+                activeTab == Tab.ADMIN,
+                btn -> switchTab(Tab.ADMIN)
+        );
+        this.addRenderableWidget(adminTabButton);
+        nextTabX += TAB_WIDTH + TAB_SPACING;
 
+        if (isAdmin()) {
             // Remote tab (admin only)
             remoteTabButton = (TabButton) ButtonFactory.createTab(
                     nextTabX, tabY,
@@ -266,8 +266,9 @@ public class SettingsScreen extends Screen {
         // Create settings for all tabs
         createServerSettings();
 
+        createAdminSettings();
+
         if (isAdmin()) {
-            createAdminSettings();
             createRemoteSettings();
         }
 
@@ -363,11 +364,8 @@ public class SettingsScreen extends Screen {
             updateActionButtonState();
 
         } else if (activeTab == Tab.ADMIN) {
-            // "Save Visibility" logic - send hidden collections to server
-            new UpdateHiddenCollectionsPacket(new ArrayList<>(pendingHiddenCollections)).sendToServer();
-
-            // Update client cache immediately for responsiveness
-            ClientServerConfig.updateHiddenCollections(new ArrayList<>(pendingHiddenCollections));
+            // Save hidden collections locally (per-user preference)
+            ClientServerConfig.updateLocalHiddenCollections(new java.util.HashSet<>(pendingHiddenCollections));
 
             updateActionButtonState();
 
@@ -1073,10 +1071,10 @@ public class SettingsScreen extends Screen {
     }
 
     /**
-     * Check if hidden collections have changed from the server state
+     * Check if hidden collections have changed from the local state
      */
     private boolean hasHiddenCollectionsChanged() {
-        java.util.Set<String> serverHidden = ClientServerConfig.getHiddenCollections();
+        java.util.Set<String> serverHidden = ClientServerConfig.getLocalHiddenCollections();
         return !pendingHiddenCollections.equals(serverHidden);
     }
 
@@ -1084,9 +1082,9 @@ public class SettingsScreen extends Screen {
      * Create admin settings widgets (collection visibility toggles)
      */
     private void createAdminSettings() {
-        // Initialize pending state from current server config
+        // Initialize pending state from local hidden collections
         pendingHiddenCollections.clear();
-        pendingHiddenCollections.addAll(ClientServerConfig.getHiddenCollections());
+        pendingHiddenCollections.addAll(ClientServerConfig.getLocalHiddenCollections());
 
         int padding = 20;
         int buttonWidth = 180;

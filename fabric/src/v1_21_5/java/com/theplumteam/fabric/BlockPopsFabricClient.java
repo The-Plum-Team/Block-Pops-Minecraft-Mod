@@ -34,6 +34,9 @@ public class BlockPopsFabricClient implements ClientModInitializer {
         // Initialize client-side networking
         ModNetworking.initClient();
 
+        // Load locally hidden collections from disk
+        com.theplumteam.client.config.ClientServerConfig.loadLocalHiddenCollections();
+
         // Register disconnect event to clear render cache (prevents memory leaks)
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             FigureWidgetRenderer.clearCache();

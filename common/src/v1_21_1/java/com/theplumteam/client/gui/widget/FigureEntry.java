@@ -10,6 +10,11 @@ import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.figure.FigureDefinition;
+import software.bernie.geckolib.cache.object.GeoBone;
+import software.bernie.geckolib.util.RenderUtil;
+
+import java.util.HashSet;
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ObjectSelectionList;
@@ -18,6 +23,7 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
+import software.bernie.geckolib.renderer.GeoBlockRenderer;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -261,6 +267,40 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 return;
             }
 
+            // Set up bone visibility before rendering (actuallyRender bypasses preRender)
+            FigureDefinition figureDef = renderEntity.getFigureDefinition();
+            if (figureDef != null) {
+                // Reset all variant bones to visible
+                for (String boneName : figureDef.getAllVariantBoneNames()) {
+                    bakedModel.getBone(boneName).ifPresent(bone -> {
+                        bone.setHidden(false);
+                        bone.setChildrenHidden(false);
+                    });
+                }
+                // Hide current variant's hidden bones
+                java.util.List<String> hiddenBones = figureDef.getHiddenBonesForSkinIndex(renderEntity.getAlternativeSkinIndex());
+                for (String boneName : hiddenBones) {
+                    bakedModel.getBone(boneName).ifPresent(bone -> {
+                        bone.setHidden(true);
+                        bone.setChildrenHidden(true);
+                    });
+                }
+                // Hide extra texture bones - re-rendered by FigureBoneTextureLayer
+                boolean usingAltModel = renderEntity.getAlternativeSkinIndex() > 0
+                        && figureDef.getModelForSkinIndex(renderEntity.getAlternativeSkinIndex()) != null
+                        && !figureDef.getModelForSkinIndex(renderEntity.getAlternativeSkinIndex()).equals(figureDef.getModelPath());
+                if (!usingAltModel) {
+                    for (FigureDefinition.ExtraTexture extra : figureDef.getExtraTextures()) {
+                        for (String boneName : extra.bones()) {
+                            bakedModel.getBone(boneName).ifPresent(bone -> {
+                                bone.setHidden(true);
+                                bone.setChildrenHidden(false);
+                            });
+                        }
+                    }
+                }
+            }
+
             RenderType renderType = figureModel.getRenderType(renderEntity, textureResource);
             VertexConsumer buffer = bufferSource.getBuffer(renderType);
 
@@ -278,6 +318,24 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 0xFFFFFFFF  // ARGB color (fully opaque white)
             );
 
+            // Manually render extra texture bones (actuallyRender doesn't trigger render layers)
+            if (figureDef != null && !figureDef.getExtraTextures().isEmpty()) {
+                boolean usingAltModel = renderEntity.getAlternativeSkinIndex() > 0
+                        && figureDef.getModelForSkinIndex(renderEntity.getAlternativeSkinIndex()) != null
+                        && !figureDef.getModelForSkinIndex(renderEntity.getAlternativeSkinIndex()).equals(figureDef.getModelPath());
+                if (!usingAltModel) {
+                    for (FigureDefinition.ExtraTexture extra : figureDef.getExtraTextures()) {
+                        Set<String> extraBoneNames = new HashSet<>(extra.bones());
+                        RenderType extraRT = RenderType.entityCutoutNoCull(extra.texture());
+                        VertexConsumer extraBuffer = bufferSource.getBuffer(extraRT);
+                        for (GeoBone topBone : bakedModel.topLevelBones()) {
+                            renderExtraBoneTree(poseStack, topBone, extraBuffer, figureRenderer,
+                                    15728880, net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY, extraBoneNames);
+                        }
+                    }
+                }
+            }
+
             bufferSource.endBatch();
         } catch (Exception e) {
             com.theplumteam.BlockPopsMod.LOGGER.error("FigureEntry: Exception rendering figure: {}", e.getMessage());
@@ -288,6 +346,30 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         graphics.disableScissor();
 
         Lighting.setupFor3DItems();
+        poseStack.popPose();
+    }
+
+    /**
+     * Recursively traverses the bone tree, applying GeckoLib bone transforms.
+     * Only renders cubes for bones in the extraBoneNames set with the extra texture buffer.
+     */
+    private static void renderExtraBoneTree(PoseStack poseStack, GeoBone bone, VertexConsumer buffer,
+                                             GeoBlockRenderer<BoxBlockEntity> renderer,
+                                             int packedLight, int packedOverlay, Set<String> extraBoneNames) {
+        poseStack.pushPose();
+        RenderUtil.prepMatrixForBone(poseStack, bone);
+
+        if (extraBoneNames.contains(bone.getName())) {
+            boolean wasHidden = bone.isHidden();
+            bone.setHidden(false);
+            renderer.renderCubesOfBone(poseStack, bone, buffer, packedLight, packedOverlay, 0xFFFFFFFF);
+            bone.setHidden(wasHidden);
+        }
+
+        for (GeoBone child : bone.getChildBones()) {
+            renderExtraBoneTree(poseStack, child, buffer, renderer, packedLight, packedOverlay, extraBoneNames);
+        }
+
         poseStack.popPose();
     }
 

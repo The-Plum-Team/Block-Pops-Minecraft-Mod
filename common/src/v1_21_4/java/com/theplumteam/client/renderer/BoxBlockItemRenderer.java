@@ -128,12 +128,30 @@ public class BoxBlockItemRenderer implements SpecialModelRenderer<BoxBlockItemRe
                 renderEntity.setLevel(Minecraft.getInstance().level);
             }
 
-            // Load component data from ItemStack FIRST before any rendering
-            // This ensures isOpen is set correctly before the animation controller evaluates
+            // First extract collection/color from BoxBlockItem (creative menu defaults)
+            if (stack.getItem() instanceof BoxBlockItem boxBlockItem) {
+                PopBlockColor color = boxBlockItem.getColor();
+                if (color != null) {
+                    renderEntity.setColorOverride(color.getSerializedName());
+                }
+                String collectionId = boxBlockItem.getCollectionId();
+                if (collectionId != null) {
+                    renderEntity.setCollectionIdOverride(collectionId);
+                }
+            }
+
+            // Then load component data from ItemStack (NBT overrides BoxBlockItem defaults)
+            // This ensures remote collections with CollectionId in NBT take priority
             CustomData customData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
             if (customData != null) {
                 CompoundTag blockEntityTag = customData.copyTag();
                 renderEntity.loadFromItemNbt(blockEntityTag);
+
+                // Remote collections store CollectionId in NBT but not Color.
+                // Clear color override so the collection texture is used instead of the default box color.
+                if (blockEntityTag.contains("CollectionId") && !blockEntityTag.contains("Color")) {
+                    renderEntity.setColorOverride(null);
+                }
             }
 
             // Apply transformations for item rendering

@@ -41,6 +41,9 @@ public class BlockPopsModForgeClient {
     public static void clientSetup(FMLClientSetupEvent event) {
         // Initialize client-side networking
         ModNetworking.initClient();
+
+        // Load locally hidden collections from disk
+        com.theplumteam.client.config.ClientServerConfig.loadLocalHiddenCollections();
     }
 
     @SubscribeEvent

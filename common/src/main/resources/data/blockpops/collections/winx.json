@@ -1,0 +1,144 @@
+{
+  "id": "winx",
+  "name": "Winx Club Collection",
+  "author": "Buhh",
+  "author_url": "https://www.planetminecraft.com/member/buhh/",
+  "box_texture": "blockpops:textures/block/box/winx.png",
+  "logo": {
+    "texture": "blockpops:textures/block/box/logo/logo_winx.png",
+    "position_x": -2.05,
+    "position_y": -0.49,
+    "position_z": 0.0,
+    "scale_x": 7.913,
+    "scale_y": 8.381,
+    "scale_z": 1.0
+  },
+  "background_color": {
+    "r": 200,
+    "g": 50,
+    "b": 130
+  },
+  "figures": [
+    {
+      "id": "bloom",
+      "name": "Bloom",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/winx/bloom.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Bloom (Fairy)",
+          "texture": "blockpops:textures/block/figure/winx/bloom_fairy.png"
+        },
+        {
+          "name": "Bloom (Enchantix)",
+          "texture": "blockpops:textures/block/figure/winx/bloom_enchantix.png"
+        }
+      ]
+    },
+    {
+      "id": "dark_bloom",
+      "name": "Dark Bloom",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/winx/dark_bloom.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "stella",
+      "name": "Stella",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/winx/stella.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Stella (Fairy)",
+          "texture": "blockpops:textures/block/figure/winx/stella_fairy.png"
+        }
+      ]
+    },
+    {
+      "id": "flora",
+      "name": "Flora",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/winx/flora.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Flora (Fairy)",
+          "texture": "blockpops:textures/block/figure/winx/flora_fairy.png"
+        },
+        {
+          "name": "Flora (Enchantix)",
+          "texture": "blockpops:textures/block/figure/winx/flora_enchantix.png"
+        }
+      ]
+    },
+    {
+      "id": "musa",
+      "name": "Musa",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/winx/musa.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Musa (Fairy)",
+          "texture": "blockpops:textures/block/figure/winx/musa_fairy.png"
+        }
+      ]
+    },
+    {
+      "id": "tecna",
+      "name": "Tecna",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/winx/tecna.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Tecna (Fairy)",
+          "texture": "blockpops:textures/block/figure/winx/tecna_fairy.png"
+        }
+      ]
+    },
+    {
+      "id": "aisha",
+      "name": "Aisha",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/winx/aisha.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Aisha (Fairy)",
+          "texture": "blockpops:textures/block/figure/winx/aisha_fairy.png"
+        }
+      ]
+    },
+    {
+      "id": "roxy",
+      "name": "Roxy",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/winx/roxy.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "icy",
+      "name": "Icy",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/winx/icy.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "stormy",
+      "name": "Stormy",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/winx/stormy.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "darcy",
+      "name": "Darcy",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/winx/darcy.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    }
+  ]
+}
