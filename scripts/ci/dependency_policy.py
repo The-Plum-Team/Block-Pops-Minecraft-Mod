@@ -61,6 +61,20 @@ EXPECTED_TRUSTS = frozenset(
         ),
         frozenset(
             {
+                (
+                    "group",
+                    "^net[.]neoforged[.]fancymodloader[.][0-9a-f]{64}$",
+                ),
+                ("name", "^loader$"),
+                ("regex", "true"),
+                (
+                    "reason",
+                    "Loom-generated transformed NeoForge loader; every remote repository rejects this namespace",
+                ),
+            }
+        ),
+        frozenset(
+            {
                 ("group", "^remapped[.].+$"),
                 ("regex", "true"),
                 (
@@ -80,6 +94,10 @@ GENERATED_COMPONENTS = (
         ),
     ),
     (re.compile(r"net[.]minecraftforge[.][0-9a-f]{64}"), re.compile(r"fmlloader")),
+    (
+        re.compile(r"net[.]neoforged[.]fancymodloader[.][0-9a-f]{64}"),
+        re.compile(r"loader"),
+    ),
     (re.compile(r"remapped[.].+"), re.compile(r".+")),
 )
 EXPECTED_REMOTE_IDENTITIES = frozenset(
@@ -106,13 +124,14 @@ REMOTE_EXCLUSIONS = (
     "excludeGroup('loom')",
     "excludeGroup('net.minecraft')",
     "excludeGroupByRegex('net\\\\.minecraftforge\\\\.[0-9a-f]{64}')",
+    "excludeGroupByRegex('net\\\\.neoforged\\\\.fancymodloader\\\\.[0-9a-f]{64}')",
     "excludeGroupByRegex('remapped\\\\..+')",
 )
-EXPECTED_POLICY_SHA256 = "7c05f32806d318195ef826e12ba1050140b7107390a7b7cedcb05de53df044a9"
+EXPECTED_POLICY_SHA256 = "3bfd5b790aebcd374aa43eb78d50bbfe9b77b9da1ff413c31358da0cda251064"
 EXPECTED_PLUGIN_MANAGEMENT_SHA256 = (
-    "8a62308ab518f9b9a6283fead6ac5e8807d11ccf8c05b4f5724d58d126513852"
+    "a328bf5c434347f69cd58825c1f60bc809e38fdf78184109f73bb3df43ae857d"
 )
-EXPECTED_SETTINGS_SHA256 = "cc7783e215351a31d48afb0aad7100a1e3f375eddbae07c3a9443ebefa232b03"
+EXPECTED_SETTINGS_SHA256 = "bbcbba903fc635fec906110fda2de04f0eec88688c2d2b53f0929a5256ba6f86"
 XML_DECLARATION = b'<?xml version="1.0" encoding="UTF-8"?>\n'
 
 
@@ -235,7 +254,7 @@ def validate_plugin_management_text(plugin_management: str) -> None:
         or plugin_management.count("mavenContent { releasesOnly() }") != 6
     ):
         raise DependencyPolicyError("plugin repositories are not release-only")
-    expected_plugin_exclusion_counts = (1, 1, 2, 1)
+    expected_plugin_exclusion_counts = (1, 1, 2, 2, 1)
     if tuple(plugin_management.count(value) for value in REMOTE_EXCLUSIONS) != (
         expected_plugin_exclusion_counts
     ):
