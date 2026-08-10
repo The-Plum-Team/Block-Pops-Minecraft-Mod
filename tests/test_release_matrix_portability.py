@@ -165,6 +165,9 @@ class ReleaseMatrixPortabilityTests(unittest.TestCase):
             {row["java"] for row in gha_matrix(matrix, "java")["include"]},
         )
         self.assertEqual(
+            {"java": matrix["gradle_java"]}, gha_matrix(matrix, "gradle-java")
+        )
+        self.assertEqual(
             {row["artifact_node"] for row in matrix["runtimes"]},
             {row["artifact_node"] for row in gha_matrix(matrix, "pr-anchors")["include"]},
         )
@@ -178,6 +181,7 @@ class ReleaseMatrixPortabilityTests(unittest.TestCase):
             [row["artifact_node"] for row in gha_matrix(matrix, "artifacts")["include"]],
         )
         self.assertEqual([{"java": 21}], gha_matrix(matrix, "java")["include"])
+        self.assertEqual({"java": 21}, gha_matrix(matrix, "gradle-java"))
         runtime = gha_matrix(matrix, "pr-anchors")["include"]
         self.assertEqual({"fabric", "neoforge"}, {row["loader"] for row in runtime})
         self.assertTrue(all(row["minecraft"] == "1.21.1" for row in runtime))
@@ -242,6 +246,9 @@ class ReleaseMatrixPortabilityTests(unittest.TestCase):
     def test_lane_and_runtime_mutations_cannot_drift_from_artifact_inventory(self) -> None:
         mutations = {
             "lane count": lambda matrix: matrix.__setitem__("lane_count", 3),
+            "Gradle JVM below supported floor": lambda matrix: matrix.__setitem__(
+                "gradle_java", 17
+            ),
             "invalid mod version": lambda matrix: matrix["project"].__setitem__(
                 "mod_version", "latest"
             ),

@@ -40,6 +40,16 @@ class WorkflowSecurityTests(unittest.TestCase):
         self.assertIn("scripts/ci/loader_bootstrap.py", attestation)
         self.assertIn('--head-sha "$TARGET_SHA"', attestation)
 
+    def test_gradle_runtime_and_artifact_toolchains_are_matrix_owned(self) -> None:
+        for name in ("build-gate.yml", "on-demand-e2e.yml"):
+            text = (WORKFLOWS / name).read_text("utf-8")
+            with self.subTest(name=name):
+                self.assertIn("--kind gradle-java", text)
+                self.assertIn("needs.identity.outputs.gradle_java", text)
+                self.assertNotIn("needs.identity.outputs.java_versions", text)
+        e2e = (WORKFLOWS / "on-demand-e2e.yml").read_text("utf-8")
+        self.assertIn("java-version: ${{ matrix.java }}", e2e)
+
     def test_python_gates_install_the_hash_locked_png_decoder(self) -> None:
         build = (WORKFLOWS / "build-gate.yml").read_text("utf-8")
         aggregate = (WORKFLOWS / "on-demand-e2e.yml").read_text("utf-8").split(
