@@ -56,6 +56,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  BLOCKPOPS_TESTED_SHA: ${{ github.sha }}
   PYTHONUNBUFFERED: "1"
 
 jobs:
@@ -88,7 +89,7 @@ jobs:
           set -euo pipefail
           if [[ -n "$EXPECTED_SHA" ]]; then
             [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]
-            [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ && "$EXPECTED_SHA" == "$GITHUB_SHA" ]]
+            [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ && "$EXPECTED_SHA" == "$BLOCKPOPS_TESTED_SHA" ]]
             [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
             [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
             [[ -n "$TARGET_BRANCH" ]]
@@ -106,7 +107,7 @@ jobs:
           set -euo pipefail
           python3 scripts/release/matrix.py --matrix release/release-matrix.json >/dev/null
           python3 scripts/ci/loader_bootstrap.py \
-            --repository . --head-sha "$GITHUB_SHA" >/dev/null
+            --repository . --head-sha "$BLOCKPOPS_TESTED_SHA" >/dev/null
           matrix_kind=pr-anchors
           if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
             matrix_kind=scheduled-anchors
@@ -259,7 +260,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]]
+          [[ "$(git rev-parse HEAD)" == "$BLOCKPOPS_TESTED_SHA" ]]
           tree="$(git rev-parse 'HEAD^{tree}')"
           python3 scripts/ci/e2e_fanin.py create \
             --input packaged-e2e-lanes \
@@ -270,7 +271,7 @@ jobs:
             --artifact-manifest build/release/artifacts.json \
             --repository "$GITHUB_REPOSITORY" \
             --source-branch "$GITHUB_REF_NAME" \
-            --commit "$GITHUB_SHA" \
+            --commit "$BLOCKPOPS_TESTED_SHA" \
             --tree "$tree" \
             --run-id "$GITHUB_RUN_ID" \
             --run-attempt "$GITHUB_RUN_ATTEMPT" \
@@ -361,7 +362,7 @@ jobs:
           SOURCE_RUN_ID: ${{ inputs.attest_run_id || github.run_id }}
         run: |
           set -euo pipefail
-          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]]
+          [[ "$(git rev-parse HEAD)" == "$BLOCKPOPS_TESTED_SHA" ]]
           [[ "$(jq -er .branch.name release/release-matrix.json)" == "$GITHUB_REF_NAME" ]]
           [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
           token="$(python3 scripts/ci/gate_controller.py branch-token --branch "$GITHUB_REF_NAME")"
@@ -403,7 +404,7 @@ jobs:
           --output public-evidence
           --repository "$GITHUB_REPOSITORY"
           --branch "$GITHUB_REF_NAME"
-          --commit "$GITHUB_SHA"
+          --commit "$BLOCKPOPS_TESTED_SHA"
           --tree "${{ steps.identity.outputs.tree }}"
           --run-id "$GITHUB_RUN_ID"
           --run-attempt "$GITHUB_RUN_ATTEMPT"

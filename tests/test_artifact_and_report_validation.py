@@ -530,10 +530,12 @@ class ArtifactCommitIdentityTests(unittest.TestCase):
                 text=True,
                 stdout=subprocess.PIPE,
             ).stdout.strip()
-            with mock.patch.dict(os.environ, {"GITHUB_SHA": "0" * 40}):
+            with mock.patch.dict(os.environ, {"BLOCKPOPS_TESTED_SHA": "0" * 40}):
                 with self.assertRaisesRegex(ArtifactError, "does not equal checkout HEAD"):
                     git_commit(repository)
-            with mock.patch.dict(os.environ, {"GITHUB_SHA": temporary_commit}):
+            with mock.patch.dict(
+                os.environ, {"BLOCKPOPS_TESTED_SHA": temporary_commit}
+            ):
                 self.assertRegex(git_commit(repository), r"^[0-9a-f]{40}$")
                 self.assertRegex(
                     git_tree(repository, git_commit(repository)), r"^[0-9a-f]{40}$"
