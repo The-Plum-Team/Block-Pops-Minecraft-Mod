@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'">
+  <title>BlockPops packaged E2E evidence</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <header class="hero">
+    <p class="eyebrow">Authenticated current-head evidence</p>
+    <h1 id="project-name">BlockPops</h1>
+    <p id="project-description">Loading the packaged-E2E gallery…</p>
+    <nav aria-label="Project links"><a id="source-link" href="#">Source</a><a id="issues-link" href="#">Issues</a></nav>
+  </header>
+  <main>
+    <section aria-labelledby="evidence-title">
+      <h2 id="evidence-title">Current release evidence</h2>
+      <p class="advisory">Every image comes from a real remapped mod JAR and an exact current branch head. Publication and AI review are advisory; Build and Packaged E2E remain authoritative.</p>
+      <div class="filters">
+        <label>Branch <select id="branch-filter"><option value="all">All</option></select></label>
+        <label>Loader <select id="loader-filter"><option value="all">All</option></select></label>
+        <label>Checkpoint <select id="capture-filter"><option value="all">All</option></select></label>
+      </div>
+      <p id="status" role="status" aria-live="polite">Loading…</p>
+      <div id="gallery" class="gallery"></div>
+    </section>
+  </main>
+  <script src="assets/gallery.js" defer></script>
+</body>
+</html>

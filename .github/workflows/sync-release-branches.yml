@@ -1,0 +1,254 @@
+name: Synchronize release branches
+
+on:
+  repository_dispatch:
+    types:
+      - release-sync-requested
+  schedule:
+    - cron: "41 2 * * *"
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: synchronize-release-branches
+  cancel-in-progress: false
+
+jobs:
+  synchronize:
+    name: Open or update exact release-sync PRs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out the protected default branch controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Discover matrix-enrolled branches and synchronize each exact head
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$(jq -er .branch.role release/release-matrix.json)" == integration ]]
+          [[ "$(jq -er .branch.name release/release-matrix.json)" == "$DEFAULT_BRANCH" ]]
+          [[ "$(jq -er .branch.canonical release/release-matrix.json)" == "$DEFAULT_BRANCH" ]]
+          python3 scripts/release/matrix.py --matrix release/release-matrix.json >/dev/null
+          source_sha="$(git rev-parse HEAD)"
+          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
+          encoded_default="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$DEFAULT_BRANCH")"
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded_default" --jq .object.sha)" == "$source_sha" ]]
+
+          gh auth setup-git
+          gh api --paginate "repos/$GITHUB_REPOSITORY/branches?per_page=100" \
+            --jq '.[].name' > "$RUNNER_TEMP/branches"
+          while IFS= read -r branch; do
+            git fetch --no-tags origin \
+              "+refs/heads/$branch:refs/remotes/origin/$branch"
+          done < "$RUNNER_TEMP/branches"
+          branches="$(python3 scripts/release/version_branches.py --objects)"
+          failures=0
+          declare -A sync_token_owner=()
+
+          publish_status() {
+            local sha="$1" context="$2" state="$3" description="$4"
+            jq -n --arg state "$state" --arg context "$context" \
+              --arg description "$description" \
+              --arg target_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions" \
+              '{state:$state,context:$context,description:$description,target_url:$target_url}' \
+              | gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$sha" --input - >/dev/null
+          }
+
+          dispatch_if_needed() {
+            local workflow="$1" branch="$2" head="$3" target="$4" base="$5" context="$6" description="$7"
+            local runs="$RUNNER_TEMP/${workflow}.runs.json"
+            gh api --paginate --slurp \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?event=workflow_dispatch&head_sha=$head&per_page=100" \
+              > "$runs"
+            local settled
+            settled="$(jq -r --arg branch "$branch" --arg head "$head" \
+              --arg path ".github/workflows/$workflow" --arg repository "$GITHUB_REPOSITORY" \
+              '[.[].workflow_runs[] | select(.event == "workflow_dispatch" and .path == $path and
+                .head_branch == $branch and .head_sha == $head and
+                .head_repository.full_name == $repository)] |
+               sort_by(.created_at, .id) | last | if . == null then "missing"
+               elif (.status == "queued" or .status == "in_progress" or
+                     .status == "pending" or .status == "waiting" or
+                     .status == "requested" or
+                     (.status == "completed" and .conclusion == "success")) then "settled"
+               else "failed" end' "$runs")"
+            if [[ "$settled" == settled ]]; then
+              printf '%s already has current exact-head evidence for %s\n' "$workflow" "$head"
+              return
+            fi
+            if [[ "$settled" == failed ]]; then
+              printf '%s newest exact-head attempt failed for %s; refusing an automatic retry\n' \
+                "$workflow" "$head"
+              return
+            fi
+            publish_status "$head" "$context" pending "$description"
+            payload="$RUNNER_TEMP/${workflow}.dispatch.json"
+            jq -n --arg ref "$branch" --arg head "$head" --arg target "$target" \
+              --arg base "$base" --arg source "$source_sha" \
+              '{ref:$ref,inputs:{expected_sha:$head,target_branch:$target,target_sha:$base,source_sha:$source}}' \
+              > "$payload"
+            gh api --method POST \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/dispatches" \
+              --input "$payload"
+          }
+
+          # Keep the canonical visual reference on an authenticated current-head
+          # workflow_dispatch run as well as the daily schedule. This explicit
+          # dispatch is also immune to GITHUB_TOKEN pull-request recursion rules.
+          canonical_runs="$RUNNER_TEMP/canonical-e2e.runs.json"
+          gh api --paginate --slurp \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/on-demand-e2e.yml/runs?event=workflow_dispatch&head_sha=$source_sha&per_page=100" \
+            > "$canonical_runs"
+          canonical_state="$(jq -r --arg branch "$DEFAULT_BRANCH" --arg head "$source_sha" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            '[.[].workflow_runs[] | select(.event == "workflow_dispatch" and
+              .path == ".github/workflows/on-demand-e2e.yml" and
+              .head_branch == $branch and .head_sha == $head and
+              .head_repository.full_name == $repository)] |
+             sort_by(.created_at, .id) | last | if . == null then "missing"
+             elif (.status == "queued" or .status == "in_progress" or
+                   .status == "pending" or .status == "waiting" or
+                   .status == "requested" or
+                   (.status == "completed" and .conclusion == "success"))
+             then "settled" else "failed" end' "$canonical_runs")"
+          if [[ "$canonical_state" == missing ]]; then
+            jq -n --arg ref "$DEFAULT_BRANCH" '{ref:$ref,inputs:{}}' \
+              > "$RUNNER_TEMP/canonical-e2e.dispatch.json"
+            gh api --method POST \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/on-demand-e2e.yml/dispatches" \
+              --input "$RUNNER_TEMP/canonical-e2e.dispatch.json"
+          elif [[ "$canonical_state" == failed ]]; then
+            printf 'Canonical Packaged E2E failed for %s; refusing an automatic retry.\n' \
+              "$source_sha" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          while IFS= read -r row; do
+            target_branch="$(jq -er .name <<< "$row")"
+            target_sha="$(jq -er .commit <<< "$row")"
+            expected_matrix_sha="$(jq -er .matrix_sha256 <<< "$row")"
+            token="$(python3 scripts/ci/gate_controller.py branch-token --branch "$target_branch")"
+            previous_owner="${sync_token_owner[$token]:-}"
+            [[ -z "$previous_owner" || "$previous_owner" == "$target_branch" ]]
+            sync_token_owner[$token]="$target_branch"
+            automation_branch="automation/release-sync/$token"
+            printf 'Synchronizing %s at %s from %s\n' "$target_branch" "$target_sha" "$source_sha"
+            existing="$(git ls-remote --heads origin "refs/heads/$automation_branch" | cut -f1)"
+            reuse=false
+            if [[ -n "$existing" ]]; then
+              [[ "$existing" =~ ^[0-9a-f]{40}$ ]]
+              git fetch --no-tags origin \
+                "+refs/heads/$automation_branch:refs/remotes/origin/$automation_branch"
+              if python3 scripts/ci/gate_controller.py topology --repository . \
+                  --protected-sha "$source_sha" --target-sha "$target_sha" \
+                  --head-sha "$existing" --source-branch "$DEFAULT_BRANCH" \
+                  --target-branch "$target_branch" > "$RUNNER_TEMP/reused-$token.json" 2>/dev/null \
+                  && python3 scripts/ci/gate_controller.py parity --repository . \
+                  --protected-sha "$source_sha" --candidate-sha "$existing" >/dev/null 2>&1; then
+                head_sha="$existing"
+                reuse=true
+                [[ "$(jq -er .matrix_sha256 "$RUNNER_TEMP/reused-$token.json")" == "$expected_matrix_sha" ]]
+                printf 'Reusing authenticated release-sync head %s\n' "$head_sha"
+              fi
+            fi
+
+            if [[ "$reuse" != true ]]; then
+              target_worktree="$RUNNER_TEMP/target-$token"
+              git worktree add --detach "$target_worktree" "$target_sha"
+              evidence_file="$RUNNER_TEMP/sync-$token.json"
+              if ! python3 scripts/ci/sync_merge.py \
+                  --repository "$target_worktree" --target-sha "$target_sha" --source-sha "$source_sha" \
+                  --target-branch "$target_branch" --source-branch "$DEFAULT_BRANCH" \
+                  > "$evidence_file"; then
+                printf 'Release sync failed closed for `%s`.\n' "$target_branch" >> "$GITHUB_STEP_SUMMARY"
+                failures=$((failures + 1))
+                git worktree remove --force "$target_worktree"
+                continue
+              fi
+              [[ "$(jq -er .matrix_sha256 "$evidence_file")" == "$expected_matrix_sha" ]]
+              if [[ "$(jq -er .status "$evidence_file")" == up-to-date ]]; then
+                printf '%s already contains protected source %s\n' "$target_branch" "$source_sha"
+                git worktree remove --force "$target_worktree"
+                stale_pr="$(gh pr list --state open --base "$target_branch" \
+                  --head "$automation_branch" --limit 2 --json number)"
+                [[ "$(jq length <<< "$stale_pr")" -le 1 ]]
+                if [[ "$(jq length <<< "$stale_pr")" == 1 ]]; then
+                  gh pr close "$(jq -er '.[0].number' <<< "$stale_pr")" --comment \
+                    "The canonical source is already an ancestor of the current release head; this synchronization PR is obsolete."
+                fi
+                continue
+              fi
+              head_sha="$(jq -er .merge_sha "$evidence_file")"
+              python3 scripts/ci/gate_controller.py parity \
+                --repository "$target_worktree" --protected-sha "$source_sha" \
+                --candidate-sha "$head_sha" >/dev/null
+              if [[ -n "$existing" ]]; then
+                git -C "$target_worktree" push \
+                  --force-with-lease="refs/heads/$automation_branch:$existing" \
+                  origin "HEAD:refs/heads/$automation_branch"
+              else
+                git -C "$target_worktree" push origin "HEAD:refs/heads/$automation_branch"
+              fi
+              git worktree remove "$target_worktree"
+            fi
+
+            impact_file="$RUNNER_TEMP/impact-$token.json"
+            python3 scripts/ci/e2e_impact.py --repository . \
+              --base "$target_sha" --head "$head_sha" > "$impact_file"
+            jq -e '.schema_version == 1 and .gate_policy == "always-full" and
+              (.runtime_required | type == "boolean") and (.paths | type == "array") and
+              (.runtime_paths | type == "array")' "$impact_file" >/dev/null
+
+            prs="$(gh pr list --state open --base "$target_branch" \
+              --head "$automation_branch" --limit 2 --json number,url,headRefOid,baseRefOid)"
+            [[ "$(jq length <<< "$prs")" -le 1 ]]
+            if [[ "$(jq length <<< "$prs")" == 0 ]]; then
+              pr_url="$(gh pr create --base "$target_branch" --head "$automation_branch" \
+                --title "chore: synchronize shared release architecture" \
+                --body "Automated exact-parent synchronization from the canonical branch. The target branch matrix is retained byte-for-byte; Build and Packaged E2E must both pass on this exact head.")"
+            else
+              pr_url="$(jq -er '.[0].url' <<< "$prs")"
+            fi
+            pr_consistent=false
+            for attempt in $(seq 1 10); do
+              current_pr="$(gh pr view "$pr_url" \
+                --json state,baseRefName,baseRefOid,headRefName,headRefOid,isCrossRepository)"
+              if jq -e --arg base "$target_sha" --arg head "$head_sha" \
+                  --arg head_branch "$automation_branch" --arg target "$target_branch" \
+                  '.state == "OPEN" and .baseRefName == $target and .baseRefOid == $base and
+                   .headRefName == $head_branch and .headRefOid == $head and
+                   (.isCrossRepository | not)' <<< "$current_pr" >/dev/null; then
+                pr_consistent=true
+                break
+              fi
+              sleep 2
+            done
+            [[ "$pr_consistent" == true ]]
+
+            dispatch_if_needed build-gate.yml "$automation_branch" "$head_sha" \
+              "$target_branch" "$target_sha" "Release sync / Build and verify" \
+              "Waiting for exact-head Build gate"
+            dispatch_if_needed on-demand-e2e.yml "$automation_branch" "$head_sha" \
+              "$target_branch" "$target_sha" "Release sync / Packaged E2E gate" \
+              "Waiting for exact-head Packaged E2E"
+            printf 'Release-sync PR for `%s`: %s\n' "$target_branch" "$pr_url" >> "$GITHUB_STEP_SUMMARY"
+            printf 'Impact classifier for `%s`: runtime-facing `%s`; authoritative policy remains full.\n' \
+              "$target_branch" "$(jq -r .runtime_required "$impact_file")" >> "$GITHUB_STEP_SUMMARY"
+          done < <(jq -c '.[]' <<< "$branches")
+          [[ "$failures" == 0 ]]

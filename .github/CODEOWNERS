@@ -1,0 +1,18 @@
+# Release control-plane and evidence boundaries require explicit owner review.
+/.github/ @AkaNebur
+/build.gradle @AkaNebur
+/settings.gradle @AkaNebur
+/gradle.properties @AkaNebur
+/common/build.gradle @AkaNebur
+/fabric/build.gradle @AkaNebur
+/forge/build.gradle @AkaNebur
+/neoforge/build.gradle @AkaNebur
+/gradle/e2e-harness-conventions.gradle @AkaNebur
+/e2e/ @AkaNebur
+/release/ @AkaNebur
+/scripts/ci/ @AkaNebur
+/scripts/lib/ @AkaNebur
+/scripts/pages/ @AkaNebur
+/scripts/release/ @AkaNebur
+/scripts/visual/ @AkaNebur
+/site/ @AkaNebur

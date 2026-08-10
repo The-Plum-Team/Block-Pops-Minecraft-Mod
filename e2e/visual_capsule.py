@@ -179,8 +179,9 @@ def build_capsule_manifest(
     if (
         reference.matrix["branch"]["role"] != "integration"
         or reference_source["base_branch"] != reference_anchor["release_branch"]
-        or reference_source["head_branch"] != reference_anchor["release_branch"]
-        or reference_source["head_repository"] != reference_source["repository"]
+        or reference_source["source_head_branch"] != reference_anchor["release_branch"]
+        or reference_source["source_head_repository"] != reference_source["repository"]
+        or reference_source["source_head_commit"] != reference_source["tested_commit"]
         or reference_source["event"] not in {"push", "schedule", "workflow_dispatch"}
     ):
         _fail("visual reference is not authenticated current-head evidence from protected master")
@@ -372,7 +373,7 @@ def _validate_source_record(value: Any, label: str, contract_sha256: str) -> dic
         or source["contract_sha256"] != contract_sha256
     ):
         _fail(f"{label} is not successful provenance for this capsule contract")
-    for field in ("head_sha", "head_tree_sha"):
+    for field in ("source_head_commit", "tested_commit", "tested_tree"):
         if not isinstance(source[field], str) or SHA1.fullmatch(source[field]) is None:
             _fail(f"{label}.{field} is invalid")
     for field in (
@@ -387,16 +388,24 @@ def _validate_source_record(value: Any, label: str, contract_sha256: str) -> dic
     for field in ("run_id", "run_attempt", "artifact_id"):
         if isinstance(source[field], bool) or not isinstance(source[field], int) or source[field] <= 0:
             _fail(f"{label}.{field} must be a positive integer")
-    for field in ("repository", "head_repository"):
+    for field in ("repository", "source_head_repository"):
         if not isinstance(source[field], str) or SAFE_REPOSITORY.fullmatch(source[field]) is None:
             _fail(f"{label}.{field} is unsafe")
-    for field in ("head_branch", "base_branch"):
+    for field in ("source_head_branch", "base_branch"):
         if not valid_branch_name(source[field]):
             _fail(f"{label}.{field} is not a safe Git branch")
     if not isinstance(source["workflow_path"], str) or SAFE_WORKFLOW.fullmatch(source["workflow_path"]) is None:
         _fail(f"{label}.workflow_path is unsafe")
     if source["event"] not in ALLOWED_EVENTS:
         _fail(f"{label}.event is unsupported")
+    if source["event"] == "pull_request":
+        if source["tested_commit"] == source["source_head_commit"]:
+            _fail(f"{label} does not distinguish the tested PR merge from its source head")
+    elif (
+        source["source_head_repository"] != source["repository"]
+        or source["tested_commit"] != source["source_head_commit"]
+    ):
+        _fail(f"{label} has inconsistent non-PR tested/source identity")
     if not isinstance(source["artifact_name"], str) or SAFE_ID.fullmatch(source["artifact_name"]) is None:
         _fail(f"{label}.artifact_name is unsafe")
     for field in ("artifact_nodes", "scenarios"):
@@ -514,8 +523,9 @@ def validate_capsule(root: Path) -> tuple[dict[str, Any], tuple[dict[str, Any], 
     )
     if (
         reference_source["base_branch"] != "master"
-        or reference_source["head_branch"] != "master"
-        or reference_source["head_repository"] != reference_source["repository"]
+        or reference_source["source_head_branch"] != "master"
+        or reference_source["source_head_repository"] != reference_source["repository"]
+        or reference_source["source_head_commit"] != reference_source["tested_commit"]
     ):
         _fail("visual capsule reference is not current-head master provenance")
     if candidate_source["repository"] != reference_source["repository"]:

@@ -1,0 +1,164 @@
+name: Authenticate ordinary PR gates
+
+# workflow_run always executes this implementation from the protected default branch. Candidate
+# workflows are evidence only: no candidate file is executed here and the status writer receives
+# only a dedicated App token limited to commit statuses.
+on:
+  workflow_run:
+    workflows:
+      - Build gate
+      - Packaged E2E
+    types:
+      - requested
+      - in_progress
+      - completed
+
+permissions: {}
+
+concurrency:
+  group: >-
+    trusted-pr-${{ github.event.workflow_run.head_repository.full_name }}-${{
+    github.event.workflow_run.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    name: Authenticate current PR and newest exact attempts
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      eligible: ${{ steps.assess.outputs.eligible }}
+      pr_number: ${{ steps.assess.outputs.pr_number }}
+      head_sha: ${{ steps.assess.outputs.head_sha }}
+      merge_sha: ${{ steps.assess.outputs.merge_sha }}
+      build_state: ${{ steps.assess.outputs.build_state }}
+      build_description: ${{ steps.assess.outputs.build_description }}
+      build_run_id: ${{ steps.assess.outputs.build_run_id }}
+      e2e_state: ${{ steps.assess.outputs.e2e_state }}
+      e2e_description: ${{ steps.assess.outputs.e2e_description }}
+      e2e_run_id: ${{ steps.assess.outputs.e2e_run_id }}
+    steps:
+      - name: Check out only the exact protected evaluator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+
+      - name: Authenticate wake and locate the current synthetic merge
+        id: locate
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          IMPLEMENTATION_SHA: ${{ github.sha }}
+          TRIGGER_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          test "$(git -C controller rev-parse HEAD)" = "$IMPLEMENTATION_SHA"
+          python3 controller/scripts/ci/pr_gate.py locate \
+            --repository-name "$GITHUB_REPOSITORY" \
+            --trigger-run-id "$TRIGGER_RUN_ID" \
+            --implementation-sha "$IMPLEMENTATION_SHA" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Check out the current synthetic merge as inert data
+        if: steps.locate.outputs.eligible == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.locate.outputs.merge_sha }}
+          fetch-depth: 0
+          path: candidate
+          persist-credentials: false
+
+      - name: Reauthenticate policy, newest attempts, artifacts, and exact job graphs
+        id: assess
+        if: steps.locate.outputs.eligible == 'true'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          IMPLEMENTATION_SHA: ${{ github.sha }}
+          TRIGGER_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          python3 controller/scripts/ci/pr_gate.py evaluate \
+            --repository-name "$GITHUB_REPOSITORY" \
+            --repository candidate \
+            --trigger-run-id "$TRIGGER_RUN_ID" \
+            --implementation-sha "$IMPLEMENTATION_SHA" \
+            --expected-pr-number "${{ steps.locate.outputs.pr_number }}" \
+            --expected-merge-sha "${{ steps.locate.outputs.merge_sha }}" \
+            --github-output "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish App-authenticated trusted PR contexts
+    needs: evaluate
+    if: needs.evaluate.outputs.eligible == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: pr-gate
+    permissions: {}
+    steps:
+      - name: Mint one status-only installation token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.PR_GATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PR_GATE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-statuses: write
+
+      - name: Publish only the two fixed exact-head contexts
+        shell: bash
+        env:
+          BUILD_DESCRIPTION: ${{ needs.evaluate.outputs.build_description }}
+          BUILD_RUN_ID: ${{ needs.evaluate.outputs.build_run_id }}
+          BUILD_STATE: ${{ needs.evaluate.outputs.build_state }}
+          E2E_DESCRIPTION: ${{ needs.evaluate.outputs.e2e_description }}
+          E2E_RUN_ID: ${{ needs.evaluate.outputs.e2e_run_id }}
+          E2E_STATE: ${{ needs.evaluate.outputs.e2e_state }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          HEAD_SHA: ${{ needs.evaluate.outputs.head_sha }}
+          PR_NUMBER: ${{ needs.evaluate.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          [[ "$BUILD_STATE" =~ ^(pending|success|failure)$ ]]
+          [[ "$E2E_STATE" =~ ^(pending|success|failure)$ ]]
+          [[ ${#BUILD_DESCRIPTION} -ge 1 && ${#BUILD_DESCRIPTION} -le 140 ]]
+          [[ ${#E2E_DESCRIPTION} -ge 1 && ${#E2E_DESCRIPTION} -le 140 ]]
+
+          publish_status() {
+            local context="$1" state="$2" description="$3" run_id="$4"
+            local target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/pull/$PR_NUMBER"
+            if [[ "$run_id" =~ ^[1-9][0-9]*$ ]]; then
+              target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$run_id"
+            else
+              [[ "$run_id" == 0 ]]
+            fi
+            jq -n --arg state "$state" --arg context "$context" \
+              --arg description "$description" --arg target_url "$target_url" \
+              '{state:$state,context:$context,description:$description,target_url:$target_url}' \
+              | gh api --method POST \
+                "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" --input - >/dev/null
+          }
+
+          # Publish a restrictive state first. If the second API call fails, at least one required
+          # App-owned context remains fail-closed instead of exposing a stale pair of successes.
+          if [[ "$BUILD_STATE" != success ]]; then
+            publish_status "Trusted PR / Build and verify" \
+              "$BUILD_STATE" "$BUILD_DESCRIPTION" "$BUILD_RUN_ID"
+            publish_status "Trusted PR / Packaged E2E gate" \
+              "$E2E_STATE" "$E2E_DESCRIPTION" "$E2E_RUN_ID"
+          else
+            publish_status "Trusted PR / Packaged E2E gate" \
+              "$E2E_STATE" "$E2E_DESCRIPTION" "$E2E_RUN_ID"
+            publish_status "Trusted PR / Build and verify" \
+              "$BUILD_STATE" "$BUILD_DESCRIPTION" "$BUILD_RUN_ID"
+          fi

@@ -1,0 +1,102 @@
+name: Verify gate attestation
+
+on:
+  workflow_call:
+    inputs:
+      source_run_id:
+        required: true
+        type: string
+      source_run_attempt:
+        required: true
+        type: string
+      source_workflow:
+        required: true
+        type: string
+      tested_branch:
+        required: true
+        type: string
+      tested_sha:
+        required: true
+        type: string
+      base_sha:
+        required: true
+        type: string
+      target_sha:
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  verify:
+    name: Verify exact tested tree
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the exact final release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.target_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Authenticate run, attempt, parents, tree, matrix, and current ref
+        shell: bash
+        env:
+          BASE_SHA: ${{ inputs.base_sha }}
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ATTEMPT: ${{ inputs.source_run_attempt }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_WORKFLOW: ${{ inputs.source_workflow }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+          TESTED_BRANCH: ${{ inputs.tested_branch }}
+          TESTED_SHA: ${{ inputs.tested_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$SOURCE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$SOURCE_WORKFLOW" == build-gate.yml || "$SOURCE_WORKFLOW" == on-demand-e2e.yml ]]
+          [[ "$TESTED_BRANCH" == automation/release-sync/* ]]
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$TESTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ && "$GITHUB_SHA" == "$TARGET_SHA" ]]
+          [[ "$(git rev-parse HEAD)" == "$TARGET_SHA" ]]
+          [[ "$(git show -s --format=%P "$TARGET_SHA")" == "$BASE_SHA $TESTED_SHA" ]]
+          [[ "$(git rev-parse "$TARGET_SHA^{tree}")" == "$(git rev-parse "$TESTED_SHA^{tree}")" ]]
+          [[ "$(git rev-parse "$BASE_SHA:release/release-matrix.json")" == \
+            "$(git rev-parse "$TARGET_SHA:release/release-matrix.json")" ]]
+          matrix_sha256="$(sha256sum release/release-matrix.json | cut -d' ' -f1)"
+          [[ "$matrix_sha256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$(jq -er .branch.name release/release-matrix.json)" == "$GITHUB_REF_NAME" ]]
+
+          encoded_branch="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$GITHUB_REF_NAME")"
+          current_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded_branch" --jq .object.sha)"
+          [[ "$current_sha" == "$TARGET_SHA" ]]
+
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID")"
+          jq -e \
+            --arg attempt "$SOURCE_RUN_ATTEMPT" \
+            --arg branch "$TESTED_BRANCH" \
+            --arg path ".github/workflows/$SOURCE_WORKFLOW" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg sha "$TESTED_SHA" \
+            '.status == "completed" and .conclusion == "success" and
+             .event == "workflow_dispatch" and .path == $path and
+             .head_branch == $branch and .head_sha == $sha and
+             .head_repository.full_name == $repository and
+             (.run_attempt | tostring) == $attempt' <<< "$run_json" >/dev/null
+
+          python3 scripts/release/matrix.py --matrix release/release-matrix.json >/dev/null
+          python3 scripts/ci/loader_bootstrap.py \
+            --repository . --head-sha "$TARGET_SHA" >/dev/null
+          {
+            printf '### Exact release gate attestation\n\n'
+            printf -- '- Final branch: `%s`\n' "$GITHUB_REF_NAME"
+            printf -- '- Final commit/tree: `%s` / `%s`\n' "$TARGET_SHA" "$(git rev-parse 'HEAD^{tree}')"
+            printf -- '- Tested commit: `%s`\n' "$TESTED_SHA"
+            printf -- '- Source: `%s` run `%s`, attempt `%s`\n' \
+              "$SOURCE_WORKFLOW" "$SOURCE_RUN_ID" "$SOURCE_RUN_ATTEMPT"
+            printf -- '- Matrix SHA-256: `%s`\n' "$matrix_sha256"
+          } >> "$GITHUB_STEP_SUMMARY"

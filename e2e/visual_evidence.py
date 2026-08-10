@@ -103,11 +103,12 @@ ATTESTATION_KEYS = frozenset(
     {
         "schema_version",
         "repository",
-        "head_repository",
-        "head_branch",
+        "source_head_repository",
+        "source_head_branch",
         "base_branch",
-        "head_sha",
-        "head_tree_sha",
+        "source_head_commit",
+        "tested_commit",
+        "tested_tree",
         "workflow_path",
         "workflow_sha256",
         "job_graph_sha256",
@@ -151,17 +152,19 @@ class SourceExpectation:
 
     Callers must not construct this object from files inside the candidate artifact.
     In particular, ``artifact_sha256`` is the normalized digest returned for the
-    downloaded artifact, ``job_graph_sha256`` binds the canonical proof derived from
-    authenticated jobs API responses, and ``head_sha``/``head_tree_sha`` must be
-    re-selected from the current branch head immediately before curation.
+    downloaded artifact and ``job_graph_sha256`` binds the canonical proof derived from
+    authenticated jobs API responses. ``tested_commit``/``tested_tree`` identify the exact base
+    repository bytes executed by Actions; ``source_head_*`` separately identify the current PR
+    head (or the same protected branch commit for non-PR runs).
     """
 
     repository: str
-    head_repository: str
-    head_branch: str
+    source_head_repository: str
+    source_head_branch: str
     base_branch: str
-    head_sha: str
-    head_tree_sha: str
+    source_head_commit: str
+    tested_commit: str
+    tested_tree: str
     workflow_path: str
     workflow_sha256: str
     job_graph_sha256: str
@@ -351,11 +354,12 @@ def validate_attestation(
         field: getattr(expectation, field)
         for field in (
             "repository",
-            "head_repository",
-            "head_branch",
+            "source_head_repository",
+            "source_head_branch",
             "base_branch",
-            "head_sha",
-            "head_tree_sha",
+            "source_head_commit",
+            "tested_commit",
+            "tested_tree",
             "workflow_path",
             "workflow_sha256",
             "job_graph_sha256",
@@ -372,15 +376,23 @@ def validate_attestation(
     ]
     if mismatches:
         _fail(f"visual source provenance disagrees with authenticated API fields: {mismatches}")
-    for field in ("repository", "head_repository"):
+    for field in ("repository", "source_head_repository"):
         if SAFE_REPOSITORY.fullmatch(_text(record[field], field, maximum=201)) is None:
             _fail(f"visual source {field} is unsafe")
-    for field in ("head_branch", "base_branch"):
+    for field in ("source_head_branch", "base_branch"):
         if not valid_branch_name(record[field]):
             _fail(f"visual source {field} is not a safe Git branch")
-    for field in ("head_sha", "head_tree_sha"):
+    for field in ("source_head_commit", "tested_commit", "tested_tree"):
         if not isinstance(record[field], str) or SHA1.fullmatch(record[field]) is None:
             _fail(f"visual source {field} must be a lowercase GitHub SHA-1")
+    if record["event"] == "pull_request":
+        if record["tested_commit"] == record["source_head_commit"]:
+            _fail("pull_request visual source must distinguish tested merge and source head")
+    elif (
+        record["source_head_repository"] != record["repository"]
+        or record["tested_commit"] != record["source_head_commit"]
+    ):
+        _fail("non-PR visual source tested/source identity is inconsistent")
     if SAFE_WORKFLOW.fullmatch(str(record["workflow_path"])) is None:
         _fail("visual source workflow_path must identify a repository Actions workflow")
     for field in (

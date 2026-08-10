@@ -15,7 +15,7 @@
     "name": "BlockPops",
     "mod_id": "blockpops",
     "description": "Collectible figures, animated blocks, and interactive claw-machine gameplay.",
-    "mod_version_property": "mod_version",
+    "mod_version": "1.1.2",
     "sources": "https://github.com/AkaNebur/BlockPops",
     "issues": "https://github.com/AkaNebur/BlockPops/issues",
     "license": "All Rights Reserved"

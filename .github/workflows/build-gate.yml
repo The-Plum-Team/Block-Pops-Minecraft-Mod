@@ -1,0 +1,231 @@
+name: Build gate
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact automation head; empty only for an ordinary manual run
+        required: false
+        type: string
+      target_branch:
+        description: Exact enrolled release branch for an automation run
+        required: false
+        type: string
+      target_sha:
+        description: Exact release base for an automation run
+        required: false
+        type: string
+      source_sha:
+        description: Exact canonical source parent for an automation run
+        required: false
+        type: string
+      attest_run_id:
+        description: Successful source run id; non-empty selects attestation mode
+        required: false
+        type: string
+      attest_run_attempt:
+        description: Exact successful source run attempt
+        required: false
+        type: string
+      attest_branch:
+        description: Exact tested automation branch
+        required: false
+        type: string
+      attest_sha:
+        description: Exact tested automation head
+        required: false
+        type: string
+      attest_base_sha:
+        description: Exact pre-merge release head
+        required: false
+        type: string
+      attest_target_sha:
+        description: Exact final release merge commit
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  identity:
+    name: Resolve authoritative build matrix
+    if: >-
+      inputs.attest_run_id == '' &&
+      !(github.event_name == 'push' &&
+        startsWith(github.ref_name, 'automation/release-sync/'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      java_versions: ${{ steps.matrix.outputs.java_versions }}
+    steps:
+      - name: Check out the exact candidate without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Authenticate explicit release-sync inputs
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$EXPECTED_SHA" ]]; then
+            [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]
+            [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ && "$EXPECTED_SHA" == "$GITHUB_SHA" ]]
+            [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ -n "$TARGET_BRANCH" ]]
+            jq -e --arg branch "$TARGET_BRANCH" \
+              '.branch.role == "release" and .branch.name == $branch and .branch.sync.enabled == true' \
+              release/release-matrix.json >/dev/null
+          else
+            [[ -z "$SOURCE_SHA$TARGET_BRANCH$TARGET_SHA" ]]
+          fi
+
+      - name: Resolve matrix-owned Java toolchains
+        id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/release/matrix.py --matrix release/release-matrix.json >/dev/null
+          python3 scripts/ci/loader_bootstrap.py \
+            --repository . --head-sha "$GITHUB_SHA" >/dev/null
+          java_versions="$(python3 scripts/release/matrix.py \
+            --matrix release/release-matrix.json --kind java \
+            | jq -r '.include[].java')"
+          [[ -n "$java_versions" ]]
+          {
+            printf 'java_versions<<BLOCKPOPS_JAVA\n'
+            printf '%s\n' "$java_versions"
+            printf 'BLOCKPOPS_JAVA\n'
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build immutable release bundle
+    needs: identity
+    if: needs.identity.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out the exact candidate without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate the Gradle wrapper
+        uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Verify exact Gradle bootstrap checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd gradle/wrapper && sha256sum --check --strict gradle-wrapper.jar.sha256)
+          distribution_hash="$(tr -d '\r\n' < gradle/wrapper/gradle-8.14-bin.zip.sha256)"
+          grep --fixed-strings --line-regexp "distributionSha256Sum=$distribution_hash" \
+            gradle/wrapper/gradle-wrapper.properties
+
+      - name: Install matrix-owned JDKs
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: ${{ needs.identity.outputs.java_versions }}
+
+      - name: Install Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install hash-locked test dependencies
+        run: >-
+          python3 -m pip install --disable-pip-version-check
+          --only-binary=:all: --require-hashes
+          --requirement scripts/pages/requirements.txt
+
+      - name: Configure read-only Gradle cache
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-read-only: true
+
+      - name: Validate protected Python policy and tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m compileall -q e2e scripts tests
+          python3 -m unittest discover -s scripts/ci/tests -p 'test_*.py' -v
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Build every declared production and harness lane
+        run: >-
+          ./gradlew --no-daemon --no-parallel --stacktrace
+          clean buildAllLanes buildAllE2EHarnesses check
+
+      - name: Stage and reverify the production bundle
+        run: python3 scripts/release/verify_release.py
+
+      - name: Upload the exact-head staged release bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: staged-release-bundle-${{ github.sha }}-${{ github.run_attempt }}
+          path: build/release/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Assert the build did not mutate tracked sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+  required:
+    name: Build and verify
+    needs: [identity, build]
+    if: >-
+      always() && inputs.attest_run_id == '' &&
+      !(github.event_name == 'push' &&
+        startsWith(github.ref_name, 'automation/release-sync/'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require authoritative build completion
+        shell: bash
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          IDENTITY_RESULT: ${{ needs.identity.result }}
+        run: |
+          set -euo pipefail
+          [[ "$IDENTITY_RESULT" == success ]]
+          [[ "$BUILD_RESULT" == success ]]
+
+  attest:
+    name: Attest exact tested build tree
+    if: inputs.attest_run_id != ''
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/verify-gate-attestation.yml
+    with:
+      source_run_id: ${{ inputs.attest_run_id }}
+      source_run_attempt: ${{ inputs.attest_run_attempt }}
+      source_workflow: build-gate.yml
+      tested_branch: ${{ inputs.attest_branch }}
+      tested_sha: ${{ inputs.attest_sha }}
+      base_sha: ${{ inputs.attest_base_sha }}
+      target_sha: ${{ inputs.attest_target_sha }}

@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "loaders": {
+    "fabric": {
+      "build_sha256": "a2fa397b1f421c0efe714530268b0702621726a152fa0f5352c26799616c5b7b",
+      "files": {
+        "fabric/src/e2e/java/com/theplumteam/e2e/fabric/BlockPopsE2EFabric.java": "16b4a48616ae46ae7712948b5c43cc9b1fb13c689c1b4337ada69733aa8f9db8",
+        "fabric/src/e2e/resources/fabric.mod.json": "614b14315c1e50f2bee0b3731db3dbd0be3a46829e5dba6f1fb2a893c106a678"
+      }
+    },
+    "forge": {
+      "build_sha256": "c4302a7ce9ad1ffbf868f15d553cf52825da876e30ba68bc7dfe930c2656c63c",
+      "files": {
+        "forge/src/e2e/java/com/theplumteam/e2e/forge/BlockPopsE2EForge.java": "7ace8782eba783bfcc727228682adec1458ed56b88f5740189d6f0c3abc47c34",
+        "forge/src/e2e/resources/META-INF/mods.toml": "d8732428dff29b70b546ebd19cc22a41ea8544ecfe6ab6ac322bec1d6634e635"
+      }
+    },
+    "neoforge": {
+      "build_sha256": "2add700edc607ef7b07d13b02d5a32fd128d854e9932d05355f567588e9832eb",
+      "files": {
+        "neoforge/src/e2e/java/com/theplumteam/e2e/neoforge/BlockPopsE2ENeoForge.java": "d1bdc682e8e74cd4af3e39cb417a51a0f9c441262e028265d73b5784de666332",
+        "neoforge/src/e2e/resources/META-INF/neoforge.mods.toml": "e18bf7db19f9acec702947867c4ea1e922f43e6abaf2f83e24306b342cb52e3e"
+      }
+    }
+  }
+}

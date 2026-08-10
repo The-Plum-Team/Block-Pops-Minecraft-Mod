@@ -30,7 +30,7 @@ from scripts.release.matrix import (  # noqa: E402
     mod_version,
 )
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MAX_MANIFEST_BYTES = 1024 * 1024
 MAX_JAR_BYTES = 256 * 1024 * 1024
 MAX_ZIP_ENTRIES = 8192
@@ -42,6 +42,7 @@ ROOT_KEYS = frozenset(
         "lane_count",
         "mod_version",
         "git_commit",
+        "git_tree",
         "release_branch",
         "artifacts",
     }
@@ -290,6 +291,22 @@ def git_commit(repository: Path) -> str:
     return commit
 
 
+def git_tree(repository: Path, commit: str) -> str:
+    if len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
+        raise ArtifactError("cannot resolve tree for an invalid exact git commit")
+    result = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", f"{commit}^{{tree}}"],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    tree = result.stdout.strip()
+    if result.returncode or len(tree) != 40 or any(c not in "0123456789abcdef" for c in tree):
+        raise ArtifactError(f"cannot resolve exact git tree: {result.stderr.strip()}")
+    return tree
+
+
 def _clean_directory(directory: Path) -> None:
     if directory.exists():
         if directory.is_symlink() or not directory.is_dir():
@@ -325,6 +342,7 @@ def stage_release(
     matrix = load_matrix(matrix_file)
     version = mod_version(matrix_file, matrix)
     commit = git_commit(repo)
+    tree = git_tree(repo, commit)
     stage_root.mkdir(parents=True, exist_ok=True)
     files_directory = stage_root / "files"
     harness_directory = stage_root / "harness"
@@ -367,6 +385,7 @@ def stage_release(
         "lane_count": matrix["lane_count"],
         "mod_version": version,
         "git_commit": commit,
+        "git_tree": tree,
         "release_branch": matrix["branch"]["name"],
         "artifacts": rows,
     }
@@ -454,8 +473,11 @@ def verify_staged(
         raise ArtifactError("artifact manifest lane_count is stale")
     if manifest["mod_version"] != mod_version(matrix_path, matrix):
         raise ArtifactError("artifact manifest mod_version is stale")
-    if manifest["git_commit"] != git_commit(repo):
+    current_commit = git_commit(repo)
+    if manifest["git_commit"] != current_commit:
         raise ArtifactError("artifact manifest commit is stale")
+    if manifest["git_tree"] != git_tree(repo, current_commit):
+        raise ArtifactError("artifact manifest tree is stale")
     if manifest["release_branch"] != matrix["branch"]["name"]:
         raise ArtifactError("artifact manifest release branch is stale")
     rows = manifest["artifacts"]

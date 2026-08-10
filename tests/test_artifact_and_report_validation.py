@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import io
 import json
 import os
 import stat
@@ -10,6 +12,7 @@ import unittest
 import warnings
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from PIL import Image, ImageDraw
@@ -18,6 +21,7 @@ from e2e import packaged_runtime
 from scripts.release.artifact_manifest import (
     ArtifactError,
     git_commit,
+    git_tree,
     inspect_zip,
     verify_harness_jar,
     verify_production_jar,
@@ -38,6 +42,23 @@ def _write_zip(path: Path, entries: dict[str, bytes]) -> None:
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, content in entries.items():
             archive.writestr(name, content)
+
+
+class _DownloadResponse:
+    def __init__(self, payload: bytes, content_length: str | None = None) -> None:
+        self.stream = io.BytesIO(payload)
+        self.headers = {}
+        if content_length is not None:
+            self.headers["Content-Length"] = content_length
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args) -> None:
+        self.stream.close()
+
+    def read(self, size: int = -1) -> bytes:
+        return self.stream.read(size)
 
 
 def _fabric_production_entries() -> dict[str, bytes]:
@@ -219,6 +240,104 @@ class JarValidationTests(unittest.TestCase):
             with mock.patch("scripts.release.artifact_manifest.MAX_UNCOMPRESSED_BYTES", 7):
                 with self.assertRaisesRegex(ArtifactError, "uncompressed size"):
                     inspect_zip(path)
+
+
+class RuntimeDownloadBoundaryTests(unittest.TestCase):
+    def test_verified_download_streams_into_one_fresh_file(self) -> None:
+        payload = b"verified runtime installer"
+        expected = hashlib.sha256(payload).hexdigest()
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "installer.jar"
+            response = _DownloadResponse(payload, str(len(payload)))
+            with mock.patch(
+                "e2e.packaged_runtime.urllib.request.urlopen", return_value=response
+            ):
+                actual = packaged_runtime.download(
+                    "https://downloads.example.invalid/installer.jar",
+                    destination,
+                    expected,
+                )
+            self.assertEqual(destination, actual)
+            self.assertEqual(payload, destination.read_bytes())
+            self.assertEqual([], list(destination.parent.glob(".*.part")))
+
+    def test_declared_and_streamed_oversize_downloads_fail_before_admission(self) -> None:
+        expected = hashlib.sha256(b"never admitted").hexdigest()
+        cases = (
+            (b"12345", "5", "before transfer"),
+            (b"12345", None, "per-blob byte limit"),
+        )
+        for payload, length, message in cases:
+            with self.subTest(length=length), tempfile.TemporaryDirectory() as temporary:
+                destination = Path(temporary) / "installer.jar"
+                response = _DownloadResponse(payload, length)
+                with mock.patch(
+                    "e2e.packaged_runtime.MAX_RUNTIME_DOWNLOAD_BYTES", 4
+                ), mock.patch(
+                    "e2e.packaged_runtime.RUNTIME_DOWNLOAD_CHUNK_BYTES", 2
+                ), mock.patch(
+                    "e2e.packaged_runtime.urllib.request.urlopen", return_value=response
+                ), self.assertRaisesRegex(packaged_runtime.RuntimeFailure, message):
+                    packaged_runtime.download(
+                        "https://downloads.example.invalid/installer.jar",
+                        destination,
+                        expected,
+                    )
+                self.assertFalse(destination.exists())
+                self.assertEqual([], list(destination.parent.glob(".*.part")))
+
+    def test_invalid_or_truncated_content_length_fails_closed(self) -> None:
+        expected = hashlib.sha256(b"abc").hexdigest()
+        for payload, length, message in (
+            (b"abc", "3.0", "invalid Content-Length"),
+            (b"abc", "4", "disagrees with Content-Length"),
+        ):
+            with self.subTest(length=length), tempfile.TemporaryDirectory() as temporary:
+                destination = Path(temporary) / "installer.jar"
+                with mock.patch(
+                    "e2e.packaged_runtime.urllib.request.urlopen",
+                    return_value=_DownloadResponse(payload, length),
+                ), self.assertRaisesRegex(packaged_runtime.RuntimeFailure, message):
+                    packaged_runtime.download(
+                        "https://downloads.example.invalid/installer.jar",
+                        destination,
+                        expected,
+                    )
+                self.assertFalse(destination.exists())
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks are unavailable")
+    def test_destination_and_fresh_file_collisions_never_follow_symlinks(self) -> None:
+        expected = hashlib.sha256(b"payload").hexdigest()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            outside = root / "outside"
+            outside.write_bytes(b"owner data")
+            destination = root / "installer.jar"
+            destination.symlink_to(outside)
+            with self.assertRaisesRegex(packaged_runtime.RuntimeFailure, "unsafe.*destination"):
+                packaged_runtime.download(
+                    "https://downloads.example.invalid/installer.jar",
+                    destination,
+                    expected,
+                )
+            self.assertEqual(b"owner data", outside.read_bytes())
+
+            destination.unlink()
+            collision = root / ".installer.jar.fixed.part"
+            collision.symlink_to(outside)
+            with mock.patch(
+                "e2e.packaged_runtime.uuid.uuid4",
+                return_value=SimpleNamespace(hex="fixed"),
+            ), self.assertRaisesRegex(
+                packaged_runtime.RuntimeFailure, "collision-free"
+            ):
+                packaged_runtime.download(
+                    "https://downloads.example.invalid/installer.jar",
+                    destination,
+                    expected,
+                )
+            self.assertTrue(collision.is_symlink())
+            self.assertEqual(b"owner data", outside.read_bytes())
 
 
 class ScreenshotNormalizationTests(unittest.TestCase):
@@ -420,6 +539,9 @@ class ArtifactCommitIdentityTests(unittest.TestCase):
                 check=True,
             )
             self.assertRegex(git_commit(repository), r"^[0-9a-f]{40}$")
+            self.assertRegex(
+                git_tree(repository, git_commit(repository)), r"^[0-9a-f]{40}$"
+            )
 
             tracked.write_text("dirty\n", encoding="utf-8")
             with self.assertRaisesRegex(ArtifactError, "tracked changes"):
