@@ -164,6 +164,25 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
                 with self.assertRaises(DependencyPolicyError):
                     validate_metadata(candidate)
 
+    def test_lwjgl_native_metadata_covers_the_linux_ci_runtime(self) -> None:
+        root = ElementTree.parse(METADATA).getroot()
+        components = root.find(f"{TAG}components")
+        self.assertIsNotNone(components)
+        assert components is not None
+        checked = 0
+        for component in components:
+            if component.attrib.get("group") != "org.lwjgl":
+                continue
+            artifacts = {artifact.attrib["name"] for artifact in component}
+            for artifact in artifacts:
+                suffix = "-natives-macos.jar"
+                if not artifact.endswith(suffix):
+                    continue
+                linux_artifact = artifact[: -len(suffix)] + "-natives-linux.jar"
+                self.assertIn(linux_artifact, artifacts, component.attrib)
+                checked += 1
+        self.assertGreater(checked, 0)
+
     def test_remote_repository_policy_excludes_every_trusted_namespace(self) -> None:
         policy = POLICY.read_text("utf-8")
         before_hosts, separator, after_hosts = policy.partition("switch (repositoryIdentity)")
