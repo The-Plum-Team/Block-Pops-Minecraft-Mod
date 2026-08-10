@@ -1,4 +1,4 @@
-"""Branch-portable matrix fixtures for shared controller tests."""
+"""Protected branch-portable matrix fixtures for shared controller tests."""
 
 from __future__ import annotations
 

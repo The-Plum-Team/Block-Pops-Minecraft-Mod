@@ -1,3 +1,5 @@
+"""Synthetic visual capsule fixtures and mutation tests discovered by CI."""
+
 from __future__ import annotations
 
 import copy
@@ -41,7 +43,7 @@ from e2e.visual_review_output import (
     write_normalized_review,
 )
 from scripts.release.matrix import load_matrix, matrix_sha256
-from tests.matrix_fixtures import (
+from scripts.ci.tests.matrix_fixtures import (
     canonical_integration_matrix,
     reference_runtime,
     write_matrix_fixture,
@@ -371,7 +373,7 @@ class VisualCapsuleTests(unittest.TestCase):
             nodes=[REFERENCE_NODE],
             artifact_id=41,
             source_head_branch=CANONICAL_BRANCH,
-            base_branch=ACTIVE_BRANCH,
+            base_branch=CANONICAL_BRANCH,
             event="push",
             metadata="reference",
             matrix_path=cls.reference_matrix_path,
@@ -508,7 +510,7 @@ class VisualBoundaryMutationTests(unittest.TestCase):
             nodes=[ACTIVE_NODES[0]],
             artifact_id=51,
             source_head_branch="candidate",
-            base_branch=CANONICAL_BRANCH,
+            base_branch=ACTIVE_BRANCH,
             event="pull_request",
             metadata="candidate",
         )

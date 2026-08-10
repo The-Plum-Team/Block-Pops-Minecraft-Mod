@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import copy
 import json
 import subprocess
@@ -7,14 +8,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.ci.gate_controller import validate_topology
+from scripts.ci.gate_controller import PROTECTED_PATHS, validate_topology
+from scripts.ci.tests import matrix_fixtures
 from scripts.ci.sync_merge import (
     MATRIX_PATH,
     SyncMergeError,
     branch_specific_loader_roots,
     create_sync_merge,
 )
-from tests.matrix_fixtures import canonical_integration_matrix
+from scripts.ci.tests.matrix_fixtures import canonical_integration_matrix
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -104,6 +106,36 @@ class SyncRepository:
 
 
 class SyncMergeTests(unittest.TestCase):
+    def test_protected_controller_python_never_imports_candidate_owned_tests(self) -> None:
+        for path in sorted((REPO / "scripts/ci").rglob("*.py")):
+            tree = ast.parse(path.read_text("utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                imported = ()
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    imported = (node.module,)
+                elif isinstance(node, ast.Import):
+                    imported = tuple(alias.name for alias in node.names)
+                for module in imported:
+                    with self.subTest(path=path, module=module):
+                        self.assertFalse(
+                            module == "tests" or module.startswith("tests."),
+                            f"protected {path} imports candidate-owned {module}",
+                        )
+
+    def test_branch_portability_fixture_is_inside_the_protected_controller_tree(self) -> None:
+        relative = (
+            Path(matrix_fixtures.__file__).resolve().relative_to(REPO).as_posix()
+        )
+        self.assertTrue(
+            any(
+                relative == protected or relative.startswith(protected + "/")
+                for protected in PROTECTED_PATHS
+            ),
+            relative,
+        )
+        codeowners = (REPO / ".github/CODEOWNERS").read_text("utf-8")
+        self.assertIn("/scripts/ci/ @AkaNebur", codeowners)
+
     def test_fabric_neoforge_target_retains_both_nonshared_loader_roots(self) -> None:
         self.assertEqual(
             branch_specific_loader_roots(

@@ -237,37 +237,26 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
             "forge/transformed-dependencies-v1",
         ):
             self.assertIn(exact_path, policy)
+        for exact_owner in (
+            "includeGroupByRegex('org\\\\.lwjgl(\\\\..*)?')",
+            "includeGroupByRegex('cpw\\\\.mods(\\\\..*)?')",
+            "excludeGroupByRegex('org\\\\.lwjgl(\\\\..*)?')",
+            "excludeGroupByRegex('cpw\\\\.mods(\\\\..*)?')",
+        ):
+            self.assertEqual(policy.count(exact_owner), 1, exact_owner)
+        self.assertEqual(
+            policy.count(
+                "def useNeoForgeRepositoryOrigins = "
+                "rootProject.forge_family_loader == 'neoforge'"
+            ),
+            1,
+        )
+        self.assertEqual(policy.count("if (useNeoForgeRepositoryOrigins)"), 3)
+        self.assertNotIn("includeGroupByRegex('org\\\\.lwjgl.*')", policy)
+        self.assertNotIn("includeGroupByRegex('cpw\\\\.mods.*')", policy)
         self.assertIn("actualLocalPath != expectedLocalPath", policy)
         self.assertIn("Unapproved local Maven repository", policy)
         self.assertNotIn("mavenLocal()", policy)
-
-    def test_neoforge_owns_its_exact_cpw_bootstrap_namespace(self) -> None:
-        policy = POLICY.read_text("utf-8")
-        neoforge = policy.split(
-            "case 'maven.neoforged.net/releases':", 1
-        )[1].split("break", 1)[0]
-        central = policy.split(
-            "case 'repo.maven.apache.org/maven2':", 1
-        )[1].split("break", 1)[0]
-        exact_group = "cpw\\\\.mods(\\\\..*)?"
-        self.assertEqual(1, neoforge.count(f"includeGroupByRegex('{exact_group}')"))
-        self.assertEqual(1, central.count(f"excludeGroupByRegex('{exact_group}')"))
-        self.assertNotIn("includeGroupByRegex('cpw\\\\.mods.*')", policy)
-
-    def test_minecraft_libraries_owns_its_exact_lwjgl_runtime_namespace(self) -> None:
-        policy = POLICY.read_text("utf-8")
-        minecraft_libraries = policy.split(
-            "case 'libraries.minecraft.net/':", 1
-        )[1].split("break", 1)[0]
-        central = policy.split(
-            "case 'repo.maven.apache.org/maven2':", 1
-        )[1].split("break", 1)[0]
-        exact_group = "org\\\\.lwjgl(\\\\..*)?"
-        self.assertEqual(
-            1, minecraft_libraries.count(f"includeGroupByRegex('{exact_group}')")
-        )
-        self.assertEqual(1, central.count(f"excludeGroupByRegex('{exact_group}')"))
-        self.assertNotIn("includeGroupByRegex('org\\\\.lwjgl.*')", policy)
 
     def test_repository_policy_mutations_fail_closed(self) -> None:
         policy = POLICY.read_text("utf-8")
@@ -292,6 +281,11 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
                 policy.replace(
                     "excludeGroupByRegex('org\\\\.lwjgl(\\\\..*)?')",
                     "",
+                    1,
+                ),
+                policy.replace(
+                    "rootProject.forge_family_loader == 'neoforge'",
+                    "true",
                     1,
                 ),
                 policy.replace(

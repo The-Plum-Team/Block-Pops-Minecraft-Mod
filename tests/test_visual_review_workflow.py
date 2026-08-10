@@ -35,8 +35,11 @@ from scripts.visual.review_client import (
     run_review,
     validate_handoff,
 )
-from tests.matrix_fixtures import canonical_integration_matrix, write_matrix_fixture
-from tests.visual_test_capsule import (
+from scripts.ci.tests.matrix_fixtures import (
+    canonical_integration_matrix,
+    write_matrix_fixture,
+)
+from tests.test_visual_capsule import (
     ACTIVE_BRANCH,
     BRANCH_MATRIX,
     CANONICAL_BRANCH,

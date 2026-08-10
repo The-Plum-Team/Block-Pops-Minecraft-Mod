@@ -36,6 +36,12 @@ FABRIC_MINECRAFT = FABRIC_ARTIFACT["minecraft"]
 FML_ARTIFACT = next(
     row for row in MATRIX["artifacts"] if row["loader"] in {"forge", "neoforge"}
 )
+NEOFORGE_ARTIFACT = copy.deepcopy(FML_ARTIFACT)
+NEOFORGE_ARTIFACT.update(
+    loader="neoforge",
+    artifact_node=f"neoforge-{FML_ARTIFACT['minecraft']}",
+)
+NEOFORGE_ARTIFACT["metadata"]["file"] = "META-INF/neoforge.mods.toml"
 
 
 def _write_zip(path: Path, entries: dict[str, bytes]) -> None:
@@ -135,12 +141,39 @@ side = "CLIENT"
     return entries
 
 
+def _neoforge_production_entries(entrypoint: str) -> dict[str, bytes]:
+    metadata = NEOFORGE_ARTIFACT["metadata"]
+    toml = f'''modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "All Rights Reserved"
+[[mods]]
+modId = "blockpops"
+[[dependencies.blockpops]]
+modId = "minecraft"
+versionRange = "{metadata["minecraft"]}"
+[[dependencies.blockpops]]
+modId = "architectury"
+versionRange = "{metadata["architectury"]}"
+[[dependencies.blockpops]]
+modId = "geckolib"
+versionRange = "{metadata["geckolib"]}"
+'''.encode()
+    return {
+        "com/theplumteam/BlockPopsMod.class": b"class",
+        entrypoint: b"class",
+        "blockpops.mixins.json": b"{}",
+        "META-INF/neoforge.mods.toml": toml,
+    }
+
+
 class JarValidationTests(unittest.TestCase):
     def test_minimal_production_and_harness_jars_preserve_physical_separation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             production = root / f"BlockPops - Fabric - {FABRIC_MINECRAFT}-test.jar"
-            harness = root / f"BlockPops E2E - Fabric - {FABRIC_MINECRAFT}-0.0.0.jar"
+            harness = root / (
+                f"BlockPops E2E - Fabric - {FABRIC_MINECRAFT}-0.0.0.jar"
+            )
             _write_zip(production, _fabric_production_entries())
             _write_zip(harness, _fabric_harness_entries())
 
@@ -165,6 +198,21 @@ class JarValidationTests(unittest.TestCase):
             _write_zip(stale_path, stale)
             with self.assertRaisesRegex(ArtifactError, "disagrees with the release matrix"):
                 verify_production_jar(stale_path, FABRIC_ARTIFACT)
+
+    def test_neoforge_production_uses_the_real_legacy_named_entrypoint(self) -> None:
+        correct = "com/theplumteam/neoforge/BlockPopsModForge.class"
+        invented = "com/theplumteam/neoforge/BlockPopsModNeoForge.class"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            minecraft = NEOFORGE_ARTIFACT["minecraft"]
+            valid = root / f"BlockPops - NeoForge - {minecraft}-test.jar"
+            _write_zip(valid, _neoforge_production_entries(correct))
+            verify_production_jar(valid, NEOFORGE_ARTIFACT)
+
+            stale = root / f"BlockPops - NeoForge - {minecraft}-stale.jar"
+            _write_zip(stale, _neoforge_production_entries(invented))
+            with self.assertRaisesRegex(ArtifactError, "entrypoint class is missing"):
+                verify_production_jar(stale, NEOFORGE_ARTIFACT)
 
     def test_harness_rejects_production_or_foreign_classes(self) -> None:
         mutations = {
