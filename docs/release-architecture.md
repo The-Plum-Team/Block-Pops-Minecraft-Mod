@@ -54,8 +54,8 @@ canonical protected commit.
 
 Gradle dependency verification checksum-locks every artifact that can arrive
 over the network. Loom-generated layered mappings, merged Minecraft modules,
-transformed Forge loader, and remapped modules are the only exact trust
-exceptions because their archive bytes vary across hosts. The protected
+transformed Forge and NeoForge loaders, and remapped modules are the only exact
+trust exceptions because their archive bytes vary across hosts. The protected
 `gradle/repository-policy.gradle` allows only reviewed HTTPS hosts with narrow
 content filters and rejects those generated namespaces from every remote
 repository; `scripts/ci/dependency_policy.py` rejects any broader exception
