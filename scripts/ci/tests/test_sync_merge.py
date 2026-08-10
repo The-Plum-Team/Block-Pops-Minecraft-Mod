@@ -14,6 +14,7 @@ from scripts.ci.sync_merge import (
     branch_specific_loader_roots,
     create_sync_merge,
 )
+from tests.matrix_fixtures import canonical_integration_matrix
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -33,7 +34,8 @@ class SyncRepository:
         (root / "gradle").mkdir()
         (root / "common/src/e2e/java/com/theplumteam/e2e").mkdir(parents=True)
         (root / "e2e/server-template/datapack").mkdir(parents=True)
-        self.integration = json.loads((REPO / MATRIX_PATH).read_text("utf-8"))
+        self.release = json.loads((REPO / MATRIX_PATH).read_text("utf-8"))
+        self.integration = canonical_integration_matrix(self.release)
         (root / MATRIX_PATH).write_text(json.dumps(self.integration, indent=2) + "\n", encoding="utf-8")
         (root / "gradle/verification-metadata.xml").write_text(
             "<verification-metadata>base</verification-metadata>\n", encoding="utf-8"
@@ -51,7 +53,7 @@ class SyncRepository:
 
     def release_commit(self, *, conflict: bool = False) -> tuple[str, bytes]:
         subprocess.run(["git", "-C", self.root, "switch", "-q", "release/one"], check=True)
-        release = copy.deepcopy(self.integration)
+        release = copy.deepcopy(self.release)
         release["branch"] = {
             "role": "release",
             "name": "release/one",

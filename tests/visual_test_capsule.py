@@ -41,6 +41,11 @@ from e2e.visual_review_output import (
     write_normalized_review,
 )
 from scripts.release.matrix import load_matrix, matrix_sha256
+from tests.matrix_fixtures import (
+    canonical_integration_matrix,
+    reference_runtime,
+    write_matrix_fixture,
+)
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -48,6 +53,12 @@ MATRIX_PATH = REPO / "release" / "release-matrix.json"
 CONTRACT_PATH = REPO / "e2e" / "scenario-contract.json"
 PRODUCTION_SHA = "1" * 64
 HARNESS_SHA = "2" * 64
+BRANCH_MATRIX = load_matrix(MATRIX_PATH)
+ACTIVE_NODES = sorted(row["artifact_node"] for row in BRANCH_MATRIX["runtimes"])
+REFERENCE_ROW = reference_runtime(BRANCH_MATRIX)
+REFERENCE_NODE = REFERENCE_ROW["artifact_node"]
+CANONICAL_BRANCH = BRANCH_MATRIX["branch"]["canonical"]
+ACTIVE_BRANCH = BRANCH_MATRIX["branch"]["name"]
 
 
 def _write_json(path: Path, value: object) -> None:
@@ -59,7 +70,8 @@ def _image(path: Path, node: str, step_index: int, capture, *, metadata: str) ->
     width, height = 1600, 900
     image = Image.new("RGB", (width, height), (18, 22, 34))
     draw = ImageDraw.Draw(image)
-    node_shift = 19 if node.startswith("forge") else 0
+    loader = node.partition("-")[0]
+    node_shift = sum(loader.encode("utf-8")) % 20
     colors = [
         (35 + node_shift, 60, 110),
         (110, 45 + node_shift, 80),
@@ -126,8 +138,14 @@ def _comparison(
         return round(changed, 7), round(rms, 3)
 
 
-def _build_evidence(root: Path, nodes: list[str], *, metadata: str) -> list[dict[str, object]]:
-    matrix = load_matrix(MATRIX_PATH)
+def _build_evidence(
+    root: Path,
+    nodes: list[str],
+    *,
+    metadata: str,
+    matrix_path: Path = MATRIX_PATH,
+) -> list[dict[str, object]]:
+    matrix = load_matrix(matrix_path)
     contract = load_contract(CONTRACT_PATH)
     rows = {row["artifact_node"]: row for row in matrix["runtimes"]}
     results: list[dict[str, object]] = []
@@ -287,9 +305,10 @@ def _source(
     base_branch: str,
     event: str,
     metadata: str,
+    matrix_path: Path = MATRIX_PATH,
 ) -> tuple[Path, Path, SourceExpectation]:
     evidence = root / f"{name}-evidence"
-    _build_evidence(evidence, nodes, metadata=metadata)
+    _build_evidence(evidence, nodes, metadata=metadata, matrix_path=matrix_path)
     archive = root / f"{name}.zip"
     archive_sha = _zip_tree(evidence, archive)
     contract = load_contract(CONTRACT_PATH)
@@ -318,7 +337,7 @@ def _source(
         **fields,
         "status": "completed",
         "conclusion": "success",
-        "matrix_sha256": matrix_sha256(MATRIX_PATH),
+        "matrix_sha256": matrix_sha256(matrix_path),
         "contract_sha256": contract.sha256,
         "artifact_nodes": sorted(nodes),
         "scenarios": sorted(contract.scenarios_for_profile("release")),
@@ -333,27 +352,29 @@ class VisualCapsuleTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.shared = tempfile.TemporaryDirectory(prefix="blockpops-visual-tests-")
         root = Path(cls.shared.name)
-        matrix = load_matrix(MATRIX_PATH)
-        nodes = sorted(row["artifact_node"] for row in matrix["runtimes"])
+        cls.reference_matrix_path = write_matrix_fixture(
+            root, canonical_integration_matrix(BRANCH_MATRIX)
+        )
         candidate = _source(
             root,
             name="candidate",
-            nodes=nodes,
+            nodes=ACTIVE_NODES,
             artifact_id=31,
             source_head_branch="feature/visual-candidate",
-            base_branch="master",
+            base_branch=ACTIVE_BRANCH,
             event="pull_request",
             metadata="candidate",
         )
         reference = _source(
             root,
             name="reference",
-            nodes=["fabric-1.20.1"],
+            nodes=[REFERENCE_NODE],
             artifact_id=41,
-            source_head_branch="master",
-            base_branch="master",
+            source_head_branch=CANONICAL_BRANCH,
+            base_branch=ACTIVE_BRANCH,
             event="push",
             metadata="reference",
+            matrix_path=cls.reference_matrix_path,
         )
         cls.candidate = load_archived_evidence(
             archive=candidate[0],
@@ -367,7 +388,7 @@ class VisualCapsuleTests(unittest.TestCase):
             archive=reference[0],
             attestation_path=reference[1],
             expectation=reference[2],
-            matrix_path=MATRIX_PATH,
+            matrix_path=cls.reference_matrix_path,
             contract_path=CONTRACT_PATH,
             extraction_destination=root / "reference-extracted",
         )
@@ -392,13 +413,14 @@ class VisualCapsuleTests(unittest.TestCase):
     def test_pairs_every_lane_by_semantic_capture_against_fabric_baseline(self) -> None:
         capsule = self._capsule()
         manifest, pairs = validate_capsule(capsule)
-        self.assertEqual(10, len(pairs))
+        captures = load_contract(CONTRACT_PATH).capture_ids
+        self.assertEqual(len(ACTIVE_NODES) * len(captures), len(pairs))
         self.assertEqual(
-            {"fabric-1.20.1", "forge-1.20.1"},
+            set(ACTIVE_NODES),
             {pair["candidate"]["artifact_node"] for pair in pairs},
         )
         self.assertEqual(
-            {"fabric-1.20.1"}, {pair["reference"]["artifact_node"] for pair in pairs}
+            {REFERENCE_NODE}, {pair["reference"]["artifact_node"] for pair in pairs}
         )
         self.assertEqual(5, len({pair["capture_id"] for pair in pairs}))
         self.assertTrue(manifest["advisory"])
@@ -415,13 +437,13 @@ class VisualCapsuleTests(unittest.TestCase):
 
     def test_normalization_strips_metadata_and_deduplicates_same_pixels(self) -> None:
         manifest, _images = build_capsule_manifest(self.candidate, self.reference)
-        fabric_pairs = [
+        same_loader_pairs = [
             pair
             for pair in manifest["pairs"]
-            if pair["candidate"]["artifact_node"] == "fabric-1.20.1"
+            if pair["candidate"]["loader"] == REFERENCE_ROW["loader"]
         ]
-        self.assertEqual(5, len(fabric_pairs))
-        for pair in fabric_pairs:
+        self.assertEqual(5, len(same_loader_pairs))
+        for pair in same_loader_pairs:
             self.assertNotEqual(
                 pair["candidate"]["source_file_sha256"],
                 pair["reference"]["source_file_sha256"],
@@ -483,10 +505,10 @@ class VisualBoundaryMutationTests(unittest.TestCase):
         archive, attestation_path, expectation = _source(
             self.root,
             name="candidate",
-            nodes=["fabric-1.20.1"],
+            nodes=[ACTIVE_NODES[0]],
             artifact_id=51,
             source_head_branch="candidate",
-            base_branch="master",
+            base_branch=CANONICAL_BRANCH,
             event="pull_request",
             metadata="candidate",
         )
@@ -553,11 +575,11 @@ class VisualBoundaryMutationTests(unittest.TestCase):
 
     def test_evidence_rejects_symlink_and_dimension_skew(self) -> None:
         evidence = self.root / "evidence"
-        _build_evidence(evidence, ["fabric-1.20.1"], metadata="candidate")
+        _build_evidence(evidence, [ACTIVE_NODES[0]], metadata="candidate")
         matrix = load_matrix(MATRIX_PATH)
         contract = load_contract(CONTRACT_PATH)
         provenance = {
-            "artifact_nodes": ["fabric-1.20.1"],
+            "artifact_nodes": [ACTIVE_NODES[0]],
             "scenarios": sorted(contract.scenarios_for_profile("release")),
             "artifact_id": 1,
         }
@@ -581,7 +603,7 @@ class VisualBoundaryMutationTests(unittest.TestCase):
         contract = load_contract(CONTRACT_PATH)
         capture = contract.capture("ui-regression", "client_a", "favorite_color_prompt")
         path = self.root / "washed-out.png"
-        _image(path, "fabric-1.20.1", 0, capture, metadata="candidate")
+        _image(path, REFERENCE_NODE, 0, capture, metadata="candidate")
         with Image.open(path) as source:
             image = source.convert("RGB")
         ImageDraw.Draw(image).rectangle((32, 135, 320, 765), fill=(250, 250, 250))
@@ -597,28 +619,29 @@ class VisualReviewOutputTests(unittest.TestCase):
         shared = tempfile.TemporaryDirectory(prefix="blockpops-review-output-")
         cls.shared = shared
         root = Path(shared.name)
-        nodes = sorted(
-            row["artifact_node"] for row in load_matrix(MATRIX_PATH)["runtimes"]
+        cls.reference_matrix_path = write_matrix_fixture(
+            root, canonical_integration_matrix(BRANCH_MATRIX)
         )
         candidate_input = _source(
             root,
             name="candidate",
-            nodes=nodes,
+            nodes=ACTIVE_NODES,
             artifact_id=61,
             source_head_branch="candidate",
-            base_branch="master",
+            base_branch=ACTIVE_BRANCH,
             event="pull_request",
             metadata="candidate",
         )
         reference_input = _source(
             root,
             name="reference",
-            nodes=["fabric-1.20.1"],
+            nodes=[REFERENCE_NODE],
             artifact_id=62,
-            source_head_branch="master",
-            base_branch="master",
+            source_head_branch=CANONICAL_BRANCH,
+            base_branch=CANONICAL_BRANCH,
             event="push",
             metadata="reference",
+            matrix_path=cls.reference_matrix_path,
         )
         candidate = load_archived_evidence(
             archive=candidate_input[0],
@@ -632,7 +655,7 @@ class VisualReviewOutputTests(unittest.TestCase):
             archive=reference_input[0],
             attestation_path=reference_input[1],
             expectation=reference_input[2],
-            matrix_path=MATRIX_PATH,
+            matrix_path=cls.reference_matrix_path,
             contract_path=CONTRACT_PATH,
             extraction_destination=root / "reference-extracted",
         )

@@ -29,6 +29,7 @@ from scripts.ci.pr_gate import (
 
 REPO = Path(__file__).resolve().parents[3]
 MATRIX = REPO / "release/release-matrix.json"
+MATRIX_IDENTITY = json.loads(MATRIX.read_text(encoding="utf-8"))["branch"]
 MERGE = "d" * 40
 HEAD = "c" * 40
 BASE = "b" * 40
@@ -285,6 +286,8 @@ class TreePolicyTests(unittest.TestCase):
         tree = self.git("rev-parse", "HEAD^{tree}")
         return identity(
             default_sha=self.base,
+            default_branch=MATRIX_IDENTITY["canonical"],
+            base_branch=MATRIX_IDENTITY["name"],
             base_sha=self.base,
             head_sha=head,
             merge_sha=merge,
