@@ -538,14 +538,24 @@ class ArtifactCommitIdentityTests(unittest.TestCase):
                 ["git", "-C", str(repository), "commit", "-q", "-m", "initial"],
                 check=True,
             )
-            self.assertRegex(git_commit(repository), r"^[0-9a-f]{40}$")
-            self.assertRegex(
-                git_tree(repository, git_commit(repository)), r"^[0-9a-f]{40}$"
-            )
+            temporary_commit = subprocess.run(
+                ["git", "-C", str(repository), "rev-parse", "HEAD"],
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+            ).stdout.strip()
+            with mock.patch.dict(os.environ, {"GITHUB_SHA": "0" * 40}):
+                with self.assertRaisesRegex(ArtifactError, "does not equal checkout HEAD"):
+                    git_commit(repository)
+            with mock.patch.dict(os.environ, {"GITHUB_SHA": temporary_commit}):
+                self.assertRegex(git_commit(repository), r"^[0-9a-f]{40}$")
+                self.assertRegex(
+                    git_tree(repository, git_commit(repository)), r"^[0-9a-f]{40}$"
+                )
 
-            tracked.write_text("dirty\n", encoding="utf-8")
-            with self.assertRaisesRegex(ArtifactError, "tracked changes"):
-                git_commit(repository)
+                tracked.write_text("dirty\n", encoding="utf-8")
+                with self.assertRaisesRegex(ArtifactError, "tracked changes"):
+                    git_commit(repository)
 
 if __name__ == "__main__":
     unittest.main()
