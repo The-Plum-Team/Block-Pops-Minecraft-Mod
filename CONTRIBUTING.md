@@ -36,7 +36,7 @@ final `gradle/e2e-harness-conventions.gradle` binding.
 
 Remote Gradle artifacts remain checksum-verified. Loom also creates mappings,
 merged Minecraft modules, and remapped dependencies locally; their ZIP bytes
-are not reproducible across hosts. The four exact generated-name exceptions in
+are not reproducible across hosts. The five exact generated-name exceptions in
 `gradle/verification-metadata.xml` are safe only together with
 `gradle/repository-policy.gradle`, which makes those namespaces unreachable
 from every HTTPS repository and binds Loom's four local repositories to their
