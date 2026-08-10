@@ -172,6 +172,22 @@ jobs:
           ./gradlew --no-daemon --no-parallel --stacktrace
           clean buildAllLanes buildAllE2EHarnesses check
 
+      - name: Report rejected generated mapping hashes without admitting them
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=0
+          while IFS= read -r -d '' mapping; do
+            [[ -f "$mapping" && ! -L "$mapping" ]]
+            bytes="$(wc -c < "$mapping")"
+            [[ "$bytes" =~ ^[0-9]+$ && "$bytes" -le 67108864 ]]
+            sha256sum "$mapping"
+            found=1
+          done < <(find "$GRADLE_USER_HOME" -type f \
+            -name 'mappings-layered+hash.*.jar' -print0)
+          [[ "$found" == 1 ]]
+
       - name: Stage and reverify the production bundle
         run: python3 scripts/release/verify_release.py
 
