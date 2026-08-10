@@ -108,6 +108,8 @@ jobs:
           python3 scripts/release/matrix.py --matrix release/release-matrix.json >/dev/null
           python3 scripts/ci/loader_bootstrap.py \
             --repository . --head-sha "$BLOCKPOPS_TESTED_SHA" >/dev/null
+          python3 scripts/ci/dependency_policy.py \
+            --metadata gradle/verification-metadata.xml >/dev/null
           matrix_kind=pr-anchors
           if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
             matrix_kind=scheduled-anchors

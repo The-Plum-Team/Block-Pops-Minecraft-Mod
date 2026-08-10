@@ -1,0 +1,132 @@
+import org.gradle.api.GradleException
+import org.gradle.api.artifacts.repositories.MavenArtifactRepository
+
+// Loom owns the file-backed Minecraft/remap repositories. The only artifacts
+// exempted from checksum verification are generated into those local stores.
+// Every network repository is HTTPS, host-allowlisted, content-filtered, and
+// unable to serve any trusted generated namespace.
+def loomUserCache = new File(gradle.gradleUserHomeDir, 'caches/fabric-loom')
+def loomRootCache = new File(rootProject.projectDir, '.gradle/loom-cache')
+def loomLocalRepositories = [
+    'LoomGlobalMinecraft': new File(loomUserCache, 'minecraftMaven').canonicalFile,
+    'LoomLocalMinecraft': new File(loomRootCache, 'minecraftMaven').canonicalFile,
+    'LoomLocalRemappedMods': new File(loomRootCache, 'remapped_mods').canonicalFile,
+    'LoomTransformedForgeDependencies': new File(
+        loomUserCache,
+        'forge/transformed-dependencies-v1'
+    ).canonicalFile,
+].asImmutable()
+
+repositories.configureEach { repository ->
+    if (!(repository instanceof MavenArtifactRepository)) {
+        throw new GradleException(
+            "Unapproved non-Maven dependency repository for ${project.path}: ${repository.name}"
+        )
+    }
+}
+
+repositories.withType(MavenArtifactRepository).configureEach { repository ->
+    def repositoryScheme = repository.url.scheme?.toLowerCase(Locale.ROOT)
+    def repositoryHost = repository.url.host?.toLowerCase(Locale.ROOT)
+    def rawRepositoryPath = repository.url.path ?: '/'
+    def repositoryPath = rawRepositoryPath.length() > 1
+        ? rawRepositoryPath.replaceFirst('/+$', '')
+        : rawRepositoryPath
+
+    if (repositoryScheme == 'file') {
+        def expectedLocalPath = loomLocalRepositories[repository.name]
+        File actualLocalPath
+        try {
+            actualLocalPath = new File(repository.url).canonicalFile
+        } catch (IllegalArgumentException exception) {
+            throw new GradleException(
+                "Invalid local Maven repository URI for ${project.path}: ${repository.url}",
+                exception
+            )
+        }
+        if (expectedLocalPath == null || actualLocalPath != expectedLocalPath) {
+            throw new GradleException(
+                "Unapproved local Maven repository for ${project.path}: " +
+                    "${repository.name} at ${actualLocalPath}"
+            )
+        }
+        return
+    }
+    if (repositoryScheme != 'https'
+            || repository.url.userInfo != null
+            || repository.url.port != -1
+            || repository.url.query != null
+            || repository.url.fragment != null) {
+        throw new GradleException(
+            "Unapproved dependency repository URI for ${project.path}: ${repository.url}. " +
+                'Only Loom-owned local repositories and reviewed canonical HTTPS URIs are allowed.'
+        )
+    }
+
+    repository.content {
+        excludeGroup('loom')
+        excludeGroup('net.minecraft')
+        excludeGroupByRegex('net\\.minecraftforge\\.[0-9a-f]{64}')
+        excludeGroupByRegex('remapped\\..+')
+    }
+
+    def repositoryIdentity = "${repositoryHost}${repositoryPath}"
+    switch (repositoryIdentity) {
+        case 'maven.architectury.dev/':
+            repository.content {
+                includeGroupByRegex('dev\\.architectury(\\..*)?')
+            }
+            break
+        case 'maven.fabricmc.net/':
+            repository.content {
+                includeGroupByRegex('net\\.fabricmc(\\..*)?')
+            }
+            break
+        case 'libraries.minecraft.net/':
+            repository.content {
+                includeGroupByRegex('com\\.mojang(\\..*)?')
+            }
+            break
+        case 'maven.minecraftforge.net/':
+            repository.content {
+                includeGroupByRegex('net\\.minecraftforge(\\..*)?')
+                includeGroupByRegex('de\\.oceanlabs\\.mcp(\\..*)?')
+                includeGroupByRegex('org\\.spongepowered(\\..*)?')
+            }
+            break
+        case 'maven.neoforged.net/releases':
+            repository.content {
+                includeGroupByRegex('net\\.neoforged(\\..*)?')
+            }
+            break
+        case 'repo.spongepowered.org/repository/maven-public':
+            repository.content {
+                includeGroupByRegex('org\\.spongepowered(\\..*)?')
+            }
+            break
+        case 'dl.cloudsmith.io/public/geckolib3/geckolib/maven':
+            repository.content {
+                includeGroupByRegex('software\\.bernie(\\..*)?')
+                includeGroup('com.eliotlash.mclib')
+            }
+            break
+        case 'repo.maven.apache.org/maven2':
+            repository.content {
+                excludeGroupByRegex('dev\\.architectury(\\..*)?')
+                excludeGroupByRegex('net\\.fabricmc(\\..*)?')
+                excludeGroupByRegex('com\\.mojang(\\..*)?')
+                excludeGroupByRegex('net\\.minecraftforge(\\..*)?')
+                excludeGroupByRegex('de\\.oceanlabs\\.mcp(\\..*)?')
+                excludeGroupByRegex('org\\.spongepowered(\\..*)?')
+                excludeGroupByRegex('net\\.neoforged(\\..*)?')
+                excludeGroupByRegex('software\\.bernie(\\..*)?')
+                excludeGroup('com.eliotlash.mclib')
+            }
+            break
+        default:
+            throw new GradleException(
+                "Unapproved remote dependency repository for ${project.path}: ${repository.url}. " +
+                    'Review its ownership and add a narrow content filter before using it.'
+            )
+    }
+}

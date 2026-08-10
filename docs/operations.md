@@ -88,6 +88,11 @@ governance for it.
   `e2e/loader-bootstrap-contract.json`. Never snapshot or bless a digest from an
   untrusted release candidate. Missing, extra, executable, or differently
   bound harness files must remain a hard failure.
+- **Dependency verification rejected a Loom-generated module:** confirm its
+  coordinate matches one of the four exact generated-name exceptions and that
+  every remote repository still rejects that namespace. Do not append the
+  observed archive hash: Loom's locally generated ZIP is host-dependent. Any
+  other coordinate remains a hard checksum failure and must be investigated.
 - **Post-merge attestation failed:** freeze further synchronization, compare the
   final parent order/tree/matrix to the tested candidate, and revert or repair
   through a gated PR.

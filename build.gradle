@@ -67,6 +67,11 @@ allprojects {
     group = rootProject.maven_group
     version = rootProject.mod_version
 
+    // Network dependencies remain checksum-verified. The shared policy also
+    // makes Loom's generated namespaces unreachable from every remote Maven
+    // repository before dependency verification exempts those local outputs.
+    apply from: rootProject.file('gradle/repository-policy.gradle')
+
     tasks.withType(AbstractArchiveTask).configureEach {
         preserveFileTimestamps = false
         reproducibleFileOrder = true
@@ -97,7 +102,7 @@ subprojects {
             name = 'GeckoLib'
             url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
             content {
-                includeGroupByRegex('software\\.bernie.*')
+                includeGroupByRegex('software\\.bernie(\\..*)?')
                 includeGroup('com.eliotlash.mclib')
             }
         }
