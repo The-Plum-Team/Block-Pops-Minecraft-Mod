@@ -156,9 +156,15 @@ public final class UiRegressionScenario implements Scenario {
                 || CollectionRegistry.getAllCollections().isEmpty()) {
             return Step.Result.fail("packaged collection data is absent");
         }
+        List<AbstractWidget> widgets = visibleWidgets(minecraft);
+        if (!hasWidgetMessage(widgets, "Done")
+                || !hasWidgetMessage(widgets, "Use Regular Token")
+                || !hasWidgetMessage(widgets, "Use Guaranteed Token")) {
+            return Step.Result.fail("claw-machine token/footer controls are missing or mislabeled");
+        }
         return productionSourceSeparated(CollectionSelectionScreen.class)
                 ? Step.Result.pass(
-                        "real block interaction opened the production collection screen")
+                        "real block interaction opened the production collection and token controls")
                 : Step.Result.fail("collection screen came from the harness container");
     }
 
@@ -168,16 +174,37 @@ public final class UiRegressionScenario implements Scenario {
         if (!screen.pass()) {
             return screen;
         }
-        boolean developVisible = minecraft.screen.children().stream()
-                .filter(AbstractWidget.class::isInstance)
-                .map(AbstractWidget.class::cast)
-                .anyMatch(widget -> "Develop".equals(widget.getMessage().getString()));
+        List<AbstractWidget> widgets = visibleWidgets(minecraft);
+        boolean developVisible = hasWidgetMessage(widgets, "Develop");
         if (Platform.isDevelopmentEnvironment() || developVisible) {
             return Step.Result.fail("development-only settings leaked into a packaged runtime");
         }
+        boolean serverTab = hasWidgetMessage(widgets, "Server");
+        boolean close = hasWidgetMessage(widgets, "Close");
+        boolean changeTime = hasWidgetMessage(widgets, "Change time");
+        boolean resetHour = widgets.stream()
+                .map(widget -> widget.getMessage().getString())
+                .anyMatch(message -> message.startsWith("Guaranteed Token Reset Hour ("));
+        if (!serverTab || !close || !changeTime || !resetHour) {
+            return Step.Result.fail("packaged server settings controls are missing or mislabeled");
+        }
         return productionSourceSeparated(SettingsScreen.class)
-                ? Step.Result.pass("production server settings are visible; Develop is absent")
+                ? Step.Result.pass(
+                        "production server tab, reset slider, and footer are visible; Develop is absent")
                 : Step.Result.fail("settings screen came from the harness container");
+    }
+
+    private static List<AbstractWidget> visibleWidgets(Minecraft minecraft) {
+        return minecraft.screen.children().stream()
+                .filter(AbstractWidget.class::isInstance)
+                .map(AbstractWidget.class::cast)
+                .filter(widget -> widget.visible)
+                .toList();
+    }
+
+    private static boolean hasWidgetMessage(List<AbstractWidget> widgets, String message) {
+        return widgets.stream()
+                .anyMatch(widget -> message.equals(widget.getMessage().getString()));
     }
 
     private static boolean readyScreen(
