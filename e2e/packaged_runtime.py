@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.metadata
+import io
 import json
 import os
 import re
@@ -180,6 +181,7 @@ MAX_EVIDENCE_LOG_BYTES = 16 * 1024 * 1024
 MAX_EVIDENCE_REPORT_BYTES = 4 * 1024 * 1024
 MAX_EVIDENCE_SCREENSHOT_BYTES = 32 * 1024 * 1024
 MAX_EVIDENCE_CRASH_REPORT_BYTES = 16 * 1024 * 1024
+MAX_SCREENSHOT_SCALE_FACTOR = 4
 
 
 @dataclass(frozen=True)
@@ -1109,6 +1111,100 @@ def inspect_screenshot(
 
     try:
         Image.MAX_IMAGE_PIXELS = 20_000_000
+        if expected_format == "PNG":
+            source_stat = path.lstat()
+            if (
+                stat.S_ISLNK(source_stat.st_mode)
+                or not stat.S_ISREG(source_stat.st_mode)
+                or source_stat.st_size <= 0
+                or source_stat.st_size > MAX_EVIDENCE_SCREENSHOT_BYTES
+            ):
+                raise RuntimeFailure(f"screenshot is not a bounded regular file: {path}")
+            flags = (
+                os.O_RDONLY
+                | getattr(os, "O_BINARY", 0)
+                | getattr(os, "O_NOFOLLOW", 0)
+            )
+            descriptor = os.open(path, flags)
+            try:
+                opened_stat = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(opened_stat.st_mode)
+                    or opened_stat.st_dev != source_stat.st_dev
+                    or opened_stat.st_ino != source_stat.st_ino
+                    or opened_stat.st_size != source_stat.st_size
+                ):
+                    raise RuntimeFailure(f"screenshot changed while opening: {path}")
+                with os.fdopen(descriptor, "rb") as stream:
+                    descriptor = -1
+                    source_bytes = stream.read(MAX_EVIDENCE_SCREENSHOT_BYTES + 1)
+                if len(source_bytes) != source_stat.st_size:
+                    raise RuntimeFailure(f"screenshot changed while reading: {path}")
+            finally:
+                if descriptor >= 0:
+                    os.close(descriptor)
+
+            with Image.open(io.BytesIO(source_bytes)) as source_image:
+                if source_image.format != "PNG" or getattr(source_image, "n_frames", 1) != 1:
+                    raise RuntimeFailure(f"screenshot is not a PNG image: {path}")
+                source_width, source_height = source_image.size
+                if (source_width, source_height) != GUI_TEXT_REFERENCE_SIZE:
+                    expected_width, expected_height = GUI_TEXT_REFERENCE_SIZE
+                    width_factor, width_remainder = divmod(source_width, expected_width)
+                    height_factor, height_remainder = divmod(source_height, expected_height)
+                    if (
+                        width_remainder != 0
+                        or height_remainder != 0
+                        or width_factor != height_factor
+                        or not 2 <= width_factor <= MAX_SCREENSHOT_SCALE_FACTOR
+                    ):
+                        raise RuntimeFailure(
+                            f"screenshot dimensions must be the contracted "
+                            f"{expected_width}x{expected_height} or one exact integer-density "
+                            f"variant: {path} ({source_width}x{source_height})"
+                        )
+                    source_image.load()
+                    normalized = source_image.convert("RGB").resize(
+                        GUI_TEXT_REFERENCE_SIZE, Image.Resampling.LANCZOS
+                    )
+                    encoded = io.BytesIO()
+                    normalized.save(
+                        encoded,
+                        format="PNG",
+                        optimize=False,
+                        compress_level=9,
+                    )
+                    normalized_bytes = encoded.getvalue()
+                    if (
+                        not normalized_bytes
+                        or len(normalized_bytes) > MAX_EVIDENCE_SCREENSHOT_BYTES
+                    ):
+                        raise RuntimeFailure(
+                            f"normalized screenshot exceeds its byte limit: {path}"
+                        )
+                    current_stat = path.lstat()
+                    if (
+                        current_stat.st_dev != source_stat.st_dev
+                        or current_stat.st_ino != source_stat.st_ino
+                        or current_stat.st_size != source_stat.st_size
+                    ):
+                        raise RuntimeFailure(f"screenshot changed before normalization: {path}")
+                    temporary_descriptor, temporary_name = tempfile.mkstemp(
+                        prefix=".blockpops-normalized-",
+                        suffix=".png",
+                        dir=path.parent,
+                    )
+                    temporary_path = Path(temporary_name)
+                    try:
+                        with os.fdopen(temporary_descriptor, "wb") as output:
+                            output.write(normalized_bytes)
+                            output.flush()
+                            os.fsync(output.fileno())
+                        os.chmod(temporary_path, 0o644)
+                        os.replace(temporary_path, path)
+                    finally:
+                        temporary_path.unlink(missing_ok=True)
+
         with Image.open(path) as image:
             if image.format != expected_format:
                 raise RuntimeFailure(
@@ -2038,6 +2134,12 @@ def run_packaged_row(
             raise RuntimeFailure(
                 f"unsupported E2E orchestration mode {orchestration.mode!r}"
             )
+
+        # Freeze candidate-controlled client files before the trusted validator opens reports
+        # or screenshots. A client that has emitted its terminal marker no longer needs to run,
+        # and leaving it alive would permit a production mod to race the evidence boundary.
+        for client_process in client_processes.values():
+            stop_process(client_process)
 
         failed_roles = [role for role in roles if markers.get(role) != "pass"]
         if failed_roles:
