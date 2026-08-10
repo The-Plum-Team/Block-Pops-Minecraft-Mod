@@ -108,7 +108,7 @@ REMOTE_EXCLUSIONS = (
     "excludeGroupByRegex('net\\\\.minecraftforge\\\\.[0-9a-f]{64}')",
     "excludeGroupByRegex('remapped\\\\..+')",
 )
-EXPECTED_POLICY_SHA256 = "be4e517441350d6b0f03fe3ea9e6a5556a7726d1e4962302640706e966a0bb46"
+EXPECTED_POLICY_SHA256 = "ff2da159c3de70ccc68bf5441122c66da740e3bff5465c5f6a4f147727478e4a"
 EXPECTED_PLUGIN_MANAGEMENT_SHA256 = (
     "8a62308ab518f9b9a6283fead6ac5e8807d11ccf8c05b4f5724d58d126513852"
 )

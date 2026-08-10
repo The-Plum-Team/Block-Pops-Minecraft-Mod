@@ -85,6 +85,7 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
         case 'libraries.minecraft.net/':
             repository.content {
                 includeGroupByRegex('com\\.mojang(\\..*)?')
+                includeGroupByRegex('org\\.lwjgl(\\..*)?')
             }
             break
         case 'maven.minecraftforge.net/':
@@ -97,6 +98,7 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
         case 'maven.neoforged.net/releases':
             repository.content {
                 includeGroupByRegex('net\\.neoforged(\\..*)?')
+                includeGroupByRegex('cpw\\.mods(\\..*)?')
             }
             break
         case 'repo.spongepowered.org/repository/maven-public':
@@ -115,10 +117,12 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
                 excludeGroupByRegex('dev\\.architectury(\\..*)?')
                 excludeGroupByRegex('net\\.fabricmc(\\..*)?')
                 excludeGroupByRegex('com\\.mojang(\\..*)?')
+                excludeGroupByRegex('org\\.lwjgl(\\..*)?')
                 excludeGroupByRegex('net\\.minecraftforge(\\..*)?')
                 excludeGroupByRegex('de\\.oceanlabs\\.mcp(\\..*)?')
                 excludeGroupByRegex('org\\.spongepowered(\\..*)?')
                 excludeGroupByRegex('net\\.neoforged(\\..*)?')
+                excludeGroupByRegex('cpw\\.mods(\\..*)?')
                 excludeGroupByRegex('software\\.bernie(\\..*)?')
                 excludeGroup('com.eliotlash.mclib')
             }
