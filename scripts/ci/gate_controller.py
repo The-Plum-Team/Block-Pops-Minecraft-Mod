@@ -43,6 +43,7 @@ PROTECTED_PATHS = (
     "e2e",
     "gradle.properties",
     "gradle/e2e-harness-conventions.gradle",
+    "gradle/repository-policy.gradle",
     "gradle/wrapper",
     "gradlew",
     "scripts/ci",
@@ -54,6 +55,7 @@ PROTECTED_PATHS = (
     "site",
     "common/src/e2e",
 )
+FORBIDDEN_PATHS = (".gradle", "buildSrc")
 VERSION_SPECIFIC_PATHS = frozenset(
     {
         "common/src/e2e/java/com/theplumteam/e2e/VanillaShim.java",
@@ -258,6 +260,15 @@ def validate_controller_parity(
         for path in (f"{loader}/build.gradle", f"{loader}/src/e2e")
     )
     paths = (*PROTECTED_PATHS, *loader_paths)
+    for path in FORBIDDEN_PATHS:
+        if _tree_entry(repository, protected_sha, path) is not None:
+            raise GateControllerError(
+                f"canonical controller contains forbidden Gradle path {path!r}"
+            )
+        if _tree_entry(repository, candidate_sha, path) is not None:
+            raise GateControllerError(
+                f"candidate contains forbidden Gradle path {path!r}"
+            )
     for path in paths:
         _git(repository, "cat-file", "-e", f"{protected_sha}:{path}")
         _git(repository, "cat-file", "-e", f"{candidate_sha}:{path}")

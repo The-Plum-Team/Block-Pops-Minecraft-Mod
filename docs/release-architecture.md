@@ -52,6 +52,18 @@ requires one final binding to the physically separate harness convention. The
 trusted release handler validates a candidate against the contract from the
 canonical protected commit.
 
+Gradle dependency verification checksum-locks every artifact that can arrive
+over the network. Loom-generated layered mappings, merged Minecraft modules,
+transformed Forge loader, and remapped modules are the only exact trust
+exceptions because their archive bytes vary across hosts. The protected
+`gradle/repository-policy.gradle` allows only reviewed HTTPS hosts with narrow
+content filters and rejects those generated namespaces from every remote
+repository; `scripts/ci/dependency_policy.py` rejects any broader exception
+before Gradle starts. Each permitted local repository name is also bound to the
+exact Loom cache path, while tracked `.gradle` content and implicit `buildSrc`
+builds are rejected by both the candidate gate and protected controller
+parity. Local generation inputs remain checksum-locked.
+
 Reports and screenshots are accepted only after exact scenario, role, ordered
 step, assertion, capture basename, digest, size, image decode, dimensions, pixel
 probe, and full inventory validation. An extra file is evidence corruption, not

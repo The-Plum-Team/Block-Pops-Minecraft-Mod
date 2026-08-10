@@ -91,6 +91,8 @@ jobs:
           python3 scripts/release/matrix.py --matrix release/release-matrix.json >/dev/null
           python3 scripts/ci/loader_bootstrap.py \
             --repository . --head-sha "$TARGET_SHA" >/dev/null
+          python3 scripts/ci/dependency_policy.py \
+            --metadata gradle/verification-metadata.xml >/dev/null
           {
             printf '### Exact release gate attestation\n\n'
             printf -- '- Final branch: `%s`\n' "$GITHUB_REF_NAME"

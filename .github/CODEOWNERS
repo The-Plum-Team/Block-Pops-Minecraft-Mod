@@ -8,6 +8,10 @@
 /forge/build.gradle @AkaNebur
 /neoforge/build.gradle @AkaNebur
 /gradle/e2e-harness-conventions.gradle @AkaNebur
+/gradle/repository-policy.gradle @AkaNebur
+/gradle/verification-metadata.xml @AkaNebur
+/.gradle/ @AkaNebur
+/buildSrc/ @AkaNebur
 /e2e/ @AkaNebur
 /release/ @AkaNebur
 /scripts/ci/ @AkaNebur

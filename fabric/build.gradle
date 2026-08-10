@@ -28,7 +28,7 @@ repositories {
         name = 'GeckoLib'
         url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
         content {
-            includeGroupByRegex("software\\.bernie.*")
+            includeGroupByRegex("software\\.bernie(\\..*)?")
         }
     }
 }

@@ -30,6 +30,16 @@ Loader build scripts and `src/e2e` entrypoints are also bound by
 response to a failure: review the executable change and preserve the single
 final `gradle/e2e-harness-conventions.gradle` binding.
 
+Remote Gradle artifacts remain checksum-verified. Loom also creates mappings,
+merged Minecraft modules, and remapped dependencies locally; their ZIP bytes
+are not reproducible across hosts. The four exact generated-name exceptions in
+`gradle/verification-metadata.xml` are safe only together with
+`gradle/repository-policy.gradle`, which makes those namespaces unreachable
+from every HTTPS repository and binds Loom's four local repositories to their
+canonical cache paths. Git-tracked `.gradle` content and implicit `buildSrc`
+builds are forbidden. Never broaden either side or add observed generated
+hashes one run at a time.
+
 Two deterministic gates are authoritative. On ordinary PRs, branch protection
 must require their protected App-authenticated bridge contexts, not a check run
 created from candidate-controlled workflow YAML:
