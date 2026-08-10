@@ -28,7 +28,8 @@ repositories {
         name = 'GeckoLib'
         url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
         content {
-            includeGroupByRegex("software\\.bernie.*")
+            includeGroupByRegex("software\\.bernie(\\..*)?")
+            includeGroup("com.eliotlash.mclib")
         }
     }
 }
@@ -37,13 +38,13 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
 
     // Fabric API
-    modImplementation "net.fabricmc.fabric-api:fabric-api:$rootProject.fabric_api_version"
+    modImplementation rootProject.runtime_dependency_coordinate.call('fabric', 'fabric-api')
 
     // Architectury API - Fabric version
-    modImplementation "dev.architectury:architectury-fabric:$rootProject.architectury_api_version"
+    modImplementation rootProject.runtime_dependency_coordinate.call('fabric', 'architectury')
 
     // GeckoLib - Fabric version
-    modImplementation "software.bernie.geckolib:geckolib-fabric-1.21.1:$rootProject.geckolib_version"
+    modImplementation rootProject.runtime_dependency_coordinate.call('fabric', 'geckolib')
 
     // Common code
     common(project(path: ':common', configuration: 'namedElements')) { transitive = false }
@@ -66,3 +67,5 @@ shadowJar {
 remapJar {
     inputFile.set shadowJar.archiveFile
 }
+
+apply from: rootProject.file('gradle/e2e-harness-conventions.gradle')

@@ -1,0 +1,32 @@
+# Packaged-E2E harness metadata. This physically separate client jar is never shipped.
+modLoader = "javafml"
+loaderVersion = "${loader_requirement}"
+license = "All Rights Reserved"
+
+[[mods]]
+modId = "blockpops_e2e"
+version = "0.0.0"
+displayName = "BlockPops Packaged E2E"
+description = "Client-only release verification harness; never shipped."
+displayTest = "IGNORE_ALL_VERSION"
+
+[[dependencies.blockpops_e2e]]
+modId = "blockpops"
+type = "required"
+versionRange = "[0,)"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies.blockpops_e2e]]
+modId = "neoforge"
+type = "required"
+versionRange = "${loader_requirement}"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.blockpops_e2e]]
+modId = "minecraft"
+type = "required"
+versionRange = "${minecraft_requirement}"
+ordering = "NONE"
+side = "CLIENT"

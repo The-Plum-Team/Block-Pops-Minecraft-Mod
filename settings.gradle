@@ -1,15 +1,127 @@
+import groovy.json.JsonSlurper
+import java.nio.charset.StandardCharsets
+
 pluginManagement {
     repositories {
-        maven { url = 'https://maven.fabricmc.net/' }
-        maven { url = 'https://maven.architectury.dev/' }
-        maven { url = 'https://maven.neoforged.net/releases/' }
-        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
-        gradlePluginPortal()
+        maven {
+            name = 'FabricPluginRepository'
+            url = 'https://maven.fabricmc.net/'
+            mavenContent { releasesOnly() }
+            content {
+                includeGroupByRegex('net\\.fabricmc(\\..*)?')
+            }
+        }
+        maven {
+            name = 'ArchitecturyPluginRepository'
+            url = 'https://maven.architectury.dev/'
+            mavenContent { releasesOnly() }
+            content {
+                includeGroupByRegex('dev\\.architectury(\\..*)?')
+                includeGroup('architectury-plugin')
+                includeGroup('com.github.architectury')
+            }
+        }
+        maven {
+            name = 'MojangPluginRepository'
+            url = 'https://libraries.minecraft.net/'
+            mavenContent { releasesOnly() }
+            content {
+                includeGroupByRegex('com\\.mojang(\\..*)?')
+            }
+        }
+        maven {
+            name = 'ForgePluginRepository'
+            url = 'https://maven.minecraftforge.net/'
+            mavenContent { releasesOnly() }
+            content {
+                includeGroupByRegex('net\\.minecraftforge(\\..*)?')
+                includeGroupByRegex('de\\.oceanlabs\\.mcp(\\..*)?')
+                includeGroupByRegex('org\\.spongepowered(\\..*)?')
+                excludeGroupByRegex('net\\.minecraftforge\\.[0-9a-f]{64}')
+            }
+        }
+        maven {
+            name = 'NeoForgePluginRepository'
+            url = 'https://maven.neoforged.net/releases/'
+            mavenContent { releasesOnly() }
+            content {
+                includeGroupByRegex('net\\.neoforged(\\..*)?')
+                excludeGroupByRegex('net\\.neoforged\\.fancymodloader\\.[0-9a-f]{64}')
+            }
+        }
+        maven {
+            name = 'SpongePluginRepository'
+            url = 'https://repo.spongepowered.org/repository/maven-public/'
+            mavenContent { releasesOnly() }
+            content {
+                includeGroupByRegex('org\\.spongepowered(\\..*)?')
+            }
+        }
+        gradlePluginPortal {
+            content {
+                excludeGroup('loom')
+                excludeGroup('net.minecraft')
+                excludeGroupByRegex('net\\.minecraftforge\\.[0-9a-f]{64}')
+                excludeGroupByRegex('net\\.neoforged\\.fancymodloader\\.[0-9a-f]{64}')
+                excludeGroupByRegex('remapped\\..+')
+                excludeGroupByRegex('net\\.fabricmc(\\..*)?')
+                excludeGroupByRegex('dev\\.architectury(\\..*)?')
+                excludeGroup('architectury-plugin')
+                excludeGroup('com.github.architectury')
+                excludeGroupByRegex('net\\.minecraftforge(\\..*)?')
+                excludeGroupByRegex('de\\.oceanlabs\\.mcp(\\..*)?')
+                excludeGroupByRegex('org\\.spongepowered(\\..*)?')
+                excludeGroupByRegex('net\\.neoforged(\\..*)?')
+            }
+        }
     }
+}
+
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
 rootProject.name = 'blockpops'
 
+def matrixFile = file('release/release-matrix.json')
+if (!matrixFile.isFile()) {
+    throw new GradleException("Missing authoritative release matrix: ${matrixFile}")
+}
+def pythonExecutable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3'
+def matrixProcess = new ProcessBuilder(
+    pythonExecutable,
+    file('scripts/release/matrix.py').absolutePath,
+    '--matrix', matrixFile.absolutePath,
+    '--no-source-check'
+).directory(rootDir).redirectErrorStream(false).start()
+def matrixBytes = matrixProcess.inputStream.readNBytes(4 * 1024 * 1024 + 1)
+def matrixErrors = matrixProcess.errorStream.readNBytes(256 * 1024 + 1)
+def matrixExit = matrixProcess.waitFor()
+if (matrixExit != 0 || matrixBytes.length == 0 || matrixBytes.length > 4 * 1024 * 1024
+        || matrixErrors.length > 256 * 1024) {
+    def detail = new String(matrixErrors, StandardCharsets.UTF_8).trim()
+    throw new GradleException("Strict release matrix validation failed${detail ? ': ' + detail : ''}")
+}
+def releaseMatrix = new JsonSlurper().parseText(
+    new String(matrixBytes, StandardCharsets.UTF_8)
+)
+if (releaseMatrix.schema_version != 1) {
+    throw new GradleException('Unsupported release matrix schema')
+}
+if (!(releaseMatrix.artifacts instanceof List)
+        || releaseMatrix.artifacts.size() != releaseMatrix.lane_count) {
+    throw new GradleException('Release matrix lane_count does not match artifacts')
+}
+def activeLoaders = releaseMatrix.artifacts.collect { row -> row.loader as String }.toSet()
+if (!activeLoaders || !activeLoaders.every { it in ['fabric', 'forge', 'neoforge'] }) {
+    throw new GradleException("Unsupported release loader inventory: ${activeLoaders}")
+}
+if (releaseMatrix.source_routing.keySet() as Set != (['common'] + activeLoaders) as Set) {
+    throw new GradleException('Release matrix source routing disagrees with active loaders')
+}
+
+gradle.ext.blockPopsReleaseMatrix = releaseMatrix
+gradle.ext.blockPopsReleaseMatrixFile = matrixFile
+
 include 'common'
-include 'fabric'
-include 'neoforge'
+activeLoaders.sort().each { include it }

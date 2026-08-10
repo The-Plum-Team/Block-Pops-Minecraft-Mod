@@ -1,0 +1,426 @@
+name: Packaged E2E
+
+on:
+  pull_request:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact automation head; empty only for an ordinary manual run
+        required: false
+        type: string
+      target_branch:
+        description: Exact enrolled release branch for an automation run
+        required: false
+        type: string
+      target_sha:
+        description: Exact release base for an automation run
+        required: false
+        type: string
+      source_sha:
+        description: Exact canonical source parent for an automation run
+        required: false
+        type: string
+      attest_run_id:
+        description: Successful source run id; non-empty selects attestation mode
+        required: false
+        type: string
+      attest_run_attempt:
+        description: Exact successful source run attempt
+        required: false
+        type: string
+      attest_branch:
+        description: Exact tested automation branch
+        required: false
+        type: string
+      attest_sha:
+        description: Exact tested automation head
+        required: false
+        type: string
+      attest_base_sha:
+        description: Exact pre-merge release head
+        required: false
+        type: string
+      attest_target_sha:
+        description: Exact final release merge commit
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: packaged-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  BLOCKPOPS_TESTED_SHA: ${{ github.sha }}
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  identity:
+    name: Resolve authoritative packaged matrix
+    if: inputs.attest_run_id == ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      anchors: ${{ steps.matrix.outputs.anchors }}
+      gradle_java: ${{ steps.matrix.outputs.gradle_java }}
+      branch_name: ${{ steps.matrix.outputs.branch_name }}
+      branch_role: ${{ steps.matrix.outputs.branch_role }}
+      projection: ${{ steps.matrix.outputs.projection }}
+    steps:
+      - name: Check out the exact candidate without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Authenticate explicit release-sync inputs
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$EXPECTED_SHA" ]]; then
+            [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]
+            [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ && "$EXPECTED_SHA" == "$BLOCKPOPS_TESTED_SHA" ]]
+            [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ -n "$TARGET_BRANCH" ]]
+            jq -e --arg branch "$TARGET_BRANCH" \
+              '.branch.role == "release" and .branch.name == $branch and .branch.sync.enabled == true' \
+              release/release-matrix.json >/dev/null
+          else
+            [[ -z "$SOURCE_SHA$TARGET_BRANCH$TARGET_SHA" ]]
+          fi
+
+      - name: Resolve the authoritative runtime graph
+        id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/release/matrix.py --matrix release/release-matrix.json >/dev/null
+          python3 scripts/ci/loader_bootstrap.py \
+            --repository . --head-sha "$BLOCKPOPS_TESTED_SHA" >/dev/null
+          python3 scripts/ci/dependency_policy.py \
+            --metadata gradle/verification-metadata.xml >/dev/null
+          matrix_kind=pr-anchors
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            matrix_kind=scheduled-anchors
+          fi
+          anchors="$(python3 scripts/release/matrix.py \
+            --matrix release/release-matrix.json --kind "$matrix_kind")"
+          [[ "$(jq '.include | length' <<< "$anchors")" -gt 0 ]]
+          printf 'anchors=%s\n' "$anchors" >> "$GITHUB_OUTPUT"
+          gradle_java="$(python3 scripts/release/matrix.py \
+            --matrix release/release-matrix.json --kind gradle-java \
+            | jq -er '.java')"
+          [[ "$gradle_java" =~ ^[0-9]+$ ]]
+          printf 'gradle_java=%s\n' "$gradle_java" >> "$GITHUB_OUTPUT"
+          printf 'branch_name=%s\n' "$(jq -er .branch.name release/release-matrix.json)" >> "$GITHUB_OUTPUT"
+          printf 'branch_role=%s\n' "$(jq -er .branch.role release/release-matrix.json)" >> "$GITHUB_OUTPUT"
+          printf 'projection=%s\n' "$matrix_kind" >> "$GITHUB_OUTPUT"
+          printf 'Coverage projection: `%s`.\n' "$matrix_kind" >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build immutable E2E input bundle
+    needs: identity
+    if: needs.identity.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out the exact candidate without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate the Gradle wrapper
+        uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Verify exact Gradle bootstrap checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd gradle/wrapper && sha256sum --check --strict gradle-wrapper.jar.sha256)
+          distribution_hash="$(tr -d '\r\n' < gradle/wrapper/gradle-8.14-bin.zip.sha256)"
+          grep --fixed-strings --line-regexp "distributionSha256Sum=$distribution_hash" \
+            gradle/wrapper/gradle-wrapper.properties
+
+      - name: Install the matrix-owned Gradle JDK
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: ${{ needs.identity.outputs.gradle_java }}
+
+      - name: Install Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Configure read-only Gradle cache
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-read-only: true
+
+      - name: Build every declared production and harness lane
+        run: >-
+          ./gradlew --no-daemon --no-parallel --stacktrace
+          clean buildAllLanes buildAllE2EHarnesses check
+
+      - name: Stage and reverify the exact runtime inputs
+        run: python3 scripts/release/verify_release.py
+
+      - name: Upload one immutable runtime input bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-input-bundle-${{ github.sha }}-${{ github.run_attempt }}
+          path: build/release/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  e2e:
+    name: ${{ matrix.id }} - contract scenarios
+    needs: [identity, build]
+    if: needs.identity.result == 'success' && needs.build.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.identity.outputs.anchors) }}
+    steps:
+      - name: Check out exact tested orchestration code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Launch real packaged jars and contracted scenarios
+        uses: ./.github/actions/run-packaged-e2e
+        with:
+          bundle-name: e2e-input-bundle-${{ github.sha }}-${{ github.run_attempt }}
+          row-json: ${{ toJSON(matrix) }}
+          java-version: ${{ matrix.java }}
+          scenarios: ${{ matrix.scenarios }}
+          evidence-name: packaged-e2e-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.id }}
+
+  aggregate:
+    name: Validate and aggregate packaged evidence
+    needs: [identity, build, e2e]
+    if: >-
+      needs.identity.result == 'success' && needs.build.result == 'success' &&
+      needs.e2e.result == 'success' && inputs.attest_run_id == ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Check out exact tested fan-in policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install the hash-locked PNG decoder
+        run: >-
+          python3 -m pip install --disable-pip-version-check
+          --only-binary=:all: --require-hashes
+          --requirement scripts/pages/requirements.txt
+
+      - name: Download the exact verified production bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: e2e-input-bundle-${{ github.sha }}-${{ github.run_attempt }}
+          path: build/release
+          digest-mismatch: error
+
+      - name: Download every lane without overlaying their roots
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: packaged-e2e-${{ github.sha }}-${{ github.run_attempt }}-*
+          merge-multiple: false
+          path: packaged-e2e-lanes
+          digest-mismatch: error
+
+      - name: Validate and reconstruct the exact aggregate
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$BLOCKPOPS_TESTED_SHA" ]]
+          tree="$(git rev-parse 'HEAD^{tree}')"
+          python3 scripts/ci/e2e_fanin.py create \
+            --input packaged-e2e-lanes \
+            --output packaged-e2e-aggregate \
+            --matrix release/release-matrix.json \
+            --contract e2e/scenario-contract.json \
+            --stage build/release \
+            --artifact-manifest build/release/artifacts.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-branch "$GITHUB_REF_NAME" \
+            --commit "$BLOCKPOPS_TESTED_SHA" \
+            --tree "$tree" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --projection "${{ needs.identity.outputs.projection }}"
+
+      - name: Upload one immutable aggregate handoff
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: packaged-e2e-${{ github.sha }}-${{ github.run_attempt }}-aggregate
+          path: packaged-e2e-aggregate/
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 1
+
+  required:
+    name: Packaged E2E gate
+    needs: [identity, build, e2e, aggregate]
+    if: always() && inputs.attest_run_id == ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require the complete matrix and packaged behavior
+        shell: bash
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+          AGGREGATE_RESULT: ${{ needs.aggregate.result }}
+          IDENTITY_RESULT: ${{ needs.identity.result }}
+        run: |
+          set -euo pipefail
+          [[ "$IDENTITY_RESULT" == success ]]
+          [[ "$BUILD_RESULT" == success ]]
+          [[ "$E2E_RESULT" == success ]]
+          [[ "$AGGREGATE_RESULT" == success ]]
+
+  attest:
+    name: Attest exact tested packaged tree
+    if: inputs.attest_run_id != ''
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/verify-gate-attestation.yml
+    with:
+      source_run_id: ${{ inputs.attest_run_id }}
+      source_run_attempt: ${{ inputs.attest_run_attempt }}
+      source_workflow: on-demand-e2e.yml
+      tested_branch: ${{ inputs.attest_branch }}
+      tested_sha: ${{ inputs.attest_sha }}
+      base_sha: ${{ inputs.attest_base_sha }}
+      target_sha: ${{ inputs.attest_target_sha }}
+
+  public-evidence:
+    name: Curate current-head public evidence (advisory)
+    needs: [identity, aggregate, required, attest]
+    if: >-
+      always() && github.event_name != 'pull_request' &&
+      ((inputs.attest_run_id == '' && needs.required.result == 'success' &&
+        needs.identity.outputs.branch_name == github.ref_name) ||
+       (inputs.attest_run_id != '' && needs.attest.result == 'success'))
+    continue-on-error: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Check out the exact published head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install the hash-locked evidence decoder
+        run: >-
+          python -m pip install --only-binary=:all: --require-hashes
+          --requirement scripts/pages/requirements.txt
+
+      - name: Authenticate current branch and derive opaque artifact identity
+        id: identity
+        shell: bash
+        env:
+          SOURCE_RUN_ID: ${{ inputs.attest_run_id || github.run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$BLOCKPOPS_TESTED_SHA" ]]
+          [[ "$(jq -er .branch.name release/release-matrix.json)" == "$GITHUB_REF_NAME" ]]
+          [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
+          token="$(python3 scripts/ci/gate_controller.py branch-token --branch "$GITHUB_REF_NAME")"
+          printf 'artifact=pages-e2e-%s-%s\n' "$token" "$GITHUB_RUN_ATTEMPT" \
+            >> "$GITHUB_OUTPUT"
+          printf 'source_run_id=%s\n' "$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
+          printf 'tree=%s\n' "$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+
+      - name: Download the exact validated aggregate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: >-
+            packaged-e2e-${{ inputs.attest_sha || github.sha }}-${{
+            inputs.attest_run_attempt || github.run_attempt }}-aggregate
+          path: e2e-out/current
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.identity.outputs.source_run_id }}
+          digest-mismatch: error
+
+      - name: Revalidate the exact aggregate inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          projection=pr-anchors
+          if [[ -z "${{ inputs.attest_run_id }}" && "$GITHUB_EVENT_NAME" == schedule ]]; then
+            projection=scheduled-anchors
+          fi
+          python3 scripts/ci/e2e_fanin.py validate \
+            --input e2e-out/current \
+            --matrix release/release-matrix.json \
+            --contract e2e/scenario-contract.json \
+            --projection "$projection"
+
+      - name: Curate strict SHA-bound public evidence
+        run: >-
+          python3 scripts/pages/evidence.py curate
+          --input e2e-out/current
+          --output public-evidence
+          --repository "$GITHUB_REPOSITORY"
+          --branch "$GITHUB_REF_NAME"
+          --commit "$BLOCKPOPS_TESTED_SHA"
+          --tree "${{ steps.identity.outputs.tree }}"
+          --run-id "$GITHUB_RUN_ID"
+          --run-attempt "$GITHUB_RUN_ATTEMPT"
+          --packaged-run-id "${{ steps.identity.outputs.source_run_id }}"
+          --packaged-run-attempt "${{ inputs.attest_run_attempt || github.run_attempt }}"
+          --packaged-branch "${{ inputs.attest_branch || github.ref_name }}"
+          --packaged-commit "${{ inputs.attest_sha || github.sha }}"
+          --packaged-tree "${{ steps.identity.outputs.tree }}"
+
+      - name: Upload a single-use current-head Pages handoff
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.identity.outputs.artifact }}
+          path: public-evidence/
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 1

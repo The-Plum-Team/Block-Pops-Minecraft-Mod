@@ -25,13 +25,20 @@ side = "BOTH"
 [[dependencies.blockpops]]
 modId = "minecraft"
 type = "required"
-versionRange = "[1.21.1,1.22)"
+versionRange = "[1.21.1,1.21.2)"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.blockpops]]
 modId = "architectury"
 type = "required"
-versionRange = "[13.0,)"
+versionRange = "[13.0.8,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.blockpops]]
+modId = "geckolib"
+type = "required"
+versionRange = "[4.8,)"
 ordering = "AFTER"
 side = "BOTH"

@@ -8,8 +8,8 @@
     "ThePlumTeam"
   ],
   "contact": {
-    "homepage": "https://github.com/ThePlumTeam/BlockPops",
-    "sources": "https://github.com/ThePlumTeam/BlockPops"
+    "homepage": "https://github.com/AkaNebur/BlockPops",
+    "sources": "https://github.com/AkaNebur/BlockPops"
   },
   "license": "All Rights Reserved",
   "icon": "icon.png",
@@ -29,7 +29,7 @@
     "fabricloader": ">=0.17.0",
     "fabric-api": "*",
     "minecraft": "~1.21.1",
-    "architectury": ">=13.0.0",
+    "architectury": ">=13.0.8",
     "geckolib": ">=4.8"
   }
 }

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "blockpops-e2e",
+  "version": "0.0.0",
+  "name": "BlockPops Packaged E2E",
+  "description": "Client-only release verification harness; never shipped.",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.theplumteam.e2e.fabric.BlockPopsE2EFabric"
+    ]
+  },
+  "depends": {
+    "fabricloader": "${loader_requirement}",
+    "minecraft": "${minecraft_requirement}",
+    "blockpops": "*"
+  }
+}

@@ -1,0 +1,148 @@
+import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.bundling.AbstractArchiveTask
+import org.gradle.jvm.tasks.Jar
+
+def loaderId = project.name
+def loaderLabels = [fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge']
+def loaderLabel = loaderLabels[loaderId]
+if (loaderLabel == null) {
+    throw new GradleException("Unsupported E2E harness loader: ${loaderId}")
+}
+def artifacts = gradle.ext.blockPopsReleaseMatrix.artifacts as List
+def artifact = artifacts.find { it.loader == loaderId }
+if (artifact == null) {
+    throw new GradleException("Release matrix has no E2E lane for ${loaderId}")
+}
+def minecraftVersion = artifact.minecraft as String
+def noRemap = artifact.no_remap as Boolean
+
+def mainSourceSet = sourceSets.main
+def e2eSourceSet = sourceSets.findByName('e2e') ?: sourceSets.create('e2e')
+def protectedRoots = [
+    rootProject.file("${loaderId}/src/e2e/java"),
+    rootProject.file("${loaderId}/src/e2e/resources"),
+    rootProject.file('common/src/e2e/java'),
+    rootProject.file('common/src/e2e/resources')
+]
+protectedRoots.each {
+    if (!it.isDirectory()) {
+        throw new GradleException("Missing protected E2E harness source root: ${it}")
+    }
+}
+e2eSourceSet.java.setSrcDirs([
+    rootProject.file("${loaderId}/src/e2e/java"),
+    rootProject.file('common/src/e2e/java')
+])
+e2eSourceSet.resources.setSrcDirs([
+    rootProject.file("${loaderId}/src/e2e/resources"),
+    rootProject.file('common/src/e2e/resources')
+])
+e2eSourceSet.compileClasspath = files(mainSourceSet.output, mainSourceSet.compileClasspath)
+e2eSourceSet.runtimeClasspath = files(e2eSourceSet.output, e2eSourceSet.compileClasspath)
+
+// Forge-family loaders turn a missing client resource-pack descriptor into a blocking
+// LoadingErrorScreen even when every class loaded successfully. Reuse the active loader's
+// production descriptor verbatim so the harness cannot carry a second version/pack-format
+// inventory. Fabric 1.20.1 has no loader-local descriptor and does not require one.
+def productionPackMetadata = mainSourceSet.resources.srcDirs
+        .collect { new File(it, 'pack.mcmeta') }
+        .findAll { it.isFile() }
+if (loaderId in ['forge', 'neoforge'] && productionPackMetadata.size() != 1) {
+    throw new GradleException(
+            "${loaderLabel} E2E requires exactly one production-owned pack.mcmeta, "
+                    + "found ${productionPackMetadata}")
+}
+
+def contractFile = rootProject.file('e2e/scenario-contract.json')
+def contractParser = rootProject.file('e2e/scenario_contract.py')
+def contractGenerator = rootProject.file('e2e/generate_contract_java.py')
+def generatedJava = layout.buildDirectory.dir('generated/e2e-contract/java')
+def defaultPython = System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3'
+def contractPython = providers.environmentVariable('BLOCKPOPS_PYTHON').orElse(defaultPython)
+
+def generateContract = tasks.register('generateE2EContractJava', Exec) {
+    group = 'verification'
+    description = 'Validates the canonical scenario contract and generates typed Java identities.'
+    inputs.files(contractFile, contractParser, contractGenerator)
+    inputs.property('pythonExecutable', contractPython)
+    def output = generatedJava.map {
+        it.file('com/theplumteam/e2e/generated/ScenarioContract.java')
+    }
+    outputs.file(output)
+    workingDir rootProject.projectDir
+    commandLine(
+        contractPython.get(),
+        contractGenerator.absolutePath,
+        '--contract', contractFile.absolutePath,
+        '--output', output.get().asFile.absolutePath
+    )
+}
+
+e2eSourceSet.java.srcDir(generatedJava)
+tasks.named(e2eSourceSet.compileJavaTaskName) {
+    dependsOn generateContract
+}
+tasks.named(e2eSourceSet.processResourcesTaskName) {
+    inputs.property('e2eMinecraftRequirement', artifact.metadata.minecraft as String)
+    inputs.property('e2eLoaderRequirement', artifact.metadata.loader as String)
+    if (!productionPackMetadata.isEmpty()) {
+        from(productionPackMetadata.first())
+    }
+    filesMatching(['fabric.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml']) {
+        expand(
+            minecraft_requirement: artifact.metadata.minecraft as String,
+            loader_requirement: artifact.metadata.loader as String
+        )
+    }
+}
+
+def archiveName = "BlockPops E2E - ${loaderLabel} - ${minecraftVersion}"
+if (noRemap) {
+    tasks.register('e2eHarnessJar', Jar) {
+        group = 'verification'
+        description = 'Packages the physically separate client-only E2E harness.'
+        dependsOn tasks.named(e2eSourceSet.classesTaskName)
+        from e2eSourceSet.output
+        archiveBaseName.set(archiveName)
+        archiveVersion.set('0.0.0')
+        archiveClassifier.set('')
+    }
+} else {
+    def devJar = tasks.register('e2eHarnessDevJar', Jar) {
+        group = 'verification'
+        description = 'Packages the named input for the remapped E2E harness.'
+        dependsOn tasks.named(e2eSourceSet.classesTaskName)
+        from e2eSourceSet.output
+        archiveBaseName.set(archiveName)
+        archiveVersion.set('0.0.0')
+        archiveClassifier.set('dev')
+        destinationDirectory.set(layout.buildDirectory.dir('devlibs'))
+    }
+    def productionRemap = tasks.named('remapJar')
+    def remapType = productionRemap.get().class
+    while (remapType != null
+            && remapType.name != 'net.fabricmc.loom.task.RemapJarTask') {
+        remapType = remapType.superclass
+    }
+    if (remapType == null) {
+        throw new GradleException('Loom remapJar does not expose the pinned public RemapJarTask API')
+    }
+    tasks.register('remapE2EHarnessJar', remapType) {
+        group = 'verification'
+        description = "Remaps the separate E2E harness for packaged ${loaderLabel}."
+        dependsOn devJar
+        inputFile.set(devJar.flatMap { it.archiveFile })
+        sourceNamespace.set(productionRemap.flatMap { it.sourceNamespace })
+        targetNamespace.set(productionRemap.flatMap { it.targetNamespace })
+        classpath.from(productionRemap.map { it.classpath }, e2eSourceSet.compileClasspath)
+        addNestedDependencies.set(false)
+        readMixinConfigsFromManifest.set(false)
+        injectAccessWidener.set(false)
+        useMixinAP.set(false)
+        archiveBaseName.set(archiveName)
+        archiveVersion.set('0.0.0')
+        archiveClassifier.set('')
+    }
+}

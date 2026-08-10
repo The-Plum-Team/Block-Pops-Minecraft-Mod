@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "gradle_java": 21,
+  "lane_count": 2,
+  "unit_test_lane": "fabric-1.21.1",
+  "branch": {
+    "role": "release",
+    "name": "1.21.1-neoforge-fabric",
+    "canonical": "master",
+    "sync": {
+      "enabled": true,
+      "source": "master"
+    }
+  },
+  "project": {
+    "name": "BlockPops",
+    "mod_id": "blockpops",
+    "description": "Collectible figures, animated blocks, and interactive claw-machine gameplay.",
+    "mod_version": "1.1.2",
+    "sources": "https://github.com/AkaNebur/BlockPops",
+    "issues": "https://github.com/AkaNebur/BlockPops/issues",
+    "license": "All Rights Reserved"
+  },
+  "visual_reference": {
+    "release_branch": "master",
+    "artifact_node": "fabric-1.20.1",
+    "scenario_contract": "e2e/scenario-contract.json"
+  },
+  "source_routing": {
+    "common": {
+      "canonical": "common/src/main",
+      "overlays": {}
+    },
+    "fabric": {
+      "canonical": "fabric/src/main",
+      "overlays": {}
+    },
+    "neoforge": {
+      "canonical": "neoforge/src/main",
+      "overlays": {}
+    }
+  },
+  "installers": {
+    "fabric-1.1.0": {
+      "url": "https://maven.fabricmc.net/net/fabricmc/fabric-installer/1.1.0/fabric-installer-1.1.0.jar",
+      "sha256": "c20c407d5ca4b119aae97847eb2fbb1d34c92969b647fbbb1de2fd36ca00738e"
+    },
+    "neoforge-21.1.77": {
+      "url": "https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.77/neoforge-21.1.77-installer.jar",
+      "sha256": "359b4d488e68cf86569c20a4a422511b4299aa2af8accf38f36f436f35e49562"
+    }
+  },
+  "artifacts": [
+    {
+      "artifact_node": "fabric-1.21.1",
+      "minecraft": "1.21.1",
+      "loader": "fabric",
+      "java": 21,
+      "no_remap": false,
+      "gradle_task": ":fabric:remapJar",
+      "harness_task": ":fabric:remapE2EHarnessJar",
+      "jar": "fabric/build/libs/BlockPops - Fabric - 1.21.1-{mod_version}.jar",
+      "harness_jar": "fabric/build/libs/BlockPops E2E - Fabric - 1.21.1-0.0.0.jar",
+      "metadata": {
+        "file": "fabric.mod.json",
+        "minecraft": "~1.21.1",
+        "loader": ">=0.17.0",
+        "architectury": ">=13.0.8",
+        "geckolib": ">=4.8"
+      }
+    },
+    {
+      "artifact_node": "neoforge-1.21.1",
+      "minecraft": "1.21.1",
+      "loader": "neoforge",
+      "java": 21,
+      "no_remap": false,
+      "gradle_task": ":neoforge:remapJar",
+      "harness_task": ":neoforge:remapE2EHarnessJar",
+      "jar": "neoforge/build/libs/BlockPops - NeoForge - 1.21.1-{mod_version}.jar",
+      "harness_jar": "neoforge/build/libs/BlockPops E2E - NeoForge - 1.21.1-0.0.0.jar",
+      "metadata": {
+        "file": "META-INF/neoforge.mods.toml",
+        "minecraft": "[1.21.1,1.21.2)",
+        "loader": "[4,)",
+        "architectury": "[13.0.8,)",
+        "geckolib": "[4.8,)"
+      }
+    }
+  ],
+  "runtimes": [
+    {
+      "artifact_node": "fabric-1.21.1",
+      "minecraft": "1.21.1",
+      "loader": "fabric",
+      "java": 21,
+      "loader_version": "0.17.0",
+      "installer": "fabric-1.1.0",
+      "pr_anchor": true,
+      "scheduled_anchor": true,
+      "runtime_dependencies": [
+        {
+          "id": "fabric-api",
+          "coordinate": "net.fabricmc.fabric-api:fabric-api:0.110.0+1.21.1",
+          "repository": "https://maven.fabricmc.net/",
+          "side": "both"
+        },
+        {
+          "id": "architectury",
+          "coordinate": "dev.architectury:architectury-fabric:13.0.8",
+          "repository": "https://maven.architectury.dev/",
+          "side": "both"
+        },
+        {
+          "id": "geckolib",
+          "coordinate": "software.bernie.geckolib:geckolib-fabric-1.21.1:4.8",
+          "repository": "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "artifact_node": "neoforge-1.21.1",
+      "minecraft": "1.21.1",
+      "loader": "neoforge",
+      "java": 21,
+      "loader_version": "21.1.77",
+      "installer": "neoforge-21.1.77",
+      "pr_anchor": true,
+      "scheduled_anchor": true,
+      "runtime_dependencies": [
+        {
+          "id": "architectury",
+          "coordinate": "dev.architectury:architectury-neoforge:13.0.8",
+          "repository": "https://maven.architectury.dev/",
+          "side": "both"
+        },
+        {
+          "id": "geckolib",
+          "coordinate": "software.bernie.geckolib:geckolib-neoforge-1.21.1:4.8",
+          "repository": "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/",
+          "side": "both"
+        }
+      ]
+    }
+  ]
+}

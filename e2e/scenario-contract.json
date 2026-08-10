@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "gui_text_reference_size": [
+    1600,
+    900
+  ],
+  "scenarios": [
+    {
+      "scenario": "ui-regression",
+      "execution_profiles": [
+        "runtime-default",
+        "pr",
+        "release"
+      ],
+      "orchestration": {
+        "mode": "single-client"
+      },
+      "roles": [
+        {
+          "role": "client_a",
+          "steps": [
+            {
+              "id": "favorite_color_prompt",
+              "assertion_required": true,
+              "capture": {
+                "title": "Organic first-join favorite-color prompt",
+                "review_tier": "key",
+                "expectation": "The production server-triggered Choose Your Favorite Color modal is opaque and centered; its 4 by 4 color grid, Figure ON control, disabled Done control, text, and figure preview are crisp and unclipped.",
+                "probes": [
+                  {
+                    "kind": "opaque-stars-background",
+                    "region": [0.02, 0.15, 0.2, 0.85],
+                    "maximum_mean_luma": 32.0,
+                    "bright_luma": 64,
+                    "maximum_bright_fraction": 0.1
+                  },
+                  {
+                    "kind": "required-gui-text",
+                    "label": "favorite-color title and description",
+                    "box": [670, 145, 930, 205],
+                    "minimum_luma_exclusive": 143,
+                    "minimum_pixels": 400
+                  }
+                ]
+              }
+            },
+            {
+              "id": "favorite_color_selected",
+              "assertion_required": true,
+              "capture": {
+                "title": "Favorite color selected state",
+                "review_tier": "key",
+                "expectation": "The same favorite-color modal visibly marks purple as selected and enables Done without text bleeding, transparency, blur, or layout movement.",
+                "probes": [
+                  {
+                    "kind": "opaque-stars-background",
+                    "region": [0.02, 0.15, 0.2, 0.85],
+                    "maximum_mean_luma": 32.0,
+                    "bright_luma": 64,
+                    "maximum_bright_fraction": 0.1
+                  },
+                  {
+                    "kind": "required-gui-text",
+                    "label": "selected favorite-color title and description",
+                    "box": [670, 145, 930, 205],
+                    "minimum_luma_exclusive": 143,
+                    "minimum_pixels": 400
+                  }
+                ]
+              }
+            },
+            {
+              "id": "favorite_color_applied",
+              "assertion_required": true,
+              "capture": {
+                "title": "Favorite color round trip applied",
+                "review_tier": "all",
+                "expectation": "The real Done action has closed the modal and returned to a normal packaged world view after the server persisted and synchronized the purple World Players figure.",
+                "probes": []
+              }
+            },
+            {
+              "id": "collection_screen_initial",
+              "assertion_required": true,
+              "capture": {
+                "title": "Claw machine collection screen",
+                "review_tier": "key",
+                "expectation": "The Claw Machine Configuration screen shows the real packaged One Piece selection, collection and figure grids, token controls, and footer; labels and controls are not clipped or overlapped.",
+                "probes": [
+                  {
+                    "kind": "required-gui-text",
+                    "label": "collections header",
+                    "box": [205, 75, 600, 110],
+                    "minimum_luma_exclusive": 143,
+                    "minimum_pixels": 200
+                  },
+                  {
+                    "kind": "required-gui-text",
+                    "label": "selected collection and figure header",
+                    "box": [790, 75, 1200, 110],
+                    "minimum_luma_exclusive": 143,
+                    "minimum_pixels": 300
+                  },
+                  {
+                    "kind": "required-gui-text",
+                    "label": "token availability status",
+                    "box": [400, 745, 1200, 775],
+                    "minimum_luma_exclusive": 143,
+                    "minimum_pixels": 250
+                  }
+                ]
+              }
+            },
+            {
+              "id": "settings_modal",
+              "assertion_required": true,
+              "capture": {
+                "title": "Claw machine settings modal",
+                "review_tier": "key",
+                "expectation": "The production Settings modal is opaque, centered over the claw-machine screen, and its server tab, sliders, buttons, and labels remain readable without token-button text bleeding through.",
+                "probes": [
+                  {
+                    "kind": "opaque-stars-background",
+                    "region": [0.31, 0.5, 0.39, 0.61],
+                    "maximum_mean_luma": 8.0,
+                    "bright_luma": 32,
+                    "maximum_bright_fraction": 0.01
+                  },
+                  {
+                    "kind": "required-gui-text",
+                    "label": "settings server title",
+                    "box": [720, 305, 900, 335],
+                    "minimum_luma_exclusive": 159,
+                    "minimum_pixels": 150
+                  },
+                  {
+                    "kind": "required-gui-text",
+                    "label": "settings slider and explanation",
+                    "box": [580, 345, 1020, 425],
+                    "minimum_luma_exclusive": 143,
+                    "minimum_pixels": 1200
+                  }
+                ]
+              }
+            }
+          ],
+          "comparisons": [
+            {
+              "first_step": "favorite_color_prompt",
+              "second_step": "favorite_color_selected",
+              "minimum_changed_fraction": 0.002,
+              "region": [0.25, 0.18, 0.75, 0.82]
+            },
+            {
+              "first_step": "favorite_color_selected",
+              "second_step": "favorite_color_applied",
+              "minimum_changed_fraction": 0.005,
+              "region": [0.25, 0.18, 0.75, 0.82]
+            },
+            {
+              "first_step": "collection_screen_initial",
+              "second_step": "settings_modal",
+              "minimum_changed_fraction": 0.005,
+              "region": [0.09375, 0.1111, 0.88, 0.88]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
