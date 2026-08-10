@@ -67,3 +67,5 @@ shadowJar {
 remapJar {
     inputFile.set shadowJar.archiveFile
 }
+
+apply from: rootProject.file('gradle/e2e-harness-conventions.gradle')

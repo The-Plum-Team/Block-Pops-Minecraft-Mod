@@ -1,16 +1,68 @@
+import org.gradle.api.tasks.bundling.AbstractArchiveTask
+
 plugins {
-    id 'dev.architectury.loom' version '1.11-SNAPSHOT' apply false
-    id 'architectury-plugin' version '3.4-SNAPSHOT'
-    id 'com.gradleup.shadow' version '8.3.6' apply false
+    id 'dev.architectury.loom' version '1.11.456' apply false
+    id 'architectury-plugin' version '3.4.164'
+    id 'com.gradleup.shadow' version '8.3.11' apply false
+}
+
+def releaseMatrix = gradle.ext.blockPopsReleaseMatrix
+def artifacts = releaseMatrix.artifacts as List
+def runtimes = releaseMatrix.runtimes as List
+def minecraftVersions = artifacts.collect { it.minecraft as String }.toSet()
+def javaVersions = artifacts.collect { (it.java as Number).intValue() }.toSet()
+if (minecraftVersions.size() != 1 || javaVersions.size() != 1) {
+    throw new GradleException('A BlockPops release branch must route exactly one Minecraft/Java era')
+}
+def minecraftVersion = minecraftVersions.first()
+def javaVersion = javaVersions.first()
+def runtimeByLoader = runtimes.collectEntries { [(it.loader as String): it] }
+def versionOf = { String loader, String dependencyId ->
+    def runtime = runtimeByLoader[loader]
+    def dependency = runtime?.runtime_dependencies?.find { it.id == dependencyId }
+    if (dependency == null) {
+        throw new GradleException("Release matrix has no ${dependencyId} runtime dependency for ${loader}")
+    }
+    def coordinate = dependency.coordinate as String
+    return coordinate.substring(coordinate.lastIndexOf(':') + 1)
+}
+
+ext {
+    minecraft_version = minecraftVersion
+    release_java_version = javaVersion
+    enabled_platforms = artifacts.collect { it.loader as String }.sort().join(',')
+    architectury_api_version = versionOf(artifacts[0].loader as String, 'architectury')
+    geckolib_version = versionOf(artifacts[0].loader as String, 'geckolib')
+}
+runtimeByLoader.each { String loader, Object runtime ->
+    switch (loader) {
+        case 'fabric':
+            ext.fabric_loader_version = runtime.loader_version as String
+            ext.fabric_api_version = versionOf('fabric', 'fabric-api')
+            break
+        case 'forge':
+            ext.forge_version = runtime.loader_version as String
+            break
+        case 'neoforge':
+            ext.neoforge_version = runtime.loader_version as String
+            break
+        default:
+            throw new GradleException("Unsupported loader ${loader}")
+    }
 }
 
 architectury {
-    minecraft = project.minecraft_version
+    minecraft = minecraftVersion
 }
 
 allprojects {
     group = rootProject.maven_group
     version = rootProject.mod_version
+
+    tasks.withType(AbstractArchiveTask).configureEach {
+        preserveFileTimestamps = false
+        reproducibleFileOrder = true
+    }
 }
 
 subprojects {
@@ -18,23 +70,29 @@ subprojects {
     apply plugin: 'architectury-plugin'
     apply plugin: 'maven-publish'
 
+    def lane = artifacts.find { it.loader == project.name }
+    if (project.name != 'common' && lane == null) {
+        throw new GradleException("Project ${project.path} has no active matrix lane")
+    }
+
     base {
-        // Set up named JARs for each platform
-        if (project.name == 'forge') {
-            archivesName = "BlockPops - Forge - ${rootProject.minecraft_version}"
-        } else if (project.name == 'fabric') {
-            archivesName = "BlockPops - Fabric - ${rootProject.minecraft_version}"
+        if (lane != null) {
+            def loaderName = [fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge'][lane.loader]
+            archivesName = "BlockPops - ${loaderName} - ${lane.minecraft}"
         } else {
             archivesName = "$rootProject.archives_name-$project.name"
         }
     }
 
     repositories {
-        // Add repositories to retrieve artifacts from in here.
-        // You should only use this when depending on other mods because
-        // Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-        // See https://docs.gradle.org/current/userguide/declaring_repositories.html
-        // for more information about repositories.
+        maven {
+            name = 'GeckoLib'
+            url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
+            content {
+                includeGroupByRegex('software\\.bernie.*')
+                includeGroup('com.eliotlash.mclib')
+            }
+        }
     }
 
     dependencies {
@@ -43,20 +101,19 @@ subprojects {
     }
 
     java {
-        // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-        // if it is present.
-        // If you remove this line, sources will not be generated.
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(javaVersion)
+        }
         withSourcesJar()
-
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.toVersion(javaVersion)
+        targetCompatibility = JavaVersion.toVersion(javaVersion)
     }
 
     tasks.withType(JavaCompile).configureEach {
-        it.options.release = 17
+        options.release = javaVersion
+        options.encoding = 'UTF-8'
     }
 
-    // Configure Maven publishing.
     publishing {
         publications {
             mavenJava(MavenPublication) {
@@ -64,13 +121,31 @@ subprojects {
                 from components.java
             }
         }
-
-        // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-        repositories {
-            // Add repositories to publish to here.
-            // Notice: This block does NOT have the same function as the block in the top level.
-            // The repositories here will be used for publishing your artifact, not for
-            // retrieving dependencies.
-        }
     }
+}
+
+tasks.register('validateReleaseMatrix', Exec) {
+    group = 'verification'
+    description = 'Validates the sole release/version/loader authority.'
+    workingDir rootProject.projectDir
+    commandLine(System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3',
+        'scripts/release/matrix.py', '--matrix', 'release/release-matrix.json')
+    standardOutput = new ByteArrayOutputStream()
+}
+
+tasks.register('buildAllLanes') {
+    group = 'build'
+    description = 'Builds every production artifact declared by this branch matrix.'
+    dependsOn artifacts.collect { it.gradle_task as String }
+}
+
+tasks.register('buildAllE2EHarnesses') {
+    group = 'verification'
+    description = 'Builds each physically separate packaged-E2E harness.'
+    dependsOn artifacts.collect { it.harness_task as String }
+}
+
+tasks.register('check') {
+    group = 'verification'
+    dependsOn tasks.named('validateReleaseMatrix')
 }

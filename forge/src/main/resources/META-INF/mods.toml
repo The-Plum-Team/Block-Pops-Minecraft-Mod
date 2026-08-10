@@ -1,7 +1,7 @@
 modLoader = "javafml"
 loaderVersion = "[47,)"
 #issueTrackerURL = ""
-license = "Insert License Here"
+license = "All Rights Reserved"
 
 [[mods]]
 modId = "blockpops"
@@ -23,8 +23,15 @@ side = "BOTH"
 [[dependencies.blockpops]]
 modId = "minecraft"
 mandatory = true
-versionRange = "[1.20.1,)"
+versionRange = "[1.20.1,1.20.2)"
 ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.blockpops]]
+modId = "geckolib"
+mandatory = true
+versionRange = "[4.7.4,)"
+ordering = "AFTER"
 side = "BOTH"
 
 [[dependencies.blockpops]]

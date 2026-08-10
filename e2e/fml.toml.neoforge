@@ -1,0 +1,2 @@
+# Packaged-E2E-only loader configuration. The real game window still opens.
+earlyWindowControl = false
