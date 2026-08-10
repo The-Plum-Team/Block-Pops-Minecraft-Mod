@@ -29,8 +29,13 @@ def versionOf = { String loader, String dependencyId ->
     def coordinate = coordinateOf(loader, dependencyId)
     return coordinate.substring(coordinate.lastIndexOf(':') + 1)
 }
-def forgeFamilyLoader = artifacts.collect { it.loader as String }
-        .find { it in ['forge', 'neoforge'] }
+def forgeFamilyLoaders = artifacts.collect { it.loader as String }
+        .findAll { it in ['forge', 'neoforge'] }
+        .toSet()
+if (forgeFamilyLoaders.size() > 1) {
+    throw new GradleException('A release branch cannot activate Forge and NeoForge together')
+}
+def forgeFamilyLoader = forgeFamilyLoaders ? forgeFamilyLoaders.first() : null
 
 ext {
     mod_version = releaseMatrix.project.mod_version as String

@@ -32,6 +32,17 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
     def test_current_metadata_has_only_reviewed_generated_exceptions(self) -> None:
         validate_metadata(METADATA)
         validate_repository_layout(REPO)
+        root = ElementTree.parse(METADATA).getroot()
+        trusted = root.findall(f"{TAG}configuration/{TAG}trusted-artifacts/{TAG}trust")
+        generated = [
+            (component.attrib["group"], component.attrib["name"])
+            for component in root.findall(f"{TAG}components/{TAG}component")
+            if _generated_component(
+                component.attrib["group"], component.attrib["name"]
+            )
+        ]
+        self.assertEqual(4, len(trusted))
+        self.assertEqual([], generated)
 
     def test_generated_component_patterns_accept_only_exact_loom_outputs(self) -> None:
         accepted = (
@@ -226,6 +237,23 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
             "forge/transformed-dependencies-v1",
         ):
             self.assertIn(exact_path, policy)
+        for exact_owner in (
+            "includeGroupByRegex('org\\\\.lwjgl(\\\\..*)?')",
+            "includeGroupByRegex('cpw\\\\.mods(\\\\..*)?')",
+            "excludeGroupByRegex('org\\\\.lwjgl(\\\\..*)?')",
+            "excludeGroupByRegex('cpw\\\\.mods(\\\\..*)?')",
+        ):
+            self.assertEqual(policy.count(exact_owner), 1, exact_owner)
+        self.assertEqual(
+            policy.count(
+                "def useNeoForgeRepositoryOrigins = "
+                "rootProject.forge_family_loader == 'neoforge'"
+            ),
+            1,
+        )
+        self.assertEqual(policy.count("if (useNeoForgeRepositoryOrigins)"), 3)
+        self.assertNotIn("includeGroupByRegex('org\\\\.lwjgl.*')", policy)
+        self.assertNotIn("includeGroupByRegex('cpw\\\\.mods.*')", policy)
         self.assertIn("actualLocalPath != expectedLocalPath", policy)
         self.assertIn("Unapproved local Maven repository", policy)
         self.assertNotIn("mavenLocal()", policy)
@@ -235,6 +263,31 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
         mutations = [policy.replace(exclusion, "", 1) for exclusion in REMOTE_EXCLUSIONS]
         mutations.extend(
             (
+                policy.replace(
+                    "includeGroupByRegex('cpw\\\\.mods(\\\\..*)?')",
+                    "includeGroupByRegex('cpw\\\\.mods.*')",
+                    1,
+                ),
+                policy.replace(
+                    "excludeGroupByRegex('cpw\\\\.mods(\\\\..*)?')",
+                    "",
+                    1,
+                ),
+                policy.replace(
+                    "includeGroupByRegex('org\\\\.lwjgl(\\\\..*)?')",
+                    "includeGroupByRegex('org\\\\.lwjgl.*')",
+                    1,
+                ),
+                policy.replace(
+                    "excludeGroupByRegex('org\\\\.lwjgl(\\\\..*)?')",
+                    "",
+                    1,
+                ),
+                policy.replace(
+                    "rootProject.forge_family_loader == 'neoforge'",
+                    "true",
+                    1,
+                ),
                 policy.replace(
                     "case 'repo.maven.apache.org/maven2':",
                     "case 'evil.example/repository':\n        case 'repo.maven.apache.org/maven2':",
@@ -342,11 +395,15 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
         self.assertEqual(
             properties.count("org.gradle.dependency.verification.console=verbose"), 1
         )
+        loader_build_files = tuple(
+            REPO / loader / "build.gradle"
+            for loader in ("fabric", "forge", "neoforge")
+            if (REPO / loader / "build.gradle").is_file()
+        )
         for build_file in (
             REPO / "build.gradle",
             REPO / "common" / "build.gradle",
-            REPO / "fabric" / "build.gradle",
-            REPO / "forge" / "build.gradle",
+            *loader_build_files,
         ):
             with self.subTest(build_file=build_file):
                 text = build_file.read_text("utf-8")

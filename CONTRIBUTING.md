@@ -17,6 +17,10 @@ source layout for that branch. The authoritative branch-local matrix owns:
 Never infer any of these from a branch name. Release branch names are opaque.
 A feature branch carrying a copied matrix is deliberately not enrolled because
 the matrix's exact branch identity does not match the feature ref.
+One branch may activate Forge or NeoForge, never both. That matrix-derived
+choice also binds `cpw.mods` and `org.lwjgl` to one reviewed repository origin:
+Maven Central for the Forge line, and the NeoForge/Minecraft repositories for
+the NeoForge line; strict checksums remain mandatory in both cases.
 
 ## Required checks
 

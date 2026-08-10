@@ -270,6 +270,29 @@ class ReleaseMatrixPortabilityTests(unittest.TestCase):
             with self.subTest(label=label), self.assertRaises(MatrixError):
                 validate_matrix(matrix)
 
+    def test_forge_and_neoforge_cannot_compete_for_repository_origins(self) -> None:
+        matrix = arbitrary_named_1211_release_matrix()
+        forge_artifact = copy.deepcopy(matrix["artifacts"][1])
+        forge_artifact.update(
+            artifact_node="forge-1.21.1",
+            loader="forge",
+            gradle_task=":forge:remapJar",
+            harness_task=":forge:remapE2EHarnessJar",
+            jar="forge/build/libs/BlockPops - Forge - 1.21.1-{mod_version}.jar",
+            harness_jar=(
+                "forge/build/libs/BlockPops E2E - Forge - 1.21.1-0.0.0.jar"
+            ),
+        )
+        forge_artifact["metadata"]["file"] = "META-INF/mods.toml"
+        forge_runtime = copy.deepcopy(matrix["runtimes"][1])
+        forge_runtime.update(artifact_node="forge-1.21.1", loader="forge")
+        matrix["artifacts"].append(forge_artifact)
+        matrix["runtimes"].append(forge_runtime)
+        matrix["lane_count"] = 3
+
+        with self.assertRaisesRegex(MatrixError, "Forge and NeoForge"):
+            validate_matrix(matrix)
+
     def test_matrix_json_duplicate_and_nonfinite_values_are_rejected(self) -> None:
         for raw in (
             b'{"schema_version":1,"schema_version":1}',

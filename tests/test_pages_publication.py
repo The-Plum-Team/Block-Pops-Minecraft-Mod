@@ -30,6 +30,9 @@ from scripts.release.matrix import load_matrix
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 MATRIX_PATH = REPOSITORY / "release" / "release-matrix.json"
+MATRIX = load_matrix(MATRIX_PATH)
+ACTIVE_BRANCH = MATRIX["branch"]["name"]
+CANONICAL_BRANCH = MATRIX["branch"]["canonical"]
 COMMIT = "1" * 40
 TREE = "2" * 40
 REPO_NAME = "AkaNebur/BlockPops"
@@ -107,12 +110,12 @@ def _fixture_profiles(root: Path) -> None:
             (profile / "result.json").write_text(json.dumps(result), encoding="utf-8")
 
 
-def _inventory() -> list[dict[str, object]]:
-    matrix = load_matrix(MATRIX_PATH)
+def _inventory(branch: str = ACTIVE_BRANCH) -> list[dict[str, object]]:
+    matrix = MATRIX
     raw = MATRIX_PATH.read_bytes()
     return [
         {
-            "name": "master",
+            "name": branch,
             "commit": COMMIT,
             "tree": TREE,
             "matrix_blob": hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest(),
@@ -134,7 +137,7 @@ class EvidenceRoundTripTests(unittest.TestCase):
         self.compact = self.root / "compact"
         self.expected = {
             "repository": REPO_NAME,
-            "branch": "master",
+            "branch": ACTIVE_BRANCH,
             "commit": COMMIT,
             "tree": TREE,
             "matrix_sha256": hashlib.sha256(MATRIX_PATH.read_bytes()).hexdigest(),
@@ -158,7 +161,7 @@ class EvidenceRoundTripTests(unittest.TestCase):
                 output=self.raw,
                 matrix_path=MATRIX_PATH,
                 repository=REPO_NAME,
-                branch="master",
+                branch=ACTIVE_BRANCH,
                 commit=COMMIT,
                 tree=TREE,
                 run_id=101,
@@ -176,7 +179,7 @@ class EvidenceRoundTripTests(unittest.TestCase):
                 matrix_path=MATRIX_PATH,
                 expected=self.expected,
                 source_artifact_id=501,
-                source_artifact_name=evidence.raw_artifact_name("master", 2),
+                source_artifact_name=evidence.raw_artifact_name(ACTIVE_BRANCH, 2),
                 source_artifact_digest="sha256:" + "5" * 64,
             )
 
@@ -187,7 +190,7 @@ class EvidenceRoundTripTests(unittest.TestCase):
         self.assertTrue(list(self.compact.rglob("*.webp")))
 
         collected = self.root / "collected"
-        cache = collected / evidence.cache_artifact_name("master", COMMIT)
+        cache = collected / evidence.cache_artifact_name(ACTIVE_BRANCH, COMMIT)
         cache.parent.mkdir()
         self.compact.rename(cache)
         inventory = self.root / "inventory.json"
@@ -258,7 +261,7 @@ class EvidenceRoundTripTests(unittest.TestCase):
                 matrix_path=MATRIX_PATH,
                 expected=self.expected,
                 source_artifact_id=501,
-                source_artifact_name=evidence.raw_artifact_name("master", 2),
+                source_artifact_name=evidence.raw_artifact_name(ACTIVE_BRANCH, 2),
                 source_artifact_digest="sha256:" + "5" * 64,
             )
         (self.compact / "unexpected.txt").write_text("no")
@@ -366,7 +369,7 @@ class RotationPlanTests(unittest.TestCase):
                 repository=REPO_NAME,
                 pages_run_id=200,
                 pages_run_sha="a" * 40,
-                inventory=_inventory(),
+                inventory=_inventory("master"),
                 caches_root=Path("unused"),
                 canonical_branch="master",
             )
@@ -383,7 +386,7 @@ class RotationPlanTests(unittest.TestCase):
                 repository=REPO_NAME,
                 pages_run_id=200,
                 pages_run_sha="a" * 40,
-                inventory=_inventory(),
+                inventory=_inventory("master"),
                 caches_root=Path("unused"),
                 canonical_branch="master",
             )
@@ -445,7 +448,7 @@ class SelectionTests(unittest.TestCase):
             select(
                 FakeApi(),
                 repository=REPO_NAME,
-                branch="master",
+                branch=ACTIVE_BRANCH,
                 commit=COMMIT,
                 tree="f" * 40,
                 canonical_branch="master",
@@ -598,7 +601,7 @@ class SourceAuthenticationTests(unittest.TestCase):
                 output=self.raw,
                 matrix_path=MATRIX_PATH,
                 repository=REPO_NAME,
-                branch="master",
+                branch=ACTIVE_BRANCH,
                 commit=COMMIT,
                 tree=TREE,
                 run_id=101,
@@ -609,7 +612,7 @@ class SourceAuthenticationTests(unittest.TestCase):
         self,
         attempt: int = 2,
         *,
-        source_branch: str = "master",
+        source_branch: str = ACTIVE_BRANCH,
     ) -> list[dict[str, object]]:
         return [
             {
@@ -640,7 +643,7 @@ class SourceAuthenticationTests(unittest.TestCase):
                 return {
                     "workflow_id": 8,
                     "path": evidence.E2E_WORKFLOW,
-                    "head_branch": "master",
+                    "head_branch": ACTIVE_BRANCH,
                     "head_sha": COMMIT,
                     "event": "workflow_dispatch",
                     "head_repository": {"full_name": REPO_NAME},
@@ -658,7 +661,7 @@ class SourceAuthenticationTests(unittest.TestCase):
         result = authenticate(
             FakeApi(),
             repository=REPO_NAME,
-            canonical_branch="master",
+            canonical_branch=CANONICAL_BRANCH,
             matrix_path=MATRIX_PATH,
             evidence_root=self.raw,
             selected_kind="raw",
@@ -672,7 +675,7 @@ class SourceAuthenticationTests(unittest.TestCase):
             authenticate(
                 FakeApi(),
                 repository=REPO_NAME,
-                canonical_branch="master",
+                canonical_branch=CANONICAL_BRANCH,
                 matrix_path=MATRIX_PATH,
                 evidence_root=self.raw,
                 selected_kind="raw",
@@ -686,7 +689,7 @@ class SourceAuthenticationTests(unittest.TestCase):
             authenticate(
                 FakeApi(),
                 repository=REPO_NAME,
-                canonical_branch="master",
+                canonical_branch=CANONICAL_BRANCH,
                 matrix_path=MATRIX_PATH,
                 evidence_root=self.raw,
                 selected_kind="raw",
@@ -705,7 +708,7 @@ class SourceAuthenticationTests(unittest.TestCase):
                 output=self.raw,
                 matrix_path=MATRIX_PATH,
                 repository=REPO_NAME,
-                branch="master",
+                branch=ACTIVE_BRANCH,
                 commit=COMMIT,
                 tree=TREE,
                 run_id=101,
@@ -739,7 +742,9 @@ class SourceAuthenticationTests(unittest.TestCase):
                 return {
                     "workflow_id": 8,
                     "path": evidence.E2E_WORKFLOW,
-                    "head_branch": "automation/release-sync/example" if packaged else "master",
+                    "head_branch": (
+                        "automation/release-sync/example" if packaged else ACTIVE_BRANCH
+                    ),
                     "head_sha": "6" * 40 if packaged else COMMIT,
                     "event": "workflow_dispatch",
                     "head_repository": {"full_name": REPO_NAME},
@@ -757,7 +762,7 @@ class SourceAuthenticationTests(unittest.TestCase):
         result = authenticate(
             FakeApi(),
             repository=REPO_NAME,
-            canonical_branch="master",
+            canonical_branch=CANONICAL_BRANCH,
             matrix_path=MATRIX_PATH,
             evidence_root=self.raw,
             selected_kind="raw",
@@ -772,7 +777,7 @@ class SourceAuthenticationTests(unittest.TestCase):
             authenticate(
                 FakeApi(),
                 repository=REPO_NAME,
-                canonical_branch="master",
+                canonical_branch=CANONICAL_BRANCH,
                 matrix_path=MATRIX_PATH,
                 evidence_root=self.raw,
                 selected_kind="raw",

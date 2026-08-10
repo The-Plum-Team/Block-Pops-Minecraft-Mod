@@ -35,7 +35,19 @@ from scripts.visual.review_client import (
     run_review,
     validate_handoff,
 )
-from tests.visual_test_capsule import CONTRACT_PATH, MATRIX_PATH, _source
+from scripts.ci.tests.matrix_fixtures import (
+    canonical_integration_matrix,
+    write_matrix_fixture,
+)
+from tests.test_visual_capsule import (
+    ACTIVE_BRANCH,
+    BRANCH_MATRIX,
+    CANONICAL_BRANCH,
+    CONTRACT_PATH,
+    MATRIX_PATH,
+    REFERENCE_NODE,
+    _source,
+)
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -246,6 +258,9 @@ class VisualReviewHandoffTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.shared = tempfile.TemporaryDirectory(prefix="blockpops-review-workflow-")
         root = Path(cls.shared.name)
+        cls.reference_matrix_path = write_matrix_fixture(
+            root, canonical_integration_matrix(BRANCH_MATRIX)
+        )
         nodes = sorted(row["artifact_node"] for row in load_matrix(MATRIX_PATH)["runtimes"])
         candidate_input = _source(
             root,
@@ -253,19 +268,20 @@ class VisualReviewHandoffTests(unittest.TestCase):
             nodes=nodes,
             artifact_id=71,
             source_head_branch="feature/visual-candidate",
-            base_branch="master",
+            base_branch=ACTIVE_BRANCH,
             event="pull_request",
             metadata="candidate",
         )
         reference_input = _source(
             root,
             name="reference",
-            nodes=["fabric-1.20.1"],
+            nodes=[REFERENCE_NODE],
             artifact_id=72,
-            source_head_branch="master",
-            base_branch="master",
+            source_head_branch=CANONICAL_BRANCH,
+            base_branch=CANONICAL_BRANCH,
             event="push",
             metadata="reference",
+            matrix_path=cls.reference_matrix_path,
         )
         candidate = load_archived_evidence(
             archive=candidate_input[0],
@@ -279,7 +295,7 @@ class VisualReviewHandoffTests(unittest.TestCase):
             archive=reference_input[0],
             attestation_path=reference_input[1],
             expectation=reference_input[2],
-            matrix_path=MATRIX_PATH,
+            matrix_path=cls.reference_matrix_path,
             contract_path=CONTRACT_PATH,
             extraction_destination=root / "reference-extracted",
         )

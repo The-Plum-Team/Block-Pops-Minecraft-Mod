@@ -277,6 +277,10 @@ def validate_matrix(
         active_loaders.add(loader)
         artifact_java_versions.add(java)
 
+    forge_family_loaders = active_loaders & {"forge", "neoforge"}
+    if len(forge_family_loaders) > 1:
+        _fail("a release branch cannot activate Forge and NeoForge together")
+
     if gradle_java < max(artifact_java_versions):
         _fail("gradle_java cannot be lower than an artifact Java toolchain")
 

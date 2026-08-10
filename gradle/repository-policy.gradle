@@ -7,6 +7,7 @@ import org.gradle.api.artifacts.repositories.MavenArtifactRepository
 // unable to serve any trusted generated namespace.
 def loomUserCache = new File(gradle.gradleUserHomeDir, 'caches/fabric-loom')
 def loomRootCache = new File(rootProject.projectDir, '.gradle/loom-cache')
+def useNeoForgeRepositoryOrigins = rootProject.forge_family_loader == 'neoforge'
 def loomLocalRepositories = [
     'LoomGlobalMinecraft': new File(loomUserCache, 'minecraftMaven').canonicalFile,
     'LoomLocalMinecraft': new File(loomRootCache, 'minecraftMaven').canonicalFile,
@@ -85,6 +86,9 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
         case 'libraries.minecraft.net/':
             repository.content {
                 includeGroupByRegex('com\\.mojang(\\..*)?')
+                if (useNeoForgeRepositoryOrigins) {
+                    includeGroupByRegex('org\\.lwjgl(\\..*)?')
+                }
             }
             break
         case 'maven.minecraftforge.net/':
@@ -97,6 +101,9 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
         case 'maven.neoforged.net/releases':
             repository.content {
                 includeGroupByRegex('net\\.neoforged(\\..*)?')
+                if (useNeoForgeRepositoryOrigins) {
+                    includeGroupByRegex('cpw\\.mods(\\..*)?')
+                }
             }
             break
         case 'repo.spongepowered.org/repository/maven-public':
@@ -121,6 +128,10 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
                 excludeGroupByRegex('net\\.neoforged(\\..*)?')
                 excludeGroupByRegex('software\\.bernie(\\..*)?')
                 excludeGroup('com.eliotlash.mclib')
+                if (useNeoForgeRepositoryOrigins) {
+                    excludeGroupByRegex('org\\.lwjgl(\\..*)?')
+                    excludeGroupByRegex('cpw\\.mods(\\..*)?')
+                }
             }
             break
         default:
