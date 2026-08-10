@@ -9,6 +9,7 @@ source layout for that branch. The authoritative branch-local matrix owns:
 - exact branch role and synchronization identity;
 - Minecraft, loaders, Java toolchain, and source routing;
 - Gradle production and E2E harness tasks and output paths;
+- the published mod version and full dependency coordinates;
 - loader installers and runtime dependencies;
 - PR and scheduled packaged-E2E lanes; and
 - the canonical visual reference identity.
@@ -24,10 +25,21 @@ production/harness build, and artifact staging commands in the README. Changes
 to the scenario contract must regenerate both harnesses and pass contract
 mutation tests.
 
-Two deterministic checks are authoritative:
+Loader build scripts and `src/e2e` entrypoints are also bound by
+`e2e/loader-bootstrap-contract.json`. Do not update its hashes as a mechanical
+response to a failure: review the executable change and preserve the single
+final `gradle/e2e-harness-conventions.gradle` binding.
 
-- `Build and verify`
-- `Packaged E2E gate`
+Two deterministic gates are authoritative. On ordinary PRs, branch protection
+must require their protected App-authenticated bridge contexts, not a check run
+created from candidate-controlled workflow YAML:
+
+- `Trusted PR / Build and verify`
+- `Trusted PR / Packaged E2E gate`
+
+`Build and verify` and `Packaged E2E gate` remain the underlying deterministic
+jobs. Release-sync PRs use the separately authenticated `Release sync / ...`
+contexts described below.
 
 AI visual review and the public evidence gallery are advisory. Do not weaken a
 deterministic assertion or skip a lane to accommodate visual-review noise.
