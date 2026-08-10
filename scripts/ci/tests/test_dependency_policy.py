@@ -41,7 +41,7 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
                 component.attrib["group"], component.attrib["name"]
             )
         ]
-        self.assertEqual(4, len(trusted))
+        self.assertEqual(5, len(trusted))
         self.assertEqual([], generated)
 
     def test_generated_component_patterns_accept_only_exact_loom_outputs(self) -> None:
@@ -51,6 +51,7 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
             ("net.minecraft", "forge-1.20.1-47.4.9-minecraft-merged"),
             ("net.minecraft", "neoforge-21.1.77-minecraft-merged-deobf"),
             ("net.minecraftforge." + "a" * 64, "fmlloader"),
+            ("net.neoforged.fancymodloader." + "a" * 64, "loader"),
             ("remapped.software.bernie.geckolib", "geckolib-fabric"),
         )
         rejected = (
@@ -60,6 +61,10 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
             ("net.minecraft", "minecraft-merged-deadbeef0g"),
             ("net.minecraftforge." + "a" * 63, "fmlloader"),
             ("net.minecraftforge." + "a" * 64, "forge"),
+            ("net.neoforged.fancymodloader", "loader"),
+            ("net.neoforged.fancymodloader." + "a" * 63, "loader"),
+            ("net.neoforged.fancymodloader." + "g" * 64, "loader"),
+            ("net.neoforged.fancymodloader." + "a" * 64, "earlydisplay"),
             ("unremapped.software.bernie", "geckolib"),
         )
         for group, name in accepted:
@@ -78,6 +83,16 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
         assert trusted is not None
 
         mutations = []
+        neoforge_trust = next(
+            trust
+            for trust in trusted
+            if trust.attrib.get("name") == "^loader$"
+        )
+        exact_neoforge_group = neoforge_trust.attrib["group"]
+        neoforge_trust.set("group", "^net[.]neoforged[.]fancymodloader[.].*$")
+        mutations.append(ElementTree.tostring(root, encoding="utf-8", xml_declaration=True))
+        neoforge_trust.set("group", exact_neoforge_group)
+
         trust = list(trusted)[0]
         trust.set("group", ".*")
         mutations.append(ElementTree.tostring(root, encoding="utf-8", xml_declaration=True))
@@ -203,6 +218,7 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
             "excludeGroup('loom')",
             "excludeGroup('net.minecraft')",
             "excludeGroupByRegex('net\\\\.minecraftforge\\\\.[0-9a-f]{64}')",
+            "excludeGroupByRegex('net\\\\.neoforged\\\\.fancymodloader\\\\.[0-9a-f]{64}')",
             "excludeGroupByRegex('remapped\\\\..+')",
         ):
             self.assertEqual(before_hosts.count(exclusion), 1, exclusion)
@@ -369,6 +385,7 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
             "excludeGroup('loom')": 1,
             "excludeGroup('net.minecraft')": 1,
             "excludeGroupByRegex('net\\\\.minecraftforge\\\\.[0-9a-f]{64}')": 2,
+            "excludeGroupByRegex('net\\\\.neoforged\\\\.fancymodloader\\\\.[0-9a-f]{64}')": 2,
             "excludeGroupByRegex('remapped\\\\..+')": 1,
         }
         for exclusion, count in expected_exclusions.items():

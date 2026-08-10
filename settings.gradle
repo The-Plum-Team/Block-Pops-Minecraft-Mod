@@ -46,6 +46,7 @@ pluginManagement {
             mavenContent { releasesOnly() }
             content {
                 includeGroupByRegex('net\\.neoforged(\\..*)?')
+                excludeGroupByRegex('net\\.neoforged\\.fancymodloader\\.[0-9a-f]{64}')
             }
         }
         maven {
@@ -61,6 +62,7 @@ pluginManagement {
                 excludeGroup('loom')
                 excludeGroup('net.minecraft')
                 excludeGroupByRegex('net\\.minecraftforge\\.[0-9a-f]{64}')
+                excludeGroupByRegex('net\\.neoforged\\.fancymodloader\\.[0-9a-f]{64}')
                 excludeGroupByRegex('remapped\\..+')
                 excludeGroupByRegex('net\\.fabricmc(\\..*)?')
                 excludeGroupByRegex('dev\\.architectury(\\..*)?')
