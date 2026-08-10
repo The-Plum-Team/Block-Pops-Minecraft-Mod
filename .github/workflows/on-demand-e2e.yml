@@ -66,7 +66,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       anchors: ${{ steps.matrix.outputs.anchors }}
-      java_versions: ${{ steps.matrix.outputs.java_versions }}
+      gradle_java: ${{ steps.matrix.outputs.gradle_java }}
       branch_name: ${{ steps.matrix.outputs.branch_name }}
       branch_role: ${{ steps.matrix.outputs.branch_role }}
       projection: ${{ steps.matrix.outputs.projection }}
@@ -114,13 +114,12 @@ jobs:
           anchors="$(python3 scripts/release/matrix.py \
             --matrix release/release-matrix.json --kind "$matrix_kind")"
           [[ "$(jq '.include | length' <<< "$anchors")" -gt 0 ]]
-          java_versions="$(jq -r '[.include[].java] | unique[]' <<< "$anchors")"
           printf 'anchors=%s\n' "$anchors" >> "$GITHUB_OUTPUT"
-          {
-            printf 'java_versions<<BLOCKPOPS_JAVA\n'
-            printf '%s\n' "$java_versions"
-            printf 'BLOCKPOPS_JAVA\n'
-          } >> "$GITHUB_OUTPUT"
+          gradle_java="$(python3 scripts/release/matrix.py \
+            --matrix release/release-matrix.json --kind gradle-java \
+            | jq -er '.java')"
+          [[ "$gradle_java" =~ ^[0-9]+$ ]]
+          printf 'gradle_java=%s\n' "$gradle_java" >> "$GITHUB_OUTPUT"
           printf 'branch_name=%s\n' "$(jq -er .branch.name release/release-matrix.json)" >> "$GITHUB_OUTPUT"
           printf 'branch_role=%s\n' "$(jq -er .branch.role release/release-matrix.json)" >> "$GITHUB_OUTPUT"
           printf 'projection=%s\n' "$matrix_kind" >> "$GITHUB_OUTPUT"
@@ -152,11 +151,11 @@ jobs:
           grep --fixed-strings --line-regexp "distributionSha256Sum=$distribution_hash" \
             gradle/wrapper/gradle-wrapper.properties
 
-      - name: Install matrix-owned JDKs
+      - name: Install the matrix-owned Gradle JDK
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
-          java-version: ${{ needs.identity.outputs.java_versions }}
+          java-version: ${{ needs.identity.outputs.gradle_java }}
 
       - name: Install Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0

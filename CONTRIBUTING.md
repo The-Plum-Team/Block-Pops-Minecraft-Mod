@@ -7,7 +7,7 @@ Work from the branch for the Minecraft line you intend to change. `common`,
 source layout for that branch. The authoritative branch-local matrix owns:
 
 - exact branch role and synchronization identity;
-- Minecraft, loaders, Java toolchain, and source routing;
+- Minecraft, loaders, Gradle JVM, artifact/runtime Java toolchains, and source routing;
 - Gradle production and E2E harness tasks and output paths;
 - the published mod version and full dependency coordinates;
 - loader installers and runtime dependencies;

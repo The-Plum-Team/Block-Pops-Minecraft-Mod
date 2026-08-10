@@ -40,8 +40,10 @@ exact manifest. Each packaged lane revalidates that manifest, installs genuine
 loader clients and a dedicated server, installs only hash-verified matrix
 dependencies, and places the harness on clients only.
 
-The branch matrix owns the mod version and all full runtime dependency
-coordinates. `e2e/loader-bootstrap-contract.json` is a protected security
+The branch matrix owns the Gradle JVM independently from each artifact/runtime
+Java toolchain, plus the mod version and all full runtime dependency
+coordinates. This lets modern Loom run on Java 21 while Minecraft 1.20.1 output
+remains compiled for Java 17. `e2e/loader-bootstrap-contract.json` is a protected security
 allowlist, not a second release matrix: it contains one reviewed build-script
 digest and exact E2E entrypoint/resource inventory per supported loader.
 `scripts/ci/loader_bootstrap.py` derives the active loaders from the matrix,

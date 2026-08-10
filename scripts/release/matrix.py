@@ -32,6 +32,7 @@ COORDINATE = re.compile(
 ROOT_KEYS = frozenset(
     {
         "schema_version",
+        "gradle_java",
         "lane_count",
         "unit_test_lane",
         "branch",
@@ -157,6 +158,7 @@ def validate_matrix(
         raise MatrixError(str(exc)) from exc
     if root["schema_version"] != 1:
         _fail("release matrix schema_version must be 1")
+    gradle_java = _integer(root["gradle_java"], "gradle_java", minimum=21)
     lane_count = _integer(root["lane_count"], "lane_count")
 
     try:
@@ -215,6 +217,7 @@ def validate_matrix(
     by_node: dict[str, dict[str, Any]] = {}
     versions: set[str] = set()
     active_loaders: set[str] = set()
+    artifact_java_versions: set[int] = set()
     for index, raw in enumerate(artifacts):
         try:
             artifact = require_object(
@@ -272,7 +275,10 @@ def validate_matrix(
         by_node[node] = artifact
         versions.add(minecraft)
         active_loaders.add(loader)
-        del java
+        artifact_java_versions.add(java)
+
+    if gradle_java < max(artifact_java_versions):
+        _fail("gradle_java cannot be lower than an artifact Java toolchain")
 
     if len(versions) != 1:
         _fail("a release branch must contain exactly one Minecraft version")
@@ -510,7 +516,7 @@ def gha_matrix(
     kind: str,
     *,
     contract: ScenarioContract | None = None,
-) -> dict[str, list[dict[str, Any]]]:
+) -> dict[str, Any]:
     selected_contract = contract or default_contract()
     if kind == "artifacts":
         return {"include": [dict(row) for row in matrix["artifacts"]]}
@@ -521,6 +527,8 @@ def gha_matrix(
                 for major in sorted({row["java"] for row in matrix["artifacts"]})
             ]
         }
+    if kind == "gradle-java":
+        return {"java": matrix["gradle_java"]}
     if kind not in {"runtime", "pr-anchors", "scheduled-anchors"}:
         _fail(f"unsupported matrix projection {kind!r}")
     profile = "pr" if kind == "pr-anchors" else "release"
@@ -548,7 +556,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--kind",
-        choices=("artifacts", "java", "runtime", "pr-anchors", "scheduled-anchors"),
+        choices=(
+            "artifacts",
+            "java",
+            "gradle-java",
+            "runtime",
+            "pr-anchors",
+            "scheduled-anchors",
+        ),
     )
     parser.add_argument("--no-source-check", action="store_true")
     parser.add_argument("--pretty", action="store_true")
