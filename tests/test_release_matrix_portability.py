@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts.ci.tests.matrix_fixtures import canonical_integration_matrix
 from scripts.release.matrix import MatrixError, gha_matrix, load_matrix_bytes, validate_matrix
 from scripts.release.version_branches import (
     BranchDiscoveryError,
@@ -26,6 +27,10 @@ def _base_matrix() -> dict[str, object]:
 
 def _encoded(value: object) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def _canonical_matrix_bytes() -> bytes:
+    return _encoded(canonical_integration_matrix(_base_matrix()))
 
 
 def arbitrary_named_1211_release_matrix() -> dict[str, object]:
@@ -189,11 +194,12 @@ class ReleaseMatrixPortabilityTests(unittest.TestCase):
 
     def test_discovery_enrolls_self_identified_arbitrary_release_and_excludes_copied_feature(self) -> None:
         release = arbitrary_named_1211_release_matrix()
+        canonical = _canonical_matrix_bytes()
         snapshots = {
-            "master": BASE_MATRIX_BYTES,
+            "master": canonical,
             "ship/aurora-ui": _encoded(release),
             # This is exactly what a normal feature branch forked from master carries.
-            "feature/copied-integration-matrix": BASE_MATRIX_BYTES,
+            "feature/copied-integration-matrix": canonical,
         }
 
         discovered = discover_from_snapshots(
@@ -320,7 +326,7 @@ class RepositoryBranchDiscoveryTests(unittest.TestCase):
         self.git(repository, "config", "core.filemode", "true")
         matrix_path = repository / "release" / "release-matrix.json"
         matrix_path.parent.mkdir()
-        matrix_path.write_bytes(BASE_MATRIX_BYTES)
+        matrix_path.write_bytes(_canonical_matrix_bytes())
         self.git(repository, "add", "release/release-matrix.json")
         self.git(repository, "commit", "-q", "-m", "integration matrix")
         integration_commit = self.git(repository, "rev-parse", "HEAD")
