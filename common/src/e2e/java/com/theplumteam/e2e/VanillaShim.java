@@ -1,6 +1,7 @@
 package com.theplumteam.e2e;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -70,19 +71,9 @@ public final class VanillaShim {
     }
 
     public static boolean press(Object widget) {
-        if (widget == null) {
-            return false;
-        }
-        try {
-            for (Method method : widget.getClass().getMethods()) {
-                if (method.getName().equals("onPress") && method.getParameterCount() == 0) {
-                    method.setAccessible(true);
-                    method.invoke(widget);
-                    return true;
-                }
-            }
-        } catch (ReflectiveOperationException failure) {
-            E2ELog.warn("widget press failed: " + failure);
+        if (widget instanceof Button button) {
+            button.onPress();
+            return true;
         }
         return false;
     }
