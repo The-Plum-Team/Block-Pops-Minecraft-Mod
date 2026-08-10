@@ -19,6 +19,12 @@ capture. Screenshots are exactly 1600×900 at GUI scale 2. Generic image checks,
 BlockPops-specific text/background probes, and localized change comparisons are
 deterministic.
 
+The protected fan-in fully decodes every PNG and independently recomputes pixel
+hashes, blank-frame metrics, and each contracted regional comparison. A client
+report cannot make the deterministic gate pass by declaring fabricated image
+metrics. Runtime downloads are HTTPS-only, SHA-256 pinned, streamed into fresh
+exclusive files, and capped per blob before admission to the immutable store.
+
 ## Local commands
 
 List matrix-derived work without launching Minecraft:
@@ -54,5 +60,10 @@ capsule contains only its exact manifest and content-addressed paired images.
 
 The provider receives a read-only, path-scoped image/manifest surface and emits
 JSON to stdout. Protected code rejects missing, duplicate, extra, incoherent,
-or unbounded verdicts and publishes only normalized output. Raw provider output
-is never an artifact.
+or unbounded verdicts and publishes only normalized output. Raw HTTP responses
+are never artifacts; only the client's strict bounded per-pair projection
+crosses back to the protected normalizer.
+
+The credential runner is the fixed `visual-review` environment. Its protected
+client sends one semantic pair per OpenAI Responses request with storage
+disabled and no tools. This result remains advisory regardless of severity.

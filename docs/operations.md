@@ -2,12 +2,28 @@
 
 ## Owner configuration required
 
-The deterministic implementation is secretless, but repository governance
-requires owner configuration:
+Build, E2E, evidence validation, and PR evaluation are secretless. Narrow
+governance/publication writers still require owner configuration:
 
-- Protect `master` with strict required checks `Build and verify` and
-  `Packaged E2E gate`, required pull requests, no force pushes/deletions, and no
-  bypass actors.
+- Protect `master` with required pull requests, strict up-to-date heads, no
+  force pushes/deletions, and no bypass actors. Require the App-sourced contexts
+  `Trusted PR / Build and verify` and `Trusted PR / Packaged E2E gate`; do not
+  use the similarly named candidate-workflow checks as the protected contexts.
+- Create and install a repository-scoped **PR gate** GitHub App with only
+  Metadata read and Commit statuses write. Create a protected `pr-gate`
+  environment restricted to `master`, set `PR_GATE_APP_CLIENT_ID` there as a
+  variable, and store `PR_GATE_APP_PRIVATE_KEY` there as its only secret. The
+  protected `handle-pr-gate-result.yml` evaluator is read-only; a fresh writer
+  job uses this App only after revalidating the current PR, exact synthetic
+  merge parents/tree, unchanged control plane, newest run attempts, and exact
+  job graphs. Configure both required contexts with this App as their expected
+  source. Bootstrap in that order: install/configure the App and environment,
+  let one current PR produce both contexts, then select those existing contexts
+  and that exact App as the expected source in branch protection.
+- An organization/enterprise may instead enforce Build and Packaged E2E as
+  required-workflow rules from a protected repository/ref. GitHub does not
+  expose that rule at the level of this user-owned repository, so it is not the
+  documented bootstrap path here.
 - Protect every matrix-enrolled release branch with strict bridge contexts
   `Release sync / Build and verify` and
   `Release sync / Packaged E2E gate` plus the same no-bypass rules.
@@ -19,10 +35,13 @@ requires owner configuration:
   administration is separate and is needed only to reconcile rulesets.
 - Set Pages source to GitHub Actions. Create the `github-pages` environment and
   limit deployment to protected `master`.
-- Add the model credential named by the tracked provider adapter (initially
-  `CLAUDE_CODE_OAUTH_TOKEN`) only if advisory AI review is desired. It must be
-  exposed only to the fresh review job, never build, curation, cleanup, Pages,
-  or synchronization.
+- Create a protected `visual-review` environment if advisory AI review is
+  desired. Store only `OPENAI_API_KEY` as its secret and set
+  `OPENAI_VISUAL_MODEL` as its environment variable. Restrict the environment
+  to protected `master`; optional required reviewers may add a human approval.
+  The credential is exposed only to the fresh review job, never Build, E2E,
+  curation, normalization, cleanup, Pages, or synchronization. The fixed
+  client uses the Responses API with storage disabled and no tools.
 
 At the time this system was implemented the repository was private, all three
 remote branches reported unprotected, and the ruleset/protection APIs returned
@@ -30,6 +49,19 @@ HTTP 403 with an upgrade requirement. GitHub Pro (or making the repository
 public) is therefore required before deterministic checks can be institutionally
 authoritative against direct pushes. Do not represent a green workflow as
 branch governance until protection is visible through the API.
+
+The PR-gate App is intentionally distinct from the synchronization identity.
+Its installation token may write commit statuses only: it cannot read candidate
+contents, dispatch workflows, modify branches, create PRs, comment, or merge.
+`CODEOWNERS` is defense in depth and becomes enforceable only when branch
+protection requires an eligible independent code-owner review; it does not
+authenticate a check by itself. A sole repository owner cannot satisfy an
+independent-review policy on their own PR.
+
+Keep default Actions permissions read-only. The current repository setting also
+disallows Actions-created PRs; either enable **Allow GitHub Actions to create
+and approve pull requests** or install the narrow synchronization App before
+expecting automated release PR creation.
 
 ## Bootstrap a release branch
 
@@ -51,6 +83,11 @@ governance for it.
   new exact base. Do not force the old tree through.
 - **A protected conflict appeared:** leave synchronization blocked and open a
   reviewed branch-specific port. Do not add a broad conflict exception.
+- **A loader bootstrap changed:** update the matrix-driven build implementation
+  first, then deliberately review the affected digest in
+  `e2e/loader-bootstrap-contract.json`. Never snapshot or bless a digest from an
+  untrusted release candidate. Missing, extra, executable, or differently
+  bound harness files must remain a hard failure.
 - **Post-merge attestation failed:** freeze further synchronization, compare the
   final parent order/tree/matrix to the tested candidate, and revert or repair
   through a gated PR.

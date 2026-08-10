@@ -40,6 +40,16 @@ exact manifest. Each packaged lane revalidates that manifest, installs genuine
 loader clients and a dedicated server, installs only hash-verified matrix
 dependencies, and places the harness on clients only.
 
+The branch matrix owns the mod version and all full runtime dependency
+coordinates. `e2e/loader-bootstrap-contract.json` is a protected security
+allowlist, not a second release matrix: it contains one reviewed build-script
+digest and exact E2E entrypoint/resource inventory per supported loader.
+`scripts/ci/loader_bootstrap.py` derives the active loaders from the matrix,
+reads the exact tested Git commit, rejects extra/missing/executable files, and
+requires one final binding to the physically separate harness convention. The
+trusted release handler validates a candidate against the contract from the
+canonical protected commit.
+
 Reports and screenshots are accepted only after exact scenario, role, ordered
 step, assertion, capture basename, digest, size, image decode, dimensions, pixel
 probe, and full inventory validation. An extra file is evidence corruption, not
@@ -56,3 +66,19 @@ Release-sync PRs use bridge contexts `Release sync / Build and verify` and
 `Release sync / Packaged E2E gate`. This prevents an incidental approval-held
 PR run with the same check name from colliding with authenticated dispatched
 runs. The handler posts a bridge status only for the exact tested head.
+
+Ordinary PR workflow YAML is part of the candidate tree, so its own green check
+cannot authenticate that YAML. A protected default-branch `workflow_run`
+evaluator therefore treats completion events only as locators, re-reads the
+current same-repository PR and exact synthetic merge, requires the matrix and
+dependency-verification metadata to match the current base, verifies protected
+controller/bootstrap parity, selects the newest exact Build and Packaged E2E
+attempts, and authenticates their complete job graphs. A separate status-only
+GitHub App then emits `Trusted PR / Build and verify` and
+`Trusted PR / Packaged E2E gate` on the current source head. The App writer has
+no checkout or candidate execution surface. Missing App credentials produce no
+trusted context and fail closed.
+
+Release synchronization has its own protected default-branch handler that
+authenticates exact topology, controller parity, loader bootstrap, run attempt,
+and job graph before merging only the tested automation head.
