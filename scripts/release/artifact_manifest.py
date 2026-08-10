@@ -192,7 +192,7 @@ def verify_production_jar(path: Path, artifact: dict[str, Any]) -> None:
                 )
             entrypoint = {
                 "forge": "com/theplumteam/forge/BlockPopsModForge.class",
-                "neoforge": "com/theplumteam/neoforge/BlockPopsModNeoForge.class",
+                "neoforge": "com/theplumteam/neoforge/BlockPopsModForge.class",
             }[loader]
             if entrypoint not in names:
                 raise ArtifactError(f"{loader} production entrypoint class is missing")

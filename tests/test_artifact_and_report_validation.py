@@ -26,6 +26,7 @@ from scripts.release.matrix import load_matrix_bytes
 REPOSITORY = Path(__file__).resolve().parents[1]
 MATRIX = load_matrix_bytes((REPOSITORY / "release" / "release-matrix.json").read_bytes())
 FABRIC_ARTIFACT = next(row for row in MATRIX["artifacts"] if row["loader"] == "fabric")
+FABRIC_MINECRAFT = FABRIC_ARTIFACT["minecraft"]
 
 
 def _write_zip(path: Path, entries: dict[str, bytes]) -> None:
@@ -75,8 +76,8 @@ class JarValidationTests(unittest.TestCase):
     def test_minimal_production_and_harness_jars_preserve_physical_separation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            production = root / "BlockPops - Fabric - 1.20.1-test.jar"
-            harness = root / "BlockPops E2E - Fabric - 1.20.1-0.0.0.jar"
+            production = root / f"BlockPops - Fabric - {FABRIC_MINECRAFT}-test.jar"
+            harness = root / f"BlockPops E2E - Fabric - {FABRIC_MINECRAFT}-0.0.0.jar"
             _write_zip(production, _fabric_production_entries())
             _write_zip(harness, _fabric_harness_entries())
 
@@ -88,7 +89,7 @@ class JarValidationTests(unittest.TestCase):
             root = Path(temporary)
             leaked = _fabric_production_entries()
             leaked["com/theplumteam/e2e/E2EHarness.class"] = b"class"
-            leaked_path = root / "BlockPops - Fabric - 1.20.1-leaked.jar"
+            leaked_path = root / f"BlockPops - Fabric - {FABRIC_MINECRAFT}-leaked.jar"
             _write_zip(leaked_path, leaked)
             with self.assertRaisesRegex(ArtifactError, "leaks the packaged E2E harness"):
                 verify_production_jar(leaked_path, FABRIC_ARTIFACT)
@@ -97,7 +98,7 @@ class JarValidationTests(unittest.TestCase):
             metadata = json.loads(stale["fabric.mod.json"])
             metadata["depends"]["minecraft"] = "*"
             stale["fabric.mod.json"] = json.dumps(metadata).encode()
-            stale_path = root / "BlockPops - Fabric - 1.20.1-stale.jar"
+            stale_path = root / f"BlockPops - Fabric - {FABRIC_MINECRAFT}-stale.jar"
             _write_zip(stale_path, stale)
             with self.assertRaisesRegex(ArtifactError, "disagrees with the release matrix"):
                 verify_production_jar(stale_path, FABRIC_ARTIFACT)
@@ -109,7 +110,9 @@ class JarValidationTests(unittest.TestCase):
         }
         for label, class_name in mutations.items():
             with tempfile.TemporaryDirectory() as temporary:
-                path = Path(temporary) / "BlockPops E2E - Fabric - 1.20.1-0.0.0.jar"
+                path = Path(temporary) / (
+                    f"BlockPops E2E - Fabric - {FABRIC_MINECRAFT}-0.0.0.jar"
+                )
                 entries = _fabric_harness_entries()
                 entries[class_name] = b"class"
                 _write_zip(path, entries)
@@ -172,7 +175,7 @@ class ReportValidationTests(unittest.TestCase):
         role_contract = packaged_runtime.SCENARIO_CONTRACT.role(self.scenario, self.role)
         self.report = {
             "schema_version": 1,
-            "minecraft": "1.20.1",
+            "minecraft": FABRIC_MINECRAFT,
             "role": self.role,
             "scenario": self.scenario,
             "contract_sha256": packaged_runtime.SCENARIO_CONTRACT.sha256,
@@ -195,7 +198,7 @@ class ReportValidationTests(unittest.TestCase):
             )
             if screenshot is not None:
                 (self.game_dir / "screenshots" / screenshot).write_bytes(b"png evidence")
-        self.row = {"minecraft": "1.20.1"}
+        self.row = {"minecraft": FABRIC_MINECRAFT}
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -236,7 +239,7 @@ class ReportValidationTests(unittest.TestCase):
         mutations = {
             "unknown key": lambda report: report.__setitem__("trusted", True),
             "stale contract": lambda report: report.__setitem__("contract_sha256", "0" * 64),
-            "wrong version": lambda report: report.__setitem__("minecraft", "1.21.1"),
+            "wrong version": lambda report: report.__setitem__("minecraft", "0.0.0"),
             "wrong role": lambda report: report.__setitem__("role", "client_b"),
             "failed report": lambda report: report.__setitem__("status", "fail"),
             "step order": lambda report: report["steps"].reverse(),

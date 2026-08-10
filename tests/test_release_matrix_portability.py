@@ -186,10 +186,9 @@ class ReleaseMatrixPortabilityTests(unittest.TestCase):
     def test_discovery_enrolls_self_identified_arbitrary_release_and_excludes_copied_feature(self) -> None:
         release = arbitrary_named_1211_release_matrix()
         snapshots = {
-            "master": BASE_MATRIX_BYTES,
             "ship/aurora-ui": _encoded(release),
-            # This is exactly what a normal feature branch forked from master carries.
-            "feature/copied-integration-matrix": BASE_MATRIX_BYTES,
+            # A normal feature branch carries an unchanged branch-local matrix.
+            "feature/copied-release-matrix": _encoded(release),
         }
 
         discovered = discover_from_snapshots(
@@ -242,8 +241,8 @@ class ReleaseMatrixPortabilityTests(unittest.TestCase):
     def test_lane_and_runtime_mutations_cannot_drift_from_artifact_inventory(self) -> None:
         mutations = {
             "lane count": lambda matrix: matrix.__setitem__("lane_count", 3),
-            "unit lane": lambda matrix: matrix.__setitem__("unit_test_lane", "forge-1.20.1"),
-            "runtime version": lambda matrix: matrix["runtimes"][0].__setitem__("minecraft", "1.20.1"),
+            "unit lane": lambda matrix: matrix.__setitem__("unit_test_lane", "absent-0.0.0"),
+            "runtime version": lambda matrix: matrix["runtimes"][0].__setitem__("minecraft", "0.0.0"),
             "task": lambda matrix: matrix["artifacts"][0].__setitem__("gradle_task", ":fabric:jar"),
             "extra dependency": lambda matrix: matrix["runtimes"][1]["runtime_dependencies"].append(
                 {
@@ -285,20 +284,15 @@ class RepositoryBranchDiscoveryTests(unittest.TestCase):
         self.git(repository, "config", "user.name", "BlockPops Tests")
         self.git(repository, "config", "user.email", "tests@blockpops.invalid")
         self.git(repository, "config", "core.filemode", "true")
-        matrix_path = repository / "release" / "release-matrix.json"
-        matrix_path.parent.mkdir()
-        matrix_path.write_bytes(BASE_MATRIX_BYTES)
-        self.git(repository, "add", "release/release-matrix.json")
-        self.git(repository, "commit", "-q", "-m", "integration matrix")
+        marker = repository / "README.md"
+        marker.write_text("synthetic canonical branch\n", encoding="utf-8")
+        self.git(repository, "add", "README.md")
+        self.git(repository, "commit", "-q", "-m", "canonical branch")
         integration_commit = self.git(repository, "rev-parse", "HEAD")
-        self.git(
-            repository,
-            "update-ref",
-            "refs/remotes/origin/master",
-            integration_commit,
-        )
 
         self.git(repository, "switch", "-q", "-c", "ship/aurora-ui")
+        matrix_path = repository / "release" / "release-matrix.json"
+        matrix_path.parent.mkdir()
         matrix_path.write_bytes(_encoded(arbitrary_named_1211_release_matrix()))
         self.git(repository, "add", "release/release-matrix.json")
         self.git(repository, "commit", "-q", "-m", "release matrix")
@@ -309,12 +303,12 @@ class RepositoryBranchDiscoveryTests(unittest.TestCase):
             "refs/remotes/origin/ship/aurora-ui",
             release_commit,
         )
-        # A copied matrix on a feature ref is inert because it still identifies master.
+        # A copied matrix on a feature ref is inert because it identifies the release.
         self.git(
             repository,
             "update-ref",
             "refs/remotes/origin/feature/copied-matrix",
-            integration_commit,
+            release_commit,
         )
         return integration_commit, release_commit
 
