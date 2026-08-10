@@ -270,9 +270,11 @@ def git_commit(repository: Path) -> str:
     commit = result.stdout.strip()
     if result.returncode or len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
         raise ArtifactError(f"cannot resolve exact git commit: {result.stderr.strip()}")
-    expected = os.environ.get("GITHUB_SHA")
+    expected = os.environ.get("BLOCKPOPS_TESTED_SHA")
     if expected and expected != commit:
-        raise ArtifactError(f"GITHUB_SHA {expected} does not equal checkout HEAD {commit}")
+        raise ArtifactError(
+            f"BLOCKPOPS_TESTED_SHA {expected} does not equal checkout HEAD {commit}"
+        )
     cleanliness = subprocess.run(
         ["git", "-C", str(repository), "diff-index", "--quiet", "HEAD", "--"],
         check=False,

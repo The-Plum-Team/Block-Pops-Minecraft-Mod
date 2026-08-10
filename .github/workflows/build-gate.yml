@@ -54,6 +54,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  BLOCKPOPS_TESTED_SHA: ${{ github.sha }}
   PYTHONUNBUFFERED: "1"
 
 jobs:
@@ -85,7 +86,7 @@ jobs:
           set -euo pipefail
           if [[ -n "$EXPECTED_SHA" ]]; then
             [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]
-            [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ && "$EXPECTED_SHA" == "$GITHUB_SHA" ]]
+            [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ && "$EXPECTED_SHA" == "$BLOCKPOPS_TESTED_SHA" ]]
             [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
             [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
             [[ -n "$TARGET_BRANCH" ]]
@@ -103,7 +104,7 @@ jobs:
           set -euo pipefail
           python3 scripts/release/matrix.py --matrix release/release-matrix.json >/dev/null
           python3 scripts/ci/loader_bootstrap.py \
-            --repository . --head-sha "$GITHUB_SHA" >/dev/null
+            --repository . --head-sha "$BLOCKPOPS_TESTED_SHA" >/dev/null
           gradle_java="$(python3 scripts/release/matrix.py \
             --matrix release/release-matrix.json --kind gradle-java \
             | jq -er '.java')"
