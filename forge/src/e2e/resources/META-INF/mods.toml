@@ -1,5 +1,5 @@
 modLoader = "javafml"
-loaderVersion = "[47,)"
+loaderVersion = "${loader_requirement}"
 license = "All Rights Reserved"
 
 [[mods]]
@@ -14,4 +14,11 @@ modId = "blockpops"
 mandatory = true
 versionRange = "[0,)"
 ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies.blockpops_e2e]]
+modId = "minecraft"
+mandatory = true
+versionRange = "${minecraft_requirement}"
+ordering = "NONE"
 side = "CLIENT"

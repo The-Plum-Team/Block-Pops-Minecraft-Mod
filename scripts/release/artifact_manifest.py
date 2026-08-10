@@ -230,12 +230,15 @@ def verify_harness_jar(path: Path, artifact: dict[str, Any]) -> None:
             )
         if artifact["loader"] == "fabric":
             metadata = _read_zip_json(archive, "fabric.mod.json")
+            dependencies = metadata.get("depends")
             if (
                 metadata.get("id") != "blockpops-e2e"
                 or metadata.get("version") != "0.0.0"
                 or metadata.get("environment") != "client"
-                or not isinstance(metadata.get("depends"), dict)
-                or "blockpops" not in metadata["depends"]
+                or not isinstance(dependencies, dict)
+                or dependencies.get("blockpops") != "*"
+                or dependencies.get("fabricloader") != artifact["metadata"]["loader"]
+                or dependencies.get("minecraft") != artifact["metadata"]["minecraft"]
             ):
                 raise ArtifactError("Fabric E2E metadata identity is invalid")
         else:
@@ -245,6 +248,8 @@ def verify_harness_jar(path: Path, artifact: dict[str, Any]) -> None:
                 or 'version = "0.0.0"' not in text
                 or 'displayTest = "IGNORE_ALL_VERSION"' not in text
                 or 'modId = "blockpops"' not in text
+                or f'loaderVersion = "{artifact["metadata"]["loader"]}"' not in text
+                or f'versionRange = "{artifact["metadata"]["minecraft"]}"' not in text
             ):
                 raise ArtifactError("FML E2E metadata identity is invalid")
     finally:
@@ -265,6 +270,21 @@ def git_commit(repository: Path) -> str:
     expected = os.environ.get("GITHUB_SHA")
     if expected and expected != commit:
         raise ArtifactError(f"GITHUB_SHA {expected} does not equal checkout HEAD {commit}")
+    cleanliness = subprocess.run(
+        ["git", "-C", str(repository), "diff-index", "--quiet", "HEAD", "--"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    if cleanliness.returncode not in {0, 1}:
+        raise ArtifactError(
+            "cannot authenticate tracked worktree cleanliness: "
+            + cleanliness.stderr.decode("utf-8", "replace").strip()
+        )
+    if cleanliness.returncode:
+        raise ArtifactError(
+            "refusing to bind release artifacts to a commit with tracked changes"
+        )
     return commit
 
 

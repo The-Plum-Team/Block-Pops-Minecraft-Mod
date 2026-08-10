@@ -71,6 +71,16 @@ e2eSourceSet.java.srcDir(generatedJava)
 tasks.named(e2eSourceSet.compileJavaTaskName) {
     dependsOn generateContract
 }
+tasks.named(e2eSourceSet.processResourcesTaskName) {
+    inputs.property('e2eMinecraftRequirement', artifact.metadata.minecraft as String)
+    inputs.property('e2eLoaderRequirement', artifact.metadata.loader as String)
+    filesMatching(['fabric.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml']) {
+        expand(
+            minecraft_requirement: artifact.metadata.minecraft as String,
+            loader_requirement: artifact.metadata.loader as String
+        )
+    }
+}
 
 def archiveName = "BlockPops E2E - ${loaderLabel} - ${minecraftVersion}"
 if (noRemap) {

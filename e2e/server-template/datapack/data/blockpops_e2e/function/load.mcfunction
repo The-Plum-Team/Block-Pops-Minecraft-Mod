@@ -1,4 +1,4 @@
-# Runs once on world load (minecraft:load tag). Starts screenshots in clear daylight.
+# Minecraft 1.21+ singular data-pack path; content mirrors the 1.20.x path.
 weather clear
 time set day
 gamerule doDaylightCycle false

@@ -4,6 +4,7 @@ import copy
 import json
 import os
 import stat
+import subprocess
 import tempfile
 import unittest
 import warnings
@@ -14,6 +15,7 @@ from unittest import mock
 from e2e import packaged_runtime
 from scripts.release.artifact_manifest import (
     ArtifactError,
+    git_commit,
     inspect_zip,
     verify_harness_jar,
     verify_production_jar,
@@ -55,7 +57,11 @@ def _fabric_harness_entries() -> dict[str, bytes]:
         "id": "blockpops-e2e",
         "version": "0.0.0",
         "environment": "client",
-        "depends": {"blockpops": "*"},
+        "depends": {
+            "blockpops": "*",
+            "fabricloader": FABRIC_ARTIFACT["metadata"]["loader"],
+            "minecraft": FABRIC_ARTIFACT["metadata"]["minecraft"],
+        },
     }
     return {
         "com/theplumteam/e2e/E2EHarness.class": b"class",
@@ -261,6 +267,59 @@ class ReportValidationTests(unittest.TestCase):
         with self.assertRaises(packaged_runtime.RuntimeFailure):
             self.validate()
 
+
+class RuntimeLogIdentityTests(unittest.TestCase):
+    def test_client_log_requires_blockpops_harness_completion_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            client_log = Path(temporary) / "client_a.log"
+            client_log.write_text(
+                "[BlockPops-E2E] finished; passed=true\n", encoding="utf-8"
+            )
+            packaged_runtime.scan_runtime_logs([client_log])
+
+            client_log.write_text("[QS-E2E] FINISHED status=pass\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                packaged_runtime.RuntimeFailure, "missing.*BlockPops-E2E"
+            ):
+                packaged_runtime.scan_runtime_logs([client_log])
+
+    def test_fatal_loader_linkage_still_fails_with_completion_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            client_log = Path(temporary) / "client_a.log"
+            client_log.write_text(
+                "[BlockPops-E2E] finished; passed=true\nNoClassDefFoundError: geckolib\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(packaged_runtime.RuntimeFailure, "fatal runtime"):
+                packaged_runtime.scan_runtime_logs([client_log])
+
+
+class ArtifactCommitIdentityTests(unittest.TestCase):
+    def test_release_provenance_rejects_tracked_worktree_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            for arguments in (
+                ("init", "-q", "-b", "master"),
+                ("config", "user.name", "BlockPops Tests"),
+                ("config", "user.email", "tests@blockpops.invalid"),
+            ):
+                subprocess.run(
+                    ["git", "-C", str(repository), *arguments], check=True
+                )
+            tracked = repository / "tracked.txt"
+            tracked.write_text("clean\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(repository), "add", "tracked.txt"], check=True
+            )
+            subprocess.run(
+                ["git", "-C", str(repository), "commit", "-q", "-m", "initial"],
+                check=True,
+            )
+            self.assertRegex(git_commit(repository), r"^[0-9a-f]{40}$")
+
+            tracked.write_text("dirty\n", encoding="utf-8")
+            with self.assertRaisesRegex(ArtifactError, "tracked changes"):
+                git_commit(repository)
 
 if __name__ == "__main__":
     unittest.main()

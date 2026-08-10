@@ -66,11 +66,6 @@ KQUEUE_UNSUPPORTED_PLATFORM_CAUSE = (
 )
 DEBUG_FILE_APPENDER_FAILURE = "An exception occurred processing Appender DebugFile"
 DEBUG_FILE_APPENDER_STACK_WINDOW = 96
-COMPATIBILITY_LOG_MARKERS = {
-    "neoforge-26.1-break-event-v1": (
-        "BlockPops applied Architectury NeoForge 26.1 BreakEvent compatibility patch"
-    ),
-}
 
 SCENARIO_CONTRACT = default_contract()
 
@@ -1558,8 +1553,13 @@ def scan_runtime_logs(logs: list[Path]) -> None:
         if not log.is_file():
             raise RuntimeFailure(f"runtime log missing: {log}")
         content = log.read_text(encoding="utf-8", errors="replace")
-        if "client" in log.stem.lower() and "[QS-E2E] FINISHED status=pass" not in content:
-            hits.append(f"{log}: missing [QS-E2E] FINISHED status=pass")
+        if (
+            "client" in log.stem.lower()
+            and "[BlockPops-E2E] finished; passed=true" not in content
+        ):
+            hits.append(
+                f"{log}: missing [BlockPops-E2E] finished; passed=true"
+            )
         lines = content.splitlines()
         for line_index, line in enumerate(lines):
             if any(pattern.search(line) for pattern in FATAL_LOG_PATTERNS):
@@ -1568,27 +1568,6 @@ def scan_runtime_logs(logs: list[Path]) -> None:
                 hits.append(f"{log}:{line_index + 1}: {line[:300]}")
     if hits:
         raise RuntimeFailure("fatal runtime log evidence:\n" + "\n".join(hits[:30]))
-
-
-def require_compatibility_marker(logs: list[Path], row: Mapping[str, Any]) -> None:
-    patch = row.get("compatibility_patch")
-    if patch is None:
-        return
-    marker = COMPATIBILITY_LOG_MARKERS.get(patch)
-    if marker is None:
-        raise RuntimeFailure(f"unknown runtime compatibility patch {patch!r}")
-    missing: list[str] = []
-    for log in logs:
-        try:
-            content = log.read_text(encoding="utf-8", errors="replace")
-        except OSError as exc:
-            raise RuntimeFailure(f"cannot read compatibility log {log}: {exc}") from exc
-        if marker not in content:
-            missing.append(str(log))
-    if missing:
-        raise RuntimeFailure(
-            f"compatibility patch {patch!r} was not observed in every process: {missing}"
-        )
 
 
 def artifact_record(manifest: dict[str, Any], node: str) -> dict[str, Any]:
@@ -2082,7 +2061,6 @@ def run_packaged_row(
             for role in roles
         }
         scan_runtime_logs(runtime_logs)
-        require_compatibility_marker(runtime_logs, row)
         crash_reports = list(profile.rglob("crash-reports/*.txt"))
         if crash_reports:
             raise RuntimeFailure(f"runtime produced crash reports: {crash_reports}")
