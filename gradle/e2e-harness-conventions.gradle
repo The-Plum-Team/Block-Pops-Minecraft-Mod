@@ -42,6 +42,19 @@ e2eSourceSet.resources.setSrcDirs([
 e2eSourceSet.compileClasspath = files(mainSourceSet.output, mainSourceSet.compileClasspath)
 e2eSourceSet.runtimeClasspath = files(e2eSourceSet.output, e2eSourceSet.compileClasspath)
 
+// Forge-family loaders turn a missing client resource-pack descriptor into a blocking
+// LoadingErrorScreen even when every class loaded successfully. Reuse the active loader's
+// production descriptor verbatim so the harness cannot carry a second version/pack-format
+// inventory. Fabric 1.20.1 has no loader-local descriptor and does not require one.
+def productionPackMetadata = mainSourceSet.resources.srcDirs
+        .collect { new File(it, 'pack.mcmeta') }
+        .findAll { it.isFile() }
+if (loaderId in ['forge', 'neoforge'] && productionPackMetadata.size() != 1) {
+    throw new GradleException(
+            "${loaderLabel} E2E requires exactly one production-owned pack.mcmeta, "
+                    + "found ${productionPackMetadata}")
+}
+
 def contractFile = rootProject.file('e2e/scenario-contract.json')
 def contractParser = rootProject.file('e2e/scenario_contract.py')
 def contractGenerator = rootProject.file('e2e/generate_contract_java.py')
@@ -74,6 +87,9 @@ tasks.named(e2eSourceSet.compileJavaTaskName) {
 tasks.named(e2eSourceSet.processResourcesTaskName) {
     inputs.property('e2eMinecraftRequirement', artifact.metadata.minecraft as String)
     inputs.property('e2eLoaderRequirement', artifact.metadata.loader as String)
+    if (!productionPackMetadata.isEmpty()) {
+        from(productionPackMetadata.first())
+    }
     filesMatching(['fabric.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml']) {
         expand(
             minecraft_requirement: artifact.metadata.minecraft as String,

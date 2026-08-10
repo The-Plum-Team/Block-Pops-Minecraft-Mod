@@ -29,6 +29,9 @@ REPOSITORY = Path(__file__).resolve().parents[1]
 MATRIX = load_matrix_bytes((REPOSITORY / "release" / "release-matrix.json").read_bytes())
 FABRIC_ARTIFACT = next(row for row in MATRIX["artifacts"] if row["loader"] == "fabric")
 FABRIC_MINECRAFT = FABRIC_ARTIFACT["minecraft"]
+FML_ARTIFACT = next(
+    row for row in MATRIX["artifacts"] if row["loader"] in {"forge", "neoforge"}
+)
 
 
 def _write_zip(path: Path, entries: dict[str, bytes]) -> None:
@@ -72,6 +75,43 @@ def _fabric_harness_entries() -> dict[str, bytes]:
         "com/theplumteam/e2e/fabric/BlockPopsE2EFabric.class": b"class",
         "fabric.mod.json": json.dumps(metadata).encode(),
     }
+
+
+def _fml_harness_entries(*, include_pack: bool) -> dict[str, bytes]:
+    metadata = f'''modLoader = "javafml"
+loaderVersion = "{FML_ARTIFACT["metadata"]["loader"]}"
+license = "All Rights Reserved"
+[[mods]]
+modId = "blockpops_e2e"
+version = "0.0.0"
+displayTest = "IGNORE_ALL_VERSION"
+[[dependencies.blockpops_e2e]]
+modId = "blockpops"
+mandatory = true
+versionRange = "*"
+ordering = "AFTER"
+side = "CLIENT"
+[[dependencies.blockpops_e2e]]
+modId = "minecraft"
+mandatory = true
+versionRange = "{FML_ARTIFACT["metadata"]["minecraft"]}"
+ordering = "NONE"
+side = "CLIENT"
+'''.encode()
+    loader = FML_ARTIFACT["loader"]
+    entrypoint = {
+        "forge": "com/theplumteam/e2e/forge/BlockPopsE2EForge.class",
+        "neoforge": "com/theplumteam/e2e/neoforge/BlockPopsE2ENeoForge.class",
+    }[loader]
+    entries = {
+        "com/theplumteam/e2e/E2EHarness.class": b"class",
+        "com/theplumteam/e2e/generated/ScenarioContract.class": b"class",
+        entrypoint: b"class",
+        FML_ARTIFACT["metadata"]["file"]: metadata,
+    }
+    if include_pack:
+        entries["pack.mcmeta"] = b'{"pack":{"description":"BlockPops","pack_format":15}}'
+    return entries
 
 
 class JarValidationTests(unittest.TestCase):
@@ -120,6 +160,22 @@ class JarValidationTests(unittest.TestCase):
                 _write_zip(path, entries)
                 with self.subTest(label=label), self.assertRaises(ArtifactError):
                     verify_harness_jar(path, FABRIC_ARTIFACT)
+
+    def test_active_fml_harness_requires_resource_pack_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            loader_label = {"forge": "Forge", "neoforge": "NeoForge"}[
+                FML_ARTIFACT["loader"]
+            ]
+            prefix = f"BlockPops E2E - {loader_label} - {FML_ARTIFACT['minecraft']}"
+            valid = root / f"{prefix}-0.0.0.jar"
+            _write_zip(valid, _fml_harness_entries(include_pack=True))
+            verify_harness_jar(valid, FML_ARTIFACT)
+
+            missing = root / f"{prefix}-missing.jar"
+            _write_zip(missing, _fml_harness_entries(include_pack=False))
+            with self.assertRaisesRegex(ArtifactError, "pack.mcmeta"):
+                verify_harness_jar(missing, FML_ARTIFACT)
 
     def test_zip_entries_reject_traversal_absolute_backslash_and_drive_paths(self) -> None:
         unsafe_names = ("../escape.class", "/absolute.class", "dir\\entry.class", "C:drive.class")
