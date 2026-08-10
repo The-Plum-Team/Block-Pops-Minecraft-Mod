@@ -12,6 +12,8 @@ import zipfile
 from pathlib import Path
 from unittest import mock
 
+from PIL import Image, ImageDraw
+
 from e2e import packaged_runtime
 from scripts.release.artifact_manifest import (
     ArtifactError,
@@ -161,6 +163,49 @@ class JarValidationTests(unittest.TestCase):
             with mock.patch("scripts.release.artifact_manifest.MAX_UNCOMPRESSED_BYTES", 7):
                 with self.assertRaisesRegex(ArtifactError, "uncompressed size"):
                     inspect_zip(path)
+
+
+class ScreenshotNormalizationTests(unittest.TestCase):
+    @staticmethod
+    def _write_frame(path: Path, size: tuple[int, int]) -> None:
+        image = Image.new("RGB", size, (8, 12, 20))
+        draw = ImageDraw.Draw(image)
+        width, height = size
+        colors = (
+            (16, 32, 64),
+            (80, 32, 96),
+            (32, 112, 80),
+            (180, 140, 40),
+        )
+        for index, color in enumerate(colors):
+            left = index * width // len(colors)
+            right = (index + 1) * width // len(colors)
+            draw.rectangle((left, 0, right, height), fill=color)
+        image.save(path, format="PNG")
+
+    def test_exact_integer_density_frame_is_canonicalized_before_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            screenshot = Path(temporary) / "retina.png"
+            self._write_frame(screenshot, (3200, 1800))
+
+            metrics = packaged_runtime.inspect_screenshot(screenshot)
+
+            self.assertEqual((1600, 900), (metrics["width"], metrics["height"]))
+            with Image.open(screenshot) as normalized:
+                self.assertEqual((1600, 900), normalized.size)
+                self.assertEqual("RGB", normalized.mode)
+
+    def test_non_integer_or_asymmetric_dimensions_fail_closed(self) -> None:
+        for dimensions in ((1920, 1080), (3200, 900), (800, 450)):
+            with self.subTest(
+                dimensions=dimensions
+            ), tempfile.TemporaryDirectory() as temporary:
+                screenshot = Path(temporary) / "incompatible.png"
+                self._write_frame(screenshot, dimensions)
+                with self.assertRaisesRegex(
+                    packaged_runtime.RuntimeFailure, "dimensions must be"
+                ):
+                    packaged_runtime.inspect_screenshot(screenshot)
 
 
 class ReportValidationTests(unittest.TestCase):
