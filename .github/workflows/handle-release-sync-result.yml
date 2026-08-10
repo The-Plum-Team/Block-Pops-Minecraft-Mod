@@ -1,0 +1,323 @@
+name: Handle release synchronization result
+
+on:
+  repository_dispatch:
+    types:
+      - release-sync-reconcile-head
+  workflow_run:
+    workflows:
+      - Build gate
+      - Packaged E2E
+    types:
+      - completed
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: >-
+    release-sync-result-${{ github.event.workflow_run.head_branch || github.event.client_payload.head_branch || 'canonical-wake' }}
+  cancel-in-progress: false
+
+jobs:
+  wake-canonical-sync:
+    name: Wake synchronization after canonical Build
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.name == 'Build gate' &&
+      github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Dispatch the protected default-branch synchronizer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          jq -n --arg source_run_id "${{ github.event.workflow_run.id }}" \
+            '{event_type:"release-sync-requested",client_payload:{reason:"canonical-build",source_run_id:$source_run_id}}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" --input -
+
+  handle:
+    name: Reverify exact heads and merge
+    if: >-
+      github.event_name == 'repository_dispatch' ||
+      (github.event.workflow_run.event == 'workflow_dispatch' &&
+       startsWith(github.event.workflow_run.head_branch, 'automation/release-sync/'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the protected default-branch controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Authenticate both newest runs and merge only their exact tested head
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DISPATCH_HEAD_BRANCH: ${{ github.event.client_payload.head_branch }}
+          DISPATCH_HEAD_SHA: ${{ github.event.client_payload.head_sha }}
+          EVENT_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          EVENT_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          head_branch="${DISPATCH_HEAD_BRANCH:-$EVENT_HEAD_BRANCH}"
+          requested_sha="${DISPATCH_HEAD_SHA:-$EVENT_HEAD_SHA}"
+          [[ "$head_branch" == automation/release-sync/* ]]
+          [[ "$requested_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$(jq -er .branch.name release/release-matrix.json)" == "$DEFAULT_BRANCH" ]]
+          [[ "$(jq -er .branch.role release/release-matrix.json)" == integration ]]
+          protected_sha="$(git rev-parse HEAD)"
+          encoded_default="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$DEFAULT_BRANCH")"
+          current_protected="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded_default" --jq .object.sha)"
+          if [[ "$protected_sha" != "$current_protected" ]]; then
+            printf 'Canonical head advanced during controller checkout; reconciliation will retry.\n' \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          prs="$(gh pr list --state open --head "$head_branch" --limit 2 \
+            --json number,state,baseRefName,baseRefOid,headRefName,headRefOid,isCrossRepository,url)"
+          if [[ "$(jq length <<< "$prs")" == 0 ]]; then
+            printf 'No open release-sync PR remains for `%s`.\n' "$head_branch" \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          [[ "$(jq length <<< "$prs")" == 1 ]]
+          pr="$(jq -c '.[0]' <<< "$prs")"
+          jq -e --arg branch "$head_branch" \
+            '.state == "OPEN" and .headRefName == $branch and (.isCrossRepository | not)' \
+            <<< "$pr" >/dev/null
+          pr_number="$(jq -er .number <<< "$pr")"
+          target_branch="$(jq -er .baseRefName <<< "$pr")"
+          target_sha="$(jq -er .baseRefOid <<< "$pr")"
+          head_sha="$(jq -er .headRefOid <<< "$pr")"
+          [[ "$pr_number" =~ ^[0-9]+$ ]]
+          [[ "$target_sha" =~ ^[0-9a-f]{40}$ && "$head_sha" =~ ^[0-9a-f]{40}$ ]]
+          if [[ "$requested_sha" != "$head_sha" ]]; then
+            printf 'Completion was for stale `%s`; current PR head is `%s`.\n' \
+              "$requested_sha" "$head_sha" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          encoded_target="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$target_branch")"
+          encoded_head="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$head_branch")"
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded_target" --jq .object.sha)" == "$target_sha" ]]
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded_head" --jq .object.sha)" == "$head_sha" ]]
+          gh auth setup-git
+          git fetch --no-tags origin \
+            "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH" \
+            "+refs/heads/$target_branch:refs/remotes/origin/$target_branch" \
+            "+refs/heads/$head_branch:refs/remotes/origin/$head_branch"
+          [[ "$(git rev-parse "refs/remotes/origin/$DEFAULT_BRANCH")" == "$protected_sha" ]]
+          [[ "$(git rev-parse "refs/remotes/origin/$target_branch")" == "$target_sha" ]]
+          [[ "$(git rev-parse "refs/remotes/origin/$head_branch")" == "$head_sha" ]]
+
+          topology="$(python3 scripts/ci/gate_controller.py topology \
+            --repository . --protected-sha "$protected_sha" --target-sha "$target_sha" \
+            --head-sha "$head_sha" --source-branch "$DEFAULT_BRANCH" \
+            --target-branch "$target_branch")"
+          matrix_sha="$(jq -er .matrix_sha256 <<< "$topology")"
+          python3 scripts/ci/gate_controller.py parity --repository . \
+            --protected-sha "$protected_sha" --candidate-sha "$head_sha" >/dev/null
+          python3 scripts/ci/e2e_impact.py --repository . \
+            --base "$target_sha" --head "$head_sha" > "$RUNNER_TEMP/impact.json"
+          jq -e '.schema_version == 1 and .gate_policy == "always-full"' \
+            "$RUNNER_TEMP/impact.json" >/dev/null
+
+          candidate="$RUNNER_TEMP/candidate"
+          git worktree add --detach "$candidate" "$head_sha"
+
+          publish_status() {
+            local context="$1" state="$2" description="$3" run_id="$4"
+            jq -n --arg state "$state" --arg context "$context" \
+              --arg description "$description" \
+              --arg target_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$run_id" \
+              '{state:$state,context:$context,description:$description,target_url:$target_url}' \
+              | gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$head_sha" --input - >/dev/null
+          }
+
+          select_run() {
+            local workflow="$1" output="$2" runs="$RUNNER_TEMP/$workflow.runs.json"
+            gh api --paginate --slurp \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?event=workflow_dispatch&head_sha=$head_sha&per_page=100" \
+              > "$runs" || return 2
+            local count
+            count="$(jq --arg branch "$head_branch" --arg head "$head_sha" \
+              --arg path ".github/workflows/$workflow" --arg repository "$GITHUB_REPOSITORY" \
+              '[.[].workflow_runs[] | select(.event == "workflow_dispatch" and .path == $path and
+                .head_branch == $branch and .head_sha == $head and
+                .head_repository.full_name == $repository)] | length' "$runs")" || return 2
+            if [[ "$count" == 0 ]]; then
+              return 3
+            fi
+            python3 scripts/ci/gate_controller.py select-run --runs "$runs" \
+              --workflow "$workflow" --branch "$head_branch" --sha "$head_sha" \
+              --repository-name "$GITHUB_REPOSITORY" > "$output" || return 2
+          }
+
+          build_run="$RUNNER_TEMP/build.selected.json"
+          e2e_run="$RUNNER_TEMP/e2e.selected.json"
+          set +e
+          select_run build-gate.yml "$build_run"
+          build_select=$?
+          set -e
+          if [[ "$build_select" == 3 ]]; then
+            printf 'Exact-head Build run has not been created yet.\n' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          [[ "$build_select" == 0 ]]
+          set +e
+          select_run on-demand-e2e.yml "$e2e_run"
+          e2e_select=$?
+          set -e
+          if [[ "$e2e_select" == 3 ]]; then
+            printf 'Exact-head Packaged E2E run has not been created yet.\n' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          [[ "$e2e_select" == 0 ]]
+
+          build_status="$(jq -er .status "$build_run")"
+          e2e_status="$(jq -er .status "$e2e_run")"
+          if [[ "$build_status" != completed || "$e2e_status" != completed ]]; then
+            printf 'Newest exact-head gate attempts are still running.\n' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          build_id="$(jq -er .id "$build_run")"
+          build_attempt="$(jq -er .run_attempt "$build_run")"
+          e2e_id="$(jq -er .id "$e2e_run")"
+          e2e_attempt="$(jq -er .run_attempt "$e2e_run")"
+          if [[ "$(jq -er .conclusion "$build_run")" != success ]]; then
+            publish_status "Release sync / Build and verify" failure \
+              "Newest exact-head Build gate failed" "$build_id"
+            exit 1
+          fi
+          if [[ "$(jq -er .conclusion "$e2e_run")" != success ]]; then
+            publish_status "Release sync / Packaged E2E gate" failure \
+              "Newest exact-head Packaged E2E failed" "$e2e_id"
+            exit 1
+          fi
+
+          gh api --paginate --slurp \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$build_id/jobs?filter=all&per_page=100" \
+            > "$RUNNER_TEMP/build.jobs.json"
+          gh api --paginate --slurp \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$e2e_id/jobs?filter=all&per_page=100" \
+            > "$RUNNER_TEMP/e2e.jobs.json"
+          if ! python3 scripts/ci/e2e_job_graph.py \
+              --matrix "$candidate/release/release-matrix.json" \
+              --jobs "$RUNNER_TEMP/build.jobs.json" --workflow build-gate.yml \
+              --event workflow_dispatch --source-branch "$head_branch" \
+              --run-attempt "$build_attempt" > "$RUNNER_TEMP/build.graph.json"; then
+            publish_status "Release sync / Build and verify" failure \
+              "Build run has an invalid protected job graph" "$build_id"
+            exit 1
+          fi
+          if ! python3 scripts/ci/e2e_job_graph.py \
+              --matrix "$candidate/release/release-matrix.json" \
+              --jobs "$RUNNER_TEMP/e2e.jobs.json" --workflow on-demand-e2e.yml \
+              --event workflow_dispatch --source-branch "$head_branch" \
+              --run-attempt "$e2e_attempt" > "$RUNNER_TEMP/e2e.graph.json"; then
+            publish_status "Release sync / Packaged E2E gate" failure \
+              "Packaged E2E run has an invalid protected job graph" "$e2e_id"
+            exit 1
+          fi
+
+          # Re-read every mutable boundary and reselect the newest attempt immediately
+          # before publishing statuses and invoking the merge API.
+          current_pr="$(gh pr view "$pr_number" \
+            --json state,baseRefName,baseRefOid,headRefName,headRefOid,isCrossRepository)"
+          jq -e --arg base "$target_sha" --arg head "$head_sha" \
+            --arg head_branch "$head_branch" --arg target "$target_branch" \
+            '.state == "OPEN" and .baseRefName == $target and .baseRefOid == $base and
+             .headRefName == $head_branch and .headRefOid == $head and
+             (.isCrossRepository | not)' <<< "$current_pr" >/dev/null
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded_target" --jq .object.sha)" == "$target_sha" ]]
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded_head" --jq .object.sha)" == "$head_sha" ]]
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded_default" --jq .object.sha)" == "$protected_sha" ]]
+          build_reselected="$RUNNER_TEMP/build.reselected.json"
+          e2e_reselected="$RUNNER_TEMP/e2e.reselected.json"
+          select_run build-gate.yml "$build_reselected"
+          select_run on-demand-e2e.yml "$e2e_reselected"
+          if ! cmp -s "$build_run" "$build_reselected" || ! cmp -s "$e2e_run" "$e2e_reselected"; then
+            printf 'A newer exact-head run/attempt appeared; waiting for its completion.\n' \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          publish_status "Release sync / Build and verify" success \
+            "Verified newest exact-head Build run and job graph" "$build_id"
+          publish_status "Release sync / Packaged E2E gate" success \
+            "Verified newest exact-head packaged run and job graph" "$e2e_id"
+          gh pr comment "$pr_number" --body \
+            "Protected controllers reverified Build run $build_id attempt $build_attempt and Packaged E2E run $e2e_id attempt $e2e_attempt against exact head \`$head_sha\`. Merging that tested head."
+          # Keep one rolling automation branch per enrolled release. The advisory
+          # visual curator must be able to reauthenticate the exact tested head
+          # after the deterministic merge; the next synchronization replaces this
+          # ref only with an authenticated force-with-lease.
+          gh pr merge "$pr_number" --merge --match-head-commit "$head_sha"
+
+          merge_sha=''
+          for attempt in $(seq 1 20); do
+            merge_sha="$(gh pr view "$pr_number" --json mergeCommit \
+              --jq '.mergeCommit.oid // ""')"
+            [[ -n "$merge_sha" ]] && break
+            sleep 2
+          done
+          [[ "$merge_sha" =~ ^[0-9a-f]{40}$ ]]
+          git fetch --no-tags origin \
+            "+refs/heads/$target_branch:refs/remotes/origin/$target_branch"
+          [[ "$(git rev-parse "refs/remotes/origin/$target_branch")" == "$merge_sha" ]]
+          [[ "$(git show -s --format=%P "$merge_sha")" == "$target_sha $head_sha" ]]
+          [[ "$(git rev-parse "$merge_sha^{tree}")" == "$(git rev-parse "$head_sha^{tree}")" ]]
+          [[ "$(git show "$merge_sha:release/release-matrix.json" | sha256sum | cut -d' ' -f1)" == "$matrix_sha" ]]
+
+          dispatch_attestation() {
+            local workflow="$1" run_id="$2" run_attempt="$3"
+            payload="$RUNNER_TEMP/$workflow.attest.json"
+            jq -n --arg ref "$target_branch" --arg run_id "$run_id" \
+              --arg run_attempt "$run_attempt" --arg tested_branch "$head_branch" \
+              --arg tested_sha "$head_sha" --arg base_sha "$target_sha" \
+              --arg target_sha "$merge_sha" \
+              '{ref:$ref,inputs:{attest_run_id:$run_id,attest_run_attempt:$run_attempt,
+                attest_branch:$tested_branch,attest_sha:$tested_sha,
+                attest_base_sha:$base_sha,attest_target_sha:$target_sha}}' > "$payload"
+            gh api --method POST \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/dispatches" \
+              --input "$payload"
+          }
+          dispatch_attestation build-gate.yml "$build_id" "$build_attempt"
+          dispatch_attestation on-demand-e2e.yml "$e2e_id" "$e2e_attempt"
+          visual_payload="$RUNNER_TEMP/visual-review.dispatch.json"
+          jq -n --arg repository "$GITHUB_REPOSITORY" \
+            --arg run_id "$e2e_id" --arg branch "$head_branch" \
+            --arg sha "$head_sha" \
+            '{event_type:"visual-review-requested",client_payload:{
+              source_repository:$repository,source_run_id:$run_id,
+              source_branch:$branch,source_sha:$sha}}' > "$visual_payload"
+          if ! gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" \
+              --input "$visual_payload"; then
+            printf '::warning::Could not dispatch advisory visual review for E2E run %s.\n' \
+              "$e2e_id"
+          fi
+          {
+            printf '### Delivered release synchronization\n\n'
+            printf -- '- Release branch: `%s`\n' "$target_branch"
+            printf -- '- Tested head: `%s`\n' "$head_sha"
+            printf -- '- Final commit/tree: `%s` / `%s`\n' \
+              "$merge_sha" "$(git rev-parse "$merge_sha^{tree}")"
+            printf -- '- Build: run `%s`, attempt `%s`\n' "$build_id" "$build_attempt"
+            printf -- '- Packaged E2E: run `%s`, attempt `%s`\n' "$e2e_id" "$e2e_attempt"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -48,7 +48,7 @@ PROJECT_KEYS = frozenset(
         "name",
         "mod_id",
         "description",
-        "mod_version_property",
+        "mod_version",
         "sources",
         "issues",
         "license",
@@ -182,6 +182,11 @@ def validate_matrix(
         _text(project[key], f"project.{key}")
     if not re.fullmatch(r"[a-z][a-z0-9_-]{1,63}", project["mod_id"]):
         _fail("project.mod_id is unsafe")
+    if re.fullmatch(
+        r"[0-9]+(?:\.[0-9]+){2}(?:[-+][A-Za-z0-9.-]+)?",
+        project["mod_version"],
+    ) is None:
+        _fail("project.mod_version must be a bounded semantic release version")
     branch = _text(branch_record["name"], "branch.name")
     canonical = _text(branch_record["canonical"], "branch.canonical")
     source_branch = _text(branch_sync["source"], "branch.sync.source")
@@ -487,29 +492,9 @@ def load_matrix_bytes(data: bytes) -> dict[str, Any]:
         raise MatrixError(str(exc)) from exc
 
 
-def read_properties(path: Path) -> dict[str, str]:
-    values: dict[str, str] = {}
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeError) as exc:
-        raise MatrixError(f"cannot read Gradle properties: {exc}") from exc
-    for raw in lines:
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" not in line:
-            _fail(f"invalid Gradle property line {raw!r}")
-        key, value = (part.strip() for part in line.split("=", 1))
-        if key in values:
-            _fail(f"duplicate Gradle property {key}")
-        values[key] = value
-    return values
-
-
 def mod_version(matrix_path: Path, matrix: dict[str, Any]) -> str:
-    properties = read_properties(matrix_path.resolve().parents[1] / "gradle.properties")
-    key = matrix["project"]["mod_version_property"]
-    return _text(properties.get(key), f"Gradle property {key}")
+    del matrix_path
+    return _text(matrix["project"]["mod_version"], "project.mod_version")
 
 
 def matrix_sha256(path: Path) -> str:

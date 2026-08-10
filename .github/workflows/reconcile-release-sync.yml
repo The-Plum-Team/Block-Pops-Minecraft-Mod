@@ -1,0 +1,60 @@
+name: Reconcile release synchronization
+
+on:
+  repository_dispatch:
+    types:
+      - release-sync-reconcile
+  schedule:
+    - cron: "11,41 * * * *"
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: reconcile-release-synchronization
+  cancel-in-progress: true
+
+jobs:
+  reconcile:
+    name: Repair missed release-sync events
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the protected default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Dispatch the protected synchronizer and every open-head recheck
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$(jq -er .branch.name release/release-matrix.json)" == "$DEFAULT_BRANCH" ]]
+          jq -n \
+            '{event_type:"release-sync-requested",client_payload:{reason:"protected-reconcile"}}' \
+            > "$RUNNER_TEMP/sync.json"
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/dispatches" \
+            --input "$RUNNER_TEMP/sync.json"
+
+          gh pr list --state open --limit 100 \
+            --json headRefName,headRefOid,isCrossRepository \
+            | jq -c '.[] | select((.isCrossRepository | not) and
+                (.headRefName | startswith("automation/release-sync/")))' \
+            | while IFS= read -r pr; do
+                branch="$(jq -er .headRefName <<< "$pr")"
+                sha="$(jq -er .headRefOid <<< "$pr")"
+                [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+                jq -n --arg branch "$branch" --arg sha "$sha" \
+                  '{event_type:"release-sync-reconcile-head",client_payload:{head_branch:$branch,head_sha:$sha}}' \
+                  > "$RUNNER_TEMP/handle.json"
+                gh api --method POST \
+                  "repos/$GITHUB_REPOSITORY/dispatches" \
+                  --input "$RUNNER_TEMP/handle.json"
+              done

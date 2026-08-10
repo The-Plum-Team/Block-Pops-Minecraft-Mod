@@ -283,7 +283,7 @@ def _source(
     name: str,
     nodes: list[str],
     artifact_id: int,
-    head_branch: str,
+    source_head_branch: str,
     base_branch: str,
     event: str,
     metadata: str,
@@ -295,11 +295,14 @@ def _source(
     contract = load_contract(CONTRACT_PATH)
     fields = {
         "repository": "AkaNebur/BlockPops",
-        "head_repository": "AkaNebur/BlockPops",
-        "head_branch": head_branch,
+        "source_head_repository": "AkaNebur/BlockPops",
+        "source_head_branch": source_head_branch,
         "base_branch": base_branch,
-        "head_sha": ("a" if name == "candidate" else "b") * 40,
-        "head_tree_sha": ("c" if name == "candidate" else "d") * 40,
+        "source_head_commit": ("a" if name == "candidate" else "b") * 40,
+        "tested_commit": (
+            ("9" * 40) if event == "pull_request" else (("a" if name == "candidate" else "b") * 40)
+        ),
+        "tested_tree": ("c" if name == "candidate" else "d") * 40,
         "workflow_path": ".github/workflows/packaged-e2e.yml",
         "workflow_sha256": "e" * 64,
         "job_graph_sha256": "f" * 64,
@@ -337,7 +340,7 @@ class VisualCapsuleTests(unittest.TestCase):
             name="candidate",
             nodes=nodes,
             artifact_id=31,
-            head_branch="feature/visual-candidate",
+            source_head_branch="feature/visual-candidate",
             base_branch="master",
             event="pull_request",
             metadata="candidate",
@@ -347,7 +350,7 @@ class VisualCapsuleTests(unittest.TestCase):
             name="reference",
             nodes=["fabric-1.20.1"],
             artifact_id=41,
-            head_branch="master",
+            source_head_branch="master",
             base_branch="master",
             event="push",
             metadata="reference",
@@ -435,7 +438,7 @@ class VisualCapsuleTests(unittest.TestCase):
 
     def test_reference_must_be_current_protected_head(self) -> None:
         provenance = dict(self.reference.provenance)
-        provenance["head_branch"] = "stale-baseline"
+        provenance["source_head_branch"] = "stale-baseline"
         broken = replace(self.reference, provenance=provenance)
         with self.assertRaisesRegex(VisualEvidenceError, "current-head"):
             build_capsule_manifest(self.candidate, broken)
@@ -482,7 +485,7 @@ class VisualBoundaryMutationTests(unittest.TestCase):
             name="candidate",
             nodes=["fabric-1.20.1"],
             artifact_id=51,
-            head_branch="candidate",
+            source_head_branch="candidate",
             base_branch="master",
             event="pull_request",
             metadata="candidate",
@@ -495,7 +498,7 @@ class VisualBoundaryMutationTests(unittest.TestCase):
                 if mutation == "unknown":
                     broken["token"] = "must-not-pass"
                 elif mutation == "head":
-                    broken["head_sha"] = "f" * 40
+                    broken["tested_commit"] = "f" * 40
                 else:
                     broken["matrix_sha256"] = "f" * 64
                 with self.assertRaises(VisualEvidenceError):
@@ -602,7 +605,7 @@ class VisualReviewOutputTests(unittest.TestCase):
             name="candidate",
             nodes=nodes,
             artifact_id=61,
-            head_branch="candidate",
+            source_head_branch="candidate",
             base_branch="master",
             event="pull_request",
             metadata="candidate",
@@ -612,7 +615,7 @@ class VisualReviewOutputTests(unittest.TestCase):
             name="reference",
             nodes=["fabric-1.20.1"],
             artifact_id=62,
-            head_branch="master",
+            source_head_branch="master",
             base_branch="master",
             event="push",
             metadata="reference",

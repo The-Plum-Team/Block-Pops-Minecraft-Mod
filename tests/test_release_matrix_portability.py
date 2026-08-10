@@ -242,6 +242,9 @@ class ReleaseMatrixPortabilityTests(unittest.TestCase):
     def test_lane_and_runtime_mutations_cannot_drift_from_artifact_inventory(self) -> None:
         mutations = {
             "lane count": lambda matrix: matrix.__setitem__("lane_count", 3),
+            "invalid mod version": lambda matrix: matrix["project"].__setitem__(
+                "mod_version", "latest"
+            ),
             "unit lane": lambda matrix: matrix.__setitem__("unit_test_lane", "forge-1.20.1"),
             "runtime version": lambda matrix: matrix["runtimes"][0].__setitem__("minecraft", "1.20.1"),
             "task": lambda matrix: matrix["artifacts"][0].__setitem__("gradle_task", ":fabric:jar"),

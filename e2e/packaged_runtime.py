@@ -182,6 +182,8 @@ MAX_EVIDENCE_REPORT_BYTES = 4 * 1024 * 1024
 MAX_EVIDENCE_SCREENSHOT_BYTES = 32 * 1024 * 1024
 MAX_EVIDENCE_CRASH_REPORT_BYTES = 16 * 1024 * 1024
 MAX_SCREENSHOT_SCALE_FACTOR = 4
+MAX_RUNTIME_DOWNLOAD_BYTES = 512 * 1024 * 1024
+RUNTIME_DOWNLOAD_CHUNK_BYTES = 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -437,29 +439,105 @@ def download(url: str, destination: Path, expected_sha256: str) -> Path:
         raise RuntimeFailure(f"refusing non-HTTPS runtime download: {url}")
     if SHA256_PATTERN.fullmatch(expected_sha256) is None:
         raise RuntimeFailure("runtime download requires one exact lowercase SHA-256")
-    if destination.is_symlink():
-        raise RuntimeFailure(f"refusing symlinked runtime download destination: {destination}")
-    if destination.is_file() and sha256(destination) == expected_sha256:
-        return destination
+    try:
+        destination_stat = destination.lstat()
+    except FileNotFoundError:
+        destination_stat = None
+    except OSError as exc:
+        raise RuntimeFailure(f"cannot inspect runtime download destination: {exc}") from exc
+    if destination_stat is not None:
+        if stat.S_ISLNK(destination_stat.st_mode) or not stat.S_ISREG(destination_stat.st_mode):
+            raise RuntimeFailure(f"refusing unsafe runtime download destination: {destination}")
+        if not 0 < destination_stat.st_size <= MAX_RUNTIME_DOWNLOAD_BYTES:
+            raise RuntimeFailure(
+                f"existing runtime download is outside the per-blob byte limit: {destination}"
+            )
+        if sha256(destination) == expected_sha256:
+            return destination
     destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_suffix(destination.suffix + ".part")
+    try:
+        parent_stat = destination.parent.lstat()
+    except OSError as exc:
+        raise RuntimeFailure(f"cannot inspect runtime download directory: {exc}") from exc
+    if stat.S_ISLNK(parent_stat.st_mode) or not stat.S_ISDIR(parent_stat.st_mode):
+        raise RuntimeFailure(f"runtime download parent must be a real directory: {destination.parent}")
+
+    temporary: Path | None = None
+    descriptor = -1
+    flags = (
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    for _ in range(16):
+        candidate = destination.parent / f".{destination.name}.{uuid.uuid4().hex}.part"
+        try:
+            descriptor = os.open(candidate, flags, 0o600)
+        except FileExistsError:
+            continue
+        except OSError as exc:
+            raise RuntimeFailure(f"cannot create fresh runtime download: {exc}") from exc
+        temporary = candidate
+        break
+    if temporary is None or descriptor < 0:
+        raise RuntimeFailure("cannot allocate a collision-free runtime download")
+
     request = urllib.request.Request(
         url,
         headers={"User-Agent": "AkaNebur/BlockPops packaged-e2e"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=120) as response, temporary.open("wb") as out:
-            shutil.copyfileobj(response, out)
+        digest = hashlib.sha256()
+        total = 0
+        with urllib.request.urlopen(request, timeout=120) as response, os.fdopen(
+            descriptor, "wb"
+        ) as out:
+            descriptor = -1
+            raw_length = response.headers.get("Content-Length")
+            if raw_length is not None:
+                if not isinstance(raw_length, str) or not raw_length.isascii() or not raw_length.isdigit():
+                    raise RuntimeFailure("runtime download has an invalid Content-Length")
+                declared_length = int(raw_length)
+                if declared_length > MAX_RUNTIME_DOWNLOAD_BYTES:
+                    raise RuntimeFailure(
+                        "runtime download exceeds the per-blob byte limit before transfer"
+                    )
+            else:
+                declared_length = None
+            while True:
+                chunk = response.read(RUNTIME_DOWNLOAD_CHUNK_BYTES)
+                if not isinstance(chunk, bytes):
+                    raise RuntimeFailure("runtime download returned a non-byte stream")
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_RUNTIME_DOWNLOAD_BYTES:
+                    raise RuntimeFailure("runtime download exceeds the per-blob byte limit")
+                out.write(chunk)
+                digest.update(chunk)
+            if declared_length is not None and total != declared_length:
+                raise RuntimeFailure(
+                    "runtime download byte count disagrees with Content-Length"
+                )
+            out.flush()
+            os.fsync(out.fileno())
     except Exception as exc:
+        if descriptor >= 0:
+            os.close(descriptor)
+            descriptor = -1
         temporary.unlink(missing_ok=True)
+        if isinstance(exc, RuntimeFailure):
+            raise
         raise RuntimeFailure(f"failed to download {url}: {exc}") from exc
-    if sha256(temporary) != expected_sha256:
-        actual = sha256(temporary)
+    actual = digest.hexdigest()
+    if actual != expected_sha256:
         temporary.unlink(missing_ok=True)
         raise RuntimeFailure(
             f"download SHA-256 mismatch for {url}: expected {expected_sha256}, got {actual}"
         )
-    temporary.replace(destination)
+    os.replace(temporary, destination)
     return destination
 
 
