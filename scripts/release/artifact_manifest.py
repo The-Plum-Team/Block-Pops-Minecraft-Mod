@@ -214,6 +214,8 @@ def verify_harness_jar(path: Path, artifact: dict[str, Any]) -> None:
             "neoforge": "com/theplumteam/e2e/neoforge/BlockPopsE2ENeoForge.class",
         }[artifact["loader"]]
         required.add(loader_entrypoint)
+        if artifact["loader"] in {"forge", "neoforge"}:
+            required.add("pack.mcmeta")
         missing = required - names
         if missing:
             raise ArtifactError(f"E2E harness is missing {sorted(missing)}")

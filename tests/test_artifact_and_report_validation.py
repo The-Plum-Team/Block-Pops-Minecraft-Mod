@@ -28,6 +28,7 @@ from scripts.release.matrix import load_matrix_bytes
 REPOSITORY = Path(__file__).resolve().parents[1]
 MATRIX = load_matrix_bytes((REPOSITORY / "release" / "release-matrix.json").read_bytes())
 FABRIC_ARTIFACT = next(row for row in MATRIX["artifacts"] if row["loader"] == "fabric")
+FORGE_ARTIFACT = next(row for row in MATRIX["artifacts"] if row["loader"] == "forge")
 
 
 def _write_zip(path: Path, entries: dict[str, bytes]) -> None:
@@ -71,6 +72,38 @@ def _fabric_harness_entries() -> dict[str, bytes]:
         "com/theplumteam/e2e/fabric/BlockPopsE2EFabric.class": b"class",
         "fabric.mod.json": json.dumps(metadata).encode(),
     }
+
+
+def _forge_harness_entries(*, include_pack: bool) -> dict[str, bytes]:
+    metadata = f'''modLoader = "javafml"
+loaderVersion = "{FORGE_ARTIFACT["metadata"]["loader"]}"
+license = "All Rights Reserved"
+[[mods]]
+modId = "blockpops_e2e"
+version = "0.0.0"
+displayTest = "IGNORE_ALL_VERSION"
+[[dependencies.blockpops_e2e]]
+modId = "blockpops"
+mandatory = true
+versionRange = "*"
+ordering = "AFTER"
+side = "CLIENT"
+[[dependencies.blockpops_e2e]]
+modId = "minecraft"
+mandatory = true
+versionRange = "{FORGE_ARTIFACT["metadata"]["minecraft"]}"
+ordering = "NONE"
+side = "CLIENT"
+'''.encode()
+    entries = {
+        "com/theplumteam/e2e/E2EHarness.class": b"class",
+        "com/theplumteam/e2e/generated/ScenarioContract.class": b"class",
+        "com/theplumteam/e2e/forge/BlockPopsE2EForge.class": b"class",
+        "META-INF/mods.toml": metadata,
+    }
+    if include_pack:
+        entries["pack.mcmeta"] = b'{"pack":{"description":"BlockPops","pack_format":15}}'
+    return entries
 
 
 class JarValidationTests(unittest.TestCase):
@@ -117,6 +150,18 @@ class JarValidationTests(unittest.TestCase):
                 _write_zip(path, entries)
                 with self.subTest(label=label), self.assertRaises(ArtifactError):
                     verify_harness_jar(path, FABRIC_ARTIFACT)
+
+    def test_forge_harness_requires_resource_pack_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            valid = root / "BlockPops E2E - Forge - 1.20.1-0.0.0.jar"
+            _write_zip(valid, _forge_harness_entries(include_pack=True))
+            verify_harness_jar(valid, FORGE_ARTIFACT)
+
+            missing = root / "BlockPops E2E - Forge - 1.20.1-missing.jar"
+            _write_zip(missing, _forge_harness_entries(include_pack=False))
+            with self.assertRaisesRegex(ArtifactError, "pack.mcmeta"):
+                verify_harness_jar(missing, FORGE_ARTIFACT)
 
     def test_zip_entries_reject_traversal_absolute_backslash_and_drive_paths(self) -> None:
         unsafe_names = ("../escape.class", "/absolute.class", "dir\\entry.class", "C:drive.class")
