@@ -11,8 +11,8 @@
     ]
   },
   "depends": {
-    "fabricloader": ">=0.17.0",
-    "minecraft": "*",
+    "fabricloader": "${loader_requirement}",
+    "minecraft": "${minecraft_requirement}",
     "blockpops": "*"
   }
 }
