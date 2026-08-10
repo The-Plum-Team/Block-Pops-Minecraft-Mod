@@ -52,6 +52,15 @@ class WorkflowSecurityTests(unittest.TestCase):
         e2e = (WORKFLOWS / "on-demand-e2e.yml").read_text("utf-8")
         self.assertIn("java-version: ${{ matrix.java }}", e2e)
 
+    def test_verification_failure_diagnostics_never_auto_admit_bytes(self) -> None:
+        build = (WORKFLOWS / "build-gate.yml").read_text("utf-8")
+        self.assertIn("Report rejected generated mapping hashes without admitting them", build)
+        self.assertIn("mappings-layered+hash.*.jar", build)
+        self.assertIn('sha256sum "$mapping"', build)
+        for path in WORKFLOWS.glob("*.yml"):
+            with self.subTest(path=path.name):
+                self.assertNotIn("--write-verification-metadata", path.read_text("utf-8"))
+
     def test_python_gates_install_the_hash_locked_png_decoder(self) -> None:
         build = (WORKFLOWS / "build-gate.yml").read_text("utf-8")
         aggregate = (WORKFLOWS / "on-demand-e2e.yml").read_text("utf-8").split(
