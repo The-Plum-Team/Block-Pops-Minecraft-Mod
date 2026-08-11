@@ -34,4 +34,6 @@ development launch.
 See [CONTRIBUTING.md](CONTRIBUTING.md),
 [the release architecture](docs/release-architecture.md), and
 [the E2E contract](docs/e2e.md) before changing build, runtime, UI, networking,
-or release-controller code.
+or release-controller code. The advisory Claude routing, durable queue, cost
+limits, workload identity, and recovery procedures are documented in
+[the visual-review architecture](docs/visual-review.md).

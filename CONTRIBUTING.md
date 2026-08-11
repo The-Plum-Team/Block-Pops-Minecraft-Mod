@@ -2,9 +2,13 @@
 
 ## Source and release ownership
 
-Work from the branch for the Minecraft line you intend to change. `common`,
-`fabric`, and the active FML loader module remain the canonical production
-source layout for that branch. The authoritative branch-local matrix owns:
+Ordinary product and documentation PRs target the exact current `master`.
+Controller upgrades also target only `master` through the separately authorized
+procedure below. Enrolled release branches are not ordinary PR targets: they
+accept only the generated `Release sync / ...` bridge, including for a reviewed
+conflict reconciliation. `common`, `fabric`, and the matrix-selected FML loader
+remain the production source layout for the tree being tested. The authoritative
+branch-local matrix owns:
 
 - exact branch role and synchronization identity;
 - Minecraft, loaders, Gradle JVM, artifact/runtime Java toolchains, and source routing;
@@ -44,19 +48,38 @@ canonical cache paths. Git-tracked `.gradle` content and implicit `buildSrc`
 builds are forbidden. Never broaden either side or add observed generated
 hashes one run at a time.
 
-Two deterministic gates are authoritative. On ordinary PRs, branch protection
-must require their protected App-authenticated bridge contexts, not a check run
-created from candidate-controlled workflow YAML:
+Two deterministic gates are authoritative. On ordinary PRs into `master`, branch
+protection must require their protected App-authenticated bridge contexts, not a
+check run created from candidate-controlled workflow YAML:
 
 - `Trusted PR / Build and verify`
 - `Trusted PR / Packaged E2E gate`
 
 `Build and verify` and `Packaged E2E gate` remain the underlying deterministic
-jobs. Release-sync PRs use the separately authenticated `Release sync / ...`
-contexts described below.
+jobs. Generated release-sync PRs use the separately authenticated
+`Release sync / ...` contexts described below. Do not expect the ordinary
+`Trusted PR / ...` contexts on a PR whose base is a release branch.
+
+Protected controller changes use the deliberately narrower procedure in
+[`docs/operations.md`](docs/operations.md#controller-upgrade-procedure), not an
+ordinary feature PR. Branch from the exact current `master` as
+`controller-upgrade/<purpose>`, target `master`, add the exact
+`controller-upgrade` label, and keep the change within the protected
+controller/docs/test or matrix-selected loader-bootstrap roots. After reviewing
+the complete exact-head diff, only repository owner `AkaNebur` may post
+`/controller-upgrade approve <head-sha>`. Every new head requires a new approval;
+the latest exact-head `approve` or `revoke` command wins. Neither this route nor
+an ordinary PR may change the release matrix, verification metadata, or
+version-specific shims. Both newest exact Build and Packaged E2E attempts and
+their protected App contexts remain mandatory.
 
 AI visual review and the public evidence gallery are advisory. Do not weaken a
 deterministic assertion or skip a lane to accommodate visual-review noise.
+The protected review path uses short-lived Anthropic workload identity, never a
+static API key or a Claude Code subscription token. Changes to captures,
+prompts, routing, retry limits, image bounds, or model-visible expectations
+must also update the security and cost tests described in
+[`docs/visual-review.md`](docs/visual-review.md).
 
 ## Packaged scenario changes
 
@@ -69,13 +92,32 @@ must not construct a fake product screen or mutate server state as a substitute
 for the production packet path. Development-only UI such as the Develop tab or
 figure-position editor is not valid packaged coverage.
 
+Each deterministic visual probe needs calibration canaries for every supported
+layout variant. The canaries must accept legitimate font/layout differences and
+still reject empty, washed-out, blurred, missing-widget, or wrong-state frames.
+Do not tune a threshold from one loader screenshot and assume it is portable.
+
 ## Release branch synchronization
 
-Shared changes originate on the canonical integration branch. Automation
-discovers enrolled releases from strict branch-local matrices, creates one
-two-parent merge candidate per exact target head, retains the target matrix
-byte-for-byte, and explicitly dispatches Build and Packaged E2E. Unknown
-conflicts fail closed and require a deliberate branch-specific port.
+Shared changes originate on `master`. Automation discovers enrolled releases
+from strict branch-local matrices, creates or reuses one two-parent merge
+candidate per exact target head, retains the target matrix byte-for-byte, and
+explicitly dispatches Build and Packaged E2E. The release branch accepts only
+the PR opened for that authenticated `automation/release-sync/<token>` head.
+
+Unknown conflicts fail closed. Resolve one only by reviewing and constructing an
+exact merge commit whose ordered parents are the current release head first and
+the current `master` head second. Preserve the release matrix byte-for-byte and
+the target-owned loader/version implementation while resolving the intended
+shared product changes; protected controller paths must remain a valid canonical
+projection. Push that exact commit to the canonical
+`automation/release-sync/<token>` ref, where `<token>` is the protected
+`branch-token` value for the exact release branch, using force-with-lease if the
+rolling ref already exists. Then wake the protected synchronizer. It must
+reauthenticate and reuse the exact candidate, open or update the generated PR,
+dispatch both gates, merge only that tested head, and attest the final release
+HEAD. Never open an ordinary release PR or merge the hand-built candidate
+directly.
 
 Automation merges only the exact head authenticated by the newest exact-head
 run of both gates. A newer pending or failed run supersedes an older success.

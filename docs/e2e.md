@@ -49,21 +49,30 @@ display or the required JDK is unavailable.
 
 ## Visual comparison
 
-Protected `master` / `fabric-1.20.1` is the canonical baseline. Current-head
-baseline evidence must have the same contract SHA and exactly one frame for
-every candidate `capture_id`. Pairing rejects missing, duplicate, stale, mixed,
-or incompatible-aspect evidence before any model credential is available.
+Protected `master` / `fabric-1.20.1` is the canonical baseline. Its current-head
+anchor retains the original lossless PNG bytes for 90 days with the producer
+run and attempt in both its immutable artifact name and manifest, plus exact
+commit/tree, matrix/contract, semantic frame, dimensions, file hash
+and pixel hash provenance. Current-head baseline evidence must have the same
+contract SHA and exactly one frame for every candidate `capture_id`. Pairing
+rejects missing, duplicate, stale, mixed, or incompatible evidence before any
+model credential is available.
 
-Images are decoded and rewritten as metadata-free RGB PNGs. Same-aspect size
-drift is normalized with LANCZOS; aspect-ratio drift fails. The single-use
-capsule contains only its exact manifest and content-addressed paired images.
+Images are fully decoded and rewritten as metadata-free RGB PNGs. Every frame
+must already have the contract's exact 1600x900 reference dimensions; any size
+or aspect skew fails before curation. The single-use capsule contains only its
+exact manifest and content-addressed paired images.
 
-The provider receives a read-only, path-scoped image/manifest surface and emits
-JSON to stdout. Protected code rejects missing, duplicate, extra, incoherent,
-or unbounded verdicts and publishes only normalized output. Raw HTTP responses
-are never artifacts; only the client's strict bounded per-pair projection
-crosses back to the protected normalizer.
+Exact canonical PNG equality is the only automatic visual acceptance. Integer
+pixel metrics prioritize changed pairs but never make a semantic decision.
+Changed pairs are grouped under a strict request/call budget: Claude Sonnet 5
+triages first and only anomalous or uncertain pairs reach Claude Fable 5.
 
-The credential runner is the fixed `visual-review` environment. Its protected
-client sends one semantic pair per OpenAI Responses request with storage
-disabled and no tools. This result remains advisory regardless of severity.
+The provider receives no tool surface, repository checkout, GitHub permission,
+or static credential. Protected code rejects missing, duplicate, extra,
+incoherent, or unbounded structured verdicts and publishes only normalized
+output. Raw provider responses are never artifacts. The fixed `visual-review`
+environment exchanges a narrowly claimed GitHub OIDC JWT for a short-lived
+Anthropic `workspace:inference` token. This result remains advisory regardless
+of severity. See [the visual-review architecture](visual-review.md) for queue,
+cost, retention, WIF and recovery details.
