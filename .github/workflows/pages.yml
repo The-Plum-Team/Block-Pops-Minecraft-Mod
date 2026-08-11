@@ -15,7 +15,10 @@ on:
 permissions: {}
 
 concurrency:
-  group: ${{ github.event_name == 'repository_dispatch' && github.event.action == 'pages-rotate' && 'blockpops-pages-rotation' || 'blockpops-pages-deployment' }}
+  # Selection, promotion, deployment, and exact-ID cleanup share one lifecycle
+  # lock so a new gallery cannot consume artifacts while an older rotation is
+  # deleting them.
+  group: blockpops-pages-lifecycle
   cancel-in-progress: false
 
 jobs:
@@ -65,6 +68,7 @@ jobs:
                (.event == "workflow_dispatch" or
                 (.event == "schedule" and .head_branch == $canonical)) and
                .path == ".github/workflows/on-demand-e2e.yml" and
+               .head_branch == $canonical and
                .head_repository.full_name == $repository and
                (.head_sha | test("^[0-9a-f]{40}$"))' <<< "$source_run" > /dev/null; then
               printf 'Wake run is not an authenticated successful Packaged E2E owner; leaving the previous site unchanged.\n'
@@ -194,6 +198,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_HANDOFF_RUN_ATTEMPT: ${{ steps.source.outputs.expected_handoff_run_attempt }}
           EXPECTED_HANDOFF_RUN_ID: ${{ steps.source.outputs.expected_handoff_run_id }}
+          SELECTED_ARTIFACT_DIGEST: ${{ steps.source.outputs.artifact_digest }}
+          SELECTED_ARTIFACT_ID: ${{ steps.source.outputs.artifact_id }}
+          SELECTED_ARTIFACT_NAME: ${{ steps.source.outputs.artifact_name }}
           SELECTED_KIND: ${{ steps.source.outputs.kind }}
           SELECTED_RUN_ATTEMPT: ${{ steps.source.outputs.run_attempt }}
           SELECTED_RUN_ID: ${{ steps.source.outputs.run_id }}
@@ -205,6 +212,9 @@ jobs:
             --matrix "$RUNNER_TEMP/release-matrix.json" \
             --evidence selected-evidence \
             --selected-kind "$SELECTED_KIND" \
+            --selected-artifact-id "$SELECTED_ARTIFACT_ID" \
+            --selected-artifact-name "$SELECTED_ARTIFACT_NAME" \
+            --selected-artifact-digest "$SELECTED_ARTIFACT_DIGEST" \
             --selected-run-id "$SELECTED_RUN_ID" \
             --selected-run-attempt "$SELECTED_RUN_ATTEMPT" \
             --expected-handoff-run-id "$EXPECTED_HANDOFF_RUN_ID" \
@@ -220,6 +230,8 @@ jobs:
           SOURCE_ID: ${{ steps.source.outputs.artifact_id }}
           SOURCE_KIND: ${{ steps.source.outputs.kind }}
           SOURCE_NAME: ${{ steps.source.outputs.artifact_name }}
+          SOURCE_CONTROLLER_BRANCH: ${{ steps.source.outputs.expected_handoff_controller_branch }}
+          SOURCE_CONTROLLER_SHA: ${{ steps.source.outputs.expected_handoff_controller_sha }}
           SOURCE_RUN_ATTEMPT: ${{ steps.source.outputs.run_attempt }}
           SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
           TREE_SHA: ${{ matrix.branch.tree }}
@@ -239,6 +251,8 @@ jobs:
             python3 scripts/pages/evidence.py compact "${common[@]}" \
               --run-id "$SOURCE_RUN_ID" \
               --run-attempt "$SOURCE_RUN_ATTEMPT" \
+              --controller-branch "$SOURCE_CONTROLLER_BRANCH" \
+              --controller-sha "$SOURCE_CONTROLLER_SHA" \
               --source-artifact-id "$SOURCE_ID" \
               --source-artifact-name "$SOURCE_NAME" \
               --source-artifact-digest "$SOURCE_DIGEST"
@@ -422,28 +436,64 @@ jobs:
           compression-level: 6
           retention-days: 90
 
-  request-rotation:
-    name: Request exact-ID rotation after successful promotion
+  rotate-current:
+    name: Rotate this exact successful evidence generation
     needs: [discover, collect, build, deploy, refresh-cache]
     if: ${{ always() && needs.collect.result == 'success' && needs.build.result == 'success' && needs.deploy.result == 'success' && needs.refresh-cache.result == 'success' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 20
     permissions:
-      contents: write
+      actions: write
+      contents: read
 
     steps:
-      - name: Dispatch a fresh protected default-branch rotation controller
-        shell: bash
+      - name: Check out the exact protected same-run rotation implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.discover.outputs.implementation_sha }}
+          persist-credentials: false
+
+      - name: Install Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install hash-locked image validator
+        run: >-
+          python -m pip install
+          --only-binary=:all:
+          --require-hashes
+          --requirement scripts/pages/requirements.txt
+
+      - name: Download this attempt's exact promoted caches
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: pages-cache-*
+          path: owner-caches
+          merge-multiple: false
+          digest-mismatch: error
+
+      - name: Download this attempt's exact promotion inventory
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: pages-promotion
+          path: owner-promotion
+          digest-mismatch: error
+
+      - name: Delete only exact authenticated superseded artifact IDs
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          CANONICAL_BRANCH: ${{ needs.discover.outputs.canonical_branch }}
         run: |
           set -euo pipefail
-          jq -n \
-            --arg run_id "$GITHUB_RUN_ID" \
-            --arg run_sha "$GITHUB_SHA" \
-            '{event_type:"pages-rotate",client_payload:{pages_run_id:$run_id,pages_run_sha:$run_sha}}' \
-            | gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" --input -
+          python3 scripts/pages/rotate_artifacts.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --pages-run-id "$GITHUB_RUN_ID" \
+            --current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --pages-run-sha "$GITHUB_SHA" \
+            --canonical-branch "$CANONICAL_BRANCH" \
+            --inventory owner-promotion/pages-inventory.json \
+            --caches-root owner-caches
 
   rotate:
     name: Rotate successful evidence generation

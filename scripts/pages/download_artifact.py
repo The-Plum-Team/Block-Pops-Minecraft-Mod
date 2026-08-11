@@ -8,6 +8,7 @@ import hashlib
 import os
 import re
 import shutil
+import ssl
 import stat
 import sys
 import tempfile
@@ -144,9 +145,35 @@ def extract_archive(archive: Path, output: Path, *, expected_digest: str) -> dic
 
 
 class _CredentialSafeRedirect(urllib.request.HTTPRedirectHandler):
+    """Follow only HTTPS redirects and never leak auth across origins."""
+
     def redirect_request(self, request, fp, code, msg, headers, new_url):  # type: ignore[no-untyped-def]
+        previous = urllib.parse.urlsplit(request.full_url)
+        redirected_url = urllib.parse.urlsplit(new_url)
+        try:
+            previous_port = previous.port or 443
+            redirected_port = redirected_url.port or 443
+        except ValueError:
+            return None
+        if (
+            redirected_url.scheme != "https"
+            or not redirected_url.hostname
+            or redirected_url.username is not None
+            or redirected_url.password is not None
+            or redirected_url.fragment
+        ):
+            return None
         redirected = super().redirect_request(request, fp, code, msg, headers, new_url)
-        if redirected is not None and urllib.parse.urlsplit(request.full_url).netloc != urllib.parse.urlsplit(new_url).netloc:
+        same_origin = (
+            previous.scheme,
+            previous.hostname,
+            previous_port,
+        ) == (
+            redirected_url.scheme,
+            redirected_url.hostname,
+            redirected_port,
+        )
+        if redirected is not None and not same_origin:
             redirected.remove_header("Authorization")
         return redirected
 
@@ -158,8 +185,17 @@ def download(*, repository: str, artifact_id: int, digest: str, output: Path, to
         raise ArtifactDownloadError("artifact id must be positive")
     if DIGEST.fullmatch(digest) is None:
         raise ArtifactDownloadError("artifact digest is invalid")
+    if not isinstance(token, str) or not token or len(token) > 4096:
+        raise ArtifactDownloadError("GitHub token is absent or invalid")
     parsed_api = urllib.parse.urlsplit(api_url)
-    if parsed_api.scheme != "https" or not parsed_api.netloc:
+    if (
+        parsed_api.scheme != "https"
+        or not parsed_api.hostname
+        or parsed_api.username is not None
+        or parsed_api.password is not None
+        or parsed_api.query
+        or parsed_api.fragment
+    ):
         raise ArtifactDownloadError("GitHub API URL must be absolute HTTPS")
     output = output.absolute()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -176,7 +212,11 @@ def download(*, repository: str, artifact_id: int, digest: str, output: Path, to
                 "User-Agent": "BlockPops-pages-artifact",
             },
         )
-        opener = urllib.request.build_opener(_CredentialSafeRedirect())
+        opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler({}),
+            _CredentialSafeRedirect(),
+            urllib.request.HTTPSHandler(context=ssl.create_default_context()),
+        )
         try:
             with opener.open(request, timeout=60) as response, temporary.open("wb") as target:
                 copied = 0

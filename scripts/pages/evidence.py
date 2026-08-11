@@ -478,11 +478,14 @@ def _collect_lane(
 def curate(
     *, input_root: Path, output: Path, matrix_path: Path, repository: str,
     branch: str, commit: str, tree: str, run_id: int, run_attempt: int,
+    controller_branch: str, controller_sha: str,
     packaged_run_id: int | None = None,
     packaged_run_attempt: int | None = None,
     packaged_branch: str | None = None,
     packaged_commit: str | None = None,
     packaged_tree: str | None = None,
+    packaged_controller_branch: str | None = None,
+    packaged_controller_sha: str | None = None,
 ) -> dict[str, Any]:
     if REPOSITORY.fullmatch(repository) is None:
         raise EvidenceError("repository must use owner/name form")
@@ -491,6 +494,8 @@ def curate(
     _digest(tree, "tree", SHA1)
     _positive_int(run_id, "run_id")
     _positive_int(run_attempt, "run_attempt")
+    _text(controller_branch, "controller_branch", maximum=240)
+    _digest(controller_sha, "controller_sha", SHA1)
     packaged_run_id = run_id if packaged_run_id is None else packaged_run_id
     packaged_run_attempt = (
         run_attempt if packaged_run_attempt is None else packaged_run_attempt
@@ -498,11 +503,21 @@ def curate(
     packaged_branch = branch if packaged_branch is None else packaged_branch
     packaged_commit = commit if packaged_commit is None else packaged_commit
     packaged_tree = tree if packaged_tree is None else packaged_tree
+    packaged_controller_branch = (
+        controller_branch
+        if packaged_controller_branch is None
+        else packaged_controller_branch
+    )
+    packaged_controller_sha = (
+        controller_sha if packaged_controller_sha is None else packaged_controller_sha
+    )
     _positive_int(packaged_run_id, "packaged_run_id")
     _positive_int(packaged_run_attempt, "packaged_run_attempt")
     _text(packaged_branch, "packaged_branch", maximum=240)
     _digest(packaged_commit, "packaged_commit", SHA1)
     _digest(packaged_tree, "packaged_tree", SHA1)
+    _text(packaged_controller_branch, "packaged_controller_branch", maximum=240)
+    _digest(packaged_controller_sha, "packaged_controller_sha", SHA1)
     if packaged_tree != tree:
         raise EvidenceError("packaged source and current handoff must have the exact same tree")
     try:
@@ -561,6 +576,8 @@ def curate(
                 "path": E2E_WORKFLOW,
                 "run_id": run_id,
                 "run_attempt": run_attempt,
+                "controller_branch": controller_branch,
+                "controller_sha": controller_sha,
             },
             "packaged": {
                 "path": E2E_WORKFLOW,
@@ -569,6 +586,8 @@ def curate(
                 "branch": packaged_branch,
                 "commit": packaged_commit,
                 "tree": packaged_tree,
+                "controller_branch": packaged_controller_branch,
+                "controller_sha": packaged_controller_sha,
             },
             "matrix_sha256": matrix_sha,
             "contract_sha256": contract.sha256,
@@ -613,22 +632,35 @@ def _validate_provenance(value: Any, *, expected: dict[str, Any] | None = None) 
     handoff = _object(
         provenance["handoff"],
         "provenance handoff",
-        {"path", "run_id", "run_attempt"},
+        {"path", "run_id", "run_attempt", "controller_branch", "controller_sha"},
     )
     packaged = _object(
         provenance["packaged"],
         "provenance packaged",
-        {"path", "run_id", "run_attempt", "branch", "commit", "tree"},
+        {
+            "path",
+            "run_id",
+            "run_attempt",
+            "branch",
+            "commit",
+            "tree",
+            "controller_branch",
+            "controller_sha",
+        },
     )
     if handoff["path"] != E2E_WORKFLOW or packaged["path"] != E2E_WORKFLOW:
         raise EvidenceError("evidence comes from an unapproved workflow")
     _positive_int(handoff["run_id"], "handoff.run_id")
     _positive_int(handoff["run_attempt"], "handoff.run_attempt")
+    _text(handoff["controller_branch"], "handoff.controller_branch", maximum=240)
+    _digest(handoff["controller_sha"], "handoff.controller_sha", SHA1)
     _positive_int(packaged["run_id"], "packaged.run_id")
     _positive_int(packaged["run_attempt"], "packaged.run_attempt")
     _text(packaged["branch"], "packaged.branch", maximum=240)
     _digest(packaged["commit"], "packaged.commit", SHA1)
     _digest(packaged["tree"], "packaged.tree", SHA1)
+    _text(packaged["controller_branch"], "packaged.controller_branch", maximum=240)
+    _digest(packaged["controller_sha"], "packaged.controller_sha", SHA1)
     if packaged["tree"] != provenance["tree"]:
         raise EvidenceError("packaged source tree differs from the current handoff tree")
     if expected:
@@ -981,6 +1013,8 @@ def _expected_args(args: argparse.Namespace) -> dict[str, Any]:
             "path": E2E_WORKFLOW,
             "run_id": args.run_id,
             "run_attempt": args.run_attempt,
+            "controller_branch": args.controller_branch,
+            "controller_sha": args.controller_sha,
         }
     return expected
 
@@ -996,11 +1030,15 @@ def main(argv: list[str] | None = None) -> int:
         curate_parser.add_argument(f"--{name}", required=True)
     curate_parser.add_argument("--run-id", type=int, required=True)
     curate_parser.add_argument("--run-attempt", type=int, required=True)
+    curate_parser.add_argument("--controller-branch", required=True)
+    curate_parser.add_argument("--controller-sha", required=True)
     curate_parser.add_argument("--packaged-run-id", type=int)
     curate_parser.add_argument("--packaged-run-attempt", type=int)
     curate_parser.add_argument("--packaged-branch")
     curate_parser.add_argument("--packaged-commit")
     curate_parser.add_argument("--packaged-tree")
+    curate_parser.add_argument("--packaged-controller-branch")
+    curate_parser.add_argument("--packaged-controller-sha")
 
     for command in ("validate-raw", "validate-compact", "compact", "copy-compact"):
         selected = sub.add_parser(command)
@@ -1013,6 +1051,8 @@ def main(argv: list[str] | None = None) -> int:
         if command in {"validate-raw", "compact"}:
             selected.add_argument("--run-id", type=int, required=True)
             selected.add_argument("--run-attempt", type=int, required=True)
+            selected.add_argument("--controller-branch", required=True)
+            selected.add_argument("--controller-sha", required=True)
         if command == "compact":
             selected.add_argument("--source-artifact-id", type=int, required=True)
             selected.add_argument("--source-artifact-name", required=True)
@@ -1026,6 +1066,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.packaged_branch,
                 args.packaged_commit,
                 args.packaged_tree,
+                args.packaged_controller_branch,
+                args.packaged_controller_sha,
             )
             if any(value is not None for value in packaged_values) and not all(
                 value is not None for value in packaged_values
@@ -1041,11 +1083,15 @@ def main(argv: list[str] | None = None) -> int:
                 tree=args.tree,
                 run_id=args.run_id,
                 run_attempt=args.run_attempt,
+                controller_branch=args.controller_branch,
+                controller_sha=args.controller_sha,
                 packaged_run_id=args.packaged_run_id,
                 packaged_run_attempt=args.packaged_run_attempt,
                 packaged_branch=args.packaged_branch,
                 packaged_commit=args.packaged_commit,
                 packaged_tree=args.packaged_tree,
+                packaged_controller_branch=args.packaged_controller_branch,
+                packaged_controller_sha=args.packaged_controller_sha,
             )
         else:
             expected = _expected_args(args)

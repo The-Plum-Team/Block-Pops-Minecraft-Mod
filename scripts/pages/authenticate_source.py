@@ -24,9 +24,15 @@ from scripts.pages.evidence import (  # noqa: E402
     E2E_WORKFLOW,
     EvidenceError,
     _validate_provenance,
+    cache_artifact_name,
+    raw_artifact_name,
 )
 from scripts.pages.select_artifact import (  # noqa: E402
+    ARTIFACT_DIGEST_PATTERN,
     GitHubApi,
+    MAX_ARTIFACT_BYTES,
+    PAGES_EVENTS,
+    PAGES_WORKFLOW,
     REPOSITORY_PATTERN,
     SelectionError,
     _validate_run,
@@ -38,6 +44,12 @@ MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 
 class SourceAuthenticationError(RuntimeError):
     """Raised when a public bundle lacks an exact deterministic source run."""
+
+
+def _positive(value: Any, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise SourceAuthenticationError(f"{label} must be a positive integer")
+    return value
 
 
 def _manifest(root: Path) -> tuple[dict[str, Any], str]:
@@ -75,9 +87,48 @@ def _expected_jobs(
         raise SourceAuthenticationError(str(exc)) from exc
 
 
-def _run_attempt(run: dict[str, Any], expected: int, label: str) -> None:
-    if run.get("run_attempt") != expected:
-        raise SourceAuthenticationError(f"{label} run attempt is stale")
+def _historical_run(
+    api: GitHubApi, run_id: int, run_attempt: int, label: str
+) -> dict[str, Any]:
+    run = api.run_attempt(run_id, run_attempt)
+    if run.get("id") != run_id or run.get("run_attempt") != run_attempt:
+        raise SourceAuthenticationError(f"{label} historical run attempt is stale")
+    return run
+
+
+def _selected_artifact(
+    api: GitHubApi,
+    *,
+    run_id: int,
+    artifact_id: int,
+    artifact_name: str,
+    artifact_digest: str,
+    controller_branch: str,
+    controller_sha: str,
+) -> None:
+    matches = [
+        artifact
+        for artifact in api.artifacts_for_run(run_id)
+        if artifact.id == artifact_id
+    ]
+    if len(matches) != 1:
+        raise SourceAuthenticationError(
+            "selected artifact ID is absent or ambiguous at its exact owner"
+        )
+    artifact = matches[0]
+    if (
+        artifact.name != artifact_name
+        or artifact.digest != artifact_digest
+        or artifact.expired
+        or artifact.run_id != run_id
+        or artifact.head_branch != controller_branch
+        or artifact.head_sha != controller_sha
+        or artifact.size <= 0
+        or artifact.size > MAX_ARTIFACT_BYTES
+    ):
+        raise SourceAuthenticationError(
+            "selected artifact digest/owner/controller provenance is stale"
+        )
 
 
 def authenticate(
@@ -88,11 +139,41 @@ def authenticate(
     matrix_path: Path,
     evidence_root: Path,
     selected_kind: str,
+    selected_artifact_id: int,
+    selected_artifact_name: str,
+    selected_artifact_digest: str,
     selected_run_id: int,
     selected_run_attempt: int,
     expected_handoff_run_id: int,
     expected_handoff_run_attempt: int,
 ) -> dict[str, Any]:
+    if selected_kind not in {"raw", "compact"}:
+        raise SourceAuthenticationError("selected artifact kind is invalid")
+    if REPOSITORY_PATTERN.fullmatch(repository) is None:
+        raise SourceAuthenticationError("repository must use owner/name form")
+    if (
+        not isinstance(canonical_branch, str)
+        or not canonical_branch
+        or canonical_branch != canonical_branch.strip()
+        or len(canonical_branch.encode("utf-8")) > 240
+    ):
+        raise SourceAuthenticationError("canonical branch identity is invalid")
+    for value, item_label in (
+        (selected_artifact_id, "selected artifact id"),
+        (selected_run_id, "selected run id"),
+        (selected_run_attempt, "selected run attempt"),
+        (expected_handoff_run_id, "expected handoff run id"),
+        (expected_handoff_run_attempt, "expected handoff run attempt"),
+    ):
+        _positive(value, item_label)
+    if (
+        not isinstance(selected_artifact_name, str)
+        or not selected_artifact_name
+        or len(selected_artifact_name.encode("utf-8")) > 240
+        or not isinstance(selected_artifact_digest, str)
+        or ARTIFACT_DIGEST_PATTERN.fullmatch(selected_artifact_digest) is None
+    ):
+        raise SourceAuthenticationError("selected artifact name/digest is invalid")
     manifest, manifest_kind = _manifest(evidence_root)
     if manifest_kind != selected_kind:
         raise SourceAuthenticationError("selected artifact kind disagrees with its manifest")
@@ -106,6 +187,19 @@ def authenticate(
         raise SourceAuthenticationError(
             "evidence does not derive from the newest exact-head E2E run attempt"
         )
+    if handoff["controller_branch"] != canonical_branch:
+        raise SourceAuthenticationError(
+            "handoff run is not owned by the protected default controller branch"
+        )
+    if packaged["controller_branch"] != canonical_branch:
+        raise SourceAuthenticationError(
+            "packaged run is not owned by the protected default controller branch"
+        )
+    if api.branch_head(provenance["branch"]) != (
+        provenance["commit"],
+        provenance["tree"],
+    ):
+        raise SourceAuthenticationError("published branch/commit/tree identity is stale")
     workflow = api.workflow("on-demand-e2e.yml")
 
     if selected_kind == "raw" and (
@@ -114,7 +208,9 @@ def authenticate(
     ):
         raise SourceAuthenticationError("raw artifact owner differs from handoff provenance")
 
-    handoff_run = api.run(handoff["run_id"])
+    handoff_run = _historical_run(
+        api, handoff["run_id"], handoff["run_attempt"], "handoff"
+    )
     handoff_events = (
         frozenset({"schedule", "workflow_dispatch"})
         if provenance["branch"] == canonical_branch
@@ -126,16 +222,18 @@ def authenticate(
             workflow_id=workflow["id"],
             workflow_path=E2E_WORKFLOW,
             repository=repository,
-            branch=provenance["branch"],
-            sha=provenance["commit"],
+            branch=handoff["controller_branch"],
+            sha=handoff["controller_sha"],
             events=handoff_events,
             require_success=True,
+            display_title=f"Packaged E2E / {provenance['commit']}",
         )
     except SelectionError as exc:
         raise SourceAuthenticationError(str(exc)) from exc
-    _run_attempt(handoff_run, handoff["run_attempt"], "handoff")
 
-    packaged_run = api.run(packaged["run_id"])
+    packaged_run = _historical_run(
+        api, packaged["run_id"], packaged["run_attempt"], "packaged source"
+    )
     packaged_events = (
         frozenset({"schedule", "workflow_dispatch"})
         if packaged["branch"] == canonical_branch
@@ -147,14 +245,16 @@ def authenticate(
             workflow_id=workflow["id"],
             workflow_path=E2E_WORKFLOW,
             repository=repository,
-            branch=packaged["branch"],
-            sha=packaged["commit"],
+            branch=packaged["controller_branch"],
+            sha=packaged["controller_sha"],
             events=packaged_events,
             require_success=True,
+            display_title=f"Packaged E2E / {packaged['commit']}",
         )
     except SelectionError as exc:
         raise SourceAuthenticationError(str(exc)) from exc
-    _run_attempt(packaged_run, packaged["run_attempt"], "packaged source")
+    if api.commit_tree(provenance["commit"]) != provenance["tree"]:
+        raise SourceAuthenticationError("published commit/tree identity is stale")
     if api.commit_tree(packaged["commit"]) != packaged["tree"]:
         raise SourceAuthenticationError("packaged source commit/tree identity is stale")
     jobs = api.jobs_for_attempt(packaged["run_id"], packaged["run_attempt"])
@@ -175,6 +275,16 @@ def authenticate(
         packaged["run_id"],
         packaged["run_attempt"],
     )
+    if not attested and (
+        packaged["branch"] != provenance["branch"]
+        or packaged["commit"] != provenance["commit"]
+        or packaged["tree"] != provenance["tree"]
+        or packaged["controller_branch"] != handoff["controller_branch"]
+        or packaged["controller_sha"] != handoff["controller_sha"]
+    ):
+        raise SourceAuthenticationError(
+            "non-attested handoff does not describe its own exact packaged source"
+        )
     if attested:
         handoff_jobs = api.jobs_for_attempt(handoff["run_id"], handoff["run_attempt"])
         attestation_jobs = [
@@ -183,11 +293,59 @@ def authenticate(
             if isinstance(job.get("name"), str)
             and job["name"].endswith(" / Verify exact tested tree")
             and job.get("run_attempt") == handoff["run_attempt"]
-            and job.get("status") == "completed"
-            and job.get("conclusion") == "success"
         ]
-        if len(attestation_jobs) != 1:
+        if len(attestation_jobs) != 1 or (
+            attestation_jobs[0].get("status") != "completed"
+            or attestation_jobs[0].get("conclusion") != "success"
+        ):
             raise SourceAuthenticationError("handoff run lacks one successful exact-tree attestation job")
+
+    expected_selected_name = (
+        raw_artifact_name(provenance["branch"], handoff["run_attempt"])
+        if selected_kind == "raw"
+        else cache_artifact_name(provenance["branch"], provenance["commit"])
+    )
+    if selected_artifact_name != expected_selected_name:
+        raise SourceAuthenticationError("selected artifact name is not exact")
+    if selected_kind == "raw":
+        selected_owner = handoff_run
+        if (
+            selected_run_id != handoff["run_id"]
+            or selected_run_attempt != handoff["run_attempt"]
+        ):
+            raise SourceAuthenticationError("raw artifact owner differs from handoff provenance")
+    else:
+        selected_owner = _historical_run(
+            api, selected_run_id, selected_run_attempt, "compact cache owner"
+        )
+        pages_workflow = api.workflow("pages.yml")
+        try:
+            _validate_run(
+                selected_owner,
+                workflow_id=pages_workflow["id"],
+                workflow_path=PAGES_WORKFLOW,
+                repository=repository,
+                branch=canonical_branch,
+                sha=str(selected_owner.get("head_sha", "")),
+                events=PAGES_EVENTS,
+                require_success=True,
+            )
+        except SelectionError as exc:
+            raise SourceAuthenticationError(str(exc)) from exc
+    _selected_artifact(
+        api,
+        run_id=selected_run_id,
+        artifact_id=selected_artifact_id,
+        artifact_name=selected_artifact_name,
+        artifact_digest=selected_artifact_digest,
+        controller_branch=str(selected_owner["head_branch"]),
+        controller_sha=str(selected_owner["head_sha"]),
+    )
+    if api.branch_head(provenance["branch"]) != (
+        provenance["commit"],
+        provenance["tree"],
+    ):
+        raise SourceAuthenticationError("published branch advanced during authentication")
     return {
         "schema_version": 1,
         "attested": attested,
@@ -204,6 +362,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--matrix", type=Path, required=True)
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--selected-kind", choices=("raw", "compact"), required=True)
+    parser.add_argument("--selected-artifact-id", type=int, required=True)
+    parser.add_argument("--selected-artifact-name", required=True)
+    parser.add_argument("--selected-artifact-digest", required=True)
     parser.add_argument("--selected-run-id", type=int, required=True)
     parser.add_argument("--selected-run-attempt", type=int, required=True)
     parser.add_argument("--expected-handoff-run-id", type=int, required=True)
@@ -227,6 +388,9 @@ def main(argv: list[str] | None = None) -> int:
             matrix_path=args.matrix,
             evidence_root=args.evidence,
             selected_kind=args.selected_kind,
+            selected_artifact_id=args.selected_artifact_id,
+            selected_artifact_name=args.selected_artifact_name,
+            selected_artifact_digest=args.selected_artifact_digest,
             selected_run_id=args.selected_run_id,
             selected_run_attempt=args.selected_run_attempt,
             expected_handoff_run_id=args.expected_handoff_run_id,

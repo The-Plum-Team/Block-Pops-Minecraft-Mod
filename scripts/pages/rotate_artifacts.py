@@ -10,6 +10,8 @@ import re
 import sys
 import urllib.error
 import urllib.request
+from collections.abc import Mapping
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -18,11 +20,16 @@ sys.path.insert(0, str(REPO))
 
 from scripts.pages.build_site import SiteError, _inventory  # noqa: E402
 from scripts.pages.evidence import (  # noqa: E402
+    E2E_WORKFLOW,
     EvidenceError,
     cache_artifact_name,
     collection_artifact_name,
     raw_artifact_name,
     validate_compact,
+)
+from scripts.pages.visual_anchor import (  # noqa: E402
+    visual_anchor_artifact_name,
+    visual_anchor_artifact_prefix,
 )
 from scripts.pages.select_artifact import (  # noqa: E402
     Artifact,
@@ -38,6 +45,9 @@ class RotationError(RuntimeError):
     """Raised before deletion when a replacement generation is not exact."""
 
 
+ANCHOR_QUEUE_GRACE = timedelta(days=8)
+
+
 class RotationApi(GitHubApi):
     def delete_artifact(self, artifact_id: int) -> None:
         request = urllib.request.Request(
@@ -51,31 +61,190 @@ class RotationApi(GitHubApi):
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=30) as response:
+            with self.opener.open(request, timeout=30) as response:
                 if response.status != 204:
                     raise RotationError(f"artifact deletion returned HTTP {response.status}")
-        except (OSError, urllib.error.HTTPError) as exc:
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return
             raise RotationError(f"cannot delete exact artifact {artifact_id}: {exc}") from exc
+        except OSError as exc:
+            raise RotationError(f"cannot delete exact artifact {artifact_id}: {exc}") from exc
+
+
+def validate_current_invocation(
+    environment: Mapping[str, str],
+    *,
+    repository: str,
+    canonical_branch: str,
+    pages_run_id: int,
+    pages_run_attempt: int,
+    pages_run_sha: str,
+) -> None:
+    """Bind the in-progress exception to this exact protected Pages attempt."""
+
+    expected_workflow_ref = (
+        f"{repository}/.github/workflows/pages.yml@refs/heads/{canonical_branch}"
+    )
+    expected = {
+        "GITHUB_REPOSITORY": repository,
+        "GITHUB_REF": f"refs/heads/{canonical_branch}",
+        "GITHUB_SHA": pages_run_sha,
+        "GITHUB_RUN_ID": str(pages_run_id),
+        "GITHUB_RUN_ATTEMPT": str(pages_run_attempt),
+        "GITHUB_WORKFLOW_REF": expected_workflow_ref,
+    }
+    if pages_run_id <= 0 or pages_run_attempt <= 0:
+        raise RotationError("current Pages run id/attempt must be positive")
+    for key, value in expected.items():
+        if environment.get(key) != value:
+            raise RotationError(f"current Pages invocation has stale {key}")
+
+
+def _plan_anchor_rotation(
+    *,
+    api: RotationApi,
+    repository: str,
+    branch: str,
+    commit: str,
+    artifacts: list[Artifact],
+    now: datetime,
+) -> tuple[int, set[int]]:
+    """Keep each authenticated anchor for one queue window after supersession."""
+
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise RotationError("visual anchor rotation time must be timezone-aware")
+    now = now.astimezone(timezone.utc)
+
+    workflow = api.workflow("on-demand-e2e.yml")
+    prefix = visual_anchor_artifact_prefix(branch)
+    pattern = re.compile(
+        re.escape(prefix)
+        + r"(?P<commit>[0-9a-f]{40})-(?P<run_id>[1-9][0-9]*)-"
+        + r"(?P<run_attempt>[1-9][0-9]*)"
+    )
+    authenticated: list[tuple[Artifact, str]] = []
+    for artifact in artifacts:
+        match = pattern.fullmatch(artifact.name)
+        if match is None or artifact.expired:
+            continue
+        artifact_commit = match.group("commit")
+        producer_run_id = int(match.group("run_id"))
+        producer_run_attempt = int(match.group("run_attempt"))
+        if (
+            artifact.name
+            != visual_anchor_artifact_name(
+                branch, artifact_commit, producer_run_id, producer_run_attempt
+            )
+            or artifact.run_id != producer_run_id
+            or artifact.head_branch != branch
+            or artifact.head_sha != artifact_commit
+        ):
+            continue
+        try:
+            owner = api.run_attempt(producer_run_id, producer_run_attempt)
+            _validate_run(
+                owner,
+                workflow_id=workflow["id"],
+                workflow_path=E2E_WORKFLOW,
+                repository=repository,
+                branch=branch,
+                sha=artifact_commit,
+                events=frozenset({"schedule", "workflow_dispatch"}),
+                require_success=True,
+                display_title=f"Packaged E2E / {artifact_commit}",
+            )
+            if (
+                owner.get("id") != producer_run_id
+                or owner.get("run_attempt") != producer_run_attempt
+                or artifact.head_branch != owner.get("head_branch")
+                or artifact.head_sha != owner.get("head_sha")
+            ):
+                raise SelectionError("anchor owner attempt identity is stale")
+        except (OSError, SelectionError):
+            # An artifact is never a deletion candidate unless its owner can be
+            # authenticated positively.  Current-head absence still fails below.
+            continue
+        authenticated.append((artifact, artifact_commit))
+    replacements = [
+        artifact
+        for artifact, published_commit in authenticated
+        if published_commit == commit
+    ]
+    if not replacements:
+        raise RotationError("no authenticated current-head visual anchor replacement exists")
+    replacement = max(replacements, key=lambda artifact: artifact.order)
+    if replacement.order[0] > now:
+        raise RotationError("current visual anchor replacement is future-dated")
+    ordered = sorted(
+        (artifact for artifact, _commit in authenticated), key=lambda item: item.order
+    )
+    deletions: set[int] = set()
+    for index, candidate in enumerate(ordered):
+        if candidate.id == replacement.id:
+            continue
+        if candidate.order >= replacement.order:
+            raise RotationError(
+                f"a concurrent visual anchor is not older than replacement {replacement.id}"
+            )
+        # The first authenticated successor is the earliest time at which this
+        # exact anchor could have become obsolete.  Queue artifacts live for
+        # seven days.  One additional day avoids a boundary race between queue
+        # expiry/cleanup and a review that still names the historical artifact.
+        successor = ordered[index + 1]
+        if now - successor.order[0] >= ANCHOR_QUEUE_GRACE:
+            deletions.add(candidate.id)
+    return replacement.id, deletions
 
 
 def plan_rotation(
     *, api: RotationApi, repository: str, pages_run_id: int, pages_run_sha: str,
     inventory: list[dict[str, Any]], caches_root: Path, canonical_branch: str,
+    now: datetime | None = None, current_run_attempt: int | None = None,
 ) -> list[int]:
+    rotation_time = datetime.now(timezone.utc) if now is None else now
     pages_workflow = api.workflow("pages.yml")
     owner = api.run(pages_run_id)
     try:
         _validate_run(
             owner, workflow_id=pages_workflow["id"], workflow_path=PAGES_WORKFLOW,
             repository=repository, branch=canonical_branch, sha=pages_run_sha,
-            events=PAGES_EVENTS, require_success=True,
+            events=PAGES_EVENTS, require_success=current_run_attempt is None,
         )
     except SelectionError as exc:
         raise RotationError(str(exc)) from exc
+    if owner.get("id") != pages_run_id:
+        raise RotationError("Pages owner API returned another run id")
+    if current_run_attempt is not None:
+        if current_run_attempt <= 0:
+            raise RotationError("current Pages run attempt must be positive")
+        if (
+            owner.get("run_attempt") != current_run_attempt
+            or owner.get("status") != "in_progress"
+            or owner.get("conclusion") is not None
+        ):
+            raise RotationError("current Pages owner attempt is not exact and in progress")
     owner_artifacts = api.artifacts_for_run(pages_run_id)
     repository_artifacts = api.all_artifacts()
     deletions: set[int] = set()
     keep_ids: set[int] = set()
+    canonical_rows = [row for row in inventory if row["name"] == canonical_branch]
+    if len(canonical_rows) != 1:
+        raise RotationError("Pages inventory must contain exactly one canonical branch")
+    canonical_row = canonical_rows[0]
+    canonical_head = api.branch_head(canonical_branch)
+    if canonical_head != (canonical_row["commit"], canonical_row["tree"]):
+        raise RotationError("canonical branch advanced before visual anchor rotation")
+    anchor_keep, anchor_deletions = _plan_anchor_rotation(
+        api=api,
+        repository=repository,
+        branch=canonical_branch,
+        commit=canonical_row["commit"],
+        artifacts=repository_artifacts,
+        now=rotation_time,
+    )
+    keep_ids.add(anchor_keep)
+    deletions.update(anchor_deletions)
     for row in inventory:
         branch = row["name"]
         current = api.branch_head(branch)
@@ -128,30 +297,39 @@ def plan_rotation(
             raise RotationError(f"source artifact ID {source_id} is ambiguous")
         if raw_matches:
             source = raw_matches[0]
-            if source.name != source_name or source.head_branch != branch or source.head_sha != row["commit"]:
+            handoff = manifest["provenance"]["handoff"]
+            if (
+                source.name != source_name
+                or source.digest != manifest["source_artifact"]["digest"]
+                or source.run_id != handoff["run_id"]
+                or source.head_branch != handoff["controller_branch"]
+                or source.head_sha != handoff["controller_sha"]
+            ):
                 raise RotationError(f"source artifact {source_id} provenance is stale")
             source_workflow = api.workflow("on-demand-e2e.yml")
-            source_run = api.run(source.run_id)
+            source_run = api.run_attempt(source.run_id, handoff["run_attempt"])
             try:
                 _validate_run(
                     source_run,
                     workflow_id=source_workflow["id"],
-                    workflow_path=".github/workflows/on-demand-e2e.yml",
+                    workflow_path=E2E_WORKFLOW,
                     repository=repository,
-                    branch=branch,
-                    sha=row["commit"],
+                    branch=handoff["controller_branch"],
+                    sha=handoff["controller_sha"],
                     events=(
                         frozenset({"workflow_dispatch", "schedule"})
                         if branch == canonical_branch
                         else frozenset({"workflow_dispatch"})
                     ),
                     require_success=True,
+                    display_title=f"Packaged E2E / {row['commit']}",
                 )
             except SelectionError as exc:
                 raise RotationError(str(exc)) from exc
-            if source.run_id != manifest["provenance"]["handoff"]["run_id"]:
-                raise RotationError("source artifact owner differs from compact provenance")
-            if source_run.get("run_attempt") != manifest["provenance"]["handoff"]["run_attempt"]:
+            if (
+                source_run.get("id") != handoff["run_id"]
+                or source_run.get("run_attempt") != handoff["run_attempt"]
+            ):
                 raise RotationError("source artifact run attempt differs from compact provenance")
             deletions.add(source.id)
         cache_prefix = cache_name.rsplit("--", 1)[0] + "--"
@@ -197,6 +375,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", required=True)
     parser.add_argument("--pages-run-id", type=int, required=True)
+    parser.add_argument("--current-run-attempt", type=int)
     parser.add_argument("--pages-run-sha", required=True)
     parser.add_argument("--canonical-branch", required=True)
     parser.add_argument("--inventory", type=Path, required=True)
@@ -212,6 +391,15 @@ def main(argv: list[str] | None = None) -> int:
             token=token,
             api_url=os.environ.get("GITHUB_API_URL", "https://api.github.com"),
         )
+        if args.current_run_attempt is not None:
+            validate_current_invocation(
+                os.environ,
+                repository=args.repository,
+                canonical_branch=args.canonical_branch,
+                pages_run_id=args.pages_run_id,
+                pages_run_attempt=args.current_run_attempt,
+                pages_run_sha=args.pages_run_sha,
+            )
         inventory = _inventory(args.inventory)
         deletions = plan_rotation(
             api=api,
@@ -221,6 +409,7 @@ def main(argv: list[str] | None = None) -> int:
             inventory=inventory,
             caches_root=args.caches_root,
             canonical_branch=args.canonical_branch,
+            current_run_attempt=args.current_run_attempt,
         )
         if not args.dry_run:
             for artifact_id in deletions:
