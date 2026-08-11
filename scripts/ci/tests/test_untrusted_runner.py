@@ -13,6 +13,7 @@ from scripts.ci.untrusted_runner import (
     SandboxError,
     _candidate_environment,
     _refresh_candidate_index,
+    _refresh_restored_index,
     _relative,
     _restore_authenticated_tree,
     _root,
@@ -94,6 +95,52 @@ class BoundaryTests(unittest.TestCase):
             return_value=1,
         ), self.assertRaises(SandboxError):
             _refresh_candidate_index(root, repository, 1234)
+
+    def test_restored_index_is_rebound_to_the_exact_authenticated_identity(self) -> None:
+        repository = Path("/tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository")
+        commit = "a" * 40
+        tree = "b" * 40
+        state = {
+            "repository": str(repository),
+            "source_commit": commit,
+            "source_tree": tree,
+        }
+        with mock.patch(
+            "scripts.ci.untrusted_runner._run",
+            side_effect=(f"{commit}\n".encode(), f"{tree}\n".encode(), b"", b""),
+        ) as run:
+            _refresh_restored_index(state)
+        prefix = ("/usr/bin/git", "-c", "core.fsmonitor=false", "-C", str(repository))
+        self.assertEqual(
+            [
+                mock.call((*prefix, "rev-parse", "HEAD")),
+                mock.call((*prefix, "rev-parse", "HEAD^{tree}")),
+                mock.call((*prefix, "update-index", "--really-refresh")),
+                mock.call(
+                    (*prefix, "diff-index", "--no-ext-diff", "--quiet", commit, "--")
+                ),
+            ],
+            run.call_args_list,
+        )
+
+        with mock.patch(
+            "scripts.ci.untrusted_runner._run",
+            side_effect=(b"c" * 40 + b"\n", f"{tree}\n".encode()),
+        ), self.assertRaises(SandboxError):
+            _refresh_restored_index(state)
+
+        for failed_call in (2, 3):
+            effects: list[bytes | BaseException] = [
+                f"{commit}\n".encode(),
+                f"{tree}\n".encode(),
+                b"",
+                b"",
+            ]
+            effects[failed_call] = SandboxError("fail closed")
+            with self.subTest(failed_call=failed_call), mock.patch(
+                "scripts.ci.untrusted_runner._run", side_effect=effects
+            ), self.assertRaises(SandboxError):
+                _refresh_restored_index(state)
 
     def test_export_inventory_rejects_symlinks_hardlinks_and_special_files(self) -> None:
         for kind in ("symlink", "hardlink", "fifo"):
@@ -236,6 +283,22 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn('"usermod",', helper)
         self.assertIn("GITHUB_", helper)
         self.assertIn("ACTIONS_", helper)
+
+    def test_seal_refreshes_restored_git_metadata_before_publication(self) -> None:
+        helper = (REPO / "scripts/ci/untrusted_runner.py").read_text("utf-8")
+        seal = helper.split("def seal(", 1)[1].split("def validate_sealed(", 1)[0]
+        self.assertLess(
+            seal.index("_terminate_identity(uid, USER_NAME)"),
+            seal.index("_restore_authenticated_tree(state)"),
+        )
+        self.assertLess(
+            seal.index("_restore_authenticated_tree(state)"),
+            seal.index("_refresh_restored_index(state)"),
+        )
+        self.assertLess(
+            seal.index("_refresh_restored_index(state)"),
+            seal.index('state["sealed"] = True'),
+        )
 
 
 if __name__ == "__main__":

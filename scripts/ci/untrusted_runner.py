@@ -322,6 +322,19 @@ def _restore_authenticated_tree(state: dict[str, Any]) -> None:
     _run(("cp", "-a", "--", str(source_git), str(candidate_git)))
 
 
+def _refresh_restored_index(state: dict[str, Any]) -> None:
+    """Bind the restored index stat cache to the sealed, runner-owned checkout."""
+
+    repository = Path(state["repository"])
+    git = ("/usr/bin/git", "-c", "core.fsmonitor=false", "-C", str(repository))
+    commit = _run((*git, "rev-parse", "HEAD")).decode("ascii", "strict").strip()
+    tree = _run((*git, "rev-parse", "HEAD^{tree}")).decode("ascii", "strict").strip()
+    if commit != state["source_commit"] or tree != state["source_tree"]:
+        raise SandboxError("restored candidate Git metadata has the wrong identity")
+    _run((*git, "update-index", "--really-refresh"))
+    _run((*git, "diff-index", "--no-ext-diff", "--quiet", state["source_commit"], "--"))
+
+
 def prepare(
     root_value: Path,
     source_value: Path,
@@ -748,6 +761,7 @@ def seal(root_value: Path, exports: tuple[str, ...]) -> dict[str, Any]:
     _run(("sudo", "-n", "chown", "-hR", runner_identity, str(repository)))
     _run(("chmod", "-R", "u+rwX,go+rX,go-w", str(repository)))
     _restore_authenticated_tree(state)
+    _refresh_restored_index(state)
     normalized: list[str] = []
     for raw in exports:
         relative = _relative(raw)
