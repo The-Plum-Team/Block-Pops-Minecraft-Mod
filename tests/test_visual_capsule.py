@@ -12,7 +12,7 @@ import zipfile
 from dataclasses import replace
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw, PngImagePlugin
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, PngImagePlugin
 
 from e2e.scenario_contract import OpaqueStarsProbe, RequiredGuiTextProbe, load_contract
 from e2e.visual_capsule import (
@@ -34,6 +34,7 @@ from e2e.visual_evidence import (
     load_archived_evidence,
     validate_attestation,
     validate_contract_probes,
+    _validate_metrics,
 )
 from e2e.visual_review_output import (
     VisualReviewOutputError,
@@ -321,7 +322,7 @@ def _source(
         "base_branch": base_branch,
         "source_head_commit": ("a" if name == "candidate" else "b") * 40,
         "tested_commit": (
-            ("9" * 40) if event == "pull_request" else (("a" if name == "candidate" else "b") * 40)
+            ("9" * 40) if event == "pull_request_target" else (("a" if name == "candidate" else "b") * 40)
         ),
         "tested_tree": ("c" if name == "candidate" else "d") * 40,
         "workflow_path": ".github/workflows/packaged-e2e.yml",
@@ -364,7 +365,7 @@ class VisualCapsuleTests(unittest.TestCase):
             artifact_id=31,
             source_head_branch="feature/visual-candidate",
             base_branch=ACTIVE_BRANCH,
-            event="pull_request",
+            event="pull_request_target",
             metadata="candidate",
         )
         reference = _source(
@@ -511,18 +512,20 @@ class VisualBoundaryMutationTests(unittest.TestCase):
             artifact_id=51,
             source_head_branch="candidate",
             base_branch=ACTIVE_BRANCH,
-            event="pull_request",
+            event="pull_request_target",
             metadata="candidate",
         )
         value = json.loads(attestation_path.read_text(encoding="utf-8"))
         contract = load_contract(CONTRACT_PATH)
-        for mutation in ("unknown", "head", "matrix"):
+        for mutation in ("unknown", "head", "matrix", "legacy-event"):
             with self.subTest(mutation=mutation):
                 broken = copy.deepcopy(value)
                 if mutation == "unknown":
                     broken["token"] = "must-not-pass"
                 elif mutation == "head":
                     broken["tested_commit"] = "f" * 40
+                elif mutation == "legacy-event":
+                    broken["event"] = "pull_request"
                 else:
                     broken["matrix_sha256"] = "f" * 64
                 with self.assertRaises(VisualEvidenceError):
@@ -614,6 +617,77 @@ class VisualBoundaryMutationTests(unittest.TestCase):
         with self.assertRaisesRegex(VisualEvidenceError, "opaque-stars-background"):
             validate_contract_probes(canonical, capture, "washed-out favorite color modal")
 
+    def test_probe_calibration_accepts_every_matrix_lane_and_capture(self) -> None:
+        contract = load_contract(CONTRACT_PATH)
+        scenario = contract.scenario("ui-regression")
+        for node in ACTIVE_NODES:
+            for role in scenario.roles:
+                for index, step in enumerate(role.steps):
+                    if step.capture is None:
+                        continue
+                    with self.subTest(node=node, capture=step.capture.capture_id):
+                        path = self.root / "calibration" / node / f"{step.id}.png"
+                        _image(path, node, index, step.capture, metadata="candidate")
+                        *_, canonical, _metrics = canonicalize_png(
+                            path, expected_size=contract.gui_text_reference_size
+                        )
+                        validate_contract_probes(
+                            canonical,
+                            step.capture,
+                            f"{node} {step.capture.capture_id} calibration canary",
+                        )
+
+    def test_probe_calibration_rejects_empty_frame(self) -> None:
+        path = self.root / "empty-frame.png"
+        Image.new("RGB", (1600, 900), (0, 0, 0)).save(path, format="PNG")
+        *_, metrics = canonicalize_png(path, expected_size=(1600, 900))
+        reported = {key: metrics[key] for key in SCREENSHOT_METRIC_KEYS}
+        with self.assertRaisesRegex(VisualEvidenceError, "effectively blank"):
+            _validate_metrics(reported, metrics, "empty calibration canary")
+
+    def test_probe_calibration_rejects_missing_and_blurred_required_text(self) -> None:
+        contract = load_contract(CONTRACT_PATH)
+        capture = contract.capture("ui-regression", "client_a", "favorite_color_prompt")
+        text_probe = next(
+            probe for probe in capture.probes if isinstance(probe, RequiredGuiTextProbe)
+        )
+        source = self.root / "text-canary.png"
+        _image(source, REFERENCE_NODE, 0, capture, metadata="candidate")
+        with Image.open(source) as opened:
+            original = opened.convert("RGB")
+
+        missing = original.copy()
+        ImageDraw.Draw(missing).rectangle(text_probe.box, fill=(32, 32, 32))
+        missing_path = self.root / "missing-text.png"
+        missing.save(missing_path, format="PNG")
+        *_, missing_png, _metrics = canonicalize_png(
+            missing_path, expected_size=contract.gui_text_reference_size
+        )
+        with self.assertRaisesRegex(VisualEvidenceError, "required-gui-text"):
+            validate_contract_probes(missing_png, capture, "missing text calibration canary")
+
+        crisp = original.copy()
+        crisp_draw = ImageDraw.Draw(crisp)
+        crisp_draw.rectangle(text_probe.box, fill=(32, 32, 32))
+        left, top, right, _bottom = text_probe.box
+        crisp_draw.line((left + 8, top + 8, right - 8, top + 8), fill=(255, 255, 255))
+        crisp_draw.line((left + 8, top + 18, right - 8, top + 18), fill=(255, 255, 255))
+        crisp_path = self.root / "crisp-text.png"
+        crisp.save(crisp_path, format="PNG")
+        *_, crisp_png, _metrics = canonicalize_png(
+            crisp_path, expected_size=contract.gui_text_reference_size
+        )
+        validate_contract_probes(crisp_png, capture, "crisp text calibration canary")
+
+        blurred = crisp.filter(ImageFilter.GaussianBlur(radius=6))
+        blurred_path = self.root / "blurred-text.png"
+        blurred.save(blurred_path, format="PNG")
+        *_, blurred_png, _metrics = canonicalize_png(
+            blurred_path, expected_size=contract.gui_text_reference_size
+        )
+        with self.assertRaisesRegex(VisualEvidenceError, "required-gui-text"):
+            validate_contract_probes(blurred_png, capture, "blurred text calibration canary")
+
 
 class VisualReviewOutputTests(unittest.TestCase):
     @classmethod
@@ -631,7 +705,7 @@ class VisualReviewOutputTests(unittest.TestCase):
             artifact_id=61,
             source_head_branch="candidate",
             base_branch=ACTIVE_BRANCH,
-            event="pull_request",
+            event="pull_request_target",
             metadata="candidate",
         )
         reference_input = _source(
@@ -670,41 +744,99 @@ class VisualReviewOutputTests(unittest.TestCase):
         cls.shared.cleanup()
 
     def _valid(self) -> dict[str, object]:
+        changed = [
+            pair for pair in self.pairs if pair["triage"]["byte_identical"] is False
+        ]
+        defect_label = changed[-1]["label"] if changed else None
         verdicts = []
-        for index, pair in enumerate(reversed(self.pairs)):
-            defect = index == 0
-            findings = (
-                [
+        for pair in reversed(self.pairs):
+            identical = pair["triage"]["byte_identical"] is True
+            defect = pair["label"] == defect_label
+            if identical:
+                findings = []
+                visible = "Candidate and canonical reference are byte-identical."
+                route = "identical"
+            elif defect:
+                findings = [
                     {
                         "category": "clipping",
                         "severity": "defect",
                         "detail": "The settings label is visibly clipped.",
                     }
                 ]
-                if defect
-                else (
-                    [
-                        {
-                            "category": "rendering",
-                            "severity": "note",
-                            "detail": "Harmless antialiasing differs from the reference.",
-                        }
-                    ]
-                    if index == 1
-                    else []
-                )
-            )
+                visible = "The settings label is visibly clipped."
+                route = "fable"
+            else:
+                findings = [
+                    {
+                        "category": "rendering",
+                        "severity": "note",
+                        "detail": "Harmless antialiasing differs from the reference.",
+                    }
+                ]
+                visible = "The expected packaged UI state is visible."
+                route = "sonnet"
             verdicts.append(
                 {
                     "label": pair["label"],
                     "capture_id": pair["capture_id"],
+                    "route": route,
                     "matches_expectation": not defect,
                     "semantic_regression": defect,
-                    "visible": "The expected packaged UI state is visible.",
+                    "visible": visible,
                     "findings": findings,
                 }
             )
-        return {"schema_version": 1, "advisory": True, "verdicts": verdicts}
+        identical_count = len(self.pairs) - len(changed)
+        escalated_count = int(defect_label is not None)
+        sonnet_calls = (len(changed) + 4) // 5
+        fable_calls = (escalated_count + 3) // 4
+        calls = sonnet_calls + fable_calls
+        sonnet_usage = {
+            "input_tokens": 100 if sonnet_calls else 0,
+            "output_tokens": 20 if sonnet_calls else 0,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+        }
+        fable_usage = {
+            "input_tokens": 40 if fable_calls else 0,
+            "output_tokens": 10 if fable_calls else 0,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+        }
+        cost = (
+            sonnet_usage["input_tokens"] * 3
+            + sonnet_usage["output_tokens"] * 15
+            + fable_usage["input_tokens"] * 10
+            + fable_usage["output_tokens"] * 50
+        )
+        return {
+            "schema_version": 2,
+            "advisory": True,
+            "telemetry": {
+                "provider": "anthropic",
+                "auth_mode": "github-oidc-wif",
+                "triage_model": "claude-sonnet-5",
+                "verification_model": "claude-fable-5",
+                "client_sha256": "a" * 64,
+                "sonnet_prompt_sha256": "b" * 64,
+                "fable_prompt_sha256": "c" * 64,
+                "pair_count": len(self.pairs),
+                "identical_pairs": identical_count,
+                "triaged_pairs": len(changed),
+                "escalated_pairs": escalated_count,
+                "sonnet_calls": sonnet_calls,
+                "fable_calls": fable_calls,
+                "provider_attempts": calls,
+                "retries": 0,
+                "sonnet_usage": sonnet_usage,
+                "fable_usage": fable_usage,
+                "reported_cost_upper_bound_micro_usd": cost,
+                "duration_ms": 1234,
+                "request_ids": [f"req_test_{index}" for index in range(calls)],
+            },
+            "verdicts": verdicts,
+        }
 
     def test_valid_output_is_normalized_to_capsule_order_and_remains_advisory(self) -> None:
         normalized = validate_review_output(self.pairs, self._valid())
@@ -724,20 +856,31 @@ class VisualReviewOutputTests(unittest.TestCase):
 
     def test_output_mutations_fail_closed(self) -> None:
         for mutation in (
+            "stale-schema",
             "unknown-root",
             "missing",
             "duplicate",
             "identity",
+            "route",
             "boolean",
             "defect-without-finding",
             "note-marked-defect",
             "unknown-category",
+            "cost",
             "control",
+            "surrogate",
         ):
             with self.subTest(mutation=mutation):
                 report = self._valid()
                 verdicts = report["verdicts"]
-                if mutation == "unknown-root":
+                defect = next(
+                    verdict
+                    for verdict in verdicts
+                    if verdict["semantic_regression"] is True
+                )
+                if mutation == "stale-schema":
+                    report["schema_version"] = 1
+                elif mutation == "unknown-root":
                     report["model"] = "secret-bearing detail"
                 elif mutation == "missing":
                     verdicts.pop()
@@ -745,16 +888,22 @@ class VisualReviewOutputTests(unittest.TestCase):
                     verdicts[-1] = copy.deepcopy(verdicts[0])
                 elif mutation == "identity":
                     verdicts[0]["capture_id"] = "wrong.capture.id"
+                elif mutation == "route":
+                    verdicts[0]["route"] = "whole-pixel"
                 elif mutation == "boolean":
-                    verdicts[0]["matches_expectation"] = True
+                    defect["matches_expectation"] = True
                 elif mutation == "defect-without-finding":
-                    verdicts[0]["findings"] = []
+                    defect["findings"] = []
                 elif mutation == "note-marked-defect":
-                    verdicts[0]["findings"][0]["severity"] = "note"
+                    defect["findings"][0]["severity"] = "note"
                 elif mutation == "unknown-category":
-                    verdicts[0]["findings"][0]["category"] = "pixels-differ"
-                else:
+                    defect["findings"][0]["category"] = "pixels-differ"
+                elif mutation == "cost":
+                    report["telemetry"]["reported_cost_upper_bound_micro_usd"] += 1
+                elif mutation == "control":
                     verdicts[0]["visible"] = "bad\x00text"
+                else:
+                    verdicts[0]["visible"] = "bad\ud800text"
                 with self.assertRaises(VisualReviewOutputError):
                     validate_review_output(self.pairs, report)
 
@@ -763,7 +912,7 @@ class VisualReviewOutputTests(unittest.TestCase):
             root = Path(temporary)
             duplicate = root / "duplicate.json"
             duplicate.write_text(
-                '{"schema_version":1,"schema_version":1,"advisory":true,"verdicts":[]}',
+                '{"schema_version":2,"schema_version":2,"advisory":true,"telemetry":{},"verdicts":[]}',
                 encoding="utf-8",
             )
             with self.assertRaises(VisualReviewOutputError):

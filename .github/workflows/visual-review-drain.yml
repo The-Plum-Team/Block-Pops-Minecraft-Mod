@@ -1,0 +1,2098 @@
+name: Drain advisory visual review queue
+
+# Queue artifacts are the durable state. A fixed concurrency key serializes the
+# oldest-first selection, credential use, publication, and exact-id cleanup.
+on:
+  repository_dispatch:
+    types:
+      - visual-review-queue-wake
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: blockpops-visual-review-global-drain
+  cancel-in-progress: false
+
+jobs:
+  select:
+    name: Authenticate and select the oldest eligible queue item
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      artifact_digest: ${{ steps.queue.outputs.artifact_digest }}
+      artifact_id: ${{ steps.queue.outputs.artifact_id }}
+      artifact_name: ${{ steps.queue.outputs.artifact_name }}
+      artifact_size: ${{ steps.queue.outputs.artifact_size }}
+      completed_attempts: ${{ steps.queue.outputs.completed_attempts }}
+      control_sha: ${{ steps.control.outputs.control_sha }}
+      eligible: ${{ steps.queue.outputs.eligible }}
+      handoff_name: ${{ steps.identity.outputs.handoff_name }}
+      implementation_sha: ${{ steps.queue.outputs.implementation_sha }}
+      next_attempt_ordinal: ${{ steps.queue.outputs.next_attempt_ordinal }}
+      producer_run_attempt: ${{ steps.queue.outputs.producer_run_attempt }}
+      producer_run_id: ${{ steps.queue.outputs.producer_run_id }}
+      queue_state: ${{ steps.queue.outputs.queue_state }}
+      report_name: ${{ steps.identity.outputs.report_name }}
+      result_name: ${{ steps.identity.outputs.result_name }}
+      source_run_attempt: ${{ steps.queue.outputs.source_run_attempt }}
+      source_run_id: ${{ steps.queue.outputs.source_run_id }}
+      tested_sha: ${{ steps.queue.outputs.tested_sha }}
+    steps:
+      - name: Check out the current protected selector
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: master
+          persist-credentials: false
+
+      - name: Bind the selector to the current default-branch head
+        id: control
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repository="$(gh api "repos/$GITHUB_REPOSITORY")"
+          jq -e --arg repository "$GITHUB_REPOSITORY" '
+            .full_name == $repository and .default_branch == "master"
+          ' <<< "$repository" >/dev/null
+          control_sha="$(git rev-parse HEAD)"
+          [[ "$control_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GITHUB_REF" == refs/heads/master && "$GITHUB_SHA" == "$control_sha" ]]
+          [[ "$control_sha" == "$(gh api "repos/$GITHUB_REPOSITORY/branches/master" --jq .commit.sha)" ]]
+          printf 'control_sha=%s\n' "$control_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Select one authenticated oldest-first queue item
+        id: queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 scripts/ci/visual_review_queue.py
+          --repository "$GITHUB_REPOSITORY"
+          --default-branch master
+          --github-output "$GITHUB_OUTPUT"
+
+      - name: Derive exact per-item artifact identities
+        id: identity
+        if: steps.queue.outputs.eligible == 'true'
+        shell: bash
+        env:
+          QUEUE_STATE: ${{ steps.queue.outputs.queue_state }}
+          SOURCE_RUN_ATTEMPT: ${{ steps.queue.outputs.source_run_attempt }}
+          SOURCE_RUN_ID: ${{ steps.queue.outputs.source_run_id }}
+          TESTED_SHA: ${{ steps.queue.outputs.tested_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$SOURCE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$TESTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$QUEUE_STATE" == eligible || "$QUEUE_STATE" == attempts_exhausted ||
+             "$QUEUE_STATE" == stale_source ]]
+          identity="$SOURCE_RUN_ID-$SOURCE_RUN_ATTEMPT-$TESTED_SHA"
+          printf 'report_name=visual-review-%s\n' "$identity" >> "$GITHUB_OUTPUT"
+          printf 'handoff_name=visual-review-handoff-%s-%s-%s\n' \
+            "$identity" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          printf 'result_name=visual-review-result-%s-%s-%s\n' \
+            "$identity" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+
+  exhausted:
+    name: Record bounded attempt exhaustion for owner action
+    needs: select
+    if: >-
+      needs.select.outputs.eligible == 'true' &&
+      needs.select.outputs.queue_state == 'attempts_exhausted'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: {}
+    outputs:
+      artifact_digest: ${{ steps.report.outputs.artifact-digest }}
+      artifact_id: ${{ steps.report.outputs.artifact-id }}
+    steps:
+      - name: Write a bounded owner-action report
+        shell: bash
+        env:
+          COMPLETED_ATTEMPTS: ${{ needs.select.outputs.completed_attempts }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.select.outputs.source_run_attempt }}
+          SOURCE_RUN_ID: ${{ needs.select.outputs.source_run_id }}
+          TESTED_SHA: ${{ needs.select.outputs.tested_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$COMPLETED_ATTEMPTS" == 2 ]]
+          mkdir -p "$RUNNER_TEMP/visual-review-report"
+          jq -cnS \
+            --argjson source_run_id "$SOURCE_RUN_ID" \
+            --argjson source_run_attempt "$SOURCE_RUN_ATTEMPT" \
+            --arg tested_sha "$TESTED_SHA" \
+            '{schema_version:1,advisory:true,status:"attempts_exhausted",
+              category:"attempts_exhausted",retain_queue:true,owner_action_required:true,
+              source_run_id:$source_run_id,source_run_attempt:$source_run_attempt,
+              tested_sha:$tested_sha,completed_attempts:2}' \
+            > "$RUNNER_TEMP/visual-review-report/publication.json"
+
+      - name: Upload the durable owner-action report
+        id: report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ needs.select.outputs.report_name }}
+          path: ${{ runner.temp }}/visual-review-report/
+          if-no-files-found: error
+          compression-level: 9
+          retention-days: 30
+
+  attempt:
+    name: Mark one bounded credential attempt
+    needs: select
+    if: >-
+      needs.select.outputs.eligible == 'true' &&
+      needs.select.outputs.queue_state == 'eligible'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: {}
+    outputs:
+      artifact_digest: ${{ steps.marker.outputs.artifact-digest }}
+      artifact_id: ${{ steps.marker.outputs.artifact-id }}
+      artifact_name: ${{ steps.identity.outputs.artifact_name }}
+    steps:
+      - name: Create the exact ordinal attempt marker
+        id: identity
+        shell: bash
+        env:
+          COMPLETED_ATTEMPTS: ${{ needs.select.outputs.completed_attempts }}
+          NEXT_ORDINAL: ${{ needs.select.outputs.next_attempt_ordinal }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.select.outputs.source_run_attempt }}
+          SOURCE_RUN_ID: ${{ needs.select.outputs.source_run_id }}
+          TESTED_SHA: ${{ needs.select.outputs.tested_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$NEXT_ORDINAL" =~ ^[12]$ ]]
+          [[ "$COMPLETED_ATTEMPTS" -eq $((NEXT_ORDINAL - 1)) ]]
+          artifact_name="visual-review-attempt-$SOURCE_RUN_ID-$SOURCE_RUN_ATTEMPT-$TESTED_SHA-$NEXT_ORDINAL"
+          [[ "$artifact_name" =~ ^visual-review-attempt-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{40}-[12]$ ]]
+          mkdir -p "$RUNNER_TEMP/visual-review-attempt"
+          jq -cnS \
+            --argjson source_run_id "$SOURCE_RUN_ID" \
+            --argjson source_run_attempt "$SOURCE_RUN_ATTEMPT" \
+            --arg tested_sha "$TESTED_SHA" \
+            --argjson ordinal "$NEXT_ORDINAL" \
+            '{schema_version:1,advisory:true,status:"selected",
+              source_run_id:$source_run_id,source_run_attempt:$source_run_attempt,
+              tested_sha:$tested_sha,ordinal:$ordinal}' \
+            > "$RUNNER_TEMP/visual-review-attempt/attempt.json"
+          printf 'artifact_name=%s\n' "$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the immutable cooldown marker
+        id: marker
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.identity.outputs.artifact_name }}
+          path: ${{ runner.temp }}/visual-review-attempt/
+          if-no-files-found: error
+          compression-level: 9
+          retention-days: 7
+
+  prepare:
+    name: Reauthenticate queue and create a fresh tool handoff
+    needs: [select, attempt]
+    if: >-
+      needs.select.outputs.eligible == 'true' &&
+      needs.select.outputs.queue_state == 'eligible' &&
+      needs.attempt.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      artifact_digest: ${{ steps.handoff.outputs.artifact-digest }}
+      artifact_id: ${{ steps.handoff.outputs.artifact-id }}
+      artifact_name: ${{ needs.select.outputs.handoff_name }}
+      manifest_sha256: ${{ steps.build.outputs.manifest_sha256 }}
+      implementation_sha: ${{ steps.control.outputs.implementation_sha }}
+      reauth_status: ${{ steps.reauth.outputs.status }}
+      reference_sha: ${{ steps.build.outputs.reference_sha }}
+      source_head_sha: ${{ steps.build.outputs.source_head_sha }}
+      tested_sha: ${{ steps.build.outputs.tested_sha }}
+    steps:
+      - name: Check out the fresh current protected implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: master
+          persist-credentials: false
+
+      - name: Install Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install the hash-locked PNG decoder
+        run: >-
+          python3 -m pip install --disable-pip-version-check
+          --only-binary=:all: --require-hashes
+          --requirement scripts/visual/requirements.txt
+
+      - name: Bind this fresh checkout to current master
+        id: control
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          implementation_sha="$(git rev-parse HEAD)"
+          [[ "$implementation_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$implementation_sha" == "$(gh api "repos/$GITHUB_REPOSITORY/branches/master" --jq .commit.sha)" ]]
+          printf 'implementation_sha=%s\n' "$implementation_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Download the exact selected data-only queue artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.select.outputs.artifact_id }}
+          path: ${{ runner.temp }}/visual-review-queue
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          digest-mismatch: error
+
+      - name: Reauthenticate source, tested tree, job graph, and current anchor
+        id: reauth
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          IMPLEMENTATION_SHA: ${{ steps.control.outputs.implementation_sha }}
+          QUEUE_ARTIFACT_DIGEST: ${{ needs.select.outputs.artifact_digest }}
+          QUEUE_ARTIFACT_ID: ${{ needs.select.outputs.artifact_id }}
+          QUEUE_ARTIFACT_NAME: ${{ needs.select.outputs.artifact_name }}
+          QUEUE_OWNER_RUN_ATTEMPT: ${{ needs.select.outputs.producer_run_attempt }}
+          QUEUE_OWNER_RUN_ID: ${{ needs.select.outputs.producer_run_id }}
+        run: |
+          set -euo pipefail
+          printf 'status=authentication\n' >> "$GITHUB_OUTPUT"
+          set +e
+          python3 scripts/visual/reauth.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --queue "$RUNNER_TEMP/visual-review-queue" \
+            --queue-artifact-id "$QUEUE_ARTIFACT_ID" \
+            --queue-artifact-name "$QUEUE_ARTIFACT_NAME" \
+            --queue-artifact-digest "$QUEUE_ARTIFACT_DIGEST" \
+            --queue-owner-run-id "$QUEUE_OWNER_RUN_ID" \
+            --queue-owner-run-attempt "$QUEUE_OWNER_RUN_ATTEMPT" \
+            --implementation-sha "$IMPLEMENTATION_SHA" \
+            --result "$RUNNER_TEMP/visual-reauth.json"
+          status=$?
+          set -e
+          if [[ "$status" == 3 ]]; then
+            jq -e 'keys == ["category","schema_version","status"] and
+              .schema_version == 1 and .status == "stale_source" and
+              .category == "stale_source"' "$RUNNER_TEMP/visual-reauth.json" >/dev/null
+            printf 'status=stale_source\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$status" != 0 ]]; then
+            jq -e '.schema_version == 1 and .status == "error" and
+              .category == "authentication"' "$RUNNER_TEMP/visual-reauth.json" >/dev/null
+            exit 2
+          fi
+          jq -e \
+            --argjson artifact_id "$QUEUE_ARTIFACT_ID" \
+            --arg artifact_digest "$QUEUE_ARTIFACT_DIGEST" \
+            --arg implementation "$IMPLEMENTATION_SHA" \
+            --argjson source_run_id "${{ needs.select.outputs.source_run_id }}" \
+            --argjson source_run_attempt "${{ needs.select.outputs.source_run_attempt }}" \
+            --arg tested "${{ needs.select.outputs.tested_sha }}" '
+              .schema_version == 1 and .status == "authenticated" and .category == "" and
+              .queue_artifact_id == $artifact_id and
+              .queue_artifact_digest == $artifact_digest and
+              .implementation_sha == $implementation and
+              .source_run_id == $source_run_id and
+              .source_run_attempt == $source_run_attempt and .tested_sha == $tested and
+              (.source_head_sha | test("^[0-9a-f]{40}$")) and
+              (.tested_tree | test("^[0-9a-f]{40}$")) and
+              (.reference_sha | test("^[0-9a-f]{40}$"))
+            ' "$RUNNER_TEMP/visual-reauth.json" >/dev/null
+          printf 'status=authenticated\n' >> "$GITHUB_OUTPUT"
+
+      - name: Prepare a sanitized owner-action report for proven authentication failure
+        id: reauth_report_data
+        if: failure() && steps.reauth.outputs.status == 'authentication'
+        shell: bash
+        env:
+          SOURCE_RUN_ATTEMPT: ${{ needs.select.outputs.source_run_attempt }}
+          SOURCE_RUN_ID: ${{ needs.select.outputs.source_run_id }}
+          TESTED_SHA: ${{ needs.select.outputs.tested_sha }}
+        run: |
+          set -euo pipefail
+          jq -e 'keys == ["category","schema_version","status"] and
+            .schema_version == 1 and .status == "error" and
+            .category == "authentication"' "$RUNNER_TEMP/visual-reauth.json" >/dev/null
+          mkdir -p "$RUNNER_TEMP/visual-review-authentication-report"
+          cp "$RUNNER_TEMP/visual-reauth.json" \
+            "$RUNNER_TEMP/visual-review-authentication-report/reauthentication.json"
+          jq -cnS \
+            --argjson source_run_id "$SOURCE_RUN_ID" \
+            --argjson source_run_attempt "$SOURCE_RUN_ATTEMPT" \
+            --arg tested_sha "$TESTED_SHA" \
+            '{schema_version:1,advisory:true,status:"authentication",
+              retain_queue:true,owner_action_required:true,stage:"prepare",
+              source_run_id:$source_run_id,source_run_attempt:$source_run_attempt,
+              tested_sha:$tested_sha}' \
+            > "$RUNNER_TEMP/visual-review-authentication-report/publication.json"
+
+      - name: Upload the pre-credential authentication owner-action report
+        if: >-
+          failure() && steps.reauth_report_data.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ needs.select.outputs.report_name }}
+          path: ${{ runner.temp }}/visual-review-authentication-report/
+          if-no-files-found: error
+          compression-level: 9
+          retention-days: 30
+
+      - name: Build the current protected code-and-prompt handoff
+        id: build
+        if: steps.reauth.outputs.status == 'authenticated'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/visual/handoff.py \
+            --queue "$RUNNER_TEMP/visual-review-queue" \
+            --reviewer-implementation-sha "${{ steps.control.outputs.implementation_sha }}" \
+            --client scripts/visual/review_client.py \
+            --preflight scripts/visual/credential_preflight.py \
+            --sonnet-prompt scripts/visual/prompts/sonnet.md \
+            --fable-prompt scripts/visual/prompts/fable.md \
+            --output "$RUNNER_TEMP/visual-review-handoff" \
+            > "$RUNNER_TEMP/visual-handoff.json"
+          jq -e \
+            --argjson source_run_id "${{ needs.select.outputs.source_run_id }}" \
+            --argjson source_run_attempt "${{ needs.select.outputs.source_run_attempt }}" \
+            --arg reviewer "${{ steps.control.outputs.implementation_sha }}" \
+            --arg tested "${{ needs.select.outputs.tested_sha }}" '
+              .schema_version == 1 and .source_run_id == $source_run_id and
+              .source_run_attempt == $source_run_attempt and .tested_sha == $tested and
+              .reviewer_implementation_sha == $reviewer and
+              (.manifest_sha256 | test("^[0-9a-f]{64}$")) and
+              (.source_head_sha | test("^[0-9a-f]{40}$")) and
+              (.reference_sha | test("^[0-9a-f]{40}$")) and .pair_count > 0
+            ' "$RUNNER_TEMP/visual-handoff.json" >/dev/null
+          for field in manifest_sha256 reference_sha source_head_sha tested_sha; do
+            printf '%s=%s\n' "$field" "$(jq -er --arg field "$field" '.[$field]' \
+              "$RUNNER_TEMP/visual-handoff.json")" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Upload the single-use exact handoff
+        id: handoff
+        if: steps.reauth.outputs.status == 'authenticated'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ needs.select.outputs.handoff_name }}
+          path: ${{ runner.temp }}/visual-review-handoff/
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 1
+
+  admit:
+    name: Post-approval reauthenticate on a non-credential runner
+    needs: [select, attempt, prepare]
+    if: >-
+      needs.prepare.result == 'success' &&
+      needs.prepare.outputs.reauth_status == 'authenticated' &&
+      needs.prepare.outputs.artifact_id != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: visual-review
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      artifact_digest: ${{ steps.handoff.outputs.artifact-digest }}
+      artifact_id: ${{ steps.handoff.outputs.artifact-id }}
+      artifact_name: ${{ steps.identity.outputs.name }}
+      status: ${{ steps.reauth.outputs.status }}
+    steps:
+      - name: Check out current protected reauthentication code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: master
+          persist-credentials: false
+
+      - name: Install Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install the hash-locked decoder without an AI credential
+        run: >-
+          python3 -m pip install --disable-pip-version-check
+          --only-binary=:all: --require-hashes
+          --requirement scripts/visual/requirements.txt
+
+      - name: Download the exact prepared handoff
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.prepare.outputs.artifact_id }}
+          path: ${{ runner.temp }}/visual-review-admission-handoff
+          merge-multiple: true
+          digest-mismatch: error
+
+      - name: Reauthenticate source, tested tree, graph, and baseline after approval
+        id: reauth
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PREPARED_IMPLEMENTATION_SHA: ${{ needs.prepare.outputs.implementation_sha }}
+          QUEUE_ARTIFACT_DIGEST: ${{ needs.select.outputs.artifact_digest }}
+          QUEUE_ARTIFACT_ID: ${{ needs.select.outputs.artifact_id }}
+          QUEUE_ARTIFACT_NAME: ${{ needs.select.outputs.artifact_name }}
+          QUEUE_OWNER_RUN_ATTEMPT: ${{ needs.select.outputs.producer_run_attempt }}
+          QUEUE_OWNER_RUN_ID: ${{ needs.select.outputs.producer_run_id }}
+        run: |
+          set -euo pipefail
+          implementation_sha="$(git rev-parse HEAD)"
+          current_master="$(gh api "repos/$GITHUB_REPOSITORY/branches/master" --jq .commit.sha)"
+          [[ "$implementation_sha" =~ ^[0-9a-f]{40}$ && "$current_master" =~ ^[0-9a-f]{40}$ ]]
+          if [[ "$GITHUB_REF" != refs/heads/master || "$GITHUB_SHA" != "$implementation_sha" ||
+                "$implementation_sha" != "$current_master" ||
+                "$implementation_sha" != "$PREPARED_IMPLEMENTATION_SHA" ]]; then
+            printf 'status=retryable_control_race\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          set +e
+          python3 scripts/visual/reauth.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --queue "$RUNNER_TEMP/visual-review-admission-handoff/queue" \
+            --queue-artifact-id "$QUEUE_ARTIFACT_ID" \
+            --queue-artifact-name "$QUEUE_ARTIFACT_NAME" \
+            --queue-artifact-digest "$QUEUE_ARTIFACT_DIGEST" \
+            --queue-owner-run-id "$QUEUE_OWNER_RUN_ID" \
+            --queue-owner-run-attempt "$QUEUE_OWNER_RUN_ATTEMPT" \
+            --implementation-sha "$implementation_sha" \
+            --result "$RUNNER_TEMP/visual-admission-reauth.json"
+          status=$?
+          set -e
+          if [[ "$status" == 3 ]]; then
+            jq -e '.schema_version == 1 and .status == "stale_source" and
+              .category == "stale_source"' "$RUNNER_TEMP/visual-admission-reauth.json" >/dev/null
+            printf 'status=stale_source\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$status" != 0 ]]; then
+            jq -e '.schema_version == 1 and .status == "error" and
+              .category == "authentication"' "$RUNNER_TEMP/visual-admission-reauth.json" >/dev/null
+            printf 'status=authentication\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          jq -e \
+            --arg implementation "$implementation_sha" \
+            --argjson source_run_id "${{ needs.select.outputs.source_run_id }}" \
+            --argjson source_run_attempt "${{ needs.select.outputs.source_run_attempt }}" \
+            --arg tested "${{ needs.prepare.outputs.tested_sha }}" \
+            --arg source_head "${{ needs.prepare.outputs.source_head_sha }}" \
+            --arg reference "${{ needs.prepare.outputs.reference_sha }}" '
+              .schema_version == 1 and .status == "authenticated" and .category == "" and
+              .implementation_sha == $implementation and
+              .source_run_id == $source_run_id and
+              .source_run_attempt == $source_run_attempt and
+              .tested_sha == $tested and .source_head_sha == $source_head and
+              .reference_sha == $reference and
+              (.tested_tree | test("^[0-9a-f]{40}$"))
+            ' "$RUNNER_TEMP/visual-admission-reauth.json" >/dev/null
+          printf 'status=authenticated\n' >> "$GITHUB_OUTPUT"
+
+      - name: Derive a single-use admitted handoff name
+        id: identity
+        if: steps.reauth.outputs.status == 'authenticated'
+        shell: bash
+        env:
+          SOURCE_RUN_ATTEMPT: ${{ needs.select.outputs.source_run_attempt }}
+          SOURCE_RUN_ID: ${{ needs.select.outputs.source_run_id }}
+          TESTED_SHA: ${{ needs.select.outputs.tested_sha }}
+        run: |
+          set -euo pipefail
+          name="visual-review-admitted-$SOURCE_RUN_ID-$SOURCE_RUN_ATTEMPT-$TESTED_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          [[ "$name" =~ ^visual-review-admitted-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{40}-[1-9][0-9]*-[1-9][0-9]*$ ]]
+          printf 'name=%s\n' "$name" >> "$GITHUB_OUTPUT"
+
+      - name: Upload only the newly admitted exact handoff
+        id: handoff
+        if: steps.reauth.outputs.status == 'authenticated'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.identity.outputs.name }}
+          path: ${{ runner.temp }}/visual-review-admission-handoff/
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 1
+
+  review:
+    name: Run the credential-bearing advisory Claude client
+    needs: [select, attempt, prepare, admit]
+    if: >-
+      needs.admit.result == 'success' &&
+      needs.admit.outputs.status == 'authenticated' &&
+      needs.admit.outputs.artifact_id != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: visual-review
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      pull-requests: read
+    env:
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+    outputs:
+      artifact_digest: ${{ steps.result.outputs.artifact-digest }}
+      artifact_id: ${{ steps.result.outputs.artifact-id }}
+      artifact_name: ${{ needs.select.outputs.result_name }}
+      client_exit: ${{ steps.invoke.outputs.client_exit }}
+    steps:
+      - name: Download only this run's exact handoff id
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.admit.outputs.artifact_id }}
+          path: ${{ runner.temp }}/visual-review-handoff
+          merge-multiple: true
+          digest-mismatch: error
+
+      - name: Validate the protected client before exposing OIDC
+        shell: bash
+        env:
+          ACTION_ARTIFACT_DIGEST: ${{ needs.admit.outputs.artifact_digest }}
+          HANDOFF_MANIFEST_SHA256: ${{ needs.prepare.outputs.manifest_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$ACTION_ARTIFACT_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$HANDOFF_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$(sha256sum "$RUNNER_TEMP/visual-review-handoff/handoff.json" | cut -d ' ' -f 1)" == \
+            "$HANDOFF_MANIFEST_SHA256" ]]
+          client_sha="$(jq -er '.client_sha256 | select(test("^[0-9a-f]{64}$"))' \
+            "$RUNNER_TEMP/visual-review-handoff/handoff.json")"
+          preflight_sha="$(jq -er '.preflight_sha256 | select(test("^[0-9a-f]{64}$"))' \
+            "$RUNNER_TEMP/visual-review-handoff/handoff.json")"
+          [[ "$(sha256sum "$RUNNER_TEMP/visual-review-handoff/review_client.py" | cut -d ' ' -f 1)" == \
+            "$client_sha" ]]
+          [[ "$(sha256sum "$RUNNER_TEMP/visual-review-handoff/credential_preflight.py" | cut -d ' ' -f 1)" == \
+            "$preflight_sha" ]]
+          env -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+            -u ACTIONS_RUNTIME_TOKEN -u ACTIONS_CACHE_URL -u ACTIONS_RESULTS_URL \
+            python3 "$RUNNER_TEMP/visual-review-handoff/review_client.py" \
+              --handoff "$RUNNER_TEMP/visual-review-handoff" \
+              --expected-manifest-sha256 "$HANDOFF_MANIFEST_SHA256" \
+              --validate-only
+          chmod -R a-w "$RUNNER_TEMP/visual-review-handoff"
+          [[ ! -e "$GITHUB_WORKSPACE/.git" ]]
+
+      - name: Mint renewable GitHub OIDC and invoke only the stdlib client
+        id: invoke
+        shell: bash
+        env:
+          ANTHROPIC_FEDERATION_RULE_ID: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          ANTHROPIC_ORGANIZATION_ID: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          ADMITTED_ARTIFACT_DIGEST: ${{ needs.admit.outputs.artifact_digest }}
+          ADMITTED_ARTIFACT_ID: ${{ needs.admit.outputs.artifact_id }}
+          ADMITTED_ARTIFACT_NAME: ${{ needs.admit.outputs.artifact_name }}
+          HANDOFF_MANIFEST_SHA256: ${{ needs.prepare.outputs.manifest_sha256 }}
+          PREFLIGHT_GITHUB_TOKEN: ${{ github.token }}
+          WORKFLOW_SHA: ${{ needs.prepare.outputs.implementation_sha }}
+        run: |
+          set -euo pipefail
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL
+          mkdir -p "$RUNNER_TEMP/visual-review-result" "$RUNNER_TEMP/visual-review-oidc"
+          identity_file="$RUNNER_TEMP/visual-review-oidc/github.jwt"
+          refresh_failed="$RUNNER_TEMP/visual-review-oidc/refresh-failed"
+          all_identical="$(jq -er '
+            if .schema_version == 1 and .purpose == "advisory-semantic-ui-review" and
+              (.pairs | type == "array" and length > 0)
+            then ([.pairs[].triage.byte_identical] | all | tostring)
+            else error("invalid capsule identity") end
+          ' "$RUNNER_TEMP/visual-review-handoff/queue/capsule/visual-capsule.json")"
+          [[ "$all_identical" == true || "$all_identical" == false ]]
+
+          invoke_client() {
+            env -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+              -u PREFLIGHT_GITHUB_TOKEN -u GH_TOKEN -u GITHUB_TOKEN -u GITHUB_REPOSITORY \
+              -u GITHUB_EVENT_PATH \
+              python3 "$RUNNER_TEMP/visual-review-handoff/review_client.py" \
+              --handoff "$RUNNER_TEMP/visual-review-handoff" \
+              --expected-manifest-sha256 "$HANDOFF_MANIFEST_SHA256" \
+              --identity-token-file "$identity_file" \
+              --output "$RUNNER_TEMP/visual-review-result/review.json" \
+              --failure-output "$RUNNER_TEMP/visual-review-result/failure.json"
+          }
+
+          refresh_oidc() {
+            OIDC_DESTINATION="$identity_file" python3 - <<'PY'
+          import json
+          import os
+          import ssl
+          import stat
+          import sys
+          import tempfile
+          import urllib.parse
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          destination = Path(os.environ["OIDC_DESTINATION"])
+          base = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]
+          bearer = os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]
+          parsed = urllib.parse.urlsplit(base)
+          if (
+              parsed.scheme != "https"
+              or parsed.username is not None
+              or parsed.password is not None
+              or parsed.hostname is None
+              or not parsed.hostname.endswith(".actions.githubusercontent.com")
+              or parsed.port not in (None, 443)
+              or parsed.fragment
+              or not bearer
+              or any(ord(character) < 32 for character in bearer)
+          ):
+              raise SystemExit(40)
+          query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+          if any(key == "audience" for key, _value in query):
+              raise SystemExit(40)
+          query.append(("audience", "https://api.anthropic.com"))
+          url = urllib.parse.urlunsplit(parsed._replace(query=urllib.parse.urlencode(query)))
+          request = urllib.request.Request(
+              url,
+              headers={
+                  "Authorization": f"Bearer {bearer}",
+                  "Accept": "application/json",
+                  "User-Agent": "BlockPops-visual-review-oidc/1",
+              },
+          )
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+          try:
+              opener = urllib.request.build_opener(
+                  urllib.request.ProxyHandler({}),
+                  urllib.request.HTTPSHandler(context=ssl.create_default_context()),
+                  NoRedirect(),
+              )
+              with opener.open(request, timeout=30) as response:
+                  if response.status != 200:
+                      if response.status == 429:
+                          raise SystemExit(42)
+                      if response.status in (408, 425) or 500 <= response.status <= 599:
+                          raise SystemExit(43)
+                      raise SystemExit(41)
+                  payload = response.read(17 * 1024 + 1)
+          except urllib.error.HTTPError as error:
+              if error.code == 429:
+                  raise SystemExit(42) from None
+              if error.code in (408, 425) or 500 <= error.code <= 599:
+                  raise SystemExit(43) from None
+              raise SystemExit(41) from None
+          except (urllib.error.URLError, TimeoutError):
+              raise SystemExit(43) from None
+          if len(payload) > 17 * 1024:
+              raise SystemExit(43)
+          def reject_duplicates(pairs):
+              result = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise ValueError("duplicate JSON key")
+                  result[key] = value
+              return result
+          try:
+              value = json.loads(payload, object_pairs_hook=reject_duplicates)
+          except (UnicodeDecodeError, ValueError):
+              raise SystemExit(43) from None
+          token = value.get("value") if isinstance(value, dict) else None
+          try:
+              token_bytes = token.encode("ascii") if isinstance(token, str) else b""
+          except UnicodeEncodeError:
+              token_bytes = b""
+          parts = token.split(".") if isinstance(token, str) else []
+          if (
+              not token_bytes
+              or len(token_bytes) > 16 * 1024
+              or len(parts) != 3
+              or any(not part or not all(character.isalnum() or character in "-_" for character in part) for part in parts)
+          ):
+              raise SystemExit(43)
+          parent = destination.parent.resolve(strict=True)
+          metadata = parent.lstat()
+          if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+              raise SystemExit(40)
+          descriptor, temporary_name = tempfile.mkstemp(prefix=".github-jwt-", dir=parent)
+          try:
+              os.fchmod(descriptor, 0o600)
+              with os.fdopen(descriptor, "wb", closefd=True) as stream:
+                  stream.write(token_bytes + b"\n")
+                  stream.flush()
+                  os.fsync(stream.fileno())
+              os.replace(temporary_name, destination)
+              os.chmod(destination, 0o600)
+          finally:
+              try:
+                  os.unlink(temporary_name)
+              except FileNotFoundError:
+                  pass
+          PY
+          }
+
+          write_oidc_failure() {
+            case "$1" in
+              40)
+                category=invalid_configuration
+                transient=false
+                cooldown_seconds=0
+                ;;
+              41)
+                category=authentication
+                transient=false
+                cooldown_seconds=0
+                ;;
+              42)
+                category=rate_limited
+                transient=true
+                cooldown_seconds=1800
+                ;;
+              43)
+                category=transport
+                transient=true
+                cooldown_seconds=1800
+                ;;
+              *)
+                category=unknown
+                transient=false
+                cooldown_seconds=0
+                ;;
+            esac
+            jq -cnS --arg category "$category" \
+              --argjson transient "$transient" \
+              --argjson cooldown_seconds "$cooldown_seconds" \
+              '{schema_version:1,advisory:true,complete:false,
+                category:$category,stage:"authentication",transient:$transient,
+                cooldown_seconds:$cooldown_seconds,attempts:0}' \
+              > "$RUNNER_TEMP/visual-review-result/failure.json"
+          }
+
+          # This is deliberately the final operation before OIDC mint/provider use.  It
+          # rechecks the current PR/delivery, tested tree, baseline, workflow SHA, and exact
+          # admitted artifact without importing a decoder or repository module.
+          preflight_status=0
+          env -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+            python3 "$RUNNER_TEMP/visual-review-handoff/credential_preflight.py" \
+              --repository "$GITHUB_REPOSITORY" \
+              --handoff "$RUNNER_TEMP/visual-review-handoff" \
+              --manifest-sha256 "$HANDOFF_MANIFEST_SHA256" \
+              --workflow-sha "$WORKFLOW_SHA" \
+              --artifact-id "$ADMITTED_ARTIFACT_ID" \
+              --artifact-name "$ADMITTED_ARTIFACT_NAME" \
+              --artifact-digest "$ADMITTED_ARTIFACT_DIGEST" \
+              --owner-run-id "$GITHUB_RUN_ID" \
+              --owner-run-attempt "$GITHUB_RUN_ATTEMPT" || preflight_status=$?
+          unset PREFLIGHT_GITHUB_TOKEN GH_TOKEN GITHUB_TOKEN
+          if [[ "$preflight_status" == 0 ]]; then
+            fresh_status=authenticated
+          elif [[ "$preflight_status" == 3 ]]; then
+            fresh_status=stale_source
+            jq -cnS '{schema_version:1,advisory:true,complete:false,
+              category:"stale_source",stage:"validation",transient:false,
+              cooldown_seconds:0,attempts:0}' \
+              > "$RUNNER_TEMP/visual-review-result/failure.json"
+          elif [[ "$preflight_status" == 4 ]]; then
+            fresh_status=retryable_control_race
+            jq -cnS '{schema_version:1,advisory:true,complete:false,
+              category:"transport",stage:"validation",transient:true,
+              cooldown_seconds:1800,attempts:0}' \
+              > "$RUNNER_TEMP/visual-review-result/failure.json"
+          else
+            fresh_status=authentication
+            jq -cnS '{schema_version:1,advisory:true,complete:false,
+              category:"authentication",stage:"validation",transient:false,
+              cooldown_seconds:0,attempts:0}' \
+              > "$RUNNER_TEMP/visual-review-result/failure.json"
+          fi
+
+          if [[ "$fresh_status" != authenticated ]]; then
+            [[ -s "$RUNNER_TEMP/visual-review-result/failure.json" ]]
+            client_status=2
+          elif [[ "$all_identical" == true ]]; then
+            : > "$identity_file"
+            chmod 0600 "$identity_file"
+            set +e
+            invoke_client
+            client_status=$?
+            set -e
+            rm -f -- "$identity_file"
+          else
+            if [[ -z "$ACTIONS_ID_TOKEN_REQUEST_URL" || -z "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]]; then
+              jq -cnS '{schema_version:1,advisory:true,complete:false,
+                category:"invalid_configuration",stage:"authentication",transient:false,
+                cooldown_seconds:0,attempts:0}' \
+                > "$RUNNER_TEMP/visual-review-result/failure.json"
+              client_status=2
+            else
+              oidc_status=0
+              refresh_oidc || oidc_status=$?
+              if [[ "$oidc_status" != 0 ]]; then
+                write_oidc_failure "$oidc_status"
+                client_status=2
+              else
+                invoke_client &
+                client_pid=$!
+                (
+                  for _refresh in {1..12}; do
+                    sleep 180
+                    kill -0 "$client_pid" 2>/dev/null || exit 0
+                    oidc_status=0
+                    refresh_oidc || oidc_status=$?
+                    if [[ "$oidc_status" != 0 ]]; then
+                      printf '%s\n' "$oidc_status" > "$refresh_failed"
+                      kill "$client_pid" 2>/dev/null || true
+                      exit 1
+                    fi
+                  done
+                  if kill -0 "$client_pid" 2>/dev/null; then
+                    printf '43\n' > "$refresh_failed"
+                    kill "$client_pid" 2>/dev/null || true
+                    exit 1
+                  fi
+                ) &
+                refresher_pid=$!
+                cleanup() {
+                  kill "$refresher_pid" 2>/dev/null || true
+                  wait "$refresher_pid" 2>/dev/null || true
+                  rm -f -- "$identity_file"
+                }
+                trap cleanup EXIT INT TERM
+                set +e
+                wait "$client_pid"
+                client_status=$?
+                set -e
+                cleanup
+                trap - EXIT INT TERM
+              fi
+            fi
+          fi
+          if [[ -e "$refresh_failed" ]]; then
+            client_status=2
+            rm -f -- "$RUNNER_TEMP/visual-review-result/review.json" \
+              "$RUNNER_TEMP/visual-review-result/failure.json"
+            oidc_status="$(tr -d '\r\n' < "$refresh_failed")"
+            write_oidc_failure "$oidc_status"
+          fi
+          if [[ "$client_status" == 0 ]]; then
+            [[ -s "$RUNNER_TEMP/visual-review-result/review.json" ]]
+            [[ ! -e "$RUNNER_TEMP/visual-review-result/failure.json" ]]
+          else
+            [[ ! -e "$RUNNER_TEMP/visual-review-result/review.json" ]]
+            [[ -s "$RUNNER_TEMP/visual-review-result/failure.json" ]]
+          fi
+          mapfile -t result_inventory < <(find "$RUNNER_TEMP/visual-review-result" \
+            -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort)
+          [[ "${#result_inventory[@]}" == 1 ]]
+          [[ "${result_inventory[0]}" == review.json || "${result_inventory[0]}" == failure.json ]]
+          result_path="$RUNNER_TEMP/visual-review-result/${result_inventory[0]}"
+          [[ -f "$result_path" && ! -L "$result_path" ]]
+          result_size="$(stat -c '%s' "$result_path")"
+          [[ "$result_size" =~ ^[1-9][0-9]*$ && "$result_size" -le 1048576 ]]
+          printf 'client_exit=%s\n' "$client_status" >> "$GITHUB_OUTPUT"
+
+      - name: Upload only the bounded normalized result or failure marker
+        id: result
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ needs.select.outputs.result_name }}
+          path: ${{ runner.temp }}/visual-review-result/
+          if-no-files-found: error
+          compression-level: 9
+          retention-days: 1
+
+      - name: Preserve failure state after the sanitized artifact exists
+        if: steps.invoke.outputs.client_exit != '0'
+        shell: bash
+        run: exit 2
+
+  publish:
+    name: Freshly reauthenticate and normalize advisory output
+    needs: [select, attempt, prepare, review]
+    if: >-
+      always() && needs.select.outputs.eligible == 'true' &&
+      needs.prepare.outputs.artifact_id != '' && needs.review.outputs.artifact_id != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      cooldown_artifact_id: ${{ steps.cooldown.outputs.artifact-id }}
+      outcome: ${{ steps.finalize.outputs.outcome || steps.reauth.outputs.status }}
+      report_artifact_id: >-
+        ${{ steps.report.outputs.artifact-id || steps.reauth_report.outputs.artifact-id }}
+      report_artifact_digest: >-
+        ${{ steps.report.outputs.artifact-digest || steps.reauth_report.outputs.artifact-digest }}
+      report_artifact_name: ${{ needs.select.outputs.report_name }}
+      reference_sha: ${{ steps.reauth.outputs.reference_sha }}
+      source_head_sha: ${{ steps.reauth.outputs.source_head_sha }}
+      tested_sha: ${{ steps.reauth.outputs.tested_sha }}
+    steps:
+      - name: Check out a new copy of current protected publication code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: master
+          persist-credentials: false
+
+      - name: Install Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install the hash-locked PNG decoder
+        run: >-
+          python3 -m pip install --disable-pip-version-check
+          --only-binary=:all: --require-hashes
+          --requirement scripts/visual/requirements.txt
+
+      - name: Download this run's exact handoff id into an isolated root
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.prepare.outputs.artifact_id }}
+          path: ${{ runner.temp }}/visual-review-publication/handoff
+          merge-multiple: true
+          digest-mismatch: error
+
+      - name: Download this run's exact sanitized result id into a separate root
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.review.outputs.artifact_id }}
+          path: ${{ runner.temp }}/visual-review-publication/result
+          merge-multiple: true
+          digest-mismatch: error
+
+      - name: Reauthenticate mutable identities immediately before publication
+        id: reauth
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          QUEUE_ARTIFACT_DIGEST: ${{ needs.select.outputs.artifact_digest }}
+          QUEUE_ARTIFACT_ID: ${{ needs.select.outputs.artifact_id }}
+          QUEUE_ARTIFACT_NAME: ${{ needs.select.outputs.artifact_name }}
+          QUEUE_OWNER_RUN_ATTEMPT: ${{ needs.select.outputs.producer_run_attempt }}
+          QUEUE_OWNER_RUN_ID: ${{ needs.select.outputs.producer_run_id }}
+        run: |
+          set -euo pipefail
+          printf 'status=authentication\n' >> "$GITHUB_OUTPUT"
+          implementation_sha="$(git rev-parse HEAD)"
+          [[ "$implementation_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$implementation_sha" == "$(gh api "repos/$GITHUB_REPOSITORY/branches/master" --jq .commit.sha)" ]]
+          set +e
+          python3 scripts/visual/reauth.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --queue "$RUNNER_TEMP/visual-review-publication/handoff/queue" \
+            --queue-artifact-id "$QUEUE_ARTIFACT_ID" \
+            --queue-artifact-name "$QUEUE_ARTIFACT_NAME" \
+            --queue-artifact-digest "$QUEUE_ARTIFACT_DIGEST" \
+            --queue-owner-run-id "$QUEUE_OWNER_RUN_ID" \
+            --queue-owner-run-attempt "$QUEUE_OWNER_RUN_ATTEMPT" \
+            --implementation-sha "$implementation_sha" \
+            --result "$RUNNER_TEMP/publish-reauth.json"
+          status=$?
+          set -e
+          if [[ "$status" == 3 ]]; then
+            jq -e '.schema_version == 1 and .status == "stale_source" and
+              .category == "stale_source"' "$RUNNER_TEMP/publish-reauth.json" >/dev/null
+            printf 'status=stale_source\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$status" != 0 ]]; then
+            jq -e '.schema_version == 1 and .status == "error" and
+              .category == "authentication"' "$RUNNER_TEMP/publish-reauth.json" >/dev/null
+            exit 2
+          fi
+          jq -e \
+            --argjson source_run_id "${{ needs.select.outputs.source_run_id }}" \
+            --argjson source_run_attempt "${{ needs.select.outputs.source_run_attempt }}" \
+            --arg tested "${{ needs.select.outputs.tested_sha }}" '
+              .schema_version == 1 and .status == "authenticated" and .category == "" and
+              .source_run_id == $source_run_id and
+              .source_run_attempt == $source_run_attempt and .tested_sha == $tested and
+              (.source_head_sha | test("^[0-9a-f]{40}$")) and
+              (.reference_sha | test("^[0-9a-f]{40}$"))
+            ' "$RUNNER_TEMP/publish-reauth.json" >/dev/null
+          printf 'status=authenticated\n' >> "$GITHUB_OUTPUT"
+          for field in source_head_sha reference_sha tested_sha; do
+            printf '%s=%s\n' "$field" "$(jq -er --arg field "$field" '.[$field]' \
+              "$RUNNER_TEMP/publish-reauth.json")" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Prepare a sanitized owner-action report for publication authentication failure
+        id: publish_reauth_report_data
+        if: failure() && steps.reauth.outputs.status == 'authentication'
+        shell: bash
+        env:
+          SOURCE_RUN_ATTEMPT: ${{ needs.select.outputs.source_run_attempt }}
+          SOURCE_RUN_ID: ${{ needs.select.outputs.source_run_id }}
+          TESTED_SHA: ${{ needs.select.outputs.tested_sha }}
+        run: |
+          set -euo pipefail
+          jq -e 'keys == ["category","schema_version","status"] and
+            .schema_version == 1 and .status == "error" and
+            .category == "authentication"' "$RUNNER_TEMP/publish-reauth.json" >/dev/null
+          mkdir -p "$RUNNER_TEMP/visual-review-authentication-report"
+          cp "$RUNNER_TEMP/publish-reauth.json" \
+            "$RUNNER_TEMP/visual-review-authentication-report/reauthentication.json"
+          jq -cnS \
+            --argjson source_run_id "$SOURCE_RUN_ID" \
+            --argjson source_run_attempt "$SOURCE_RUN_ATTEMPT" \
+            --arg tested_sha "$TESTED_SHA" \
+            '{schema_version:1,advisory:true,status:"authentication",
+              retain_queue:true,owner_action_required:true,stage:"publish",
+              source_run_id:$source_run_id,source_run_attempt:$source_run_attempt,
+              tested_sha:$tested_sha}' \
+            > "$RUNNER_TEMP/visual-review-authentication-report/publication.json"
+
+      - name: Upload the publication authentication owner-action report
+        id: reauth_report
+        if: >-
+          failure() && steps.publish_reauth_report_data.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ needs.select.outputs.report_name }}
+          path: ${{ runner.temp }}/visual-review-authentication-report/
+          if-no-files-found: error
+          compression-level: 9
+          retention-days: 30
+
+      - name: Normalize success or deterministically classify a sanitized failure
+        id: publication
+        if: steps.reauth.outputs.status == 'authenticated'
+        shell: bash
+        env:
+          HANDOFF_MANIFEST_SHA256: ${{ needs.prepare.outputs.manifest_sha256 }}
+          REFERENCE_SHA: ${{ steps.reauth.outputs.reference_sha }}
+          NEXT_ORDINAL: ${{ needs.select.outputs.next_attempt_ordinal }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.select.outputs.source_run_attempt }}
+          SOURCE_HEAD_SHA: ${{ steps.reauth.outputs.source_head_sha }}
+          SOURCE_RUN_ID: ${{ needs.select.outputs.source_run_id }}
+          TESTED_SHA: ${{ steps.reauth.outputs.tested_sha }}
+        run: |
+          set -euo pipefail
+          review="$RUNNER_TEMP/visual-review-publication/result/review.json"
+          failure="$RUNNER_TEMP/visual-review-publication/result/failure.json"
+          [[ -e "$review" || -e "$failure" ]]
+          [[ ! -e "$review" || ! -e "$failure" ]]
+          if [[ -e "$review" ]]; then
+            mkdir -p "$RUNNER_TEMP/visual-review-report"
+            python3 scripts/visual/normalize.py \
+              --handoff "$RUNNER_TEMP/visual-review-publication/handoff" \
+              --expected-handoff-sha256 "$HANDOFF_MANIFEST_SHA256" \
+              --raw-output "$review" \
+              --normalized-output "$RUNNER_TEMP/visual-review-report/review.json" \
+              --markdown-output "$RUNNER_TEMP/visual-review-report/review.md" \
+              --provenance-output "$RUNNER_TEMP/visual-review-report/provenance.json" \
+              --repository "$GITHUB_REPOSITORY" \
+              --source-run-id "$SOURCE_RUN_ID" \
+              --source-run-attempt "${{ needs.select.outputs.source_run_attempt }}" \
+              --source-head-sha "$SOURCE_HEAD_SHA" \
+              --tested-sha "$TESTED_SHA" \
+              --reference-sha "$REFERENCE_SHA" \
+              > "$RUNNER_TEMP/visual-review-report/publication.json"
+            printf 'outcome=reviewed\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          jq -e 'keys == ["advisory","attempts","category","complete",
+              "cooldown_seconds","schema_version","stage","transient"] and
+            .schema_version == 1 and .advisory == true and .complete == false and
+            (.category | type == "string") and (.stage | type == "string") and
+            (.transient | type == "boolean") and
+            (.cooldown_seconds | type == "number" and . >= 0 and . <= 21600) and
+            (.attempts | type == "number" and . >= 0 and . <= 14)' "$failure" >/dev/null
+          category="$(jq -er .category "$failure")"
+          if [[ "$category" == stale_source ]]; then
+            printf 'outcome=stale_source\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          case "$category" in
+            invalid_handoff) code=capsule_invalid ;;
+            invalid_configuration) code=credential_missing ;;
+            authentication) code=provider_authentication ;;
+            rate_limited) code=provider_rate_limit ;;
+            provider_unavailable) code=provider_overloaded ;;
+            transport) code=network_timeout ;;
+            deadline) code=provider_timeout ;;
+            provider_response|output) code=provider_error ;;
+            *) code=unknown ;;
+          esac
+          python3 scripts/ci/transient_failure.py --code "$code" \
+            > "$RUNNER_TEMP/failure-classification.json"
+          jq -e '.schema_version == 1 and (.retain_queue | type == "boolean") and
+            (.retryable | type == "boolean") and (.category | type == "string") and
+            (.code | type == "string")' "$RUNNER_TEMP/failure-classification.json" >/dev/null
+          retain="$(jq -er .retain_queue "$RUNNER_TEMP/failure-classification.json")"
+          classified="$(jq -er .category "$RUNNER_TEMP/failure-classification.json")"
+          if [[ "$retain" == false ]]; then
+            outcome=terminal_input_rejected
+          elif [[ "$category" == invalid_configuration ]]; then
+            outcome=configuration
+          elif [[ "$category" == authentication ]]; then
+            outcome=authentication
+          elif [[ "$classified" == external_capacity ]]; then
+            outcome=external_capacity
+          elif [[ "$classified" == transient_network ]]; then
+            outcome=transient_network
+          elif [[ "$category" == provider_response || "$category" == output ]]; then
+            outcome=provider
+          else
+            outcome=unknown
+          fi
+          if [[ "$outcome" == terminal_input_rejected || "$outcome" == authentication ||
+                "$outcome" == configuration || "$outcome" == provider || "$outcome" == unknown ]]; then
+            mkdir -p "$RUNNER_TEMP/visual-review-report"
+            cp "$failure" "$RUNNER_TEMP/visual-review-report/failure.json"
+            cp "$RUNNER_TEMP/failure-classification.json" \
+              "$RUNNER_TEMP/visual-review-report/classification.json"
+            owner_action=false
+            retain_queue=false
+            if [[ "$outcome" != terminal_input_rejected ]]; then
+              owner_action=true
+              retain_queue=true
+            fi
+            jq -cnS --arg outcome "$outcome" \
+              --argjson source_run_id "$SOURCE_RUN_ID" \
+              --argjson source_run_attempt "$SOURCE_RUN_ATTEMPT" \
+              --arg tested_sha "$TESTED_SHA" \
+              --argjson owner_action_required "$owner_action" \
+              --argjson retain_queue "$retain_queue" \
+              '{schema_version:1,advisory:true,status:$outcome,
+                source_run_id:$source_run_id,source_run_attempt:$source_run_attempt,
+                tested_sha:$tested_sha,retain_queue:$retain_queue,
+                owner_action_required:$owner_action_required}' \
+              > "$RUNNER_TEMP/visual-review-report/publication.json"
+          elif [[ "$outcome" == external_capacity || "$outcome" == transient_network ]]; then
+            [[ "$NEXT_ORDINAL" =~ ^[12]$ ]]
+            cooldown_seconds="$(jq -er '.cooldown_seconds | floor' "$failure")"
+            [[ "$cooldown_seconds" =~ ^[0-9]+$ && "$cooldown_seconds" -le 21600 ]]
+            if [[ "$cooldown_seconds" -lt 1800 ]]; then
+              cooldown_seconds=1800
+            fi
+            cooldown_name="visual-review-cooldown-$SOURCE_RUN_ID-$SOURCE_RUN_ATTEMPT-$TESTED_SHA-$NEXT_ORDINAL-$cooldown_seconds"
+            [[ "$cooldown_name" =~ ^visual-review-cooldown-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{40}-[12]-([1-9][0-9]{3,4})$ ]]
+            mkdir -p "$RUNNER_TEMP/visual-review-cooldown"
+            jq -cnS --arg outcome "$outcome" \
+              --argjson source_run_id "$SOURCE_RUN_ID" \
+              --argjson source_run_attempt "$SOURCE_RUN_ATTEMPT" \
+              --arg tested_sha "$TESTED_SHA" \
+              --argjson ordinal "$NEXT_ORDINAL" \
+              --argjson cooldown_seconds "$cooldown_seconds" \
+              '{schema_version:1,advisory:true,status:$outcome,retain_queue:true,
+                source_run_id:$source_run_id,source_run_attempt:$source_run_attempt,
+                tested_sha:$tested_sha,ordinal:$ordinal,cooldown_seconds:$cooldown_seconds}' \
+              > "$RUNNER_TEMP/visual-review-cooldown/cooldown.json"
+            printf 'cooldown_name=%s\n' "$cooldown_name" >> "$GITHUB_OUTPUT"
+            printf 'cooldown_seconds=%s\n' "$cooldown_seconds" >> "$GITHUB_OUTPUT"
+          fi
+          printf 'outcome=%s\n' "$outcome" >> "$GITHUB_OUTPUT"
+
+      - name: Upload authenticated dynamic cooldown state for retryable failures
+        id: cooldown
+        if: >-
+          steps.publication.outputs.outcome == 'external_capacity' ||
+          steps.publication.outputs.outcome == 'transient_network'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.publication.outputs.cooldown_name }}
+          path: ${{ runner.temp }}/visual-review-cooldown/
+          if-no-files-found: error
+          compression-level: 9
+          retention-days: 7
+
+      - name: Upload reviewed, terminal, or owner-action reports
+        id: report
+        if: >-
+          steps.publication.outputs.outcome == 'reviewed' ||
+          steps.publication.outputs.outcome == 'terminal_input_rejected' ||
+          steps.publication.outputs.outcome == 'authentication' ||
+          steps.publication.outputs.outcome == 'configuration' ||
+          steps.publication.outputs.outcome == 'provider' ||
+          steps.publication.outputs.outcome == 'unknown'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ needs.select.outputs.report_name }}
+          path: ${{ runner.temp }}/visual-review-report/
+          if-no-files-found: error
+          compression-level: 9
+          retention-days: 30
+
+      - name: Expose an outcome only after required publication succeeds
+        id: finalize
+        if: always() && steps.reauth.outputs.status == 'authenticated'
+        shell: bash
+        env:
+          CLASSIFIED_OUTCOME: ${{ steps.publication.outputs.outcome }}
+          COOLDOWN_ARTIFACT_ID: ${{ steps.cooldown.outputs.artifact-id }}
+          REPORT_ARTIFACT_ID: ${{ steps.report.outputs.artifact-id }}
+        run: |
+          set -euo pipefail
+          [[ -n "$CLASSIFIED_OUTCOME" ]]
+          case "$CLASSIFIED_OUTCOME" in
+            stale_source)
+              [[ -z "$REPORT_ARTIFACT_ID" && -z "$COOLDOWN_ARTIFACT_ID" ]]
+              ;;
+            reviewed|terminal_input_rejected|authentication|configuration|provider|unknown)
+              [[ "$REPORT_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+              ;;
+            external_capacity|transient_network)
+              [[ "$COOLDOWN_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+              ;;
+            *) exit 2 ;;
+          esac
+          printf 'outcome=%s\n' "$CLASSIFIED_OUTCOME" >> "$GITHUB_OUTPUT"
+
+  comment:
+    name: Publish only independently validated advisory Markdown
+    needs: [select, prepare, publish]
+    if: >-
+      always() && needs.publish.outputs.outcome == 'reviewed' &&
+      needs.publish.outputs.report_artifact_id != ''
+    continue-on-error: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Download only this run's exact normalized report id
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.publish.outputs.report_artifact_id }}
+          path: ${{ runner.temp }}/visual-review-comment/report
+          merge-multiple: true
+          digest-mismatch: error
+
+      - name: Independently validate JSON inventory and reconstruct safe Markdown
+        id: validate
+        shell: bash
+        env:
+          IMPLEMENTATION_SHA: ${{ needs.prepare.outputs.implementation_sha }}
+          REFERENCE_SHA: ${{ needs.publish.outputs.reference_sha }}
+          REPORT_ARTIFACT_DIGEST: ${{ needs.publish.outputs.report_artifact_digest }}
+          REPORT_ARTIFACT_ID: ${{ needs.publish.outputs.report_artifact_id }}
+          REPORT_ARTIFACT_NAME: ${{ needs.publish.outputs.report_artifact_name }}
+          SOURCE_HEAD_SHA: ${{ needs.publish.outputs.source_head_sha }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.select.outputs.source_run_attempt }}
+          SOURCE_RUN_ID: ${{ needs.select.outputs.source_run_id }}
+          TESTED_SHA: ${{ needs.publish.outputs.tested_sha }}
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/visual-review-comment/validated"
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import stat
+          import unicodedata
+          from pathlib import Path
+
+          SHA1 = re.compile(r"^[0-9a-f]{40}$")
+          SHA256 = re.compile(r"^[0-9a-f]{64}$")
+          REQUEST_ID = re.compile(r"^req_[A-Za-z0-9_-]{1,160}$")
+          root = Path(os.environ["RUNNER_TEMP"]) / "visual-review-comment/report"
+          validated = Path(os.environ["RUNNER_TEMP"]) / "visual-review-comment/validated"
+          expected_files = {
+              "publication.json": 64 * 1024,
+              "provenance.json": 4 * 1024 * 1024,
+              "review.json": 1024 * 1024,
+              "review.md": 512 * 1024,
+          }
+
+          def fail(message):
+              raise SystemExit(f"visual comment validation failed: {message}")
+
+          def unique(pairs):
+              result = {}
+              for key, value in pairs:
+                  if key in result:
+                      fail(f"duplicate JSON key {key!r}")
+                  result[key] = value
+              return result
+
+          def reject_constant(value):
+              fail(f"non-finite JSON constant {value!r}")
+
+          def exact_keys(value, keys, label):
+              if not isinstance(value, dict) or set(value) != set(keys):
+                  fail(f"{label} has an unknown schema")
+              return value
+
+          def integer(value, label, maximum):
+              if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= maximum:
+                  fail(f"{label} is outside its integer bound")
+              return value
+
+          def positive(value, label):
+              if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                  fail(f"{label} is not a positive integer")
+              return value
+
+          def text(value, label, maximum):
+              if (
+                  not isinstance(value, str)
+                  or not value
+                  or value != value.strip()
+                  or len(value) > maximum
+                  or any(
+                      ord(character) < 32
+                      or ord(character) == 127
+                      or 0xD800 <= ord(character) <= 0xDFFF
+                      or unicodedata.category(character) == "Cf"
+                      for character in value
+                  )
+              ):
+                  fail(f"{label} is not bounded printable text")
+              return value
+
+          def read_regular(name, maximum):
+              path = root / name
+              before = path.lstat()
+              if not stat.S_ISREG(before.st_mode) or stat.S_ISLNK(before.st_mode):
+                  fail(f"{name} is not a regular file")
+              if not 1 <= before.st_size <= maximum:
+                  fail(f"{name} exceeds its byte bound")
+              flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+              descriptor = os.open(path, flags)
+              try:
+                  opened = os.fstat(descriptor)
+                  if (
+                      not stat.S_ISREG(opened.st_mode)
+                      or (opened.st_dev, opened.st_ino, opened.st_size)
+                      != (before.st_dev, before.st_ino, before.st_size)
+                  ):
+                      fail(f"{name} changed while opening")
+                  payload = b""
+                  while len(payload) <= maximum:
+                      chunk = os.read(descriptor, min(65536, maximum + 1 - len(payload)))
+                      if not chunk:
+                          break
+                      payload += chunk
+                  after = os.fstat(descriptor)
+                  if (after.st_dev, after.st_ino, after.st_size) != (
+                      opened.st_dev,
+                      opened.st_ino,
+                      opened.st_size,
+                  ):
+                      fail(f"{name} changed while reading")
+              finally:
+                  os.close(descriptor)
+              if not 1 <= len(payload) <= maximum:
+                  fail(f"{name} changed size while reading")
+              return payload
+
+          def document(name, maximum):
+              raw = read_regular(name, maximum)
+              try:
+                  value = json.loads(
+                      raw.decode("utf-8"),
+                      object_pairs_hook=unique,
+                      parse_constant=reject_constant,
+                  )
+              except (UnicodeError, json.JSONDecodeError) as error:
+                  fail(f"{name} is not strict UTF-8 JSON: {error}")
+              canonical = json.dumps(
+                  value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+              ).encode("utf-8") + b"\n"
+              if raw != canonical:
+                  fail(f"{name} is not canonical JSON")
+              return value, raw
+
+          root_metadata = root.lstat()
+          if stat.S_ISLNK(root_metadata.st_mode) or not stat.S_ISDIR(root_metadata.st_mode):
+              fail("report root is not a real directory")
+          entries = list(root.iterdir())
+          if {entry.name for entry in entries} != set(expected_files):
+              fail("report inventory is not exactly the four bounded publication files")
+          if any(entry.is_dir() for entry in entries):
+              fail("report contains a directory")
+
+          publication, publication_raw = document("publication.json", expected_files["publication.json"])
+          provenance, provenance_raw = document("provenance.json", expected_files["provenance.json"])
+          review, review_raw = document("review.json", expected_files["review.json"])
+          markdown_raw = read_regular("review.md", expected_files["review.md"])
+
+          publication = exact_keys(
+              publication,
+              {
+                  "schema_version", "advisory", "source_run_id", "source_run_attempt",
+                  "source_head_sha", "tested_sha", "reference_sha", "verdicts",
+                  "semantic_regressions", "provenance_sha256",
+              },
+              "publication",
+          )
+          expected_source_id = positive(int(os.environ["SOURCE_RUN_ID"]), "expected source run id")
+          expected_source_attempt = positive(
+              int(os.environ["SOURCE_RUN_ATTEMPT"]), "expected source run attempt"
+          )
+          expected_source_head = os.environ["SOURCE_HEAD_SHA"]
+          expected_tested = os.environ["TESTED_SHA"]
+          expected_reference = os.environ["REFERENCE_SHA"]
+          expected_implementation = os.environ["IMPLEMENTATION_SHA"]
+          if any(SHA1.fullmatch(value) is None for value in (
+              expected_source_head, expected_tested, expected_reference, expected_implementation
+          )):
+              fail("workflow-projected commit identity is invalid")
+          if (
+              type(publication["schema_version"]) is not int
+              or publication["schema_version"] != 1
+              or publication["advisory"] is not True
+              or type(publication["source_run_id"]) is not int
+              or publication["source_run_id"] != expected_source_id
+              or type(publication["source_run_attempt"]) is not int
+              or publication["source_run_attempt"] != expected_source_attempt
+              or publication["source_head_sha"] != expected_source_head
+              or publication["tested_sha"] != expected_tested
+              or publication["reference_sha"] != expected_reference
+              or type(publication["verdicts"]) is not int
+              or not 1 <= publication["verdicts"] <= 10
+              or type(publication["semantic_regressions"]) is not int
+              or not 0 <= publication["semantic_regressions"] <= 10
+              or not isinstance(publication["provenance_sha256"], str)
+              or SHA256.fullmatch(publication["provenance_sha256"]) is None
+              or hashlib.sha256(provenance_raw).hexdigest() != publication["provenance_sha256"]
+          ):
+              fail("publication identity or provenance digest is stale")
+
+          provenance = exact_keys(
+              provenance,
+              {
+                  "schema_version", "purpose", "advisory", "handoff_manifest_sha256",
+                  "queue_manifest_sha256", "capsule_manifest_sha256",
+                  "normalized_review_sha256", "reviewer_implementation_sha",
+                  "contract_sha256", "canonical_reference", "candidate_source",
+                  "reference_source", "pairs",
+              },
+              "provenance",
+          )
+          for field in (
+              "handoff_manifest_sha256", "queue_manifest_sha256", "capsule_manifest_sha256",
+              "normalized_review_sha256", "contract_sha256",
+          ):
+              if not isinstance(provenance[field], str) or SHA256.fullmatch(provenance[field]) is None:
+                  fail(f"provenance {field} is invalid")
+          candidate = provenance["candidate_source"]
+          reference = provenance["reference_source"]
+          if not isinstance(candidate, dict) or not isinstance(reference, dict):
+              fail("provenance source records are not objects")
+          if (
+              type(provenance["schema_version"]) is not int
+              or provenance["schema_version"] != 1
+              or provenance["purpose"] != "authenticated-advisory-visual-review-provenance"
+              or provenance["advisory"] is not True
+              or provenance["reviewer_implementation_sha"] != expected_implementation
+              or provenance["normalized_review_sha256"] != hashlib.sha256(review_raw).hexdigest()
+              or candidate.get("repository") != os.environ["GITHUB_REPOSITORY"]
+              or candidate.get("run_id") != expected_source_id
+              or candidate.get("run_attempt") != expected_source_attempt
+              or candidate.get("source_head_commit") != expected_source_head
+              or candidate.get("tested_commit") != expected_tested
+              or reference.get("repository") != os.environ["GITHUB_REPOSITORY"]
+              or reference.get("source_head_branch") != "master"
+              or reference.get("source_head_commit") != expected_reference
+              or reference.get("tested_commit") != expected_reference
+          ):
+              fail("durable provenance is bound to another review identity")
+
+          pairs = provenance["pairs"]
+          if not isinstance(pairs, list) or not 1 <= len(pairs) <= 10:
+              fail("provenance pair inventory is empty or excessive")
+          pair_identities = []
+          for index, pair in enumerate(pairs):
+              if not isinstance(pair, dict):
+                  fail(f"provenance pair {index} is not an object")
+              label = text(pair.get("label"), f"pairs[{index}].label", 512)
+              capture_id = text(pair.get("capture_id"), f"pairs[{index}].capture_id", 160)
+              triage = pair.get("triage")
+              if not isinstance(triage, dict) or not isinstance(triage.get("byte_identical"), bool):
+                  fail(f"provenance pair {index} lacks byte identity")
+              pair_identities.append((label, capture_id, triage["byte_identical"]))
+          if len({identity[0] for identity in pair_identities}) != len(pair_identities):
+              fail("provenance repeats a pair label")
+
+          review = exact_keys(review, {"schema_version", "advisory", "telemetry", "verdicts"}, "review")
+          verdicts = review["verdicts"]
+          if (
+              review["schema_version"] != 2
+              or review["advisory"] is not True
+              or not isinstance(verdicts, list)
+              or len(verdicts) != len(pair_identities)
+              or publication["verdicts"] != len(verdicts)
+          ):
+              fail("review header or verdict count is invalid")
+          categories = {
+              "blur", "clipping", "layout", "missing-widget", "rendering", "state",
+              "text", "transparency", "unexpected-widget", "other",
+          }
+          routes = {"identical", "sonnet", "fable"}
+          defects = 0
+          for index, (verdict, pair_identity) in enumerate(zip(verdicts, pair_identities, strict=True)):
+              verdict = exact_keys(
+                  verdict,
+                  {"label", "capture_id", "route", "matches_expectation",
+                   "semantic_regression", "visible", "findings"},
+                  f"verdicts[{index}]",
+              )
+              label = text(verdict["label"], f"verdicts[{index}].label", 512)
+              capture_id = text(verdict["capture_id"], f"verdicts[{index}].capture_id", 160)
+              route = verdict["route"]
+              matches = verdict["matches_expectation"]
+              regression = verdict["semantic_regression"]
+              visible = text(verdict["visible"], f"verdicts[{index}].visible", 2048)
+              findings = verdict["findings"]
+              if (
+                  (label, capture_id) != pair_identity[:2]
+                  or route not in routes
+                  or not isinstance(matches, bool)
+                  or not isinstance(regression, bool)
+                  or matches == regression
+                  or not isinstance(findings, list)
+                  or len(findings) > 16
+              ):
+                  fail(f"verdicts[{index}] identity or decision is invalid")
+              normalized_findings = []
+              seen_findings = set()
+              for finding_index, finding in enumerate(findings):
+                  finding = exact_keys(
+                      finding, {"category", "severity", "detail"},
+                      f"verdicts[{index}].findings[{finding_index}]",
+                  )
+                  category = finding["category"]
+                  severity = finding["severity"]
+                  detail = text(
+                      finding["detail"],
+                      f"verdicts[{index}].findings[{finding_index}].detail",
+                      1024,
+                  )
+                  if category not in categories or severity not in {"note", "defect"}:
+                      fail(f"verdicts[{index}] has an unknown finding")
+                  identity = (category, severity, detail)
+                  if identity in seen_findings:
+                      fail(f"verdicts[{index}] repeats a finding")
+                  seen_findings.add(identity)
+                  normalized_findings.append(identity)
+              has_defect = any(item[1] == "defect" for item in normalized_findings)
+              if regression != has_defect:
+                  fail(f"verdicts[{index}] regression/finding identity is inconsistent")
+              if pair_identity[2]:
+                  if (
+                      route != "identical" or matches is not True or regression is not False
+                      or visible != "Candidate and canonical reference are byte-identical."
+                      or findings
+                  ):
+                      fail(f"verdicts[{index}] identical verdict is not deterministic")
+              elif route == "identical" or (route == "sonnet" and regression):
+                  fail(f"verdicts[{index}] route is inconsistent")
+              defects += int(regression)
+          if publication["semantic_regressions"] != defects:
+              fail("publication regression count differs from the review")
+
+          telemetry = exact_keys(
+              review["telemetry"],
+              {
+                  "provider", "auth_mode", "triage_model", "verification_model",
+                  "client_sha256", "sonnet_prompt_sha256", "fable_prompt_sha256",
+                  "pair_count", "identical_pairs", "triaged_pairs", "escalated_pairs",
+                  "sonnet_calls", "fable_calls", "provider_attempts", "retries",
+                  "sonnet_usage", "fable_usage", "reported_cost_upper_bound_micro_usd",
+                  "duration_ms", "request_ids",
+              },
+              "telemetry",
+          )
+          if (
+              telemetry["provider"] != "anthropic"
+              or telemetry["auth_mode"] != "github-oidc-wif"
+              or telemetry["triage_model"] != "claude-sonnet-5"
+              or telemetry["verification_model"] != "claude-fable-5"
+          ):
+              fail("telemetry provider/model identity is invalid")
+          for field in ("client_sha256", "sonnet_prompt_sha256", "fable_prompt_sha256"):
+              if not isinstance(telemetry[field], str) or SHA256.fullmatch(telemetry[field]) is None:
+                  fail(f"telemetry {field} is invalid")
+          for field, maximum in (
+              ("pair_count", 10), ("identical_pairs", 10), ("triaged_pairs", 10),
+              ("escalated_pairs", 10), ("sonnet_calls", 5), ("fable_calls", 5),
+              ("provider_attempts", 10), ("retries", 5),
+              ("reported_cost_upper_bound_micro_usd", 2**63 - 1),
+              ("duration_ms", 35 * 60 * 1000),
+          ):
+              integer(telemetry[field], f"telemetry.{field}", maximum)
+          if (
+              telemetry["pair_count"] != len(verdicts)
+              or telemetry["identical_pairs"] != sum(pair[2] for pair in pair_identities)
+              or telemetry["triaged_pairs"] != sum(not pair[2] for pair in pair_identities)
+              or telemetry["escalated_pairs"] != sum(verdict["route"] == "fable" for verdict in verdicts)
+              or telemetry["provider_attempts"]
+                 != telemetry["sonnet_calls"] + telemetry["fable_calls"] + telemetry["retries"]
+          ):
+              fail("telemetry counts are inconsistent")
+          usage_keys = {
+              "input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"
+          }
+          for usage_name in ("sonnet_usage", "fable_usage"):
+              usage = exact_keys(telemetry[usage_name], usage_keys, f"telemetry.{usage_name}")
+              for field in usage_keys:
+                  integer(usage[field], f"telemetry.{usage_name}.{field}", 100_000_000)
+          request_ids = telemetry["request_ids"]
+          calls = telemetry["sonnet_calls"] + telemetry["fable_calls"]
+          if (
+              not isinstance(request_ids, list)
+              or len(request_ids) != calls
+              or len(set(request_ids)) != len(request_ids)
+              or any(not isinstance(value, str) or REQUEST_ID.fullmatch(value) is None for value in request_ids)
+          ):
+              fail("telemetry request ids are invalid")
+
+          def markdown(value):
+              value = " ".join(str(value).split()).replace("&", "&amp;")
+              for character in ("\\", "`", "*", "_", "[", "]", "<", ">"):
+                  value = value.replace(character, "\\" + character)
+              for character, replacement in (("@", "&#64;"), ("#", "&#35;"), (":", "&#58;")):
+                  value = value.replace(character, replacement)
+              return value
+
+          defect_verdicts = [verdict for verdict in verdicts if verdict["semantic_regression"] is True]
+          route_counts = {route: sum(verdict["route"] == route for verdict in verdicts) for route in routes}
+          lines = [
+              "## Advisory visual review: regressions reported" if defect_verdicts
+              else "## Advisory visual review: clean",
+              "",
+              f"Reviewed {len(verdicts)} semantic frame pairs; {len(defect_verdicts)} advisory regression(s).",
+              f"Routes: {route_counts['identical']} byte-identical, "
+              f"{route_counts['sonnet']} Sonnet, {route_counts['fable']} Fable.",
+              f"Provider calls: {calls}; reported-usage cost upper bound: "
+              f"${telemetry['reported_cost_upper_bound_micro_usd'] / 1_000_000:.6f}.",
+          ]
+          for verdict in defect_verdicts:
+              lines.extend((
+                  "",
+                  f"**{markdown(verdict['label'])}** (route: {markdown(verdict['route'])})",
+                  f"- Seen: {markdown(verdict['visible'])}",
+              ))
+              for finding in verdict["findings"]:
+                  if finding["severity"] == "defect":
+                      lines.append(
+                          f"- {markdown(finding['category'])}: {markdown(finding['detail'])}"
+                      )
+          lines.extend((
+              "",
+              "This semantic AI review is advisory. Build and packaged E2E remain authoritative.",
+          ))
+          rendered = ("\n".join(lines) + "\n").encode("utf-8")
+          if rendered != markdown_raw:
+              fail("downloaded Markdown differs from the independent safe rendering")
+
+          marker = f"<!-- blockpops-visual-review:{expected_source_id}:{expected_tested} -->"
+          comment = marker.encode("ascii") + b"\n\n" + rendered
+          comment_path = validated / "comment.md"
+          comment_path.write_bytes(comment)
+          files = []
+          for name, maximum in sorted(expected_files.items()):
+              payload = {
+                  "publication.json": publication_raw,
+                  "provenance.json": provenance_raw,
+                  "review.json": review_raw,
+                  "review.md": markdown_raw,
+              }[name]
+              files.append({
+                  "path": name,
+                  "sha256": hashlib.sha256(payload).hexdigest(),
+                  "size": len(payload),
+              })
+          inventory = {
+              "schema_version": 1,
+              "artifact_id": positive(int(os.environ["REPORT_ARTIFACT_ID"]), "report artifact id"),
+              "artifact_name": os.environ["REPORT_ARTIFACT_NAME"],
+              "artifact_digest": os.environ["REPORT_ARTIFACT_DIGEST"],
+              "implementation_sha": expected_implementation,
+              "source_run_id": expected_source_id,
+              "source_run_attempt": expected_source_attempt,
+              "source_head_sha": expected_source_head,
+              "tested_sha": expected_tested,
+              "files": files,
+              "comment_sha256": hashlib.sha256(comment).hexdigest(),
+          }
+          inventory_raw = json.dumps(
+              inventory, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+          ).encode("utf-8") + b"\n"
+          inventory_path = validated / "inventory.json"
+          inventory_path.write_bytes(inventory_raw)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"comment_sha256={inventory['comment_sha256']}\n")
+              output.write(f"inventory_sha256={hashlib.sha256(inventory_raw).hexdigest()}\n")
+          PY
+
+      - name: Recheck exact artifact and current PR head, then comment idempotently
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENT_SHA256: ${{ steps.validate.outputs.comment_sha256 }}
+          IMPLEMENTATION_SHA: ${{ needs.prepare.outputs.implementation_sha }}
+          INVENTORY_SHA256: ${{ steps.validate.outputs.inventory_sha256 }}
+          REPORT_ARTIFACT_DIGEST: ${{ needs.publish.outputs.report_artifact_digest }}
+          REPORT_ARTIFACT_ID: ${{ needs.publish.outputs.report_artifact_id }}
+          REPORT_ARTIFACT_NAME: ${{ needs.publish.outputs.report_artifact_name }}
+          SOURCE_HEAD_SHA: ${{ needs.publish.outputs.source_head_sha }}
+          SOURCE_RUN_ATTEMPT: ${{ needs.select.outputs.source_run_attempt }}
+          SOURCE_RUN_ID: ${{ needs.select.outputs.source_run_id }}
+          TESTED_SHA: ${{ needs.publish.outputs.tested_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == refs/heads/master && "$GITHUB_SHA" == "$IMPLEMENTATION_SHA" ]]
+          [[ "$IMPLEMENTATION_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ && "$SOURCE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$REPORT_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$REPORT_ARTIFACT_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$REPORT_ARTIFACT_NAME" == "visual-review-$SOURCE_RUN_ID-$SOURCE_RUN_ATTEMPT-$TESTED_SHA" ]]
+          [[ "$INVENTORY_SHA256" =~ ^[0-9a-f]{64}$ && "$COMMENT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SOURCE_HEAD_SHA" =~ ^[0-9a-f]{40}$ && "$TESTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/branches/master" --jq .commit.sha)" == "$IMPLEMENTATION_SHA" ]]
+          controller_run="$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT")"
+          jq -e --arg repository "$GITHUB_REPOSITORY" --arg head "$IMPLEMENTATION_SHA" \
+            --argjson run_id "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT" '
+              .id == $run_id and .run_attempt == $attempt and
+              .repository.full_name == $repository and
+              .head_repository.full_name == $repository and
+              .path == ".github/workflows/visual-review-drain.yml" and
+              (.event == "repository_dispatch" or .event == "schedule" or
+               .event == "workflow_dispatch") and
+              .head_branch == "master" and .head_sha == $head and
+              .status == "in_progress" and .conclusion == null
+            ' <<< "$controller_run" >/dev/null
+
+          report_artifact="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$REPORT_ARTIFACT_ID")"
+          jq -e --arg name "$REPORT_ARTIFACT_NAME" --arg head "$IMPLEMENTATION_SHA" \
+            --argjson id "$REPORT_ARTIFACT_ID" --argjson run_id "$GITHUB_RUN_ID" '
+              .id == $id and .name == $name and .expired == false and
+              (.digest | test("^sha256:[0-9a-f]{64}$")) and
+              (.size_in_bytes | type == "number" and . > 0 and . <= 8388608) and
+              .workflow_run.id == $run_id and .workflow_run.head_sha == $head
+            ' <<< "$report_artifact" >/dev/null
+          [[ "$(jq -er .digest <<< "$report_artifact")" == "sha256:$REPORT_ARTIFACT_DIGEST" ]]
+
+          report_root="$RUNNER_TEMP/visual-review-comment/report"
+          validated_root="$RUNNER_TEMP/visual-review-comment/validated"
+          inventory="$validated_root/inventory.json"
+          comment="$validated_root/comment.md"
+          [[ -f "$inventory" && ! -L "$inventory" && -f "$comment" && ! -L "$comment" ]]
+          [[ "$(sha256sum "$inventory" | cut -d ' ' -f 1)" == "$INVENTORY_SHA256" ]]
+          [[ "$(sha256sum "$comment" | cut -d ' ' -f 1)" == "$COMMENT_SHA256" ]]
+          jq -e --argjson artifact_id "$REPORT_ARTIFACT_ID" \
+            --arg artifact_name "$REPORT_ARTIFACT_NAME" \
+            --arg artifact_digest "$REPORT_ARTIFACT_DIGEST" \
+            --arg implementation "$IMPLEMENTATION_SHA" \
+            --argjson source_run_id "$SOURCE_RUN_ID" \
+            --argjson source_run_attempt "$SOURCE_RUN_ATTEMPT" \
+            --arg source_head "$SOURCE_HEAD_SHA" --arg tested "$TESTED_SHA" \
+            --arg comment_sha256 "$COMMENT_SHA256" '
+              keys == ["artifact_digest","artifact_id","artifact_name","comment_sha256",
+                "files","implementation_sha","schema_version","source_head_sha",
+                "source_run_attempt","source_run_id","tested_sha"] and
+              .schema_version == 1 and .artifact_id == $artifact_id and
+              .artifact_name == $artifact_name and .artifact_digest == $artifact_digest and
+              .implementation_sha == $implementation and .source_run_id == $source_run_id and
+              .source_run_attempt == $source_run_attempt and .source_head_sha == $source_head and
+              .tested_sha == $tested and .comment_sha256 == $comment_sha256 and
+              [.files[].path] == ["provenance.json","publication.json","review.json","review.md"] and
+              ([.files[] | (.sha256 | test("^[0-9a-f]{64}$")) and
+                (.size | type == "number" and . > 0)] | all)
+            ' "$inventory" >/dev/null
+          while IFS=$'\t' read -r path digest size; do
+            [[ "$path" == publication.json || "$path" == provenance.json ||
+               "$path" == review.json || "$path" == review.md ]]
+            [[ -f "$report_root/$path" && ! -L "$report_root/$path" ]]
+            [[ "$(stat -c '%s' "$report_root/$path")" == "$size" ]]
+            [[ "$(sha256sum "$report_root/$path" | cut -d ' ' -f 1)" == "$digest" ]]
+          done < <(jq -r '.files[] | [.path,.sha256,(.size|tostring)] | @tsv' "$inventory")
+
+          source_run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/attempts/$SOURCE_RUN_ATTEMPT")"
+          jq -e --arg repository "$GITHUB_REPOSITORY" \
+            --argjson run_id "$SOURCE_RUN_ID" --argjson attempt "$SOURCE_RUN_ATTEMPT" '
+              .id == $run_id and .run_attempt == $attempt and
+              .repository.full_name == $repository and
+              .head_repository.full_name == $repository and
+              .path == ".github/workflows/on-demand-e2e.yml" and
+              (.event == "pull_request_target" or .event == "workflow_dispatch") and
+              .status == "completed" and
+              .conclusion == "success" and .head_branch == "master" and
+              (.head_sha | test("^[0-9a-f]{40}$"))
+            ' <<< "$source_run" >/dev/null
+          historical_source_identity="$(jq -cS '
+            {id,run_attempt,path,event,status,conclusion,created_at,display_title,
+             head_branch,head_sha,repository:.repository.full_name,
+             head_repository:.head_repository.full_name,
+             pull_requests:[.pull_requests[] | {number}]}
+          ' <<< "$source_run")"
+          source_controller_sha="$(jq -er .head_sha <<< "$source_run")"
+          controller_compare="$(gh api \
+            "repos/$GITHUB_REPOSITORY/compare/$source_controller_sha...$IMPLEMENTATION_SHA")"
+          jq -e --arg base "$source_controller_sha" --arg head "$IMPLEMENTATION_SHA" '
+            .base_commit.sha == $base and .merge_base_commit.sha == $base and
+            .status == (if $base == $head then "identical" else "ahead" end)
+          ' <<< "$controller_compare" >/dev/null
+          if [[ "$(jq -er .event <<< "$source_run")" != pull_request_target ]]; then
+            exit 0
+          fi
+          [[ "$(jq '.pull_requests | length' <<< "$source_run")" == 1 ]]
+          pull_number="$(jq -er '.pull_requests[0].number' <<< "$source_run")"
+          pull="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pull_number")"
+          jq -e --arg repository "$GITHUB_REPOSITORY" --arg head "$SOURCE_HEAD_SHA" \
+            '
+              (.state == "open" or (.state == "closed" and .merged == true)) and
+              .head.sha == $head and .head.repo.full_name == $repository and
+              .base.repo.full_name == $repository and
+              (.base.ref | type == "string" and length > 0) and
+              (.base.sha | test("^[0-9a-f]{40}$")) and
+              (.merge_commit_sha | test("^[0-9a-f]{40}$"))
+            ' <<< "$pull" >/dev/null
+          pull_state="$(jq -er .state <<< "$pull")"
+          base_branch="$(jq -er .base.ref <<< "$pull")"
+          base_sha="$(jq -er .base.sha <<< "$pull")"
+          delivered_sha="$(jq -er .merge_commit_sha <<< "$pull")"
+          encoded_base="$(jq -rn --arg value "$base_branch" '$value|@uri')"
+          tested_commit="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$TESTED_SHA")"
+          tested_tree="$(jq -er '.tree.sha | select(test("^[0-9a-f]{40}$"))' <<< "$tested_commit")"
+          tested_parents="$(jq -c '[.parents[].sha]' <<< "$tested_commit")"
+          if [[ "$pull_state" == open ]]; then
+            [[ "$delivered_sha" == "$TESTED_SHA" ]]
+            [[ "$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded_base" --jq .commit.sha)" == "$base_sha" ]]
+            jq -e --arg base "$base_sha" --arg head "$SOURCE_HEAD_SHA" '
+              [.parents[].sha] == [$base, $head]
+            ' <<< "$tested_commit" >/dev/null
+          else
+            [[ "$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded_base" --jq .commit.sha)" == "$delivered_sha" ]]
+            delivered_commit="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$delivered_sha")"
+            jq -e --arg tree "$tested_tree" --arg head "$SOURCE_HEAD_SHA" \
+              --argjson parents "$tested_parents" '
+                .tree.sha == $tree and [.parents[].sha] == $parents and
+                ($parents | length) == 2 and .parents[1].sha == $head
+              ' <<< "$delivered_commit" >/dev/null
+          fi
+          marker="<!-- blockpops-visual-review:$SOURCE_RUN_ID:$TESTED_SHA -->"
+          [[ "$(head -n 1 "$comment")" == "$marker" ]]
+          comments="$(gh api --paginate --slurp \
+            "repos/$GITHUB_REPOSITORY/issues/$pull_number/comments?per_page=100")"
+          jq -e 'type == "array" and length <= 10 and
+            ([.[] | type == "array"] | all) and ([.[].[]] | length <= 1000)' \
+            <<< "$comments" >/dev/null
+          jq '[.[].[]]' <<< "$comments" > "$RUNNER_TEMP/visual-review-comments.json"
+          matches="$(jq --arg marker "$marker" '[.[] | select(
+            .user.login == "github-actions[bot]" and (.body | contains($marker)))] | length' \
+            "$RUNNER_TEMP/visual-review-comments.json")"
+          [[ "$matches" -le 1 ]]
+          if [[ "$matches" == 0 ]]; then
+            comment_method=POST
+            comment_route="repos/$GITHUB_REPOSITORY/issues/$pull_number/comments"
+          else
+            comment_id="$(jq -er --arg marker "$marker" '.[] | select(
+              .user.login == "github-actions[bot]" and (.body | contains($marker))) | .id' \
+              "$RUNNER_TEMP/visual-review-comments.json")"
+            [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]
+            comment_method=PATCH
+            comment_route="repos/$GITHUB_REPOSITORY/issues/comments/$comment_id"
+          fi
+
+          # The attempt endpoint is immutable, but a re-run advances the mutable run record.
+          # Re-prove the complete selected identity at the final writer boundary so an older
+          # advisory result cannot be posted after its source attempt has been superseded.
+          current_source_run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID")"
+          current_source_identity="$(jq -cS '
+            {id,run_attempt,path,event,status,conclusion,created_at,display_title,
+             head_branch,head_sha,repository:.repository.full_name,
+             head_repository:.head_repository.full_name,
+             pull_requests:[.pull_requests[] | {number}]}
+          ' <<< "$current_source_run")"
+          [[ "$current_source_identity" == "$historical_source_identity" ]]
+          jq -n --rawfile body "$comment" '{body:$body}' \
+            | gh api --method "$comment_method" "$comment_route" --input - >/dev/null
+
+  cleanup:
+    name: Authenticate exact ids and apply outcome-safe cleanup
+    needs: [select, exhausted, attempt, prepare, admit, review, publish]
+    if: always() && needs.select.outputs.eligible == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    outputs:
+      outcome: ${{ steps.outcome.outputs.outcome }}
+    steps:
+      - name: Resolve the fail-closed queue outcome
+        id: outcome
+        shell: bash
+        env:
+          ADMIT_STATUS: ${{ needs.admit.outputs.status }}
+          PREPARE_STATUS: ${{ needs.prepare.outputs.reauth_status }}
+          PUBLISH_OUTCOME: ${{ needs.publish.outputs.outcome }}
+          QUEUE_STATE: ${{ needs.select.outputs.queue_state }}
+        run: |
+          set -euo pipefail
+          if [[ "$QUEUE_STATE" == stale_source ]]; then
+            outcome=stale_source
+          elif [[ "$QUEUE_STATE" == attempts_exhausted ]]; then
+            outcome=attempts_exhausted
+          elif [[ "$PREPARE_STATUS" == stale_source || "$ADMIT_STATUS" == stale_source ||
+                  "$PUBLISH_OUTCOME" == stale_source ]]; then
+            outcome=stale_source
+          elif [[ -n "$PUBLISH_OUTCOME" ]]; then
+            outcome="$PUBLISH_OUTCOME"
+          elif [[ "$PREPARE_STATUS" == authentication || "$ADMIT_STATUS" == authentication ]]; then
+            outcome=authentication
+          elif [[ "$ADMIT_STATUS" == retryable_control_race ]]; then
+            outcome=transient_network
+          else
+            outcome=unknown
+          fi
+          case "$outcome" in
+            reviewed|stale_source|terminal_input_rejected|attempts_exhausted|\
+            authentication|configuration|external_capacity|provider|\
+            transient_network|unknown) ;;
+            *) outcome=unknown ;;
+          esac
+          printf 'outcome=%s\n' "$outcome" >> "$GITHUB_OUTPUT"
+
+      - name: Delete only authenticated single-use and terminal exact ids
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ADMITTED_HANDOFF_DIGEST: ${{ needs.admit.outputs.artifact_digest }}
+          ADMITTED_HANDOFF_ID: ${{ needs.admit.outputs.artifact_id }}
+          ADMITTED_HANDOFF_NAME: ${{ needs.admit.outputs.artifact_name }}
+          HANDOFF_DIGEST: ${{ needs.prepare.outputs.artifact_digest }}
+          HANDOFF_ID: ${{ needs.prepare.outputs.artifact_id }}
+          HANDOFF_NAME: ${{ needs.prepare.outputs.artifact_name }}
+          OUTCOME: ${{ steps.outcome.outputs.outcome }}
+          QUEUE_DIGEST: ${{ needs.select.outputs.artifact_digest }}
+          QUEUE_ID: ${{ needs.select.outputs.artifact_id }}
+          QUEUE_IMPLEMENTATION_SHA: ${{ needs.select.outputs.implementation_sha }}
+          QUEUE_NAME: ${{ needs.select.outputs.artifact_name }}
+          QUEUE_OWNER_RUN_ATTEMPT: ${{ needs.select.outputs.producer_run_attempt }}
+          QUEUE_OWNER_RUN_ID: ${{ needs.select.outputs.producer_run_id }}
+          QUEUE_SIZE: ${{ needs.select.outputs.artifact_size }}
+          RESULT_DIGEST: ${{ needs.review.outputs.artifact_digest }}
+          RESULT_ID: ${{ needs.review.outputs.artifact_id }}
+          RESULT_NAME: ${{ needs.review.outputs.artifact_name }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_API_URL" == https://api.github.com && -n "$GH_TOKEN" ]]
+          api="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts"
+          request() {
+            local method="$1" url="$2" output="$3"
+            curl --silent --show-error --request "$method" \
+              --header "Accept: application/vnd.github+json" \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              --output "$output" --write-out '%{http_code}' "$url"
+          }
+          delete_current_run_artifact() {
+            local id="$1" name="$2" digest="$3" label="$4"
+            [[ -n "$id" ]] || return 0
+            [[ "$id" =~ ^[1-9][0-9]*$ && "$digest" =~ ^[0-9a-f]{64}$ && -n "$name" ]]
+            local metadata="$RUNNER_TEMP/$label-metadata.json" status
+            status="$(request GET "$api/$id" "$metadata")"
+            if [[ "$status" == 404 ]]; then
+              return 0
+            fi
+            [[ "$status" == 200 ]]
+            jq -e --argjson id "$id" --arg name "$name" --arg digest "sha256:$digest" \
+              --argjson run_id "$GITHUB_RUN_ID" '
+                .id == $id and .name == $name and .digest == $digest and
+                .expired == false and .workflow_run.id == $run_id
+              ' "$metadata" >/dev/null
+            status="$(request DELETE "$api/$id" "$RUNNER_TEMP/$label-delete.json")"
+            [[ "$status" == 204 || "$status" == 404 ]]
+          }
+          delete_queue_artifact() {
+            local metadata="$RUNNER_TEMP/queue-metadata.json" status owner
+            status="$(request GET "$api/$QUEUE_ID" "$metadata")"
+            if [[ "$status" == 404 ]]; then
+              return 0
+            fi
+            [[ "$status" == 200 ]]
+            jq -e --argjson id "$QUEUE_ID" --arg name "$QUEUE_NAME" \
+              --arg digest "sha256:$QUEUE_DIGEST" --argjson size "$QUEUE_SIZE" \
+              --argjson owner "$QUEUE_OWNER_RUN_ID" --arg head "$QUEUE_IMPLEMENTATION_SHA" '
+                .id == $id and .name == $name and .digest == $digest and
+                .size_in_bytes == $size and .expired == false and
+                .workflow_run.id == $owner and .workflow_run.head_sha == $head
+              ' "$metadata" >/dev/null
+            owner="$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$QUEUE_OWNER_RUN_ID/attempts/$QUEUE_OWNER_RUN_ATTEMPT")"
+            jq -e --arg repository "$GITHUB_REPOSITORY" \
+              --arg head "$QUEUE_IMPLEMENTATION_SHA" \
+              --argjson run_id "$QUEUE_OWNER_RUN_ID" \
+              --argjson attempt "$QUEUE_OWNER_RUN_ATTEMPT" '
+                .id == $run_id and .run_attempt == $attempt and
+                .path == ".github/workflows/visual-review.yml" and
+                (.event == "workflow_run" or .event == "repository_dispatch") and
+                .repository.full_name == $repository and
+                .head_repository.full_name == $repository and .head_branch == "master" and
+                .head_sha == $head and .status == "completed" and
+                .conclusion == "success"
+              ' <<< "$owner" >/dev/null
+            status="$(request DELETE "$api/$QUEUE_ID" "$RUNNER_TEMP/queue-delete.json")"
+            [[ "$status" == 204 || "$status" == 404 ]]
+          }
+
+          delete_current_run_artifact "$HANDOFF_ID" "$HANDOFF_NAME" "$HANDOFF_DIGEST" handoff
+          delete_current_run_artifact "$ADMITTED_HANDOFF_ID" "$ADMITTED_HANDOFF_NAME" \
+            "$ADMITTED_HANDOFF_DIGEST" admitted-handoff
+          delete_current_run_artifact "$RESULT_ID" "$RESULT_NAME" "$RESULT_DIGEST" result
+          case "$OUTCOME" in
+            reviewed|stale_source|terminal_input_rejected) delete_queue_artifact ;;
+            attempts_exhausted|authentication|configuration|external_capacity|provider|\
+            transient_network|unknown) ;;
+            *) exit 2 ;;
+          esac
+
+  continue:
+    name: Wake the next globally serialized queue drain
+    needs: [select, exhausted, attempt, cleanup]
+    # Failed marker/report uploads and failed exact-ID cleanup create no durable
+    # state that would make the next selector choose differently. Stop in those
+    # cases and let the half-hour schedule recover instead of hot-looping
+    # repository_dispatch runs while an Actions dependency remains unavailable.
+    if: >-
+      always() && needs.select.outputs.eligible == 'true' &&
+      needs.cleanup.result == 'success' &&
+      ((needs.select.outputs.queue_state == 'stale_source') ||
+       (needs.select.outputs.queue_state == 'attempts_exhausted' &&
+        needs.exhausted.result == 'success') ||
+       (needs.select.outputs.queue_state == 'eligible' &&
+        needs.attempt.result == 'success'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Dispatch continuation after this selected identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          jq -n --arg source_run_id "${{ needs.select.outputs.source_run_id }}" \
+            --arg outcome "${{ needs.cleanup.outputs.outcome }}" \
+            '{event_type:"visual-review-queue-wake",client_payload:{
+              reason:"continuation",source_run_id:$source_run_id,outcome:$outcome}}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" --input -

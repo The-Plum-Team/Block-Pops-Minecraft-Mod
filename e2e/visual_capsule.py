@@ -9,6 +9,7 @@ read-only review records and content-addressed images to the model.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import re
@@ -17,6 +18,8 @@ import stat
 import tempfile
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+from PIL import Image, ImageChops, UnidentifiedImageError
 
 from e2e.scenario_contract import ScenarioContract
 from e2e.visual_evidence import (
@@ -46,10 +49,10 @@ from scripts.release.matrix import valid_branch_name
 CAPSULE_MANIFEST = "visual-capsule.json"
 CAPSULE_DIGEST = "visual-capsule.sha256"
 CAPSULE_PURPOSE = "advisory-semantic-ui-review"
-MAX_CAPSULE_PAIRS = 512
-MAX_CAPSULE_IMAGES = 1024
-MAX_CAPSULE_IMAGE_BYTES = 32 * 1024 * 1024
-MAX_CAPSULE_TOTAL_BYTES = 480 * 1024 * 1024
+MAX_CAPSULE_PAIRS = 10
+MAX_CAPSULE_IMAGES = 64
+MAX_CAPSULE_IMAGE_BYTES = 7 * 1024 * 1024
+MAX_CAPSULE_TOTAL_BYTES = 96 * 1024 * 1024
 MAX_CAPSULE_MANIFEST_BYTES = 4 * 1024 * 1024
 CAPSULE_KEYS = frozenset(
     {
@@ -73,6 +76,16 @@ PAIR_KEYS = frozenset(
         "review_tier",
         "candidate",
         "reference",
+        "triage",
+    }
+)
+TRIAGE_KEYS = frozenset(
+    {
+        "byte_identical",
+        "pixel_count",
+        "changed_pixels",
+        "sum_absolute_delta",
+        "sum_squared_delta",
     }
 )
 FRAME_KEYS = frozenset(
@@ -135,6 +148,81 @@ def _frame_record(frame: VisualFrame, path: str) -> dict[str, Any]:
         "height": frame.height,
         "source_artifact_id": frame.source_artifact_id,
     }
+
+
+def _pair_metrics(candidate: bytes, reference: bytes, *, width: int, height: int) -> dict[str, Any]:
+    """Return exact integer-only triage metrics over canonical RGB pixels.
+
+    These values only order changed pairs.  The sole deterministic AI skip is exact canonical
+    byte identity; no similarity threshold is allowed to make a semantic decision.
+    """
+
+    pixel_count = width * height
+    if candidate == reference:
+        return {
+            "byte_identical": True,
+            "pixel_count": pixel_count,
+            "changed_pixels": 0,
+            "sum_absolute_delta": 0,
+            "sum_squared_delta": 0,
+        }
+    try:
+        with Image.open(io.BytesIO(candidate)) as candidate_image, Image.open(
+            io.BytesIO(reference)
+        ) as reference_image:
+            candidate_image.load()
+            reference_image.load()
+            if (
+                candidate_image.format != "PNG"
+                or reference_image.format != "PNG"
+                or candidate_image.size != (width, height)
+                or reference_image.size != (width, height)
+            ):
+                _fail("canonical pair images changed before deterministic triage")
+            difference = ImageChops.difference(
+                candidate_image.convert("RGB"), reference_image.convert("RGB")
+            )
+            histograms = difference.histogram()
+            changed_pixels = sum(
+                1 for red, green, blue in difference.getdata() if red or green or blue
+            )
+            sum_absolute_delta = sum(
+                value * count
+                for channel in range(3)
+                for value, count in enumerate(histograms[channel * 256 : (channel + 1) * 256])
+            )
+            sum_squared_delta = sum(
+                value * value * count
+                for channel in range(3)
+                for value, count in enumerate(histograms[channel * 256 : (channel + 1) * 256])
+            )
+    except VisualEvidenceError:
+        raise
+    except (OSError, UnidentifiedImageError, ValueError) as exc:
+        raise VisualEvidenceError(f"cannot compare canonical visual pair: {exc}") from exc
+    if not 1 <= changed_pixels <= pixel_count:
+        _fail("non-identical canonical pair has no changed RGB pixels")
+    return {
+        "byte_identical": False,
+        "pixel_count": pixel_count,
+        "changed_pixels": changed_pixels,
+        "sum_absolute_delta": sum_absolute_delta,
+        "sum_squared_delta": sum_squared_delta,
+    }
+
+
+def _validate_pair_metrics(value: Any, expected: dict[str, Any], label: str) -> None:
+    try:
+        metrics = require_object(value, label=label, required=TRIAGE_KEYS)
+    except SecureJsonError as exc:
+        raise VisualEvidenceError(str(exc)) from exc
+    if not isinstance(metrics["byte_identical"], bool):
+        _fail(f"{label}.byte_identical must be a boolean")
+    for field in TRIAGE_KEYS - {"byte_identical"}:
+        if isinstance(metrics[field], bool) or not isinstance(metrics[field], int) or metrics[field] < 0:
+            _fail(f"{label}.{field} must be a non-negative integer")
+    if metrics != expected:
+        _fail(f"{label} disagrees with the authenticated canonical pixels")
 
 
 def _source_record(provenance: dict[str, Any]) -> dict[str, Any]:
@@ -276,6 +364,12 @@ def build_capsule_manifest(
                 "review_tier": frame.review_tier,
                 "candidate": _frame_record(frame, content_path(frame)),
                 "reference": _frame_record(baseline, content_path(baseline)),
+                "triage": _pair_metrics(
+                    frame.canonical_png,
+                    baseline.canonical_png,
+                    width=frame.width,
+                    height=frame.height,
+                ),
             }
         )
     if len(images) > MAX_CAPSULE_IMAGES:
@@ -398,7 +492,7 @@ def _validate_source_record(value: Any, label: str, contract_sha256: str) -> dic
         _fail(f"{label}.workflow_path is unsafe")
     if source["event"] not in ALLOWED_EVENTS:
         _fail(f"{label}.event is unsupported")
-    if source["event"] == "pull_request":
+    if source["event"] == "pull_request_target":
         if source["tested_commit"] == source["source_head_commit"]:
             _fail(f"{label} does not distinguish the tested PR merge from its source head")
     elif (
@@ -570,6 +664,24 @@ def validate_capsule(root: Path) -> tuple[dict[str, Any], tuple[dict[str, Any], 
             or reference_frame["scenario"] not in reference_source["scenarios"]
         ):
             _fail(f"pairs[{index}] frame inventory disagrees with source provenance")
+        _validate_pair_metrics(
+            pair["triage"],
+            _pair_metrics(
+                _read_regular_bytes(
+                    root / PurePosixPath(candidate_frame["path"]),
+                    label=f"pairs[{index}] candidate image",
+                    maximum=MAX_CAPSULE_IMAGE_BYTES,
+                ),
+                _read_regular_bytes(
+                    root / PurePosixPath(reference_frame["path"]),
+                    label=f"pairs[{index}] reference image",
+                    maximum=MAX_CAPSULE_IMAGE_BYTES,
+                ),
+                width=candidate_frame["width"],
+                height=candidate_frame["height"],
+            ),
+            f"pairs[{index}].triage",
+        )
         paths_from_pairs.update({candidate_frame["path"], reference_frame["path"]})
         normalized_pairs.append(pair)
     if [pair["label"] for pair in normalized_pairs] != sorted(labels):
@@ -655,6 +767,8 @@ def read_only_review_records(root: Path) -> tuple[dict[str, Any], ...]:
             "capture_id": pair["capture_id"],
             "title": pair["title"],
             "expectation": pair["expectation"],
+            "review_tier": pair["review_tier"],
+            "triage": pair["triage"],
             "candidate_path": pair["candidate"]["path"],
             "reference_path": pair["reference"]["path"],
         }

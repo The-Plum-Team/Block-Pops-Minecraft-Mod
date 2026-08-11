@@ -1,8 +1,8 @@
-name: Advisory AI visual review
+name: Queue advisory visual review
 
-# workflow_run executes this file from the protected default branch. The explicit dispatch is the
-# non-recursive bridge for Packaged E2E runs started with GITHUB_TOKEN; its payload is only a
-# locator and every field is re-read from the GitHub API before protected code executes.
+# This workflow is credentialless. It authenticates successful packaged evidence,
+# curates a data-only queue entry, and wakes the globally serialized drain. The
+# repository_dispatch bridge covers GITHUB_TOKEN's non-recursive workflow behavior.
 on:
   repository_dispatch:
     types:
@@ -17,143 +17,486 @@ permissions: {}
 
 concurrency:
   group: >-
-    advisory-visual-${{ github.event.client_payload.source_run_id ||
-    github.event.workflow_run.id }}
+    visual-review-enqueue-${{ github.event.client_payload.source_run_id ||
+    github.event.workflow_run.id || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   authenticate:
-    name: Authenticate exact packaged source
+    name: Authenticate exact packaged source and queue identity
     if: >-
       github.event_name == 'repository_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       actions: read
       contents: read
+      pull-requests: read
     outputs:
       eligible: ${{ steps.source.outputs.eligible }}
-      final_artifact_name: ${{ steps.source.outputs.final_artifact_name }}
-      handoff_artifact_name: ${{ steps.source.outputs.handoff_artifact_name }}
       implementation_sha: ${{ steps.source.outputs.implementation_sha }}
+      queue_name: ${{ steps.source.outputs.queue_name }}
+      report_name: ${{ steps.source.outputs.report_name }}
       source_branch: ${{ steps.source.outputs.source_branch }}
+      source_event: ${{ steps.source.outputs.source_event }}
       source_run_attempt: ${{ steps.source.outputs.source_run_attempt }}
       source_run_id: ${{ steps.source.outputs.source_run_id }}
       source_sha: ${{ steps.source.outputs.source_sha }}
+      tested_sha: ${{ steps.source.outputs.tested_sha }}
+      tested_tree: ${{ steps.source.outputs.tested_tree }}
     steps:
-      - name: Reauthenticate the locator and reject duplicate delivery
+      - name: Reauthenticate locator, tested tree, and duplicate deliveries
         id: source
         shell: bash
         env:
           DISPATCH_BRANCH: ${{ github.event.client_payload.source_branch }}
           DISPATCH_REPOSITORY: ${{ github.event.client_payload.source_repository }}
+          DISPATCH_RUN_ATTEMPT: ${{ github.event.client_payload.source_run_attempt }}
           DISPATCH_RUN_ID: ${{ github.event.client_payload.source_run_id }}
           DISPATCH_SHA: ${{ github.event.client_payload.source_sha }}
           GH_TOKEN: ${{ github.token }}
           TRIGGER_BRANCH: ${{ github.event.workflow_run.head_branch }}
           TRIGGER_REPOSITORY: ${{ github.repository }}
+          TRIGGER_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           TRIGGER_RUN_ID: ${{ github.event.workflow_run.id }}
           TRIGGER_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
           printf 'eligible=false\n' >> "$GITHUB_OUTPUT"
+          expected_source_branch=''
+          expected_source_sha=''
           if [[ "$GITHUB_EVENT_NAME" == repository_dispatch ]]; then
-            locator_repository="$DISPATCH_REPOSITORY"
+            [[ "$DISPATCH_REPOSITORY" == "$GITHUB_REPOSITORY" ]]
             source_run_id="$DISPATCH_RUN_ID"
-            source_branch="$DISPATCH_BRANCH"
-            source_sha="$DISPATCH_SHA"
+            locator_run_attempt="$DISPATCH_RUN_ATTEMPT"
+            expected_source_branch="$DISPATCH_BRANCH"
+            expected_source_sha="$DISPATCH_SHA"
+            [[ "$expected_source_branch" =~ ^[A-Za-z0-9._/-]+$ ]]
+            [[ "$expected_source_sha" =~ ^[0-9a-f]{40}$ ]]
           else
-            locator_repository="$TRIGGER_REPOSITORY"
+            [[ "$TRIGGER_REPOSITORY" == "$GITHUB_REPOSITORY" ]]
             source_run_id="$TRIGGER_RUN_ID"
-            source_branch="$TRIGGER_BRANCH"
-            source_sha="$TRIGGER_SHA"
+            locator_run_attempt="$TRIGGER_RUN_ATTEMPT"
           fi
-          [[ "$locator_repository" == "$GITHUB_REPOSITORY" ]]
           [[ "$source_run_id" =~ ^[1-9][0-9]*$ ]]
-          [[ "$source_branch" =~ ^[A-Za-z0-9._/-]+$ ]]
-          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$locator_run_attempt" =~ ^[1-9][0-9]*$ ]]
           [[ "$GITHUB_REF" == refs/heads/master ]]
-          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
 
           repository="$(gh api "repos/$GITHUB_REPOSITORY")"
           jq -e --arg repository "$GITHUB_REPOSITORY" '
             .full_name == $repository and .default_branch == "master"
           ' <<< "$repository" >/dev/null
+          implementation_sha="$(gh api "repos/$GITHUB_REPOSITORY/branches/master" --jq .commit.sha)"
+          [[ "$implementation_sha" =~ ^[0-9a-f]{40}$ ]]
+          if [[ "$GITHUB_SHA" != "$implementation_sha" ]]; then
+            printf 'Protected visual controller advanced; a later wake will use the new head.\n' \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
           source_run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id")"
           jq -e \
-            --arg branch "$source_branch" \
             --arg repository "$GITHUB_REPOSITORY" \
-            --arg sha "$source_sha" \
-            --argjson run_id "$source_run_id" '
-              .id == $run_id and .repository.full_name == $repository and
+            --argjson run_id "$source_run_id" \
+            --argjson run_attempt "$locator_run_attempt" '
+              .id == $run_id and .run_attempt == $run_attempt and
+              .repository.full_name == $repository and
               .path == ".github/workflows/on-demand-e2e.yml" and
-              (.event == "pull_request" or .event == "schedule" or
+              (.event == "pull_request_target" or .event == "schedule" or
                .event == "workflow_dispatch") and
-              .head_branch == $branch and .head_sha == $sha and
+              .head_repository.full_name == $repository and
+              .head_branch == "master" and (.head_sha | test("^[0-9a-f]{40}$")) and
               .status == "completed" and .conclusion == "success" and
               (.run_attempt | type == "number" and . > 0)
             ' <<< "$source_run" >/dev/null
+          source_event="$(jq -er .event <<< "$source_run")"
+          if [[ "$source_event" == schedule ]]; then
+            printf 'Scheduled canonical baseline runs do not enter the review queue.\n' \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           source_run_attempt="$(jq -er .run_attempt <<< "$source_run")"
+          [[ "$source_run_attempt" == "$locator_run_attempt" ]]
+          controller_sha="$(jq -er .head_sha <<< "$source_run")"
+          controller_compare="$(gh api \
+            "repos/$GITHUB_REPOSITORY/compare/$controller_sha...$implementation_sha")"
+          jq -e --arg base "$controller_sha" --arg head "$implementation_sha" '
+            .base_commit.sha == $base and .merge_base_commit.sha == $base and
+            .status == (if $base == $head then "identical" else "ahead" end)
+          ' <<< "$controller_compare" >/dev/null
+          if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
+            [[ "$TRIGGER_BRANCH" == master && "$TRIGGER_SHA" == "$controller_sha" ]]
+          fi
 
           artifacts="$(gh api --paginate --slurp \
             "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id/artifacts?per_page=100")"
-          jq -e '
-            type == "array" and ([.[] | (.artifacts | type == "array")] | all) and
-            ([.[].artifacts[]] | length <= 1000)
-          ' <<< "$artifacts" >/dev/null
-          aggregate_pattern="^packaged-e2e-[0-9a-f]{40}-${source_run_attempt}-aggregate$"
-          aggregate_count="$(jq --arg pattern "$aggregate_pattern" '[.[].artifacts[] |
-            select((.name | test($pattern)) and .expired == false)] | length' \
-            <<< "$artifacts")"
-          if [[ "$aggregate_count" -eq 0 ]]; then
-            printf 'Successful source run %s has no aggregate evidence; advisory review skipped.\n' \
-              "$source_run_id" | tee -a "$GITHUB_STEP_SUMMARY"
+          jq -e 'type == "array" and ([.[] | (.artifacts | type == "array")] | all) and
+            ([.[].artifacts[]] | length <= 1000)' <<< "$artifacts" >/dev/null
+          aggregate_suffix="-$source_run_attempt-aggregate"
+          mapfile -t aggregate_names < <(jq -r --arg suffix "$aggregate_suffix" '
+            [.[].artifacts[] | select(
+              .expired == false and (.digest | test("^sha256:[0-9a-f]{64}$")) and
+              (.name | test("^packaged-e2e-[0-9a-f]{40}-[1-9][0-9]*-aggregate$")) and
+              (.name | endswith($suffix)))] | .[].name' <<< "$artifacts")
+          if [[ "${#aggregate_names[@]}" == 0 && "$source_event" == workflow_dispatch &&
+                "$GITHUB_EVENT_NAME" == workflow_run ]]; then
+            jobs="$(gh api --paginate --slurp \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id/jobs?filter=all&per_page=100")"
+            jq -e 'type == "array" and length <= 10 and
+              ([.[] | (.jobs | type == "array")] | all) and
+              ([.[].jobs[]] | length <= 1000)' <<< "$jobs" >/dev/null
+            jq -e --argjson attempt "$source_run_attempt" '
+              [.[].jobs[] | select(.run_attempt == $attempt)] as $current |
+              ($current | length) > 0 and
+              ([$current[] |
+                (.id | type == "number" and . > 0) and
+                (.name | type == "string" and length > 0) and
+                (.status | type == "string") and
+                ((.conclusion == null) or (.conclusion | type == "string"))
+              ] | all) and
+              ([$current[].id] | length) == ([$current[].id] | unique | length) and
+              ([$current[].name] | length) == ([$current[].name] | unique | length) and
+              ([$current[] | select(
+                .name == "Attest exact tested packaged tree / Verify exact tested tree" and
+                .status == "completed" and .conclusion == "success"
+              )] | length) == 1
+            ' <<< "$jobs" >/dev/null
+            printf 'Authenticated exact-tree attestation delivery has no review aggregate.\n' \
+              >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          [[ "$aggregate_count" -eq 1 ]]
+          [[ "${#aggregate_names[@]}" == 1 ]]
+          tested_sha="${aggregate_names[0]#packaged-e2e-}"
+          tested_sha="${tested_sha%$aggregate_suffix}"
+          [[ "$tested_sha" =~ ^[0-9a-f]{40}$ ]]
+          tested_commit="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$tested_sha")"
 
-          final_artifact_name="visual-review-$source_run_id-$source_run_attempt"
-          existing="$(gh api \
-            "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$final_artifact_name&per_page=100")"
-          jq -e '
-            (.total_count | type == "number" and . >= 0 and . <= 100) and
-            (.artifacts | type == "array") and (.artifacts | length) == .total_count
-          ' <<< "$existing" >/dev/null
-          while IFS= read -r owner_run_id; do
-            [[ "$owner_run_id" =~ ^[1-9][0-9]*$ ]]
-            if owner="$(gh api \
-                "repos/$GITHUB_REPOSITORY/actions/runs/$owner_run_id" 2>/dev/null)" \
-              && jq -e --arg repository "$GITHUB_REPOSITORY" '
-                .repository.full_name == $repository and
-                .path == ".github/workflows/visual-review.yml" and
-                (.event == "workflow_run" or .event == "repository_dispatch") and
-                .head_branch == "master" and .status == "completed" and
-                .conclusion == "success"
-              ' <<< "$owner" >/dev/null; then
-              printf 'Exact advisory review already exists for source run %s attempt %s.\n' \
-                "$source_run_id" "$source_run_attempt" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [[ "$source_event" == pull_request_target ]]; then
+            [[ "$(jq '.pull_requests | length' <<< "$source_run")" == 1 ]]
+            pull_number="$(jq -er '.pull_requests[0].number' <<< "$source_run")"
+            pull="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pull_number")"
+            jq -e --arg repository "$GITHUB_REPOSITORY" \
+              '
+              (.state == "open" or (.state == "closed" and .merged == true)) and
+              .head.repo.full_name == $repository and
+              .base.repo.full_name == $repository and
+              (.head.sha | test("^[0-9a-f]{40}$")) and
+              (.head.ref | test("^[A-Za-z0-9._/-]+$")) and
+              (.merge_commit_sha | test("^[0-9a-f]{40}$")) and
+              (.base.sha | test("^[0-9a-f]{40}$"))
+            ' <<< "$pull" >/dev/null
+            source_branch="$(jq -er .head.ref <<< "$pull")"
+            source_sha="$(jq -er .head.sha <<< "$pull")"
+            if [[ "$GITHUB_EVENT_NAME" == repository_dispatch ]]; then
+              [[ "$expected_source_branch" == "$source_branch" ]]
+              [[ "$expected_source_sha" == "$source_sha" ]]
+            fi
+            pull_state="$(jq -er .state <<< "$pull")"
+            delivered_sha="$(jq -er .merge_commit_sha <<< "$pull")"
+            base_sha="$(jq -er .base.sha <<< "$pull")"
+            base_branch="$(jq -er .base.ref <<< "$pull")"
+            encoded_base="$(jq -rn --arg value "$base_branch" '$value|@uri')"
+            if [[ "$pull_state" == open ]]; then
+              [[ "$delivered_sha" == "$tested_sha" ]]
+              [[ "$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded_base" --jq .commit.sha)" == "$base_sha" ]]
+              jq -e --arg base "$base_sha" --arg head "$source_sha" '
+                [.parents[].sha] == [$base, $head] and
+                (.tree.sha | test("^[0-9a-f]{40}$"))
+              ' <<< "$tested_commit" >/dev/null
+            else
+              [[ "$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded_base" --jq .commit.sha)" == "$delivered_sha" ]]
+              delivered_commit="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$delivered_sha")"
+              jq -e --arg head "$source_sha" \
+                --arg tested_tree "$(jq -er .tree.sha <<< "$tested_commit")" \
+                --argjson tested_parents "$(jq '[.parents[].sha]' <<< "$tested_commit")" '
+                  .tree.sha == $tested_tree and [.parents[].sha] == $tested_parents and
+                  ([.parents[].sha] | length) == 2 and .parents[1].sha == $head
+              ' <<< "$delivered_commit" >/dev/null
+            fi
+          elif [[ "$tested_sha" == "$controller_sha" ]]; then
+            source_branch=master
+            source_sha="$controller_sha"
+            if [[ "$GITHUB_EVENT_NAME" == repository_dispatch ]]; then
+              [[ "$expected_source_branch" == "$source_branch" ]]
+              [[ "$expected_source_sha" == "$source_sha" ]]
+            fi
+          else
+            if [[ "$source_event" != workflow_dispatch ||
+                  "$GITHUB_EVENT_NAME" != repository_dispatch ]]; then
+              printf 'Protected sync dispatch awaits its authenticated merge-controller wake.\n' \
+                >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
-          done < <(jq -r --arg name "$final_artifact_name" '
-            .artifacts[] | select(.name == $name and .expired == false) |
-            .workflow_run.id
-          ' <<< "$existing")
+            source_branch="$expected_source_branch"
+            source_sha="$expected_source_sha"
+            [[ "$source_branch" == automation/release-sync/* ]]
+            [[ "$source_sha" == "$tested_sha" ]]
+            associated="$(gh api \
+              "repos/$GITHUB_REPOSITORY/commits/$tested_sha/pulls?per_page=100")"
+            jq -e 'type == "array" and length < 100 and
+              ([.[] | type == "object"] | all)' <<< "$associated" >/dev/null
+            jq '.' <<< "$associated" > "$RUNNER_TEMP/associated-pulls.json"
+            jq -ce --arg branch "$source_branch" --arg repository "$GITHUB_REPOSITORY" \
+              --arg sha "$tested_sha" '[.[] | select(
+                .head.sha == $sha and .head.ref == $branch and
+                .head.repo.full_name == $repository and
+                .base.repo.full_name == $repository
+              )] | if length == 1 then .[0] else error("ambiguous sync pull") end' \
+              "$RUNNER_TEMP/associated-pulls.json" > "$RUNNER_TEMP/associated-pull.json"
+            pull_number="$(jq -er .number "$RUNNER_TEMP/associated-pull.json")"
+            pull="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pull_number")"
+            jq -e --arg branch "$source_branch" --arg repository "$GITHUB_REPOSITORY" \
+              --arg sha "$tested_sha" '
+                (.state == "open" or (.state == "closed" and .merged == true)) and
+                .head.sha == $sha and .head.ref == $branch and
+                .head.repo.full_name == $repository and
+                .base.repo.full_name == $repository and
+                (.base.sha | test("^[0-9a-f]{40}$")) and
+                (.merge_commit_sha | test("^[0-9a-f]{40}$"))
+              ' <<< "$pull" >/dev/null
+            pull_state="$(jq -er .state <<< "$pull")"
+            base_sha="$(jq -er .base.sha <<< "$pull")"
+            base_branch="$(jq -er .base.ref <<< "$pull")"
+            delivered_sha="$(jq -er .merge_commit_sha <<< "$pull")"
+            encoded_base="$(jq -rn --arg value "$base_branch" '$value|@uri')"
+            if [[ "$pull_state" == open ]]; then
+              encoded_source="$(jq -rn --arg value "$source_branch" '$value|@uri')"
+              [[ "$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded_source" --jq .commit.sha)" == "$source_sha" ]]
+              [[ "$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded_base" --jq .commit.sha)" == "$base_sha" ]]
+              jq -e --arg base "$base_sha" '
+                ([.parents[].sha] | length) == 2 and .parents[0].sha == $base
+              ' <<< "$tested_commit" >/dev/null
+            else
+              [[ "$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded_base" --jq .commit.sha)" == "$delivered_sha" ]]
+              delivered_commit="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$delivered_sha")"
+              jq -e --arg tested "$tested_sha" \
+                --arg tree "$(jq -er .tree.sha <<< "$tested_commit")" '
+                  .tree.sha == $tree and ([.parents[].sha] | length) == 2 and
+                  .parents[1].sha == $tested
+                ' <<< "$delivered_commit" >/dev/null
+            fi
+          fi
+          tested_tree="$(jq -er .tree.sha <<< "$tested_commit")"
+          [[ "$tested_sha" =~ ^[0-9a-f]{40}$ && "$tested_tree" =~ ^[0-9a-f]{40}$ ]]
+
+          aggregate_name="packaged-e2e-$tested_sha-$source_run_attempt-aggregate"
+          aggregate_count="$(jq --arg name "$aggregate_name" '[.[].artifacts[] |
+            select(.name == $name and .expired == false and
+              (.digest | test("^sha256:[0-9a-f]{64}$")))] | length' <<< "$artifacts")"
+          [[ "$aggregate_count" == 1 ]]
+
+          queue_name="visual-review-input-$source_run_id-$source_run_attempt-$tested_sha-$GITHUB_RUN_ATTEMPT"
+          report_name="visual-review-$source_run_id-$source_run_attempt-$tested_sha"
+
+          authenticated_artifacts() {
+            local name="$1" expected_path="$2" expected_events="$3" expected_conclusions="$4"
+            local allow_active="$5"
+            local artifact encoded listing owner owner_id count=0
+            encoded="$(jq -rn --arg value "$name" '$value|@uri')"
+            listing="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$encoded&per_page=100")"
+            jq -e '(.total_count | type == "number" and . >= 0 and . <= 100) and
+              (.artifacts | type == "array") and (.artifacts | length) == .total_count' \
+              <<< "$listing" >/dev/null
+            while IFS= read -r artifact; do
+              [[ -n "$artifact" ]] || continue
+              owner_id="$(jq -er .workflow_run.id <<< "$artifact")"
+              owner_route="repos/$GITHUB_REPOSITORY/actions/runs/$owner_id"
+              if [[ "$expected_path" == '.github/workflows/visual-review.yml' &&
+                    "$name" =~ ^visual-review-input-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{40}-([1-9][0-9]*)$ ]]; then
+                owner_route="$owner_route/attempts/${BASH_REMATCH[1]}"
+              fi
+              owner="$(gh api "$owner_route")"
+              if jq -e --arg path "$expected_path" --arg repository "$GITHUB_REPOSITORY" \
+                  --argjson events "$expected_events" --argjson conclusions "$expected_conclusions" \
+                  --argjson allow_active "$allow_active" '
+                    .path == $path and .repository.full_name == $repository and
+                    .head_repository.full_name == $repository and .head_branch == "master" and
+                    (.event as $event | $events | index($event)) != null and
+                    ((.status == "completed" and
+                      (.conclusion as $conclusion | $conclusions | index($conclusion)) != null) or
+                     ($allow_active and .status == "in_progress" and .conclusion == null)) and
+                    (.run_attempt | type == "number" and . > 0)
+                  ' <<< "$owner" >/dev/null; then
+                count=$((count + 1))
+              fi
+            done < <(jq -c --arg name "$name" '.artifacts[] |
+              select(.name == $name and .expired == false and
+                (.digest | test("^sha256:[0-9a-f]{64}$")))' <<< "$listing")
+            printf '%s' "$count"
+          }
+
+          queue_count="$(authenticated_artifacts "$queue_name" \
+            '.github/workflows/visual-review.yml' \
+            '["workflow_run","repository_dispatch"]' '["success"]' 'false')"
+          report_count="$(authenticated_artifacts "$report_name" \
+            '.github/workflows/visual-review-drain.yml' \
+            '["schedule","repository_dispatch","workflow_dispatch"]' \
+            '["action_required","cancelled","failure","neutral","skipped","stale",
+              "startup_failure","success","timed_out"]' 'true')"
+          [[ "$queue_count" -le 1 && "$report_count" -le 1 ]]
+          if [[ "$queue_count" == 1 || "$report_count" == 1 ]]; then
+            printf 'Authenticated queue/report already exists for `%s`.\n' "$tested_sha" \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
 
           printf 'eligible=true\n' >> "$GITHUB_OUTPUT"
-          printf 'final_artifact_name=%s\n' "$final_artifact_name" >> "$GITHUB_OUTPUT"
-          printf 'handoff_artifact_name=visual-review-input-%s-%s\n' \
-            "$source_run_id" "$source_run_attempt" >> "$GITHUB_OUTPUT"
-          printf 'implementation_sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          printf 'implementation_sha=%s\n' "$implementation_sha" >> "$GITHUB_OUTPUT"
+          printf 'queue_name=%s\n' "$queue_name" >> "$GITHUB_OUTPUT"
+          printf 'report_name=%s\n' "$report_name" >> "$GITHUB_OUTPUT"
           printf 'source_branch=%s\n' "$source_branch" >> "$GITHUB_OUTPUT"
+          printf 'source_event=%s\n' "$source_event" >> "$GITHUB_OUTPUT"
           printf 'source_run_attempt=%s\n' "$source_run_attempt" >> "$GITHUB_OUTPUT"
           printf 'source_run_id=%s\n' "$source_run_id" >> "$GITHUB_OUTPUT"
           printf 'source_sha=%s\n' "$source_sha" >> "$GITHUB_OUTPUT"
+          printf 'tested_sha=%s\n' "$tested_sha" >> "$GITHUB_OUTPUT"
+          printf 'tested_tree=%s\n' "$tested_tree" >> "$GITHUB_OUTPUT"
 
-  curate:
-    name: Curate immutable semantic capsule
+  classify:
+    name: Conservatively classify bot-sync visual impact
     needs: authenticate
     if: needs.authenticate.outputs.eligible == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      review: ${{ steps.impact.outputs.review }}
+    steps:
+      - name: Check out the exact protected classifier
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.authenticate.outputs.implementation_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Skip only an exact safe github-actions bot synchronization
+        id: impact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMPLEMENTATION_SHA: ${{ needs.authenticate.outputs.implementation_sha }}
+          SOURCE_BRANCH: ${{ needs.authenticate.outputs.source_branch }}
+          SOURCE_EVENT: ${{ needs.authenticate.outputs.source_event }}
+          TESTED_SHA: ${{ needs.authenticate.outputs.tested_sha }}
+        run: |
+          set -euo pipefail
+          printf 'review=true\n' >> "$GITHUB_OUTPUT"
+          if [[ "$SOURCE_EVENT" != workflow_dispatch || "$SOURCE_BRANCH" != automation/release-sync/* ]]; then
+            exit 0
+          fi
+          set +e
+          (
+            set -euo pipefail
+            pulls="$(gh api \
+              "repos/$GITHUB_REPOSITORY/commits/$TESTED_SHA/pulls?per_page=100")"
+            jq -e 'type == "array" and length < 100 and
+              ([.[] | type == "object"] | all)' <<< "$pulls" >/dev/null
+            jq -c --arg repository "$GITHUB_REPOSITORY" --arg branch "$SOURCE_BRANCH" \
+              --arg sha "$TESTED_SHA" '[.[] | select(
+                .user.login == "github-actions[bot]" and .user.type == "Bot" and
+                .head.ref == $branch and .head.sha == $sha and
+                .head.repo.full_name == $repository and .base.repo.full_name == $repository
+              )] | if length == 1 then .[0] else error("ambiguous sync pull") end' \
+              <<< "$pulls" > "$RUNNER_TEMP/sync-pull-association.json"
+            pull_number="$(jq -er .number "$RUNNER_TEMP/sync-pull-association.json")"
+            gh api "repos/$GITHUB_REPOSITORY/pulls/$pull_number" \
+              > "$RUNNER_TEMP/sync-pull.json"
+            jq -e --arg repository "$GITHUB_REPOSITORY" --arg branch "$SOURCE_BRANCH" \
+              --arg sha "$TESTED_SHA" --argjson number "$pull_number" '
+                .number == $number and .state == "closed" and .merged == true and
+                (.merged_at | type == "string") and
+                .user.login == "github-actions[bot]" and .user.type == "Bot" and
+                .head.ref == $branch and .head.sha == $sha and
+                .head.repo.full_name == $repository and .base.repo.full_name == $repository and
+                (.base.sha | test("^[0-9a-f]{40}$")) and
+                (.merge_commit_sha | test("^[0-9a-f]{40}$"))
+              ' "$RUNNER_TEMP/sync-pull.json" >/dev/null
+            pull_number="$(jq -er .number "$RUNNER_TEMP/sync-pull.json")"
+            target_branch="$(jq -er .base.ref "$RUNNER_TEMP/sync-pull.json")"
+            candidate_sha="$(jq -er .merge_commit_sha "$RUNNER_TEMP/sync-pull.json")"
+            changed_files="$(jq -er .changed_files "$RUNNER_TEMP/sync-pull.json")"
+            [[ "$pull_number" =~ ^[1-9][0-9]*$ && "$changed_files" =~ ^[1-9][0-9]*$ ]]
+            [[ "$candidate_sha" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$changed_files" -le 100 ]]
+
+            gh api "repos/$GITHUB_REPOSITORY/git/commits/$candidate_sha" \
+              > "$RUNNER_TEMP/sync-candidate.json"
+            jq -e --arg candidate "$candidate_sha" --arg tested "$TESTED_SHA" '
+              .sha == $candidate and (.tree.sha | test("^[0-9a-f]{40}$")) and
+              ([.parents[].sha] | length) == 2 and .parents[1].sha == $tested and
+              (.parents[0].sha | test("^[0-9a-f]{40}$"))
+            ' "$RUNNER_TEMP/sync-candidate.json" >/dev/null
+            target_sha="$(jq -er .parents[0].sha "$RUNNER_TEMP/sync-candidate.json")"
+            [[ "$(jq -er .base.sha "$RUNNER_TEMP/sync-pull.json")" == "$target_sha" ]]
+            candidate_tree="$(jq -er .tree.sha "$RUNNER_TEMP/sync-candidate.json")"
+
+            git_auth_config="$RUNNER_TEMP/visual-impact-git-auth.config"
+            (umask 077 && : > "$git_auth_config")
+            cleanup_git_auth() {
+              rm -f -- "$git_auth_config"
+            }
+            trap cleanup_git_auth EXIT INT TERM
+            GIT_CONFIG_GLOBAL="$git_auth_config" gh auth setup-git --hostname github.com
+            GIT_CONFIG_GLOBAL="$git_auth_config" git fetch --no-tags origin \
+              "+refs/pull/$pull_number/head:refs/remotes/origin/visual-impact-source" \
+              "+refs/heads/master:refs/remotes/origin/visual-impact-protected"
+            cleanup_git_auth
+            trap - EXIT INT TERM
+            [[ "$(git rev-parse refs/remotes/origin/visual-impact-source)" == "$TESTED_SHA" ]]
+            parents="$(git show -s --format=%P "$TESTED_SHA")"
+            [[ "$parents" =~ ^[0-9a-f]{40}\ [0-9a-f]{40}$ ]]
+            [[ "${parents%% *}" == "$target_sha" ]]
+            protected_sha="${parents##* }"
+            git merge-base --is-ancestor "$protected_sha" "$IMPLEMENTATION_SHA"
+            python3 scripts/ci/gate_controller.py topology --repository . \
+              --protected-sha "$protected_sha" --target-sha "$target_sha" \
+              --head-sha "$TESTED_SHA" --source-branch master \
+              --target-branch "$target_branch" > "$RUNNER_TEMP/sync-topology.json"
+            python3 scripts/ci/gate_controller.py parity --repository . \
+              --protected-sha "$protected_sha" --candidate-sha "$TESTED_SHA" >/dev/null
+
+            [[ "$candidate_tree" =~ ^[0-9a-f]{40}$ ]]
+
+            gh api --paginate --slurp \
+              "repos/$GITHUB_REPOSITORY/pulls/$pull_number/files?per_page=100" \
+              > "$RUNNER_TEMP/sync-files-pages.json"
+            jq '[.[].[]]' "$RUNNER_TEMP/sync-files-pages.json" > "$RUNNER_TEMP/sync-files.json"
+            [[ "$(jq length "$RUNNER_TEMP/sync-files.json")" == "$changed_files" ]]
+            python3 scripts/ci/visual_review_impact.py \
+              --pull "$RUNNER_TEMP/sync-pull.json" \
+              --candidate "$RUNNER_TEMP/sync-candidate.json" \
+              --files "$RUNNER_TEMP/sync-files.json" \
+              --changed-files "$changed_files" \
+              --repository "$GITHUB_REPOSITORY" \
+              --head-ref "$SOURCE_BRANCH" --head-sha "$TESTED_SHA" \
+              --base-ref "$target_branch" --base-sha "$target_sha" \
+              --candidate-sha "$candidate_sha" --candidate-tree "$candidate_tree" \
+              --expected-actor 'github-actions[bot]' \
+              --controller-authenticated > "$RUNNER_TEMP/visual-impact.json"
+            jq -e '.schema_version == 1 and .gate_policy == "always-full" and
+              .visual_review == "skip" and .reason == "authenticated-nonvisual-sync"' \
+              "$RUNNER_TEMP/visual-impact.json" >/dev/null
+          )
+          status=$?
+          set -e
+          if [[ "$status" == 0 ]]; then
+            printf 'review=false\n' >> "$GITHUB_OUTPUT"
+            printf 'Authenticated nonvisual bot synchronization; AI review skipped.\n' \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf 'Visual impact was uncertain; advisory review retained.\n' \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  curate:
+    name: Curate and enqueue immutable data-only evidence
+    needs: [authenticate, classify]
+    if: >-
+      needs.authenticate.outputs.eligible == 'true' &&
+      needs.classify.outputs.review == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -161,13 +504,11 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      artifact_digest: ${{ steps.handoff.outputs.artifact-digest }}
-      artifact_id: ${{ steps.handoff.outputs.artifact-id }}
-      artifact_name: ${{ needs.authenticate.outputs.handoff_artifact_name }}
-      client_sha256: ${{ steps.curation.outputs.client_sha256 }}
-      handoff_manifest_sha256: ${{ steps.curation.outputs.handoff_manifest_sha256 }}
+      artifact_digest: ${{ steps.queue.outputs.artifact-digest }}
+      artifact_id: ${{ steps.queue.outputs.artifact-id }}
+      artifact_name: ${{ needs.authenticate.outputs.queue_name }}
+      queue_manifest_sha256: ${{ steps.curation.outputs.queue_manifest_sha256 }}
       reference_sha: ${{ steps.curation.outputs.reference_sha }}
-      tested_sha: ${{ steps.curation.outputs.tested_sha }}
     steps:
       - name: Check out only the exact protected curator
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -186,279 +527,70 @@ jobs:
           --only-binary=:all: --require-hashes
           --requirement scripts/visual/requirements.txt
 
-      - name: Authenticate candidate, current baseline, job graphs, and aggregate digests
+      - name: Authenticate candidate/baseline and build a data-only queue entry
         id: curation
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
           IMPLEMENTATION_SHA: ${{ needs.authenticate.outputs.implementation_sha }}
-          SOURCE_RUN_ID: ${{ needs.authenticate.outputs.source_run_id }}
-          SOURCE_SHA: ${{ needs.authenticate.outputs.source_sha }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$IMPLEMENTATION_SHA"
-          python3 scripts/visual/curate.py \
-            --repository "$GITHUB_REPOSITORY" \
-            --source-run-id "$SOURCE_RUN_ID" \
-            --source-sha "$SOURCE_SHA" \
-            --implementation-sha "$IMPLEMENTATION_SHA" \
-            --output "$RUNNER_TEMP/visual-review-handoff" \
-            --result "$RUNNER_TEMP/visual-curation.json"
-          for field in client_sha256 handoff_manifest_sha256 reference_sha tested_sha; do
-            value="$(jq -er --arg field "$field" '.[$field]' \
-              "$RUNNER_TEMP/visual-curation.json")"
-            printf '%s=%s\n' "$field" "$value" >> "$GITHUB_OUTPUT"
-          done
-
-      - name: Upload the single-use immutable handoff
-        id: handoff
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ${{ needs.authenticate.outputs.handoff_artifact_name }}
-          path: ${{ runner.temp }}/visual-review-handoff/
-          if-no-files-found: error
-          compression-level: 6
-          retention-days: 1
-
-  review:
-    name: Review semantic image pairs (advisory)
-    needs:
-      - authenticate
-      - curate
-    if: >-
-      needs.authenticate.outputs.eligible == 'true' &&
-      needs.curate.result == 'success' && needs.curate.outputs.artifact_id != ''
-    concurrency:
-      group: advisory-visual-model
-      cancel-in-progress: false
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    permissions: {}
-    environment: visual-review
-    env:
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
-    outputs:
-      artifact_digest: ${{ steps.raw.outputs.artifact-digest }}
-      artifact_id: ${{ steps.raw.outputs.artifact-id }}
-      artifact_name: visual-review-raw-${{ needs.authenticate.outputs.source_run_id }}-${{ needs.authenticate.outputs.source_run_attempt }}
-    steps:
-      - name: Download only the exact curated handoff id
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          artifact-ids: ${{ needs.curate.outputs.artifact_id }}
-          path: ${{ runner.temp }}/visual-review-handoff
-          merge-multiple: true
-          digest-mismatch: error
-
-      - name: Verify the artifact digest and immutable read-only surface
-        shell: bash
-        env:
-          ACTION_ARTIFACT_DIGEST: ${{ needs.curate.outputs.artifact_digest }}
-          CLIENT_SHA256: ${{ needs.curate.outputs.client_sha256 }}
-          HANDOFF_MANIFEST_SHA256: ${{ needs.curate.outputs.handoff_manifest_sha256 }}
-        run: |
-          set -euo pipefail
-          [[ "$ACTION_ARTIFACT_DIGEST" =~ ^[0-9a-f]{64}$ ]]
-          [[ "$CLIENT_SHA256" =~ ^[0-9a-f]{64}$ ]]
-          [[ "$HANDOFF_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
-          test "$(sha256sum "$RUNNER_TEMP/visual-review-handoff/review_client.py" |
-            cut -d ' ' -f 1)" = "$CLIENT_SHA256"
-          python3 "$RUNNER_TEMP/visual-review-handoff/review_client.py" \
-            --handoff "$RUNNER_TEMP/visual-review-handoff" \
-            --expected-manifest-sha256 "$HANDOFF_MANIFEST_SHA256" \
-            --validate-only
-          chmod -R a-w "$RUNNER_TEMP/visual-review-handoff"
-          test ! -e "$GITHUB_WORKSPACE/.git"
-
-      - name: Call tool-free OpenAI Responses one bounded pair at a time
-        shell: bash
-        env:
-          HANDOFF_MANIFEST_SHA256: ${{ needs.curate.outputs.handoff_manifest_sha256 }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_VISUAL_MODEL: ${{ vars.OPENAI_VISUAL_MODEL }}
-        run: |
-          set -euo pipefail
-          test -n "$OPENAI_API_KEY"
-          test -n "$OPENAI_VISUAL_MODEL"
-          unset GH_TOKEN GITHUB_TOKEN ACTIONS_RUNTIME_TOKEN \
-            ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL \
-            ACTIONS_CACHE_URL ACTIONS_RESULTS_URL
-          python3 "$RUNNER_TEMP/visual-review-handoff/review_client.py" \
-            --handoff "$RUNNER_TEMP/visual-review-handoff" \
-            --expected-manifest-sha256 "$HANDOFF_MANIFEST_SHA256" \
-            --output "$RUNNER_TEMP/visual-review.raw.json"
-          test -s "$RUNNER_TEMP/visual-review.raw.json"
-
-      - name: Upload only the raw bounded advisory output
-        id: raw
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: visual-review-raw-${{ needs.authenticate.outputs.source_run_id }}-${{ needs.authenticate.outputs.source_run_attempt }}
-          path: ${{ runner.temp }}/visual-review.raw.json
-          if-no-files-found: error
-          compression-level: 9
-          retention-days: 1
-
-  publish:
-    name: Normalize and publish advisory result
-    needs:
-      - authenticate
-      - curate
-      - review
-    if: >-
-      needs.review.result == 'success' && needs.review.outputs.artifact_id != ''
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      actions: read
-      contents: read
-      issues: write
-      pull-requests: read
-    steps:
-      - name: Check out only the exact protected normalizer
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.authenticate.outputs.implementation_sha }}
-          persist-credentials: false
-
-      - name: Install Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-
-      - name: Install the hash-locked PNG decoder
-        run: >-
-          python3 -m pip install --disable-pip-version-check
-          --only-binary=:all: --require-hashes
-          --requirement scripts/visual/requirements.txt
-
-      - name: Download exact handoff id for independent revalidation
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          artifact-ids: ${{ needs.curate.outputs.artifact_id }}
-          path: ${{ runner.temp }}/visual-review-handoff
-          merge-multiple: true
-          digest-mismatch: error
-
-      - name: Download exact raw review id
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          artifact-ids: ${{ needs.review.outputs.artifact_id }}
-          path: ${{ runner.temp }}/visual-review-raw
-          merge-multiple: true
-          digest-mismatch: error
-
-      - name: Revalidate and normalize every verdict without gating on findings
-        shell: bash
-        env:
-          HANDOFF_MANIFEST_SHA256: ${{ needs.curate.outputs.handoff_manifest_sha256 }}
-          REFERENCE_SHA: ${{ needs.curate.outputs.reference_sha }}
-          SOURCE_RUN_ID: ${{ needs.authenticate.outputs.source_run_id }}
-          SOURCE_SHA: ${{ needs.authenticate.outputs.source_sha }}
-          TESTED_SHA: ${{ needs.curate.outputs.tested_sha }}
-        run: |
-          set -euo pipefail
-          python3 scripts/visual/normalize.py \
-            --handoff "$RUNNER_TEMP/visual-review-handoff" \
-            --expected-handoff-sha256 "$HANDOFF_MANIFEST_SHA256" \
-            --raw-output "$RUNNER_TEMP/visual-review-raw/visual-review.raw.json" \
-            --normalized-output "$RUNNER_TEMP/visual-review.json" \
-            --markdown-output "$RUNNER_TEMP/visual-review.md" \
-            --repository "$GITHUB_REPOSITORY" \
-            --source-run-id "$SOURCE_RUN_ID" \
-            --source-head-sha "$SOURCE_SHA" \
-            --tested-sha "$TESTED_SHA" \
-            --reference-sha "$REFERENCE_SHA"
-          cat "$RUNNER_TEMP/visual-review.md" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Comment only on the still-current exact pull request head
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
+          SOURCE_BRANCH: ${{ needs.authenticate.outputs.source_branch }}
           SOURCE_RUN_ATTEMPT: ${{ needs.authenticate.outputs.source_run_attempt }}
           SOURCE_RUN_ID: ${{ needs.authenticate.outputs.source_run_id }}
           SOURCE_SHA: ${{ needs.authenticate.outputs.source_sha }}
-          TESTED_SHA: ${{ needs.curate.outputs.tested_sha }}
+          TESTED_SHA: ${{ needs.authenticate.outputs.tested_sha }}
         run: |
           set -euo pipefail
-          source_run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID")"
-          jq -e \
-            --arg repository "$GITHUB_REPOSITORY" \
-            --arg sha "$SOURCE_SHA" \
-            --argjson attempt "$SOURCE_RUN_ATTEMPT" \
-            --argjson run_id "$SOURCE_RUN_ID" '
-              .id == $run_id and .run_attempt == $attempt and
-              .repository.full_name == $repository and .head_sha == $sha and
-              .path == ".github/workflows/on-demand-e2e.yml" and
-              .status == "completed" and .conclusion == "success"
-            ' <<< "$source_run" >/dev/null
-          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/master" --jq .commit.sha)" = \
-            "${{ needs.curate.outputs.reference_sha }}"
-          if [[ "$(jq -r .event <<< "$source_run")" != pull_request ]]; then
-            printf 'Source event has no pull request; advisory report remains an artifact.\n' \
-              >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          pull_count="$(jq '.pull_requests | length' <<< "$source_run")"
-          [[ "$pull_count" -eq 1 ]]
-          pull_number="$(jq -er '.pull_requests[0].number' <<< "$source_run")"
-          pull="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pull_number")"
-          jq -e --arg repository "$GITHUB_REPOSITORY" --arg sha "$SOURCE_SHA" \
-            --arg tested_sha "$TESTED_SHA" '
-            .state == "open" and .head.sha == $sha and
-            .merge_commit_sha == $tested_sha and .base.repo.full_name == $repository
-          ' <<< "$pull" >/dev/null
-          marker="<!-- blockpops-visual-review source-run:$SOURCE_RUN_ID attempt:$SOURCE_RUN_ATTEMPT -->"
-          {
-            printf '%s\n\n' "$marker"
-            cat "$RUNNER_TEMP/visual-review.md"
-          } > "$RUNNER_TEMP/visual-review-comment.md"
-          comments="$(gh api --paginate --slurp \
-            "repos/$GITHUB_REPOSITORY/issues/$pull_number/comments?per_page=100")"
-          matches="$(jq -c --arg marker "$marker" \
-            '[.[].[] | select(.user.type == "Bot" and
-              .user.login == "github-actions[bot]" and (.body | startswith($marker)))]' \
-            <<< "$comments")"
-          match_count="$(jq length <<< "$matches")"
-          [[ "$match_count" -le 1 ]]
-          body="$(cat "$RUNNER_TEMP/visual-review-comment.md")"
-          if [[ "$match_count" -eq 1 ]]; then
-            comment_id="$(jq -er '.[0].id' <<< "$matches")"
-            gh api --method PATCH \
-              "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" -f body="$body" >/dev/null
-          else
-            gh api --method POST \
-              "repos/$GITHUB_REPOSITORY/issues/$pull_number/comments" -f body="$body" >/dev/null
-          fi
+          [[ "$(git rev-parse HEAD)" == "$IMPLEMENTATION_SHA" ]]
+          python3 scripts/visual/curate.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-run-id "$SOURCE_RUN_ID" \
+            --source-run-attempt "$SOURCE_RUN_ATTEMPT" \
+            --source-branch "$SOURCE_BRANCH" \
+            --source-sha "$SOURCE_SHA" \
+            --implementation-sha "$IMPLEMENTATION_SHA" \
+            --producer-run-id "$GITHUB_RUN_ID" \
+            --producer-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --output "$RUNNER_TEMP/visual-review-queue" \
+            --result "$RUNNER_TEMP/visual-curation.json"
+          jq -e --argjson run_id "$SOURCE_RUN_ID" --argjson attempt "$SOURCE_RUN_ATTEMPT" \
+            --argjson producer_run_id "$GITHUB_RUN_ID" \
+            --argjson producer_run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg tested "$TESTED_SHA" --arg implementation "$IMPLEMENTATION_SHA" '
+              .schema_version == 1 and .advisory == true and
+              .source_run_id == $run_id and .source_run_attempt == $attempt and
+              .producer_run_id == $producer_run_id and
+              .producer_run_attempt == $producer_run_attempt and
+              .tested_sha == $tested and .implementation_sha == $implementation and
+              (.queue_manifest_sha256 | test("^[0-9a-f]{64}$")) and
+              (.reference_sha | test("^[0-9a-f]{40}$")) and .pair_count > 0
+            ' "$RUNNER_TEMP/visual-curation.json" >/dev/null
+          for field in queue_manifest_sha256 reference_sha; do
+            printf '%s=%s\n' "$field" "$(jq -er --arg field "$field" '.[$field]' \
+              "$RUNNER_TEMP/visual-curation.json")" >> "$GITHUB_OUTPUT"
+          done
 
-      - name: Upload the normalized source-bound advisory report
+      - name: Upload the durable data-only queue item
+        id: queue
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ needs.authenticate.outputs.final_artifact_name }}
-          path: |
-            ${{ runner.temp }}/visual-review-handoff/capsule/visual-capsule.json
-            ${{ runner.temp }}/visual-review.json
-            ${{ runner.temp }}/visual-review.md
+          name: ${{ needs.authenticate.outputs.queue_name }}
+          path: ${{ runner.temp }}/visual-review-queue/
           if-no-files-found: error
-          compression-level: 9
+          compression-level: 6
           retention-days: 7
 
-  cleanup-handoff:
-    name: Delete the exact single-use handoff
-    needs:
-      - authenticate
-      - curate
-      - review
-      - publish
+  wake:
+    name: Wake the serialized visual-review drain
+    needs: [authenticate, classify, curate]
     if: >-
-      always() && needs.curate.outputs.artifact_id != ''
+      needs.curate.result == 'success' && needs.curate.outputs.artifact_id != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
-      actions: write
+      contents: write
     steps:
-      - name: Reauthenticate and delete only the numeric handoff id
+      - name: Dispatch a non-recursive queue wake
+        continue-on-error: true
         shell: bash
         env:
           ARTIFACT_DIGEST: ${{ needs.curate.outputs.artifact_digest }}
@@ -468,17 +600,10 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
-          [[ "$ARTIFACT_NAME" =~ ^visual-review-input-[1-9][0-9]*-[1-9][0-9]*$ ]]
           [[ "$ARTIFACT_DIGEST" =~ ^[0-9a-f]{64}$ ]]
-          metadata="$(gh api \
-            "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID")"
-          jq -e \
-            --arg digest "sha256:$ARTIFACT_DIGEST" \
-            --arg name "$ARTIFACT_NAME" \
-            --argjson artifact_id "$ARTIFACT_ID" \
-            --argjson run_id "$GITHUB_RUN_ID" '
-              .id == $artifact_id and .name == $name and .digest == $digest and
-              .expired == false and .workflow_run.id == $run_id
-            ' <<< "$metadata" >/dev/null
-          gh api --method DELETE \
-            "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID"
+          [[ "$ARTIFACT_NAME" =~ ^visual-review-input-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{40}-[1-9][0-9]*$ ]]
+          jq -n --arg id "$ARTIFACT_ID" --arg name "$ARTIFACT_NAME" \
+            --arg digest "$ARTIFACT_DIGEST" \
+            '{event_type:"visual-review-queue-wake",client_payload:{
+              queue_artifact_id:$id,queue_artifact_name:$name,queue_artifact_digest:$digest}}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" --input -
