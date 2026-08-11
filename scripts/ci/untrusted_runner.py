@@ -458,6 +458,7 @@ def prepare(
             str(temporary),
         )
     )
+    _refresh_candidate_index(root, repository, record.pw_uid)
     state = {
         "schema_version": 2,
         "root": str(root),
@@ -586,6 +587,24 @@ def _execute_untrusted(
     return_code = process.wait()
     _emit_bounded_log(label, bytes(captured), truncated=truncated)
     return return_code
+
+
+def _refresh_candidate_index(root: Path, repository: Path, uid: int) -> None:
+    """Refresh copy/chown stat metadata without inheriting runner credentials."""
+
+    environment = _candidate_environment(root, ())
+    for command in (
+        ("/usr/bin/git", "update-index", "--really-refresh"),
+        ("/usr/bin/git", "diff-index", "--quiet", "HEAD", "--"),
+    ):
+        if _execute_untrusted(
+            uid=uid,
+            cwd=repository,
+            environment=environment,
+            command=command,
+            label="prepare",
+        ):
+            raise SandboxError("copied candidate index could not be refreshed cleanly")
 
 
 def run_candidate(

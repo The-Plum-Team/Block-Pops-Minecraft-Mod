@@ -12,6 +12,7 @@ from scripts.ci.untrusted_runner import (
     SANDBOX_BOUNDARY,
     SandboxError,
     _candidate_environment,
+    _refresh_candidate_index,
     _relative,
     _restore_authenticated_tree,
     _root,
@@ -60,6 +61,39 @@ class BoundaryTests(unittest.TestCase):
             self.assertNotIn("ACTIONS_", joined)
             with self.assertRaises(SandboxError):
                 _candidate_environment(Path(temporary), ("GITHUB_TOKEN",))
+
+    def test_copied_index_stat_metadata_is_refreshed_inside_the_empty_boundary(self) -> None:
+        root = Path("/tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox")
+        repository = root / "repository"
+        with mock.patch(
+            "scripts.ci.untrusted_runner._candidate_environment",
+            return_value=["PATH=/usr/bin"],
+        ), mock.patch(
+            "scripts.ci.untrusted_runner._execute_untrusted",
+            side_effect=(0, 0),
+        ) as execute:
+            _refresh_candidate_index(root, repository, 1234)
+        self.assertEqual(2, execute.call_count)
+        self.assertEqual(
+            ("/usr/bin/git", "update-index", "--really-refresh"),
+            execute.call_args_list[0].kwargs["command"],
+        )
+        self.assertEqual(
+            ("/usr/bin/git", "diff-index", "--quiet", "HEAD", "--"),
+            execute.call_args_list[1].kwargs["command"],
+        )
+        for call in execute.call_args_list:
+            self.assertEqual(["PATH=/usr/bin"], call.kwargs["environment"])
+            self.assertEqual(repository, call.kwargs["cwd"])
+
+        with mock.patch(
+            "scripts.ci.untrusted_runner._candidate_environment",
+            return_value=[],
+        ), mock.patch(
+            "scripts.ci.untrusted_runner._execute_untrusted",
+            return_value=1,
+        ), self.assertRaises(SandboxError):
+            _refresh_candidate_index(root, repository, 1234)
 
     def test_export_inventory_rejects_symlinks_hardlinks_and_special_files(self) -> None:
         for kind in ("symlink", "hardlink", "fifo"):

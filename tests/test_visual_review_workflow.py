@@ -1218,7 +1218,10 @@ class VisualReviewHandoffTests(unittest.TestCase):
                 provenance_output=provenance_path,
             )
             self.assertEqual("9" * 40, provenance["candidate_source"]["tested_commit"])
-            self.assertEqual("7" * 40, provenance["candidate_source"]["tested_tree"])
+            self.assertEqual(
+                capsule["candidate_source"]["tested_tree"],
+                provenance["candidate_source"]["tested_tree"],
+            )
             self.assertEqual("b" * 40, provenance["reference_source"]["tested_commit"])
             self.assertEqual(10, len(provenance["pairs"]))
             self.assertEqual(
