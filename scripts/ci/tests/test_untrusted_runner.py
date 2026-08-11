@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from scripts.ci.untrusted_runner import (
+    SANDBOX_BOUNDARY,
     SandboxError,
     _candidate_environment,
     _relative,
@@ -23,21 +24,16 @@ REPO = Path(__file__).resolve().parents[3]
 
 
 class BoundaryTests(unittest.TestCase):
-    def test_root_is_one_exact_workspace_sibling(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary, mock.patch.dict(
-            os.environ,
-            {"GITHUB_WORKSPACE": str(Path(temporary) / "repository")},
-            clear=False,
+    def test_root_is_one_exact_private_boundary_child(self) -> None:
+        expected = SANDBOX_BOUNDARY / "blockpops-candidate-sandbox"
+        self.assertEqual(expected, _root(expected))
+        for invalid in (
+            SANDBOX_BOUNDARY,
+            SANDBOX_BOUNDARY / "other",
+            SANDBOX_BOUNDARY / "nested/blockpops-candidate-sandbox",
         ):
-            expected = Path(temporary) / "blockpops-candidate-sandbox"
-            self.assertEqual(expected.resolve(), _root(expected))
-            for invalid in (
-                Path(temporary),
-                Path(temporary) / "other",
-                Path(temporary) / "nested/blockpops-candidate-sandbox",
-            ):
-                with self.subTest(path=invalid), self.assertRaises(SandboxError):
-                    _root(invalid)
+            with self.subTest(path=invalid), self.assertRaises(SandboxError):
+                _root(invalid)
 
     def test_export_paths_are_canonical_and_cannot_escape(self) -> None:
         self.assertEqual("build/release", _relative("build/release"))

@@ -41,6 +41,7 @@ MAX_EXPORT_ENTRIES = 20_000
 MAX_EXPORT_FILE_BYTES = 1024 * 1024 * 1024
 MAX_EXPORT_TOTAL_BYTES = 2 * 1024 * 1024 * 1024
 MAX_LOG_BYTES = 16 * 1024 * 1024
+SANDBOX_BOUNDARY = Path("/tmp/blockpops-sandbox-boundary")
 SAFE_ENV_NAMES = frozenset(
     {
         "BLOCKPOPS_TESTED_SHA",
@@ -107,13 +108,12 @@ def _run(arguments: Iterable[str], *, accepted: frozenset[int] = frozenset({0}))
 
 
 def _root(value: Path) -> Path:
+    expected = SANDBOX_BOUNDARY / "blockpops-candidate-sandbox"
+    if value.absolute() != expected:
+        raise SandboxError("sandbox root must be the exact dedicated boundary child")
     resolved = value.resolve()
-    workspace = os.environ.get("GITHUB_WORKSPACE", "")
-    if not workspace:
-        raise SandboxError("GITHUB_WORKSPACE is required")
-    boundary = Path(workspace).resolve().parent
-    if resolved.parent != boundary or resolved.name != "blockpops-candidate-sandbox":
-        raise SandboxError("sandbox root must be the exact dedicated workspace sibling")
+    if resolved != expected:
+        raise SandboxError("sandbox root boundary resolves outside its exact path")
     return resolved
 
 
@@ -330,6 +330,19 @@ def prepare(
     overlay_values: tuple[tuple[Path, str], ...],
 ) -> dict[str, Any]:
     root = _root(root_value)
+    boundary = root.parent
+    try:
+        boundary.mkdir(mode=0o711)
+    except FileExistsError:
+        pass
+    boundary_metadata = boundary.lstat()
+    if (
+        boundary.is_symlink()
+        or not stat.S_ISDIR(boundary_metadata.st_mode)
+        or boundary_metadata.st_uid != os.getuid()
+        or stat.S_IMODE(boundary_metadata.st_mode) != 0o711
+    ):
+        raise SandboxError("sandbox boundary is not a private runner-owned traversal directory")
     source = source_value.resolve()
     controller_source = controller_source_value.resolve()
     if (

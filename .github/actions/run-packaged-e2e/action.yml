@@ -67,7 +67,7 @@ runs:
       env:
         CANDIDATE_ROOT: ${{ inputs.candidate-root }}
         CONTROLLER_ROOT: ${{ inputs.controller-root }}
-        SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
+        SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
       run: |
         set -euo pipefail
         python3 "$CONTROLLER_ROOT/scripts/ci/untrusted_runner.py" prepare \
@@ -86,7 +86,7 @@ runs:
         E2E_SCENARIOS: ${{ inputs.scenarios }}
         LIBGL_ALWAYS_SOFTWARE: "1"
         GALLIUM_DRIVER: llvmpipe
-        SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
+        SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
         __GLX_VENDOR_LIBRARY_NAME: mesa
       run: |
         set -euo pipefail
@@ -117,7 +117,7 @@ runs:
       shell: bash
       env:
         CONTROLLER_ROOT: ${{ inputs.controller-root }}
-        SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
+        SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
       run: |
         set -euo pipefail
         python3 "$CONTROLLER_ROOT/scripts/ci/untrusted_runner.py" seal \
@@ -134,7 +134,7 @@ runs:
         CONTROLLER_ROOT: ${{ inputs.controller-root }}
         E2E_PROJECTION: ${{ inputs.projection }}
         E2E_ROW_JSON: ${{ inputs.row-json }}
-        SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
+        SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
       run: |
         set -euo pipefail
         repository="$SANDBOX_ROOT/repository"
@@ -160,14 +160,14 @@ runs:
       with:
         name: ${{ inputs.evidence-name }}
         path: |
-          ${{ github.workspace }}/../blockpops-candidate-sandbox/repository/e2e-out/current/summary.json
-          ${{ github.workspace }}/../blockpops-candidate-sandbox/repository/e2e-out/current/resolved-matrix.json
-          ${{ github.workspace }}/../blockpops-candidate-sandbox/repository/e2e-out/current/runtime-store.json
-          ${{ github.workspace }}/../blockpops-candidate-sandbox/repository/e2e-out/current/profiles/**/result.json
-          ${{ github.workspace }}/../blockpops-candidate-sandbox/repository/e2e-out/current/profiles/**/logs/**
-          ${{ github.workspace }}/../blockpops-candidate-sandbox/repository/e2e-out/current/profiles/**/e2e-report/**
-          ${{ github.workspace }}/../blockpops-candidate-sandbox/repository/e2e-out/current/profiles/**/screenshots/**
-          ${{ github.workspace }}/../blockpops-candidate-sandbox/repository/e2e-out/current/profiles/**/crash-reports/**
+          /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/e2e-out/current/summary.json
+          /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/e2e-out/current/resolved-matrix.json
+          /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/e2e-out/current/runtime-store.json
+          /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/e2e-out/current/profiles/**/result.json
+          /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/e2e-out/current/profiles/**/logs/**
+          /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/e2e-out/current/profiles/**/e2e-report/**
+          /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/e2e-out/current/profiles/**/screenshots/**
+          /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/e2e-out/current/profiles/**/crash-reports/**
         if-no-files-found: error
         compression-level: 6
         retention-days: 1
@@ -181,8 +181,8 @@ runs:
       with:
         name: diagnostic-${{ inputs.evidence-name }}
         path: |
-          ${{ github.workspace }}/../blockpops-candidate-sandbox/repository/e2e-out/current/profiles/**/logs/**
-          ${{ github.workspace }}/../blockpops-candidate-sandbox/repository/e2e-out/current/profiles/**/crash-reports/**
+          /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/e2e-out/current/profiles/**/logs/**
+          /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/e2e-out/current/profiles/**/crash-reports/**
         if-no-files-found: warn
         compression-level: 6
         retention-days: 1

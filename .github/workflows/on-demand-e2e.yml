@@ -202,7 +202,7 @@ jobs:
         env:
           BLOCKPOPS_TESTED_SHA: ${{ steps.source.outputs.merge_sha }}
           EXPECTED_SHA: ${{ inputs.expected_sha }}
-          SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
+          SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
           TARGET_BRANCH: ${{ inputs.target_branch }}
         run: |
           set -euo pipefail
@@ -327,7 +327,7 @@ jobs:
       - name: Prepare the isolated candidate filesystem and OS identity
         shell: bash
         env:
-          SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
+          SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
         run: |
           set -euo pipefail
           seed=()
@@ -344,7 +344,7 @@ jobs:
         id: candidate
         shell: bash
         env:
-          SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
+          SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
         run: |
           set -euo pipefail
           python3 controller/scripts/ci/untrusted_runner.py run \
@@ -365,7 +365,7 @@ jobs:
         if: always()
         shell: bash
         env:
-          SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
+          SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
         run: |
           set -euo pipefail
           python3 controller/scripts/ci/untrusted_runner.py seal \
@@ -376,7 +376,7 @@ jobs:
         if: steps.candidate.outcome == 'success' && steps.seal.outcome == 'success'
         shell: bash
         env:
-          SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
+          SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
         run: |
           set -euo pipefail
           repository="$SANDBOX_ROOT/repository"
@@ -396,7 +396,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-input-bundle-${{ needs.identity.outputs.tested_sha }}-${{ github.run_attempt }}
-          path: ${{ github.workspace }}/../blockpops-candidate-sandbox/repository/build/release/
+          path: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/build/release/
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
@@ -508,7 +508,7 @@ jobs:
           BLOCKPOPS_SOURCE_BRANCH: ${{ needs.identity.outputs.source_branch }}
           BLOCKPOPS_TESTED_SHA: ${{ needs.identity.outputs.tested_sha }}
           BLOCKPOPS_TREE: ${{ needs.identity.outputs.tested_tree }}
-          SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
+          SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
         run: |
           set -euo pipefail
           [[ "$(git -C candidate rev-parse HEAD)" == "$BLOCKPOPS_TESTED_SHA" ]]
@@ -544,7 +544,7 @@ jobs:
         if: always()
         shell: bash
         env:
-          SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
+          SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
         run: |
           set -euo pipefail
           python3 controller/scripts/ci/untrusted_runner.py seal \
@@ -564,7 +564,7 @@ jobs:
           BLOCKPOPS_SOURCE_BRANCH: ${{ needs.identity.outputs.source_branch }}
           BLOCKPOPS_TESTED_SHA: ${{ needs.identity.outputs.tested_sha }}
           BLOCKPOPS_TREE: ${{ needs.identity.outputs.tested_tree }}
-          SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
+          SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
         run: |
           set -euo pipefail
           repository="$SANDBOX_ROOT/repository"
@@ -609,7 +609,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: packaged-e2e-${{ needs.identity.outputs.tested_sha }}-${{ github.run_attempt }}-aggregate
-          path: ${{ github.workspace }}/../blockpops-candidate-sandbox/repository/packaged-e2e-aggregate/
+          path: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/packaged-e2e-aggregate/
           if-no-files-found: error
           compression-level: 6
           retention-days: 1
