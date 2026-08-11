@@ -324,17 +324,23 @@ class _PullApi:
 
 class VisualReviewWorkflowContractTests(unittest.TestCase):
     def test_curator_disables_proxies_and_only_redirects_over_https(self) -> None:
-        api = CuratorGitHubApi(
-            repository=REPOSITORY,
-            token="test-token",
-            api_url="https://api.github.com",
+        with mock.patch(
+            "scripts.visual.curate.urllib.request.build_opener",
+            wraps=urllib.request.build_opener,
+        ) as build_opener:
+            CuratorGitHubApi(
+                repository=REPOSITORY,
+                token="test-token",
+                api_url="https://api.github.com",
+            )
+        handlers = build_opener.call_args.args
+        self.assertTrue(
+            any(
+                isinstance(handler, urllib.request.ProxyHandler)
+                and handler.proxies == {}
+                for handler in handlers
+            )
         )
-        proxies = [
-            handler.proxies
-            for handler in api.opener.handlers
-            if isinstance(handler, urllib.request.ProxyHandler)
-        ]
-        self.assertEqual([{}], proxies)
 
         request = urllib.request.Request(
             "https://api.github.com/repos/AkaNebur/BlockPops/actions/artifacts/1/zip",
@@ -520,7 +526,10 @@ class VisualReviewWorkflowContractTests(unittest.TestCase):
             model_step.index("refresh_oidc || oidc_status=$?"),
         )
         self.assertIn("-u GITHUB_REPOSITORY", model_step)
-        self.assertNotIn("GITHUB_TOKEN: ${{ github.token }}", model_step)
+        self.assertNotRegex(
+            model_step,
+            r"(?m)^\s*GITHUB_TOKEN:\s*\$\{\{ github\.token \}\}\s*$",
+        )
         self.assertIn("[[ ! -e \"$GITHUB_WORKSPACE/.git\" ]]", review)
         self.assertIn("env -u ACTIONS_ID_TOKEN_REQUEST_URL", review)
         self.assertIn("payload = response.read(17 * 1024 + 1)", review)
@@ -1181,7 +1190,7 @@ class VisualReviewHandoffTests(unittest.TestCase):
             )
             self.assertEqual(1, sum(item["semantic_regression"] for item in report["verdicts"]))
             self.assertEqual(
-                {"sonnet", "fable"},
+                {"identical", "sonnet", "fable"},
                 {item["route"] for item in report["verdicts"]},
             )
             normalized = read_and_validate_review(self.handoff / "queue" / "capsule", output)

@@ -1414,7 +1414,10 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("blockpops-pages-deployment", workflow)
         self.assertNotIn("blockpops-pages-rotation", workflow)
         self.assertIn("scripts/pages/authenticate_source.py", workflow)
-        self.assertIn(".display_title", (REPOSITORY / "scripts/pages/select_artifact.py").read_text())
+        self.assertIn(
+            'run.get("display_title")',
+            (REPOSITORY / "scripts/pages/select_artifact.py").read_text(),
+        )
         self.assertIn("api.run_attempt", (REPOSITORY / "scripts/pages/authenticate_source.py").read_text())
         self.assertIn("--selected-artifact-digest", workflow)
         self.assertIn("SOURCE_CONTROLLER_BRANCH", workflow)
