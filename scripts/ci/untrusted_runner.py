@@ -663,6 +663,7 @@ def _relative(value: str) -> str:
     parsed = PurePosixPath(value)
     if (
         parsed.is_absolute()
+        or not parsed.parts
         or parsed.as_posix() != value
         or any(part in {"", ".", ".."} for part in parsed.parts)
     ):

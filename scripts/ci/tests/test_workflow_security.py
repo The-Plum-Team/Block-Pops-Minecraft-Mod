@@ -12,18 +12,21 @@ CREDENTIAL_SCRUB = (
     "unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL "
     "GITHUB_TOKEN GH_TOKEN"
 )
+RUNNER_COMMAND = re.compile(
+    r'(?m)^[ \t]*python3[ \t]+(?:controller/scripts/ci/untrusted_runner\.py|'
+    r'"\$CONTROLLER_ROOT/scripts/ci/untrusted_runner\.py")[ \t]+'
+    r"(?:run|validate)\b"
+)
 
 
 def _has_credentialless_candidate_boundary(text: str, position: int) -> bool:
     if CREDENTIAL_SCRUB in text[max(0, position - 900) : position]:
         return True
     prefix = text[:position]
-    boundary = max(
-        prefix.rfind("untrusted_runner.py run"),
-        prefix.rfind("untrusted_runner.py validate"),
-    )
-    if boundary < 0:
+    invocations = list(RUNNER_COMMAND.finditer(prefix))
+    if not invocations:
         return False
+    boundary = invocations[-1].start()
     invocation = prefix[boundary:]
     if re.search(r"(?m)^\s+- name:", invocation):
         return False
@@ -102,6 +105,20 @@ class WorkflowSecurityTests(unittest.TestCase):
 """
         self.assertFalse(
             _has_credentialless_candidate_boundary(workflow, workflow.index("./gradlew"))
+        )
+
+    def test_quoted_controller_runner_path_preserves_candidate_boundary(self) -> None:
+        action = r'''run: |
+  python3 "$CONTROLLER_ROOT/scripts/ci/untrusted_runner.py" run \
+    --root "$SANDBOX_ROOT" -- \
+    bash -euo pipefail -c '
+      python3 e2e/orchestrator.py
+    '
+'''
+        self.assertTrue(
+            _has_credentialless_candidate_boundary(
+                action, action.index("e2e/orchestrator.py")
+            )
         )
 
     def test_build_and_e2e_authenticate_loader_bootstrap_before_gradle(self) -> None:
@@ -210,7 +227,10 @@ class WorkflowSecurityTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIn("actions/setup-python@", text)
                 self.assertIn("--only-binary=:all: --require-hashes", text)
-                self.assertIn("--requirement scripts/pages/requirements.txt", text)
+        self.assertIn("--requirement scripts/pages/requirements.txt", build)
+        self.assertIn(
+            "--requirement controller/scripts/pages/requirements.txt", aggregate
+        )
 
     def test_writers_do_not_execute_gradle_or_packaged_candidate(self) -> None:
         for name in (
@@ -305,9 +325,10 @@ class WorkflowSecurityTests(unittest.TestCase):
         self.assertIn("digest-mismatch: error", action)
         aggregate = workflow.split("  aggregate:", 1)[1].split("  required:", 1)[0]
         self.assertIn("actions/setup-python@", aggregate)
-        self.assertIn("--requirement scripts/pages/requirements.txt", aggregate)
+        protected_requirements = "--requirement controller/scripts/pages/requirements.txt"
+        self.assertIn(protected_requirements, aggregate)
         self.assertLess(
-            aggregate.index("--requirement scripts/pages/requirements.txt"),
+            aggregate.index(protected_requirements),
             aggregate.index("scripts/ci/e2e_fanin.py create"),
         )
         required = workflow.split("  required:", 1)[1].split("  attest:", 1)[0]
@@ -339,7 +360,7 @@ class WorkflowSecurityTests(unittest.TestCase):
         self.assertIn('--overlay "$RUNNER_TEMP/blockpops-e2e-lanes" packaged-e2e-lanes', e2e)
         self.assertIn('--controller-source "$CONTROLLER_ROOT"', action)
         self.assertIn('--overlay "$RUNNER_TEMP/blockpops-e2e-bundle" build/release', action)
-        self.assertIn("untrusted_runner.py validate", action)
+        self.assertRegex(action, r'untrusted_runner\.py" validate\b')
         self.assertIn("steps.validate-runtime.outcome == 'success'", action)
 
     def test_release_attestation_runs_from_default_and_reauthenticates_controller_attempt(self) -> None:

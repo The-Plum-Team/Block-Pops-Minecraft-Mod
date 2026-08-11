@@ -166,12 +166,15 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_packaged_runtime_and_fanin_seal_before_upload(self) -> None:
         action = (REPO / ".github/actions/run-packaged-e2e/action.yml").read_text("utf-8")
-        self.assertIn("untrusted_runner.py run", action)
-        self.assertIn("untrusted_runner.py seal", action)
-        self.assertIn("untrusted_runner.py validate", action)
+        self.assertIn('untrusted_runner.py" run', action)
+        self.assertIn('untrusted_runner.py" seal', action)
+        self.assertIn('untrusted_runner.py" validate', action)
         self.assertIn("--controller-source", action)
         self.assertIn("--overlay", action)
-        self.assertLess(action.index("untrusted_runner.py seal"), action.index("actions/upload-artifact@"))
+        self.assertLess(
+            action.index('untrusted_runner.py" seal'),
+            action.index("actions/upload-artifact@"),
+        )
         self.assertIn("steps.seal-runtime.outcome == 'success'", action)
         self.assertIn("steps.validate-runtime.outcome == 'success'", action)
 
@@ -189,8 +192,9 @@ class WorkflowContractTests(unittest.TestCase):
     def test_helper_destroys_both_unprivileged_identities(self) -> None:
         helper = (REPO / "scripts/ci/untrusted_runner.py").read_text("utf-8")
         self.assertIn('"/usr/bin/env",\n            "-i"', helper)
-        self.assertGreaterEqual(helper.count('"/usr/bin/setpriv"'), 2)
-        self.assertGreaterEqual(helper.count('"--no-new-privs"'), 2)
+        self.assertEqual(1, helper.count('"/usr/bin/setpriv"'))
+        self.assertEqual(1, helper.count('"--no-new-privs"'))
+        self.assertGreaterEqual(helper.count("_execute_untrusted("), 3)
         self.assertIn('"pkill", "-KILL", "-u"', helper)
         self.assertIn('"pkill", "-KILL", "-U"', helper)
         self.assertIn('"pgrep", "-U"', helper)

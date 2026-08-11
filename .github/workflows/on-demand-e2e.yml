@@ -357,7 +357,11 @@ jobs:
                 --metadata gradle/verification-metadata.xml >/dev/null
               ./gradlew --no-daemon --no-parallel --stacktrace \
                 clean buildAllLanes buildAllE2EHarnesses check
-              python3 scripts/release/verify_release.py
+              if ! python3 scripts/release/verify_release.py; then
+                git -c core.quotePath=true diff-index --name-status HEAD -- |
+                  head -n 32 || true
+                exit 2
+              fi
             '
 
       - name: Kill and lock the candidate identity before artifact upload

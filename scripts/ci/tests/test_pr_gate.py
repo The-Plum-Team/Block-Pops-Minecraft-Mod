@@ -94,20 +94,24 @@ def run(
 
 class RunSelectionTests(unittest.TestCase):
     def test_authenticated_api_disables_environment_proxies_and_redirects(self) -> None:
-        api = GitHubApi(
-            repository="owner/repo",
-            token="test-token",
-            api_url="https://api.github.invalid",
-        )
-        proxies = [
-            handler.proxies
-            for handler in api.opener.handlers
-            if isinstance(handler, urllib.request.ProxyHandler)
-        ]
-        self.assertEqual([{}], proxies)
+        with mock.patch(
+            "scripts.ci.pr_gate.urllib.request.build_opener",
+            wraps=urllib.request.build_opener,
+        ) as build_opener:
+            GitHubApi(
+                repository="owner/repo",
+                token="test-token",
+                api_url="https://api.github.invalid",
+            )
+        handlers = build_opener.call_args.args
         self.assertTrue(
-            any(type(handler).__name__ == "_NoRedirect" for handler in api.opener.handlers)
+            any(
+                isinstance(handler, urllib.request.ProxyHandler)
+                and handler.proxies == {}
+                for handler in handlers
+            )
         )
+        self.assertTrue(any(type(handler).__name__ == "_NoRedirect" for handler in handlers))
 
     def test_newest_pending_attempt_supersedes_an_older_success(self) -> None:
         old = run(10)
@@ -888,7 +892,7 @@ class ControllerUpgradeTreeTests(unittest.TestCase):
     def controller_merge(
         self, path: str, *, executable: bool = False, symlink: bool = False
     ) -> PullIdentity:
-        self.git("switch", "-qc", "controller-upgrade/visual-gate")
+        self.git("switch", "-qC", "controller-upgrade/visual-gate", self.base)
         target = self.repository / path
         target.parent.mkdir(parents=True, exist_ok=True)
         if symlink:
@@ -902,7 +906,7 @@ class ControllerUpgradeTreeTests(unittest.TestCase):
         self.git("add", "--", path)
         self.git("commit", "-qm", "controller candidate")
         head = self.git("rev-parse", "HEAD")
-        self.git("switch", "-q", "master")
+        self.git("switch", "-qC", "master", self.base)
         self.git("merge", "--no-ff", "--no-edit", "controller-upgrade/visual-gate")
         merge = self.git("rev-parse", "HEAD")
         return identity(
@@ -949,8 +953,6 @@ class ControllerUpgradeTreeTests(unittest.TestCase):
         )
         for path in rejected:
             with self.subTest(path=path):
-                self.tearDown()
-                self.setUp()
                 current = self.controller_merge(path)
                 with mock.patch("scripts.ci.pr_gate.validate_controller_parity"):
                     with self.assertRaises(PrGateError):
@@ -962,8 +964,6 @@ class ControllerUpgradeTreeTests(unittest.TestCase):
             ("scripts/ci/unsafe-executable.py", {"executable": True}),
         ):
             with self.subTest(path=path):
-                self.tearDown()
-                self.setUp()
                 current = self.controller_merge(path, **options)
                 with mock.patch("scripts.ci.pr_gate.validate_controller_parity"):
                     with self.assertRaisesRegex(PrGateError, "unsafe"):

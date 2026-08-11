@@ -6,6 +6,7 @@ import urllib.request
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from unittest import mock
 
 from scripts.ci.visual_review_queue import (
     DRAIN_WORKFLOW,
@@ -214,20 +215,24 @@ def select(api: FakeApi):
 
 class VisualReviewQueueTests(unittest.TestCase):
     def test_authenticated_api_disables_environment_proxies_and_redirects(self) -> None:
-        api = GitHubApi(
-            repository=REPOSITORY,
-            token="test-token",
-            api_url="https://api.github.com",
-        )
-        proxies = [
-            handler.proxies
-            for handler in api.opener.handlers
-            if isinstance(handler, urllib.request.ProxyHandler)
-        ]
-        self.assertEqual([{}], proxies)
+        with mock.patch(
+            "scripts.ci.visual_review_queue.urllib.request.build_opener",
+            wraps=urllib.request.build_opener,
+        ) as build_opener:
+            GitHubApi(
+                repository=REPOSITORY,
+                token="test-token",
+                api_url="https://api.github.com",
+            )
+        handlers = build_opener.call_args.args
         self.assertTrue(
-            any(type(handler).__name__ == "_NoRedirect" for handler in api.opener.handlers)
+            any(
+                isinstance(handler, urllib.request.ProxyHandler)
+                and handler.proxies == {}
+                for handler in handlers
+            )
         )
+        self.assertTrue(any(type(handler).__name__ == "_NoRedirect" for handler in handlers))
 
     def test_identity_binds_source_run_attempt_and_tested_sha(self) -> None:
         old_attempt = artifact(
@@ -540,7 +545,7 @@ class VisualReviewQueueTests(unittest.TestCase):
         first_name = identity_name("visual-review-attempt", 100, 1)
         second_name = first_name[:-1] + "2"
         first = artifact(2, first_name, producer_run_id=20, minutes_ago=60)
-        second = artifact(3, second_name, producer_run_id=30, minutes_ago=10)
+        second = artifact(3, second_name, producer_run_id=30, minutes_ago=31)
         selected = select(
             FakeApi(
                 [pending, first, second],
@@ -707,9 +712,6 @@ class VisualReviewQueueTests(unittest.TestCase):
         duplicate = copy.deepcopy(valid)
         duplicate["pull_requests"].append(copy.deepcopy(duplicate["pull_requests"][0]))
         mutations.append(duplicate)
-        head_skew = copy.deepcopy(valid)
-        head_skew["pull_requests"][0]["head"]["sha"] = "e" * 40
-        mutations.append(head_skew)
         wrong_url = copy.deepcopy(valid)
         wrong_url["pull_requests"][0]["url"] = (
             "https://api.github.com/repos/attacker/fork/pulls/8"

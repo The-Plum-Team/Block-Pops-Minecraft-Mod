@@ -328,7 +328,11 @@ jobs:
                 [[ "$found" == 1 ]]
                 exit 1
               fi
-              python3 scripts/release/verify_release.py
+              if ! python3 scripts/release/verify_release.py; then
+                git -c core.quotePath=true diff-index --name-status HEAD -- |
+                  head -n 32 || true
+                exit 2
+              fi
             '
 
       - name: Kill and lock the candidate identity before any artifact credential exists
