@@ -1,12 +1,25 @@
 name: Build gate
 
+run-name: Build gate / ${{ inputs.attest_run_id && inputs.attest_target_sha || inputs.expected_sha || github.event.pull_request.number || github.sha }}
+
 on:
-  pull_request:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
   push:
+    branches:
+      - master
   workflow_dispatch:
     inputs:
       expected_sha:
         description: Exact automation head; empty only for an ordinary manual run
+        required: false
+        type: string
+      candidate_branch:
+        description: Exact automation branch containing expected_sha
+        required: false
+        type: string
+      expected_tree:
+        description: Exact tree of the automation head
         required: false
         type: string
       target_branch:
@@ -45,16 +58,24 @@ on:
         description: Exact final release merge commit
         required: false
         type: string
+      attest_release_branch:
+        description: Exact enrolled release branch containing attest_target_sha
+        required: false
+        type: string
+      attest_controller_sha:
+        description: Protected default-branch SHA that executed the source gate
+        required: false
+        type: string
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
-  group: build-gate-${{ github.event.pull_request.number || github.ref }}
+  group: build-gate-${{ inputs.expected_sha || inputs.attest_target_sha || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
-  BLOCKPOPS_TESTED_SHA: ${{ github.sha }}
   PYTHONUNBUFFERED: "1"
 
 jobs:
@@ -63,55 +84,143 @@ jobs:
     if: >-
       inputs.attest_run_id == '' &&
       !(github.event_name == 'push' &&
-        startsWith(github.ref_name, 'automation/release-sync/'))
+        startsWith(github.ref_name, 'automation/release-sync/')) &&
+      !(github.event_name == 'pull_request_target' &&
+        startsWith(github.event.pull_request.head.ref, 'automation/release-sync/'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       gradle_java: ${{ steps.matrix.outputs.gradle_java }}
+      tested_sha: ${{ steps.source.outputs.merge_sha }}
+      tested_tree: ${{ steps.source.outputs.merge_tree }}
+      source_branch: ${{ steps.source.outputs.head_branch }}
+      controller_sha: ${{ steps.source.outputs.default_sha }}
     steps:
-      - name: Check out the exact candidate without persisted credentials
+      - name: Check out only the protected default-branch controller
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
+          path: controller
           persist-credentials: false
 
-      - name: Authenticate explicit release-sync inputs
+      - name: Authenticate the current source and synthetic merge
+        id: source
         shell: bash
         env:
+          CANDIDATE_BRANCH: ${{ inputs.candidate_branch }}
           EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_TREE: ${{ inputs.expected_tree }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           SOURCE_SHA: ${{ inputs.source_sha }}
           TARGET_BRANCH: ${{ inputs.target_branch }}
           TARGET_SHA: ${{ inputs.target_sha }}
         run: |
           set -euo pipefail
+          test "$(git -C controller rev-parse HEAD)" = "$GITHUB_SHA"
+          if [[ "$GITHUB_EVENT_NAME" == pull_request_target ]]; then
+            python3 controller/scripts/ci/pr_gate.py resolve-source \
+              --repository-name "$GITHUB_REPOSITORY" \
+              --implementation-sha "$GITHUB_SHA" \
+              --pr-number "$PR_NUMBER" \
+              --github-output "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_EVENT_NAME" == workflow_dispatch && -n "$EXPECTED_SHA" ]]; then
+            python3 controller/scripts/ci/pr_gate.py resolve-dispatch-source \
+              --repository-name "$GITHUB_REPOSITORY" \
+              --implementation-sha "$GITHUB_SHA" \
+              --expected-source-sha "$SOURCE_SHA" \
+              --target-branch "$TARGET_BRANCH" \
+              --expected-target-sha "$TARGET_SHA" \
+              --candidate-branch "$CANDIDATE_BRANCH" \
+              --expected-candidate-sha "$EXPECTED_SHA" \
+              --expected-candidate-tree "$EXPECTED_TREE" \
+              --github-output "$GITHUB_OUTPUT"
+          else
+            tree="$(git -C controller rev-parse 'HEAD^{tree}')"
+            printf 'eligible=true\n' >> "$GITHUB_OUTPUT"
+            printf 'pr_number=0\n' >> "$GITHUB_OUTPUT"
+            printf 'default_branch=%s\n' "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            printf 'default_sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            printf 'base_branch=%s\n' "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            printf 'base_sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            printf 'head_branch=%s\n' "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            printf 'head_sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            printf 'merge_sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            printf 'merge_tree=%s\n' "$tree" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out the authenticated merge only as candidate data
+        if: steps.source.outputs.eligible == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.source.outputs.merge_sha }}
+          path: candidate
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
+
+      - name: Require an authenticated eligible source
+        shell: bash
+        env:
+          SOURCE_ELIGIBLE: ${{ steps.source.outputs.eligible }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_ELIGIBLE" == true ]]
+
+      - name: Authenticate explicit release-sync inputs
+        shell: bash
+        env:
+          BLOCKPOPS_TESTED_SHA: ${{ steps.source.outputs.merge_sha }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_TREE: ${{ inputs.expected_tree }}
+          CANDIDATE_BRANCH: ${{ inputs.candidate_branch }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          set -euo pipefail
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
           if [[ -n "$EXPECTED_SHA" ]]; then
             [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]
             [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ && "$EXPECTED_SHA" == "$BLOCKPOPS_TESTED_SHA" ]]
+            [[ "$EXPECTED_TREE" =~ ^[0-9a-f]{40}$ && \
+              "$EXPECTED_TREE" == "${{ steps.source.outputs.merge_tree }}" ]]
             [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
             [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$CANDIDATE_BRANCH" == automation/release-sync/* ]]
+            [[ "$CANDIDATE_BRANCH" == "${{ steps.source.outputs.head_branch }}" ]]
             [[ -n "$TARGET_BRANCH" ]]
-            jq -e --arg branch "$TARGET_BRANCH" \
-              '.branch.role == "release" and .branch.name == $branch and .branch.sync.enabled == true' \
-              release/release-matrix.json >/dev/null
           else
-            [[ -z "$SOURCE_SHA$TARGET_BRANCH$TARGET_SHA" ]]
+            [[ -z "$CANDIDATE_BRANCH$EXPECTED_TREE$SOURCE_SHA$TARGET_BRANCH$TARGET_SHA" ]]
           fi
+        working-directory: candidate
 
       - name: Resolve matrix-owned Java toolchains
         id: matrix
         shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
         run: |
           set -euo pipefail
-          python3 scripts/release/matrix.py --matrix release/release-matrix.json >/dev/null
-          python3 scripts/ci/loader_bootstrap.py \
-            --repository . --head-sha "$BLOCKPOPS_TESTED_SHA" >/dev/null
-          python3 scripts/ci/dependency_policy.py \
-            --metadata gradle/verification-metadata.xml >/dev/null
-          gradle_java="$(python3 scripts/release/matrix.py \
-            --matrix release/release-matrix.json --kind gradle-java \
-            | jq -er '.java')"
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
+          # This identity job parses inert matrix data only. Every candidate-controlled validator,
+          # test and build runs later under the disposable no-sudo account.
+          python3 ../controller/scripts/release/matrix.py \
+            --matrix release/release-matrix.json --no-source-check \
+            > "$RUNNER_TEMP/protected-matrix.json"
+          python3 ../controller/scripts/release/matrix.py \
+            --matrix release/release-matrix.json --no-source-check --kind gradle-java \
+            > "$RUNNER_TEMP/protected-gradle-java.json"
+          if [[ -n "$EXPECTED_SHA" ]]; then
+            jq -e --arg branch "$TARGET_BRANCH" \
+              '.branch.role == "release" and .branch.name == $branch and
+               .branch.sync.enabled == true' \
+              "$RUNNER_TEMP/protected-matrix.json" >/dev/null
+          fi
+          gradle_java="$(jq -er '.java' "$RUNNER_TEMP/protected-gradle-java.json")"
           [[ "$gradle_java" =~ ^[0-9]+$ ]]
           printf 'gradle_java=%s\n' "$gradle_java" >> "$GITHUB_OUTPUT"
+        working-directory: candidate
 
   build:
     name: Build immutable release bundle
@@ -119,13 +228,24 @@ jobs:
     if: needs.identity.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      BLOCKPOPS_TESTED_SHA: ${{ needs.identity.outputs.tested_sha }}
     steps:
-      - name: Check out the exact candidate without persisted credentials
+      - name: Check out only the protected default-branch controller
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
+          ref: ${{ needs.identity.outputs.controller_sha }}
+          path: controller
           persist-credentials: false
+
+      - name: Check out the authenticated merge only as candidate data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.identity.outputs.tested_sha }}
+          fetch-depth: 0
+          path: candidate
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
 
       - name: Validate the Gradle wrapper
         uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
@@ -134,10 +254,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd gradle/wrapper && sha256sum --check --strict gradle-wrapper.jar.sha256)
-          distribution_hash="$(tr -d '\r\n' < gradle/wrapper/gradle-8.14-bin.zip.sha256)"
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
+          (cd candidate/gradle/wrapper && sha256sum --check --strict gradle-wrapper.jar.sha256)
+          distribution_hash="$(tr -d '\r\n' < candidate/gradle/wrapper/gradle-8.14-bin.zip.sha256)"
           grep --fixed-strings --line-regexp "distributionSha256Sum=$distribution_hash" \
-            gradle/wrapper/gradle-wrapper.properties
+            candidate/gradle/wrapper/gradle-wrapper.properties
 
       - name: Install the matrix-owned Gradle JDK
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
@@ -150,64 +271,114 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install hash-locked test dependencies
-        run: >-
-          python3 -m pip install --disable-pip-version-check
-          --only-binary=:all: --require-hashes
-          --requirement scripts/pages/requirements.txt
-
       - name: Configure read-only Gradle cache
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           cache-read-only: true
 
-      - name: Validate protected Python policy and tests
+      - name: Prepare the isolated candidate filesystem and OS identity
+        shell: bash
+        env:
+          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
+        run: |
+          set -euo pipefail
+          seed=()
+          if [[ -n "${GRADLE_USER_HOME:-}" && -d "$GRADLE_USER_HOME" ]]; then
+            seed=(--seed-gradle-home "$GRADLE_USER_HOME")
+          fi
+          python3 controller/scripts/ci/untrusted_runner.py prepare \
+            --root "$SANDBOX_ROOT" \
+            --source "$GITHUB_WORKSPACE/candidate" \
+            --controller-source "$GITHUB_WORKSPACE/controller" \
+            "${seed[@]}"
+
+      - name: Validate and build entirely inside the credentialless account
+        id: candidate
+        shell: bash
+        env:
+          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
+        run: |
+          set -euo pipefail
+          python3 controller/scripts/ci/untrusted_runner.py run \
+            --root "$SANDBOX_ROOT" --pass-env BLOCKPOPS_TESTED_SHA -- \
+            bash -euo pipefail -c '
+              python3 -m pip install --user --disable-pip-version-check \
+                --only-binary=:all: --require-hashes \
+                --requirement scripts/pages/requirements.txt
+              python3 scripts/release/matrix.py --matrix release/release-matrix.json >/dev/null
+              python3 scripts/ci/loader_bootstrap.py \
+                --repository . --head-sha "$BLOCKPOPS_TESTED_SHA" >/dev/null
+              python3 scripts/ci/dependency_policy.py \
+                --metadata gradle/verification-metadata.xml >/dev/null
+              python3 -m compileall -q e2e scripts tests
+              python3 -m unittest discover -s scripts/ci/tests -p "test_*.py" -v
+              python3 -m unittest discover -s tests -p "test_*.py" -v
+              if ! ./gradlew --no-daemon --no-parallel --stacktrace \
+                clean buildAllLanes buildAllE2EHarnesses check; then
+                # Report rejected generated mapping hashes without admitting them.
+                found=0
+                while IFS= read -r -d "" mapping; do
+                  [[ -f "$mapping" && ! -L "$mapping" ]]
+                  bytes="$(wc -c < "$mapping")"
+                  [[ "$bytes" =~ ^[0-9]+$ && "$bytes" -le 67108864 ]]
+                  sha256sum "$mapping"
+                  found=1
+                done < <(find "$GRADLE_USER_HOME" -type f \
+                  -name "mappings-layered+hash.*.jar" -print0)
+                [[ "$found" == 1 ]]
+                exit 1
+              fi
+              python3 scripts/release/verify_release.py
+            '
+
+      - name: Kill and lock the candidate identity before any artifact credential exists
+        id: seal
+        if: always()
+        shell: bash
+        env:
+          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
+        run: |
+          set -euo pipefail
+          python3 controller/scripts/ci/untrusted_runner.py seal \
+            --root "$SANDBOX_ROOT" --export build/release
+
+      - name: Reverify inert outputs under a fresh credentialless validator identity
+        id: validator
+        if: steps.candidate.outcome == 'success' && steps.seal.outcome == 'success'
+        shell: bash
+        env:
+          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
+        run: |
+          set -euo pipefail
+          repository="$SANDBOX_ROOT/repository"
+          python3 controller/scripts/ci/untrusted_runner.py validate \
+            --root "$SANDBOX_ROOT" --pass-env BLOCKPOPS_TESTED_SHA -- \
+            python3 scripts/release/verify_release.py \
+              --repository "$repository" \
+              --matrix "$repository/release/release-matrix.json" \
+              --stage "$repository/build/release" \
+              --manifest "$repository/build/release/artifacts.json" \
+              --verify-staged
+
+      - name: Assert the candidate never touched the host checkout
+        if: steps.candidate.outcome == 'success' && steps.seal.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m compileall -q e2e scripts tests
-          python3 -m unittest discover -s scripts/ci/tests -p 'test_*.py' -v
-          python3 -m unittest discover -s tests -p 'test_*.py' -v
-
-      - name: Build every declared production and harness lane
-        run: >-
-          ./gradlew --no-daemon --no-parallel --stacktrace
-          clean buildAllLanes buildAllE2EHarnesses check
-
-      - name: Report rejected generated mapping hashes without admitting them
-        if: failure()
-        shell: bash
-        run: |
-          set -euo pipefail
-          found=0
-          while IFS= read -r -d '' mapping; do
-            [[ -f "$mapping" && ! -L "$mapping" ]]
-            bytes="$(wc -c < "$mapping")"
-            [[ "$bytes" =~ ^[0-9]+$ && "$bytes" -le 67108864 ]]
-            sha256sum "$mapping"
-            found=1
-          done < <(find "$GRADLE_USER_HOME" -type f \
-            -name 'mappings-layered+hash.*.jar' -print0)
-          [[ "$found" == 1 ]]
-
-      - name: Stage and reverify the production bundle
-        run: python3 scripts/release/verify_release.py
+          git -C candidate diff --exit-code
+          test -z "$(git -C candidate status --porcelain --untracked-files=no)"
 
       - name: Upload the exact-head staged release bundle
+        if: >-
+          steps.candidate.outcome == 'success' && steps.seal.outcome == 'success' &&
+          steps.validator.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: staged-release-bundle-${{ github.sha }}-${{ github.run_attempt }}
-          path: build/release/
+          name: staged-release-bundle-${{ needs.identity.outputs.tested_sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/blockpops-candidate-sandbox/repository/build/release/
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
-
-      - name: Assert the build did not mutate tracked sources
-        shell: bash
-        run: |
-          set -euo pipefail
-          git diff --exit-code
-          test -z "$(git status --porcelain --untracked-files=no)"
 
   required:
     name: Build and verify
@@ -215,7 +386,9 @@ jobs:
     if: >-
       always() && inputs.attest_run_id == '' &&
       !(github.event_name == 'push' &&
-        startsWith(github.ref_name, 'automation/release-sync/'))
+        startsWith(github.ref_name, 'automation/release-sync/')) &&
+      !(github.event_name == 'pull_request_target' &&
+        startsWith(github.event.pull_request.head.ref, 'automation/release-sync/'))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -244,3 +417,5 @@ jobs:
       tested_sha: ${{ inputs.attest_sha }}
       base_sha: ${{ inputs.attest_base_sha }}
       target_sha: ${{ inputs.attest_target_sha }}
+      target_branch: ${{ inputs.attest_release_branch }}
+      source_controller_sha: ${{ inputs.attest_controller_sha }}

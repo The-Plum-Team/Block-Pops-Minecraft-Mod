@@ -1,8 +1,8 @@
 name: Authenticate ordinary PR gates
 
-# workflow_run always executes this implementation from the protected default branch. Candidate
-# workflows are evidence only: no candidate file is executed here and the status writer receives
-# only a dedicated App token limited to commit statuses.
+# workflow_run and issue_comment always execute this implementation from the protected default
+# branch. Protected pull_request_target gates are evidence only: no candidate file is executed in
+# the writer and its fresh App token remains limited to commit statuses.
 on:
   workflow_run:
     workflows:
@@ -12,30 +12,50 @@ on:
       - requested
       - in_progress
       - completed
+  issue_comment:
+    types:
+      - created
+      - edited
+      - deleted
 
 permissions: {}
 
 concurrency:
   group: >-
-    trusted-pr-${{ github.event.workflow_run.head_repository.full_name }}-${{
-    github.event.workflow_run.head_sha }}
+    trusted-pr-${{ github.event.workflow_run.pull_requests[0].number ||
+    github.event.issue.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   evaluate:
     name: Authenticate current PR and newest exact attempts
-    if: github.event.workflow_run.event == 'pull_request'
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'pull_request_target') ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       github.event.comment.author_association == 'OWNER')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       actions: read
       contents: read
+      issues: read
       pull-requests: read
     outputs:
       eligible: ${{ steps.assess.outputs.eligible }}
       pr_number: ${{ steps.assess.outputs.pr_number }}
+      default_branch: ${{ steps.assess.outputs.default_branch }}
+      base_branch: ${{ steps.assess.outputs.base_branch }}
+      head_branch: ${{ steps.assess.outputs.head_branch }}
       head_sha: ${{ steps.assess.outputs.head_sha }}
       merge_sha: ${{ steps.assess.outputs.merge_sha }}
+      merge_tree: ${{ steps.assess.outputs.merge_tree }}
+      base_sha: ${{ steps.assess.outputs.base_sha }}
+      default_sha: ${{ steps.assess.outputs.default_sha }}
+      policy_mode: ${{ steps.assess.outputs.policy_mode }}
+      authorization_digest: ${{ steps.assess.outputs.authorization_digest }}
+      authorization_comment_id: ${{ steps.assess.outputs.authorization_comment_id }}
       build_state: ${{ steps.assess.outputs.build_state }}
       build_description: ${{ steps.assess.outputs.build_description }}
       build_run_id: ${{ steps.assess.outputs.build_run_id }}
@@ -56,13 +76,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           IMPLEMENTATION_SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
           TRIGGER_RUN_ID: ${{ github.event.workflow_run.id }}
+          ISSUE_PR_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
           test "$(git -C controller rev-parse HEAD)" = "$IMPLEMENTATION_SHA"
+          if [[ "$EVENT_NAME" == workflow_run ]]; then
+            locator=(--trigger-run-id "$TRIGGER_RUN_ID")
+          elif [[ "$EVENT_NAME" == issue_comment ]]; then
+            locator=(--pr-number "$ISSUE_PR_NUMBER")
+          else
+            exit 2
+          fi
           python3 controller/scripts/ci/pr_gate.py locate \
             --repository-name "$GITHUB_REPOSITORY" \
-            --trigger-run-id "$TRIGGER_RUN_ID" \
+            "${locator[@]}" \
             --implementation-sha "$IMPLEMENTATION_SHA" \
             --github-output "$GITHUB_OUTPUT"
 
@@ -82,13 +111,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           IMPLEMENTATION_SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
           TRIGGER_RUN_ID: ${{ github.event.workflow_run.id }}
+          ISSUE_PR_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
+          if [[ "$EVENT_NAME" == workflow_run ]]; then
+            locator=(--trigger-run-id "$TRIGGER_RUN_ID")
+          elif [[ "$EVENT_NAME" == issue_comment ]]; then
+            locator=(--pr-number "$ISSUE_PR_NUMBER")
+          else
+            exit 2
+          fi
           python3 controller/scripts/ci/pr_gate.py evaluate \
             --repository-name "$GITHUB_REPOSITORY" \
             --repository candidate \
-            --trigger-run-id "$TRIGGER_RUN_ID" \
+            "${locator[@]}" \
             --implementation-sha "$IMPLEMENTATION_SHA" \
             --expected-pr-number "${{ steps.locate.outputs.pr_number }}" \
             --expected-merge-sha "${{ steps.locate.outputs.merge_sha }}" \
@@ -101,21 +139,62 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: pr-gate
-    permissions: {}
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
     steps:
+      - name: Check out only the exact protected final authenticator
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+          persist-credentials: false
+
+      - name: Reauthenticate exact PR identity and owner authorization
+        id: reauth
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          IMPLEMENTATION_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C controller rev-parse HEAD)" = "$IMPLEMENTATION_SHA"
+          python3 controller/scripts/ci/pr_gate.py reauthorize \
+            --repository-name "$GITHUB_REPOSITORY" \
+            --implementation-sha "$IMPLEMENTATION_SHA" \
+            --expected-pr-number "${{ needs.evaluate.outputs.pr_number }}" \
+            --expected-default-branch "${{ needs.evaluate.outputs.default_branch }}" \
+            --expected-default-sha "${{ needs.evaluate.outputs.default_sha }}" \
+            --expected-base-branch "${{ needs.evaluate.outputs.base_branch }}" \
+            --expected-base-sha "${{ needs.evaluate.outputs.base_sha }}" \
+            --expected-head-branch "${{ needs.evaluate.outputs.head_branch }}" \
+            --expected-head-sha "${{ needs.evaluate.outputs.head_sha }}" \
+            --expected-merge-sha "${{ needs.evaluate.outputs.merge_sha }}" \
+            --expected-merge-tree "${{ needs.evaluate.outputs.merge_tree }}" \
+            --expected-policy-mode "${{ needs.evaluate.outputs.policy_mode }}" \
+            --expected-authorization-digest \
+              "${{ needs.evaluate.outputs.authorization_digest }}" \
+            --expected-authorization-comment-id \
+              "${{ needs.evaluate.outputs.authorization_comment_id }}" \
+            --github-output "$GITHUB_OUTPUT"
+
       - name: Mint one status-only installation token
         id: app-token
+        if: steps.reauth.outputs.eligible == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ vars.PR_GATE_APP_CLIENT_ID }}
+          client-id: ${{ vars.PR_GATE_APP_CLIENT_ID }}
           private-key: ${{ secrets.PR_GATE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-statuses: write
 
       - name: Publish only the two fixed exact-head contexts
+        if: steps.reauth.outputs.eligible == 'true'
         shell: bash
         env:
+          AUTHORIZATION_CURRENT: ${{ steps.reauth.outputs.authorization_current }}
           BUILD_DESCRIPTION: ${{ needs.evaluate.outputs.build_description }}
           BUILD_RUN_ID: ${{ needs.evaluate.outputs.build_run_id }}
           BUILD_STATE: ${{ needs.evaluate.outputs.build_state }}
@@ -124,6 +203,7 @@ jobs:
           E2E_STATE: ${{ needs.evaluate.outputs.e2e_state }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           HEAD_SHA: ${{ needs.evaluate.outputs.head_sha }}
+          POLICY_MODE: ${{ needs.evaluate.outputs.policy_mode }}
           PR_NUMBER: ${{ needs.evaluate.outputs.pr_number }}
         run: |
           set -euo pipefail
@@ -131,8 +211,24 @@ jobs:
           [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
           [[ "$BUILD_STATE" =~ ^(pending|success|failure)$ ]]
           [[ "$E2E_STATE" =~ ^(pending|success|failure)$ ]]
+          [[ "$AUTHORIZATION_CURRENT" =~ ^(true|false)$ ]]
+          [[ "$POLICY_MODE" =~ ^(ordinary|controller-upgrade)$ ]]
           [[ ${#BUILD_DESCRIPTION} -ge 1 && ${#BUILD_DESCRIPTION} -le 140 ]]
           [[ ${#E2E_DESCRIPTION} -ge 1 && ${#E2E_DESCRIPTION} -le 140 ]]
+
+          if [[ "$AUTHORIZATION_CURRENT" != true ]]; then
+            BUILD_STATE=failure
+            E2E_STATE=failure
+            BUILD_RUN_ID=0
+            E2E_RUN_ID=0
+            if [[ "$POLICY_MODE" == controller-upgrade ]]; then
+              BUILD_DESCRIPTION="Controller upgrade approval changed before publication"
+              E2E_DESCRIPTION="$BUILD_DESCRIPTION"
+            else
+              BUILD_DESCRIPTION="Ordinary PR policy changed before publication"
+              E2E_DESCRIPTION="$BUILD_DESCRIPTION"
+            fi
+          fi
 
           publish_status() {
             local context="$1" state="$2" description="$3" run_id="$4"

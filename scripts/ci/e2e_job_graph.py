@@ -30,6 +30,7 @@ E2E_AGGREGATE = "Validate and aggregate packaged evidence"
 E2E_GATE = "Packaged E2E gate"
 E2E_ATTEST = "Attest exact tested packaged tree"
 E2E_PUBLIC = "Curate current-head public evidence (advisory)"
+SOURCE_EVENTS = frozenset({"pull_request_target", "schedule", "workflow_dispatch"})
 
 
 @dataclass(frozen=True)
@@ -92,6 +93,8 @@ def expected_jobs(
     event: str = "workflow_dispatch",
     source_branch: str | None = None,
 ) -> tuple[ExpectedJob, ...]:
+    if event not in SOURCE_EVENTS:
+        raise JobGraphError(f"unsupported protected source event {event!r}")
     if workflow == "build-gate.yml":
         return (
             ExpectedJob(BUILD_IDENTITY, "success"),
@@ -102,8 +105,6 @@ def expected_jobs(
     if workflow != "on-demand-e2e.yml":
         raise JobGraphError("unsupported protected workflow")
     matrix = load_matrix(matrix_path, validate_sources=False)
-    if event not in {"pull_request", "schedule", "workflow_dispatch"}:
-        raise JobGraphError(f"unsupported packaged source event {event!r}")
     projection = "scheduled-anchors" if event == "schedule" else "pr-anchors"
     rows = gha_matrix(matrix, projection)["include"]
     if not rows:
@@ -229,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--event",
-        choices=("pull_request", "schedule", "workflow_dispatch"),
+        choices=("pull_request_target", "schedule", "workflow_dispatch"),
         default="workflow_dispatch",
     )
     parser.add_argument("--source-branch")

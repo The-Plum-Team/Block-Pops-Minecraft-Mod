@@ -72,16 +72,26 @@ jobs:
           }
 
           dispatch_if_needed() {
-            local workflow="$1" branch="$2" head="$3" target="$4" base="$5" context="$6" description="$7"
+            local workflow="$1" branch="$2" head="$3" tree="$4" target="$5" base="$6" context="$7" description="$8"
             local runs="$RUNNER_TEMP/${workflow}.runs.json"
             gh api --paginate --slurp \
-              "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?event=workflow_dispatch&head_sha=$head&per_page=100" \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?event=workflow_dispatch&head_sha=$source_sha&per_page=100" \
               > "$runs"
+            jq -e 'type == "array" and length <= 10 and all(.[]; type == "object") and
+              ([.[].workflow_runs[]] | length) <= 1000' "$runs" >/dev/null
+            local title
+            if [[ "$workflow" == build-gate.yml ]]; then
+              title="Build gate / $head"
+            else
+              title="Packaged E2E / $head"
+            fi
             local settled
-            settled="$(jq -r --arg branch "$branch" --arg head "$head" \
+            settled="$(jq -r --arg branch "$DEFAULT_BRANCH" --arg head "$source_sha" \
+              --arg title "$title" \
               --arg path ".github/workflows/$workflow" --arg repository "$GITHUB_REPOSITORY" \
               '[.[].workflow_runs[] | select(.event == "workflow_dispatch" and .path == $path and
                 .head_branch == $branch and .head_sha == $head and
+                .display_title == $title and
                 .head_repository.full_name == $repository)] |
                sort_by(.created_at, .id) | last | if . == null then "missing"
                elif (.status == "queued" or .status == "in_progress" or
@@ -100,9 +110,11 @@ jobs:
             fi
             publish_status "$head" "$context" pending "$description"
             payload="$RUNNER_TEMP/${workflow}.dispatch.json"
-            jq -n --arg ref "$branch" --arg head "$head" --arg target "$target" \
-              --arg base "$base" --arg source "$source_sha" \
-              '{ref:$ref,inputs:{expected_sha:$head,target_branch:$target,target_sha:$base,source_sha:$source}}' \
+            jq -n --arg ref "$DEFAULT_BRANCH" --arg head "$head" --arg tree "$tree" \
+              --arg branch "$branch" --arg target "$target" --arg base "$base" \
+              --arg source "$source_sha" \
+              '{ref:$ref,inputs:{expected_sha:$head,expected_tree:$tree,
+                candidate_branch:$branch,target_branch:$target,target_sha:$base,source_sha:$source}}' \
               > "$payload"
             gh api --method POST \
               "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/dispatches" \
@@ -116,11 +128,15 @@ jobs:
           gh api --paginate --slurp \
             "repos/$GITHUB_REPOSITORY/actions/workflows/on-demand-e2e.yml/runs?event=workflow_dispatch&head_sha=$source_sha&per_page=100" \
             > "$canonical_runs"
+          jq -e 'type == "array" and length <= 10 and all(.[]; type == "object") and
+            ([.[].workflow_runs[]] | length) <= 1000' "$canonical_runs" >/dev/null
           canonical_state="$(jq -r --arg branch "$DEFAULT_BRANCH" --arg head "$source_sha" \
+            --arg title "Packaged E2E / $source_sha" \
             --arg repository "$GITHUB_REPOSITORY" \
             '[.[].workflow_runs[] | select(.event == "workflow_dispatch" and
               .path == ".github/workflows/on-demand-e2e.yml" and
               .head_branch == $branch and .head_sha == $head and
+              .display_title == $title and
               .head_repository.full_name == $repository)] |
              sort_by(.created_at, .id) | last | if . == null then "missing"
              elif (.status == "queued" or .status == "in_progress" or
@@ -241,10 +257,12 @@ jobs:
             done
             [[ "$pr_consistent" == true ]]
 
-            dispatch_if_needed build-gate.yml "$automation_branch" "$head_sha" \
+            head_tree="$(git rev-parse "$head_sha^{tree}")"
+            [[ "$head_tree" =~ ^[0-9a-f]{40}$ ]]
+            dispatch_if_needed build-gate.yml "$automation_branch" "$head_sha" "$head_tree" \
               "$target_branch" "$target_sha" "Release sync / Build and verify" \
               "Waiting for exact-head Build gate"
-            dispatch_if_needed on-demand-e2e.yml "$automation_branch" "$head_sha" \
+            dispatch_if_needed on-demand-e2e.yml "$automation_branch" "$head_sha" "$head_tree" \
               "$target_branch" "$target_sha" "Release sync / Packaged E2E gate" \
               "Waiting for exact-head Packaged E2E"
             printf 'Release-sync PR for `%s`: %s\n' "$target_branch" "$pr_url" >> "$GITHUB_STEP_SUMMARY"

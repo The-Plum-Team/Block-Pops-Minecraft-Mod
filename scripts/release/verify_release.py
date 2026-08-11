@@ -21,6 +21,12 @@ from scripts.release.matrix import MatrixError  # noqa: E402
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--repository",
+        type=Path,
+        default=REPO,
+        help="Repository whose production outputs and Git identity are being verified",
+    )
+    parser.add_argument(
         "--matrix", type=Path, default=Path("release/release-matrix.json")
     )
     parser.add_argument("--stage", type=Path, default=Path("build/release"))
@@ -29,17 +35,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--verify-staged", action="store_true")
     args = parser.parse_args(argv)
+    repository = args.repository.resolve()
     try:
         if args.verify_staged:
             verify_staged(
-                repository=REPO,
+                repository=repository,
                 matrix_path=args.matrix,
                 manifest_path=args.manifest,
                 stage=args.stage,
             )
         else:
             stage_release(
-                repository=REPO,
+                repository=repository,
                 matrix_path=args.matrix,
                 manifest_path=args.manifest,
                 stage=args.stage,

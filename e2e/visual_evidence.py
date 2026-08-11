@@ -47,7 +47,7 @@ SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$")
 SAFE_REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 SAFE_WORKFLOW = re.compile(r"^\.github/workflows/[A-Za-z0-9][A-Za-z0-9._-]*\.ya?ml$")
 ALLOWED_EVENTS = frozenset(
-    {"merge_group", "pull_request", "push", "schedule", "workflow_dispatch"}
+    {"merge_group", "pull_request_target", "push", "schedule", "workflow_dispatch"}
 )
 RESULT_KEYS = frozenset(
     {
@@ -385,9 +385,9 @@ def validate_attestation(
     for field in ("source_head_commit", "tested_commit", "tested_tree"):
         if not isinstance(record[field], str) or SHA1.fullmatch(record[field]) is None:
             _fail(f"visual source {field} must be a lowercase GitHub SHA-1")
-    if record["event"] == "pull_request":
+    if record["event"] == "pull_request_target":
         if record["tested_commit"] == record["source_head_commit"]:
-            _fail("pull_request visual source must distinguish tested merge and source head")
+            _fail("pull_request_target visual source must distinguish tested merge and source head")
     elif (
         record["source_head_repository"] != record["repository"]
         or record["tested_commit"] != record["source_head_commit"]
@@ -1067,6 +1067,7 @@ def _validate_evidence_root_outputs(
     contract: ScenarioContract,
 ) -> None:
     allowed = {
+        "aggregate.json",
         "profiles",
         "resolved-matrix.json",
         "summary.json",

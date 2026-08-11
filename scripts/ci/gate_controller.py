@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Authenticate release-sync topology and select exact GitHub Actions runs."""
+"""Authenticate release-sync topology, default-controller runs, and exact artifacts."""
 
 from __future__ import annotations
 
@@ -34,9 +34,19 @@ VERIFICATION_PATH = "gradle/verification-metadata.xml"
 KNOWN_LOADER_ROOTS = frozenset({"fabric", "forge", "neoforge"})
 MAX_API_BYTES = 16 * 1024 * 1024
 MAX_RUNS = 1000
+MAX_ARTIFACTS = 1000
+MAX_ARTIFACT_BYTES = 2 * 1024 * 1024 * 1024
 WORKFLOWS = frozenset({"build-gate.yml", "on-demand-e2e.yml"})
+WORKFLOW_TITLES = {
+    "build-gate.yml": "Build gate",
+    "on-demand-e2e.yml": "Packaged E2E",
+}
+SHA1 = re.compile(r"^[0-9a-f]{40}$")
+SHA256_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 PROTECTED_PATHS = (
     ".github/actions",
+    ".github/CODEOWNERS",
     ".github/workflows",
     "build.gradle",
     "common/build.gradle",
@@ -53,6 +63,7 @@ PROTECTED_PATHS = (
     "scripts/visual",
     "settings.gradle",
     "site",
+    "tests",
     "common/src/e2e",
 )
 FORBIDDEN_PATHS = (".gradle", "buildSrc")
@@ -357,6 +368,23 @@ def _runs(document: Any) -> list[dict[str, Any]]:
     return result
 
 
+def _artifacts(document: Any) -> list[dict[str, Any]]:
+    pages = document if isinstance(document, list) else [document]
+    result: list[dict[str, Any]] = []
+    for page in pages:
+        if not isinstance(page, dict) or not isinstance(page.get("artifacts"), list):
+            raise GateControllerError("Actions artifacts response has an invalid shape")
+        for artifact in page["artifacts"]:
+            if not isinstance(artifact, dict):
+                raise GateControllerError("Actions artifact must be an object")
+            result.append(artifact)
+    if len(result) > MAX_ARTIFACTS:
+        raise GateControllerError(
+            f"Actions response exceeds {MAX_ARTIFACTS} artifacts"
+        )
+    return result
+
+
 def _timestamp(value: Any) -> datetime:
     if not isinstance(value, str) or not value.endswith("Z"):
         raise GateControllerError("Actions run created_at must be UTC RFC3339")
@@ -370,26 +398,40 @@ def select_newest_exact_run(
     document: Any,
     *,
     workflow: str,
-    branch: str,
-    sha: str,
+    controller_branch: str,
+    controller_sha: str,
+    tested_branch: str,
+    tested_sha: str,
     repository: str,
 ) -> dict[str, Any]:
     if workflow not in WORKFLOWS:
         raise GateControllerError("unsupported protected workflow")
-    if not valid_branch_name(branch) or re.fullmatch(r"[0-9a-f]{40}", sha) is None:
-        raise GateControllerError("exact run selector has an unsafe branch/SHA")
-    if not isinstance(repository, str) or repository.count("/") != 1:
+    if not valid_branch_name(controller_branch) or not valid_branch_name(tested_branch):
+        raise GateControllerError("exact run selector has an unsafe branch identity")
+    if (
+        not tested_branch.startswith("automation/release-sync/")
+        or tested_branch == controller_branch
+    ):
+        raise GateControllerError("tested branch is not an isolated release-sync candidate")
+    if SHA1.fullmatch(controller_sha) is None or SHA1.fullmatch(tested_sha) is None:
+        raise GateControllerError("exact run selector has an unsafe SHA identity")
+    if REPOSITORY.fullmatch(repository) is None:
         raise GateControllerError("exact run selector has an invalid repository")
     path = f".github/workflows/{workflow}"
+    display_title = f"{WORKFLOW_TITLES[workflow]} / {tested_sha}"
     candidates: list[tuple[datetime, int, dict[str, Any]]] = []
-    identities: set[tuple[int, int]] = set()
+    run_ids: set[int] = set()
     for run in _runs(document):
+        run_repository = run.get("repository")
         head_repository = run.get("head_repository")
         if (
             run.get("path") != path
             or run.get("event") != "workflow_dispatch"
-            or run.get("head_branch") != branch
-            or run.get("head_sha") != sha
+            or run.get("display_title") != display_title
+            or run.get("head_branch") != controller_branch
+            or run.get("head_sha") != controller_sha
+            or not isinstance(run_repository, dict)
+            or run_repository.get("full_name") != repository
             or not isinstance(head_repository, dict)
             or head_repository.get("full_name") != repository
         ):
@@ -405,10 +447,9 @@ def select_newest_exact_run(
             or attempt <= 0
         ):
             raise GateControllerError("matching Actions run has an invalid id/attempt")
-        identity = (run_id, attempt)
-        if identity in identities:
-            raise GateControllerError("Actions response repeats a matching run/attempt")
-        identities.add(identity)
+        if run_id in run_ids:
+            raise GateControllerError("Actions response repeats a matching run id")
+        run_ids.add(run_id)
         status = run.get("status")
         conclusion = run.get("conclusion")
         if status not in {"queued", "in_progress", "completed", "pending", "waiting", "requested"}:
@@ -425,9 +466,15 @@ def select_newest_exact_run(
             "startup_failure",
         }:
             raise GateControllerError("completed Actions run has an invalid conclusion")
+        if status != "completed" and conclusion is not None:
+            raise GateControllerError(
+                "incomplete matching Actions run unexpectedly has a conclusion"
+            )
         candidates.append((_timestamp(run.get("created_at")), run_id, run))
     if not candidates:
-        raise GateControllerError("no exact workflow_dispatch run exists for this head")
+        raise GateControllerError(
+            "no exact default-controller workflow_dispatch run exists for this candidate"
+        )
     selected = max(candidates, key=lambda item: (item[0], item[1]))[2]
     return {
         "id": selected["id"],
@@ -436,9 +483,74 @@ def select_newest_exact_run(
         "status": selected["status"],
         "conclusion": selected.get("conclusion"),
         "workflow": workflow,
-        "branch": branch,
-        "sha": sha,
+        "display_title": display_title,
+        "controller_branch": controller_branch,
+        "controller_sha": controller_sha,
+        "tested_branch": tested_branch,
+        "tested_sha": tested_sha,
+        "branch": tested_branch,
+        "sha": tested_sha,
         "repository": repository,
+    }
+
+
+def validate_exact_artifact(
+    document: Any, *, expected_name: str, run_id: int
+) -> dict[str, Any]:
+    if (
+        not isinstance(expected_name, str)
+        or re.fullmatch(r"[A-Za-z0-9_.-]{1,256}", expected_name) is None
+    ):
+        raise GateControllerError("expected artifact name is unsafe")
+    if isinstance(run_id, bool) or not isinstance(run_id, int) or run_id <= 0:
+        raise GateControllerError("artifact owner run id must be a positive integer")
+    ids: set[int] = set()
+    names: set[str] = set()
+    matches: list[dict[str, Any]] = []
+    for artifact in _artifacts(document):
+        artifact_id = artifact.get("id")
+        name = artifact.get("name")
+        if (
+            isinstance(artifact_id, bool)
+            or not isinstance(artifact_id, int)
+            or artifact_id <= 0
+            or not isinstance(name, str)
+            or re.fullmatch(r"[A-Za-z0-9_.-]{1,256}", name) is None
+        ):
+            raise GateControllerError("Actions artifact has an invalid id/name")
+        if artifact_id in ids or name in names:
+            raise GateControllerError("Actions artifacts repeat an id or name")
+        ids.add(artifact_id)
+        names.add(name)
+        if name != expected_name:
+            continue
+        owner = artifact.get("workflow_run")
+        size = artifact.get("size_in_bytes")
+        digest = artifact.get("digest")
+        if (
+            artifact.get("expired") is not False
+            or not isinstance(owner, dict)
+            or isinstance(owner.get("id"), bool)
+            or owner.get("id") != run_id
+            or isinstance(size, bool)
+            or not isinstance(size, int)
+            or not 1 <= size <= MAX_ARTIFACT_BYTES
+            or not isinstance(digest, str)
+            or SHA256_DIGEST.fullmatch(digest) is None
+        ):
+            raise GateControllerError("exact gate artifact metadata is stale or unsafe")
+        matches.append(artifact)
+    if len(matches) != 1:
+        raise GateControllerError(
+            f"expected exactly one immutable artifact named {expected_name!r}"
+        )
+    artifact = matches[0]
+    return {
+        "id": artifact["id"],
+        "name": artifact["name"],
+        "digest": artifact["digest"],
+        "size_in_bytes": artifact["size_in_bytes"],
+        "run_id": run_id,
     }
 
 
@@ -465,9 +577,15 @@ def main(argv: list[str] | None = None) -> int:
     select = commands.add_parser("select-run")
     select.add_argument("--runs", type=Path, required=True)
     select.add_argument("--workflow", choices=sorted(WORKFLOWS), required=True)
-    select.add_argument("--branch", required=True)
-    select.add_argument("--sha", required=True)
+    select.add_argument("--controller-branch", required=True)
+    select.add_argument("--controller-sha", required=True)
+    select.add_argument("--tested-branch", required=True)
+    select.add_argument("--tested-sha", required=True)
     select.add_argument("--repository-name", required=True)
+    artifact = commands.add_parser("validate-artifact")
+    artifact.add_argument("--artifacts", type=Path, required=True)
+    artifact.add_argument("--expected-name", required=True)
+    artifact.add_argument("--run-id", type=int, required=True)
     token = commands.add_parser("branch-token")
     token.add_argument("--branch", required=True)
     args = parser.parse_args(argv)
@@ -495,9 +613,17 @@ def main(argv: list[str] | None = None) -> int:
             output = select_newest_exact_run(
                 _read_json(args.runs, "Actions runs response"),
                 workflow=args.workflow,
-                branch=args.branch,
-                sha=args.sha,
+                controller_branch=args.controller_branch,
+                controller_sha=args.controller_sha,
+                tested_branch=args.tested_branch,
+                tested_sha=args.tested_sha,
                 repository=args.repository_name,
+            )
+        elif args.command == "validate-artifact":
+            output = validate_exact_artifact(
+                _read_json(args.artifacts, "Actions artifacts response"),
+                expected_name=args.expected_name,
+                run_id=args.run_id,
             )
         else:
             output = branch_token(args.branch)

@@ -1,13 +1,24 @@
 name: Packaged E2E
 
+run-name: Packaged E2E / ${{ inputs.attest_run_id && inputs.attest_target_sha || inputs.expected_sha || github.event.pull_request.number || github.sha }}
+
 on:
-  pull_request:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       expected_sha:
         description: Exact automation head; empty only for an ordinary manual run
+        required: false
+        type: string
+      candidate_branch:
+        description: Exact automation branch containing expected_sha
+        required: false
+        type: string
+      expected_tree:
+        description: Exact tree of the automation head
         required: false
         type: string
       target_branch:
@@ -46,23 +57,34 @@ on:
         description: Exact final release merge commit
         required: false
         type: string
+      attest_release_branch:
+        description: Exact enrolled release branch containing attest_target_sha
+        required: false
+        type: string
+      attest_controller_sha:
+        description: Protected default-branch SHA that executed the source gate
+        required: false
+        type: string
 
 permissions:
   actions: read
   contents: read
+  pull-requests: read
 
 concurrency:
-  group: packaged-e2e-${{ github.event.pull_request.number || github.ref }}
+  group: packaged-e2e-${{ inputs.expected_sha || inputs.attest_target_sha || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
-  BLOCKPOPS_TESTED_SHA: ${{ github.sha }}
   PYTHONUNBUFFERED: "1"
 
 jobs:
   identity:
     name: Resolve authoritative packaged matrix
-    if: inputs.attest_run_id == ''
+    if: >-
+      inputs.attest_run_id == '' &&
+      !(github.event_name == 'pull_request_target' &&
+        startsWith(github.event.pull_request.head.ref, 'automation/release-sync/'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
@@ -71,60 +93,180 @@ jobs:
       branch_name: ${{ steps.matrix.outputs.branch_name }}
       branch_role: ${{ steps.matrix.outputs.branch_role }}
       projection: ${{ steps.matrix.outputs.projection }}
+      tested_sha: ${{ steps.source.outputs.merge_sha }}
+      tested_tree: ${{ steps.source.outputs.merge_tree }}
+      source_branch: ${{ steps.source.outputs.head_branch }}
+      controller_sha: ${{ steps.source.outputs.default_sha }}
     steps:
-      - name: Check out the exact candidate without persisted credentials
+      - name: Check out only the protected default-branch controller
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
+          path: controller
           persist-credentials: false
 
-      - name: Authenticate explicit release-sync inputs
+      - name: Authenticate the current source and synthetic merge
+        id: source
         shell: bash
         env:
+          CANDIDATE_BRANCH: ${{ inputs.candidate_branch }}
           EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_TREE: ${{ inputs.expected_tree }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           SOURCE_SHA: ${{ inputs.source_sha }}
           TARGET_BRANCH: ${{ inputs.target_branch }}
           TARGET_SHA: ${{ inputs.target_sha }}
         run: |
           set -euo pipefail
+          test "$(git -C controller rev-parse HEAD)" = "$GITHUB_SHA"
+          if [[ "$GITHUB_EVENT_NAME" == pull_request_target ]]; then
+            python3 controller/scripts/ci/pr_gate.py resolve-source \
+              --repository-name "$GITHUB_REPOSITORY" \
+              --implementation-sha "$GITHUB_SHA" \
+              --pr-number "$PR_NUMBER" \
+              --github-output "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_EVENT_NAME" == workflow_dispatch && -n "$EXPECTED_SHA" ]]; then
+            python3 controller/scripts/ci/pr_gate.py resolve-dispatch-source \
+              --repository-name "$GITHUB_REPOSITORY" \
+              --implementation-sha "$GITHUB_SHA" \
+              --expected-source-sha "$SOURCE_SHA" \
+              --target-branch "$TARGET_BRANCH" \
+              --expected-target-sha "$TARGET_SHA" \
+              --candidate-branch "$CANDIDATE_BRANCH" \
+              --expected-candidate-sha "$EXPECTED_SHA" \
+              --expected-candidate-tree "$EXPECTED_TREE" \
+              --github-output "$GITHUB_OUTPUT"
+          else
+            tree="$(git -C controller rev-parse 'HEAD^{tree}')"
+            printf 'eligible=true\n' >> "$GITHUB_OUTPUT"
+            printf 'pr_number=0\n' >> "$GITHUB_OUTPUT"
+            printf 'default_branch=%s\n' "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            printf 'default_sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            printf 'base_branch=%s\n' "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            printf 'base_sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            printf 'head_branch=%s\n' "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            printf 'head_sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            printf 'merge_sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            printf 'merge_tree=%s\n' "$tree" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out the authenticated merge only as candidate data
+        if: steps.source.outputs.eligible == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.source.outputs.merge_sha }}
+          path: candidate
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
+
+      - name: Require an authenticated eligible source
+        shell: bash
+        env:
+          SOURCE_ELIGIBLE: ${{ steps.source.outputs.eligible }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_ELIGIBLE" == true ]]
+
+      - name: Authenticate explicit release-sync inputs
+        shell: bash
+        env:
+          BLOCKPOPS_TESTED_SHA: ${{ steps.source.outputs.merge_sha }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_TREE: ${{ inputs.expected_tree }}
+          CANDIDATE_BRANCH: ${{ inputs.candidate_branch }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          set -euo pipefail
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
           if [[ -n "$EXPECTED_SHA" ]]; then
             [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]
             [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ && "$EXPECTED_SHA" == "$BLOCKPOPS_TESTED_SHA" ]]
+            [[ "$EXPECTED_TREE" =~ ^[0-9a-f]{40}$ && \
+              "$EXPECTED_TREE" == "${{ steps.source.outputs.merge_tree }}" ]]
             [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
             [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$CANDIDATE_BRANCH" == automation/release-sync/* ]]
+            [[ "$CANDIDATE_BRANCH" == "${{ steps.source.outputs.head_branch }}" ]]
             [[ -n "$TARGET_BRANCH" ]]
-            jq -e --arg branch "$TARGET_BRANCH" \
-              '.branch.role == "release" and .branch.name == $branch and .branch.sync.enabled == true' \
-              release/release-matrix.json >/dev/null
           else
-            [[ -z "$SOURCE_SHA$TARGET_BRANCH$TARGET_SHA" ]]
+            [[ -z "$CANDIDATE_BRANCH$EXPECTED_TREE$SOURCE_SHA$TARGET_BRANCH$TARGET_SHA" ]]
           fi
+        working-directory: candidate
 
       - name: Resolve the authoritative runtime graph
         id: matrix
         shell: bash
+        env:
+          BLOCKPOPS_TESTED_SHA: ${{ steps.source.outputs.merge_sha }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
+          TARGET_BRANCH: ${{ inputs.target_branch }}
         run: |
           set -euo pipefail
-          python3 scripts/release/matrix.py --matrix release/release-matrix.json >/dev/null
-          python3 scripts/ci/loader_bootstrap.py \
-            --repository . --head-sha "$BLOCKPOPS_TESTED_SHA" >/dev/null
-          python3 scripts/ci/dependency_policy.py \
-            --metadata gradle/verification-metadata.xml >/dev/null
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
+          python3 controller/scripts/ci/untrusted_runner.py prepare \
+            --root "$SANDBOX_ROOT" \
+            --source "$GITHUB_WORKSPACE/candidate" \
+            --controller-source "$GITHUB_WORKSPACE/controller"
           matrix_kind=pr-anchors
           if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
             matrix_kind=scheduled-anchors
           fi
-          anchors="$(python3 scripts/release/matrix.py \
-            --matrix release/release-matrix.json --kind "$matrix_kind")"
+          export MATRIX_KIND="$matrix_kind"
+          python3 controller/scripts/ci/untrusted_runner.py run --root "$SANDBOX_ROOT" \
+            --pass-env MATRIX_KIND --pass-env BLOCKPOPS_TESTED_SHA -- \
+            bash -euo pipefail -c '
+              mkdir -p build/identity
+              python3 scripts/release/matrix.py --matrix release/release-matrix.json >/dev/null
+              python3 scripts/ci/loader_bootstrap.py \
+                --repository . --head-sha "$BLOCKPOPS_TESTED_SHA" >/dev/null
+              python3 scripts/ci/dependency_policy.py \
+                --metadata gradle/verification-metadata.xml >/dev/null
+              python3 scripts/release/matrix.py \
+                --matrix release/release-matrix.json --kind "$MATRIX_KIND" \
+                > build/identity/anchors.json
+              python3 scripts/release/matrix.py \
+                --matrix release/release-matrix.json --kind gradle-java \
+                > build/identity/gradle-java.json
+            '
+          python3 controller/scripts/ci/untrusted_runner.py seal --root "$SANDBOX_ROOT" \
+            --export build/identity
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
+          python3 controller/scripts/release/matrix.py \
+            --matrix "$GITHUB_WORKSPACE/candidate/release/release-matrix.json" \
+            --no-source-check --kind "$matrix_kind" \
+            > "$RUNNER_TEMP/protected-anchors.json"
+          python3 controller/scripts/release/matrix.py \
+            --matrix "$GITHUB_WORKSPACE/candidate/release/release-matrix.json" \
+            --no-source-check --kind gradle-java \
+            > "$RUNNER_TEMP/protected-gradle-java.json"
+          python3 controller/scripts/release/matrix.py \
+            --matrix "$GITHUB_WORKSPACE/candidate/release/release-matrix.json" \
+            --no-source-check > "$RUNNER_TEMP/protected-matrix.json"
+          cmp --silent "$RUNNER_TEMP/protected-anchors.json" \
+            "$SANDBOX_ROOT/repository/build/identity/anchors.json"
+          cmp --silent "$RUNNER_TEMP/protected-gradle-java.json" \
+            "$SANDBOX_ROOT/repository/build/identity/gradle-java.json"
+          if [[ -n "$EXPECTED_SHA" ]]; then
+            jq -e --arg branch "$TARGET_BRANCH" \
+              '.branch.role == "release" and .branch.name == $branch and
+               .branch.sync.enabled == true' \
+              "$RUNNER_TEMP/protected-matrix.json" >/dev/null
+          fi
+          anchors="$(jq -ce '.include | arrays as $rows | {include:$rows}' \
+            "$RUNNER_TEMP/protected-anchors.json")"
           [[ "$(jq '.include | length' <<< "$anchors")" -gt 0 ]]
           printf 'anchors=%s\n' "$anchors" >> "$GITHUB_OUTPUT"
-          gradle_java="$(python3 scripts/release/matrix.py \
-            --matrix release/release-matrix.json --kind gradle-java \
-            | jq -er '.java')"
+          gradle_java="$(jq -er '.java' "$RUNNER_TEMP/protected-gradle-java.json")"
           [[ "$gradle_java" =~ ^[0-9]+$ ]]
           printf 'gradle_java=%s\n' "$gradle_java" >> "$GITHUB_OUTPUT"
-          printf 'branch_name=%s\n' "$(jq -er .branch.name release/release-matrix.json)" >> "$GITHUB_OUTPUT"
-          printf 'branch_role=%s\n' "$(jq -er .branch.role release/release-matrix.json)" >> "$GITHUB_OUTPUT"
+          printf 'branch_name=%s\n' \
+            "$(jq -er .branch.name "$RUNNER_TEMP/protected-matrix.json")" >> "$GITHUB_OUTPUT"
+          printf 'branch_role=%s\n' \
+            "$(jq -er .branch.role "$RUNNER_TEMP/protected-matrix.json")" >> "$GITHUB_OUTPUT"
           printf 'projection=%s\n' "$matrix_kind" >> "$GITHUB_OUTPUT"
           printf 'Coverage projection: `%s`.\n' "$matrix_kind" >> "$GITHUB_STEP_SUMMARY"
 
@@ -134,13 +276,24 @@ jobs:
     if: needs.identity.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      BLOCKPOPS_TESTED_SHA: ${{ needs.identity.outputs.tested_sha }}
     steps:
-      - name: Check out the exact candidate without persisted credentials
+      - name: Check out only the protected default-branch controller
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
+          ref: ${{ needs.identity.outputs.controller_sha }}
+          path: controller
           persist-credentials: false
+
+      - name: Check out the authenticated merge only as candidate data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.identity.outputs.tested_sha }}
+          fetch-depth: 0
+          path: candidate
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
 
       - name: Validate the Gradle wrapper
         uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
@@ -149,10 +302,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd gradle/wrapper && sha256sum --check --strict gradle-wrapper.jar.sha256)
-          distribution_hash="$(tr -d '\r\n' < gradle/wrapper/gradle-8.14-bin.zip.sha256)"
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
+          (cd candidate/gradle/wrapper && sha256sum --check --strict gradle-wrapper.jar.sha256)
+          distribution_hash="$(tr -d '\r\n' < candidate/gradle/wrapper/gradle-8.14-bin.zip.sha256)"
           grep --fixed-strings --line-regexp "distributionSha256Sum=$distribution_hash" \
-            gradle/wrapper/gradle-wrapper.properties
+            candidate/gradle/wrapper/gradle-wrapper.properties
 
       - name: Install the matrix-owned Gradle JDK
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
@@ -170,19 +324,79 @@ jobs:
         with:
           cache-read-only: true
 
-      - name: Build every declared production and harness lane
-        run: >-
-          ./gradlew --no-daemon --no-parallel --stacktrace
-          clean buildAllLanes buildAllE2EHarnesses check
+      - name: Prepare the isolated candidate filesystem and OS identity
+        shell: bash
+        env:
+          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
+        run: |
+          set -euo pipefail
+          seed=()
+          if [[ -n "${GRADLE_USER_HOME:-}" && -d "$GRADLE_USER_HOME" ]]; then
+            seed=(--seed-gradle-home "$GRADLE_USER_HOME")
+          fi
+          python3 controller/scripts/ci/untrusted_runner.py prepare \
+            --root "$SANDBOX_ROOT" \
+            --source "$GITHUB_WORKSPACE/candidate" \
+            --controller-source "$GITHUB_WORKSPACE/controller" \
+            "${seed[@]}"
 
-      - name: Stage and reverify the exact runtime inputs
-        run: python3 scripts/release/verify_release.py
+      - name: Build and stage inside the credentialless account
+        id: candidate
+        shell: bash
+        env:
+          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
+        run: |
+          set -euo pipefail
+          python3 controller/scripts/ci/untrusted_runner.py run \
+            --root "$SANDBOX_ROOT" --pass-env BLOCKPOPS_TESTED_SHA -- \
+            bash -euo pipefail -c '
+              python3 scripts/release/matrix.py --matrix release/release-matrix.json >/dev/null
+              python3 scripts/ci/loader_bootstrap.py \
+                --repository . --head-sha "$BLOCKPOPS_TESTED_SHA" >/dev/null
+              python3 scripts/ci/dependency_policy.py \
+                --metadata gradle/verification-metadata.xml >/dev/null
+              ./gradlew --no-daemon --no-parallel --stacktrace \
+                clean buildAllLanes buildAllE2EHarnesses check
+              python3 scripts/release/verify_release.py
+            '
+
+      - name: Kill and lock the candidate identity before artifact upload
+        id: seal
+        if: always()
+        shell: bash
+        env:
+          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
+        run: |
+          set -euo pipefail
+          python3 controller/scripts/ci/untrusted_runner.py seal \
+            --root "$SANDBOX_ROOT" --export build/release
+
+      - name: Reverify inert runtime inputs under a fresh credentialless validator
+        id: validator
+        if: steps.candidate.outcome == 'success' && steps.seal.outcome == 'success'
+        shell: bash
+        env:
+          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
+        run: |
+          set -euo pipefail
+          repository="$SANDBOX_ROOT/repository"
+          python3 controller/scripts/ci/untrusted_runner.py validate \
+            --root "$SANDBOX_ROOT" --pass-env BLOCKPOPS_TESTED_SHA -- \
+            python3 scripts/release/verify_release.py \
+              --repository "$repository" \
+              --matrix "$repository/release/release-matrix.json" \
+              --stage "$repository/build/release" \
+              --manifest "$repository/build/release/artifacts.json" \
+              --verify-staged
 
       - name: Upload one immutable runtime input bundle
+        if: >-
+          steps.candidate.outcome == 'success' && steps.seal.outcome == 'success' &&
+          steps.validator.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2e-input-bundle-${{ github.sha }}-${{ github.run_attempt }}
-          path: build/release/
+          name: e2e-input-bundle-${{ needs.identity.outputs.tested_sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/blockpops-candidate-sandbox/repository/build/release/
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
@@ -198,20 +412,33 @@ jobs:
       max-parallel: 2
       matrix: ${{ fromJSON(needs.identity.outputs.anchors) }}
     steps:
-      - name: Check out exact tested orchestration code
+      - name: Check out only the protected default-branch controller
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.identity.outputs.controller_sha }}
+          path: controller
           persist-credentials: false
 
-      - name: Launch real packaged jars and contracted scenarios
-        uses: ./.github/actions/run-packaged-e2e
+      - name: Check out the authenticated merge only as candidate data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          bundle-name: e2e-input-bundle-${{ github.sha }}-${{ github.run_attempt }}
+          ref: ${{ needs.identity.outputs.tested_sha }}
+          path: candidate
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
+
+      - name: Launch real packaged jars and contracted scenarios
+        uses: ./controller/.github/actions/run-packaged-e2e
+        with:
+          bundle-name: e2e-input-bundle-${{ needs.identity.outputs.tested_sha }}-${{ github.run_attempt }}
+          candidate-root: ${{ github.workspace }}/candidate
+          controller-root: ${{ github.workspace }}/controller
+          tested-sha: ${{ needs.identity.outputs.tested_sha }}
           row-json: ${{ toJSON(matrix) }}
           java-version: ${{ matrix.java }}
           scenarios: ${{ matrix.scenarios }}
-          evidence-name: packaged-e2e-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.id }}
+          projection: ${{ needs.identity.outputs.projection }}
+          evidence-name: packaged-e2e-${{ needs.identity.outputs.tested_sha }}-${{ github.run_attempt }}-${{ matrix.id }}
 
   aggregate:
     name: Validate and aggregate packaged evidence
@@ -225,12 +452,22 @@ jobs:
       actions: read
       contents: read
     steps:
-      - name: Check out exact tested fan-in policy
+      - name: Check out only the protected default-branch controller
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.identity.outputs.controller_sha }}
           fetch-depth: 0
+          path: controller
           persist-credentials: false
+
+      - name: Check out the authenticated merge only as candidate data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.identity.outputs.tested_sha }}
+          fetch-depth: 0
+          path: candidate
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
 
       - name: Install Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -238,52 +475,141 @@ jobs:
           python-version: "3.13"
 
       - name: Install the hash-locked PNG decoder
-        run: >-
-          python3 -m pip install --disable-pip-version-check
-          --only-binary=:all: --require-hashes
-          --requirement scripts/pages/requirements.txt
+        run: |
+          set -euo pipefail
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
+          python3 -m pip install --disable-pip-version-check \
+            --only-binary=:all: --require-hashes \
+            --requirement controller/scripts/pages/requirements.txt
 
       - name: Download the exact verified production bundle
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: e2e-input-bundle-${{ github.sha }}-${{ github.run_attempt }}
-          path: build/release
+          name: e2e-input-bundle-${{ needs.identity.outputs.tested_sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/blockpops-e2e-bundle
           digest-mismatch: error
 
       - name: Download every lane without overlaying their roots
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: packaged-e2e-${{ github.sha }}-${{ github.run_attempt }}-*
+          pattern: packaged-e2e-${{ needs.identity.outputs.tested_sha }}-${{ github.run_attempt }}-*
           merge-multiple: false
-          path: packaged-e2e-lanes
+          path: ${{ runner.temp }}/blockpops-e2e-lanes
           digest-mismatch: error
 
       - name: Validate and reconstruct the exact aggregate
+        id: candidate-fanin
         shell: bash
+        env:
+          BLOCKPOPS_PROJECTION: ${{ needs.identity.outputs.projection }}
+          BLOCKPOPS_REPOSITORY: ${{ github.repository }}
+          BLOCKPOPS_RUN_ATTEMPT: ${{ github.run_attempt }}
+          BLOCKPOPS_RUN_ID: ${{ github.run_id }}
+          BLOCKPOPS_SOURCE_BRANCH: ${{ needs.identity.outputs.source_branch }}
+          BLOCKPOPS_TESTED_SHA: ${{ needs.identity.outputs.tested_sha }}
+          BLOCKPOPS_TREE: ${{ needs.identity.outputs.tested_tree }}
+          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
         run: |
           set -euo pipefail
-          [[ "$(git rev-parse HEAD)" == "$BLOCKPOPS_TESTED_SHA" ]]
-          tree="$(git rev-parse 'HEAD^{tree}')"
-          python3 scripts/ci/e2e_fanin.py create \
-            --input packaged-e2e-lanes \
-            --output packaged-e2e-aggregate \
-            --matrix release/release-matrix.json \
-            --contract e2e/scenario-contract.json \
-            --stage build/release \
-            --artifact-manifest build/release/artifacts.json \
-            --repository "$GITHUB_REPOSITORY" \
-            --source-branch "$GITHUB_REF_NAME" \
-            --commit "$BLOCKPOPS_TESTED_SHA" \
-            --tree "$tree" \
-            --run-id "$GITHUB_RUN_ID" \
-            --run-attempt "$GITHUB_RUN_ATTEMPT" \
-            --projection "${{ needs.identity.outputs.projection }}"
+          [[ "$(git -C candidate rev-parse HEAD)" == "$BLOCKPOPS_TESTED_SHA" ]]
+          [[ "$(git -C candidate rev-parse 'HEAD^{tree}')" == "$BLOCKPOPS_TREE" ]]
+          python3 controller/scripts/ci/untrusted_runner.py prepare \
+            --root "$SANDBOX_ROOT" \
+            --source "$GITHUB_WORKSPACE/candidate" \
+            --controller-source "$GITHUB_WORKSPACE/controller" \
+            --overlay "$RUNNER_TEMP/blockpops-e2e-bundle" build/release \
+            --overlay "$RUNNER_TEMP/blockpops-e2e-lanes" packaged-e2e-lanes
+          python3 controller/scripts/ci/untrusted_runner.py run --root "$SANDBOX_ROOT" \
+            --pass-env BLOCKPOPS_TESTED_SHA --pass-env BLOCKPOPS_TREE \
+            --pass-env BLOCKPOPS_REPOSITORY --pass-env BLOCKPOPS_SOURCE_BRANCH \
+            --pass-env BLOCKPOPS_RUN_ID --pass-env BLOCKPOPS_RUN_ATTEMPT \
+            --pass-env BLOCKPOPS_PROJECTION -- \
+            python3 scripts/ci/e2e_fanin.py create \
+              --input packaged-e2e-lanes \
+              --output packaged-e2e-aggregate \
+              --matrix release/release-matrix.json \
+              --contract e2e/scenario-contract.json \
+              --stage build/release \
+              --artifact-manifest build/release/artifacts.json \
+              --repository "$BLOCKPOPS_REPOSITORY" \
+              --source-branch "$BLOCKPOPS_SOURCE_BRANCH" \
+              --commit "$BLOCKPOPS_TESTED_SHA" \
+              --tree "$BLOCKPOPS_TREE" \
+              --run-id "$BLOCKPOPS_RUN_ID" \
+              --run-attempt "$BLOCKPOPS_RUN_ATTEMPT" \
+              --projection "$BLOCKPOPS_PROJECTION"
+
+      - name: Kill and lock the evidence decoder before aggregate upload
+        id: seal-fanin
+        if: always()
+        shell: bash
+        env:
+          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
+        run: |
+          set -euo pipefail
+          python3 controller/scripts/ci/untrusted_runner.py seal \
+            --root "$SANDBOX_ROOT" --export packaged-e2e-aggregate
+
+      - name: Revalidate the sealed aggregate under a fresh credentialless identity
+        id: validator-fanin
+        if: >-
+          steps.candidate-fanin.outcome == 'success' &&
+          steps.seal-fanin.outcome == 'success'
+        shell: bash
+        env:
+          BLOCKPOPS_PROJECTION: ${{ needs.identity.outputs.projection }}
+          BLOCKPOPS_REPOSITORY: ${{ github.repository }}
+          BLOCKPOPS_RUN_ATTEMPT: ${{ github.run_attempt }}
+          BLOCKPOPS_RUN_ID: ${{ github.run_id }}
+          BLOCKPOPS_SOURCE_BRANCH: ${{ needs.identity.outputs.source_branch }}
+          BLOCKPOPS_TESTED_SHA: ${{ needs.identity.outputs.tested_sha }}
+          BLOCKPOPS_TREE: ${{ needs.identity.outputs.tested_tree }}
+          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
+        run: |
+          set -euo pipefail
+          repository="$SANDBOX_ROOT/repository"
+          python3 controller/scripts/ci/untrusted_runner.py validate \
+            --root "$SANDBOX_ROOT" \
+            --pass-env BLOCKPOPS_TESTED_SHA --pass-env BLOCKPOPS_TREE \
+            --pass-env BLOCKPOPS_REPOSITORY --pass-env BLOCKPOPS_SOURCE_BRANCH \
+            --pass-env BLOCKPOPS_RUN_ID --pass-env BLOCKPOPS_RUN_ATTEMPT \
+            --pass-env BLOCKPOPS_PROJECTION -- \
+            bash -euo pipefail -c '
+              repository="$1"
+              python3 scripts/ci/e2e_fanin.py validate \
+                --input "$repository/packaged-e2e-aggregate" \
+                --matrix "$repository/release/release-matrix.json" \
+                --contract "$repository/e2e/scenario-contract.json" \
+                --repository "$BLOCKPOPS_REPOSITORY" \
+                --source-branch "$BLOCKPOPS_SOURCE_BRANCH" \
+                --commit "$BLOCKPOPS_TESTED_SHA" \
+                --tree "$BLOCKPOPS_TREE" \
+                --run-id "$BLOCKPOPS_RUN_ID" \
+                --run-attempt "$BLOCKPOPS_RUN_ATTEMPT" \
+                --projection "$BLOCKPOPS_PROJECTION"
+              python3 scripts/release/verify_release.py \
+                --repository "$repository" \
+                --matrix "$repository/release/release-matrix.json" \
+                --stage "$repository/build/release" \
+                --manifest "$repository/build/release/artifacts.json" \
+                --verify-staged
+              actual_manifest="$(sha256sum \
+                "$repository/build/release/artifacts.json" | cut -d" " -f1)"
+              receipt_manifest="$(jq -er .artifact_manifest.sha256 \
+                "$repository/packaged-e2e-aggregate/aggregate.json")"
+              [[ "$actual_manifest" =~ ^[0-9a-f]{64}$ && \
+                "$actual_manifest" == "$receipt_manifest" ]]
+            ' _ "$repository"
 
       - name: Upload one immutable aggregate handoff
+        if: >-
+          steps.candidate-fanin.outcome == 'success' &&
+          steps.seal-fanin.outcome == 'success' &&
+          steps.validator-fanin.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: packaged-e2e-${{ github.sha }}-${{ github.run_attempt }}-aggregate
-          path: packaged-e2e-aggregate/
+          name: packaged-e2e-${{ needs.identity.outputs.tested_sha }}-${{ github.run_attempt }}-aggregate
+          path: ${{ runner.temp }}/blockpops-candidate-sandbox/repository/packaged-e2e-aggregate/
           if-no-files-found: error
           compression-level: 6
           retention-days: 1
@@ -291,7 +617,10 @@ jobs:
   required:
     name: Packaged E2E gate
     needs: [identity, build, e2e, aggregate]
-    if: always() && inputs.attest_run_id == ''
+    if: >-
+      always() && inputs.attest_run_id == '' &&
+      !(github.event_name == 'pull_request_target' &&
+        startsWith(github.event.pull_request.head.ref, 'automation/release-sync/'))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -324,18 +653,33 @@ jobs:
       tested_sha: ${{ inputs.attest_sha }}
       base_sha: ${{ inputs.attest_base_sha }}
       target_sha: ${{ inputs.attest_target_sha }}
+      target_branch: ${{ inputs.attest_release_branch }}
+      source_controller_sha: ${{ inputs.attest_controller_sha }}
 
   public-evidence:
     name: Curate current-head public evidence (advisory)
     needs: [identity, aggregate, required, attest]
     if: >-
-      always() && github.event_name != 'pull_request' &&
+      always() && (github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch') &&
       ((inputs.attest_run_id == '' && needs.required.result == 'success' &&
         needs.identity.outputs.branch_name == github.ref_name) ||
        (inputs.attest_run_id != '' && needs.attest.result == 'success'))
     continue-on-error: true
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      BLOCKPOPS_TESTED_SHA: ${{ inputs.attest_target_sha || github.sha }}
+      HANDOFF_CONTROLLER_BRANCH: ${{ github.event.repository.default_branch }}
+      HANDOFF_CONTROLLER_SHA: ${{ github.sha }}
+      PACKAGED_BRANCH: ${{ inputs.attest_branch || github.ref_name }}
+      PACKAGED_CONTROLLER_BRANCH: ${{ github.event.repository.default_branch }}
+      PACKAGED_CONTROLLER_SHA: ${{ inputs.attest_controller_sha || github.sha }}
+      PACKAGED_RUN_ATTEMPT: ${{ inputs.attest_run_attempt || github.run_attempt }}
+      PACKAGED_RUN_ID: ${{ inputs.attest_run_id || github.run_id }}
+      PACKAGED_SHA: ${{ inputs.attest_sha || github.sha }}
+      PUBLISHED_BRANCH: ${{ inputs.attest_release_branch || github.ref_name }}
+      PUBLIC_AGGREGATE: ${{ runner.temp }}/blockpops-public-aggregate
     permissions:
       actions: read
       contents: read
@@ -343,7 +687,7 @@ jobs:
       - name: Check out the exact published head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.attest_target_sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -353,21 +697,28 @@ jobs:
           python-version: "3.13"
 
       - name: Install the hash-locked evidence decoder
-        run: >-
-          python -m pip install --only-binary=:all: --require-hashes
-          --requirement scripts/pages/requirements.txt
+        run: |
+          set -euo pipefail
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
+          python -m pip install --only-binary=:all: --require-hashes \
+            --requirement scripts/pages/requirements.txt
 
       - name: Authenticate current branch and derive opaque artifact identity
         id: identity
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           SOURCE_RUN_ID: ${{ inputs.attest_run_id || github.run_id }}
         run: |
           set -euo pipefail
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN
           [[ "$(git rev-parse HEAD)" == "$BLOCKPOPS_TESTED_SHA" ]]
-          [[ "$(jq -er .branch.name release/release-matrix.json)" == "$GITHUB_REF_NAME" ]]
+          [[ "$(jq -er .branch.name release/release-matrix.json)" == "$PUBLISHED_BRANCH" ]]
           [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
-          token="$(python3 scripts/ci/gate_controller.py branch-token --branch "$GITHUB_REF_NAME")"
+          encoded_branch="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$PUBLISHED_BRANCH")"
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded_branch" --jq .object.sha)" == \
+            "$BLOCKPOPS_TESTED_SHA" ]]
+          token="$(python3 scripts/ci/gate_controller.py branch-token --branch "$PUBLISHED_BRANCH")"
           printf 'artifact=pages-e2e-%s-%s\n' "$token" "$GITHUB_RUN_ATTEMPT" \
             >> "$GITHUB_OUTPUT"
           printf 'source_run_id=%s\n' "$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
@@ -379,7 +730,7 @@ jobs:
           name: >-
             packaged-e2e-${{ inputs.attest_sha || github.sha }}-${{
             inputs.attest_run_attempt || github.run_attempt }}-aggregate
-          path: e2e-out/current
+          path: ${{ runner.temp }}/blockpops-public-aggregate
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ steps.identity.outputs.source_run_id }}
@@ -387,36 +738,52 @@ jobs:
 
       - name: Revalidate the exact aggregate inventory
         shell: bash
+        env:
+          PACKAGED_TREE: ${{ steps.identity.outputs.tree }}
         run: |
           set -euo pipefail
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
           projection=pr-anchors
           if [[ -z "${{ inputs.attest_run_id }}" && "$GITHUB_EVENT_NAME" == schedule ]]; then
             projection=scheduled-anchors
           fi
           python3 scripts/ci/e2e_fanin.py validate \
-            --input e2e-out/current \
+            --input "$PUBLIC_AGGREGATE" \
             --matrix release/release-matrix.json \
             --contract e2e/scenario-contract.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-branch "$PACKAGED_BRANCH" \
+            --commit "$PACKAGED_SHA" \
+            --tree "$PACKAGED_TREE" \
+            --run-id "$PACKAGED_RUN_ID" \
+            --run-attempt "$PACKAGED_RUN_ATTEMPT" \
             --projection "$projection"
 
       - name: Curate strict SHA-bound public evidence
-        run: >-
-          python3 scripts/pages/evidence.py curate
-          --input e2e-out/current
-          --output public-evidence
-          --repository "$GITHUB_REPOSITORY"
-          --branch "$GITHUB_REF_NAME"
-          --commit "$BLOCKPOPS_TESTED_SHA"
-          --tree "${{ steps.identity.outputs.tree }}"
-          --run-id "$GITHUB_RUN_ID"
-          --run-attempt "$GITHUB_RUN_ATTEMPT"
-          --packaged-run-id "${{ steps.identity.outputs.source_run_id }}"
-          --packaged-run-attempt "${{ inputs.attest_run_attempt || github.run_attempt }}"
-          --packaged-branch "${{ inputs.attest_branch || github.ref_name }}"
-          --packaged-commit "${{ inputs.attest_sha || github.sha }}"
-          --packaged-tree "${{ steps.identity.outputs.tree }}"
+        run: |
+          set -euo pipefail
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
+          python3 scripts/pages/evidence.py curate \
+            --input "$PUBLIC_AGGREGATE" \
+            --output public-evidence \
+            --repository "$GITHUB_REPOSITORY" \
+            --branch "$PUBLISHED_BRANCH" \
+            --commit "$BLOCKPOPS_TESTED_SHA" \
+            --tree "${{ steps.identity.outputs.tree }}" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --controller-branch "$HANDOFF_CONTROLLER_BRANCH" \
+            --controller-sha "$HANDOFF_CONTROLLER_SHA" \
+            --packaged-run-id "${{ steps.identity.outputs.source_run_id }}" \
+            --packaged-run-attempt "${{ inputs.attest_run_attempt || github.run_attempt }}" \
+            --packaged-branch "${{ inputs.attest_branch || github.ref_name }}" \
+            --packaged-commit "${{ inputs.attest_sha || github.sha }}" \
+            --packaged-tree "${{ steps.identity.outputs.tree }}" \
+            --packaged-controller-branch "$PACKAGED_CONTROLLER_BRANCH" \
+            --packaged-controller-sha "$PACKAGED_CONTROLLER_SHA"
 
       - name: Upload a single-use current-head Pages handoff
+        id: raw_evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.identity.outputs.artifact }}
@@ -424,3 +791,54 @@ jobs:
           if-no-files-found: error
           compression-level: 6
           retention-days: 1
+
+      - name: Create the exact canonical lossless visual anchor
+        id: anchor
+        if: inputs.attest_run_id == ''
+        shell: bash
+        env:
+          RAW_ARTIFACT_ID: ${{ steps.raw_evidence.outputs.artifact-id }}
+          RAW_ARTIFACT_DIGEST: ${{ steps.raw_evidence.outputs.artifact-digest }}
+        run: |
+          set -euo pipefail
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
+          printf 'eligible=false\n' >> "$GITHUB_OUTPUT"
+          identity="$(python3 scripts/pages/visual_anchor.py identity \
+            --matrix release/release-matrix.json \
+            --branch "$PUBLISHED_BRANCH" \
+            --commit "$BLOCKPOPS_TESTED_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT")"
+          if [[ "$(jq -r .eligible <<< "$identity")" != true ]]; then
+            exit 0
+          fi
+          [[ "$RAW_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$RAW_ARTIFACT_DIGEST" =~ ^(sha256:)?[0-9a-f]{64}$ ]]
+          artifact="$(jq -er .artifact <<< "$identity")"
+          python3 scripts/pages/visual_anchor.py create \
+            --input public-evidence \
+            --output visual-anchor \
+            --matrix release/release-matrix.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --branch "$PUBLISHED_BRANCH" \
+            --commit "$BLOCKPOPS_TESTED_SHA" \
+            --tree "${{ steps.identity.outputs.tree }}" \
+            --source-run-id "$GITHUB_RUN_ID" \
+            --source-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --source-controller-branch "$HANDOFF_CONTROLLER_BRANCH" \
+            --source-controller-sha "$HANDOFF_CONTROLLER_SHA" \
+            --raw-artifact-id "$RAW_ARTIFACT_ID" \
+            --raw-artifact-name "${{ steps.identity.outputs.artifact }}" \
+            --raw-artifact-digest "$RAW_ARTIFACT_DIGEST"
+          printf 'artifact=%s\n' "$artifact" >> "$GITHUB_OUTPUT"
+          printf 'eligible=true\n' >> "$GITHUB_OUTPUT"
+
+      - name: Upload the durable lossless canonical visual anchor
+        if: steps.anchor.outputs.eligible == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.anchor.outputs.artifact }}
+          path: visual-anchor/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90

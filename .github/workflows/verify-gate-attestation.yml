@@ -24,6 +24,12 @@ on:
       target_sha:
         required: true
         type: string
+      target_branch:
+        required: true
+        type: string
+      source_controller_sha:
+        required: true
+        type: string
 
 permissions:
   actions: read
@@ -46,11 +52,14 @@ jobs:
         shell: bash
         env:
           BASE_SHA: ${{ inputs.base_sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GH_TOKEN: ${{ github.token }}
           SOURCE_RUN_ATTEMPT: ${{ inputs.source_run_attempt }}
           SOURCE_RUN_ID: ${{ inputs.source_run_id }}
           SOURCE_WORKFLOW: ${{ inputs.source_workflow }}
+          SOURCE_CONTROLLER_SHA: ${{ inputs.source_controller_sha }}
           TARGET_SHA: ${{ inputs.target_sha }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
           TESTED_BRANCH: ${{ inputs.tested_branch }}
           TESTED_SHA: ${{ inputs.tested_sha }}
         run: |
@@ -61,7 +70,10 @@ jobs:
           [[ "$TESTED_BRANCH" == automation/release-sync/* ]]
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$TESTED_SHA" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ && "$GITHUB_SHA" == "$TARGET_SHA" ]]
+          [[ "$SOURCE_CONTROLLER_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ -n "$TARGET_BRANCH" && "$TARGET_BRANCH" != "$DEFAULT_BRANCH" ]]
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GITHUB_REF_NAME" == "$DEFAULT_BRANCH" ]]
           [[ "$(git rev-parse HEAD)" == "$TARGET_SHA" ]]
           [[ "$(git show -s --format=%P "$TARGET_SHA")" == "$BASE_SHA $TESTED_SHA" ]]
           [[ "$(git rev-parse "$TARGET_SHA^{tree}")" == "$(git rev-parse "$TESTED_SHA^{tree}")" ]]
@@ -69,24 +81,52 @@ jobs:
             "$(git rev-parse "$TARGET_SHA:release/release-matrix.json")" ]]
           matrix_sha256="$(sha256sum release/release-matrix.json | cut -d' ' -f1)"
           [[ "$matrix_sha256" =~ ^[0-9a-f]{64}$ ]]
-          [[ "$(jq -er .branch.name release/release-matrix.json)" == "$GITHUB_REF_NAME" ]]
+          [[ "$(jq -er .branch.name release/release-matrix.json)" == "$TARGET_BRANCH" ]]
 
-          encoded_branch="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$GITHUB_REF_NAME")"
+          encoded_branch="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$TARGET_BRANCH")"
           current_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded_branch" --jq .object.sha)"
           [[ "$current_sha" == "$TARGET_SHA" ]]
 
-          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID")"
+          run_json="$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/attempts/$SOURCE_RUN_ATTEMPT")"
+          expected_title=''
+          expected_artifact=''
+          if [[ "$SOURCE_WORKFLOW" == build-gate.yml ]]; then
+            expected_title="Build gate / $TESTED_SHA"
+            expected_artifact="staged-release-bundle-$TESTED_SHA-$SOURCE_RUN_ATTEMPT"
+          else
+            expected_title="Packaged E2E / $TESTED_SHA"
+            expected_artifact="packaged-e2e-$TESTED_SHA-$SOURCE_RUN_ATTEMPT-aggregate"
+          fi
           jq -e \
             --arg attempt "$SOURCE_RUN_ATTEMPT" \
-            --arg branch "$TESTED_BRANCH" \
+            --arg branch "$DEFAULT_BRANCH" \
+            --arg controller "$SOURCE_CONTROLLER_SHA" \
             --arg path ".github/workflows/$SOURCE_WORKFLOW" \
             --arg repository "$GITHUB_REPOSITORY" \
-            --arg sha "$TESTED_SHA" \
+            --arg title "$expected_title" \
             '.status == "completed" and .conclusion == "success" and
              .event == "workflow_dispatch" and .path == $path and
-             .head_branch == $branch and .head_sha == $sha and
+             .head_branch == $branch and .head_sha == $controller and
+             .display_title == $title and
              .head_repository.full_name == $repository and
              (.run_attempt | tostring) == $attempt' <<< "$run_json" >/dev/null
+
+          artifacts="$RUNNER_TEMP/source-artifacts.json"
+          gh api --paginate --slurp \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts?per_page=100" \
+            > "$artifacts"
+          jq -e '([.[].artifacts[]] | length) >= 1 and
+            ([.[].artifacts[]] | length) <= 100' "$artifacts" >/dev/null
+          jq -e --arg name "$expected_artifact" --argjson run_id "$SOURCE_RUN_ID" '
+            [.[].artifacts[] | select(.name == $name)] as $matches |
+            ($matches | length) == 1 and
+            ($matches[0].id | type == "number" and . > 0) and
+            ($matches[0].size_in_bytes | type == "number" and . > 0) and
+            ($matches[0].expired == false) and
+            ($matches[0].digest | type == "string" and test("^sha256:[0-9a-f]{64}$")) and
+            ($matches[0].workflow_run.id == $run_id)
+          ' "$artifacts" >/dev/null
 
           python3 scripts/release/matrix.py --matrix release/release-matrix.json >/dev/null
           python3 scripts/ci/loader_bootstrap.py \
@@ -95,7 +135,7 @@ jobs:
             --metadata gradle/verification-metadata.xml >/dev/null
           {
             printf '### Exact release gate attestation\n\n'
-            printf -- '- Final branch: `%s`\n' "$GITHUB_REF_NAME"
+            printf -- '- Final branch: `%s`\n' "$TARGET_BRANCH"
             printf -- '- Final commit/tree: `%s` / `%s`\n' "$TARGET_SHA" "$(git rev-parse 'HEAD^{tree}')"
             printf -- '- Tested commit: `%s`\n' "$TESTED_SHA"
             printf -- '- Source: `%s` run `%s`, attempt `%s`\n' \

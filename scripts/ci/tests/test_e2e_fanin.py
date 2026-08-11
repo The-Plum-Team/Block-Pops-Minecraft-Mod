@@ -16,6 +16,7 @@ from PIL import Image, ImageChops, ImageStat
 from e2e.scenario_contract import load_contract
 from scripts.ci.e2e_fanin import (
     AGGREGATE_ARTIFACT,
+    AGGREGATE_RECEIPT,
     FanInError,
     SourceIdentity,
     _canonical_path,
@@ -24,6 +25,7 @@ from scripts.ci.e2e_fanin import (
     expected_lanes,
     run_artifact_prefix,
     validate_aggregate,
+    validate_lane,
 )
 from scripts.release.matrix import load_matrix
 
@@ -342,8 +344,27 @@ class E2EFanInTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    def validate_exact(self) -> dict:
+        identity = self.fixture.identity
+        return validate_aggregate(
+            root=self.output,
+            matrix_path=MATRIX_PATH,
+            contract_path=CONTRACT_PATH,
+            projection=identity.projection,
+            expected_repository=identity.repository,
+            expected_source_branch=identity.source_branch,
+            expected_commit=identity.commit,
+            expected_tree=identity.tree,
+            expected_run_id=identity.run_id,
+            expected_run_attempt=identity.run_attempt,
+        )
+
     def test_fan_in_creates_one_exact_matrix_derived_aggregate(self) -> None:
         manifest = self.fixture.create(self.output)
+        self.assertEqual(
+            manifest,
+            json.loads((self.output / AGGREGATE_RECEIPT).read_text(encoding="utf-8")),
+        )
         self.assertEqual("packaged-e2e-aggregate", manifest["kind"])
         self.assertEqual(AGGREGATE_ARTIFACT, "packaged-e2e-aggregate")
         self.assertEqual(
@@ -356,20 +377,121 @@ class E2EFanInTests(unittest.TestCase):
         )
         self.assertEqual(len(self.fixture.lanes), len(manifest["lanes"]))
         self.assertEqual(2, json.loads((self.output / "summary.json").read_text())["runtime_store"]["hits"])
-        validated = validate_aggregate(
-            root=self.output,
-            matrix_path=MATRIX_PATH,
-            contract_path=CONTRACT_PATH,
-            projection="pr-anchors",
-        )
+        validated = self.validate_exact()
         self.assertEqual(
             {lane["artifact_node"] for lane in manifest["lanes"]},
             {lane["artifact_node"] for lane in validated["lanes"]},
         )
         self.assertEqual(
-            {"profiles", "summary.json", "resolved-matrix.json", "runtime-store.json"},
+            {
+                AGGREGATE_RECEIPT,
+                "profiles",
+                "summary.json",
+                "resolved-matrix.json",
+                "runtime-store.json",
+            },
             {item.name for item in self.output.iterdir()},
         )
+        self.assertNotIn(
+            AGGREGATE_RECEIPT,
+            {record["path"] for record in manifest["files"]},
+        )
+
+    def test_missing_or_tampered_aggregate_receipt_fails_closed(self) -> None:
+        self.fixture.create(self.output)
+        receipt_path = self.output / AGGREGATE_RECEIPT
+        original = receipt_path.read_bytes()
+        receipt_path.unlink()
+        with self.assertRaisesRegex(FanInError, "filesystem inventory"):
+            self.validate_exact()
+
+        receipt_path.write_bytes(original)
+        receipt = json.loads(original)
+        receipt["provenance"]["repository"] = "attacker/fork"
+        _json(receipt_path, receipt)
+        with self.assertRaisesRegex(FanInError, "source identity is stale"):
+            self.validate_exact()
+
+    def test_commit_tree_and_attempt_skew_are_bound_to_external_identity(self) -> None:
+        self.fixture.create(self.output)
+        receipt_path = self.output / AGGREGATE_RECEIPT
+        original = json.loads(receipt_path.read_text(encoding="utf-8"))
+        mutations = (
+            ("commit", "3" * 40),
+            ("tree", "3" * 40),
+            ("run_attempt", 3),
+        )
+        for key, value in mutations:
+            with self.subTest(key=key):
+                receipt = copy.deepcopy(original)
+                receipt["provenance"][key] = value
+                if key in {"commit", "tree"}:
+                    receipt["artifact_manifest"][key] = value
+                _json(receipt_path, receipt)
+                with self.assertRaisesRegex(FanInError, "source identity is stale"):
+                    self.validate_exact()
+        _json(receipt_path, original)
+
+    def test_expected_source_identity_is_strictly_all_or_none(self) -> None:
+        self.fixture.create(self.output)
+        with self.assertRaisesRegex(FanInError, "all-or-none"):
+            validate_aggregate(
+                root=self.output,
+                matrix_path=MATRIX_PATH,
+                contract_path=CONTRACT_PATH,
+                projection="pr-anchors",
+                expected_repository=self.fixture.identity.repository,
+            )
+
+    def test_receipt_inventories_every_non_self_file_by_size_and_hash(self) -> None:
+        receipt = self.fixture.create(self.output)
+        actual_files = {
+            path.relative_to(self.output).as_posix()
+            for path in self.output.rglob("*")
+            if path.is_file() and path.name != AGGREGATE_RECEIPT
+        }
+        self.assertEqual(actual_files, {record["path"] for record in receipt["files"]})
+
+        receipt_path = self.output / AGGREGATE_RECEIPT
+        receipt["files"][0]["sha256"] = "f" * 64
+        _json(receipt_path, receipt)
+        with self.assertRaisesRegex(FanInError, "non-self inventory is stale"):
+            self.validate_exact()
+
+    def test_each_sealed_lane_is_revalidated_against_its_exact_projected_row(self) -> None:
+        lane = self.fixture.lanes[0]
+        projected = next(
+            row
+            for row in self.fixture.matrix["runtimes"]
+            if row["artifact_node"] == lane.artifact_node
+        )
+        row = {
+            **projected,
+            "id": lane.job_id,
+            "scenarios": ",".join(lane.scenarios),
+        }
+        result = validate_lane(
+            root=self.fixture.root / lane.artifact_name,
+            matrix_path=MATRIX_PATH,
+            contract_path=CONTRACT_PATH,
+            projection="pr-anchors",
+            row=row,
+            artifact_manifest=self.fixture.artifact_manifest,
+        )
+        self.assertEqual(lane.artifact_node, result["artifact_node"])
+        self.assertEqual(len(lane.scenarios), result["scenario_count"])
+
+        stale = copy.deepcopy(row)
+        stale["minecraft"] = "0.0"
+        with self.assertRaisesRegex(FanInError, "exact authoritative projected lane"):
+            validate_lane(
+                root=self.fixture.root / lane.artifact_name,
+                matrix_path=MATRIX_PATH,
+                contract_path=CONTRACT_PATH,
+                projection="pr-anchors",
+                row=stale,
+                artifact_manifest=self.fixture.artifact_manifest,
+            )
 
     def test_missing_duplicate_and_unknown_lane_evidence_fail_closed(self) -> None:
         missing = self.fixture.root / self.fixture.lanes[-1].artifact_name

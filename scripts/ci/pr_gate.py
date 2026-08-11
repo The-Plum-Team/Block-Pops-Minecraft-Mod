@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate ordinary PR gates from protected default-branch policy.
+"""Evaluate protected ``pull_request_target`` gates from default-branch policy.
 
 Candidate Build/E2E workflows are deliberately treated only as evidence producers.  This
 controller runs from the protected default branch, authenticates the current pull request and its
@@ -11,6 +11,7 @@ its bounded outputs and publishes the two trusted commit-status contexts.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -24,7 +25,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
 REPO = Path(__file__).resolve().parents[2]
@@ -37,9 +38,15 @@ from scripts.ci.e2e_job_graph import (  # noqa: E402
     validate_jobs,
 )
 from scripts.ci.gate_controller import (  # noqa: E402
+    FORBIDDEN_PATHS,
     GateControllerError,
+    PROTECTED_PATHS,
     VERSION_SPECIFIC_PATHS,
     validate_controller_parity,
+)
+from scripts.ci.loader_bootstrap import (  # noqa: E402
+    LoaderBootstrapError,
+    validate_commit as validate_loader_bootstrap_commit,
 )
 from scripts.release.matrix import (  # noqa: E402
     MatrixError,
@@ -63,7 +70,44 @@ EXACT_BASE_OWNED_PATHS = (
     VERIFICATION_PATH,
     *sorted(VERSION_SPECIFIC_PATHS),
 )
+CONTROLLER_UPGRADE_LABEL = "controller-upgrade"
+CONTROLLER_UPGRADE_BRANCH_PREFIX = "controller-upgrade/"
+CONTROLLER_UPGRADE_OWNER = "AkaNebur"
+CONTROLLER_UPGRADE_COMMAND = re.compile(
+    r"^/controller-upgrade (?P<decision>approve|revoke) (?P<head>[0-9a-f]{40})$"
+)
+CONTROLLER_UPGRADE_DIRECTORY_ROOTS = frozenset(
+    {
+        ".github/actions",
+        ".github/workflows",
+        "e2e",
+        "gradle/wrapper",
+        "scripts/ci",
+        "scripts/lib",
+        "scripts/pages",
+        "scripts/release",
+        "scripts/visual",
+        "site",
+        "tests",
+        "common/src/e2e",
+    }
+)
+CONTROLLER_UPGRADE_FILE_ROOTS = frozenset(PROTECTED_PATHS) - CONTROLLER_UPGRADE_DIRECTORY_ROOTS
+CONTROLLER_UPGRADE_DOCS = frozenset({"README.md", "CONTRIBUTING.md"})
+CONTROLLER_UPGRADE_REQUIRED = frozenset(
+    {
+        ".github/workflows/build-gate.yml",
+        ".github/workflows/handle-pr-gate-result.yml",
+        ".github/workflows/on-demand-e2e.yml",
+        "scripts/ci/e2e_job_graph.py",
+        "scripts/ci/gate_controller.py",
+        "scripts/ci/pr_gate.py",
+        "scripts/release/matrix.py",
+    }
+)
+MAX_CONTROLLER_UPGRADE_PATHS = 300
 SHA1 = re.compile(r"^[0-9a-f]{40}$")
+SHA256 = re.compile(r"^[0-9a-f]{64}$")
 SHA256_DIGEST = re.compile(r"^sha256:([0-9a-f]{64})$")
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 MAX_API_BYTES = 32 * 1024 * 1024
@@ -162,7 +206,9 @@ class GitHubApi:
         self.token = token
         self.api_url = api_url.rstrip("/")
         self.opener = urllib.request.build_opener(
-            _NoRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context())
+            urllib.request.ProxyHandler({}),
+            _NoRedirect(),
+            urllib.request.HTTPSHandler(context=ssl.create_default_context()),
         )
 
     def _route(self, suffix: str) -> str:
@@ -221,6 +267,22 @@ class GitHubApi:
                 return records
         _fail(f"{label} API pagination exceeds ten pages")
 
+    def array_pages(self, suffix: str, *, label: str) -> list[dict[str, Any]]:
+        separator = "&" if "?" in suffix else "?"
+        records: list[dict[str, Any]] = []
+        for page in range(1, 11):
+            value = self.json(
+                f"{suffix}{separator}per_page=100&page={page}", label=f"{label} page {page}"
+            )
+            if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+                _fail(f"{label} API page has an invalid shape")
+            records.extend(value)
+            if len(records) > MAX_RECORDS:
+                _fail(f"{label} API response exceeds {MAX_RECORDS} records")
+            if len(value) < 100:
+                return records
+        _fail(f"{label} API pagination exceeds ten pages")
+
     def repository_record(self) -> dict[str, Any]:
         value = self.json("", label="repository")
         if not isinstance(value, dict):
@@ -238,6 +300,12 @@ class GitHubApi:
         if not isinstance(value, dict):
             _fail("pull request API record is not an object")
         return value
+
+    def issue_comments(self, number: int) -> list[dict[str, Any]]:
+        return self.array_pages(
+            f"/issues/{_positive(number, 'pull request number')}/comments",
+            label="pull request issue comments",
+        )
 
     def branch_sha(self, branch: str) -> str:
         if not valid_branch_name(branch):
@@ -267,10 +335,10 @@ class GitHubApi:
         except (KeyError, TypeError) as exc:
             raise PrGateError("commit API record is malformed") from exc
 
-    def workflow_runs(self, workflow: str, head_sha: str) -> list[dict[str, Any]]:
+    def workflow_runs(self, workflow: str) -> list[dict[str, Any]]:
         encoded = urllib.parse.quote(workflow, safe="")
         return self.pages(
-            f"/actions/workflows/{encoded}/runs?event=pull_request&head_sha={_sha(head_sha, 'head SHA')}",
+            f"/actions/workflows/{encoded}/runs?event=pull_request_target",
             key="workflow_runs",
             label=f"{workflow} runs",
         )
@@ -304,6 +372,14 @@ class PullIdentity:
 
 
 @dataclass(frozen=True)
+class UpgradeAuthorization:
+    comment_id: int
+    comment_updated_at: str
+    head_sha: str
+    digest: str
+
+
+@dataclass(frozen=True)
 class SelectedRun:
     run_id: int
     run_attempt: int
@@ -329,10 +405,10 @@ def _run_pull_number(value: Any, label: str) -> int:
 
 def _authenticate_trigger(api: GitHubApi, trigger_run_id: int) -> tuple[dict[str, Any], int]:
     run = api.run(trigger_run_id)
-    if run.get("id") != trigger_run_id:
+    if _positive(run.get("id"), "trigger API run id") != trigger_run_id:
         _fail("trigger run id disagrees with the API record")
-    if run.get("event") != "pull_request":
-        raise NotEligible("source run is not an ordinary pull_request run")
+    if run.get("event") != "pull_request_target":
+        raise NotEligible("source run is not a pull_request_target gate")
     if run.get("path") not in {f".github/workflows/{item}" for item in WORKFLOWS.values()}:
         raise NotEligible("source run is not a deterministic PR gate")
     repository = run.get("repository")
@@ -344,19 +420,38 @@ def _authenticate_trigger(api: GitHubApi, trigger_run_id: int) -> tuple[dict[str
         or head_repository.get("full_name") != api.repository
     ):
         raise NotEligible("source run is not a same-repository PR gate")
-    _sha(run.get("head_sha"), "trigger source head")
+    _sha(run.get("head_sha"), "trigger controller head")
     if not valid_branch_name(run.get("head_branch")):
-        _fail("trigger source branch is unsafe")
-    if run["head_branch"].startswith("automation/release-sync/"):
-        raise NotEligible("release synchronization uses its dedicated protected handler")
+        _fail("trigger controller branch is unsafe")
+    _positive(run.get("run_attempt"), "trigger run attempt")
+    status = run.get("status")
+    conclusion = run.get("conclusion")
+    if status not in RUN_STATUSES:
+        _fail("trigger run has an invalid status")
+    if status == "completed":
+        if conclusion not in RUN_CONCLUSIONS:
+            _fail("completed trigger run has an invalid conclusion")
+    elif conclusion is not None:
+        _fail("incomplete trigger run unexpectedly has a conclusion")
+    _timestamp(run.get("created_at"), "trigger run created_at")
     return run, _run_pull_number(run, "trigger run")
 
 
 def resolve_pull_identity(
-    api: GitHubApi, *, trigger_run_id: int, implementation_sha: str
+    api: GitHubApi,
+    *,
+    implementation_sha: str,
+    trigger_run_id: int | None = None,
+    pr_number: int | None = None,
 ) -> PullIdentity:
     implementation_sha = _sha(implementation_sha, "protected implementation SHA")
-    trigger, number = _authenticate_trigger(api, trigger_run_id)
+    if (trigger_run_id is None) == (pr_number is None):
+        _fail("exactly one trusted run or pull request locator is required")
+    trigger: dict[str, Any] | None = None
+    if trigger_run_id is not None:
+        trigger, number = _authenticate_trigger(api, _positive(trigger_run_id, "trigger run id"))
+    else:
+        number = _positive(pr_number, "pull request number")
     repository = api.repository_record()
     if repository.get("full_name") != api.repository:
         _fail("repository API identity changed")
@@ -366,10 +461,16 @@ def resolve_pull_identity(
     default_sha = api.branch_sha(default_branch)
     if default_sha != implementation_sha:
         raise NotEligible("protected default branch advanced during PR evaluation")
+    if trigger is not None and (
+        trigger["head_branch"] != default_branch or trigger["head_sha"] != default_sha
+    ):
+        raise NotEligible("trigger run is not from the exact current default controller")
 
     pull = api.pull(number)
     try:
-        if pull["number"] != number or pull["state"] != "open":
+        if _positive(pull["number"], "pull request API number") != number:
+            _fail("pull request API number changed")
+        if pull["state"] != "open":
             raise NotEligible("pull request is no longer open")
         if (
             pull["head"]["repo"]["full_name"] != api.repository
@@ -387,8 +488,6 @@ def resolve_pull_identity(
         _fail("pull request branch identity is unsafe")
     if head_branch.startswith("automation/release-sync/"):
         raise NotEligible("release synchronization head is not an ordinary PR")
-    if head_branch != trigger["head_branch"] or head_sha != trigger["head_sha"]:
-        raise NotEligible("trigger run is stale for the current pull request head")
     if api.branch_sha(head_branch) != head_sha or api.branch_sha(base_branch) != base_sha:
         raise NotEligible("pull request branch heads changed during evaluation")
     merge_tree, parents = api.commit_identity(merge_sha)
@@ -405,6 +504,156 @@ def resolve_pull_identity(
         merge_sha=merge_sha,
         merge_tree=merge_tree,
     )
+
+
+def resolve_dispatch_source(
+    api: GitHubApi,
+    *,
+    implementation_sha: str,
+    expected_source_sha: str,
+    target_branch: str,
+    expected_target_sha: str,
+    candidate_branch: str,
+    expected_candidate_sha: str,
+    expected_candidate_tree: str,
+) -> PullIdentity:
+    """Authenticate one release-sync candidate tested by a default-controller dispatch."""
+
+    implementation_sha = _sha(implementation_sha, "protected implementation SHA")
+    expected_source_sha = _sha(expected_source_sha, "expected source SHA")
+    target_sha = _sha(expected_target_sha, "expected target SHA")
+    candidate_sha = _sha(expected_candidate_sha, "expected candidate SHA")
+    candidate_tree = _sha(expected_candidate_tree, "expected candidate tree")
+    if not valid_branch_name(target_branch) or not valid_branch_name(candidate_branch):
+        _fail("release-sync dispatch has an unsafe branch identity")
+    if not candidate_branch.startswith("automation/release-sync/"):
+        _fail("release-sync candidate branch lacks its protected prefix")
+
+    repository = api.repository_record()
+    if repository.get("full_name") != api.repository:
+        _fail("repository API identity changed")
+    default_branch = repository.get("default_branch")
+    if not valid_branch_name(default_branch):
+        _fail("repository default branch is unsafe")
+    if target_branch == default_branch or candidate_branch in {default_branch, target_branch}:
+        _fail("release-sync source, target, and candidate branches must be distinct")
+    default_sha = api.branch_sha(default_branch)
+    if default_sha != implementation_sha or expected_source_sha != implementation_sha:
+        raise NotEligible("protected default branch advanced during dispatch resolution")
+    if api.branch_sha(target_branch) != target_sha:
+        raise NotEligible("release-sync target branch advanced before dispatch")
+    if api.branch_sha(candidate_branch) != candidate_sha:
+        raise NotEligible("release-sync candidate branch advanced before dispatch")
+    actual_tree, parents = api.commit_identity(candidate_sha)
+    if actual_tree != candidate_tree:
+        raise NotEligible("release-sync candidate tree differs from the expected tree")
+    if parents != (target_sha, default_sha):
+        _fail("release-sync candidate lacks exact ordered target/default parents")
+    return PullIdentity(
+        number=0,
+        default_branch=default_branch,
+        default_sha=default_sha,
+        base_branch=target_branch,
+        base_sha=target_sha,
+        head_branch=candidate_branch,
+        head_sha=candidate_sha,
+        merge_sha=candidate_sha,
+        merge_tree=actual_tree,
+    )
+
+
+def _upgrade_requested(api: GitHubApi, identity: PullIdentity) -> bool:
+    pull = api.pull(identity.number)
+    try:
+        labels = pull["labels"]
+        if not isinstance(labels, list) or len(labels) > 100:
+            _fail("pull request label inventory is malformed or excessive")
+        names = []
+        for label in labels:
+            if (
+                not isinstance(label, dict)
+                or not isinstance(label.get("name"), str)
+                or not 1 <= len(label["name"]) <= 100
+            ):
+                _fail("pull request label inventory contains an invalid label")
+            names.append(label["name"])
+    except (KeyError, TypeError) as exc:
+        raise PrGateError("pull request label inventory is malformed") from exc
+    if len(names) != len(set(names)):
+        _fail("pull request label inventory repeats a label")
+    labelled = CONTROLLER_UPGRADE_LABEL in names
+    prefixed = identity.head_branch.startswith(CONTROLLER_UPGRADE_BRANCH_PREFIX)
+    if labelled != prefixed:
+        _fail("controller-upgrade label and branch prefix must be present together")
+    if not labelled:
+        return False
+    if (
+        identity.base_branch != identity.default_branch
+        or identity.base_sha != identity.default_sha
+    ):
+        _fail("controller upgrades may target only the exact default branch")
+    return True
+
+
+def controller_upgrade_authorization(
+    api: GitHubApi, identity: PullIdentity
+) -> UpgradeAuthorization:
+    """Authenticate the latest exact owner command for this controller-upgrade head."""
+
+    if not _upgrade_requested(api, identity):
+        _fail("pull request does not request a controller upgrade")
+    repository = api.repository_record()
+    owner = repository.get("owner") if isinstance(repository, dict) else None
+    if (
+        repository.get("full_name") != api.repository
+        or not isinstance(owner, dict)
+        or owner.get("login") != CONTROLLER_UPGRADE_OWNER
+        or owner.get("type") != "User"
+    ):
+        _fail("repository owner does not match protected controller-upgrade policy")
+
+    commands: list[tuple[datetime, int, str, str]] = []
+    seen_ids: set[int] = set()
+    for comment in api.issue_comments(identity.number):
+        comment_id = _positive(comment.get("id"), "issue comment id")
+        if comment_id in seen_ids:
+            _fail("issue comment inventory repeats an id")
+        seen_ids.add(comment_id)
+        user = comment.get("user")
+        body = comment.get("body")
+        updated_at = comment.get("updated_at")
+        if not isinstance(user, dict) or not isinstance(body, str):
+            _fail("issue comment inventory contains a malformed comment")
+        updated = _timestamp(updated_at, "issue comment updated_at")
+        match = CONTROLLER_UPGRADE_COMMAND.fullmatch(body)
+        if match is None:
+            continue
+        if (
+            user.get("login") != CONTROLLER_UPGRADE_OWNER
+            or user.get("type") != "User"
+            or comment.get("author_association") != "OWNER"
+        ):
+            continue
+        if match.group("head") == identity.head_sha:
+            commands.append((updated, comment_id, match.group("decision"), updated_at))
+    if not commands:
+        _fail("controller upgrade lacks an exact current-head owner command")
+    _updated, comment_id, decision, updated_at = max(commands, key=lambda item: (item[0], item[1]))
+    if decision != "approve":
+        _fail("latest exact current-head owner command revokes controller upgrade")
+    bound = {
+        "schema_version": 1,
+        "purpose": "controller-upgrade-owner-authorization",
+        "repository": api.repository,
+        "pull_request": identity.number,
+        "head_sha": identity.head_sha,
+        "comment_id": comment_id,
+        "comment_updated_at": updated_at,
+    }
+    digest = hashlib.sha256(
+        (json.dumps(bound, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    ).hexdigest()
+    return UpgradeAuthorization(comment_id, updated_at, identity.head_sha, digest)
 
 
 def _git(repository: Path, *arguments: str, accepted: Iterable[int] = (0,)) -> bytes:
@@ -468,9 +717,7 @@ def _blob(repository: Path, commit: str, path: str, *, maximum: int) -> bytes:
     return value
 
 
-def validate_pr_tree(repository: Path, identity: PullIdentity) -> bytes:
-    """Authenticate default->base portability and exact base->merge control-plane parity."""
-
+def _validate_local_pull_tree(repository: Path, identity: PullIdentity) -> Path:
     repository = repository.resolve()
     for value, label in (
         (identity.default_sha, "default SHA"),
@@ -487,25 +734,18 @@ def validate_pr_tree(repository: Path, identity: PullIdentity) -> bytes:
     tree = _git(repository, "rev-parse", f"{identity.merge_sha}^{{tree}}").decode().strip()
     if tree != identity.merge_tree:
         _fail("local synthetic merge tree disagrees with GitHub API")
+    return repository
 
-    # A release branch is accepted as policy only after proving its controllers are a valid,
-    # branch-portable projection of the current protected default branch.
-    validate_controller_parity(
-        repository,
-        protected_sha=identity.default_sha,
-        candidate_sha=identity.base_sha,
-    )
-    validate_controller_parity(
-        repository,
-        protected_sha=identity.base_sha,
-        candidate_sha=identity.merge_sha,
-    )
+
+def _require_exact_base_owned(repository: Path, identity: PullIdentity) -> None:
     for path in EXACT_BASE_OWNED_PATHS:
         base = _tree_entry(repository, identity.base_sha, path)
         merge = _tree_entry(repository, identity.merge_sha, path)
         if base is None or base[:2] != ("100644", "blob") or merge != base:
-            _fail(f"ordinary PR changed exact base-owned path {path!r}")
+            _fail(f"pull request changed exact base-owned path {path!r}")
 
+
+def _matrix_for_identity(repository: Path, identity: PullIdentity) -> tuple[bytes, dict[str, Any]]:
     matrix_bytes = _blob(
         repository, identity.merge_sha, MATRIX_PATH, maximum=256 * 1024
     )
@@ -521,6 +761,157 @@ def validate_pr_tree(repository: Path, identity: PullIdentity) -> bytes:
         or branch["sync"] != {"enabled": True, "source": identity.default_branch}
     ):
         _fail("release base matrix is not enrolled in protected synchronization")
+    return matrix_bytes, matrix
+
+
+def validate_pr_tree(repository: Path, identity: PullIdentity) -> bytes:
+    """Authenticate default->base portability and exact base->merge control-plane parity."""
+
+    repository = _validate_local_pull_tree(repository, identity)
+
+    # A release branch is accepted as policy only after proving its controllers are a valid,
+    # branch-portable projection of the current protected default branch.
+    validate_controller_parity(
+        repository,
+        protected_sha=identity.default_sha,
+        candidate_sha=identity.base_sha,
+    )
+    validate_controller_parity(
+        repository,
+        protected_sha=identity.base_sha,
+        candidate_sha=identity.merge_sha,
+    )
+    _require_exact_base_owned(repository, identity)
+    matrix_bytes, _matrix = _matrix_for_identity(repository, identity)
+    return matrix_bytes
+
+
+def _canonical_upgrade_path(raw: bytes) -> str:
+    try:
+        value = raw.decode("utf-8", "strict")
+    except UnicodeDecodeError as exc:
+        raise PrGateError("controller-upgrade diff contains a non-UTF-8 path") from exc
+    path = PurePosixPath(value)
+    if (
+        not value
+        or "\\" in value
+        or path.is_absolute()
+        or path.as_posix() != value
+        or any(part in {"", ".", ".."} for part in path.parts)
+        or any(ord(character) < 32 or ord(character) == 127 for character in value)
+    ):
+        _fail("controller-upgrade diff contains an unsafe path")
+    return value
+
+
+def _upgrade_path_allowed(path: str, loader_paths: frozenset[str]) -> bool:
+    if path in CONTROLLER_UPGRADE_DOCS:
+        return True
+    if path.startswith("docs/") and path.endswith(".md"):
+        return True
+    loader_files = {root for root in loader_paths if root.endswith("/build.gradle")}
+    loader_directories = loader_paths - loader_files
+    if path in loader_files or any(
+        path == root or path.startswith(f"{root}/") for root in loader_directories
+    ):
+        return True
+    if path in CONTROLLER_UPGRADE_FILE_ROOTS:
+        return True
+    return any(
+        path == root or path.startswith(f"{root}/")
+        for root in CONTROLLER_UPGRADE_DIRECTORY_ROOTS
+    )
+
+
+def validate_controller_upgrade_tree(repository: Path, identity: PullIdentity) -> bytes:
+    """Admit an owner-authorized, controller-only change under the old protected policy."""
+
+    repository = _validate_local_pull_tree(repository, identity)
+    if (
+        identity.base_branch != identity.default_branch
+        or identity.base_sha != identity.default_sha
+    ):
+        _fail("controller upgrades may target only the exact default branch")
+    validate_controller_parity(
+        repository,
+        protected_sha=identity.default_sha,
+        candidate_sha=identity.base_sha,
+    )
+    _require_exact_base_owned(repository, identity)
+    matrix_bytes, matrix = _matrix_for_identity(repository, identity)
+    loader_paths = frozenset(
+        path
+        for loader in {row["loader"] for row in matrix["artifacts"]}
+        for path in (f"{loader}/build.gradle", f"{loader}/src/e2e")
+    )
+    raw = _git(
+        repository,
+        "diff",
+        "--no-ext-diff",
+        "--no-renames",
+        "--name-status",
+        "-z",
+        identity.base_sha,
+        identity.merge_sha,
+        "--",
+    )
+    fields = raw.rstrip(b"\0").split(b"\0") if raw else []
+    if not fields or len(fields) % 2:
+        _fail("controller-upgrade diff inventory is empty or malformed")
+    if len(fields) // 2 > MAX_CONTROLLER_UPGRADE_PATHS:
+        _fail("controller-upgrade diff exceeds its bounded path inventory")
+    seen: set[str] = set()
+    for index in range(0, len(fields), 2):
+        try:
+            status = fields[index].decode("ascii", "strict")
+        except UnicodeDecodeError as exc:
+            raise PrGateError("controller-upgrade diff status is not ASCII") from exc
+        path = _canonical_upgrade_path(fields[index + 1])
+        if status not in {"A", "M", "D"} or path in seen:
+            _fail("controller-upgrade diff has an unknown status or duplicate path")
+        seen.add(path)
+        if path in EXACT_BASE_OWNED_PATHS:
+            _fail(f"controller upgrade changed exact base-owned path {path!r}")
+        if not _upgrade_path_allowed(path, loader_paths):
+            _fail(f"controller upgrade changed non-controller path {path!r}")
+        base_entry = _tree_entry(repository, identity.base_sha, path)
+        merge_entry = _tree_entry(repository, identity.merge_sha, path)
+        if status == "A":
+            if base_entry is not None or merge_entry is None or merge_entry[:2] != ("100644", "blob"):
+                _fail(f"controller upgrade added unsafe tree entry {path!r}")
+        elif status == "D":
+            if (
+                merge_entry is not None
+                or base_entry is None
+                or base_entry[0] not in {"100644", "100755"}
+                or base_entry[1] != "blob"
+            ):
+                _fail(f"controller upgrade removed an unsafe tree entry {path!r}")
+        elif (
+            base_entry is None
+            or merge_entry is None
+            or base_entry[:2] != merge_entry[:2]
+            or base_entry[0] not in {"100644", "100755"}
+            or base_entry[1] != "blob"
+        ):
+            _fail(f"controller upgrade changed mode or kind for {path!r}")
+    for path in CONTROLLER_UPGRADE_REQUIRED:
+        entry = _tree_entry(repository, identity.merge_sha, path)
+        if entry is None or entry[:2] != ("100644", "blob"):
+            _fail(f"controller upgrade removed required protected file {path!r}")
+    for path in FORBIDDEN_PATHS:
+        if _tree_entry(repository, identity.merge_sha, path) is not None:
+            _fail(f"controller upgrade introduced forbidden path {path!r}")
+    try:
+        validate_loader_bootstrap_commit(
+            repository,
+            head_sha=identity.merge_sha,
+            contract_sha=identity.base_sha,
+        )
+    except LoaderBootstrapError as exc:
+        raise PrGateError(
+            f"controller upgrade changed loader bootstrap outside old policy: {exc}"
+        ) from exc
     return matrix_bytes
 
 
@@ -535,17 +926,17 @@ def select_newest_pull_run(
         _fail("unsupported PR gate workflow")
     path = f".github/workflows/{workflow}"
     candidates: list[tuple[datetime, int, SelectedRun]] = []
-    seen: set[tuple[int, int]] = set()
+    seen: set[int] = set()
     for value in records:
         if not isinstance(value, dict):
             _fail("workflow runs response contains a non-object")
         run_repository = value.get("repository")
         head_repository = value.get("head_repository")
         if (
-            value.get("event") != "pull_request"
+            value.get("event") != "pull_request_target"
             or value.get("path") != path
-            or value.get("head_branch") != identity.head_branch
-            or value.get("head_sha") != identity.head_sha
+            or value.get("head_branch") != identity.default_branch
+            or value.get("head_sha") != identity.default_sha
             or not isinstance(run_repository, dict)
             or run_repository.get("full_name") != repository
             or not isinstance(head_repository, dict)
@@ -556,9 +947,9 @@ def select_newest_pull_run(
             continue
         run_id = _positive(value.get("id"), "workflow run id")
         attempt = _positive(value.get("run_attempt"), "workflow run attempt")
-        if (run_id, attempt) in seen:
-            _fail("workflow runs response repeats a run/attempt")
-        seen.add((run_id, attempt))
+        if run_id in seen:
+            _fail("workflow runs response repeats a run id")
+        seen.add(run_id)
         status = value.get("status")
         conclusion = value.get("conclusion")
         if status not in RUN_STATUSES:
@@ -609,7 +1000,7 @@ def validate_exact_artifact(
         if (
             value.get("expired") is not False
             or not isinstance(owner, dict)
-            or owner.get("id") != run_id
+            or _positive(owner.get("id"), "artifact workflow run id") != run_id
             or isinstance(size, bool)
             or not isinstance(size, int)
             or not 1 <= size <= MAX_ARTIFACT_BYTES
@@ -652,8 +1043,8 @@ def _gate_result(
         graph = expected_jobs(
             matrix_path,
             WORKFLOWS[kind],
-            event="pull_request",
-            source_branch=identity.head_branch,
+            event="pull_request_target",
+            source_branch=identity.base_branch,
         )
         validate_jobs(
             api.jobs(selected.run_id),
@@ -685,7 +1076,7 @@ def _snapshot(
 ) -> tuple[dict[str, GateResult], dict[str, SelectedRun | None]]:
     selected = {
         kind: select_newest_pull_run(
-            api.workflow_runs(workflow, identity.head_sha),
+            api.workflow_runs(workflow),
             workflow=workflow,
             repository=api.repository,
             identity=identity,
@@ -709,28 +1100,65 @@ def evaluate(
     api: GitHubApi,
     *,
     repository: Path,
-    trigger_run_id: int,
     implementation_sha: str,
     expected_pr_number: int,
     expected_merge_sha: str,
+    trigger_run_id: int | None = None,
+    pr_number: int | None = None,
 ) -> dict[str, Any]:
     identity = resolve_pull_identity(
-        api, trigger_run_id=trigger_run_id, implementation_sha=implementation_sha
+        api,
+        trigger_run_id=trigger_run_id,
+        pr_number=pr_number,
+        implementation_sha=implementation_sha,
     )
     if identity.number != expected_pr_number or identity.merge_sha != expected_merge_sha:
         raise NotEligible("pull request identity changed after candidate checkout")
+    policy_mode = "ordinary"
+    authorization: UpgradeAuthorization | None = None
     try:
-        matrix_bytes = validate_pr_tree(repository, identity)
-    except (GateControllerError, MatrixError, PrGateError) as exc:
+        if _upgrade_requested(api, identity):
+            policy_mode = "controller-upgrade"
+            authorization = controller_upgrade_authorization(api, identity)
+            matrix_bytes = validate_controller_upgrade_tree(repository, identity)
+        else:
+            matrix_bytes = validate_pr_tree(repository, identity)
+    except (GateControllerError, LoaderBootstrapError, MatrixError, PrGateError) as exc:
         # The target head/base were authenticated before policy evaluation, so a protected-policy
         # mismatch is safe to report as failure on that exact current head.
         current = resolve_pull_identity(
-            api, trigger_run_id=trigger_run_id, implementation_sha=implementation_sha
+            api,
+            trigger_run_id=trigger_run_id,
+            pr_number=pr_number,
+            implementation_sha=implementation_sha,
         )
         if current != identity:
             raise NotEligible("pull request changed while reporting a policy failure") from exc
-        failure = GateResult("failure", "Ordinary PR changed protected branch policy", 0, 0)
-        return _result(identity, {"build": failure, "e2e": failure})
+        description = (
+            "Controller upgrade authorization or protected policy failed"
+            if policy_mode == "controller-upgrade"
+            else "Ordinary PR changed protected branch policy"
+        )
+        failure = GateResult("failure", description, 0, 0)
+        return _result(
+            identity,
+            {"build": failure, "e2e": failure},
+            policy_mode=policy_mode,
+            authorization=authorization,
+        )
+
+    def current_identity_and_authorization() -> None:
+        current = resolve_pull_identity(
+            api,
+            trigger_run_id=trigger_run_id,
+            pr_number=pr_number,
+            implementation_sha=implementation_sha,
+        )
+        if current != identity:
+            raise NotEligible("pull request identity changed during protected gate evaluation")
+        if policy_mode == "controller-upgrade":
+            if authorization is None or controller_upgrade_authorization(api, current) != authorization:
+                raise NotEligible("controller-upgrade authorization changed during evaluation")
 
     with tempfile.TemporaryDirectory(prefix="blockpops-pr-gate-") as temporary:
         matrix_path = Path(temporary) / "release-matrix.json"
@@ -743,6 +1171,7 @@ def evaluate(
             current = resolve_pull_identity(
                 api,
                 trigger_run_id=trigger_run_id,
+                pr_number=pr_number,
                 implementation_sha=implementation_sha,
             )
             if current != identity:
@@ -755,12 +1184,13 @@ def evaluate(
                 0,
                 0,
             )
-            return _result(identity, {"build": failure, "e2e": failure})
-        current = resolve_pull_identity(
-            api, trigger_run_id=trigger_run_id, implementation_sha=implementation_sha
-        )
-        if current != identity:
-            raise NotEligible("pull request identity changed during protected gate evaluation")
+            return _result(
+                identity,
+                {"build": failure, "e2e": failure},
+                policy_mode=policy_mode,
+                authorization=authorization,
+            )
+        current_identity_and_authorization()
         try:
             second_results, second_selected = _snapshot(
                 api, identity=identity, matrix_path=matrix_path
@@ -769,6 +1199,7 @@ def evaluate(
             current = resolve_pull_identity(
                 api,
                 trigger_run_id=trigger_run_id,
+                pr_number=pr_number,
                 implementation_sha=implementation_sha,
             )
             if current != identity:
@@ -781,12 +1212,13 @@ def evaluate(
                 0,
                 0,
             )
-            return _result(identity, {"build": failure, "e2e": failure})
-        final_identity = resolve_pull_identity(
-            api, trigger_run_id=trigger_run_id, implementation_sha=implementation_sha
-        )
-        if final_identity != identity:
-            raise NotEligible("pull request identity changed before protected outputs")
+            return _result(
+                identity,
+                {"build": failure, "e2e": failure},
+                policy_mode=policy_mode,
+                authorization=authorization,
+            )
+        current_identity_and_authorization()
         if first_selected != second_selected or first_results != second_results:
             pending = {
                 kind: GateResult(
@@ -797,23 +1229,153 @@ def evaluate(
                 )
                 for kind in WORKFLOWS
             }
-            return _result(identity, pending)
-        return _result(identity, second_results)
+            return _result(
+                identity,
+                pending,
+                policy_mode=policy_mode,
+                authorization=authorization,
+            )
+        return _result(
+            identity,
+            second_results,
+            policy_mode=policy_mode,
+            authorization=authorization,
+        )
 
 
-def _result(identity: PullIdentity, gates: dict[str, GateResult]) -> dict[str, Any]:
+def _result(
+    identity: PullIdentity,
+    gates: dict[str, GateResult],
+    *,
+    policy_mode: str = "ordinary",
+    authorization: UpgradeAuthorization | None = None,
+) -> dict[str, Any]:
+    if policy_mode not in {"ordinary", "controller-upgrade"}:
+        _fail("trusted PR policy mode is invalid")
     return {
         "schema_version": SCHEMA_VERSION,
         "eligible": True,
         "pull_request": identity.number,
+        "default_branch": identity.default_branch,
+        "base_branch": identity.base_branch,
+        "head_branch": identity.head_branch,
         "head_sha": identity.head_sha,
         "merge_sha": identity.merge_sha,
+        "merge_tree": identity.merge_tree,
         "base_sha": identity.base_sha,
         "default_sha": identity.default_sha,
+        "policy_mode": policy_mode,
+        "authorization_digest": "0" * 64 if authorization is None else authorization.digest,
+        "authorization_comment_id": 0 if authorization is None else authorization.comment_id,
         "gates": {
             kind: {**asdict(gates[kind]), "context": CONTEXTS[kind]}
             for kind in ("build", "e2e")
         },
+    }
+
+
+def reauthorize(
+    api: GitHubApi,
+    *,
+    implementation_sha: str,
+    expected_pr_number: int,
+    expected_default_branch: str,
+    expected_default_sha: str,
+    expected_base_branch: str,
+    expected_base_sha: str,
+    expected_head_branch: str,
+    expected_head_sha: str,
+    expected_merge_sha: str,
+    expected_merge_tree: str,
+    expected_policy_mode: str,
+    expected_authorization_digest: str,
+    expected_authorization_comment_id: int,
+) -> dict[str, Any]:
+    """Reauthenticate the exact evaluator result immediately before status-token minting.
+
+    A changed or revoked controller-upgrade authorization is still eligible for a restrictive
+    failure status on the same immutable head.  A changed PR, branch name, commit, merge, or merge
+    tree identity is ineligible, because publishing to the old head would be stale and publishing
+    to the new topology would bless evidence that was never evaluated.
+    """
+
+    expected_pr_number = _positive(expected_pr_number, "expected pull request number")
+    for branch, label in (
+        (expected_default_branch, "expected default branch"),
+        (expected_base_branch, "expected base branch"),
+        (expected_head_branch, "expected head branch"),
+    ):
+        if not valid_branch_name(branch):
+            _fail(f"{label} is unsafe")
+    expected_default_sha = _sha(expected_default_sha, "expected default SHA")
+    expected_base_sha = _sha(expected_base_sha, "expected base SHA")
+    expected_head_sha = _sha(expected_head_sha, "expected head SHA")
+    expected_merge_sha = _sha(expected_merge_sha, "expected merge SHA")
+    expected_merge_tree = _sha(expected_merge_tree, "expected merge tree")
+    if expected_policy_mode not in {"ordinary", "controller-upgrade"}:
+        _fail("expected policy mode is invalid")
+    if (
+        not isinstance(expected_authorization_digest, str)
+        or SHA256.fullmatch(expected_authorization_digest) is None
+    ):
+        _fail("expected authorization digest must be one lowercase SHA-256")
+    if (
+        isinstance(expected_authorization_comment_id, bool)
+        or not isinstance(expected_authorization_comment_id, int)
+        or expected_authorization_comment_id < 0
+    ):
+        _fail("expected authorization comment id must be a non-negative integer")
+    empty_authorization = expected_authorization_digest == "0" * 64
+    if expected_policy_mode == "ordinary":
+        if not empty_authorization or expected_authorization_comment_id != 0:
+            _fail("ordinary policy unexpectedly carries controller-upgrade authorization")
+    elif empty_authorization != (expected_authorization_comment_id == 0):
+        _fail("controller-upgrade authorization expectation is partially empty")
+
+    identity = resolve_pull_identity(
+        api,
+        pr_number=expected_pr_number,
+        implementation_sha=implementation_sha,
+    )
+    expected_identity = PullIdentity(
+        number=expected_pr_number,
+        default_branch=expected_default_branch,
+        default_sha=expected_default_sha,
+        base_branch=expected_base_branch,
+        base_sha=expected_base_sha,
+        head_branch=expected_head_branch,
+        head_sha=expected_head_sha,
+        merge_sha=expected_merge_sha,
+        merge_tree=expected_merge_tree,
+    )
+    if identity != expected_identity:
+        raise NotEligible("pull request identity changed before trusted status publication")
+
+    authorization_current = False
+    if expected_policy_mode == "ordinary":
+        try:
+            authorization_current = not _upgrade_requested(api, identity)
+        except PrGateError:
+            authorization_current = False
+    else:
+        try:
+            current = controller_upgrade_authorization(api, identity)
+        except PrGateError:
+            authorization_current = False
+        else:
+            authorization_current = (
+                not empty_authorization
+                and current.digest == expected_authorization_digest
+                and current.comment_id == expected_authorization_comment_id
+            )
+
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "eligible": True,
+        "authorization_current": authorization_current,
+        "pull_request": identity.number,
+        "head_sha": identity.head_sha,
+        "policy_mode": expected_policy_mode,
     }
 
 
@@ -843,12 +1405,38 @@ def _locate_outputs(identity: PullIdentity) -> dict[str, Any]:
     }
 
 
+def _source_outputs(identity: PullIdentity) -> dict[str, Any]:
+    """Bounded identity exported to a protected PRT gate before candidate checkout."""
+
+    return {
+        "eligible": True,
+        "pr_number": identity.number,
+        "default_branch": identity.default_branch,
+        "default_sha": identity.default_sha,
+        "base_branch": identity.base_branch,
+        "base_sha": identity.base_sha,
+        "head_branch": identity.head_branch,
+        "head_sha": identity.head_sha,
+        "merge_sha": identity.merge_sha,
+        "merge_tree": identity.merge_tree,
+    }
+
+
 def _evaluation_outputs(value: dict[str, Any]) -> dict[str, Any]:
     outputs: dict[str, Any] = {
         "eligible": value["eligible"],
         "pr_number": value["pull_request"],
+        "default_branch": value["default_branch"],
         "head_sha": value["head_sha"],
+        "head_branch": value["head_branch"],
         "merge_sha": value["merge_sha"],
+        "merge_tree": value["merge_tree"],
+        "base_branch": value["base_branch"],
+        "base_sha": value["base_sha"],
+        "default_sha": value["default_sha"],
+        "policy_mode": value["policy_mode"],
+        "authorization_digest": value["authorization_digest"],
+        "authorization_comment_id": value["authorization_comment_id"],
     }
     for kind in ("build", "e2e"):
         gate = value["gates"][kind]
@@ -857,22 +1445,69 @@ def _evaluation_outputs(value: dict[str, Any]) -> dict[str, Any]:
     return outputs
 
 
+def _reauthorization_outputs(value: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "eligible": value["eligible"],
+        "authorization_current": value["authorization_current"],
+        "pr_number": value["pull_request"],
+        "head_sha": value["head_sha"],
+        "policy_mode": value["policy_mode"],
+    }
+
+
+def _add_locator_arguments(parser: argparse.ArgumentParser) -> None:
+    locator = parser.add_mutually_exclusive_group(required=True)
+    locator.add_argument("--trigger-run-id", type=int)
+    locator.add_argument("--pr-number", type=int)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     locate = commands.add_parser("locate")
     locate.add_argument("--repository-name", required=True)
-    locate.add_argument("--trigger-run-id", type=int, required=True)
+    _add_locator_arguments(locate)
     locate.add_argument("--implementation-sha", required=True)
     locate.add_argument("--github-output", type=Path)
+    source = commands.add_parser("resolve-source")
+    source.add_argument("--repository-name", required=True)
+    source.add_argument("--implementation-sha", required=True)
+    source.add_argument("--pr-number", type=int, required=True)
+    source.add_argument("--github-output", type=Path)
+    dispatch_source = commands.add_parser("resolve-dispatch-source")
+    dispatch_source.add_argument("--repository-name", required=True)
+    dispatch_source.add_argument("--implementation-sha", required=True)
+    dispatch_source.add_argument("--expected-source-sha", required=True)
+    dispatch_source.add_argument("--target-branch", required=True)
+    dispatch_source.add_argument("--expected-target-sha", required=True)
+    dispatch_source.add_argument("--candidate-branch", required=True)
+    dispatch_source.add_argument("--expected-candidate-sha", required=True)
+    dispatch_source.add_argument("--expected-candidate-tree", required=True)
+    dispatch_source.add_argument("--github-output", type=Path)
     assess = commands.add_parser("evaluate")
     assess.add_argument("--repository-name", required=True)
     assess.add_argument("--repository", type=Path, required=True)
-    assess.add_argument("--trigger-run-id", type=int, required=True)
+    _add_locator_arguments(assess)
     assess.add_argument("--implementation-sha", required=True)
     assess.add_argument("--expected-pr-number", type=int, required=True)
     assess.add_argument("--expected-merge-sha", required=True)
     assess.add_argument("--github-output", type=Path)
+    final = commands.add_parser("reauthorize")
+    final.add_argument("--repository-name", required=True)
+    final.add_argument("--implementation-sha", required=True)
+    final.add_argument("--expected-pr-number", type=int, required=True)
+    final.add_argument("--expected-default-branch", required=True)
+    final.add_argument("--expected-default-sha", required=True)
+    final.add_argument("--expected-base-branch", required=True)
+    final.add_argument("--expected-base-sha", required=True)
+    final.add_argument("--expected-head-branch", required=True)
+    final.add_argument("--expected-head-sha", required=True)
+    final.add_argument("--expected-merge-sha", required=True)
+    final.add_argument("--expected-merge-tree", required=True)
+    final.add_argument("--expected-policy-mode", required=True)
+    final.add_argument("--expected-authorization-digest", required=True)
+    final.add_argument("--expected-authorization-comment-id", type=int, required=True)
+    final.add_argument("--github-output", type=Path)
     args = parser.parse_args(argv)
     try:
         api = GitHubApi(
@@ -884,6 +1519,7 @@ def main(argv: list[str] | None = None) -> int:
             identity = resolve_pull_identity(
                 api,
                 trigger_run_id=args.trigger_run_id,
+                pr_number=args.pr_number,
                 implementation_sha=args.implementation_sha,
             )
             value: dict[str, Any] = {
@@ -891,21 +1527,70 @@ def main(argv: list[str] | None = None) -> int:
                 **_locate_outputs(identity),
             }
             outputs = _locate_outputs(identity)
-        else:
+        elif args.command == "resolve-source":
+            identity = resolve_pull_identity(
+                api,
+                pr_number=args.pr_number,
+                implementation_sha=args.implementation_sha,
+            )
+            outputs = _source_outputs(identity)
+            value = {
+                "schema_version": SCHEMA_VERSION,
+                **outputs,
+            }
+        elif args.command == "resolve-dispatch-source":
+            identity = resolve_dispatch_source(
+                api,
+                implementation_sha=args.implementation_sha,
+                expected_source_sha=args.expected_source_sha,
+                target_branch=args.target_branch,
+                expected_target_sha=args.expected_target_sha,
+                candidate_branch=args.candidate_branch,
+                expected_candidate_sha=args.expected_candidate_sha,
+                expected_candidate_tree=args.expected_candidate_tree,
+            )
+            outputs = _source_outputs(identity)
+            value = {
+                "schema_version": SCHEMA_VERSION,
+                **outputs,
+            }
+        elif args.command == "evaluate":
             value = evaluate(
                 api,
                 repository=args.repository,
                 trigger_run_id=args.trigger_run_id,
+                pr_number=args.pr_number,
                 implementation_sha=args.implementation_sha,
                 expected_pr_number=args.expected_pr_number,
                 expected_merge_sha=args.expected_merge_sha,
             )
             outputs = _evaluation_outputs(value)
+        else:
+            value = reauthorize(
+                api,
+                implementation_sha=args.implementation_sha,
+                expected_pr_number=args.expected_pr_number,
+                expected_default_branch=args.expected_default_branch,
+                expected_default_sha=args.expected_default_sha,
+                expected_base_branch=args.expected_base_branch,
+                expected_base_sha=args.expected_base_sha,
+                expected_head_branch=args.expected_head_branch,
+                expected_head_sha=args.expected_head_sha,
+                expected_merge_sha=args.expected_merge_sha,
+                expected_merge_tree=args.expected_merge_tree,
+                expected_policy_mode=args.expected_policy_mode,
+                expected_authorization_digest=args.expected_authorization_digest,
+                expected_authorization_comment_id=args.expected_authorization_comment_id,
+            )
+            outputs = _reauthorization_outputs(value)
         if args.github_output is not None:
             _append_outputs(args.github_output, outputs)
         print(json.dumps(value, sort_keys=True, separators=(",", ":")))
         return 0
     except NotEligible as exc:
+        if args.command in {"resolve-source", "resolve-dispatch-source"}:
+            print(f"trusted gate source is ineligible: {exc}", file=sys.stderr)
+            return 2
         if args.github_output is not None:
             _append_outputs(args.github_output, {"eligible": False})
         print(f"trusted PR gate is ineligible: {exc}", file=sys.stderr)

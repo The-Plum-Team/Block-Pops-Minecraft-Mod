@@ -5,6 +5,8 @@ The matrix jobs deliberately upload one artifact per runtime lane.  This module
 never overlays those hostile trees.  It validates each lane against the
 branch-local release matrix, scenario contract, and verified production bundle,
 then creates one fresh, content-inventoried aggregate for downstream curation.
+The aggregate carries a canonical non-self-referential receipt so a protected
+consumer can bind every payload byte to the authenticated source run identity.
 """
 
 from __future__ import annotations
@@ -59,6 +61,7 @@ KIND = "packaged-e2e-aggregate"
 WORKFLOW = ".github/workflows/on-demand-e2e.yml"
 AGGREGATE_ARTIFACT = "packaged-e2e-aggregate"
 ARTIFACT_PREFIX = "packaged-e2e-"
+AGGREGATE_RECEIPT = "aggregate.json"
 
 SHA1 = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -864,6 +867,87 @@ def _manifest_lane(lane: ExpectedLane, hashes: tuple[str, str]) -> dict[str, Any
     }
 
 
+def _artifact_hashes(
+    artifact_manifest: dict[str, Any],
+    *,
+    matrix: dict[str, Any],
+    expected_nodes: set[str],
+    commit: str | None = None,
+    tree: str | None = None,
+) -> dict[str, tuple[str, str]]:
+    """Project verified production/harness hashes for an exact matrix inventory."""
+
+    if (
+        artifact_manifest.get("schema_version") != ARTIFACT_SCHEMA_VERSION
+        or artifact_manifest.get("release_branch") != matrix["branch"]["name"]
+        or artifact_manifest.get("lane_count") != matrix["lane_count"]
+        or (commit is not None and artifact_manifest.get("git_commit") != commit)
+        or (tree is not None and artifact_manifest.get("git_tree") != tree)
+    ):
+        raise FanInError("verified artifact manifest schema/commit/tree/matrix identity is stale")
+    rows = artifact_manifest.get("artifacts")
+    if not isinstance(rows, list):
+        raise FanInError("verified artifact manifest has no artifact rows")
+    by_node: dict[str, tuple[str, str]] = {}
+    for raw in rows:
+        if (
+            not isinstance(raw, dict)
+            or not isinstance(raw.get("production"), dict)
+            or not isinstance(raw.get("harness"), dict)
+        ):
+            raise FanInError("verified artifact manifest row is malformed")
+        node = raw.get("artifact_node")
+        if not isinstance(node, str) or node in by_node:
+            raise FanInError("verified artifact manifest repeats an artifact node")
+        by_node[node] = (
+            _digest(raw["production"].get("sha256"), f"{node} production sha256"),
+            _digest(raw["harness"].get("sha256"), f"{node} harness sha256"),
+        )
+    if set(by_node) != expected_nodes:
+        raise FanInError("verified artifact manifest disagrees with projected lanes")
+    return by_node
+
+
+def validate_lane(
+    *,
+    root: Path,
+    matrix_path: Path,
+    contract_path: Path,
+    projection: str,
+    row: dict[str, Any],
+    artifact_manifest: dict[str, Any],
+) -> dict[str, Any]:
+    """Revalidate one sealed runtime lane before its same-run artifact upload."""
+
+    matrix = load_matrix(matrix_path, validate_sources=False)
+    contract = load_contract(contract_path)
+    projected = gha_matrix(matrix, projection, contract=contract).get("include")
+    if not isinstance(projected, list):
+        raise FanInError("authoritative E2E projection is malformed")
+    matches = [index for index, expected in enumerate(projected) if expected == row]
+    if len(matches) != 1:
+        raise FanInError("runtime row is not one exact authoritative projected lane")
+    lanes = expected_lanes(matrix, contract, projection)
+    if len(lanes) != len(projected):
+        raise FanInError("runtime lane projection is internally inconsistent")
+    lane = lanes[matches[0]]
+    hashes = _artifact_hashes(
+        artifact_manifest,
+        matrix=matrix,
+        expected_nodes={item.artifact_node for item in lanes},
+    )
+    results, metrics, _files = _validate_lane_payload(
+        root.absolute(), lane=lane, contract=contract, hashes=hashes[lane.artifact_node]
+    )
+    return {
+        "schema_version": 1,
+        "artifact_node": lane.artifact_node,
+        "job_id": lane.job_id,
+        "scenario_count": len(results),
+        "runtime_store": metrics,
+    }
+
+
 def _provenance(
     identity: SourceIdentity,
     *,
@@ -884,6 +968,179 @@ def _provenance(
         "matrix_sha256": matrix_sha256(matrix_path),
         "contract_sha256": contract.sha256,
     }
+
+
+def _optional_expected_identity(
+    *,
+    repository: str | None,
+    source_branch: str | None,
+    commit: str | None,
+    tree: str | None,
+    run_id: int | None,
+    run_attempt: int | None,
+    projection: str,
+) -> SourceIdentity | None:
+    """Return an externally authenticated source identity, or require none.
+
+    A partial identity is more dangerous than no external identity: it can make
+    a caller believe an aggregate is bound while leaving one mutable dimension
+    unchecked.  Structural callers may omit the complete group, while workflow
+    boundaries pass every field from their protected job-graph authentication.
+    """
+
+    values = (repository, source_branch, commit, tree, run_id, run_attempt)
+    if all(value is None for value in values):
+        return None
+    if any(value is None for value in values):
+        raise FanInError("expected source identity must be supplied all-or-none")
+    identity = SourceIdentity(
+        repository=repository,
+        source_branch=source_branch,
+        commit=commit,
+        tree=tree,
+        run_id=run_id,
+        run_attempt=run_attempt,
+        projection=projection,
+    )
+    identity.validate()
+    return identity
+
+
+def _validate_receipt_shape(value: Any) -> tuple[SourceIdentity, str]:
+    """Validate every primitive in the non-self-referential aggregate receipt."""
+
+    receipt = _object(
+        value,
+        "aggregate receipt",
+        {"schema_version", "kind", "provenance", "artifact_manifest", "lanes", "files"},
+    )
+    if type(receipt["schema_version"]) is not int or receipt["schema_version"] != SCHEMA_VERSION:
+        raise FanInError("aggregate receipt schema version is unsupported")
+    if receipt["kind"] != KIND:
+        raise FanInError("aggregate receipt kind is stale")
+
+    provenance = _object(
+        receipt["provenance"],
+        "aggregate receipt provenance",
+        {
+            "repository",
+            "source_branch",
+            "commit",
+            "tree",
+            "workflow",
+            "run_id",
+            "run_attempt",
+            "projection",
+            "matrix_branch",
+            "matrix_sha256",
+            "contract_sha256",
+        },
+    )
+    identity = SourceIdentity(
+        repository=_text(provenance["repository"], "aggregate receipt provenance.repository"),
+        source_branch=_text(
+            provenance["source_branch"], "aggregate receipt provenance.source_branch"
+        ),
+        commit=_digest(
+            provenance["commit"], "aggregate receipt provenance.commit", SHA1
+        ),
+        tree=_digest(provenance["tree"], "aggregate receipt provenance.tree", SHA1),
+        run_id=_positive_int(provenance["run_id"], "aggregate receipt provenance.run_id"),
+        run_attempt=_positive_int(
+            provenance["run_attempt"], "aggregate receipt provenance.run_attempt"
+        ),
+        projection=_text(
+            provenance["projection"], "aggregate receipt provenance.projection"
+        ),
+    )
+    identity.validate()
+    _text(provenance["workflow"], "aggregate receipt provenance.workflow")
+    _text(provenance["matrix_branch"], "aggregate receipt provenance.matrix_branch")
+    _digest(provenance["matrix_sha256"], "aggregate receipt provenance.matrix_sha256")
+    _digest(provenance["contract_sha256"], "aggregate receipt provenance.contract_sha256")
+
+    artifact = _object(
+        receipt["artifact_manifest"],
+        "aggregate receipt artifact manifest",
+        {"path", "schema_version", "sha256", "commit", "tree"},
+    )
+    _canonical_path(artifact["path"], "aggregate receipt artifact manifest path")
+    if (
+        type(artifact["schema_version"]) is not int
+        or artifact["schema_version"] != ARTIFACT_SCHEMA_VERSION
+    ):
+        raise FanInError("aggregate receipt artifact manifest schema is stale")
+    manifest_sha = _digest(
+        artifact["sha256"], "aggregate receipt artifact manifest sha256"
+    )
+    _digest(artifact["commit"], "aggregate receipt artifact manifest commit", SHA1)
+    _digest(artifact["tree"], "aggregate receipt artifact manifest tree", SHA1)
+
+    lanes = receipt["lanes"]
+    if not isinstance(lanes, list) or not lanes:
+        raise FanInError("aggregate receipt lane inventory is empty")
+    for index, raw in enumerate(lanes):
+        lane = _object(
+            raw,
+            f"aggregate receipt lanes[{index}]",
+            {
+                "artifact_name",
+                "job_id",
+                "artifact_node",
+                "minecraft",
+                "loader",
+                "java",
+                "scenarios",
+                "production_jar_sha256",
+                "harness_jar_sha256",
+            },
+        )
+        artifact_name = _text(
+            lane["artifact_name"], f"aggregate receipt lanes[{index}].artifact_name"
+        )
+        if SAFE_ARTIFACT.fullmatch(artifact_name) is None:
+            raise FanInError("aggregate receipt contains an unsafe lane artifact name")
+        for key in ("job_id", "artifact_node", "minecraft", "loader"):
+            _text(lane[key], f"aggregate receipt lanes[{index}].{key}")
+        _positive_int(lane["java"], f"aggregate receipt lanes[{index}].java")
+        scenarios = lane["scenarios"]
+        if not isinstance(scenarios, list) or not scenarios:
+            raise FanInError("aggregate receipt lane scenarios are empty or duplicated")
+        observed_scenarios: set[str] = set()
+        for scenario_index, scenario in enumerate(scenarios):
+            scenario = _text(
+                scenario,
+                f"aggregate receipt lanes[{index}].scenarios[{scenario_index}]",
+            )
+            if scenario in observed_scenarios:
+                raise FanInError("aggregate receipt lane scenarios are empty or duplicated")
+            observed_scenarios.add(scenario)
+        _digest(
+            lane["production_jar_sha256"],
+            f"aggregate receipt lanes[{index}].production_jar_sha256",
+        )
+        _digest(
+            lane["harness_jar_sha256"],
+            f"aggregate receipt lanes[{index}].harness_jar_sha256",
+        )
+
+    files = receipt["files"]
+    if not isinstance(files, list) or not files:
+        raise FanInError("aggregate receipt file inventory is empty")
+    paths: set[str] = set()
+    for index, raw in enumerate(files):
+        record = _object(
+            raw,
+            f"aggregate receipt files[{index}]",
+            {"path", "size", "sha256"},
+        )
+        path = _canonical_path(record["path"], f"aggregate receipt files[{index}].path")
+        if path == AGGREGATE_RECEIPT or path in paths:
+            raise FanInError("aggregate receipt file inventory is self-referential or duplicated")
+        paths.add(path)
+        _metric_int(record["size"], f"aggregate receipt files[{index}].size")
+        _digest(record["sha256"], f"aggregate receipt files[{index}].sha256")
+    return identity, manifest_sha
 
 
 def _atomic_directory(output: Path, writer: Any) -> Any:
@@ -931,30 +1188,13 @@ def create_aggregate(
         artifact_prefix=run_artifact_prefix(identity.commit, identity.run_attempt),
     )
     _digest(artifact_manifest_sha256, "artifact manifest sha256")
-    if (
-        artifact_manifest.get("schema_version") != ARTIFACT_SCHEMA_VERSION
-        or artifact_manifest.get("git_commit") != identity.commit
-        or artifact_manifest.get("git_tree") != identity.tree
-        or artifact_manifest.get("release_branch") != matrix["branch"]["name"]
-        or artifact_manifest.get("lane_count") != matrix["lane_count"]
-    ):
-        raise FanInError("verified artifact manifest schema/commit/tree/matrix identity is stale")
-    rows = artifact_manifest.get("artifacts")
-    if not isinstance(rows, list):
-        raise FanInError("verified artifact manifest has no artifact rows")
-    by_node: dict[str, tuple[str, str]] = {}
-    for raw in rows:
-        if not isinstance(raw, dict) or not isinstance(raw.get("production"), dict) or not isinstance(raw.get("harness"), dict):
-            raise FanInError("verified artifact manifest row is malformed")
-        node = raw.get("artifact_node")
-        if not isinstance(node, str) or node in by_node:
-            raise FanInError("verified artifact manifest repeats an artifact node")
-        by_node[node] = (
-            _digest(raw["production"].get("sha256"), f"{node} production sha256"),
-            _digest(raw["harness"].get("sha256"), f"{node} harness sha256"),
-        )
-    if set(by_node) != {lane.artifact_node for lane in lanes}:
-        raise FanInError("verified artifact manifest disagrees with projected lanes")
+    by_node = _artifact_hashes(
+        artifact_manifest,
+        matrix=matrix,
+        expected_nodes={lane.artifact_node for lane in lanes},
+        commit=identity.commit,
+        tree=identity.tree,
+    )
     root = input_root.absolute()
     root_snapshot = _inventory(root)
     root_directories, root_files = root_snapshot
@@ -1031,12 +1271,19 @@ def create_aggregate(
             "lanes": lane_records,
             "files": records,
         }
+        _write_new(stage / AGGREGATE_RECEIPT, _json_bytes(receipt))
         validate_aggregate(
             root=stage,
             matrix_path=matrix_path,
             contract_path=contract_path,
             projection=identity.projection,
             expected_hashes=by_node,
+            expected_repository=identity.repository,
+            expected_source_branch=identity.source_branch,
+            expected_commit=identity.commit,
+            expected_tree=identity.tree,
+            expected_run_id=identity.run_id,
+            expected_run_attempt=identity.run_attempt,
         )
         if _inventory(root) != root_snapshot:
             raise FanInError("download root changed during fan-in")
@@ -1052,27 +1299,74 @@ def validate_aggregate(
     contract_path: Path,
     projection: str,
     expected_hashes: dict[str, tuple[str, str]] | None = None,
+    expected_repository: str | None = None,
+    expected_source_branch: str | None = None,
+    expected_commit: str | None = None,
+    expected_tree: str | None = None,
+    expected_run_id: int | None = None,
+    expected_run_attempt: int | None = None,
 ) -> dict[str, Any]:
     if projection not in {"pr-anchors", "scheduled-anchors"}:
         raise FanInError("projection must be pr-anchors or scheduled-anchors")
     matrix = load_matrix(matrix_path, validate_sources=False)
     contract = load_contract(contract_path)
-    lanes = expected_lanes(matrix, contract, projection)
+    externally_expected = _optional_expected_identity(
+        repository=expected_repository,
+        source_branch=expected_source_branch,
+        commit=expected_commit,
+        tree=expected_tree,
+        run_id=expected_run_id,
+        run_attempt=expected_run_attempt,
+        projection=projection,
+    )
+    structural_lanes = expected_lanes(matrix, contract, projection)
     root = root.absolute()
     if expected_hashes is not None and set(expected_hashes) != {
-        lane.artifact_node for lane in lanes
+        lane.artifact_node for lane in structural_lanes
     }:
         raise FanInError("expected production hashes disagree with projected lanes")
 
     expected_directories: set[str] = set()
-    expected_files = {"summary.json", "resolved-matrix.json", "runtime-store.json"}
-    for lane in lanes:
+    expected_files = {
+        AGGREGATE_RECEIPT,
+        "summary.json",
+        "resolved-matrix.json",
+        "runtime-store.json",
+    }
+    for lane in structural_lanes:
         lane_directories, lane_files = _profile_layout(lane, contract)
         expected_directories.update(lane_directories)
         expected_files.update(path for path in lane_files if path.startswith("profiles/"))
     directories, actual = _inventory(root)
     if directories != expected_directories or set(actual) != expected_files:
         raise FanInError("aggregate filesystem inventory is incomplete or contains unknown entries")
+
+    receipt_bytes = _read_file(root, AGGREGATE_RECEIPT)
+    try:
+        receipt = secure_loads(
+            receipt_bytes,
+            label="aggregate receipt",
+            max_bytes=MAX_MANIFEST_BYTES,
+        )
+    except SecureJsonError as exc:
+        raise FanInError(str(exc)) from exc
+    if not isinstance(receipt, dict):
+        raise FanInError("aggregate receipt must be an object")
+    if receipt_bytes != _json_bytes(receipt):
+        raise FanInError("aggregate receipt JSON is not canonical")
+    source_identity, artifact_manifest_sha256 = _validate_receipt_shape(receipt)
+    if source_identity.projection != projection:
+        raise FanInError("aggregate receipt projection is stale")
+    if externally_expected is not None and source_identity != externally_expected:
+        raise FanInError("aggregate receipt source identity is stale")
+    lanes = expected_lanes(
+        matrix,
+        contract,
+        projection,
+        artifact_prefix=run_artifact_prefix(
+            source_identity.commit, source_identity.run_attempt
+        ),
+    )
 
     all_results: list[dict[str, Any]] = []
     observed_hashes: dict[str, tuple[str, str]] = {}
@@ -1143,24 +1437,46 @@ def validate_aggregate(
     ]
     if resolved != {"schema_version": 1, "rows": expected_rows}:
         raise FanInError("aggregate resolved matrix is stale")
-    if _inventory(root) != (directories, actual):
-        raise FanInError("aggregate changed during validation")
-    return {
+
+    non_self_records = [
+        {
+            "path": path,
+            "size": actual[path][2],
+            "sha256": _sha256(
+                _read_file(root, path, allow_empty="/logs/" in f"/{path}")
+            ),
+        }
+        for path in sorted(actual)
+        if path != AGGREGATE_RECEIPT
+    ]
+    expected_receipt = {
         "schema_version": SCHEMA_VERSION,
         "kind": KIND,
-        "projection": projection,
-        "matrix_sha256": matrix_sha256(matrix_path),
-        "contract_sha256": contract.sha256,
+        "provenance": _provenance(
+            source_identity,
+            matrix=matrix,
+            matrix_path=matrix_path,
+            contract=contract,
+        ),
+        "artifact_manifest": {
+            "path": "build/release/artifacts.json",
+            "schema_version": ARTIFACT_SCHEMA_VERSION,
+            "sha256": artifact_manifest_sha256,
+            "commit": source_identity.commit,
+            "tree": source_identity.tree,
+        },
         "lanes": [
             _manifest_lane(lane, observed_hashes[lane.artifact_node]) for lane in lanes
         ],
-        "files": [
-            {"path": path, "size": actual[path][2], "sha256": _sha256(
-                _read_file(root, path, allow_empty="/logs/" in f"/{path}")
-            )}
-            for path in sorted(actual)
-        ],
+        "files": non_self_records,
     }
+    if receipt != expected_receipt:
+        raise FanInError("aggregate receipt identity or non-self inventory is stale")
+    if _read_file(root, AGGREGATE_RECEIPT) != receipt_bytes:
+        raise FanInError("aggregate receipt changed during validation")
+    if _inventory(root) != (directories, actual):
+        raise FanInError("aggregate changed during validation")
+    return receipt
 
 
 def _identity_from_args(args: argparse.Namespace) -> SourceIdentity:
@@ -1176,10 +1492,14 @@ def _identity_from_args(args: argparse.Namespace) -> SourceIdentity:
 
 
 def _verified_manifest(
-    *, matrix_path: Path, stage: Path, manifest_path: Path
+    *,
+    matrix_path: Path,
+    stage: Path,
+    manifest_path: Path,
+    repository: Path = REPO,
 ) -> tuple[dict[str, Any], str]:
     manifest = verify_staged(
-        repository=REPO,
+        repository=repository,
         matrix_path=matrix_path,
         manifest_path=manifest_path,
         stage=stage,
@@ -1212,6 +1532,15 @@ def _source(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--projection", choices=("pr-anchors", "scheduled-anchors"), required=True)
 
 
+def _optional_source(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--repository")
+    parser.add_argument("--source-branch")
+    parser.add_argument("--commit")
+    parser.add_argument("--tree")
+    parser.add_argument("--run-id", type=int)
+    parser.add_argument("--run-attempt", type=int)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -1228,6 +1557,21 @@ def main(argv: list[str] | None = None) -> int:
     _common(validate)
     validate.add_argument("--input", type=Path, required=True)
     validate.add_argument("--projection", choices=("pr-anchors", "scheduled-anchors"), required=True)
+    _optional_source(validate)
+    validate_lane_parser = commands.add_parser(
+        "validate-lane", help="revalidate one sealed packaged-runtime lane before upload"
+    )
+    _common(validate_lane_parser)
+    validate_lane_parser.add_argument("--input", type=Path, required=True)
+    validate_lane_parser.add_argument(
+        "--projection", choices=("pr-anchors", "scheduled-anchors"), required=True
+    )
+    validate_lane_parser.add_argument("--row-json", required=True)
+    validate_lane_parser.add_argument("--repository", type=Path, required=True)
+    validate_lane_parser.add_argument("--stage", type=Path, default=Path("build/release"))
+    validate_lane_parser.add_argument(
+        "--artifact-manifest", type=Path, default=Path("build/release/artifacts.json")
+    )
     args = parser.parse_args(argv)
     try:
         if args.command == "create":
@@ -1246,12 +1590,40 @@ def main(argv: list[str] | None = None) -> int:
                 artifact_manifest=artifact_manifest,
                 artifact_manifest_sha256=artifact_manifest_sha,
             )
-        else:
+        elif args.command == "validate":
             result = validate_aggregate(
                 root=args.input,
                 matrix_path=args.matrix,
                 contract_path=args.contract,
                 projection=args.projection,
+                expected_repository=args.repository,
+                expected_source_branch=args.source_branch,
+                expected_commit=args.commit,
+                expected_tree=args.tree,
+                expected_run_id=args.run_id,
+                expected_run_attempt=args.run_attempt,
+            )
+        else:
+            row = secure_loads(
+                args.row_json.encode("utf-8"),
+                label="runtime row",
+                max_bytes=MAX_JSON_BYTES,
+            )
+            if not isinstance(row, dict):
+                raise FanInError("runtime row must be an object")
+            artifact_manifest, _artifact_manifest_sha = _verified_manifest(
+                matrix_path=args.matrix,
+                stage=args.stage,
+                manifest_path=args.artifact_manifest,
+                repository=args.repository,
+            )
+            result = validate_lane(
+                root=args.input,
+                matrix_path=args.matrix,
+                contract_path=args.contract,
+                projection=args.projection,
+                row=row,
+                artifact_manifest=artifact_manifest,
             )
     except (
         ArtifactError,

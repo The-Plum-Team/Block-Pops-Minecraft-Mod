@@ -11,16 +11,7 @@ on:
     types:
       - completed
 
-permissions:
-  actions: write
-  contents: write
-  pull-requests: write
-  statuses: write
-
-concurrency:
-  group: >-
-    release-sync-result-${{ github.event.workflow_run.head_branch || github.event.client_payload.head_branch || 'canonical-wake' }}
-  cancel-in-progress: false
+permissions: {}
 
 jobs:
   wake-canonical-sync:
@@ -47,12 +38,72 @@ jobs:
             '{event_type:"release-sync-requested",client_payload:{reason:"canonical-build",source_run_id:$source_run_id}}' \
             | gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" --input -
 
-  handle:
-    name: Reverify exact heads and merge
+  route:
+    name: Normalize the candidate wake identity
     if: >-
       github.event_name == 'repository_dispatch' ||
       (github.event.workflow_run.event == 'workflow_dispatch' &&
-       startsWith(github.event.workflow_run.head_branch, 'automation/release-sync/'))
+       github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       ((github.event.workflow_run.path == '.github/workflows/build-gate.yml' &&
+         startsWith(github.event.workflow_run.display_title, 'Build gate / ')) ||
+        (github.event.workflow_run.path == '.github/workflows/on-demand-e2e.yml' &&
+         startsWith(github.event.workflow_run.display_title, 'Packaged E2E / '))))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      requested_sha: ${{ steps.route.outputs.requested_sha }}
+    steps:
+      - name: Emit one safe candidate key for merge-sensitive serialization
+        id: route
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DISPATCH_HEAD_BRANCH: ${{ github.event.client_payload.head_branch }}
+          DISPATCH_HEAD_SHA: ${{ github.event.client_payload.head_sha }}
+          EVENT_CONTROLLER_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          EVENT_CONTROLLER_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          EVENT_CONTROLLER_SHA: ${{ github.event.workflow_run.head_sha }}
+          EVENT_DISPLAY_TITLE: ${{ github.event.workflow_run.display_title }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_WORKFLOW_PATH: ${{ github.event.workflow_run.path }}
+        run: |
+          set -euo pipefail
+          requested_sha="$DISPATCH_HEAD_SHA"
+          if [[ "$EVENT_NAME" == workflow_run ]]; then
+            [[ -z "$DISPATCH_HEAD_BRANCH$DISPATCH_HEAD_SHA" ]]
+            case "$EVENT_WORKFLOW_PATH" in
+              .github/workflows/build-gate.yml) display_prefix='Build gate / ' ;;
+              .github/workflows/on-demand-e2e.yml) display_prefix='Packaged E2E / ' ;;
+              *) exit 2 ;;
+            esac
+            requested_sha="${EVENT_DISPLAY_TITLE#"$display_prefix"}"
+            [[ "$EVENT_DISPLAY_TITLE" == "$display_prefix$requested_sha" ]]
+            [[ "$EVENT_CONTROLLER_BRANCH" == "$DEFAULT_BRANCH" ]]
+            [[ "$EVENT_CONTROLLER_REPOSITORY" == "$GITHUB_REPOSITORY" ]]
+            [[ "$EVENT_CONTROLLER_SHA" =~ ^[0-9a-f]{40}$ ]]
+          else
+            [[ "$EVENT_NAME" == repository_dispatch ]]
+            [[ "$DISPATCH_HEAD_BRANCH" =~ ^automation/release-sync/[A-Za-z0-9._/-]{1,160}$ ]]
+          fi
+          [[ "$requested_sha" =~ ^[0-9a-f]{40}$ ]]
+          printf 'requested_sha=%s\n' "$requested_sha" >> "$GITHUB_OUTPUT"
+
+  handle:
+    name: Reverify exact heads and merge
+    needs: route
+    if: needs.route.result == 'success'
+    concurrency:
+      # Different authenticated candidate SHAs can still target the same mutable release ref.
+      # Serialize every merge-sensitive handler; the periodic reconciler recovers missed wakes.
+      group: release-sync-result
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+      statuses: write
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -69,15 +120,41 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           DISPATCH_HEAD_BRANCH: ${{ github.event.client_payload.head_branch }}
           DISPATCH_HEAD_SHA: ${{ github.event.client_payload.head_sha }}
-          EVENT_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          EVENT_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          EVENT_CONTROLLER_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          EVENT_CONTROLLER_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          EVENT_CONTROLLER_SHA: ${{ github.event.workflow_run.head_sha }}
+          EVENT_DISPLAY_TITLE: ${{ github.event.workflow_run.display_title }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_WORKFLOW_PATH: ${{ github.event.workflow_run.path }}
           GH_TOKEN: ${{ github.token }}
+          ROUTED_SHA: ${{ needs.route.outputs.requested_sha }}
         run: |
           set -euo pipefail
-          head_branch="${DISPATCH_HEAD_BRANCH:-$EVENT_HEAD_BRANCH}"
-          requested_sha="${DISPATCH_HEAD_SHA:-$EVENT_HEAD_SHA}"
-          [[ "$head_branch" == automation/release-sync/* ]]
+          head_branch="$DISPATCH_HEAD_BRANCH"
+          requested_sha="$DISPATCH_HEAD_SHA"
+          if [[ "$EVENT_NAME" == workflow_run ]]; then
+            [[ -z "$head_branch$requested_sha" ]]
+            case "$EVENT_WORKFLOW_PATH" in
+              .github/workflows/build-gate.yml)
+                display_prefix='Build gate / '
+                ;;
+              .github/workflows/on-demand-e2e.yml)
+                display_prefix='Packaged E2E / '
+                ;;
+              *)
+                exit 2
+                ;;
+            esac
+            requested_sha="${EVENT_DISPLAY_TITLE#"$display_prefix"}"
+            [[ "$EVENT_DISPLAY_TITLE" == "$display_prefix$requested_sha" ]]
+            [[ "$EVENT_CONTROLLER_BRANCH" == "$DEFAULT_BRANCH" ]]
+            [[ "$EVENT_CONTROLLER_REPOSITORY" == "$GITHUB_REPOSITORY" ]]
+          else
+            [[ "$EVENT_NAME" == repository_dispatch ]]
+            [[ "$head_branch" == automation/release-sync/* ]]
+          fi
           [[ "$requested_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$requested_sha" == "$ROUTED_SHA" ]]
           [[ "$(jq -er .branch.name release/release-matrix.json)" == "$DEFAULT_BRANCH" ]]
           [[ "$(jq -er .branch.role release/release-matrix.json)" == integration ]]
           protected_sha="$(git rev-parse HEAD)"
@@ -88,29 +165,43 @@ jobs:
               >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          if [[ "$EVENT_NAME" == workflow_run && "$EVENT_CONTROLLER_SHA" != "$protected_sha" ]]; then
+            printf 'Gate run used an obsolete default controller; reconciliation will retry.\n' \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
 
-          prs="$(gh pr list --state open --head "$head_branch" --limit 2 \
-            --json number,state,baseRefName,baseRefOid,headRefName,headRefOid,isCrossRepository,url)"
+          associated="$RUNNER_TEMP/associated-prs.json"
+          gh api --paginate --slurp \
+            "repos/$GITHUB_REPOSITORY/commits/$requested_sha/pulls?per_page=100" \
+            > "$associated"
+          jq -e 'type == "array" and length <= 10 and
+            all(.[]; type == "array") and ([.[][]] | length <= 1000) and
+            (([.[][] | .number] | length) == ([.[][] | .number] | unique | length))' \
+            "$associated" >/dev/null
+          prs="$(jq -ce --arg repository "$GITHUB_REPOSITORY" \
+            --arg requested_branch "$head_branch" --arg requested_sha "$requested_sha" \
+            '[.[][] | select(.state == "open" and
+              .head.repo.full_name == $repository and .base.repo.full_name == $repository and
+              .head.sha == $requested_sha and
+              (.head.ref | startswith("automation/release-sync/")) and
+              ($requested_branch == "" or .head.ref == $requested_branch))]' \
+            "$associated")"
           if [[ "$(jq length <<< "$prs")" == 0 ]]; then
-            printf 'No open release-sync PR remains for `%s`.\n' "$head_branch" \
+            printf 'No open release-sync PR remains for tested commit `%s`.\n' "$requested_sha" \
               >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           [[ "$(jq length <<< "$prs")" == 1 ]]
           pr="$(jq -c '.[0]' <<< "$prs")"
-          jq -e --arg branch "$head_branch" \
-            '.state == "OPEN" and .headRefName == $branch and (.isCrossRepository | not)' \
-            <<< "$pr" >/dev/null
+          head_branch="$(jq -er .head.ref <<< "$pr")"
           pr_number="$(jq -er .number <<< "$pr")"
-          target_branch="$(jq -er .baseRefName <<< "$pr")"
-          target_sha="$(jq -er .baseRefOid <<< "$pr")"
-          head_sha="$(jq -er .headRefOid <<< "$pr")"
-          [[ "$pr_number" =~ ^[0-9]+$ ]]
+          target_branch="$(jq -er .base.ref <<< "$pr")"
+          target_sha="$(jq -er .base.sha <<< "$pr")"
+          head_sha="$(jq -er .head.sha <<< "$pr")"
+          [[ "$pr_number" =~ ^[1-9][0-9]*$ ]]
           [[ "$target_sha" =~ ^[0-9a-f]{40}$ && "$head_sha" =~ ^[0-9a-f]{40}$ ]]
-          if [[ "$requested_sha" != "$head_sha" ]]; then
-            printf 'Completion was for stale `%s`; current PR head is `%s`.\n' \
-              "$requested_sha" "$head_sha" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          [[ "$requested_sha" == "$head_sha" ]]
 
           encoded_target="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$target_branch")"
           encoded_head="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$head_branch")"
@@ -151,21 +242,53 @@ jobs:
 
           select_run() {
             local workflow="$1" output="$2" runs="$RUNNER_TEMP/$workflow.runs.json"
+            local title
+            case "$workflow" in
+              build-gate.yml) title='Build gate' ;;
+              on-demand-e2e.yml) title='Packaged E2E' ;;
+              *) return 2 ;;
+            esac
             gh api --paginate --slurp \
-              "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?event=workflow_dispatch&head_sha=$head_sha&per_page=100" \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?event=workflow_dispatch&head_sha=$protected_sha&per_page=100" \
               > "$runs" || return 2
             local count
-            count="$(jq --arg branch "$head_branch" --arg head "$head_sha" \
+            count="$(jq --arg branch "$DEFAULT_BRANCH" --arg controller "$protected_sha" \
+              --arg display "$title / $head_sha" \
               --arg path ".github/workflows/$workflow" --arg repository "$GITHUB_REPOSITORY" \
               '[.[].workflow_runs[] | select(.event == "workflow_dispatch" and .path == $path and
-                .head_branch == $branch and .head_sha == $head and
+                .display_title == $display and .head_branch == $branch and
+                .head_sha == $controller and .repository.full_name == $repository and
                 .head_repository.full_name == $repository)] | length' "$runs")" || return 2
             if [[ "$count" == 0 ]]; then
               return 3
             fi
             python3 scripts/ci/gate_controller.py select-run --runs "$runs" \
-              --workflow "$workflow" --branch "$head_branch" --sha "$head_sha" \
+              --workflow "$workflow" --controller-branch "$DEFAULT_BRANCH" \
+              --controller-sha "$protected_sha" --tested-branch "$head_branch" \
+              --tested-sha "$head_sha" \
               --repository-name "$GITHUB_REPOSITORY" > "$output" || return 2
+          }
+
+          validate_run_artifact() {
+            local workflow="$1" run_id="$2" run_attempt="$3" output="$4"
+            local expected artifacts="$RUNNER_TEMP/$workflow.$run_id.artifacts.json"
+            case "$workflow" in
+              build-gate.yml)
+                expected="staged-release-bundle-$head_sha-$run_attempt"
+                ;;
+              on-demand-e2e.yml)
+                expected="packaged-e2e-$head_sha-$run_attempt-aggregate"
+                ;;
+              *)
+                return 2
+                ;;
+            esac
+            gh api --paginate --slurp \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" \
+              > "$artifacts"
+            python3 scripts/ci/gate_controller.py validate-artifact \
+              --artifacts "$artifacts" --expected-name "$expected" \
+              --run-id "$run_id" > "$output"
           }
 
           build_run="$RUNNER_TEMP/build.selected.json"
@@ -207,6 +330,21 @@ jobs:
           if [[ "$(jq -er .conclusion "$e2e_run")" != success ]]; then
             publish_status "Release sync / Packaged E2E gate" failure \
               "Newest exact-head Packaged E2E failed" "$e2e_id"
+            exit 1
+          fi
+
+          build_artifact="$RUNNER_TEMP/build.artifact.json"
+          e2e_artifact="$RUNNER_TEMP/e2e.artifact.json"
+          if ! validate_run_artifact build-gate.yml \
+              "$build_id" "$build_attempt" "$build_artifact"; then
+            publish_status "Release sync / Build and verify" failure \
+              "Build artifact identity failed protected validation" "$build_id"
+            exit 1
+          fi
+          if ! validate_run_artifact on-demand-e2e.yml \
+              "$e2e_id" "$e2e_attempt" "$e2e_artifact"; then
+            publish_status "Release sync / Packaged E2E gate" failure \
+              "Packaged artifact identity failed protected validation" "$e2e_id"
             exit 1
           fi
 
@@ -256,17 +394,33 @@ jobs:
               >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          build_artifact_reselected="$RUNNER_TEMP/build.artifact.reselected.json"
+          e2e_artifact_reselected="$RUNNER_TEMP/e2e.artifact.reselected.json"
+          validate_run_artifact build-gate.yml \
+            "$build_id" "$build_attempt" "$build_artifact_reselected"
+          validate_run_artifact on-demand-e2e.yml \
+            "$e2e_id" "$e2e_attempt" "$e2e_artifact_reselected"
+          cmp -s "$build_artifact" "$build_artifact_reselected"
+          cmp -s "$e2e_artifact" "$e2e_artifact_reselected"
 
           publish_status "Release sync / Build and verify" success \
             "Verified newest exact-head Build run and job graph" "$build_id"
           publish_status "Release sync / Packaged E2E gate" success \
             "Verified newest exact-head packaged run and job graph" "$e2e_id"
-          gh pr comment "$pr_number" --body \
-            "Protected controllers reverified Build run $build_id attempt $build_attempt and Packaged E2E run $e2e_id attempt $e2e_attempt against exact head \`$head_sha\`. Merging that tested head."
           # Keep one rolling automation branch per enrolled release. The advisory
           # visual curator must be able to reauthenticate the exact tested head
           # after the deterministic merge; the next synchronization replaces this
           # ref only with an authenticated force-with-lease.
+          final_pr="$(gh pr view "$pr_number" \
+            --json state,baseRefName,baseRefOid,headRefName,headRefOid,isCrossRepository)"
+          jq -e --arg base "$target_sha" --arg head "$head_sha" \
+            --arg head_branch "$head_branch" --arg target "$target_branch" \
+            '.state == "OPEN" and .baseRefName == $target and .baseRefOid == $base and
+             .headRefName == $head_branch and .headRefOid == $head and
+             (.isCrossRepository | not)' <<< "$final_pr" >/dev/null
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded_target" --jq .object.sha)" == "$target_sha" ]]
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded_head" --jq .object.sha)" == "$head_sha" ]]
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded_default" --jq .object.sha)" == "$protected_sha" ]]
           gh pr merge "$pr_number" --merge --match-head-commit "$head_sha"
 
           merge_sha=''
@@ -283,17 +437,22 @@ jobs:
           [[ "$(git show -s --format=%P "$merge_sha")" == "$target_sha $head_sha" ]]
           [[ "$(git rev-parse "$merge_sha^{tree}")" == "$(git rev-parse "$head_sha^{tree}")" ]]
           [[ "$(git show "$merge_sha:release/release-matrix.json" | sha256sum | cut -d' ' -f1)" == "$matrix_sha" ]]
+          gh pr comment "$pr_number" --body \
+            "Protected controllers reverified Build run $build_id attempt $build_attempt and Packaged E2E run $e2e_id attempt $e2e_attempt against exact head \`$head_sha\`, then merged and verified that tested tree."
 
           dispatch_attestation() {
             local workflow="$1" run_id="$2" run_attempt="$3"
             payload="$RUNNER_TEMP/$workflow.attest.json"
-            jq -n --arg ref "$target_branch" --arg run_id "$run_id" \
+            jq -n --arg ref "$DEFAULT_BRANCH" --arg run_id "$run_id" \
               --arg run_attempt "$run_attempt" --arg tested_branch "$head_branch" \
               --arg tested_sha "$head_sha" --arg base_sha "$target_sha" \
-              --arg target_sha "$merge_sha" \
+              --arg target_sha "$merge_sha" --arg release_branch "$target_branch" \
+              --arg controller_sha "$protected_sha" \
               '{ref:$ref,inputs:{attest_run_id:$run_id,attest_run_attempt:$run_attempt,
                 attest_branch:$tested_branch,attest_sha:$tested_sha,
-                attest_base_sha:$base_sha,attest_target_sha:$target_sha}}' > "$payload"
+                attest_base_sha:$base_sha,attest_target_sha:$target_sha,
+                attest_release_branch:$release_branch,
+                attest_controller_sha:$controller_sha}}' > "$payload"
             gh api --method POST \
               "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/dispatches" \
               --input "$payload"
@@ -302,10 +461,12 @@ jobs:
           dispatch_attestation on-demand-e2e.yml "$e2e_id" "$e2e_attempt"
           visual_payload="$RUNNER_TEMP/visual-review.dispatch.json"
           jq -n --arg repository "$GITHUB_REPOSITORY" \
-            --arg run_id "$e2e_id" --arg branch "$head_branch" \
+            --arg run_id "$e2e_id" --arg run_attempt "$e2e_attempt" \
+            --arg branch "$head_branch" \
             --arg sha "$head_sha" \
             '{event_type:"visual-review-requested",client_payload:{
               source_repository:$repository,source_run_id:$run_id,
+              source_run_attempt:$run_attempt,
               source_branch:$branch,source_sha:$sha}}' > "$visual_payload"
           if ! gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" \
               --input "$visual_payload"; then

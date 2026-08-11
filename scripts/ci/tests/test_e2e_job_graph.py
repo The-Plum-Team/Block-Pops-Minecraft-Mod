@@ -140,15 +140,45 @@ class JobGraphTests(unittest.TestCase):
                 event="workflow_dispatch",
                 source_branch="automation/release-sync/opaque",
             )
-            pull_request = expected_jobs(
+            pull_request_target = expected_jobs(
                 None,  # type: ignore[arg-type]
                 "on-demand-e2e.yml",
-                event="pull_request",
-                source_branch="123/merge",
+                event="pull_request_target",
+                source_branch="master",
             )
         self.assertEqual("success", next(item.conclusion for item in ordinary if item.name == E2E_PUBLIC))
         self.assertEqual("skipped", next(item.conclusion for item in automation if item.name == E2E_PUBLIC))
-        self.assertEqual("skipped", next(item.conclusion for item in pull_request if item.name == E2E_PUBLIC))
+        self.assertEqual(
+            "skipped",
+            next(
+                item.conclusion
+                for item in pull_request_target
+                if item.name == E2E_PUBLIC
+            ),
+        )
+
+    def test_prt_uses_pr_anchors_and_legacy_pull_request_is_rejected(self) -> None:
+        branch_matrix = {"branch": {"name": "master"}}
+        projected = {"include": [{"id": "neo-9_9--pr-behavior"}]}
+        with mock.patch(
+            "scripts.ci.e2e_job_graph.load_matrix", return_value=branch_matrix
+        ) as load, mock.patch(
+            "scripts.ci.e2e_job_graph.gha_matrix", return_value=projected
+        ) as projection:
+            expected_jobs(
+                None,  # type: ignore[arg-type]
+                "on-demand-e2e.yml",
+                event="pull_request_target",
+                source_branch="master",
+            )
+        load.assert_called_once()
+        projection.assert_called_once_with(branch_matrix, "pr-anchors")
+        with self.assertRaisesRegex(JobGraphError, "unsupported protected source event"):
+            expected_jobs(
+                None,  # type: ignore[arg-type]
+                "build-gate.yml",
+                event="pull_request",
+            )
 
 
 if __name__ == "__main__":

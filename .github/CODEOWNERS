@@ -5,8 +5,11 @@
 /gradle.properties @AkaNebur
 /common/build.gradle @AkaNebur
 /fabric/build.gradle @AkaNebur
+/fabric/src/e2e/ @AkaNebur
 /forge/build.gradle @AkaNebur
+/forge/src/e2e/ @AkaNebur
 /neoforge/build.gradle @AkaNebur
+/neoforge/src/e2e/ @AkaNebur
 /gradle/e2e-harness-conventions.gradle @AkaNebur
 /gradle/repository-policy.gradle @AkaNebur
 /gradle/verification-metadata.xml @AkaNebur
@@ -20,3 +23,4 @@
 /scripts/release/ @AkaNebur
 /scripts/visual/ @AkaNebur
 /site/ @AkaNebur
+/tests/ @AkaNebur
