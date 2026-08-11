@@ -679,7 +679,6 @@ jobs:
       PACKAGED_RUN_ID: ${{ inputs.attest_run_id || github.run_id }}
       PACKAGED_SHA: ${{ inputs.attest_sha || github.sha }}
       PUBLISHED_BRANCH: ${{ inputs.attest_release_branch || github.ref_name }}
-      PUBLIC_AGGREGATE: ${{ runner.temp }}/blockpops-public-aggregate
     permissions:
       actions: read
       contents: read
@@ -740,6 +739,7 @@ jobs:
         shell: bash
         env:
           PACKAGED_TREE: ${{ steps.identity.outputs.tree }}
+          PUBLIC_AGGREGATE: ${{ runner.temp }}/blockpops-public-aggregate
         run: |
           set -euo pipefail
           unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
@@ -760,6 +760,8 @@ jobs:
             --projection "$projection"
 
       - name: Curate strict SHA-bound public evidence
+        env:
+          PUBLIC_AGGREGATE: ${{ runner.temp }}/blockpops-public-aggregate
         run: |
           set -euo pipefail
           unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
