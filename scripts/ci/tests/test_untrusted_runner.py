@@ -23,9 +23,11 @@ REPO = Path(__file__).resolve().parents[3]
 
 
 class BoundaryTests(unittest.TestCase):
-    def test_root_is_one_exact_runner_temp_child(self) -> None:
+    def test_root_is_one_exact_workspace_sibling(self) -> None:
         with tempfile.TemporaryDirectory() as temporary, mock.patch.dict(
-            os.environ, {"RUNNER_TEMP": temporary}, clear=False
+            os.environ,
+            {"GITHUB_WORKSPACE": str(Path(temporary) / "repository")},
+            clear=False,
         ):
             expected = Path(temporary) / "blockpops-candidate-sandbox"
             self.assertEqual(expected.resolve(), _root(expected))

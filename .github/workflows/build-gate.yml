@@ -279,7 +279,7 @@ jobs:
       - name: Prepare the isolated candidate filesystem and OS identity
         shell: bash
         env:
-          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
+          SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
         run: |
           set -euo pipefail
           seed=()
@@ -296,7 +296,7 @@ jobs:
         id: candidate
         shell: bash
         env:
-          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
+          SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
         run: |
           set -euo pipefail
           python3 controller/scripts/ci/untrusted_runner.py run \
@@ -336,7 +336,7 @@ jobs:
         if: always()
         shell: bash
         env:
-          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
+          SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
         run: |
           set -euo pipefail
           python3 controller/scripts/ci/untrusted_runner.py seal \
@@ -347,7 +347,7 @@ jobs:
         if: steps.candidate.outcome == 'success' && steps.seal.outcome == 'success'
         shell: bash
         env:
-          SANDBOX_ROOT: ${{ runner.temp }}/blockpops-candidate-sandbox
+          SANDBOX_ROOT: ${{ github.workspace }}/../blockpops-candidate-sandbox
         run: |
           set -euo pipefail
           repository="$SANDBOX_ROOT/repository"
@@ -375,7 +375,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: staged-release-bundle-${{ needs.identity.outputs.tested_sha }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/blockpops-candidate-sandbox/repository/build/release/
+          path: ${{ github.workspace }}/../blockpops-candidate-sandbox/repository/build/release/
           if-no-files-found: error
           compression-level: 0
           retention-days: 1

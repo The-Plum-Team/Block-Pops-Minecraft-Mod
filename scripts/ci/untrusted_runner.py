@@ -108,12 +108,12 @@ def _run(arguments: Iterable[str], *, accepted: frozenset[int] = frozenset({0}))
 
 def _root(value: Path) -> Path:
     resolved = value.resolve()
-    runner_temp = os.environ.get("RUNNER_TEMP", "")
-    if not runner_temp:
-        raise SandboxError("RUNNER_TEMP is required")
-    boundary = Path(runner_temp).resolve()
+    workspace = os.environ.get("GITHUB_WORKSPACE", "")
+    if not workspace:
+        raise SandboxError("GITHUB_WORKSPACE is required")
+    boundary = Path(workspace).resolve().parent
     if resolved.parent != boundary or resolved.name != "blockpops-candidate-sandbox":
-        raise SandboxError("sandbox root must be the exact dedicated RUNNER_TEMP child")
+        raise SandboxError("sandbox root must be the exact dedicated workspace sibling")
     return resolved
 
 
@@ -706,14 +706,15 @@ def seal(root_value: Path, exports: tuple[str, ...]) -> dict[str, Any]:
         raise SandboxError("sandbox export inventory must be bounded and unique")
     uid = state["uid"]
     _terminate_identity(uid, USER_NAME)
-    _restore_authenticated_tree(state)
     repository = Path(state["repository"])
     runner_identity = f"{os.getuid()}:{os.getgid()}"
     # Once the candidate identity is dead, return the inert tree to the runner user.  This makes
-    # permissions deterministic for the separate credentialless validator identity; it does not
-    # execute or trust anything in the tree.
+    # the candidate-owned metadata readable for fail-closed comparison and makes permissions
+    # deterministic for the separate credentialless validator identity.  Ownership changes do
+    # not execute or trust anything in the tree.
     _run(("sudo", "-n", "chown", "-hR", runner_identity, str(repository)))
     _run(("chmod", "-R", "u+rwX,go+rX,go-w", str(repository)))
+    _restore_authenticated_tree(state)
     normalized: list[str] = []
     for raw in exports:
         relative = _relative(raw)
