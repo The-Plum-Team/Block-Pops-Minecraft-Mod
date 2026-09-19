@@ -116,6 +116,28 @@ packaged producer run/attempt in both its artifact name and manifest, plus the
 matrix and contract. Candidate evidence is paired 1:1 by semantic
 capture identity. The ordinary aggregate/raw handoff remains short lived.
 
+## Local lane release plan
+
+The canonical-only planner requires its own implementation to be the exact clean
+GitHub default-branch commit, a schema-2 integration matrix, no inherited `GIT_*`
+variables, and `GH_TOKEN` with read access to the repository and Actions evidence.
+It refuses an undeployed foundation candidate. After those prerequisites hold:
+
+```sh
+python3 scripts/release/plan_release.py --repository AkaNebur/BlockPops \
+  --artifact-node fabric-1.20.1 --build-scope legacy --e2e-scope lane
+```
+
+Both producer scopes are explicit and may differ. The command authenticates the
+newest exact-head Build and Packaged E2E runs, complete job graphs, ZIP digests,
+scoped bundles, Build report, and E2E aggregate. It chooses the E2E-tested
+production JAR with that lane's own mod version, loader, Minecraft and Java.
+Only after final API/source and byte checks does it print a new
+`build/release-plan-<uuid>/plan.json` path. `--output` may name a new direct child
+of `build`; existing outputs and earlier acquired evidence are preserved on failure.
+The plan records all matrix targets and the remaining unselected lanes. It does
+not establish AUTH-1 admission, complete the migration, or authorize publication.
+
 ## Gate and advisory policy
 
 Build and Packaged E2E are deterministic required gates. The visual model is

@@ -1,18 +1,24 @@
-"""Acquire current lane evidence; release planning and publication are separate."""
+"""Plan one lane from current canonical Build and E2E evidence; no publication."""
 
+import argparse
 import hashlib
 import os
 import re
 import stat
 import subprocess
+import sys
 import uuid
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.ci.e2e_fanin import SourceIdentity
 from scripts.ci.loader_bootstrap import validate_commit as validate_loader_bootstrap
 from scripts.lib import atomic_directory as atomic
 from scripts.lib.secure_json import canonical_json, read
+from scripts.pages.select_artifact import GitHubApi
 from scripts.release.artifact_manifest import scoped_manifest_context
 from scripts.release.build_matrix import source_snapshot
 from scripts.release.content_evidence import read_lane_content_evidence
@@ -155,6 +161,15 @@ def acquire_lane_evidence(api, *, repository, matrix_path, expected_matrix_sha25
     qualification/publication decision. Four unique build children retain acquired
     diagnostics on failure; no caller directory is replaced or recursively removed.
     """
+    return _acquire_lane_evidence(api, repository=repository, matrix_path=matrix_path,
+        expected_matrix_sha256=expected_matrix_sha256, artifact_node=artifact_node,
+        build_scope=build_scope, e2e_scope=e2e_scope, source_repository=source_repository,
+        canonical_branch=canonical_branch, controller_sha=controller_sha, branch=branch, commit=commit, tree=tree)
+
+
+def _acquire_lane_evidence(api, *, repository, matrix_path, expected_matrix_sha256, artifact_node,
+                          build_scope, e2e_scope, source_repository, canonical_branch,
+                          controller_sha, branch, commit, tree, plan_request=None):
     try:
         repository = Path(repository).resolve()
         matrix_path = Path(matrix_path).absolute()
@@ -210,12 +225,86 @@ def acquire_lane_evidence(api, *, repository, matrix_path, expected_matrix_sha25
             aggregate_root=paths["e2e-aggregate"], expected_aggregate_sha256=digest("e2e-aggregate", "aggregate.json"),
             expected_e2e_identity=e2e_identity)
         _check(canonical_json(observe()) == canonical_json(observed), "producers changed during acquisition")
+        evidence = {"schema_version": 1, "kind": "blockpops-acquired-lane-evidence", "content": content,
+            "producers": observed, "downloads": receipts, "paths": {key: str(path) for key, path in paths.items()}}
         with ExitStack() as leases:
             checks = [leases.enter_context(_verify_download(path, receipts[key])) for key, path in paths.items()]
             _check(contexts() == source, "source context changed during acquisition")
+            if plan_request is not None:
+                observation, output = plan_request
+                def final_checks():
+                    _check(canonical_json(observe()) == canonical_json(observed), "producers changed before planning")
+                    _check(canonical_json(authenticate_canonical_checkout(api)) == canonical_json(observation),
+                           "canonical checkout changed before planning")
+                    _check(contexts() == source, "source context changed before planning")
+                return _write_local_plan(evidence, observation, output, checks, final_checks)
             for unchanged in checks:
                 unchanged()
-        return {"schema_version": 1, "kind": "blockpops-acquired-lane-evidence", "content": content,
-                "producers": observed, "downloads": receipts, "paths": {key: str(path) for key, path in paths.items()}}
+        return evidence
     except (OSError, ValueError, RuntimeError, KeyError, TypeError, AttributeError, StopIteration) as exc:
         raise ReleaseEvidenceError(f"lane acquisition failed: {exc}") from exc
+
+
+def _write_local_plan(evidence, observation, output, transport_checks, final_checks):
+    """Publish only after fixed canonical authentication and all byte seals succeed."""
+    matrix, raw = read(Path(observation["checkout"]) / "release/release-matrix.json",
+                       label="plan matrix", max_bytes=MAX_MATRIX_BYTES)
+    _check(hashlib.sha256(raw).hexdigest() == observation["matrix"]["sha256"], "plan matrix changed")
+    inventory = normalize_matrix_inventory(matrix)
+    content = evidence["content"]
+    node = content["artifact_node"]
+    lane = inventory.lane(node)
+    targets = [target.artifact_node for target in inventory.targets]
+    identity = content["build_identity"]
+    selected = {key: identity[key] for key in ("artifact_node", "minecraft", "loader", "java", "mod_version")}
+    _check(selected == {"artifact_node": node, "minecraft": lane.identity.minecraft,
+        "loader": lane.identity.loader, "java": lane.artifact["java"], "mod_version": lane.mod_version}
+        and content["production"]["origin"] == "e2e", "selected production identity differs")
+    plan = {"schema_version": 1, "kind": "blockpops-local-lane-release-plan",
+        "canonical_observation": observation, "selected_production": {**selected, **content["production"]},
+        "coverage": {"selected_nodes": [node], "target_nodes": targets,
+                     "remaining_nodes": [target for target in targets if target != node], "partial": len(targets) > 1},
+        "evidence": evidence}
+    encoded = canonical_json(plan) + b"\n"
+    receipt = {"files": [{"path": "plan.json", "bytes": len(encoded),
+                          "sha256": hashlib.sha256(encoded).hexdigest()}]}
+    def writer(stage, descriptor):
+        atomic.write_new(descriptor, "plan.json", encoded)
+        final_checks()
+        with _verify_download(stage, receipt) as plan_unchanged:
+            for unchanged in transport_checks:
+                unchanged()
+            plan_unchanged()
+        return plan
+    return atomic.atomic_directory(output, writer)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Plan one canonical lane locally; no publication.", allow_abbrev=False)
+    parser.add_argument("--repository", required=True, help="GitHub owner/name")
+    parser.add_argument("--artifact-node", required=True)
+    for producer in ("build", "e2e"):
+        parser.add_argument(f"--{producer}-scope", choices=("lane", "legacy", "full"), required=True)
+    parser.add_argument("--output", type=Path, help="new direct child of this checkout's build directory")
+    args = parser.parse_args(argv)
+    try:
+        api = GitHubApi(repository=args.repository, token=os.environ.get("GH_TOKEN", ""), api_url="https://api.github.com")
+        observation = authenticate_canonical_checkout(api)
+        repository = Path(observation["checkout"])
+        output = (args.output or repository / "build" / ("release-plan-" + uuid.uuid4().hex)).absolute()
+        _check(output.parent == repository / "build", "plan output must be a direct build child")
+        _acquire_lane_evidence(api, repository=repository, matrix_path=repository / "release/release-matrix.json",
+            expected_matrix_sha256=observation["matrix"]["sha256"], artifact_node=args.artifact_node,
+            build_scope=args.build_scope, e2e_scope=args.e2e_scope, source_repository=observation["repository"],
+            canonical_branch=observation["default_branch"], controller_sha=observation["commit"],
+            branch=observation["default_branch"], commit=observation["commit"], tree=observation["tree"],
+            plan_request=(observation, output))
+        print(output / "plan.json")
+        return 0
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
+        print(f"release plan failed: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
