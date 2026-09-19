@@ -11,6 +11,7 @@ import com.theplumteam.figure.FigureType;
 import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.registry.ModItems;
 import com.theplumteam.server.ServerTickHandler;
+import com.theplumteam.util.ResourceLocations;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
@@ -38,7 +39,7 @@ import java.util.UUID;
  */
 public class DropBoxPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(DropBoxPacket.class);
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "drop_box");
+    public static final ResourceLocation ID = ResourceLocations.of(BlockPopsMod.MOD_ID, "drop_box");
 
     private final BlockPos pos;
     private final String collectionId;

@@ -2,6 +2,7 @@ package com.theplumteam.network;
 
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.token.ClientTokenManager;
+import com.theplumteam.util.ResourceLocations;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
@@ -16,7 +17,7 @@ import org.slf4j.LoggerFactory;
  */
 public class SyncTokenDataPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(SyncTokenDataPacket.class);
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "sync_token_data");
+    public static final ResourceLocation ID = ResourceLocations.of(BlockPopsMod.MOD_ID, "sync_token_data");
 
     private final int regularTokens;
     private final long ticksUntilNextRegular;

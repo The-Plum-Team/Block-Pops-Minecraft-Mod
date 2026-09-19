@@ -7,6 +7,7 @@ import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
+import com.theplumteam.util.ResourceLocations;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.RenderType;
@@ -18,8 +19,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class FigureModel extends GeoModel<BoxBlockEntity> {
-    private static final ResourceLocation FALLBACK_TEXTURE = new ResourceLocation("minecraft", "textures/entity/steve.png");
-    private static final ResourceLocation POSE_ANIMATION = new ResourceLocation(BlockPopsMod.MOD_ID, "animations/figure/figure_poses.animation.json");
+    private static final ResourceLocation FALLBACK_TEXTURE = ResourceLocations.of("minecraft", "textures/entity/steve.png");
+    private static final ResourceLocation POSE_ANIMATION = ResourceLocations.of(BlockPopsMod.MOD_ID, "animations/figure/figure_poses.animation.json");
 
     private static final Map<String, GameProfile> snapshotProfileCache = new ConcurrentHashMap<>();
     private static final Map<String, Boolean> snapshotRegistrationCache = new ConcurrentHashMap<>();

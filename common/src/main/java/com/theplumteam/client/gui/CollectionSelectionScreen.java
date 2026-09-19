@@ -21,6 +21,7 @@ import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.network.ClawMachineCollectionPacket;
 import com.theplumteam.network.DropBoxPacket;
 import com.theplumteam.network.TokenType;
+import com.theplumteam.util.ResourceLocations;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -84,12 +85,12 @@ public class CollectionSelectionScreen extends Screen {
     private boolean isClosing = false;
 
     // Icon textures
-    private static final ResourceLocation DISCORD_ICON = new ResourceLocation("blockpops", "textures/gui/discord_icon.png");
-    private static final ResourceLocation CURSEFORGE_ICON = new ResourceLocation("blockpops", "textures/gui/curseforge_icon.png");
-    private static final ResourceLocation MODRINTH_ICON = new ResourceLocation("blockpops", "textures/gui/modrinth_icon.png");
+    private static final ResourceLocation DISCORD_ICON = ResourceLocations.of("blockpops", "textures/gui/discord_icon.png");
+    private static final ResourceLocation CURSEFORGE_ICON = ResourceLocations.of("blockpops", "textures/gui/curseforge_icon.png");
+    private static final ResourceLocation MODRINTH_ICON = ResourceLocations.of("blockpops", "textures/gui/modrinth_icon.png");
 
     // Icon textures
-    private static final ResourceLocation SETTINGS_ICON = new ResourceLocation("blockpops", "textures/gui/settings_icon.png");
+    private static final ResourceLocation SETTINGS_ICON = ResourceLocations.of("blockpops", "textures/gui/settings_icon.png");
 
     // URLs
     private static final String DISCORD_URL = "https://discord.gg/yGxdvA7qej";

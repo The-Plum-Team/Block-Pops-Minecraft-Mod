@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
+import com.theplumteam.util.ResourceLocations;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
@@ -23,7 +24,7 @@ import java.util.List;
 public class SyncDynamicCollectionsPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(SyncDynamicCollectionsPacket.class);
     private static final Gson GSON = new Gson();
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "sync_dynamic_collections");
+    public static final ResourceLocation ID = ResourceLocations.of(BlockPopsMod.MOD_ID, "sync_dynamic_collections");
 
     private final List<String> collectionsJson;
 

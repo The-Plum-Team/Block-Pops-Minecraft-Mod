@@ -5,6 +5,7 @@ import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.server.ServerTickHandler;
+import com.theplumteam.util.ResourceLocations;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
@@ -19,7 +20,7 @@ import org.slf4j.LoggerFactory;
  */
 public class UpdateGuaranteedResetHourPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(UpdateGuaranteedResetHourPacket.class);
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "update_guaranteed_reset_hour");
+    public static final ResourceLocation ID = ResourceLocations.of(BlockPopsMod.MOD_ID, "update_guaranteed_reset_hour");
 
     private final int resetHour;
 

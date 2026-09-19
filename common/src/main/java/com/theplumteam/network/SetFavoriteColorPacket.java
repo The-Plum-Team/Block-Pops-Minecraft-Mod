@@ -5,6 +5,7 @@ import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.figure.PlayerCollectionHelper;
+import com.theplumteam.util.ResourceLocations;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
@@ -19,7 +20,7 @@ import org.slf4j.LoggerFactory;
  */
 public class SetFavoriteColorPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(SetFavoriteColorPacket.class);
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "set_favorite_color");
+    public static final ResourceLocation ID = ResourceLocations.of(BlockPopsMod.MOD_ID, "set_favorite_color");
 
     private final String colorName;
 

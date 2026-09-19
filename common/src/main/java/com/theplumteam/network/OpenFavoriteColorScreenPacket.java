@@ -1,6 +1,7 @@
 package com.theplumteam.network;
 
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.util.ResourceLocations;
 import dev.architectury.networking.NetworkManager;
 import dev.architectury.utils.Env;
 import dev.architectury.utils.EnvExecutor;
@@ -20,7 +21,7 @@ import org.slf4j.LoggerFactory;
  */
 public class OpenFavoriteColorScreenPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenFavoriteColorScreenPacket.class);
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "open_favorite_color_screen");
+    public static final ResourceLocation ID = ResourceLocations.of(BlockPopsMod.MOD_ID, "open_favorite_color_screen");
 
     public OpenFavoriteColorScreenPacket() {
         // No data needed - the packet's arrival is the trigger

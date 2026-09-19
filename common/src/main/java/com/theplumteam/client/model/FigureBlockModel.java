@@ -7,6 +7,7 @@ import com.theplumteam.blockentity.FigureBlockEntity;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
+import com.theplumteam.util.ResourceLocations;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.RenderType;
@@ -18,10 +19,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
-    private static final ResourceLocation FALLBACK_MODEL = new ResourceLocation(BlockPopsMod.MOD_ID, "geo/block/box_block.geo.json");
-    private static final ResourceLocation FALLBACK_TEXTURE = new ResourceLocation("minecraft", "textures/entity/player/wide/steve.png");
-    private static final ResourceLocation FALLBACK_ANIMATION = new ResourceLocation(BlockPopsMod.MOD_ID, "animations/block/box_block.animation.json");
-    private static final ResourceLocation POSE_ANIMATION = new ResourceLocation(BlockPopsMod.MOD_ID, "animations/figure/figure_poses.animation.json");
+    private static final ResourceLocation FALLBACK_MODEL = ResourceLocations.of(BlockPopsMod.MOD_ID, "geo/block/box_block.geo.json");
+    private static final ResourceLocation FALLBACK_TEXTURE = ResourceLocations.of("minecraft", "textures/entity/player/wide/steve.png");
+    private static final ResourceLocation FALLBACK_ANIMATION = ResourceLocations.of(BlockPopsMod.MOD_ID, "animations/block/box_block.animation.json");
+    private static final ResourceLocation POSE_ANIMATION = ResourceLocations.of(BlockPopsMod.MOD_ID, "animations/figure/figure_poses.animation.json");
 
     private static final Map<String, GameProfile> snapshotProfileCache = new ConcurrentHashMap<>();
     private static final Map<String, Boolean> snapshotRegistrationCache = new ConcurrentHashMap<>();

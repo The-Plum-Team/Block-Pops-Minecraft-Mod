@@ -11,6 +11,7 @@ import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.network.SyncDynamicCollectionsPacket;
 import com.theplumteam.server.config.ServerConfig;
+import com.theplumteam.util.ResourceLocations;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.Tag;
@@ -47,8 +48,8 @@ public class PlayerCollectionHelperImpl {
             GameProfileCache profileCache = server.getProfileCache();
 
             // Use default model and animation paths
-            ResourceLocation defaultModel = new ResourceLocation("blockpops", "geo/figure/box_figure_default.geo.json");
-            ResourceLocation defaultAnimation = new ResourceLocation("blockpops", "animations/figure/box_figure_default.animation.json");
+            ResourceLocation defaultModel = ResourceLocations.of("blockpops", "geo/figure/box_figure_default.geo.json");
+            ResourceLocation defaultAnimation = ResourceLocations.of("blockpops", "animations/figure/box_figure_default.animation.json");
 
             // First, process existing .dat files (if directory exists)
             if (playerdataDir.exists() && playerdataDir.isDirectory()) {
@@ -174,10 +175,10 @@ public class PlayerCollectionHelperImpl {
             BlockPopsMod.logDebug("Generated World Players collection with {} figures", playerFigures.size());
 
             // Use the default/original box texture
-            ResourceLocation boxTexture = new ResourceLocation("blockpops", "textures/block/box/default.png");
+            ResourceLocation boxTexture = ResourceLocations.of("blockpops", "textures/block/box/default.png");
 
             // Create logo configuration for World Players collection
-            ResourceLocation logoTexture = new ResourceLocation("blockpops", "textures/block/box/logo/logo_worldplayers.png");
+            ResourceLocation logoTexture = ResourceLocations.of("blockpops", "textures/block/box/logo/logo_worldplayers.png");
             FigureCollection.LogoConfig logoConfig = new FigureCollection.LogoConfig(
                 logoTexture,
                 -0.915f,  // positionX
@@ -209,10 +210,10 @@ public class PlayerCollectionHelperImpl {
      * Creates an empty World Players collection as a fallback
      */
     private static FigureCollection createEmptyCollection() {
-        ResourceLocation boxTexture = new ResourceLocation("blockpops", "textures/block/box/default.png");
+        ResourceLocation boxTexture = ResourceLocations.of("blockpops", "textures/block/box/default.png");
 
         // Create logo configuration for World Players collection
-        ResourceLocation logoTexture = new ResourceLocation("blockpops", "textures/block/box/logo/logo_worldplayers.png");
+        ResourceLocation logoTexture = ResourceLocations.of("blockpops", "textures/block/box/logo/logo_worldplayers.png");
         FigureCollection.LogoConfig logoConfig = new FigureCollection.LogoConfig(
             logoTexture,
             -0.915f,  // positionX

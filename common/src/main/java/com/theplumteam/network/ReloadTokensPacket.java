@@ -4,6 +4,7 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.server.ServerTickHandler;
+import com.theplumteam.util.ResourceLocations;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
@@ -18,7 +19,7 @@ import org.slf4j.LoggerFactory;
  */
 public class ReloadTokensPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(ReloadTokensPacket.class);
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "reload_tokens");
+    public static final ResourceLocation ID = ResourceLocations.of(BlockPopsMod.MOD_ID, "reload_tokens");
 
     private final boolean reloadRegular;
     private final boolean reloadGuaranteed;

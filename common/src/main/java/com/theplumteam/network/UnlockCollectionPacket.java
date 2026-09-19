@@ -10,6 +10,7 @@ import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.registry.ModItems;
+import com.theplumteam.util.ResourceLocations;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.nbt.CompoundTag;
@@ -31,7 +32,7 @@ import java.util.UUID;
  */
 public class UnlockCollectionPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(UnlockCollectionPacket.class);
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "unlock_collection");
+    public static final ResourceLocation ID = ResourceLocations.of(BlockPopsMod.MOD_ID, "unlock_collection");
 
     private final String collectionId;
 

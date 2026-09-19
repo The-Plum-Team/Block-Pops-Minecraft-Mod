@@ -2,6 +2,7 @@ package com.theplumteam.network;
 
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
+import com.theplumteam.util.ResourceLocations;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
@@ -21,7 +22,7 @@ import java.util.Set;
  */
 public class SyncDiscoveryDataPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(SyncDiscoveryDataPacket.class);
-    public static final ResourceLocation ID = new ResourceLocation(BlockPopsMod.MOD_ID, "sync_discovery_data");
+    public static final ResourceLocation ID = ResourceLocations.of(BlockPopsMod.MOD_ID, "sync_discovery_data");
 
     private final Set<String> discoveredFigures;
     private final Map<String, String> figureSkins;
