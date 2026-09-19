@@ -46,13 +46,17 @@ from scripts.release.artifact_manifest import (  # noqa: E402
     ArtifactError,
     MAX_MANIFEST_BYTES as MAX_ARTIFACT_MANIFEST_BYTES,
     SCHEMA_VERSION as ARTIFACT_SCHEMA_VERSION,
+    lane_build_identity,
     verify_staged,
 )
 from scripts.release.matrix import (  # noqa: E402
     MatrixError,
+    MAX_MATRIX_BYTES,
+    MatrixDocument,
     gha_matrix,
     load_matrix,
     matrix_sha256,
+    normalize_matrix_inventory,
     valid_branch_name,
 )
 
@@ -328,8 +332,14 @@ def expected_lanes(
     projection: str,
     *,
     artifact_prefix: str = ARTIFACT_PREFIX,
+    scope: str | None = None,
+    artifact_node: str | None = None,
 ) -> tuple[ExpectedLane, ...]:
-    projected = gha_matrix(matrix, projection, contract=contract).get("include")
+    if projection not in {"pr-anchors", "scheduled-anchors"}:
+        raise FanInError("projection must be pr-anchors or scheduled-anchors")
+    document = _selected_document(matrix, scope=scope, artifact_node=artifact_node)
+    projected = document.projection(projection, contract=contract, scope=scope,
+                                    artifact_node=artifact_node).get("include")
     if not isinstance(projected, list) or not projected:
         raise FanInError("authoritative E2E projection is empty")
     lanes: list[ExpectedLane] = []
@@ -363,6 +373,55 @@ def expected_lanes(
         names.add(artifact_name)
         nodes.add(node)
     return tuple(lanes)
+
+
+def _selected_document(matrix, *, scope=None, artifact_node=None):
+    document = MatrixDocument(normalize_matrix_inventory(matrix), json.dumps(matrix))
+    if document.inventory.schema_version == 2:
+        if scope not in {"lane", "legacy", "full"}:
+            raise FanInError("schema2 fan-in requires an explicit external scope")
+    elif scope is not None or artifact_node is not None:
+        raise FanInError("scoped fan-in requires a schema2 matrix")
+    document.select_lanes(scope=scope, artifact_node=artifact_node)
+    return document
+
+
+def _scoped_lane_inputs(document, manifest, *, matrix_digest, contract, scope, artifact_node):
+    """Bind an already verified bundle to the exact loaded matrix/contract and scope."""
+    _object(manifest, "scoped artifact manifest", {"schema_version", "matrix", "scenario_contract",
+        "git_commit", "git_tree", "release_branch", "scope", "artifacts"})
+    matrix_record = _object(manifest["matrix"], "scoped matrix", {"path", "sha256"})
+    contract_record = _object(manifest["scenario_contract"], "scoped contract", {"path", "sha256"})
+    selected = sorted(document.select_lanes(scope=scope, artifact_node=artifact_node),
+                      key=lambda lane: (tuple(map(int, lane.identity.minecraft.split("."))), lane.identity.loader))
+    nodes = [lane.identity.artifact_node for lane in selected]
+    expected_scope = {"kind": scope, "selected_nodes": nodes,
+                      "target_nodes": list(document.inventory.target_nodes),
+                      "migration_mode": document.inventory.migration_mode,
+                      "partial": set(nodes) != set(document.inventory.target_nodes)}
+    if (type(manifest.get("schema_version")) is not int or manifest["schema_version"] != 3
+            or _json_bytes(manifest["scope"]) != _json_bytes(expected_scope)
+            or manifest.get("release_branch") != document.branch_name
+            or matrix_record["sha256"] != matrix_digest or contract_record["sha256"] != contract.sha256):
+        raise FanInError("scoped fan-in bundle disagrees with loaded inputs or external scope")
+    commit = _digest(manifest.get("git_commit"), "scoped bundle commit", SHA1)
+    tree = _digest(manifest.get("git_tree"), "scoped bundle tree", SHA1)
+    rows = manifest.get("artifacts")
+    if not isinstance(rows, list) or len(rows) != len(selected):
+        raise FanInError("scoped fan-in bundle has incomplete lanes")
+    hashes = {}
+    for row, lane in zip(rows, selected, strict=True):
+        expected = {key: lane.artifact[key] for key in ("artifact_node", "minecraft", "loader", "java")}
+        expected.update(mod_version=lane.mod_version, gradle_java=lane.gradle_java,
+                        build_identity=lane_build_identity(document, lane.identity.artifact_node,
+                            matrix_digest=matrix_digest, contract_digest=contract.sha256, commit=commit, tree=tree))
+        _object(row, "scoped artifact row", set(expected) | {"production", "harness"})
+        if _json_bytes({key: row[key] for key in expected}) != _json_bytes(expected):
+            raise FanInError("scoped fan-in lane metadata or embedded identity is stale")
+        hashes[lane.identity.artifact_node] = tuple(
+            _digest(row[kind].get("sha256") if isinstance(row[kind], dict) else None,
+                    f"scoped {kind} hash") for kind in ("production", "harness"))
+    return hashes, expected_scope
 
 
 def _profile_name(lane: ExpectedLane, scenario: str) -> str:
@@ -767,6 +826,7 @@ def _validate_lane_payload(
     lane: ExpectedLane,
     contract: ScenarioContract,
     hashes: tuple[str, str],
+    coverage: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int], dict[str, bytes]]:
     expected_directories, expected_files = _profile_layout(lane, contract)
     before = _inventory(root)
@@ -801,10 +861,12 @@ def _validate_lane_payload(
     summary = _object(
         _json(root, "summary.json", f"{lane.artifact_name} summary"),
         f"{lane.artifact_name} summary",
-        {"schema_version", "contract_sha256", "results", "runtime_store"},
+        {"schema_version", "contract_sha256", "results", "runtime_store"} | set(coverage or {}),
     )
     if summary["schema_version"] != 1 or summary["contract_sha256"] != contract.sha256:
         raise FanInError(f"{lane.artifact_name} summary identity is stale")
+    if coverage and _json_bytes({key: summary[key] for key in coverage}) != _json_bytes(coverage):
+        raise FanInError(f"{lane.artifact_name} summary execution scope is stale")
     summary_results = summary["results"]
     if not isinstance(summary_results, list) or len(summary_results) != len(lane.scenarios):
         raise FanInError(f"{lane.artifact_name} summary result inventory is incomplete")
@@ -815,7 +877,7 @@ def _validate_lane_payload(
     resolved = _object(
         _json(root, "resolved-matrix.json", f"{lane.artifact_name} resolved matrix"),
         f"{lane.artifact_name} resolved matrix",
-        {"schema_version", "rows"},
+        {"schema_version", "rows"} | set(coverage or {}),
     )
     expected_rows = [
         {
@@ -827,7 +889,7 @@ def _validate_lane_payload(
         }
         for scenario in lane.scenarios
     ]
-    if resolved != {"schema_version": 1, "rows": expected_rows}:
+    if _json_bytes(resolved) != _json_bytes({"schema_version": 1, "rows": expected_rows, **(coverage or {})}):
         raise FanInError(f"{lane.artifact_name} resolved matrix is stale")
     runtime_store = _object(
         _json(root, "runtime-store.json", f"{lane.artifact_name} runtime store"),
@@ -916,35 +978,50 @@ def validate_lane(
     projection: str,
     row: dict[str, Any],
     artifact_manifest: dict[str, Any],
+    scope: str | None = None,
+    artifact_node: str | None = None,
 ) -> dict[str, Any]:
     """Revalidate one sealed runtime lane before its same-run artifact upload."""
 
-    matrix = load_matrix(matrix_path, validate_sources=False)
+    if projection not in {"pr-anchors", "scheduled-anchors"}:
+        raise FanInError("projection must be pr-anchors or scheduled-anchors")
+    matrix, matrix_bytes = read_secure_json(matrix_path, label="fan-in matrix", max_bytes=MAX_MATRIX_BYTES)
+    document = _selected_document(matrix, scope=scope, artifact_node=artifact_node)
     contract = load_contract(contract_path)
-    projected = gha_matrix(matrix, projection, contract=contract).get("include")
+    projected = document.projection(projection, contract=contract, scope=scope,
+                                    artifact_node=artifact_node).get("include")
     if not isinstance(projected, list):
         raise FanInError("authoritative E2E projection is malformed")
-    matches = [index for index, expected in enumerate(projected) if expected == row]
+    matches = [index for index, expected in enumerate(projected) if _json_bytes(expected) == _json_bytes(row)]
     if len(matches) != 1:
         raise FanInError("runtime row is not one exact authoritative projected lane")
-    lanes = expected_lanes(matrix, contract, projection)
+    lanes = expected_lanes(matrix, contract, projection, scope=scope, artifact_node=artifact_node)
     if len(lanes) != len(projected):
         raise FanInError("runtime lane projection is internally inconsistent")
     lane = lanes[matches[0]]
-    hashes = _artifact_hashes(
-        artifact_manifest,
-        matrix=matrix,
-        expected_nodes={item.artifact_node for item in lanes},
-    )
+    coverage = {}
+    if document.inventory.schema_version == 2:
+        hashes, artifact_scope = _scoped_lane_inputs(document, artifact_manifest,
+            matrix_digest=_sha256(matrix_bytes), contract=contract, scope=scope, artifact_node=artifact_node)
+        coverage = {"execution_scope": {"kind": "lane", "selected_nodes": [lane.artifact_node],
+            "scenarios": list(lane.scenarios), "target_nodes": list(document.inventory.target_nodes),
+            "partial": True, "artifact_scope": artifact_scope}}
+    else:
+        hashes = _artifact_hashes(artifact_manifest, matrix=matrix,
+                                 expected_nodes={item.artifact_node for item in lanes})
     results, metrics, _files = _validate_lane_payload(
-        root.absolute(), lane=lane, contract=contract, hashes=hashes[lane.artifact_node]
+        root.absolute(), lane=lane, contract=contract, hashes=hashes[lane.artifact_node], coverage=coverage,
     )
+    if (read_secure_json(matrix_path, label="final fan-in matrix", max_bytes=MAX_MATRIX_BYTES)[1] != matrix_bytes
+            or load_contract(contract_path).sha256 != contract.sha256):
+        raise FanInError("loaded fan-in matrix or contract changed during validation")
     return {
         "schema_version": 1,
         "artifact_node": lane.artifact_node,
         "job_id": lane.job_id,
         "scenario_count": len(results),
         "runtime_store": metrics,
+        **coverage,
     }
 
 

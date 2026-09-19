@@ -406,3 +406,9 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 
 - Added an explicit `--projection` for row-json validation, preserving PR anchors as the default. Scheduled rows previously failed because the orchestrator always compared them with PR rows. Each request now matches only its selected authoritative projection; runtime/non-anchor projections and numeric/boolean type aliases are rejected.
 - Root reproduced19 runtime-selection/recipe tests across schema1, preparing legacy/modern and shared inventories, including crossed projection failures. The action still needs to forward its already-owned projection in a later workflow unit; no scheduled game execution is claimed. Rollback is this selector/comparison/tests.
+
+## Task 12c — scoped per-lane fan-in verification
+
+- The per-lane API and expected-lane projection now consume normalized matrices with explicit external schema2 scopes. Already-verified schema3 bundles must match the loaded raw matrix/contract, complete selected inventory, per-lane metadata and embedded identities. Payload coverage distinguishes one executed lane from its wider artifact bundle; final input re-reads reject drift.
+- Root and independent reviewer reproduced24 legacy/scoped fan-in tests. Existing screenshot/report/profile checks run on synthetic payload fixtures for legacy2, modern lane1 and a full12 bundle; scope, typed-row, identity, scenario and late-input mutations fail. These fixtures do not qualify Minecraft gameplay.
+- Aggregate creation/validation and the CLI still reject schema2. Their next adapter must pass caller-owned scope to staged verification before invoking this API. Rollback is scoped per-lane helpers/payload validation/tests, preserving legacy aggregate shapes.
