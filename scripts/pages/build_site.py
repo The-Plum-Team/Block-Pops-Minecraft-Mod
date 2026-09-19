@@ -5,10 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import stat
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +14,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 from scripts.lib.secure_json import SecureJsonError, read as read_secure_json, require_object  # noqa: E402
+from scripts.lib.atomic_directory import AtomicDirectoryError, atomic_directory, write_new  # noqa: E402
 from scripts.pages.evidence import (  # noqa: E402
     EvidenceError,
     _child_file,
@@ -67,7 +66,7 @@ def _inventory(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _copy_static(stage: Path) -> None:
+def _copy_static(stage_fd: int) -> None:
     allowed = {"index.html", "assets/site.css", "assets/gallery.js"}
     actual: set[str] = set()
     for path in SITE_SOURCE.rglob("*"):
@@ -82,9 +81,8 @@ def _copy_static(stage: Path) -> None:
         actual.add(relative)
         if relative not in allowed:
             raise SiteError(f"site source contains an unapproved file: {relative}")
-        destination = stage / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(path, destination, follow_symlinks=False)
+        _, data = _child_file(SITE_SOURCE, relative, label="protected static site source", maximum=MAX_SITE_BYTES)
+        write_new(stage_fd, relative, data)
     if actual != allowed:
         raise SiteError(f"site source inventory mismatch: {sorted(actual)}")
 
@@ -153,9 +151,9 @@ def build(*, evidence_root: Path, inventory_path: Path, output: Path, repository
     if project["sources"].rstrip("/") != expected_source:
         raise SiteError("canonical project source URL disagrees with the repository")
 
-    def writer(stage: Path) -> dict[str, int]:
-        _copy_static(stage)
-        (stage / ".nojekyll").write_bytes(b"")
+    def writer(stage: Path, stage_fd: int) -> dict[str, int]:
+        _copy_static(stage_fd)
+        write_new(stage_fd, ".nojekyll", b"")
         releases: list[dict[str, Any]] = []
         frames: list[dict[str, Any]] = []
         copied: dict[str, bytes] = {}
@@ -219,9 +217,7 @@ def build(*, evidence_root: Path, inventory_path: Path, output: Path, repository
                     }
                 )
         for relative, data in copied.items():
-            destination = stage / relative
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(data)
+            write_new(stage_fd, relative, data)
         frames.sort(key=lambda frame: (frame["minecraft"], frame["loader"], frame["capture_id"], frame["branch"]))
         site_data = {
             "schema_version": 1,
@@ -236,7 +232,7 @@ def build(*, evidence_root: Path, inventory_path: Path, output: Path, repository
             "frames": frames,
         }
         encoded = (json.dumps(site_data, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
-        (stage / "gallery-data.json").write_bytes(encoded)
+        write_new(stage_fd, "gallery-data.json", encoded)
         total = 0
         count = 0
         for path in stage.rglob("*"):
@@ -250,18 +246,10 @@ def build(*, evidence_root: Path, inventory_path: Path, output: Path, repository
             raise SiteError("generated site exceeds its file-count or byte bound")
         return {"branches": len(releases), "frames": len(frames), "files": count, "bytes": total}
 
-    output = output.absolute()
-    if output.exists() or output.is_symlink():
-        raise SiteError(f"refusing to replace existing output {output}")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    stage = Path(tempfile.mkdtemp(prefix=f".{output.name}.building-", dir=output.parent))
     try:
-        result = writer(stage)
-        stage.rename(output)
-        return result
-    finally:
-        if stage.exists():
-            shutil.rmtree(stage)
+        return atomic_directory(output, writer)
+    except AtomicDirectoryError as exc:
+        raise SiteError(str(exc)) from exc
 
 
 def main(argv: list[str] | None = None) -> int:
