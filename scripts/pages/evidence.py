@@ -1098,7 +1098,15 @@ def _expected_args(args: argparse.Namespace) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
+
+    def selection_arguments(command: argparse.ArgumentParser) -> None:
+        selectors = command.add_mutually_exclusive_group()
+        selectors.add_argument("--scope", choices=("legacy", "full"))
+        selectors.add_argument("--artifact-node")
+        command.add_argument("--projection", choices=("pr-anchors", "scheduled-anchors"))
+
     curate_parser = sub.add_parser("curate")
+    selection_arguments(curate_parser)
     curate_parser.add_argument("--input", type=Path, required=True)
     curate_parser.add_argument("--output", type=Path, required=True)
     curate_parser.add_argument("--matrix", type=Path, default=REPO / "release/release-matrix.json")
@@ -1118,6 +1126,7 @@ def main(argv: list[str] | None = None) -> int:
 
     for command in ("validate-raw", "validate-compact", "compact", "copy-compact"):
         selected = sub.add_parser(command)
+        selection_arguments(selected)
         selected.add_argument("--input", type=Path, required=True)
         selected.add_argument("--matrix", type=Path, required=True)
         for name in ("repository", "branch", "commit", "tree", "matrix_sha256"):
@@ -1134,6 +1143,11 @@ def main(argv: list[str] | None = None) -> int:
             selected.add_argument("--source-artifact-name", required=True)
             selected.add_argument("--source-artifact-digest", required=True)
     args = parser.parse_args(argv)
+    selection = {
+        "scope": "lane" if args.artifact_node is not None else args.scope,
+        "artifact_node": args.artifact_node,
+        "projection": args.projection,
+    }
     try:
         if args.command == "curate":
             packaged_values = (
@@ -1168,18 +1182,22 @@ def main(argv: list[str] | None = None) -> int:
                 packaged_tree=args.packaged_tree,
                 packaged_controller_branch=args.packaged_controller_branch,
                 packaged_controller_sha=args.packaged_controller_sha,
+                **selection,
             )
         else:
             expected = _expected_args(args)
             if args.command == "validate-raw":
-                result = validate_raw(args.input, matrix_path=args.matrix, expected=expected)
+                result = validate_raw(args.input, matrix_path=args.matrix, expected=expected, **selection)
             elif args.command == "validate-compact":
-                result = validate_compact(args.input, matrix_path=args.matrix, expected=expected)
+                result = validate_compact(args.input, matrix_path=args.matrix, expected=expected, **selection)
             elif args.command == "compact":
-                result = compact(input_root=args.input, output=args.output, matrix_path=args.matrix, expected=expected, source_artifact_id=args.source_artifact_id, source_artifact_name=args.source_artifact_name, source_artifact_digest=args.source_artifact_digest)
+                result = compact(input_root=args.input, output=args.output, matrix_path=args.matrix, expected=expected, source_artifact_id=args.source_artifact_id, source_artifact_name=args.source_artifact_name, source_artifact_digest=args.source_artifact_digest, **selection)
             else:
-                result = copy_compact(input_root=args.input, output=args.output, matrix_path=args.matrix, expected=expected)
-        print(json.dumps({"kind": result["kind"], "branch": result["provenance"]["branch"], "commit": result["provenance"]["commit"], "lanes": len(result["lanes"]), "frames": len(result["frames"])}, sort_keys=True))
+                result = copy_compact(input_root=args.input, output=args.output, matrix_path=args.matrix, expected=expected, **selection)
+        summary = {"kind": result["kind"], "branch": result["provenance"]["branch"], "commit": result["provenance"]["commit"], "lanes": len(result["lanes"]), "frames": len(result["frames"])}
+        if "aggregate_scope" in result:
+            summary["aggregate_scope"] = result["aggregate_scope"]
+        print(json.dumps(summary, sort_keys=True))
         return 0
     except (EvidenceError, MatrixError, OSError, ValueError) as exc:
         print(f"Pages evidence error: {exc}", file=sys.stderr)
