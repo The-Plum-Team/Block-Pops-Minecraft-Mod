@@ -1753,12 +1753,16 @@ def _verified_manifest(
     stage: Path,
     manifest_path: Path,
     repository: Path = REPO,
+    scope: str | None = None,
+    artifact_node: str | None = None,
 ) -> tuple[dict[str, Any], str]:
     manifest = verify_staged(
         repository=repository,
         matrix_path=matrix_path,
         manifest_path=manifest_path,
         stage=stage,
+        scope=scope,
+        artifact_node=artifact_node,
     )
     try:
         reread, raw = read_secure_json(
@@ -1768,7 +1772,7 @@ def _verified_manifest(
         )
     except SecureJsonError as exc:
         raise FanInError(str(exc)) from exc
-    if reread != manifest:
+    if _json_bytes(reread) != _json_bytes(manifest):
         raise FanInError("verified artifact manifest changed after verification")
     return manifest, _sha256(raw)
 
@@ -1776,6 +1780,9 @@ def _verified_manifest(
 def _common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--matrix", type=Path, default=Path("release/release-matrix.json"))
     parser.add_argument("--contract", type=Path, default=Path("e2e/scenario-contract.json"))
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--scope", choices=("legacy", "full"), help="external schema3 bundle scope")
+    selection.add_argument("--artifact-node", help="select exactly one configured schema2 lane")
 
 
 def _source(parser: argparse.ArgumentParser) -> None:
@@ -1807,6 +1814,8 @@ def main(argv: list[str] | None = None) -> int:
     create.add_argument("--output", type=Path, required=True)
     create.add_argument("--stage", type=Path, default=Path("build/release"))
     create.add_argument("--artifact-manifest", type=Path, default=Path("build/release/artifacts.json"))
+    create.add_argument("--artifact-repository", type=Path,
+                        help="local bundle checkout, distinct from the source owner/repository")
     validate = commands.add_parser(
         "validate", help="revalidate one immutable aggregate's exact internal inventory"
     )
@@ -1814,6 +1823,11 @@ def main(argv: list[str] | None = None) -> int:
     validate.add_argument("--input", type=Path, required=True)
     validate.add_argument("--projection", choices=("pr-anchors", "scheduled-anchors"), required=True)
     _optional_source(validate)
+    validate.add_argument("--stage", type=Path, help="scoped bundle stage (default: build/release)")
+    validate.add_argument("--artifact-manifest", type=Path,
+                          help="scoped bundle manifest (default: build/release/artifacts.json)")
+    validate.add_argument("--artifact-repository", type=Path,
+                          help="local scoped bundle checkout, distinct from the source owner/repository")
     validate_lane_parser = commands.add_parser(
         "validate-lane", help="revalidate one sealed packaged-runtime lane before upload"
     )
@@ -1830,12 +1844,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
+        selection = {"scope": "lane" if args.artifact_node is not None else args.scope,
+                     "artifact_node": args.artifact_node}
+        bundle_inputs = {}
+        if args.command != "validate" or selection["scope"] is not None:
+            repository = (args.repository if args.command == "validate-lane" else args.artifact_repository or REPO).resolve()
+            defaults = {"stage": Path("build/release"), "artifact_manifest": Path("build/release/artifacts.json")}
+            for name in ("matrix", "contract", "stage", "artifact_manifest"):
+                path = getattr(args, name) or defaults[name]
+                setattr(args, name, path if path.is_absolute() else repository / path)
+            bundle_inputs = {"repository": repository, **selection}
+        elif any(value is not None for value in (args.stage, args.artifact_manifest, args.artifact_repository)):
+            raise FanInError("explicit aggregate bundle options require an external scope")
         if args.command == "create":
             identity = _identity_from_args(args)
             artifact_manifest, artifact_manifest_sha = _verified_manifest(
                 matrix_path=args.matrix,
                 stage=args.stage,
                 manifest_path=args.artifact_manifest,
+                **bundle_inputs,
             )
             result = create_aggregate(
                 input_root=args.input,
@@ -1845,8 +1872,15 @@ def main(argv: list[str] | None = None) -> int:
                 identity=identity,
                 artifact_manifest=artifact_manifest,
                 artifact_manifest_sha256=artifact_manifest_sha,
+                **selection,
             )
         elif args.command == "validate":
+            artifact_manifest, artifact_manifest_sha = (None, None)
+            if bundle_inputs:
+                artifact_manifest, artifact_manifest_sha = _verified_manifest(
+                    matrix_path=args.matrix, stage=args.stage, manifest_path=args.artifact_manifest,
+                    **bundle_inputs,
+                )
             result = validate_aggregate(
                 root=args.input,
                 matrix_path=args.matrix,
@@ -1858,6 +1892,9 @@ def main(argv: list[str] | None = None) -> int:
                 expected_tree=args.tree,
                 expected_run_id=args.run_id,
                 expected_run_attempt=args.run_attempt,
+                artifact_manifest=artifact_manifest,
+                artifact_manifest_sha256=artifact_manifest_sha,
+                **selection,
             )
         else:
             row = secure_loads(
@@ -1871,7 +1908,7 @@ def main(argv: list[str] | None = None) -> int:
                 matrix_path=args.matrix,
                 stage=args.stage,
                 manifest_path=args.artifact_manifest,
-                repository=args.repository,
+                **bundle_inputs,
             )
             result = validate_lane(
                 root=args.input,
@@ -1880,6 +1917,7 @@ def main(argv: list[str] | None = None) -> int:
                 projection=args.projection,
                 row=row,
                 artifact_manifest=artifact_manifest,
+                **selection,
             )
     except (
         ArtifactError,

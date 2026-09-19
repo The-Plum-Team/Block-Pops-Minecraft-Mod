@@ -485,3 +485,8 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 
 - The E2E workflow's build job now uses the same Java17/Gradle-JVM separation and normalized dispatch contract as Build. Schema2 runs serially, and staged verification under both candidate and fresh validator receives the exact matrix-owned scope. Existing schema1 aggregate/check behavior remains available.
 - Root reproduced41 workflow/boundary tests, reusing executed shell checks across both workflows for all scope tokens and failed-build/invalid-selection paths. Runtime action and fan-in call sites still await their separate adapters; no GitHub/client execution or publication is claimed. Rollback is this build-job adapter and shared shell test extension.
+
+## Task 12g — explicit scoped fan-in CLI
+
+- Create, aggregate validation and lane validation now accept one external scope or artifact node and forward it unchanged to staged-bundle verification and evidence APIs. Local artifact repository paths are separate from the remote owner/repository identity. Scoped validation verifies the bundle before reading aggregate evidence; legacy structural validation keeps its original interface and rejects ignored bundle options.
+- Root reproduced52 fan-in tests, including seven CLI cases for scoped round trips, wrong/missing selection, rejected bundles, typed manifest drift and repository-relative inputs under a fresh validator. Independent review found no blocker. Synthetic evidence remains distinct from authenticated game qualification. Rollback is CLI adapter/tests, retaining strict typed re-read validation.
