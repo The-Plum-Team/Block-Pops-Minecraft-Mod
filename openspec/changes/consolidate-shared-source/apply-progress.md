@@ -184,3 +184,10 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Extracted the existing root build body/import verbatim to `gradle/build-conventions.gradle`; root plugin requests remain unchanged and apply that file once. This prepares reuse by the required `stonecutter.gradle` controller without copying build logic or changing its behavior.
 - Root independently compared the extracted content with the previous committed bytes. Sixteen dependency-policy tests and its CLI pass; the audited Gradle-file inventory now includes the conventions and rejects missing/duplicate root or repository-policy bindings.
 - The rename-independent authored count remains below400 including this evidence. No plugin application, selected-node activation or game build occurred; rollback restores this extraction and its binding checks together.
+
+## Task 5b — separate current and protected-next evaluation
+
+- Candidate/self verification now accepts schema2 only against `current`, checking the declared loader even when inactive. A separate `validate_transition` API requires a distinct ancestor base with a transition, exact schema1 collapse to its `next`, complete matching bytes, and changes confined to that loader's declared build/bootstrap paths and contract.
+- The future protected caller must authenticate the base as deployed authority; ancestry supplies no authorization. This API is deliberately absent from the self-check CLI and has not been connected to `pr_gate` or workflows.
+- Root reproduced 55 bootstrap/PR-gate/sync tests. Negative cases cover mixed/stale generations, wrong collapse, other loaders, matrix edits, undeclared files and gitlinks hidden by local Git configuration. Independent review found and fixed inactive-current verification before final validation; schema1 reports remain identical.
+- No actual contract or executable bytes changed. Task5 remains open for exact future transition records and authenticated controller integration. A loader lacking verifiable current bytes requires a separately reviewed protocol; rollback is this evaluator/tests/evidence unit.

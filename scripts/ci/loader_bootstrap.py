@@ -308,6 +308,51 @@ def validate_commit(
     head_sha: str,
     contract_sha: str | None = None,
 ) -> dict[str, Any]:
+    """Verify current only; callers authenticate external contract_sha authority.
+
+    A candidate-owned contract is a self-check, never delivery authorization.
+    Schema 2 does not let this entry point select its proposed next generation.
+    """
+    return _validate_commit(repository, head_sha=head_sha, contract_sha=contract_sha)
+
+
+def validate_transition(repository: Path, *, head_sha: str, base_sha: str) -> dict[str, Any]:
+    """Verify exact-next collapse against an externally authenticated protected base.
+
+    The protected caller must authenticate base_sha as the deployed authority.
+    Ancestry alone is not authentication. This API supplies no delivery decision
+    and is deliberately not exposed by the candidate self-check CLI.
+    """
+    repository = repository.resolve()
+    head_sha = _exact_commit(repository, head_sha, "loader bootstrap head")
+    base_sha = _exact_commit(repository, base_sha, "protected bootstrap base")
+    if base_sha == head_sha:
+        raise LoaderBootstrapError("transition authority must precede the candidate")
+    _git(repository, "merge-base", "--is-ancestor", base_sha, head_sha)
+    base = load_contract_bytes(_blob(repository, base_sha, CONTRACT_PATH, maximum=MAX_CONTRACT_BYTES))
+    if base.transition is None:
+        raise LoaderBootstrapError("protected base must declare a current/next transition")
+    candidate = load_contract_bytes(_blob(repository, head_sha, CONTRACT_PATH, maximum=MAX_CONTRACT_BYTES))
+    if candidate.schema_version != 1 or candidate.loaders != base.transition.next_loaders:
+        raise LoaderBootstrapError("candidate must collapse to the exact protected next contract")
+    loader = base.transition.loader
+    allowed = {CONTRACT_PATH, f"{loader}/build.gradle"}
+    allowed.update(base.loaders[loader].files)
+    allowed.update(base.transition.next_loaders[loader].files)
+    changed = set(_git(repository, "diff", "--name-only", "--no-renames", "--no-ext-diff", "--ignore-submodules=none",
+                       "-z", base_sha, head_sha, "--").split(b"\0")) - {b""}
+    if changed - {path.encode("utf-8") for path in allowed}:
+        raise LoaderBootstrapError("candidate changes paths outside the declared loader transition")
+    _validate_commit(repository, head_sha=base_sha, contract_sha=base_sha, transition_phase="current")
+    result = _validate_commit(repository, head_sha=head_sha, contract_sha=base_sha, transition_phase="next")
+    result["transition"]["candidate_contract_sha256"] = candidate.sha256
+    return result
+
+
+def _validate_commit(
+    repository: Path, *, head_sha: str, contract_sha: str | None = None,
+    transition_phase: str | None = None,
+) -> dict[str, Any]:
     repository = repository.resolve()
     head_sha = _exact_commit(repository, head_sha, "loader bootstrap head")
     contract_sha = _exact_commit(
@@ -332,15 +377,18 @@ def validate_commit(
     except MatrixError as exc:
         raise LoaderBootstrapError(f"release matrix is invalid: {exc}") from exc
     contract = load_contract_bytes(contract_bytes)
-    if contract.transition is not None:
-        raise LoaderBootstrapError(
-            "loader bootstrap transitions require the separate base-owned evaluator"
-        )
+    declared = {contract.transition.loader} if contract.transition is not None else set()
+    if transition_phase is not None:
+        if contract.transition is None or transition_phase not in {"current", "next"}:
+            raise LoaderBootstrapError("transition verification requires its declared loader contract")
+        if transition_phase == "next":
+            contract = LoaderBootstrapContract(contract.transition.next_loaders, contract.sha256,
+                                               contract.schema_version, contract.transition)
     active = tuple(sorted({row["loader"] for row in matrix["artifacts"]}))
     if not active or any(loader not in contract.loaders for loader in active):
         raise LoaderBootstrapError(f"matrix selected an uncontracted loader: {active!r}")
     verified: dict[str, Any] = {}
-    for loader in active:
+    for loader in sorted(set(active) | declared):
         expected = contract.loaders[loader]
         observed = _tree_entries(repository, head_sha, loader)
         if set(observed) != set(expected.files):
@@ -385,7 +433,7 @@ def validate_commit(
                 ).encode("utf-8")
             ).hexdigest(),
         }
-    return {
+    result = {
         "schema_version": SCHEMA_VERSION,
         "head_sha": head_sha,
         "contract_sha": contract_sha,
@@ -394,6 +442,11 @@ def validate_commit(
         "active_loaders": list(active),
         "verified": verified,
     }
+    if contract.transition is not None:
+        result["transition"] = {"generation": contract.transition.generation,
+                                "loader": contract.transition.loader,
+                                "phase": transition_phase or "current"}
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
