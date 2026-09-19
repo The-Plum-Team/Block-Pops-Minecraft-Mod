@@ -640,7 +640,7 @@ def plan_build(
                    f"-PblockpopsLane={lane.identity.artifact_node}"]
         if clean:
             command.append(artifact["gradle_task"].rsplit(":", 1)[0] + ":clean")
-        command.extend(["validateReleaseMatrix", artifact["gradle_task"], artifact["harness_task"]])
+        command.extend(["validateReleaseMatrix", artifact["gradle_task"], artifact["harness_task"], "check"])
         planned.append({
             "artifact_node": lane.identity.artifact_node,
             "minecraft": lane.identity.minecraft, "loader": lane.identity.loader,

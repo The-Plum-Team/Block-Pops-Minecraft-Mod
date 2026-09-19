@@ -457,3 +457,8 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 
 - Added a small shared CLI for workflow callers: normalized schema1 emits `unscoped`, preparing emits `legacy`, and complete shared emits `full`. It reuses the matrix's selection API and accepts no bundle-derived or custom scope. Source inspection defaults on; disabling it still validates the complete configuration.
 - Root reproduced5 focused tests for malformed/incomplete/type-aliased inputs, explicit paths outside the checkout and misleading manifest data. The live matrix emits `unscoped`. This helper grants no authentication or qualification and changes no workflow yet. Rollback is helper/tests together.
+
+## Runner correction — retain the Gradle check lifecycle
+
+- Workflow review found that serial production/harness tasks omitted the `check` selector used by the existing gate. Each isolated command now also requests `check`, retaining common/loader verification tasks and their failure propagation.
+- The mocked executor regression first reproduced an incorrect success when only `check` would fail. Root then reproduced50 runner tests with the correction: that failure stops before the next lane and replaces prior success with a failed report. A real failing Java-test probe remains pending; no new game qualification is claimed. Rollback must retain equivalent lifecycle checks before using the runner in CI.

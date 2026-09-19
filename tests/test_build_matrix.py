@@ -63,7 +63,7 @@ class BuildMatrixPlanningTests(unittest.TestCase):
                     "./gradlew", "--no-daemon", "--no-parallel", "--max-workers=1",
                     "--dependency-verification", "strict", "--gradle-user-home", home,
                     f"-PblockpopsLane={node}", "validateReleaseMatrix",
-                    artifact["gradle_task"], artifact["harness_task"],
+                    artifact["gradle_task"], artifact["harness_task"], "check",
                 ], row["command"])
                 self.assertEqual({"gradle": 21, "artifact": artifact["java"], "runtime": artifact["java"]},
                                  row["required_java"])
@@ -549,6 +549,7 @@ class BuildMatrixExecutionTests(unittest.TestCase):
         self.assertEqual(str(self.homes[21]), env["JAVA_HOME"])
         lock.verify(); output.write(b"synthetic subprocess fixture\n")
         if self.failure == "nonzero": return 7
+        if self.failure == "check" and "check" in command: return 8
         if self.failure == "startup": raise OSError("synthetic startup failure")
         if self.failure == "cancel": raise KeyboardInterrupt()
         report = json.loads(self.report_path.read_text())
@@ -610,7 +611,7 @@ class BuildMatrixExecutionTests(unittest.TestCase):
             self.assertIn("--max-workers=1", command); self.assertIn("strict", command)
 
     def test_lane_failures_stop_before_next_spawn_and_replace_success_with_failed_report(self):
-        for failure in ("nonzero", "startup", "receipt", "boundary", "missing", "source"):
+        for failure in ("check", "nonzero", "startup", "receipt", "boundary", "missing", "source"):
             self.failure, self.commands = failure, []
             with self.subTest(failure=failure):
                 report = self.execute()
