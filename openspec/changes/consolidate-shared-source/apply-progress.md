@@ -474,3 +474,9 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Stonecutter nodes can now preprocess one matrix-declared overlay per source set through its public prepare API, exclude exact replaced canonical files and merge declared additions. Production and E2E remain separate. Canonical sources and identity barriers are preserved; the global modern-game guard remains active.
 - Root reproduced31 source/identity/policy tests. Six real strict/offline Gradle probes cover initial Java compilation, incremental replacement/removal without clean, deselected overlays, and rejected undeclared/linked/node-override inputs. Separate fixture JARs and all input snapshots pass; evidence is under `build/diagnostics/stonecutter-overlays/`. These synthetic Java probes use the exact adapters but no Loom/game runtime.
 - Rollback is both overlay convention hooks together. Reviewed real lane pins, game compatibility ports and node activation remain next.
+
+## Fan-in correction — bind aggregate publication to owned directories
+
+- Independent reproduction replaced the publication parent after validation and caused the old helper to publish an unvalidated external directory. Writes and cleanup now use no-follow directory descriptors, parent/stage identity is checked around publication, and exclusive rename preserves a concurrently created destination. Unsupported hosts fail before creating the output parent.
+- Root reproduced12 atomic/producer tests, then all7 final atomic adversaries including a parent swap immediately after rename. Five original adversaries were red before the fix. The reviewed macOS exclusive-rename backend ran locally; the Linux backend has not been executed here. Existing scope/reader tests also pass independently.
+- Rollback must retain equivalent directory binding and exclusive publication; returning to pathname-only writes/rename would reopen the reproduced defect. This change grants no remote evidence authority.

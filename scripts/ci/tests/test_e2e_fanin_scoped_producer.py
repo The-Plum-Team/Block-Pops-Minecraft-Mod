@@ -121,14 +121,14 @@ class ScopedAggregateProducerTests(unittest.TestCase):
         self.prepare()
         original = fanin._write_new
         before = self.inputs.matrix_path.read_bytes()
-        def drift(path, data):
-            original(path, data)
+        def drift(*args):
+            original(*args)
             self.inputs.matrix_path.write_bytes(before + b"\n")
         with patch.object(fanin, "_write_new", side_effect=drift), self.assertRaises(fanin.FanInError): self.create()
         self.assert_unpublished()
         self.inputs.matrix_path.write_bytes(before)
-        def failed(path, data):
-            original(path, data)
+        def failed(*args):
+            original(*args)
             raise OSError("simulated failed write")
         with patch.object(fanin, "_write_new", side_effect=failed), self.assertRaises(OSError): self.create()
         self.assert_unpublished()
