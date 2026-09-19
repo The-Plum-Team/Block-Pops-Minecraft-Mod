@@ -11,6 +11,7 @@ import com.theplumteam.figure.FigureType;
 import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.registry.ModItems;
 import com.theplumteam.server.ServerTickHandler;
+import com.theplumteam.util.AuthlibProfiles;
 import com.theplumteam.util.ResourceLocations;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
@@ -102,7 +103,7 @@ public class DropBoxPacket {
         if (figure.getPlayerUUID() == null) return null;
         try {
             GameProfile freshProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
-            return player.getServer().getSessionService().fillProfileProperties(freshProfile, true);
+            return AuthlibProfiles.fetch(player.getServer().getSessionService(), freshProfile);
         } catch (Exception e) {
             LOGGER.error("Failed to fetch fresh GameProfile for {}: {}", figure.getName(), e.getMessage());
             return null;
@@ -156,7 +157,7 @@ public class DropBoxPacket {
                     if (selectedFigure.getType() == FigureType.PLAYER) {
                         GameProfile freshProfile = getFreshGameProfile(player, selectedFigure);
                         if (freshProfile != null && !freshProfile.getProperties().get("textures").isEmpty()) {
-                            skinSnapshot = freshProfile.getProperties().get("textures").iterator().next().getValue();
+                            skinSnapshot = AuthlibProfiles.value(freshProfile.getProperties().get("textures").iterator().next());
                             discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
                             BlockPopsMod.logDebug("Saved/updated fresh skin snapshot for {}.", uniqueFigureId);
                         }
