@@ -12,7 +12,6 @@ consumer can bind every payload byte to the authenticated source run identity.
 from __future__ import annotations
 
 import argparse
-import ctypes
 import hashlib
 import io
 import json
@@ -22,7 +21,6 @@ import re
 import stat
 import struct
 import sys
-import uuid
 import zlib
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -37,6 +35,7 @@ from e2e.scenario_contract import (  # noqa: E402
     ScenarioContractError,
     load_contract,
 )
+from scripts.lib import atomic_directory  # noqa: E402
 from scripts.lib.secure_json import (  # noqa: E402
     SecureJsonError,
     loads as secure_loads,
@@ -1230,134 +1229,18 @@ def _validate_receipt_shape(value: Any, *, scoped: bool = False) -> tuple[Source
     return identity, manifest_sha
 
 
-def _exclusive_directory_rename():
-    required = (os.open, os.mkdir, os.stat, os.unlink, os.rmdir)
-    if (not all(call in os.supports_dir_fd for call in required) or os.listdir not in os.supports_fd
-            or not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NOFOLLOW")):
-        raise FanInError("aggregate publication requires descriptor-relative filesystem primitives")
-    library = ctypes.CDLL(None, use_errno=True)
-    name, flag = {"darwin": ("renameatx_np", 4), "linux": ("renameat2", 1)}.get(sys.platform, (None, None))
-    function = getattr(library, name, None) if name else None
-    if function is None:
-        raise FanInError("aggregate publication requires atomic exclusive directory rename")
-    function.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
-    function.restype = ctypes.c_int
-    def rename(parent, source, destination):
-        if function(parent, os.fsencode(source), parent, os.fsencode(destination), flag):
-            error = ctypes.get_errno()
-            raise FanInError(f"exclusive aggregate publication failed: {os.strerror(error)}")
-    return rename
-
-
-def _directory_fd(path: Path, *, root_fd=None, create=False):
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-    descriptor = os.dup(root_fd) if root_fd is not None else os.open(path.anchor, flags)
-    try:
-        for part in path.parts if root_fd is not None else path.parts[1:]:
-            if create:
-                try: os.mkdir(part, 0o700, dir_fd=descriptor)
-                except FileExistsError: pass
-            child = os.open(part, flags, dir_fd=descriptor)
-            os.close(descriptor)
-            descriptor = child
-        return descriptor
-    except BaseException:
-        os.close(descriptor)
-        raise
-
-
-def _directory_identity(info):
-    return info.st_dev, info.st_ino
-
-
-def _bound_aggregate_directory(output, parent, name, stage):
-    try:
-        current = _directory_fd(output.parent)
-        try:
-            same_parent = _directory_identity(os.fstat(current)) == _directory_identity(os.fstat(parent))
-        finally:
-            os.close(current)
-        entry = os.stat(name, dir_fd=parent, follow_symlinks=False)
-        if (not same_parent or not stat.S_ISDIR(entry.st_mode)
-                or _directory_identity(entry) != _directory_identity(os.fstat(stage))):
-            raise FanInError("aggregate parent or stage identity changed")
-    except OSError as exc:
-        raise FanInError("aggregate parent or stage binding changed") from exc
-
-
-def _clear_owned_directory(descriptor):
-    for name in os.listdir(descriptor):
-        try:
-            before = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
-            if stat.S_ISDIR(before.st_mode):
-                child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
-                try:
-                    if _directory_identity(before) != _directory_identity(os.fstat(child)):
-                        raise FanInError("aggregate cleanup directory changed")
-                    _clear_owned_directory(child)
-                finally:
-                    os.close(child)
-                if _directory_identity(os.stat(name, dir_fd=descriptor, follow_symlinks=False)) == _directory_identity(before):
-                    os.rmdir(name, dir_fd=descriptor)
-            else:
-                os.unlink(name, dir_fd=descriptor)
-        except FileNotFoundError:
-            pass
-
-
 def _atomic_directory(output: Path, writer: Any) -> Any:
-    rename = _exclusive_directory_rename()  # Fail before creating directories on unsupported hosts.
-    output = output.absolute()
-    if output.parent.exists() or output.parent.is_symlink():
-        _real_directory(output.parent, "aggregate parent")
-    output = output.parent.resolve() / output.name  # Resolve stable host aliases such as macOS /var once.
-    parent = _directory_fd(output.parent, create=True)
-    stage = None
-    name = f".{output.name}.building-{uuid.uuid4().hex}"
-    published = False
     try:
-        try:
-            os.stat(output.name, dir_fd=parent, follow_symlinks=False)
-        except FileNotFoundError:
-            pass
-        else:
-            raise FanInError(f"refusing to replace existing aggregate {output}")
-        os.mkdir(name, 0o700, dir_fd=parent)
-        stage = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
-        _bound_aggregate_directory(output, parent, name, stage)
-        result = writer(output.parent / name, stage)
-        _bound_aggregate_directory(output, parent, name, stage)
-        rename(parent, name, output.name)
-        name = output.name
-        _bound_aggregate_directory(output, parent, name, stage)
-        published = True
-        return result
-    finally:
-        try:
-            if stage is not None and not published:
-                _clear_owned_directory(stage)
-                try:
-                    if _directory_identity(os.stat(name, dir_fd=parent, follow_symlinks=False)) == _directory_identity(os.fstat(stage)):
-                        os.rmdir(name, dir_fd=parent)
-                except FileNotFoundError:
-                    pass
-        finally:
-            if stage is not None: os.close(stage)
-            os.close(parent)
+        return atomic_directory.atomic_directory(output, writer)
+    except atomic_directory.AtomicDirectoryError as exc:
+        raise FanInError(str(exc)) from exc
 
 
 def _write_new(stage: int, relative: str, data: bytes) -> None:
-    path = Path(_canonical_path(relative, "aggregate output"))
-    parent = _directory_fd(path.parent, root_fd=stage, create=True)
     try:
-        descriptor = os.open(path.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent)
-        with os.fdopen(descriptor, "wb") as output:
-            output.write(data)
-            output.flush()
-            os.fchmod(output.fileno(), 0o644)
-            os.fsync(output.fileno())
-    finally:
-        os.close(parent)
+        atomic_directory.write_new(stage, relative, data)
+    except atomic_directory.AtomicDirectoryError as exc:
+        raise FanInError(str(exc)) from exc
 
 
 def create_aggregate(

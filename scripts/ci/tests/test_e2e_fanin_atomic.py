@@ -101,7 +101,7 @@ class AtomicAggregateTests(unittest.TestCase):
         self.assertFalse(self.case.output.exists())
 
     def test_parent_replacement_immediately_after_rename_rolls_back_only_owned_output(self):
-        rename = fanin._exclusive_directory_rename()
+        rename = fanin.atomic_directory._exclusive_directory_rename()
         def substituted(parent, source, destination):
             rename(parent, source, destination)
             self.parent.rename(self.held)
@@ -109,7 +109,7 @@ class AtomicAggregateTests(unittest.TestCase):
             impostor = self.outside / "aggregate"
             impostor.mkdir()
             (impostor / "unrelated.txt").write_bytes(b"keep external output")
-        with patch.object(fanin, "_exclusive_directory_rename", return_value=substituted):
+        with patch.object(fanin.atomic_directory, "_exclusive_directory_rename", return_value=substituted):
             with self.assertRaises(fanin.FanInError): self.case.create()
         self.assertFalse((self.held / "aggregate").exists())
         self.assertEqual(b"keep external output", (self.outside / "aggregate/unrelated.txt").read_bytes())
