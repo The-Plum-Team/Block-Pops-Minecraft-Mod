@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "gradle_java": 21,
   "lane_count": 2,
   "unit_test_lane": "fabric-1.20.1",
@@ -29,15 +29,18 @@
   "source_routing": {
     "common": {
       "canonical": "common/src/main",
-      "overlays": {}
+      "overlays": [],
+      "e2e": "common/src/e2e"
     },
     "fabric": {
       "canonical": "fabric/src/main",
-      "overlays": {}
+      "overlays": [],
+      "e2e": "fabric/src/e2e"
     },
     "forge": {
       "canonical": "forge/src/main",
-      "overlays": {}
+      "overlays": [],
+      "e2e": "forge/src/e2e"
     }
   },
   "installers": {
@@ -67,7 +70,15 @@
         "loader": ">=0.17.0",
         "architectury": ">=9.2.14",
         "geckolib": ">=4.7.4"
-      }
+      },
+      "mod_version": "1.1.3",
+      "build_layout": "legacy",
+      "gradle_java": 21,
+      "repository_family": "fabric",
+      "source_routes": [
+        "common",
+        "fabric"
+      ]
     },
     {
       "artifact_node": "forge-1.20.1",
@@ -85,7 +96,15 @@
         "loader": "[47,)",
         "architectury": "[9.2.14,)",
         "geckolib": "[4.7.4,)"
-      }
+      },
+      "mod_version": "1.1.3",
+      "build_layout": "legacy",
+      "gradle_java": 21,
+      "repository_family": "forge",
+      "source_routes": [
+        "common",
+        "forge"
+      ]
     }
   ],
   "runtimes": [
@@ -149,5 +168,74 @@
         }
       ]
     }
-  ]
+  ],
+  "targets": [
+    {
+      "artifact_node": "fabric-1.20.1",
+      "minecraft": "1.20.1",
+      "loader": "fabric"
+    },
+    {
+      "artifact_node": "forge-1.20.1",
+      "minecraft": "1.20.1",
+      "loader": "forge"
+    },
+    {
+      "artifact_node": "fabric-1.21.1",
+      "minecraft": "1.21.1",
+      "loader": "fabric"
+    },
+    {
+      "artifact_node": "neoforge-1.21.1",
+      "minecraft": "1.21.1",
+      "loader": "neoforge"
+    },
+    {
+      "artifact_node": "fabric-1.21.4",
+      "minecraft": "1.21.4",
+      "loader": "fabric"
+    },
+    {
+      "artifact_node": "neoforge-1.21.4",
+      "minecraft": "1.21.4",
+      "loader": "neoforge"
+    },
+    {
+      "artifact_node": "fabric-1.21.5",
+      "minecraft": "1.21.5",
+      "loader": "fabric"
+    },
+    {
+      "artifact_node": "neoforge-1.21.5",
+      "minecraft": "1.21.5",
+      "loader": "neoforge"
+    },
+    {
+      "artifact_node": "fabric-1.21.6",
+      "minecraft": "1.21.6",
+      "loader": "fabric"
+    },
+    {
+      "artifact_node": "neoforge-1.21.6",
+      "minecraft": "1.21.6",
+      "loader": "neoforge"
+    },
+    {
+      "artifact_node": "fabric-1.21.7",
+      "minecraft": "1.21.7",
+      "loader": "fabric"
+    },
+    {
+      "artifact_node": "neoforge-1.21.7",
+      "minecraft": "1.21.7",
+      "loader": "neoforge"
+    }
+  ],
+  "migration": {
+    "mode": "preparing",
+    "legacy_nodes": [
+      "fabric-1.20.1",
+      "forge-1.20.1"
+    ]
+  }
 }
