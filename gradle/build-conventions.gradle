@@ -100,6 +100,7 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
     }
 
     if (stonecutterLayout) {
+        group = "${rootProject.maven_group}.${module}"
         // Detached nodes consume only the canonical tree processed by Stonecutter.
         def generatedMain = stonecutter.tasks.generate['stonecutterGenerate']
         sourceSets.main.java.setSrcDirs([
@@ -168,7 +169,7 @@ tasks.register('validateReleaseMatrix', Exec) {
     description = 'Validates the sole release/version/loader authority.'
     workingDir rootProject.projectDir
     commandLine(System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3',
-        'scripts/release/matrix.py', '--matrix', 'release/release-matrix.json')
+        'scripts/release/matrix.py', '--matrix', 'release/release-matrix.json', '--kind', 'inventory')
     standardOutput = new ByteArrayOutputStream()
 }
 

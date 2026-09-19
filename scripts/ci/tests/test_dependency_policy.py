@@ -524,6 +524,17 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
                 ), self.assertRaisesRegex(DependencyPolicyError, "binding is not exact"):
                     validate_repository_layout(REPO)
 
+    def test_gradle_matrix_validation_cannot_skip_or_project_inventory(self) -> None:
+        conventions = REPO / "gradle/build-conventions.gradle"
+        for replacement in ("", ", '--kind', 'artifacts'", ", '--kind', 'gradle-context'"):
+            def read_candidate(path):
+                text = path.read_text("utf-8")
+                return text.replace(", '--kind', 'inventory'", replacement) if path == conventions else text
+            with self.subTest(replacement=replacement), mock.patch(
+                "scripts.ci.dependency_policy._text", side_effect=read_candidate,
+            ), self.assertRaisesRegex(DependencyPolicyError, "complete normalized inventory"):
+                validate_repository_layout(REPO)
+
 
 if __name__ == "__main__":
     unittest.main()

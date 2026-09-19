@@ -341,6 +341,9 @@ def validate_repository_layout(repository: Path) -> None:
     binding = "apply from: rootProject.file('gradle/repository-policy.gradle')"
     if conventions.count(binding) != 1:
         raise DependencyPolicyError("project repository policy binding is not exact")
+    inventory_command = "'scripts/release/matrix.py', '--matrix', 'release/release-matrix.json', '--kind', 'inventory'"
+    if conventions.count(inventory_command) != 1:
+        raise DependencyPolicyError("Gradle matrix validation must bind the complete normalized inventory")
 
     properties = _text(repository / "gradle.properties").splitlines()
     if properties.count("org.gradle.dependency.verification=strict") != 1 or properties.count(
