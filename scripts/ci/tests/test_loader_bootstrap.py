@@ -158,6 +158,28 @@ class LoaderBootstrapTests(unittest.TestCase):
             with self.subTest(case=case), self.assertRaises(LoaderBootstrapError):
                 validate_transition(self.repository, head_sha=candidate, base_sha=base)
 
+    def test_replaced_blob_cannot_hide_changed_executable_bytes(self) -> None:
+        original = _run(self.repository, "rev-parse", f"{self.head}:fabric/build.gradle")
+        path = self.repository / "fabric/build.gradle"
+        path.write_bytes(b"// unauthorized\n" + path.read_bytes())
+        candidate = self.commit("changed executable")
+        changed = _run(self.repository, "rev-parse", f"{candidate}:fabric/build.gradle")
+        _run(self.repository, "replace", changed, original)
+        with self.assertRaises(LoaderBootstrapError):
+            validate_commit(self.repository, head_sha=candidate, contract_sha=self.head)
+
+    def test_grafts_cannot_supply_missing_transition_ancestry(self) -> None:
+        base, next_contract, changes = self.prepare_transition()
+        for path, payload in changes.items():
+            (self.repository / path).write_bytes(payload)
+        self.write_contract(next_contract)
+        candidate = self.commit("valid next tree")
+        unrelated = _run(self.repository, "commit-tree", f"{candidate}^{{tree}}", "-m", "unrelated next")
+        grafts = self.repository / ".git/info/grafts"
+        grafts.write_text(f"{unrelated} {base}\n", encoding="utf-8")
+        with mock.patch.dict(os.environ, {"GIT_GRAFT_FILE": str(grafts)}), self.assertRaises(LoaderBootstrapError):
+            validate_transition(self.repository, head_sha=unrelated, base_sha=base)
+
     def test_declared_next_loader_is_verified_even_when_not_in_active_matrix(self) -> None:
         _, next_contract, changes = self.prepare_transition()
         path = self.repository / "release/release-matrix.json"

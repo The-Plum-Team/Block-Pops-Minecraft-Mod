@@ -82,6 +82,8 @@ def _git(repository: Path, *arguments: str, accepted: Iterable[int] = (0,)) -> b
             **os.environ,
             "GIT_CONFIG_GLOBAL": os.devnull,
             "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_NO_REPLACE_OBJECTS": "1",
+            "GIT_GRAFT_FILE": os.devnull,
             "GIT_TERMINAL_PROMPT": "0",
             "GIT_PAGER": "cat",
             "LC_ALL": "C",

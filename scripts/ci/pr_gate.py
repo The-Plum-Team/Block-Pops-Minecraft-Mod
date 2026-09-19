@@ -45,8 +45,12 @@ from scripts.ci.gate_controller import (  # noqa: E402
     validate_controller_parity,
 )
 from scripts.ci.loader_bootstrap import (  # noqa: E402
+    CONTRACT_PATH as BOOTSTRAP_CONTRACT_PATH,
+    MAX_CONTRACT_BYTES,
     LoaderBootstrapError,
+    load_contract_bytes as load_loader_bootstrap_contract,
     validate_commit as validate_loader_bootstrap_commit,
+    validate_transition as validate_loader_bootstrap_transition,
 )
 from scripts.release.matrix import (  # noqa: E402
     MatrixError,
@@ -925,6 +929,44 @@ def validate_restricted_transition_tree(
             _fail("restricted transition status disagrees with immutable tree entries")
     if seen != set(transition.paths):
         _fail("restricted transition changed paths differ from its exact declaration")
+    return transition
+
+
+def validate_restricted_loader_transition(
+    repository: Path, identity: PullIdentity, *, declaration: bytes,
+    deployed_controller_sha: str, deployed_generation: int,
+) -> RestrictedTransition:
+    """Verify a contract-first or exact-next proposal, without admitting it.
+
+    Deployment and identity remain externally authenticated inputs. Owner authorization and
+    required gate evidence are still separate; no existing evaluator calls this helper.
+    """
+    transition = validate_restricted_transition_tree(
+        repository, identity, declaration=declaration,
+        deployed_controller_sha=deployed_controller_sha, deployed_generation=deployed_generation,
+    )
+    loader, _, phase = transition.scope.rpartition("-")
+    if loader not in {"fabric", "forge", "neoforge"} or phase not in {"contract", "next"}:
+        _fail("restricted loader validation requires one exact loader phase scope")
+    try:
+        base = load_loader_bootstrap_contract(_blob(
+            repository, identity.base_sha, BOOTSTRAP_CONTRACT_PATH, maximum=MAX_CONTRACT_BYTES,
+        ))
+        if phase == "contract":
+            candidate = load_loader_bootstrap_contract(_blob(
+                repository, identity.head_sha, BOOTSTRAP_CONTRACT_PATH, maximum=MAX_CONTRACT_BYTES,
+            ))
+            if (base.schema_version != 1 or candidate.transition is None
+                    or candidate.transition.loader != loader or candidate.loaders != base.loaders):
+                _fail("contract-first proposal must preserve the protected current contract for its exact loader")
+            validate_loader_bootstrap_commit(repository, head_sha=identity.base_sha, contract_sha=identity.base_sha)
+            validate_loader_bootstrap_commit(repository, head_sha=identity.head_sha, contract_sha=identity.head_sha)
+        else:
+            if base.transition is None or base.transition.loader != loader:
+                _fail("exact-next proposal requires its declared loader transition in the protected base")
+            validate_loader_bootstrap_transition(repository, head_sha=identity.head_sha, base_sha=identity.base_sha)
+    except LoaderBootstrapError as exc:
+        raise PrGateError(f"restricted loader bootstrap proposal is invalid: {exc}") from exc
     return transition
 
 

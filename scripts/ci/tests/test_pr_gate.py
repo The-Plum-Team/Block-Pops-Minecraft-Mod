@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import shutil
 import subprocess
@@ -12,6 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 from scripts.ci.e2e_job_graph import expected_jobs
+from scripts.ci.loader_bootstrap import HARNESS_BINDING
 from scripts.ci.pr_gate import (
     CONTROLLER_UPGRADE_REQUIRED,
     CONTEXTS,
@@ -39,6 +41,7 @@ from scripts.ci.pr_gate import (
     validate_exact_artifact,
     validate_controller_upgrade_tree,
     validate_pr_tree,
+    validate_restricted_loader_transition,
     validate_restricted_transition_tree,
 )
 
@@ -1098,6 +1101,142 @@ class RestrictedTransitionTreeTests(unittest.TestCase):
         divergent = self.merged({"settings.gradle": "next"}, head_base=unrelated)
         with self.assertRaises(PrGateError):
             self.validate(divergent, ["settings.gradle"])
+
+
+class RestrictedLoaderTransitionTests(unittest.TestCase):
+    git = RestrictedTransitionTreeTests.git
+    write = RestrictedTransitionTreeTests.write
+    merged = RestrictedTransitionTreeTests.merged
+    contract_path = "e2e/loader-bootstrap-contract.json"
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.repository = Path(self.temporary.name)
+        self.git("init", "-q", "-b", "master")
+        self.git("config", "user.name", "Tests")
+        self.git("config", "user.email", "tests@invalid.test")
+        document = json.loads((REPO / self.contract_path).read_bytes())
+        self.current = document["current"] if document["schema_version"] == 2 else document
+        self.current_bytes = {}
+        for loader, contract in self.current["loaders"].items():
+            build = f"{loader}/build.gradle"
+            self.current_bytes[build] = f"// {loader} fixture\n{HARNESS_BINDING}\n"
+            contract["build_sha256"] = hashlib.sha256(self.current_bytes[build].encode()).hexdigest()
+            for path in contract["files"]:
+                self.current_bytes[path] = f"// fixture current bytes: {path}\n"
+                contract["files"][path] = hashlib.sha256(self.current_bytes[path].encode()).hexdigest()
+        for path, content in self.current_bytes.items():
+            self.write(path, content)
+        self.write("release/release-matrix.json", MATRIX.read_text())
+        self.write(self.contract_path, json.dumps(self.current))
+        self.git("add", ".")
+        self.git("commit", "-qm", "protected current bootstrap")
+        self.base = self.git("rev-parse", "HEAD")
+
+    def proposal(self, loader="fabric"):
+        next_contract = copy.deepcopy(self.current)
+        paths = (f"{loader}/build.gradle", next(
+            path for path in self.current["loaders"][loader]["files"] if path.endswith(".java")))
+        changes = {path: "// next generation\n" + self.current_bytes[path] for path in paths}
+        next_contract["loaders"][loader]["build_sha256"] = hashlib.sha256(changes[paths[0]].encode()).hexdigest()
+        next_contract["loaders"][loader]["files"][paths[1]] = hashlib.sha256(changes[paths[1]].encode()).hexdigest()
+        return {"schema_version": 2, "generation": 1, "loader": loader,
+                "current": copy.deepcopy(self.current), "next": next_contract}, changes
+
+    def validate(self, current, scope, paths):
+        declaration = {"schema_version": 1, "controller_generation": 1, "scope": scope,
+                       "paths": sorted(paths), "controller_sha": self.base,
+                       "base_sha": self.base, "head_sha": current.head_sha}
+        return validate_restricted_loader_transition(
+            self.repository, current, declaration=json.dumps(declaration).encode(),
+            deployed_controller_sha=self.base, deployed_generation=1)
+
+    def prepare(self, loader="fabric"):
+        document, changes = self.proposal(loader)
+        prepared = self.merged({self.contract_path: json.dumps(document)})
+        self.validate(prepared, f"{loader}-contract", [self.contract_path])
+        self.base = prepared.merge_sha
+        return document, changes
+
+    def test_each_loader_requires_separate_contract_then_exact_next_collapse(self):
+        original = self.base
+        for loader in ("fabric", "forge", "neoforge"):
+            with self.subTest(loader=loader):
+                self.base = original
+                document, changes = self.prepare(loader)
+                changes[self.contract_path] = json.dumps(document["next"])
+                candidate = self.merged(changes)
+                result = self.validate(candidate, f"{loader}-next", changes)
+                self.assertEqual(f"{loader}-next", result.scope)
+
+    def test_contract_phase_rejects_wrong_loader_stale_current_or_generation(self):
+        for case in ("wrong loader", "stale current", "single digest", "unknown generation", "no next change"):
+            document, _ = self.proposal()
+            scope = "forge-contract" if case == "wrong loader" else "fabric-contract"
+            if case == "stale current":
+                document["current"]["loaders"]["fabric"]["build_sha256"] = "0" * 64
+            elif case == "single digest":
+                document = self.current
+            elif case == "unknown generation":
+                document["generation"] = 2
+            elif case == "no next change":
+                document["next"] = document["current"]
+            candidate = self.merged({self.contract_path: json.dumps(document, indent=2)})
+            with self.subTest(case=case), self.assertRaises(PrGateError):
+                self.validate(candidate, scope, [self.contract_path])
+
+    def test_contract_phase_cannot_replace_an_already_active_transition(self):
+        document, _ = self.prepare()
+        document["next"]["loaders"]["fabric"]["build_sha256"] = "0" * 64
+        candidate = self.merged({self.contract_path: json.dumps(document)})
+        with self.assertRaisesRegex(PrGateError, "preserve the protected current"):
+            self.validate(candidate, "fabric-contract", [self.contract_path])
+
+    def test_contract_phase_cannot_change_executables_or_ignore_inactive_loader_bytes(self):
+        document, changes = self.proposal()
+        changes[self.contract_path] = json.dumps(document)
+        candidate = self.merged(changes)
+        with self.assertRaises(PrGateError):
+            self.validate(candidate, "fabric-contract", [self.contract_path])
+        self.git("switch", "--discard-changes", "-qC", "broken-base", self.base)
+        target = self.repository / "neoforge/build.gradle"
+        target.write_bytes(b"// unbound inactive bytes\n" + target.read_bytes())
+        self.git("add", ".")
+        self.git("commit", "-qm", "broken inactive bootstrap")
+        self.base = self.git("rev-parse", "HEAD")
+        document, _ = self.proposal("neoforge")
+        candidate = self.merged({self.contract_path: json.dumps(document)})
+        with self.assertRaisesRegex(PrGateError, "neoforge build script differs"):
+            self.validate(candidate, "neoforge-contract", [self.contract_path])
+
+    def test_next_phase_rejects_current_mixed_wrong_loader_and_uncollapsed_bytes(self):
+        document, changes = self.prepare()
+        for case in ("current", "mixed", "wrong loader", "uncollapsed", "wrong contract"):
+            proposal = dict(changes)
+            if case in {"current", "wrong loader"}:
+                proposal.clear()
+            elif case == "mixed":
+                proposal.pop(next(path for path in proposal if path.endswith(".java")))
+            next_contract = copy.deepcopy(document["next"])
+            if case == "wrong contract":
+                next_contract["loaders"]["forge"]["build_sha256"] = "0" * 64
+            if case != "uncollapsed":
+                proposal[self.contract_path] = json.dumps(next_contract)
+            candidate = self.merged(proposal)
+            scope = "forge-next" if case == "wrong loader" else "fabric-next"
+            with self.subTest(case=case), self.assertRaises(PrGateError):
+                self.validate(candidate, scope, proposal)
+
+    def test_self_admitted_next_and_non_loader_scopes_fail(self):
+        document, changes = self.proposal()
+        changes[self.contract_path] = json.dumps(document["next"])
+        candidate = self.merged(changes)
+        with self.assertRaisesRegex(PrGateError, "requires its declared loader transition"):
+            self.validate(candidate, "fabric-next", changes)
+        candidate = self.merged({"gradle/verification-metadata.xml": "new"})
+        with self.assertRaisesRegex(PrGateError, "exact loader phase scope"):
+            self.validate(candidate, "verification", ["gradle/verification-metadata.xml"])
 
 
 class ControllerUpgradeTreeTests(unittest.TestCase):
