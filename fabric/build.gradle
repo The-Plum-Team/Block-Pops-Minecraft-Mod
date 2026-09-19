@@ -47,8 +47,8 @@ dependencies {
     modImplementation rootProject.runtime_dependency_coordinate.call('fabric', 'geckolib')
 
     // Common code
-    common(project(path: ':common', configuration: 'namedElements')) { transitive = false }
-    shadowBundle project(path: ':common', configuration: 'transformProductionFabric')
+    common(project(path: rootProject.common_project_path, configuration: 'namedElements')) { transitive = false }
+    shadowBundle project(path: rootProject.common_project_path, configuration: 'transformProductionFabric')
 }
 
 processResources {
