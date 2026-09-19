@@ -19,6 +19,7 @@ from scripts.ci.loader_bootstrap import (
     validate_transition,
 )
 from scripts.release.matrix import load_matrix
+from scripts.ci.tests.matrix_fixtures import schema2_configuration
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -369,6 +370,114 @@ class LoaderBootstrapTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(LoaderBootstrapError, "duplicate"):
             load_contract_bytes(duplicate)
+
+
+class LoaderBootstrapMatrixTests(unittest.TestCase):
+    setUp = LoaderBootstrapTests.setUp
+    tearDown = LoaderBootstrapTests.tearDown
+    commit = LoaderBootstrapTests.commit
+    contract = LoaderBootstrapTests.contract
+    write_contract = LoaderBootstrapTests.write_contract
+    prepare_transition = LoaderBootstrapTests.prepare_transition
+
+    def write_matrix(self, matrix):
+        path = self.repository / "release/release-matrix.json"
+        path.write_text(json.dumps(matrix, indent=2) + "\n", encoding="utf-8")
+        return self.commit("matrix fixture")
+
+    def pin_neoforge_fixture(self):
+        # Synthetic bytes test complete inventory/digest checks, never loader qualification.
+        contract = self.contract()
+        record = contract["loaders"]["neoforge"]
+        payloads = {path: f"fixture current bytes: {path}\n".encode() for path in record["files"]}
+        build = f"// fixture\n{HARNESS_BINDING}\n".encode()
+        payloads["neoforge/build.gradle"] = build
+        for relative, payload in payloads.items():
+            target = self.repository / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(payload)
+        record["build_sha256"] = hashlib.sha256(build).hexdigest()
+        record["files"] = {path: hashlib.sha256(payloads[path]).hexdigest() for path in record["files"]}
+        self.write_contract(contract)
+
+    def test_preparing_legacy_pairs_preserve_report_shape_and_do_not_execute_targets(self):
+        original = validate_commit(self.repository, head_sha=self.head)
+        matrix = schema2_configuration()
+        selected = set(matrix["migration"]["legacy_nodes"])
+        for key in ("artifacts", "runtimes"):
+            matrix[key] = [row for row in matrix[key] if row["artifact_node"] in selected]
+        matrix["lane_count"] = 2
+        matrix["source_routing"].pop("neoforge")
+        installers = {row["installer"] for row in matrix["runtimes"]}
+        matrix["installers"] = {key: value for key, value in matrix["installers"].items() if key in installers}
+        candidate = self.write_matrix(matrix)
+        report = validate_commit(self.repository, head_sha=candidate)
+        self.assertEqual(set(original), set(report))
+        self.assertEqual(original["verified"], report["verified"])
+        self.assertEqual(["fabric", "forge"], report["active_loaders"])
+        self.assertEqual(1, report["schema_version"])
+        self.assertEqual(12, len(matrix["targets"]))
+        self.assertFalse((self.repository / "neoforge").exists())
+        matrix_path = self.repository / "release/release-matrix.json"
+        self.assertEqual(hashlib.sha256(matrix_path.read_bytes()).hexdigest(), report["matrix_sha256"])
+        self.assertEqual((candidate, candidate), (report["head_sha"], report["contract_sha"]))
+        matrix_path.write_text("mutable invalid matrix", encoding="utf-8")
+        (self.repository / "fabric/build.gradle").unlink()
+        self.assertEqual(report, validate_commit(self.repository, head_sha=candidate))
+
+    def test_preparing_requires_every_configured_loader_even_outside_legacy_dispatch(self):
+        matrix = schema2_configuration()
+        candidate = self.write_matrix(matrix)
+        self.assertEqual(2, len(matrix["migration"]["legacy_nodes"]))
+        self.assertEqual(4, matrix["lane_count"])
+        with self.assertRaisesRegex(LoaderBootstrapError, "neoforge bootstrap inventory"):
+            validate_commit(self.repository, head_sha=candidate)
+        self.pin_neoforge_fixture()
+        candidate = self.commit("complete pinned configured loader")
+        report = validate_commit(self.repository, head_sha=candidate)
+        self.assertEqual(["fabric", "forge", "neoforge"], report["active_loaders"])
+        self.assertEqual(set(report["active_loaders"]), set(report["verified"]))
+        build = self.repository / "neoforge/build.gradle"
+        build.write_bytes(b"// stale\n" + build.read_bytes())
+        stale = self.commit("stale configured loader")
+        with self.assertRaisesRegex(LoaderBootstrapError, "neoforge build script differs"):
+            validate_commit(self.repository, head_sha=stale)
+
+    def test_shared_twelve_lanes_verify_three_pinned_bootstraps_without_qualification(self):
+        self.pin_neoforge_fixture()
+        matrix = schema2_configuration(shared=True)
+        candidate = self.write_matrix(matrix)
+        report = validate_commit(self.repository, head_sha=candidate)
+        self.assertEqual(12, matrix["lane_count"])
+        self.assertEqual(["fabric", "forge", "neoforge"], report["active_loaders"])
+        self.assertEqual(3, len(report["verified"]))
+        base, next_contract, changes = self.prepare_transition()
+        for path, payload in changes.items():
+            (self.repository / path).write_bytes(payload)
+        self.write_contract(next_contract)
+        candidate = self.commit("exact next under shared matrix")
+        result = validate_transition(self.repository, head_sha=candidate, base_sha=base)
+        self.assertEqual("next", result["transition"]["phase"])
+        self.assertEqual(set(report["verified"]), set(result["verified"]))
+
+    def test_malformed_configured_pairs_and_raw_json_fail_before_bootstrap_checks(self):
+        for case in ("missing runtime", "orphan runtime", "unknown schema", "duplicate key"):
+            _run(self.repository, "reset", "--hard", self.head)
+            matrix = schema2_configuration()
+            if case == "missing runtime":
+                matrix["runtimes"].pop()
+            elif case == "orphan runtime":
+                matrix["artifacts"].pop()
+                matrix["lane_count"] -= 1
+            elif case == "unknown schema":
+                matrix["schema_version"] = 3
+            raw = json.dumps(matrix)
+            if case == "duplicate key":
+                raw = raw.replace('"schema_version": 2', '"schema_version": 2, "schema_version": 2')
+            (self.repository / "release/release-matrix.json").write_text(raw, encoding="utf-8")
+            candidate = self.commit(case)
+            with self.subTest(case=case), self.assertRaisesRegex(LoaderBootstrapError, "release matrix is invalid"):
+                validate_commit(self.repository, head_sha=candidate)
 
 
 class LoaderBootstrapTransitionTests(unittest.TestCase):

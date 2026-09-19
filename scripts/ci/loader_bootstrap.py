@@ -32,7 +32,7 @@ from scripts.release.matrix import (  # noqa: E402
     KNOWN_LOADERS,
     MAX_MATRIX_BYTES,
     MatrixError,
-    load_matrix_bytes,
+    normalize_matrix_inventory,
 )
 
 SCHEMA_VERSION = 1
@@ -375,8 +375,10 @@ def _validate_commit(
         maximum=MAX_CONTRACT_BYTES,
     )
     try:
-        matrix = load_matrix_bytes(matrix_bytes)
-    except MatrixError as exc:
+        inventory = normalize_matrix_inventory(secure_loads(
+            matrix_bytes, label="release matrix snapshot", max_bytes=MAX_MATRIX_BYTES,
+        ))
+    except (MatrixError, SecureJsonError) as exc:
         raise LoaderBootstrapError(f"release matrix is invalid: {exc}") from exc
     contract = load_contract_bytes(contract_bytes)
     declared = {contract.transition.loader} if contract.transition is not None else set()
@@ -386,7 +388,8 @@ def _validate_commit(
         if transition_phase == "next":
             contract = LoaderBootstrapContract(contract.transition.next_loaders, contract.sha256,
                                                contract.schema_version, contract.transition)
-    active = tuple(sorted({row["loader"] for row in matrix["artifacts"]}))
+    # Preparing lanes need their pins even when execution still dispatches only legacy lanes.
+    active = tuple(sorted({lane.identity.loader for lane in inventory.lanes}))
     if not active or any(loader not in contract.loaders for loader in active):
         raise LoaderBootstrapError(f"matrix selected an uncontracted loader: {active!r}")
     verified: dict[str, Any] = {}
