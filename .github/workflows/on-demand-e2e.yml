@@ -844,12 +844,19 @@ jobs:
           "${fanin_command[@]}"
 
       - name: Curate strict SHA-bound public evidence
+        shell: bash
         env:
           PUBLIC_AGGREGATE: ${{ runner.temp }}/blockpops-public-aggregate
+          PUBLIC_ATTEST_RUN_ID: ${{ inputs.attest_run_id }}
         run: |
           set -euo pipefail
           unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
-          python3 scripts/pages/evidence.py curate \
+          projection=pr-anchors
+          if [[ -z "$PUBLIC_ATTEST_RUN_ID" && "$GITHUB_EVENT_NAME" == schedule ]]; then
+            projection=scheduled-anchors
+          fi
+          scope="$(python3 scripts/ci/matrix_scope.py --matrix release/release-matrix.json)"
+          curate_command=(python3 scripts/pages/evidence.py curate \
             --input "$PUBLIC_AGGREGATE" \
             --output public-evidence \
             --repository "$GITHUB_REPOSITORY" \
@@ -866,7 +873,13 @@ jobs:
             --packaged-commit "${{ inputs.attest_sha || github.sha }}" \
             --packaged-tree "${{ steps.identity.outputs.tree }}" \
             --packaged-controller-branch "$PACKAGED_CONTROLLER_BRANCH" \
-            --packaged-controller-sha "$PACKAGED_CONTROLLER_SHA"
+            --packaged-controller-sha "$PACKAGED_CONTROLLER_SHA")
+          case "$scope" in
+            unscoped) ;;
+            legacy|full) curate_command+=(--scope "$scope" --projection "$projection") ;;
+            *) exit 2 ;;
+          esac
+          "${curate_command[@]}"
 
       - name: Upload a single-use current-head Pages handoff
         id: raw_evidence
