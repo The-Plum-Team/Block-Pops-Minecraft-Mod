@@ -911,10 +911,16 @@ jobs:
           if [[ "$(jq -r .eligible <<< "$identity")" != true ]]; then
             exit 0
           fi
-          [[ "$RAW_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
-          [[ "$RAW_ARTIFACT_DIGEST" =~ ^(sha256:)?[0-9a-f]{64}$ ]]
+          [[ "$RAW_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]] || exit 2
+          [[ "$RAW_ARTIFACT_DIGEST" =~ ^(sha256:)?[0-9a-f]{64}$ ]] || exit 2
           artifact="$(jq -er .artifact <<< "$identity")"
-          python3 scripts/pages/visual_anchor.py create \
+          scope="$(python3 scripts/ci/matrix_scope.py --matrix release/release-matrix.json)"
+          projection=pr-anchors
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            projection=scheduled-anchors
+          fi
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
+          anchor_command=(python3 scripts/pages/visual_anchor.py create \
             --input public-evidence \
             --output visual-anchor \
             --matrix release/release-matrix.json \
@@ -928,7 +934,13 @@ jobs:
             --source-controller-sha "$HANDOFF_CONTROLLER_SHA" \
             --raw-artifact-id "$RAW_ARTIFACT_ID" \
             --raw-artifact-name "${{ steps.identity.outputs.artifact }}" \
-            --raw-artifact-digest "$RAW_ARTIFACT_DIGEST"
+            --raw-artifact-digest "$RAW_ARTIFACT_DIGEST")
+          case "$scope" in
+            unscoped) ;;
+            legacy|full) anchor_command+=(--scope "$scope" --projection "$projection") ;;
+            *) exit 2 ;;
+          esac
+          "${anchor_command[@]}"
           printf 'artifact=%s\n' "$artifact" >> "$GITHUB_OUTPUT"
           printf 'eligible=true\n' >> "$GITHUB_OUTPUT"
 

@@ -1,5 +1,6 @@
 """Execute fan-in workflow shell selection without decoding or uploading artifacts."""
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -34,8 +35,20 @@ if args[:2] == ["scripts/pages/evidence.py", "curate"]:
     if any(key in os.environ for key in ("ACTIONS_RUNTIME_TOKEN", "ACTIONS_CACHE_URL", "ACTIONS_RESULTS_URL",
                                          "GITHUB_TOKEN", "GH_TOKEN")): sys.exit(95)
     sys.exit(int(os.environ.get("CURATE_EXIT", "0")))
+if args[:2] == ["scripts/pages/visual_anchor.py", "identity"]:
+    print(os.environ["ANCHOR_IDENTITY"])
+    sys.exit(int(os.environ.get("IDENTITY_EXIT", "0")))
+if args[:2] == ["scripts/pages/visual_anchor.py", "create"]:
+    if "GH_TOKEN" in os.environ: sys.exit(95)
+    sys.exit(int(os.environ.get("CREATE_EXIT", "0")))
 if name == "sha256sum": print("a" * 64 + "  artifacts.json")
-if name == "jq": print(os.environ.get("RECEIPT_HASH", "a" * 64))
+if name == "jq":
+    if "ANCHOR_IDENTITY" in os.environ:
+        try: value = json.load(sys.stdin).get(args[-1][1:])
+        except (ValueError, AttributeError): sys.exit(4)
+        if "-er" in args and (value is None or value is False): sys.exit(1)
+        print(value if isinstance(value, str) else json.dumps(value))
+    else: print(os.environ.get("RECEIPT_HASH", "a" * 64))
 '''
         for name in ("python3", "sha256sum", "jq"):
             path = self.root / name
@@ -201,6 +214,79 @@ if name == "jq": print(os.environ.get("RECEIPT_HASH", "a" * 64))
                 self.assertNotEqual(0, result.returncode)
                 self.assertEqual(1, len(rows))
                 self.assertEqual("scripts/ci/matrix_scope.py", rows[0][1])
+
+    def run_anchor(self, scope="legacy", *, event="workflow_dispatch", identity=None, **overrides):
+        text = WORKFLOW.read_text()
+        body = text.split("      - name: Create the exact canonical lossless visual anchor", 1)[1].split("      - name:", 1)[0]
+        for binding in ("if: inputs.attest_run_id == ''", "RAW_ARTIFACT_ID: ${{ steps.raw_evidence.outputs.artifact-id }}",
+                        "RAW_ARTIFACT_DIGEST: ${{ steps.raw_evidence.outputs.artifact-digest }}"):
+            self.assertIn(binding, body)
+        token = hashlib.sha256(b"master").hexdigest()[:24]
+        self.anchor_artifact = "visual-anchor-v1-" + token + "--" + "1" * 40 + "-456-3"
+        self.raw_artifact = "pages-e2e-" + token + "-3"
+        script = textwrap.dedent(body.split("        run: |\n", 1)[1])
+        script = script.replace("${{ steps.identity.outputs.tree }}", "2" * 40)
+        script = script.replace("${{ steps.identity.outputs.artifact }}", self.raw_artifact)
+        self.assertNotIn("${{", script)
+        output = self.root / "anchor output $(touch forbidden)"
+        env = {**self.env, "MATRIX_SCOPE": scope, "GITHUB_EVENT_NAME": event, "GITHUB_OUTPUT": str(output),
+               "ANCHOR_IDENTITY": identity if identity is not None else json.dumps({"eligible": True, "artifact": self.anchor_artifact}),
+               "RAW_ARTIFACT_ID": "789", "RAW_ARTIFACT_DIGEST": "sha256:" + "a" * 64,
+               "GITHUB_REPOSITORY": "owner/repo", "PUBLISHED_BRANCH": "master", "BLOCKPOPS_TESTED_SHA": "1" * 40,
+               "GITHUB_RUN_ID": "456", "GITHUB_RUN_ATTEMPT": "3", "HANDOFF_CONTROLLER_SHA": "1" * 40,
+               "HANDOFF_CONTROLLER_BRANCH": "branch with spaces/$(touch forbidden)", "GH_TOKEN": "fixture-token", **overrides}
+        result = subprocess.run(["bash", "-euo", "pipefail", "-c", script], cwd=self.root,
+                                env=env, capture_output=True, text=True)
+        rows = [json.loads(line) for line in self.log.read_text().splitlines()]
+        self.log.unlink()
+        markers = output.read_text().splitlines()
+        output.unlink()
+        self.assertFalse((self.root / "forbidden").exists())
+        return result, rows, markers
+
+    def test_anchor_create_preserves_raw_identity_and_marks_only_successful_canonical_output(self):
+        for scope in ("unscoped", "legacy", "full"):
+            for event, projection in (("workflow_dispatch", "pr-anchors"), ("schedule", "scheduled-anchors")):
+                for digest in ("a" * 64, "sha256:" + "a" * 64):
+                    with self.subTest(scope=scope, event=event, digest=digest):
+                        result, rows, markers = self.run_anchor(scope, event=event, RAW_ARTIFACT_DIGEST=digest)
+                        self.assertEqual(0, result.returncode, result.stderr)
+                        self.assertEqual(["python3", "scripts/pages/visual_anchor.py", "identity"], rows[0][:3])
+                        self.assertEqual(["jq", "-r", ".eligible"], rows[1])
+                        self.assertEqual(["jq", "-er", ".artifact"], rows[2])
+                        self.assertEqual(["python3", "scripts/ci/matrix_scope.py", "--matrix", "release/release-matrix.json"], rows[3])
+                        create = rows[4]
+                        self.assertEqual(["python3", "scripts/pages/visual_anchor.py", "create"], create[:3])
+                        expected = {"input": "public-evidence", "output": "visual-anchor", "matrix": "release/release-matrix.json",
+                            "repository": "owner/repo", "branch": "master", "commit": "1" * 40, "tree": "2" * 40,
+                            "source-run-id": "456", "source-run-attempt": "3", "source-controller-sha": "1" * 40,
+                            "source-controller-branch": "branch with spaces/$(touch forbidden)", "raw-artifact-id": "789",
+                            "raw-artifact-name": self.raw_artifact, "raw-artifact-digest": digest}
+                        if scope != "unscoped": expected.update(scope=scope, projection=projection)
+                        self.assertEqual(expected, dict(zip((arg[2:] for arg in create[3::2]), create[4::2])))
+                        self.assertEqual(len(expected) * 2 + 3, len(create))
+                        self.assertEqual(["eligible=false", "artifact=" + self.anchor_artifact, "eligible=true"], markers)
+
+    def test_anchor_ineligible_malformed_or_bad_raw_identity_never_reads_scope_or_creates(self):
+        cases = [{"identity": json.dumps({"eligible": False})}, {"identity": "not JSON"}, {"identity": "{}"},
+                 {"identity": '{"eligible":true}'}, {"IDENTITY_EXIT": "2"}]
+        cases += [{"RAW_ARTIFACT_ID": value} for value in ("", "0", "01", "-1", "1; touch forbidden")]
+        cases += [{"RAW_ARTIFACT_DIGEST": value} for value in ("", "a" * 63, "A" * 64, "sha512:" + "a" * 64)]
+        for overrides in cases:
+            with self.subTest(overrides=overrides):
+                _, rows, markers = self.run_anchor(**overrides)
+                self.assertEqual(["eligible=false"], markers)
+                self.assertFalse(any(row[1:2] == ["scripts/ci/matrix_scope.py"] for row in rows))
+                self.assertFalse(any(row[1:3] == ["scripts/pages/visual_anchor.py", "create"] for row in rows))
+
+    def test_anchor_scope_and_create_failures_never_mark_eligible_or_name_an_upload(self):
+        for scope, overrides in (("lane", {}), ("legacy", {"SCOPE_EXIT": "2"}), ("legacy", {"CREATE_EXIT": "2"})):
+            with self.subTest(scope=scope, overrides=overrides):
+                result, rows, markers = self.run_anchor(scope, **overrides)
+                self.assertNotEqual(0, result.returncode)
+                self.assertEqual(["eligible=false"], markers)
+                creates = [row for row in rows if row[1:3] == ["scripts/pages/visual_anchor.py", "create"]]
+                self.assertEqual(1 if "CREATE_EXIT" in overrides else 0, len(creates))
 
 
 if __name__ == "__main__":
