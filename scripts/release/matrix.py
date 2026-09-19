@@ -8,7 +8,7 @@ import hashlib
 import json
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -117,6 +117,36 @@ class LaneIdentity:
 
 
 @dataclass(frozen=True)
+class LaneConfiguration:
+    """Validated configuration snapshots; neither builds nor qualification evidence."""
+
+    identity: LaneIdentity
+    mod_version: str
+    build_layout: str
+    gradle_java: int
+    repository_family: str
+    source_routes: tuple[str, ...]
+    _artifact_json: str = field(repr=False)
+    _runtime_json: str = field(repr=False)
+
+    @property
+    def artifact(self) -> dict[str, Any]:
+        return json.loads(self._artifact_json)
+
+    @property
+    def runtime(self) -> dict[str, Any]:
+        return json.loads(self._runtime_json)
+
+    @property
+    def production_jar(self) -> str:
+        return self.artifact["jar"].replace("{mod_version}", self.mod_version)
+
+    @property
+    def harness_jar(self) -> str:
+        return self.artifact["harness_jar"]
+
+
+@dataclass(frozen=True)
 class MatrixInventory:
     """Schema-neutral inventory; execution support remains an explicit boundary."""
 
@@ -125,10 +155,53 @@ class MatrixInventory:
     migration_mode: str | None
     legacy_nodes: tuple[str, ...]
     execution_supported: bool
+    lanes: tuple[LaneConfiguration, ...] = ()
+    sources_checked: bool = False
 
     @property
     def target_nodes(self) -> tuple[str, ...]:
         return tuple(target.artifact_node for target in self.targets)
+
+    @property
+    def configured_nodes(self) -> tuple[str, ...]:
+        return tuple(lane.identity.artifact_node for lane in self.lanes)
+
+    def lane(self, node: str) -> LaneConfiguration:
+        for lane in self.lanes:
+            if lane.identity.artifact_node == node:
+                return lane
+        if node in self.target_nodes:
+            _fail(f"unresolved target {node}: missing artifact and runtime configuration")
+        _fail(f"unknown target {node!r}")
+
+    def require_complete(self) -> tuple[LaneConfiguration, ...]:
+        """Require complete configuration, without claiming source/build qualification."""
+        missing = sorted(set(self.target_nodes) - set(self.configured_nodes))
+        if missing:
+            _fail(f"unresolved targets (missing artifact and runtime configuration): {', '.join(missing)}")
+        return self.lanes
+
+    def report(self) -> dict[str, Any]:
+        configured = set(self.configured_nodes)
+        return {
+            "schema_version": self.schema_version,
+            "migration_mode": self.migration_mode,
+            "target_count": len(self.targets),
+            "lane_count": len(self.lanes),
+            "configuration_complete": configured == set(self.target_nodes),
+            "sources_checked": self.sources_checked,
+            "execution_supported": self.execution_supported,
+            "targets": [
+                {
+                    "artifact_node": target.artifact_node,
+                    "minecraft": target.minecraft,
+                    "loader": target.loader,
+                    "configuration": "configured" if target.artifact_node in configured else "unresolved",
+                    "missing_inputs": [] if target.artifact_node in configured else ["artifact", "runtime"],
+                }
+                for target in self.targets
+            ],
+        }
 
 
 class MatrixError(ValueError):
@@ -357,6 +430,8 @@ def _validate_configuration(
             _fail("preparing migration must configure both legacy nodes")
         if inventory.migration_mode == "shared" and set(by_node) != set(inventory.target_nodes):
             _fail("shared migration must configure every target")
+    if schema2:
+        _text(root["unit_test_lane"], "unit_test_lane")
     if root["unit_test_lane"] not in by_node:
         _fail("unit_test_lane must select an active artifact")
 
@@ -462,6 +537,8 @@ def _validate_configuration(
             )
             if not repository_url.startswith("https://") or not repository_url.endswith("/"):
                 _fail(f"runtime {node} dependency repositories must be canonical HTTPS base URLs")
+            if schema2:
+                _text(dependency["side"], f"runtime {node} dependency side")
             if dependency["side"] not in {"both", "client", "server"}:
                 _fail(f"runtime {node} dependency side is unsupported")
             if dep_id in dependency_ids or coordinate in coordinates:
@@ -832,8 +909,8 @@ def normalize_matrix_inventory(
     """Validate normalized lane identity without activating partial schema 2.
 
     Schema 1 remains fully executable. Schema 2 validates target membership and
-    configured lane inputs without enabling execution consumers. Source routing
-    and unresolved-target projections are extended in subsequent work units.
+    configured lane inputs without enabling execution consumers. Missing pairs
+    remain explicitly unresolved; malformed or orphan rows fail validation.
     """
 
     schema = _schema_version(data)
@@ -842,7 +919,9 @@ def normalize_matrix_inventory(
         _validate_configuration(
             data, contract=contract, repository=repository, inventory=inventory,
         )
-        return inventory
+        return replace(
+            inventory, lanes=_normalized_lanes(data), sources_checked=repository is not None,
+        )
     root = _validate_configuration(
         data, contract=contract, repository=repository
     )
@@ -850,7 +929,24 @@ def normalize_matrix_inventory(
         LaneIdentity(row["artifact_node"], row["minecraft"], row["loader"])
         for row in root["artifacts"]
     )
-    return MatrixInventory(1, targets, None, (), True)
+    return MatrixInventory(1, targets, None, (), True, _normalized_lanes(root), repository is not None)
+
+
+def _normalized_lanes(matrix: dict[str, Any]) -> tuple[LaneConfiguration, ...]:
+    runtimes = {row["artifact_node"]: row for row in matrix["runtimes"]}
+    schema2 = matrix["schema_version"] == 2
+    return tuple(
+        LaneConfiguration(
+            LaneIdentity(row["artifact_node"], row["minecraft"], row["loader"]),
+            row["mod_version"] if schema2 else matrix["project"]["mod_version"],
+            row["build_layout"] if schema2 else "legacy",
+            row["gradle_java"] if schema2 else matrix["gradle_java"],
+            row["repository_family"] if schema2 else row["loader"],
+            tuple(row["source_routes"]) if schema2 else ("common", row["loader"]),
+            json.dumps(row), json.dumps(runtimes[row["artifact_node"]]),
+        )
+        for row in matrix["artifacts"]
+    )
 
 
 def validate_matrix(
@@ -924,6 +1020,17 @@ def load_matrix_bytes(data: bytes) -> dict[str, Any]:
         raise MatrixError(str(exc)) from exc
 
 
+def load_matrix_inventory(path: Path, *, validate_sources: bool = True) -> MatrixInventory:
+    """Read either schema for configuration inspection, without activating consumers."""
+    try:
+        data, _ = read_secure_json(path, label="release matrix", max_bytes=MAX_MATRIX_BYTES)
+        return normalize_matrix_inventory(
+            data, repository=path.resolve().parents[1] if validate_sources else None,
+        )
+    except (SecureJsonError, OSError) as exc:
+        raise MatrixError(str(exc)) from exc
+
+
 def mod_version(matrix_path: Path, matrix: dict[str, Any]) -> str:
     del matrix_path
     return _text(matrix["project"]["mod_version"], "project.mod_version")
@@ -983,6 +1090,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--kind",
         choices=(
+            "inventory",
             "artifacts",
             "java",
             "gradle-java",
@@ -995,10 +1103,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pretty", action="store_true")
     args = parser.parse_args(argv)
     try:
-        matrix = load_matrix(
-            args.matrix, validate_sources=not args.no_source_check
-        )
-        output: Any = gha_matrix(matrix, args.kind) if args.kind else matrix
+        if args.kind == "inventory":
+            output: Any = load_matrix_inventory(
+                args.matrix, validate_sources=not args.no_source_check,
+            ).report()
+        else:
+            matrix = load_matrix(
+                args.matrix, validate_sources=not args.no_source_check
+            )
+            output = gha_matrix(matrix, args.kind) if args.kind else matrix
     except MatrixError as exc:
         print(f"release matrix error: {exc}", file=sys.stderr)
         return 2
