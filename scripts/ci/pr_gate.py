@@ -342,6 +342,13 @@ class GitHubApi:
             label="pull request issue comments",
         )
 
+    def issue_comment(self, comment_id: int) -> dict[str, Any]:
+        value = self.json(f"/issues/comments/{_positive(comment_id, 'issue comment id')}",
+                          label="pull request issue comment")
+        if not isinstance(value, dict):
+            _fail("issue comment API record is not an object")
+        return value
+
     def branch_sha(self, branch: str) -> str:
         if not valid_branch_name(branch):
             _fail("branch identity is unsafe")
@@ -501,11 +508,13 @@ def bind_restricted_transition_decision(
         "controller_generation": transition.controller_generation,
         "controller_sha": transition.controller_sha, "base_sha": transition.base_sha,
         "head_sha": transition.head_sha, "declaration_sha256": transition.digest,
+        "comment_body": (f"/restricted-transition approve {transition.controller_generation} "
+                         f"{transition.head_sha} {transition.digest}"),
     }
     decision = authenticated_owner_decision
     if (
         not isinstance(decision, dict)
-        or set(decision) != set(expected) | {"comment_id", "comment_updated_at"}
+        or set(decision) != set(expected) | {"comment_id", "comment_created_at", "comment_updated_at"}
         or any(
             type(decision[key]) is not type(value) or decision[key] != value
             for key, value in expected.items()
@@ -513,7 +522,10 @@ def bind_restricted_transition_decision(
     ):
         _fail("restricted transition owner decision disagrees with its exact declaration and identity")
     _positive(decision["comment_id"], "owner decision comment id")
+    _timestamp(decision["comment_created_at"], "owner decision created_at")
     _timestamp(decision["comment_updated_at"], "owner decision updated_at")
+    if decision["comment_created_at"] != decision["comment_updated_at"]:
+        _fail("restricted transition owner decision was edited")
     canonical = json.dumps(decision, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(canonical).hexdigest()
 
@@ -801,6 +813,97 @@ def controller_upgrade_authorization(
         (json.dumps(bound, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     ).hexdigest()
     return UpgradeAuthorization(comment_id, updated_at, identity.head_sha, digest)
+
+
+def read_restricted_transition_owner_decision(
+    api: GitHubApi, identity: PullIdentity, *, declaration: bytes,
+    deployed_controller_sha: str, deployed_generation: int,
+) -> dict[str, Any]:
+    """Read authenticated decision data only; this never admits a transition.
+
+    Deployment identity/generation must come from independently observed trusted deployment.
+    Grammar: /restricted-transition approve|revoke <generation> <head> <declaration-sha256>.
+    The newest owner command must be exact and have matching created/updated timestamps; stale,
+    malformed and revoked commands cannot fall back to an older approval. Any newer edited
+    owner comment also blocks, because editing can erase its original command purpose.
+    The caller must retain its bound digest and re-read/compare after selecting gate evidence.
+    API reads are not atomic and cannot reconstruct comments deleted before the first observation.
+    """
+    transition = parse_restricted_transition(
+        declaration, identity=identity, deployed_controller_sha=deployed_controller_sha,
+        deployed_generation=deployed_generation)
+
+    def check_identity() -> None:
+        if resolve_pull_identity(api, implementation_sha=deployed_controller_sha,
+                                 pr_number=identity.number) != identity:
+            _fail("restricted transition pull identity changed")
+
+    check_identity()
+    repository = api.repository_record()
+    owner = repository.get("owner")
+    if (repository.get("full_name") != api.repository or not isinstance(owner, dict)
+            or owner.get("login") != CONTROLLER_UPGRADE_OWNER or owner.get("type") != "User"):
+        _fail("repository owner does not match restricted transition policy")
+    issue_url = f"{api.api_url}/repos/{api.repository}/issues/{identity.number}"
+
+    def snapshot(comment: dict[str, Any]) -> dict[str, Any]:
+        keys = ("id", "body", "created_at", "updated_at", "issue_url",
+                "author_association", "performed_via_github_app")
+        return {**{key: comment.get(key) for key in keys},
+                "user": {key: comment.get("user", {}).get(key) for key in ("login", "type")}}
+
+    def latest() -> dict[str, Any]:
+        comments = api.issue_comments(identity.number)
+        if not isinstance(comments, list) or len(comments) > MAX_RECORDS:
+            _fail("restricted transition comment inventory exceeds its bound")
+        commands, seen = [], set()
+        for comment in comments:
+            if not isinstance(comment, dict):
+                _fail("restricted transition comment inventory contains a non-object")
+            comment_id = _positive(comment.get("id"), "issue comment id")
+            if comment_id in seen:
+                _fail("restricted transition comment inventory repeats an id")
+            seen.add(comment_id)
+            user, body = comment.get("user"), comment.get("body")
+            if not isinstance(user, dict) or not isinstance(body, str):
+                _fail("restricted transition comment inventory contains a malformed comment")
+            if user.get("login") == CONTROLLER_UPGRADE_OWNER:
+                updated = _timestamp(comment.get("updated_at"), "issue comment updated_at")
+                _timestamp(comment.get("created_at"), "issue comment created_at")
+                if (body.startswith("/restricted-transition")
+                        or comment["created_at"] != comment["updated_at"]):
+                    commands.append((updated, comment["created_at"] != comment["updated_at"],
+                                     comment_id, snapshot(comment)))
+        if not commands:
+            _fail("restricted transition lacks an exact current-head owner command")
+        # An edit tied to an approval's timestamp cannot be ordered by creation id safely.
+        return max(commands, key=lambda item: item[:3])[3]
+
+    selected = latest()
+    fresh = api.issue_comment(selected["id"])
+    if (not isinstance(fresh.get("user"), dict) or snapshot(fresh) != selected
+            or latest() != selected):
+        _fail("restricted transition owner comment changed or disappeared")
+    if (selected["issue_url"] != issue_url
+            or selected["user"] != {"login": CONTROLLER_UPGRADE_OWNER, "type": "User"}
+            or selected["author_association"] != "OWNER"
+            or selected["performed_via_github_app"] is not None):
+        _fail("restricted transition comment is not a direct repository-owner decision")
+    decision = {
+        "schema_version": 1, "purpose": "restricted-transition-owner-authorization",
+        "repository": api.repository, "pull_request": identity.number,
+        "owner": CONTROLLER_UPGRADE_OWNER, "decision": "approve",
+        "controller_generation": transition.controller_generation,
+        "controller_sha": transition.controller_sha, "base_sha": transition.base_sha,
+        "head_sha": transition.head_sha, "declaration_sha256": transition.digest,
+        "comment_id": selected["id"], "comment_body": selected["body"],
+        "comment_created_at": selected["created_at"], "comment_updated_at": selected["updated_at"],
+    }
+    bind_restricted_transition_decision(
+        transition, repository=api.repository, pull_number=identity.number,
+        authenticated_owner_decision=decision)
+    check_identity()
+    return decision
 
 
 def _git(repository: Path, *arguments: str, accepted: Iterable[int] = (0,)) -> bytes:

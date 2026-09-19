@@ -34,6 +34,7 @@ from scripts.ci.pr_gate import (
     _result,
     main as pr_gate_main,
     parse_restricted_transition,
+    read_restricted_transition_owner_decision,
     reauthorize,
     resolve_dispatch_source,
     resolve_pull_identity,
@@ -122,7 +123,9 @@ class RestrictedTransitionDeclarationTests(unittest.TestCase):
             "repository": "AkaNebur/BlockPops", "pull_request": 17, "owner": "AkaNebur",
             "decision": "approve", "controller_generation": 1, "controller_sha": BASE,
             "base_sha": BASE, "head_sha": HEAD, "declaration_sha256": transition.digest,
-            "comment_id": 91, "comment_updated_at": "2026-09-19T10:00:00Z", **overrides,
+            "comment_id": 91, "comment_updated_at": "2026-09-19T10:00:00Z",
+            "comment_created_at": "2026-09-19T10:00:00Z",
+            "comment_body": f"/restricted-transition approve 1 {HEAD} {transition.digest}", **overrides,
         }
 
     def bind(self, transition, decision):
@@ -193,7 +196,8 @@ class RestrictedTransitionDeclarationTests(unittest.TestCase):
                      "repository": "other/repo", "pull_request": 18, "owner": "collaborator",
                      "decision": "revoke", "controller_generation": 2, "controller_sha": HEAD,
                      "base_sha": HEAD, "head_sha": BASE, "declaration_sha256": "0" * 64,
-                     "comment_id": True, "comment_updated_at": "yesterday", "extra": True}
+                     "comment_id": True, "comment_updated_at": "yesterday", "extra": True,
+                     "comment_created_at": "2026-09-19T09:00:00Z", "comment_body": "approve"}
         for field, value in mutations.items():
             with self.subTest(field=field), self.assertRaises(PrGateError):
                 self.bind(transition, self.decision(transition, **{field: value}))
@@ -683,6 +687,158 @@ class DispatchSourceTests(unittest.TestCase):
                 self.Api(parents=(DEFAULT, BASE)),
                 **self.arguments(),
             )
+
+
+class RestrictedTransitionOwnerTests(unittest.TestCase):
+    class MockGitHub(PullIdentityTests.Api, GitHubApi):
+        repository = "AkaNebur/BlockPops"
+        api_url = "https://api.github.test"
+
+        def __init__(self, comments):
+            PullIdentityTests.Api.__init__(self)
+            self.comments, self.calls = copy.deepcopy(comments), []
+            self.owner = {"login": "AkaNebur", "type": "User"}
+
+        def repository_record(self):
+            return {**super().repository_record(), "owner": self.owner}
+
+        def pull(self, number):
+            value = super().pull(number)
+            value["base"]["ref"] = "master"
+            return value
+
+        def branch_sha(self, branch):
+            return BASE if branch == "master" else super().branch_sha(branch)
+
+        def json(self, suffix, *, label):
+            self.calls.append(suffix)
+            if suffix.startswith("/issues/17/comments?"):
+                page = int(suffix.rsplit("page=", 1)[1])
+                return copy.deepcopy(self.comments[(page - 1) * 100:page * 100])
+            for comment in self.comments:
+                if suffix == f"/issues/comments/{comment['id']}":
+                    return copy.deepcopy(comment)
+            raise PrGateError("issue comment API returned HTTP 404")
+
+    def setUp(self):
+        fixture = RestrictedTransitionDeclarationTests()
+        self.transition = fixture.parse()
+        self.declaration = json.dumps(fixture.declaration()).encode()
+
+    def comment(self, **overrides):
+        return {
+            "id": 91, "user": {"login": "AkaNebur", "type": "User"},
+            "body": f"/restricted-transition approve 1 {HEAD} {self.transition.digest}",
+            "created_at": "2026-09-19T10:00:00Z", "updated_at": "2026-09-19T10:00:00Z",
+            "issue_url": f"{self.MockGitHub.api_url}/repos/{self.MockGitHub.repository}/issues/17",
+            "author_association": "OWNER", "performed_via_github_app": None, **overrides,
+        }
+
+    def read(self, api, **overrides):
+        return read_restricted_transition_owner_decision(api, identity(default_sha=BASE), **{
+            "declaration": self.declaration, "deployed_controller_sha": BASE,
+            "deployed_generation": 1, **overrides})
+
+    def test_fresh_owner_record_binds_complete_decision_without_gate_admission(self):
+        api = self.MockGitHub([self.comment()])
+        decision = self.read(api)
+        self.assertEqual(RestrictedTransitionDeclarationTests().decision(self.transition), decision)
+        self.assertEqual(["/issues/17/comments?per_page=100&page=1", "/issues/comments/91",
+                          "/issues/17/comments?per_page=100&page=1"], api.calls)
+        self.assertRegex(bind_restricted_transition_decision(
+            self.transition, repository=api.repository, pull_number=17,
+            authenticated_owner_decision=decision), r"^[0-9a-f]{64}$")
+
+    def test_grammar_purpose_generation_head_digest_and_edits_are_exact(self):
+        body = self.comment()["body"]
+        mutations = [{"body": value} for value in (
+            body.replace("approve", "revoke"), body.replace(" 1 ", " 2 "),
+            body.replace(HEAD, BASE), body.replace(self.transition.digest, "0" * 64),
+            body + "\n", " " + body, f"/controller-upgrade approve {HEAD}")]
+        mutations += [{"created_at": "2026-09-19T09:00:00Z"}, {"created_at": None},
+                      {"updated_at": "yesterday"}, {"id": True}]
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), self.assertRaises(PrGateError):
+                self.read(self.MockGitHub([self.comment(**mutation)]))
+
+    def test_only_exact_owner_user_direct_comment_on_this_pull_is_authority(self):
+        mutations = ({"user": {"login": "collaborator", "type": "User"}},
+                     {"user": {"login": "AkaNebur", "type": "Bot"}},
+                     {"performed_via_github_app": {"id": 1}}, {"author_association": "MEMBER"},
+                     {"issue_url": "https://api.github.test/repos/other/repo/issues/17"},
+                     {"issue_url": self.comment()["issue_url"].replace("/17", "/18")})
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), self.assertRaises(PrGateError):
+                self.read(self.MockGitHub([self.comment(**mutation)]))
+        for owner in ({"login": "other", "type": "User"}, {"login": "AkaNebur", "type": "Organization"}):
+            api = self.MockGitHub([self.comment()])
+            api.owner = owner
+            with self.assertRaisesRegex(PrGateError, "repository owner"):
+                self.read(api)
+
+    def test_latest_owned_command_never_falls_back_after_revoke_stale_or_malformed(self):
+        for body in (self.comment()["body"].replace("approve", "revoke"),
+                     self.comment()["body"].replace(HEAD, BASE), "/restricted-transition invalid"):
+            with self.subTest(body=body), self.assertRaises(PrGateError):
+                self.read(self.MockGitHub([self.comment(id=92, body=body), self.comment()]))
+        self.assertEqual(92, self.read(self.MockGitHub([self.comment(id=92), self.comment()]))["comment_id"])
+
+    def test_selected_comment_requires_fresh_get_and_cannot_disappear_or_change(self):
+        for mutation in ({"body": "edited"}, {"updated_at": "2026-09-19T10:01:00Z"},
+                         {"id": 92}, {"user": None}, {"issue_url": "wrong"}):
+            api = self.MockGitHub([self.comment()])
+            with self.subTest(mutation=mutation), mock.patch.object(
+                    api, "issue_comment", return_value=self.comment(**mutation)), self.assertRaises(PrGateError):
+                self.read(api)
+        api = self.MockGitHub([self.comment()])
+        with mock.patch.object(api, "issue_comment", side_effect=PrGateError("HTTP 404")), self.assertRaises(PrGateError):
+            self.read(api)
+
+    def test_editing_away_a_command_blocks_older_approval_until_a_fresh_decision(self):
+        edited = self.comment(id=92, body="command removed", updated_at="2026-09-19T10:01:00Z")
+        api = self.MockGitHub([self.comment(), edited])
+        with self.assertRaises(PrGateError):
+            self.read(api)
+        with self.assertRaises(PrGateError):
+            self.read(self.MockGitHub([self.comment(), self.comment(
+                id=90, body="command removed", created_at="2026-09-19T09:00:00Z")]))
+        api.comments.append(self.comment(id=93, created_at="2026-09-19T10:02:00Z",
+                                         updated_at="2026-09-19T10:02:00Z"))
+        self.assertEqual(93, self.read(api)["comment_id"])
+
+    def test_reinventory_catches_deletion_edit_and_new_revocation_during_read(self):
+        for comments in ([], [self.comment(body="edited")], [self.comment(), self.comment(
+                id=92, body=self.comment()["body"].replace("approve", "revoke"))]):
+            api = self.MockGitHub([self.comment()])
+            def fresh(_comment_id):
+                api.comments = comments
+                return self.comment()
+            with self.subTest(comments=comments), mock.patch.object(
+                    api, "issue_comment", side_effect=fresh), self.assertRaises(PrGateError):
+                self.read(api)
+
+    def test_current_pull_and_deployed_controller_are_rechecked(self):
+        api = self.MockGitHub([self.comment()])
+        for overrides in ({"deployed_controller_sha": HEAD}, {"deployed_generation": 2}):
+            with self.assertRaises(PrGateError):
+                self.read(api, **overrides)
+        with mock.patch.object(api, "pull", return_value={}), self.assertRaises(PrGateError):
+            self.read(api)
+        original = api.branch_sha
+        def changed(branch):
+            return "f" * 40 if api.calls and branch == api.head_branch else original(branch)
+        with mock.patch.object(api, "branch_sha", side_effect=changed), self.assertRaises(PrGateError):
+            self.read(api)
+
+    def test_paginated_inventory_duplicate_ids_and_limit_fail_closed(self):
+        comments = [self.comment(id=index + 100, body="discussion") for index in range(100)]
+        api = self.MockGitHub(comments + [self.comment()])
+        self.read(api)
+        self.assertEqual(2, api.calls.count("/issues/17/comments?per_page=100&page=2"))
+        for comments in ([self.comment()] * 2,
+                         [self.comment(id=index + 100) for index in range(1000)]):
+            with self.subTest(count=len(comments)), self.assertRaises(PrGateError):
+                self.read(self.MockGitHub(comments))
 
 
 class ControllerUpgradeAuthorizationTests(unittest.TestCase):

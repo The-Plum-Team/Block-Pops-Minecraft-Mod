@@ -364,3 +364,9 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Added a deterministic lane-identity generator with fixed matrix-derived output paths and anchored atomic publication. Clean raw source bytes emit the reader's exact identity; dirty/hidden/untracked inputs produce an explicit diagnostic fingerprint that release verification rejects. No Gradle task invokes it yet.
 - Root reproduced10 generation/identity tests. Review reproduced a source mutation during atomic publication; a final raw snapshot now rejects that race and removes only the newly generated owned identity. Other cases cover clean legacy/detached paths, reproducibility, linked paths and mid-read drift.
 - This is a local producer primitive, not a qualified game build. Gradle resource wiring remains next; rollback is the generator/tests. Current legacy archive contents and the live matrix are unchanged.
+
+## Task 1d — authenticate exact owner decisions
+
+- Added an opt-in API reader for exact restricted-transition owner commands. It binds repository/PR/base/head/controller generation/declaration and unchanged comment bytes, rechecks authenticated PR identity, and requires fresh direct-comment and paginated inventory reads. Revoked, stale, malformed, edited, deleted-during-read and wrong-owner records cannot fall back to an older approval.
+- Root reproduced65 PR-gate tests, including pagination and changes during reads. Independent review caught an edited-away revocation and timestamp tie; any newer owner edit now blocks until a fresh exact decision. GitHub cannot reconstruct a comment deleted before the first observation; the helper documents that limit.
+- This helper grants no admission and changes no evaluator, CLI or workflow. The caller must retain the bound digest and repeat authentication after gate-evidence selection. Deployed authority and publication remain pending. Rollback is the API reader/binding/tests together.
