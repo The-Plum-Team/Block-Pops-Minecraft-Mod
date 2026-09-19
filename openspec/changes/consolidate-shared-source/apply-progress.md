@@ -273,3 +273,9 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Toolchain validation reconstructs the canonical plan before probing explicit JDK homes. Missing/conflicting homes, changed launchers, mismatched Java/compiler versions, daemon JVM criteria and inherited JVM/Gradle option injection fail before Gradle. Commands bind Java21, serial execution and only the selected explicit toolchain paths, with auto-detection/download disabled.
 - Root reproduced44 planner/context/runtime tests and real read-only Java/javac probes for17.0.19 and21.0.10. Exact homes and stable executable/release-file hashes are recorded in `build/diagnostics/task2/explicit-toolchain-probes.json`; no Gradle ran in this unit.
 - The result explicitly remains `probed`, with Gradle JVM/compiler selection unverified. The future executor must reuse the validated environment and observe actual Gradle selections. Rollback is this API/tests unit; CLI execution and Windows process-tree ownership remain pending.
+
+## Task 11b — recursive production and harness boundaries
+
+- Archive verification now inspects bounded nested content, including renamed/prefixed ZIPs and effective Java multi-release paths. Production rejects harness namespaces/resources/loader IDs; harnesses reject production or third-party classes/resources/metadata. Entry, depth, total-byte and archive-count budgets apply across the whole tree.
+- Independent review reproduced two initial bypasses (prefixed ZIPs and multi-release classes); fixes and negative cases are included. Root reproduced38 artifact tests, and the reviewer reverified all four actual legacy JARs successfully. Those archives retain legacy provenance and are not client-E2E evidence.
+- Existing schema2 readers remain compatible. Rollback is the recursive boundary rule and tests; schema3 scope/producer work remains separate.

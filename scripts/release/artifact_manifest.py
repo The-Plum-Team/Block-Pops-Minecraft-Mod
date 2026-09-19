@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import re
@@ -37,6 +38,8 @@ MAX_MANIFEST_BYTES = 1024 * 1024
 MAX_JAR_BYTES = 256 * 1024 * 1024
 MAX_ZIP_ENTRIES = 8192
 MAX_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024
+MAX_NESTED_ARCHIVES = 32
+MAX_ARCHIVE_DEPTH = 4
 ROOT_KEYS = frozenset(
     {
         "schema_version",
@@ -103,25 +106,92 @@ def inspect_zip(path: Path) -> tuple[zipfile.ZipFile, list[zipfile.ZipInfo], set
         entries = archive.infolist()
     except (OSError, zipfile.BadZipFile) as exc:
         raise ArtifactError(f"invalid JAR {path}: {exc}") from exc
-    if not entries or len(entries) > MAX_ZIP_ENTRIES:
+    try:
+        names = _validate_zip_entries(entries, label=str(path))
+    except BaseException:
         archive.close()
-        raise ArtifactError(f"JAR entry count is outside 1..{MAX_ZIP_ENTRIES}: {path}")
+        raise
+    return archive, entries, names
+
+
+def _validate_zip_entries(entries: list[zipfile.ZipInfo], *, label: str) -> set[str]:
+    if not entries or len(entries) > MAX_ZIP_ENTRIES:
+        raise ArtifactError(f"JAR entry count is outside 1..{MAX_ZIP_ENTRIES}: {label}")
     names = [entry.filename for entry in entries]
     if len(names) != len(set(names)):
-        archive.close()
-        raise ArtifactError(f"JAR contains duplicate ZIP entries: {path}")
+        raise ArtifactError(f"JAR contains duplicate ZIP entries: {label}")
     total = 0
     for entry in entries:
         _safe_zip_name(entry.filename)
         total += entry.file_size
         if total > MAX_UNCOMPRESSED_BYTES:
-            archive.close()
-            raise ArtifactError(f"JAR uncompressed size exceeds limit: {path}")
+            raise ArtifactError(f"JAR uncompressed size exceeds limit: {label}")
         unix_type = (entry.external_attr >> 16) & 0o170000
         if unix_type not in {0, stat.S_IFREG, stat.S_IFDIR}:
-            archive.close()
             raise ArtifactError(f"JAR contains a special/symlink entry: {entry.filename}")
-    return archive, entries, set(names)
+    return set(names)
+
+
+def _verify_archive_boundary(archive: zipfile.ZipFile, *, production: bool) -> None:
+    """Inspect bounded nested archives as well as top-level classes/resources."""
+    kind = "production" if production else "E2E harness"
+    forbidden_ids = ("blockpops-e2e", "blockpops_e2e") if production else ("blockpops",)
+    budget = {"archives": 0, "entries": 0, "bytes": 0}
+    def inspect(current, depth):
+        entries = current.infolist()
+        _validate_zip_entries(entries, label=f"{kind} archive content")
+        budget["archives"] += 1
+        budget["entries"] += len(entries)
+        budget["bytes"] += sum(entry.file_size for entry in entries)
+        if (depth > MAX_ARCHIVE_DEPTH or budget["archives"] > MAX_NESTED_ARCHIVES
+                or budget["entries"] > MAX_ZIP_ENTRIES or budget["bytes"] > MAX_UNCOMPRESSED_BYTES):
+            raise ArtifactError(f"{kind} nested archive inspection exceeds its bounded budget")
+        for entry in entries:
+            name = entry.filename
+            parts = name.split("/", 3)
+            if (len(parts) == 4 and parts[:2] == ["META-INF", "versions"]
+                    and parts[2].isascii() and parts[2].isdigit()):
+                name = parts[3]  # Enforce the effective path even without Multi-Release: true.
+            if production and (name.startswith("com/theplumteam/e2e/") or name.rsplit("/", 1)[-1] == "blockpops-e2e.properties"):
+                raise ArtifactError("production JAR leaks the packaged E2E harness")
+            if not production and ((name.endswith(".class") and not name.startswith("com/theplumteam/e2e/"))
+                                   or name.rsplit("/", 1)[-1] == "blockpops.mixins.json"):
+                raise ArtifactError("E2E harness contains non-harness classes or production resources")
+            if entry.is_dir():
+                continue
+            if entry.file_size > MAX_JAR_BYTES:
+                raise ArtifactError(f"{kind} archive entry exceeds its inspection size limit")
+            metadata = name in {"fabric.mod.json", "META-INF/mods.toml", "META-INF/neoforge.mods.toml"}
+            if metadata and entry.file_size > 1024 * 1024:
+                raise ArtifactError(f"{kind} loader metadata is oversized")
+            with current.open(entry) as stream:
+                payload = stream.read(MAX_JAR_BYTES + 1)
+            if len(payload) > MAX_JAR_BYTES:
+                raise ArtifactError(f"{kind} archive entry exceeds its inspection size limit")
+            if name == "fabric.mod.json":
+                if _decode_zip_json(payload, entry.filename).get("id") in forbidden_ids:
+                    raise ArtifactError(f"{kind} contains the opposite artifact's loader metadata (E2E boundary)")
+            elif name in {"META-INF/mods.toml", "META-INF/neoforge.mods.toml"}:
+                import tomllib
+                try:
+                    mods = tomllib.loads(payload.decode("utf-8", "strict")).get("mods", [])
+                    if any(mod.get("modId") in forbidden_ids for mod in mods):
+                        raise ArtifactError(f"{kind} contains the opposite artifact's loader metadata (E2E boundary)")
+                except (UnicodeError, tomllib.TOMLDecodeError, AttributeError, TypeError) as exc:
+                    raise ArtifactError(f"{kind} contains invalid FML metadata") from exc
+            buffer = io.BytesIO(payload)
+            if not (zipfile.is_zipfile(buffer) or name.lower().endswith((".jar", ".zip"))
+                    or payload.startswith(b"PK\x03\x04")):
+                continue
+            try:
+                with zipfile.ZipFile(buffer) as nested:
+                    inspect(nested, depth + 1)
+            except zipfile.BadZipFile as exc:
+                raise ArtifactError(f"{kind} contains an invalid nested archive") from exc
+    try:
+        inspect(archive, 0)
+    except (zipfile.BadZipFile, RuntimeError, NotImplementedError, EOFError) as exc:
+        raise ArtifactError(f"{kind} contains unreadable archive data") from exc
 
 
 def _read_zip_json(
@@ -133,7 +203,10 @@ def _read_zip_json(
         raise ArtifactError(f"JAR is missing {name}") from exc
     if info.file_size <= 0 or info.file_size > maximum:
         raise ArtifactError(f"JAR metadata {name} has an invalid size")
-    raw = archive.read(info)
+    return _decode_zip_json(archive.read(info), name, maximum=maximum)
+
+
+def _decode_zip_json(raw: bytes, name: str, *, maximum: int = 1024 * 1024) -> dict[str, Any]:
     try:
         from scripts.lib.secure_json import loads
 
@@ -197,8 +270,7 @@ def verify_production_jar(
         missing = required - names
         if missing:
             raise ArtifactError(f"production JAR is missing {sorted(missing)}")
-        if any(name.startswith("com/theplumteam/e2e/") for name in names):
-            raise ArtifactError("production JAR leaks the packaged E2E harness")
+        _verify_archive_boundary(archive, production=True)
         loader = artifact["loader"]
         if loader == "fabric":
             metadata = _read_zip_json(archive, "fabric.mod.json")
@@ -287,6 +359,7 @@ def verify_harness_jar(
             raise ArtifactError(
                 f"E2E harness contains non-harness classes: {illegal_classes[:8]}"
             )
+        _verify_archive_boundary(archive, production=False)
         if artifact["loader"] == "fabric":
             metadata = _read_zip_json(archive, "fabric.mod.json")
             dependencies = metadata.get("depends")
