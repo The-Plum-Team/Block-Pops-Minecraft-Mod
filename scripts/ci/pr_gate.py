@@ -1357,6 +1357,7 @@ def _gate_result(
     identity: PullIdentity,
     matrix_path: Path,
     selected: SelectedRun | None,
+    evidence: dict[str, Any] | None = None,
 ) -> GateResult:
     label = "Build" if kind == "build" else "Packaged E2E"
     if selected is None:
@@ -1382,12 +1383,12 @@ def _gate_result(
             event="pull_request_target",
             source_branch=identity.base_branch,
         )
-        validate_jobs(
+        jobs = validate_jobs(
             api.jobs(selected.run_id),
             expected=graph,
             run_attempt=selected.run_attempt,
         )
-        validate_exact_artifact(
+        artifact = validate_exact_artifact(
             api.artifacts(selected.run_id),
             expected_name=_expected_artifact_name(kind, identity, selected.run_attempt),
             run_id=selected.run_id,
@@ -1399,6 +1400,11 @@ def _gate_result(
             selected.run_id,
             selected.run_attempt,
         )
+    if evidence is not None:
+        evidence[kind] = {
+            "run_id": selected.run_id, "run_attempt": selected.run_attempt, "jobs": jobs,
+            "artifact": {key: artifact[key] for key in ("id", "name", "size_in_bytes", "digest", "expired")},
+        }
     return GateResult(
         "success",
         f"Protected evaluator accepted newest exact {label} attempt",
@@ -1408,7 +1414,8 @@ def _gate_result(
 
 
 def _snapshot(
-    api: GitHubApi, *, identity: PullIdentity, matrix_path: Path
+    api: GitHubApi, *, identity: PullIdentity, matrix_path: Path,
+    evidence: dict[str, Any] | None = None,
 ) -> tuple[dict[str, GateResult], dict[str, SelectedRun | None]]:
     selected = {
         kind: select_newest_pull_run(
@@ -1426,10 +1433,78 @@ def _snapshot(
             identity=identity,
             matrix_path=matrix_path,
             selected=selected[kind],
+            evidence=evidence,
         )
         for kind in WORKFLOWS
     }
     return results, selected
+
+
+def evaluate_restricted_transition(
+    api: GitHubApi, *, repository: Path, identity: PullIdentity, declaration: bytes,
+    deployed_controller_sha: str, deployed_generation: int,
+) -> dict[str, Any]:
+    """Compose a bounded evidence proposal; no existing admission or publication route calls this.
+
+    The implementation and generation must come from an independently authenticated deployed
+    controller, never the candidate. Only unchanged schema-1 base matrices currently define
+    protected expected graphs. Matrix transitions and schema 2 remain unsupported here.
+    The result is not a status-writer credential: final publication reauthorization is unwired.
+    """
+    def current_identity() -> None:
+        if resolve_pull_identity(api, implementation_sha=deployed_controller_sha,
+                                 pr_number=identity.number) != identity:
+            raise NotEligible("restricted transition identity changed during evaluation")
+
+    current_identity()
+    arguments = dict(declaration=declaration, deployed_controller_sha=deployed_controller_sha,
+                     deployed_generation=deployed_generation)
+    transition = parse_restricted_transition(declaration, identity=identity,
+        deployed_controller_sha=deployed_controller_sha, deployed_generation=deployed_generation)
+    if transition.scope == "matrix":
+        _fail("restricted matrix transition has no independently authorized evidence graph")
+    if transition.scope.rpartition("-")[0] in {"fabric", "forge", "neoforge"}:
+        validate_restricted_loader_transition(repository, identity, **arguments)
+    else:
+        validate_restricted_transition_tree(repository, identity, **arguments)
+    base_matrix = _blob(repository, identity.base_sha, MATRIX_PATH, maximum=256 * 1024)
+    matrix_bytes, _ = _matrix_for_identity(repository, identity)
+    if matrix_bytes != base_matrix:
+        _fail("restricted transition cannot select candidate-owned evidence policy")
+
+    def owner() -> tuple[dict[str, Any], str]:
+        decision = read_restricted_transition_owner_decision(api, identity, **arguments)
+        digest = bind_restricted_transition_decision(transition, repository=api.repository,
+            pull_number=identity.number, authenticated_owner_decision=decision)
+        return decision, digest
+
+    decision, owner_digest = owner()
+    with tempfile.TemporaryDirectory(prefix="blockpops-restricted-evidence-") as temporary:
+        matrix_path = Path(temporary) / "release-matrix.json"
+        matrix_path.write_bytes(base_matrix)
+        snapshots = []
+        for _ in range(2):
+            evidence: dict[str, Any] = {}
+            results, selected = _snapshot(api, identity=identity, matrix_path=matrix_path, evidence=evidence)
+            if set(evidence) != set(WORKFLOWS) or any(gate.state != "success" for gate in results.values()):
+                _fail("restricted transition lacks successful newest exact Build and E2E evidence")
+            snapshots.append((results, selected, evidence))
+            if owner() != (decision, owner_digest):
+                raise NotEligible("restricted transition owner decision changed during evaluation")
+        if snapshots[0] != snapshots[1]:
+            _fail("restricted transition newest exact evidence changed during reselection")
+    current_identity()
+    # Recheck local immutable-object/checkout bindings after all external observations.
+    validate_restricted_transition_tree(repository, identity, **arguments)
+    return {
+        "schema_version": 1, "kind": "restricted-transition-evidence", "status": "evidence-validated",
+        "admission": False, "repository": api.repository, "identity": asdict(identity),
+        "transition": asdict(transition), "declaration_sha256": transition.digest,
+        "owner_decision": decision, "owner_decision_sha256": owner_digest,
+        "matrix": {"commit": identity.base_sha, "sha256": hashlib.sha256(base_matrix).hexdigest()},
+        "gates": {kind: {**asdict(snapshots[1][0][kind]), "context": CONTEXTS[kind],
+                         "evidence": snapshots[1][2][kind]} for kind in WORKFLOWS},
+    }
 
 
 def evaluate(

@@ -13,7 +13,9 @@ from pathlib import Path
 from unittest import mock
 
 from scripts.ci.e2e_job_graph import expected_jobs
+from scripts.ci.e2e_fanin import aggregate_artifact_name
 from scripts.ci.loader_bootstrap import HARNESS_BINDING
+from scripts.ci.tests.matrix_fixtures import schema2_configuration
 from scripts.ci.pr_gate import (
     CONTROLLER_UPGRADE_REQUIRED,
     CONTEXTS,
@@ -30,6 +32,7 @@ from scripts.ci.pr_gate import (
     _upgrade_path_allowed,
     bind_restricted_transition_decision,
     controller_upgrade_authorization,
+    evaluate_restricted_transition,
     _gate_result,
     _result,
     main as pr_gate_main,
@@ -1257,6 +1260,211 @@ class RestrictedTransitionTreeTests(unittest.TestCase):
         divergent = self.merged({"settings.gradle": "next"}, head_base=unrelated)
         with self.assertRaises(PrGateError):
             self.validate(divergent, ["settings.gradle"])
+
+
+class RestrictedTransitionEvaluationTests(unittest.TestCase):
+    git = RestrictedTransitionTreeTests.git
+    write = RestrictedTransitionTreeTests.write
+    merged = RestrictedTransitionTreeTests.merged
+
+    class MockGitHub(RestrictedTransitionOwnerTests.MockGitHub):
+        def __init__(self, current, comments):
+            super().__init__(comments)
+            self.current, self.runs, self.job_records, self.artifact_records = current, {}, {}, {}
+            for run_id, workflow in ((51, "build-gate.yml"), (52, "on-demand-e2e.yml")):
+                value = run(run_id, workflow=workflow, head=current.default_sha)
+                for field in ("repository", "head_repository"):
+                    value[field]["full_name"] = self.repository
+                self.runs[workflow] = [value]
+                self.job_records[run_id] = [
+                    {"id": run_id * 100 + index, "name": item.name, "run_attempt": 1,
+                     "status": "completed", "conclusion": item.conclusion}
+                    for index, item in enumerate(expected_jobs(MATRIX, workflow,
+                        event="pull_request_target", source_branch=current.base_branch))]
+                name = (f"staged-release-bundle-{current.merge_sha}-1" if run_id == 51
+                        else aggregate_artifact_name(current.merge_sha, 1))
+                self.artifact_records[run_id] = [ArtifactAndGraphTests().artifact(name, run_id=run_id)]
+
+        def pull(self, number):
+            value = super().pull(number)
+            value["head"]["sha"], value["base"]["sha"] = self.current.head_sha, self.current.base_sha
+            value["merge_commit_sha"] = self.current.merge_sha
+            return value
+
+        def branch_sha(self, branch):
+            return self.current.default_sha if branch == "master" else self.current.head_sha
+
+        def commit_identity(self, _commit):
+            return self.current.merge_tree, (self.current.base_sha, self.current.head_sha)
+
+        def workflow_runs(self, workflow):
+            return copy.deepcopy(self.runs[workflow])
+
+        def jobs(self, run_id):
+            return copy.deepcopy(self.job_records[run_id])
+
+        def artifacts(self, run_id):
+            return copy.deepcopy(self.artifact_records[run_id])
+
+    def setUp(self):
+        RestrictedTransitionTreeTests.setUp(self)
+        self.write("release/release-matrix.json", MATRIX.read_text())
+        self.write("gradle/verification-metadata.xml", "base verification\n")
+        self.git("add", ".")
+        self.git("commit", "--amend", "--no-edit", "-q")
+        self.base = self.git("rev-parse", "HEAD")
+
+    def candidate(self, changes=None, *, scope="verification", paths=None):
+        changes = {"gradle/verification-metadata.xml": "next verification\n"} if changes is None else changes
+        self.current = self.merged(changes)
+        self.declaration = json.dumps({"schema_version": 1, "controller_generation": 1,
+            "controller_sha": self.base, "base_sha": self.base, "head_sha": self.current.head_sha,
+            "scope": scope, "paths": sorted(changes if paths is None else paths)}).encode()
+        self.transition = parse_restricted_transition(self.declaration, identity=self.current,
+            deployed_controller_sha=self.base, deployed_generation=1)
+        comment = RestrictedTransitionOwnerTests.comment(self,
+            body=f"/restricted-transition approve 1 {self.current.head_sha} {self.transition.digest}")
+        self.api = self.MockGitHub(self.current, [comment])
+
+    def evaluate(self, **overrides):
+        return evaluate_restricted_transition(self.api, **{
+            "repository": self.repository, "identity": self.current, "declaration": self.declaration,
+            "deployed_controller_sha": self.base, "deployed_generation": 1, **overrides})
+
+    def test_real_git_and_fresh_api_compose_bound_evidence_without_admission(self):
+        self.candidate()
+        self.write("release/release-matrix.json", "untrusted worktree policy")
+        result = self.evaluate()
+        self.assertEqual("evidence-validated", result["status"])
+        self.assertIs(False, result["admission"])
+        self.assertEqual(self.base, result["matrix"]["commit"])
+        base_bytes = subprocess.check_output(["git", "-C", str(self.repository), "show", f"{self.base}:release/release-matrix.json"])
+        self.assertEqual(hashlib.sha256(base_bytes).hexdigest(), result["matrix"]["sha256"])
+        self.assertEqual(self.current.merge_tree, result["identity"]["merge_tree"])
+        self.assertEqual(self.transition.digest, result["declaration_sha256"])
+        self.assertEqual(3, self.api.calls.count("/issues/comments/91"))
+        for kind, run_id in (("build", 51), ("e2e", 52)):
+            gate = result["gates"][kind]
+            self.assertEqual(CONTEXTS[kind], gate["context"])
+            self.assertEqual(run_id, gate["evidence"]["run_id"])
+            self.assertEqual("sha256:" + "9" * 64, gate["evidence"]["artifact"]["digest"])
+            self.assertRegex(gate["evidence"]["jobs"]["sha256"], r"^[0-9a-f]{64}$")
+
+    def test_candidate_authority_extra_paths_and_bad_generation_fail_before_evidence(self):
+        self.candidate({"gradle/verification-metadata.xml": "next", "scripts/ci/pr_gate.py": "authority"},
+                       paths=["gradle/verification-metadata.xml"])
+        with mock.patch.object(self.api, "workflow_runs") as reads, self.assertRaises(PrGateError):
+            self.evaluate()
+        reads.assert_not_called()
+        self.candidate()
+        for overrides in ({"deployed_generation": 2}, {"deployed_controller_sha": self.current.head_sha},
+                          {"identity": replace(self.current, head_sha="f" * 40)}):
+            with self.subTest(overrides=overrides), self.assertRaises(PrGateError):
+                self.evaluate(**overrides)
+
+    def test_missing_owner_decision_cannot_be_replaced_by_successful_gates(self):
+        self.candidate()
+        self.api.comments = []
+        with mock.patch.object(self.api, "workflow_runs") as reads, self.assertRaises(PrGateError):
+            self.evaluate()
+        reads.assert_not_called()
+
+    def test_loader_scopes_require_real_contract_then_exact_next_semantics(self):
+        fixture = RestrictedLoaderTransitionTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        self.repository, self.base = fixture.repository, fixture.base
+        document, changes = fixture.proposal("fabric")
+        self.candidate({fixture.contract_path: json.dumps(document)}, scope="fabric-contract")
+        self.assertEqual("evidence-validated", self.evaluate()["status"])
+        prepared = self.current.merge_sha
+        self.base = prepared
+        self.candidate({**changes, fixture.contract_path: json.dumps(document["next"])}, scope="fabric-next")
+        self.assertEqual("evidence-validated", self.evaluate()["status"])
+        changes["fabric/build.gradle"] += "// bytes absent from protected next\n"
+        self.candidate({**changes, fixture.contract_path: json.dumps(document["next"])}, scope="fabric-next")
+        with mock.patch.object(self.api, "workflow_runs") as reads, self.assertRaises(PrGateError):
+            self.evaluate()
+        reads.assert_not_called()
+        self.base = fixture.base
+        document["current"]["loaders"]["fabric"]["build_sha256"] = "0" * 64
+        self.candidate({fixture.contract_path: json.dumps(document)}, scope="fabric-contract")
+        with self.assertRaises(PrGateError): self.evaluate()
+
+    def test_matrix_transitions_and_schema2_base_have_no_candidate_selected_graph(self):
+        self.candidate({"release/release-matrix.json": MATRIX.read_text() + "\n"}, scope="matrix")
+        with mock.patch.object(self.api, "workflow_runs") as reads, self.assertRaisesRegex(PrGateError, "evidence graph"):
+            self.evaluate()
+        reads.assert_not_called()
+        self.git("checkout", "-qf", self.base)
+        self.write("release/release-matrix.json", json.dumps(schema2_configuration()))
+        self.git("add", "."); self.git("commit", "-qm", "schema2 protected fixture")
+        self.base = self.git("rev-parse", "HEAD")
+        self.candidate()
+        with mock.patch.object(self.api, "workflow_runs") as reads, self.assertRaises(ValueError):
+            self.evaluate()
+        reads.assert_not_called()
+
+    def test_missing_failed_pending_stale_or_duplicate_run_evidence_is_rejected(self):
+        self.candidate()
+        baseline = copy.deepcopy(self.api.runs)
+        for kind in baseline:
+            value = baseline[kind][0]
+            pending = {**value, "id": value["id"] + 100, "status": "in_progress", "conclusion": None,
+                       "created_at": "2026-08-11T10:00:00Z"}
+            for rows in ([], [{**value, "conclusion": "failure"}], [value, pending],
+                         [{**value, "head_sha": "f" * 40}], [value, value]):
+                self.api.runs = {**copy.deepcopy(baseline), kind: rows}
+                with self.subTest(kind=kind, rows=rows), self.assertRaises(PrGateError):
+                    self.evaluate()
+
+    def test_skipped_missing_extra_jobs_and_stale_or_mixed_artifacts_fail(self):
+        self.candidate()
+        for run_id in (51, 52):
+            jobs, artifacts = copy.deepcopy(self.api.job_records[run_id]), copy.deepcopy(self.api.artifact_records[run_id])
+            for rows in (jobs[:-1], jobs + [{**jobs[0], "id": 9999, "name": "invented"}],
+                         [{**jobs[0], "conclusion": "skipped"}, *jobs[1:]],
+                         [{**job, "run_attempt": 2} for job in jobs]):
+                self.api.job_records[run_id] = rows
+                with self.subTest(run_id=run_id, jobs=rows), self.assertRaises(PrGateError): self.evaluate()
+            self.api.job_records[run_id] = jobs
+            for mutation in ({"expired": True}, {"digest": None}, {"workflow_run": {"id": 999}},
+                             {"name": artifacts[0]["name"].replace(self.current.merge_sha, self.current.head_sha)}):
+                self.api.artifact_records[run_id] = [{**artifacts[0], **mutation}]
+                with self.subTest(run_id=run_id, mutation=mutation), self.assertRaises(PrGateError): self.evaluate()
+            self.api.artifact_records[run_id] = artifacts
+
+    def test_reselection_binds_artifact_id_digest_and_job_identity(self):
+        self.candidate()
+        for field in ("id", "digest", "job"):
+            reads = []
+            original = self.api.artifacts
+            def artifacts(run_id):
+                rows = original(run_id)
+                reads.append(run_id)
+                if run_id == 52 and reads.count(52) == 1 and field == "job":
+                    self.api.job_records[51][0]["id"] += 10000
+                if run_id == 51 and reads.count(51) == 2 and field != "job":
+                    rows[0][field] = 999 if field == "id" else "sha256:" + "8" * 64
+                return rows
+            with self.subTest(field=field), mock.patch.object(self.api, "artifacts", side_effect=artifacts), self.assertRaisesRegex(
+                    PrGateError, "changed during reselection"):
+                self.evaluate()
+
+    def test_owner_revoke_replacement_and_identity_drift_after_evidence_fail(self):
+        for change in ("revoke", "replacement", "head", "checkout"):
+            self.candidate()
+            original = self.api.artifacts
+            def artifacts(run_id):
+                rows = original(run_id)
+                if run_id == 52:
+                    if change == "revoke": self.api.comments[0]["body"] = self.api.comments[0]["body"].replace("approve", "revoke")
+                    elif change == "replacement": self.api.comments[0]["id"] += 1
+                    elif change == "head": self.api.current = replace(self.current, head_sha="f" * 40)
+                    else: self.git("checkout", "-qf", self.current.head_sha)
+                return rows
+            with self.subTest(change=change), mock.patch.object(self.api, "artifacts", side_effect=artifacts), self.assertRaises(PrGateError):
+                self.evaluate()
 
 
 class RestrictedLoaderTransitionTests(unittest.TestCase):
