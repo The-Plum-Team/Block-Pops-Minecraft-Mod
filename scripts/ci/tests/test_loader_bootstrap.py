@@ -221,5 +221,93 @@ class LoaderBootstrapTests(unittest.TestCase):
             load_contract_bytes(duplicate)
 
 
+class LoaderBootstrapTransitionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.current = json.loads((REPO / "e2e/loader-bootstrap-contract.json").read_bytes())
+        next_contract = copy.deepcopy(self.current)
+        next_contract["loaders"]["fabric"]["build_sha256"] = "1" * 64
+        self.document = {
+            "schema_version": 2,
+            "generation": 1,
+            "loader": "fabric",
+            "current": self.current,
+            "next": next_contract,
+        }
+
+    def payload(self, document: dict | None = None) -> bytes:
+        return json.dumps(self.document if document is None else document).encode("utf-8")
+
+    def test_current_and_next_remain_separate_and_exact(self) -> None:
+        payload = self.payload()
+        contract = load_contract_bytes(payload)
+        current = load_contract_bytes(self.payload(self.current))
+        self.assertEqual(2, contract.schema_version)
+        self.assertEqual(hashlib.sha256(payload).hexdigest(), contract.sha256)
+        self.assertEqual(current.loaders, contract.loaders)
+        self.assertIsNotNone(contract.transition)
+        self.assertEqual(1, contract.transition.generation)
+        self.assertEqual("fabric", contract.transition.loader)
+        self.assertEqual("1" * 64, contract.transition.next_loaders["fabric"].build_sha256)
+        self.assertEqual(1, current.schema_version)
+        self.assertIsNone(current.transition)
+
+    def test_transition_shape_and_scope_fail_closed(self) -> None:
+        mutations = {
+            "unknown root": lambda value: value.__setitem__("authorized", True),
+            "missing current": lambda value: value.pop("current"),
+            "unknown schema": lambda value: value.__setitem__("schema_version", 3),
+            "numeric schema": lambda value: value.__setitem__("schema_version", 2.0),
+            "bool generation": lambda value: value.__setitem__("generation", True),
+            "numeric generation": lambda value: value.__setitem__("generation", 1.0),
+            "stale generation": lambda value: value.__setitem__("generation", 0),
+            "unknown generation": lambda value: value.__setitem__("generation", 2),
+            "unknown loader": lambda value: value.__setitem__("loader", "quilt"),
+            "loader array": lambda value: value.__setitem__("loader", ["fabric"]),
+            "wrong loader": lambda value: value.__setitem__("loader", "forge"),
+            "no change": lambda value: value.__setitem__("next", value["current"]),
+            "nested transition": lambda value: value["next"].__setitem__("schema_version", 2),
+            "nested bool schema": lambda value: value["current"].__setitem__("schema_version", True),
+            "extra nested key": lambda value: value["current"].__setitem__("generation", 1),
+            "extra loader change": lambda value: value["next"]["loaders"]["forge"].__setitem__(
+                "build_sha256", "2" * 64
+            ),
+            "malformed next digest": lambda value: value["next"]["loaders"]["fabric"].__setitem__(
+                "build_sha256", "*"
+            ),
+            "missing next loader": lambda value: value["next"]["loaders"].pop("neoforge"),
+        }
+        for label, mutate in mutations.items():
+            document = copy.deepcopy(self.document)
+            mutate(document)
+            with self.subTest(label=label), self.assertRaises(LoaderBootstrapError):
+                load_contract_bytes(self.payload(document))
+
+    def test_duplicate_generation_and_nested_keys_are_rejected(self) -> None:
+        for field in (b'"generation": 1', b'"schema_version": 1'):
+            payload = self.payload().replace(field, field + b", " + field, 1)
+            with self.subTest(field=field), self.assertRaisesRegex(LoaderBootstrapError, "duplicate"):
+                load_contract_bytes(payload)
+
+    def test_schema_one_cannot_smuggle_transition_authority(self) -> None:
+        for field, value in (("schema_version", True), ("schema_version", 1.0), ("generation", 1)):
+            document = copy.deepcopy(self.current)
+            document[field] = value
+            with self.subTest(field=field, value=value), self.assertRaises(LoaderBootstrapError):
+                load_contract_bytes(self.payload(document))
+
+    def test_parser_does_not_enable_transition_execution_or_self_admission(self) -> None:
+        matrix = (REPO / "release/release-matrix.json").read_bytes()
+        for contract_sha in (None, "b" * 40):
+            with self.subTest(contract_sha=contract_sha), mock.patch(
+                "scripts.ci.loader_bootstrap._exact_commit", side_effect=lambda repo, value, label: value
+            ), mock.patch(
+                "scripts.ci.loader_bootstrap._blob", side_effect=[matrix, self.payload()]
+            ), mock.patch("scripts.ci.loader_bootstrap._tree_entries") as tree, self.assertRaisesRegex(
+                LoaderBootstrapError, "separate base-owned evaluator"
+            ):
+                validate_commit(REPO, head_sha="a" * 40, contract_sha=contract_sha)
+            tree.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

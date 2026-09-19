@@ -57,9 +57,18 @@ class LoaderBootstrap:
 
 
 @dataclass(frozen=True)
+class LoaderBootstrapTransition:
+    generation: int
+    loader: str
+    next_loaders: dict[str, LoaderBootstrap]
+
+
+@dataclass(frozen=True)
 class LoaderBootstrapContract:
     loaders: dict[str, LoaderBootstrap]
     sha256: str
+    schema_version: int = SCHEMA_VERSION
+    transition: LoaderBootstrapTransition | None = None
 
 
 def _git(repository: Path, *arguments: str, accepted: Iterable[int] = (0,)) -> bytes:
@@ -156,14 +165,26 @@ def load_contract_bytes(payload: bytes) -> LoaderBootstrapContract:
                 max_bytes=MAX_CONTRACT_BYTES,
             ),
             label="loader bootstrap contract",
+            required={"schema_version"},
+            optional={"loaders", "generation", "loader", "current", "next"},
+        )
+    except SecureJsonError as exc:
+        raise LoaderBootstrapError(str(exc)) from exc
+    version = document["schema_version"]
+    if type(version) is int and version == 2:
+        return _load_transition(document, payload)
+    if type(version) is not int or version != SCHEMA_VERSION:
+        raise LoaderBootstrapError(
+            f"loader bootstrap contract schema_version must be {SCHEMA_VERSION}"
+        )
+    try:
+        require_object(
+            document,
+            label="loader bootstrap contract",
             required={"schema_version", "loaders"},
         )
     except SecureJsonError as exc:
         raise LoaderBootstrapError(str(exc)) from exc
-    if document["schema_version"] != SCHEMA_VERSION:
-        raise LoaderBootstrapError(
-            f"loader bootstrap contract schema_version must be {SCHEMA_VERSION}"
-        )
     raw_loaders = document["loaders"]
     if not isinstance(raw_loaders, dict) or set(raw_loaders) != set(KNOWN_LOADERS):
         raise LoaderBootstrapError("loader bootstrap contract must cover every known loader")
@@ -200,6 +221,51 @@ def load_contract_bytes(payload: bytes) -> LoaderBootstrapContract:
             )
         loaders[loader] = LoaderBootstrap(build_sha, files)
     return LoaderBootstrapContract(loaders, hashlib.sha256(payload).hexdigest())
+
+
+def _load_transition(document: dict[str, Any], payload: bytes) -> LoaderBootstrapContract:
+    """Read generation 1: one loader, two complete schema-1 contracts.
+
+    This parser prepares policy data only. A transition must preserve every
+    other loader and cannot authorize its own admission or executable bytes.
+    The immutable base evaluator must provide that authority separately.
+    """
+    try:
+        require_object(
+            document,
+            label="loader bootstrap transition",
+            required={"schema_version", "generation", "loader", "current", "next"},
+        )
+        for name in ("current", "next"):
+            contract = require_object(
+                document[name],
+                label=f"loader bootstrap {name}",
+                required={"schema_version", "loaders"},
+            )
+            if type(contract["schema_version"]) is not int or contract["schema_version"] != 1:
+                raise LoaderBootstrapError(f"bootstrap {name} must be a schema-1 contract")
+    except SecureJsonError as exc:
+        raise LoaderBootstrapError(str(exc)) from exc
+    generation = document["generation"]
+    if type(generation) is not int or generation != 1:
+        raise LoaderBootstrapError("loader bootstrap transition generation must be 1")
+    loader = document["loader"]
+    if not isinstance(loader, str) or loader not in KNOWN_LOADERS:
+        raise LoaderBootstrapError("loader bootstrap transition must name one known loader")
+    current = load_contract_bytes(json.dumps(document["current"]).encode("utf-8"))
+    next_contract = load_contract_bytes(json.dumps(document["next"]).encode("utf-8"))
+    changed = {
+        name for name in KNOWN_LOADERS
+        if current.loaders[name] != next_contract.loaders[name]
+    }
+    if changed != {loader}:
+        raise LoaderBootstrapError("bootstrap next must change exactly the declared loader")
+    return LoaderBootstrapContract(
+        current.loaders,
+        hashlib.sha256(payload).hexdigest(),
+        2,
+        LoaderBootstrapTransition(generation, loader, next_contract.loaders),
+    )
 
 
 def _tree_entries(repository: Path, commit: str, loader: str) -> dict[str, str]:
@@ -266,6 +332,10 @@ def validate_commit(
     except MatrixError as exc:
         raise LoaderBootstrapError(f"release matrix is invalid: {exc}") from exc
     contract = load_contract_bytes(contract_bytes)
+    if contract.transition is not None:
+        raise LoaderBootstrapError(
+            "loader bootstrap transitions require the separate base-owned evaluator"
+        )
     active = tuple(sorted({row["loader"] for row in matrix["artifacts"]}))
     if not active or any(loader not in contract.loaders for loader in active):
         raise LoaderBootstrapError(f"matrix selected an uncontracted loader: {active!r}")

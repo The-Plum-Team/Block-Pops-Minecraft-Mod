@@ -119,3 +119,11 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Restored only clean gate/build files whose CRLF-to-LF bytes exactly matched both index and HEAD, revalidating hashes immediately before writing and skipping concurrent changes. This repairs transport-only byte mismatches without Git content changes or relaxed hash validation. `.gitignore`, `.pi` and the live matrix were excluded.
 - Full `python3 -m unittest discover -s tests -q`: 161 tests passed after repair. Bootstrap tests now pass 10/10. CI discovery exposed the protected-fixture dependency corrected above and the pre-existing macOS /tmp symlink test assumption; the latter remains separate from migration logic.
 - Detailed local environment/governance/repair logs are in ignored `build/diagnostics/task2/`; diagnostic `validateReleaseMatrix check` is running serially with Java 21 and strict checksums. No build or packaged-runtime qualification is claimed.
+
+## Task 5a — parse bounded current/next bootstrap contracts
+
+- Added exact schema-2 bootstrap transition parsing: generation 1, one declared loader, complete schema-1 current/next records, and no changes to other loaders. Unknown generations, ambiguous types, duplicate keys, nested transitions, missing loaders and widened scope fail closed.
+- Schema-1 verification remains active. Schema-2 execution explicitly requires the separate base-owned evaluator; parsing grants no authority and cannot admit its own executable changes.
+- `python3 -m unittest scripts.ci.tests.test_loader_bootstrap -v`: 10 tests passed after checkout-byte repair; the same tests passed in an exact Git-byte temporary snapshot beforehand. CLI verification of the existing exact HEAD's schema-1 contract passed.
+- Only validator/tests changed (162 authored lines before this evidence); no actual bootstrap contract, protected executable byte, digest, remote or publication was changed. Root review confirmed the fail-closed boundary.
+- Task 5 remains partial: implement and test base-owned current/next evaluation separately before preparing an exact transition record. Rollback is this parser/test addition only.
