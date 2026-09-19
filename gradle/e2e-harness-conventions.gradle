@@ -45,6 +45,7 @@ protectedRoots.each {
     }
 }
 if (stonecutterLayout) {
+    blockPopsConfigureOverlay('e2e')
     def generators = [project, commonProject].collect {
         it.stonecutter.tasks.generate['stonecutterGenerateE2e']
     }

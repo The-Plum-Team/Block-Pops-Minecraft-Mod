@@ -113,6 +113,58 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
             // Only preprocessing is consumed; the loader compiles the combined harness.
             sourceSets.create('e2e')
         }
+        ext.blockPopsConfigureOverlay = { String sourceSet ->
+            if (releaseMatrix.schema_version != 2) return
+            def overlays = releaseMatrix.source_routing[module].overlays.findAll {
+                it.source_set == sourceSet && laneContext.artifact_node in it.lanes
+            }
+            if (overlays.isEmpty()) return
+            if (overlays.size() != 1) throw new GradleException('One source set requires one exact overlay')
+            def overlay = overlays[0]
+            def taskSuffix = sourceSet == 'main' ? '' : 'E2e'
+            def prepare = stonecutter.tasks.prepare["stonecutterPrepare${taskSuffix}".toString()]
+            def generate = stonecutter.tasks.generate["stonecutterGenerate${taskSuffix}".toString()]
+            def canonical = project.parent.file("src/${sourceSet}")
+            def canonicalCache = new File(stonecutter.tasks.processedCacheDir, sourceSet)
+            def overlayRoot = rootProject.file(overlay.path as String)
+            def overlayCache = layout.buildDirectory.dir("stonecutter-cache/overlays/${sourceSet}")
+            def declared = overlay.adds + overlay.replaces
+            def prepareType = prepare.get().class
+            while (prepareType != null && prepareType.name != 'dev.kikugie.stonecutter.process.SCPrepareTask') {
+                prepareType = prepareType.superclass
+            }
+            if (prepareType == null) throw new GradleException('Pinned Stonecutter prepare API is unavailable')
+            prepare.configure {
+                source.setFrom(provider {
+                    fileTree(canonical).matching(stonecutter.filters).matching { exclude overlay.replaces }
+                })
+            }
+            def processOverlay = tasks.register("blockPopsPrepareOverlay${sourceSet.capitalize()}", prepareType) {
+                params.set(prepare.flatMap { it.params })
+                root.set(overlayRoot)
+                source.setFrom(provider {
+                    fileTree(overlayRoot).matching(stonecutter.filters).matching { include declared }
+                })
+                destination.set(overlayCache)
+                // The canonical task already depends on the selected identity barrier.
+                dependsOn prepare
+            }
+            generate.configure {
+                eachFile { detail ->
+                    if (detail.path in overlay.replaces &&
+                            (detail.file.toPath().startsWith(canonical.toPath()) ||
+                             detail.file.toPath().startsWith(canonicalCache.toPath()))) detail.exclude()
+                }
+                from(overlayRoot) {
+                    include declared
+                    exclude { !it.directory && new File(overlayCache.get().asFile, it.path).isFile() }
+                }
+                from(overlayCache) { include declared }
+                dependsOn processOverlay
+            }
+        }
+        blockPopsConfigureOverlay('main')
+        if (module == 'common') blockPopsConfigureOverlay('e2e')
     }
 
     if (releaseMatrix.schema_version == 2 && lane != null) {
