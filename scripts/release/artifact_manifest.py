@@ -25,7 +25,8 @@ from scripts.lib.secure_json import (  # noqa: E402
 )
 from scripts.release.matrix import (  # noqa: E402
     MatrixError,
-    load_matrix,
+    MatrixDocument,
+    load_matrix_document,
     matrix_sha256,
     mod_version,
 )
@@ -327,6 +328,13 @@ def _file_record(path: Path, *, relative: str) -> dict[str, Any]:
     }
 
 
+def _manifest_document(matrix_path: Path) -> MatrixDocument:
+    document = load_matrix_document(matrix_path)
+    if document.inventory.schema_version != 1:
+        raise ArtifactError("schema-2 matrices require scoped schema-3 artifact evidence before staging")
+    return document
+
+
 def stage_release(
     *,
     repository: Path,
@@ -341,7 +349,8 @@ def stage_release(
         raise ArtifactError("release stage must be a direct child of repository build/")
     if manifest_path.resolve().parent != stage_root:
         raise ArtifactError("artifact manifest must be a direct child of the release stage")
-    matrix = load_matrix(matrix_file)
+    document = _manifest_document(matrix_file)
+    matrix = document.data
     version = mod_version(matrix_file, matrix)
     commit = git_commit(repo)
     tree = git_tree(repo, commit)
@@ -351,9 +360,10 @@ def stage_release(
     _clean_directory(files_directory)
     _clean_directory(harness_directory)
     rows: list[dict[str, Any]] = []
-    for artifact in matrix["artifacts"]:
-        production_source = repo / artifact["jar"].replace("{mod_version}", version)
-        harness_source = repo / artifact["harness_jar"]
+    for lane in document.select_lanes(scope="full"):
+        artifact = lane.artifact
+        production_source = repo / lane.production_jar
+        harness_source = repo / lane.harness_jar
         verify_production_jar(production_source, artifact)
         verify_harness_jar(harness_source, artifact)
         production_target = files_directory / production_source.name
@@ -465,7 +475,8 @@ def verify_staged(
         raise ArtifactError(str(exc)) from exc
     if manifest["schema_version"] != SCHEMA_VERSION:
         raise ArtifactError("artifact manifest schema_version is unsupported")
-    matrix = load_matrix(matrix_path)
+    document = _manifest_document(matrix_path)
+    matrix = document.data
     if matrix_record != {
         "path": matrix_path.resolve().relative_to(repo).as_posix(),
         "sha256": matrix_sha256(matrix_path),
@@ -485,7 +496,7 @@ def verify_staged(
     rows = manifest["artifacts"]
     if not isinstance(rows, list) or len(rows) != matrix["lane_count"]:
         raise ArtifactError("artifact manifest has the wrong row count")
-    matrix_by_node = {row["artifact_node"]: row for row in matrix["artifacts"]}
+    matrix_by_node = {lane.identity.artifact_node: lane for lane in document.select_lanes(scope="full")}
     seen: set[str] = set()
     expected_paths: set[str] = set()
     for index, raw_row in enumerate(rows):
@@ -498,9 +509,10 @@ def verify_staged(
         except SecureJsonError as exc:
             raise ArtifactError(str(exc)) from exc
         node = row["artifact_node"]
-        artifact = matrix_by_node.get(node)
-        if artifact is None or node in seen:
+        lane = matrix_by_node.get(node)
+        if lane is None or node in seen:
             raise ArtifactError(f"manifest has an unknown/duplicate artifact node {node!r}")
+        artifact = lane.artifact
         for key in ("minecraft", "loader", "java"):
             if row[key] != artifact[key]:
                 raise ArtifactError(f"manifest artifact {node}.{key} is stale")

@@ -191,3 +191,10 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - The future protected caller must authenticate the base as deployed authority; ancestry supplies no authorization. This API is deliberately absent from the self-check CLI and has not been connected to `pr_gate` or workflows.
 - Root reproduced 55 bootstrap/PR-gate/sync tests. Negative cases cover mixed/stale generations, wrong collapse, other loaders, matrix edits, undeclared files and gitlinks hidden by local Git configuration. Independent review found and fixed inactive-current verification before final validation; schema1 reports remain identical.
 - No actual contract or executable bytes changed. Task5 remains open for exact future transition records and authenticated controller integration. A loader lacking verifiable current bytes requires a separately reviewed protocol; rollback is this evaluator/tests/evidence unit.
+
+## Task 4e — normalized artifact staging and verification
+
+- Artifact staging and re-verification now use normalized lane identities and archive paths. The existing schema2 artifact format for schema1 matrices is preserved; schema2 matrices still fail explicitly until scoped schema3 provenance is implemented, before staging or Git identity work.
+- Added round-trip coverage in an isolated committed fixture repository, including exact matrix/commit/tree/file hashes, cross-lane and duplicate manifest mutations, malformed matrix input and the preparatory/shared execution boundary.
+- Root reproduced 36 artifact/matrix tests and separately ran old and new staging/verifier implementations against the same fixture: manifests and verification results are identical. Synthetic archive contents test validation only, not real Minecraft qualification.
+- Rollback is this one consumer/tests/evidence unit. Dirty local user work remains preserved; no release staging was attempted against this working checkout.
