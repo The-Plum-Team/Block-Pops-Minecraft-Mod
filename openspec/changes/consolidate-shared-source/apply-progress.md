@@ -320,3 +320,9 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 
 - The first combined policy check rejected the new protected observer because its exact Gradle-file inventory had not been extended. Added that single path to the existing audited set; the normal script-content checks still apply to it.
 - Twenty-three context/policy tests and the policy CLI pass. No checksum, repository filter or exemption changed. Keep this inventory entry with the observer, including on rollback.
+
+## Task 6f — normalized E2E lane and common binding
+
+- The harness convention now requires the project's normalized lane to belong to the selected Gradle context and match its loader/project/common paths. It no longer chooses by `project.name` or the first loader row in the full matrix. Existing legacy source roots and separate packaging remain byte-equivalent; Stonecutter still awaits preprocessing adapters.
+- Serial strict Java21/Java17 rebuilds passed for the default aggregate and isolated Fabric/Forge, with27/15/15 tasks respectively. All four archives retain their baseline hashes;501 actual compile inputs and HEAD remained unchanged. Two negative configuration probes reject a wrong-project lane and a lane outside the selected context. Evidence: `build/diagnostics/e2e-context-binding/result.json`.
+- The first diagnostic init used a dependency query at the wrong Gradle lifecycle point and failed; only that ignored probe was corrected before successful reruns. No game-code workaround or checksum change occurred. Rollback is this harness binding; these diagnostic builds still lack clean release/client-E2E qualification.

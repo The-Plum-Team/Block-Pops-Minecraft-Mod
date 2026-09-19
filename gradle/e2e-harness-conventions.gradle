@@ -4,27 +4,37 @@ import org.gradle.api.provider.Property
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.jvm.tasks.Jar
 
-def loaderId = project.name
+if (!project.ext.has('blockPopsLane')) {
+    throw new GradleException("Project ${project.path} has no normalized E2E lane")
+}
+def lane = project.ext.blockPopsLane
+if (!(lane instanceof Map) || !gradle.ext.blockPopsLaneContext.lanes.contains(lane)) {
+    throw new GradleException("Project ${project.path} has an E2E lane outside its Gradle context")
+}
+def artifact = lane.artifact
+def loaderId = artifact.loader as String
 def loaderLabels = [fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge']
 def loaderLabel = loaderLabels[loaderId]
 if (loaderLabel == null) {
     throw new GradleException("Unsupported E2E harness loader: ${loaderId}")
 }
-def artifacts = gradle.ext.blockPopsReleaseMatrix.artifacts as List
-def artifact = artifacts.find { it.loader == loaderId }
-if (artifact == null) {
-    throw new GradleException("Release matrix has no E2E lane for ${loaderId}")
-}
 def minecraftVersion = artifact.minecraft as String
+def nodeSuffix = lane.build_layout == 'stonecutter' ? ":${minecraftVersion}" : ''
+if (project.path != ":${loaderId}${nodeSuffix}"
+        || rootProject.common_project_path != ":common${nodeSuffix}"
+        || lane.runtime.loader != loaderId) {
+    throw new GradleException("Project ${project.path} disagrees with its E2E lane/common context")
+}
+def commonProject = project(rootProject.common_project_path as String)
 def noRemap = artifact.no_remap as Boolean
 
 def mainSourceSet = sourceSets.main
 def e2eSourceSet = sourceSets.findByName('e2e') ?: sourceSets.create('e2e')
 def protectedRoots = [
-    rootProject.file("${loaderId}/src/e2e/java"),
-    rootProject.file("${loaderId}/src/e2e/resources"),
-    rootProject.file('common/src/e2e/java'),
-    rootProject.file('common/src/e2e/resources')
+    project.file('src/e2e/java'),
+    project.file('src/e2e/resources'),
+    commonProject.file('src/e2e/java'),
+    commonProject.file('src/e2e/resources')
 ]
 protectedRoots.each {
     if (!it.isDirectory()) {
@@ -32,12 +42,12 @@ protectedRoots.each {
     }
 }
 e2eSourceSet.java.setSrcDirs([
-    rootProject.file("${loaderId}/src/e2e/java"),
-    rootProject.file('common/src/e2e/java')
+    project.file('src/e2e/java'),
+    commonProject.file('src/e2e/java')
 ])
 e2eSourceSet.resources.setSrcDirs([
-    rootProject.file("${loaderId}/src/e2e/resources"),
-    rootProject.file('common/src/e2e/resources')
+    project.file('src/e2e/resources'),
+    commonProject.file('src/e2e/resources')
 ])
 e2eSourceSet.compileClasspath = files(mainSourceSet.output, mainSourceSet.compileClasspath)
 e2eSourceSet.runtimeClasspath = files(e2eSourceSet.output, e2eSourceSet.compileClasspath)
