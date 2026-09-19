@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import re
 import stat
+import sys
 from pathlib import Path, PurePosixPath
 
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO))
+
 from scripts.lib.secure_json import canonical_json, read, require_object
-from scripts.release.artifact_manifest import lane_build_identity
+from scripts.release.artifact_manifest import lane_build_identity, verify_staged
 from scripts.release.build_matrix import _toolchain_flags, plan_build
 from scripts.release.matrix import MAX_MATRIX_BYTES, load_matrix_document
 
@@ -191,3 +196,39 @@ def read_lane_build_evidence(report_path, *, matrix_path, artifact_node, artifac
                 "run_id": report["run_id"], "production": dict(selected["production"]), "harness": dict(selected["harness"])}
     except (OSError, ValueError, KeyError, TypeError, IndexError, AttributeError) as exc:
         raise BuildEvidenceError(f"invalid durable build evidence: {exc}") from exc
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repository", type=Path, default=REPO)
+    for name, default in (("matrix", "release/release-matrix.json"), ("report", "build/build-matrix-report.json"),
+                          ("stage", "build/release"), ("manifest", "build/release/artifacts.json")):
+        parser.add_argument("--" + name, type=Path, default=Path(default))
+    parser.add_argument("--scope", choices=("legacy", "full"), required=True)
+    parser.add_argument("--expected-report-sha256", required=True, help="external byte binding, not freshness authority")
+    parser.add_argument("--expected-commit", required=True)
+    parser.add_argument("--expected-tree", required=True)
+    args = parser.parse_args(argv)
+    try:
+        repository = args.repository.resolve(strict=True)
+        paths = {name: value if value.is_absolute() else repository / value
+                 for name, value in ((name, getattr(args, name)) for name in ("matrix", "report", "stage", "manifest"))}
+        _digest(args.expected_report_sha256)
+        _digest(args.expected_commit, 40); _digest(args.expected_tree, 40)
+        manifest = verify_staged(repository=repository, matrix_path=paths["matrix"],
+            manifest_path=paths["manifest"], stage=paths["stage"], scope=args.scope)
+        _check(manifest["git_commit"] == args.expected_commit and manifest["git_tree"] == args.expected_tree,
+               "verified bundle differs from externally expected source")
+        document = load_matrix_document(paths["matrix"])
+        for lane in document.select_lanes(scope=args.scope):
+            read_lane_build_evidence(paths["report"], matrix_path=paths["matrix"],
+                artifact_node=lane.identity.artifact_node, artifact_manifest=manifest,
+                expected_sha256=args.expected_report_sha256)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"build evidence verification failed: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -91,6 +91,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       gradle_java: ${{ steps.matrix.outputs.gradle_java }}
+      build_report: ${{ steps.matrix.outputs.build_report }}
       tested_sha: ${{ steps.source.outputs.merge_sha }}
       tested_tree: ${{ steps.source.outputs.merge_tree }}
       source_branch: ${{ steps.source.outputs.head_branch }}
@@ -220,6 +221,14 @@ jobs:
           gradle_java="$(jq -er '.java' "$RUNNER_TEMP/protected-gradle-java.json")"
           [[ "$gradle_java" =~ ^[0-9]+$ ]]
           printf 'gradle_java=%s\n' "$gradle_java" >> "$GITHUB_OUTPUT"
+          scope="$(python3 ../controller/scripts/ci/matrix_scope.py \
+            --matrix release/release-matrix.json --no-source-check)"
+          case "$scope" in
+            unscoped) build_report=false ;;
+            legacy|full) build_report=true ;;
+            *) exit 2 ;;
+          esac
+          printf 'build_report=%s\n' "$build_report" >> "$GITHUB_OUTPUT"
         working-directory: candidate
 
   build:
@@ -367,10 +376,16 @@ jobs:
         shell: bash
         env:
           SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
+          BUILD_REPORT_REQUIRED: ${{ needs.identity.outputs.build_report }}
         run: |
           set -euo pipefail
+          exports=(--export build/release)
+          if [[ "$BUILD_REPORT_REQUIRED" == true ]]; then
+            exports+=(--export build/build-matrix-report.json)
+          fi
           python3 controller/scripts/ci/untrusted_runner.py seal \
-            --root "$SANDBOX_ROOT" --export build/release
+            --root "$SANDBOX_ROOT" "${exports[@]}"
+          [[ "$BUILD_REPORT_REQUIRED" == true || "$BUILD_REPORT_REQUIRED" == false ]]
 
       - name: Reverify inert outputs under a fresh credentialless validator identity
         id: validator
@@ -378,9 +393,16 @@ jobs:
         shell: bash
         env:
           SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
+          BLOCKPOPS_TREE: ${{ needs.identity.outputs.tested_tree }}
+          BUILD_REPORT_REQUIRED: ${{ needs.identity.outputs.build_report }}
         run: |
           set -euo pipefail
           repository="$SANDBOX_ROOT/repository"
+          report_sha=
+          if [[ "$BUILD_REPORT_REQUIRED" == true ]]; then
+            report_sha="$(sha256sum -- "$repository/build/build-matrix-report.json" | cut -d' ' -f1)"
+            [[ "$report_sha" =~ ^[0-9a-f]{64}$ ]]
+          fi
           python3 controller/scripts/ci/untrusted_runner.py validate \
             --root "$SANDBOX_ROOT" --pass-env BLOCKPOPS_TESTED_SHA -- \
             bash -euo pipefail -c '
@@ -397,7 +419,14 @@ jobs:
                 *) exit 2 ;;
               esac
               "${verify_command[@]}"
-            ' _ "$repository"
+              if [[ "$scope" != unscoped ]]; then
+                python3 scripts/release/build_evidence.py \
+                  --repository "$1" --scope "$scope" \
+                  --expected-report-sha256 "$2" \
+                  --expected-commit "$BLOCKPOPS_TESTED_SHA" --expected-tree "$3"
+              fi
+            ' _ "$repository" "$report_sha" "$BLOCKPOPS_TREE"
+          printf 'build_report=%s\n' "$BUILD_REPORT_REQUIRED" >> "$GITHUB_OUTPUT"
 
       - name: Assert the candidate never touched the host checkout
         if: steps.candidate.outcome == 'success' && steps.seal.outcome == 'success'
@@ -415,6 +444,18 @@ jobs:
         with:
           name: staged-release-bundle-${{ needs.identity.outputs.tested_sha }}-${{ github.run_attempt }}
           path: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/build/release/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload the separately verified build report
+        if: >-
+          steps.candidate.outcome == 'success' && steps.seal.outcome == 'success' &&
+          steps.validator.outcome == 'success' && steps.validator.outputs.build_report == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: build-run-report-${{ needs.identity.outputs.tested_sha }}-${{ github.run_attempt }}
+          path: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/build/build-matrix-report.json
           if-no-files-found: error
           compression-level: 0
           retention-days: 1

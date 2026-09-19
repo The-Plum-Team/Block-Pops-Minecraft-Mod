@@ -48,6 +48,10 @@ if args and args[0] == "scripts/ci/matrix_scope.py":
     sys.exit(int(os.environ.get("SCOPE_EXIT", "0")))
 if args and args[0] == "scripts/release/build_matrix.py":
     sys.exit(int(os.environ.get("BUILD_EXIT", "0")))
+if args and args[0] == "scripts/release/build_evidence.py":
+    sys.exit(int(os.environ.get("EVIDENCE_EXIT", "0")))
+if args[:2] == ["controller/scripts/ci/untrusted_runner.py", "validate"]:
+    sys.exit(int(os.environ.get("VALIDATOR_EXIT", "0")))
 ''')
         fake.chmod(0o755)
         (self.root / "gradlew").write_bytes(fake.read_bytes())
@@ -57,7 +61,7 @@ if args and args[0] == "scripts/release/build_matrix.py":
                     "GRADLE_USER_HOME": str(self.root), "BLOCKPOPS_TESTED_SHA": "a" * 40}
 
     def run_step(self, step, scope, argument, **env):
-        result = subprocess.run(["bash", "-euo", "pipefail", "-c", script(self.workflow, step), "_", argument],
+        result = subprocess.run(["bash", "-euo", "pipefail", "-c", script(self.workflow, step), "_", argument, "a" * 64, "b" * 40],
             cwd=self.root, env={**self.env, "MATRIX_SCOPE": scope, **env}, capture_output=True, text=True)
         rows = [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
         self.log.unlink(missing_ok=True)

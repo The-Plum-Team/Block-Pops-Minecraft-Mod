@@ -1,16 +1,19 @@
 """Durable records are evidence bindings, never freshness or release authority."""
 
 import copy
+import contextlib
 import hashlib
 import json
+import io
 import os
 import subprocess
 import unittest
+import zipfile
 from unittest.mock import patch
 
 from scripts.ci.tests.matrix_fixtures import schema1_matrix, schema2_configuration
-from scripts.release.artifact_manifest import lane_build_identity
-from scripts.release.build_evidence import BuildEvidenceError, read_lane_build_evidence
+from scripts.release.artifact_manifest import BUILD_IDENTITY_PATH, lane_build_identity, stage_release
+from scripts.release.build_evidence import BuildEvidenceError, main, read_lane_build_evidence
 from scripts.release.build_matrix import plan_build
 from scripts.release.matrix import load_matrix_document
 from tests import test_build_matrix as runner_tests
@@ -143,3 +146,63 @@ class BuildEvidenceTests(unittest.TestCase):
             self.path.write_text('{"status":"failed"}')
             return value
         with patch.object(build_evidence, "_report_bytes", side_effect=changed), self.assertRaises(BuildEvidenceError): self.read()
+
+    def test_cli_verifies_bundle_before_each_selected_report_and_external_source(self):
+        args = ["--repository", str(self.runner.root), "--scope", "legacy", "--expected-report-sha256",
+                hashlib.sha256(self.path.read_bytes()).hexdigest(), "--expected-commit", self.manifest["git_commit"],
+                "--expected-tree", self.manifest["git_tree"]]
+        events = []
+        def verified(**kwargs):
+            self.assertEqual(self.runner.root / "build/release/artifacts.json", kwargs["manifest_path"])
+            events.append("bundle")
+            return self.manifest
+        def report(*positional, **kwargs):
+            events.append(kwargs["artifact_node"])
+            return read_lane_build_evidence(*positional, **kwargs)
+        with patch("scripts.release.build_evidence.verify_staged", side_effect=verified), \
+             patch("scripts.release.build_evidence.read_lane_build_evidence", side_effect=report):
+            self.assertEqual(0, main(args))
+            self.assertEqual(["bundle", "fabric-1.20.1", "forge-1.20.1"], events)
+            for option in ("--expected-commit", "--expected-tree", "--expected-report-sha256"):
+                changed = list(args); changed[changed.index(option) + 1] = "0" * (64 if "sha256" in option else 40)
+                with self.subTest(option=option), contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(2, main(changed))
+        with patch("scripts.release.build_evidence.read_lane_build_evidence") as reader, contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(2, main(args))  # No actual staged bundle in this runner fixture.
+            reader.assert_not_called()
+
+    def test_cli_round_trip_with_real_scoped_archives_and_runner_report(self):
+        original_spawn = self.runner.spawn
+        document = load_matrix_document(self.matrix)
+        def spawn(command, **kwargs):
+            result = original_spawn(command, **kwargs)
+            node = next(arg.split("=", 1)[1] for arg in command if arg.startswith("-PblockpopsLane="))
+            lane = document.inventory.lane(node)
+            identity = next(row["build_identity"] for row in self.manifest["artifacts"] if row["artifact_node"] == node)
+            for harness, relative in ((False, lane.production_jar), (True, lane.harness_jar)):
+                path = self.runner.root / relative
+                with zipfile.ZipFile(path) as archive:
+                    entries = {name: archive.read(name) for name in archive.namelist()}
+                entries[BUILD_IDENTITY_PATH] = json.dumps(identity).encode()
+                if not harness:
+                    name = lane.artifact["metadata"]["file"]
+                    if lane.identity.loader == "fabric":
+                        metadata = json.loads(entries[name]); metadata["version"] = lane.mod_version
+                        entries[name] = json.dumps(metadata).encode()
+                    else:
+                        entries[name] = entries[name].replace(b'modId = "blockpops"\n',
+                            f'modId = "blockpops"\nversion = "{lane.mod_version}"\n'.encode(), 1)
+                runner_tests._write_zip(path, entries)
+            return result
+        self.runner.spawn = spawn
+        report = self.runner.execute(scope="legacy")
+        self.assertEqual("success", report["status"], report.get("error"))
+        stage = self.runner.root / "build/release"
+        stage_release(repository=self.runner.root, matrix_path=self.matrix,
+                      manifest_path=stage / "artifacts.json", stage=stage, scope="legacy")
+        args = ["--repository", str(self.runner.root), "--scope", "legacy", "--expected-report-sha256",
+                hashlib.sha256(self.path.read_bytes()).hexdigest(), "--expected-commit", self.manifest["git_commit"],
+                "--expected-tree", self.manifest["git_tree"]]
+        self.assertEqual(0, main(args))
+        self.path.write_text('{"status":"failed"}')
+        with contextlib.redirect_stderr(io.StringIO()): self.assertEqual(2, main(args))
