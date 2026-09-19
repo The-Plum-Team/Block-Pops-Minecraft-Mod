@@ -247,3 +247,10 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Missing/unconfigured same-era Fabric input fails before Gradle. Reordered matrices preserve the selected Forge/NeoForge runtime, mod version and repository family and do not add another loader project.
 - Root reproduced23 context/portability/provenance tests; the agent also ran32 context/schema2 tests. The real Forge projection retains only Forge while explicitly naming `net.fabricmc:fabric-loader:0.17.3` for common annotations. No Gradle/source-adapter activation occurred in this unit.
 - Rollback is this projection field/tests; the next convention unit consumes it. Embedded context digests include this explicit common input in addition to the full authoritative matrix digest.
+
+## Task 7c — source/output snapshots and atomic run reports
+
+- Added stable regular-file snapshots, tracked/index/raw source identity and relevant untracked build inputs, including Git-ignored sources that Gradle can still compile. Generated files, `.git` and `.pi` are excluded. Concurrent HEAD/index changes, links, hardlinks and file mutation during reads fail.
+- Run reports atomically replace prior success with `running`, bind a fresh run ID and live checkout lease, and finish successfully only for exact planned lane order, zero exits, unchanged source/matrix/contract inputs and unchanged output hashes. They do not claim runtime qualification or clean release provenance; CLI execution remains disabled.
+- Root reproduced54 planner/runtime/context tests. Review caught and fixed ignored-source omission and concurrent index drift; dedicated tests prove both invalidate evidence. Other mutations cover missing/changed outputs, stale runners and publication while a process is active.
+- Rollback is these snapshot/report primitives and tests. Toolchain validation and orchestration remain task7 follow-ups; Windows process execution is still explicitly unavailable.

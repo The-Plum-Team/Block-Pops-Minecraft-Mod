@@ -19,7 +19,8 @@ from unittest.mock import Mock, patch
 from scripts.ci.tests.matrix_fixtures import schema2_configuration
 from scripts.lib.secure_json import SecureJsonError
 from scripts.release.build_matrix import (
-    BuildProcessError, _finish_owned_group, checkout_lock, main, numeric_version, plan_build, run_lane,
+    BuildProcessError, _finish_owned_group, begin_report, checkout_lock, file_snapshot, finish_report,
+    main, numeric_version, output_snapshot, plan_build, run_lane, source_snapshot,
 )
 from scripts.release.matrix import MatrixError
 from tests.test_release_matrix_portability import arbitrary_named_1211_release_matrix
@@ -333,6 +334,191 @@ class BuildMatrixProcessTests(unittest.TestCase):
                 if process.poll() is None:
                     os.killpg(process.pid, signal.SIGKILL)
                     process.wait(timeout=5)
+
+
+class BuildMatrixEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        for name, content in {".gitignore": "build/\n.gradle/\n", "common/src/main/Block.java": "class Block {}",
+                              "docs/note.md": "tracked documentation", "release/release-matrix.json": "{}",
+                              "e2e/scenario-contract.json": "{}", "e2e/loader-bootstrap-contract.json": "{}"}.items():
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+        self.git("init", "-q")
+        self.git("add", ".")
+        self.git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "fixture")
+        matrix = self.root / "release/release-matrix.json"
+        self.outputs = {"production": "build/game.jar", "harness": "build/harness.jar"}
+        self.plan = {"kind": "blockpops-build-plan", "status": "planned",
+                     "matrix": {"path": str(matrix), "sha256": hashlib.sha256(matrix.read_bytes()).hexdigest()},
+                     "selected_nodes": ["fabric-1.20.1"],
+                     "lanes": [{"artifact_node": "fabric-1.20.1", "outputs": self.outputs}]}
+
+    def git(self, *arguments):
+        return subprocess.run(["git", "-C", str(self.root), *arguments], check=True, capture_output=True).stdout
+
+    def results(self):
+        for path in self.outputs.values():
+            output = self.root / path
+            output.parent.mkdir(exist_ok=True)
+            output.write_bytes(path.encode())
+        return [{"artifact_node": "fabric-1.20.1", "exit_code": 0,
+                 "outputs": output_snapshot(self.root, self.outputs)}]
+
+    def test_source_snapshot_binds_commit_tree_and_hidden_dirty_tracked_bytes(self):
+        clean = source_snapshot(self.root)
+        self.assertFalse(clean["dirty"])
+        self.assertEqual(self.git("rev-parse", "HEAD").decode().strip(), clean["commit"])
+        self.assertEqual(self.git("rev-parse", "HEAD^{tree}").decode().strip(), clean["tree"])
+        self.git("update-index", "--assume-unchanged", "docs/note.md")
+        (self.root / "docs/note.md").write_text("hidden edit")
+        changed = source_snapshot(self.root)
+        self.assertTrue(changed["dirty"])
+        self.assertNotEqual(clean["fingerprint"], changed["fingerprint"])
+        (self.root / "common/src/main/Block.java").unlink()
+        self.assertIn({"path": "common/src/main/Block.java", "missing": True}, source_snapshot(self.root)["files"])
+
+    def test_staged_drift_is_bound_even_when_worktree_bytes_match_head(self):
+        before = source_snapshot(self.root)
+        path = self.root / "common/src/main/Block.java"
+        original = path.read_bytes()
+        path.write_text("staged")
+        self.git("add", str(path))
+        path.write_bytes(original)
+        after = source_snapshot(self.root)
+        self.assertTrue(after["dirty"])
+        self.assertEqual(before["fingerprint"], after["fingerprint"])
+        self.assertNotEqual(before["index_sha256"], after["index_sha256"])
+
+    def test_ignored_java_inputs_are_bound_and_changes_invalidate_a_running_report(self):
+        with (self.root / ".gitignore").open("a") as stream:
+            stream.write("common/src/main/Ignored.java\n")
+        ignored = self.root / "common/src/main/Ignored.java"
+        ignored.write_text("class Ignored {}")
+        self.assertEqual(ignored.relative_to(self.root).as_posix(),
+                         self.git("check-ignore", str(ignored.relative_to(self.root))).decode().strip())
+        snapshot = source_snapshot(self.root)
+        self.assertIn("common/src/main/Ignored.java", {row["path"] for row in snapshot["files"]})
+        results = self.results()
+        with checkout_lock(self.root) as lock:
+            run_id = begin_report(lock, self.plan)
+            ignored.write_text("class Ignored { int changed; }")
+            self.assertEqual("failed", finish_report(lock, run_id, results)["status"])
+
+    def test_index_mutation_during_source_reads_cannot_produce_a_mixed_snapshot(self):
+        read = file_snapshot
+        def mutate_index(repository, path):
+            snapshot = read(repository, path)
+            if str(path) == "docs/note.md":
+                (self.root / path).write_text("concurrently staged")
+                self.git("add", str(path))
+            return snapshot
+        with patch("scripts.release.build_matrix.file_snapshot", side_effect=mutate_index):
+            with self.assertRaisesRegex(BuildProcessError, "index changed"):
+                source_snapshot(self.root)
+
+    def test_untracked_inputs_and_both_contracts_are_bound_but_pi_and_generated_files_are_excluded(self):
+        before = source_snapshot(self.root)
+        for name in (".pi/state.json", "build/cache.bin", "common/build/generated.java", ".gradle/cache.bin"):
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("irrelevant")
+        self.assertEqual(before, source_snapshot(self.root))
+        for name in ("common/src/main/New.java", "scripts/new.py", "stonecutter.gradle", ".gitignore",
+                     "release/release-matrix.json", "e2e/scenario-contract.json", "e2e/loader-bootstrap-contract.json"):
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("changed")
+            after = source_snapshot(self.root)
+            self.assertTrue(after["dirty"])
+            self.assertNotEqual(before["fingerprint"], after["fingerprint"], name)
+            before = after
+        paths = {record["path"] for record in source_snapshot(self.root)["files"]}
+        self.assertNotIn("common/build/generated.java", paths)
+        self.assertNotIn(".pi/state.json", paths)
+
+    def test_output_snapshots_reject_missing_symlink_hardlink_special_and_escape(self):
+        self.results()
+        jar = self.root / self.outputs["production"]
+        for path in ("../outside", "build/missing.jar"):
+            with self.subTest(path=path), self.assertRaises((BuildProcessError, FileNotFoundError)):
+                file_snapshot(self.root, path)
+        link = jar.with_name("link.jar")
+        link.symlink_to(jar.name)
+        with self.assertRaises(BuildProcessError):
+            file_snapshot(self.root, link)
+        link.unlink()
+        os.link(jar, link)
+        with self.assertRaises(BuildProcessError):
+            file_snapshot(self.root, jar)
+        link.unlink()
+        if hasattr(os, "mkfifo"):
+            os.mkfifo(link)
+            with self.assertRaises(BuildProcessError):
+                file_snapshot(self.root, link)
+        directory = self.root / "linked-build"
+        directory.symlink_to("build", target_is_directory=True)
+        with self.assertRaises(BuildProcessError):
+            file_snapshot(self.root, directory / jar.name)
+
+    def test_new_run_atomically_invalidates_previous_success_and_stale_finishers(self):
+        results = self.results()
+        report_path = self.root / "build/build-matrix-report.json"
+        with checkout_lock(self.root) as lock:
+            first = begin_report(lock, self.plan)
+            lock.guard.acquire()
+            try:
+                with self.assertRaisesRegex(BuildProcessError, "process is active"):
+                    finish_report(lock, first, results)
+            finally:
+                lock.guard.release()
+            self.assertEqual("success", finish_report(lock, first, results)["status"])
+            second = begin_report(lock, self.plan)
+            self.assertEqual("running", json.loads(report_path.read_text())["status"])
+            with self.assertRaises(BuildProcessError):
+                finish_report(lock, first, results)
+            self.assertEqual(second, json.loads(report_path.read_text())["run_id"])
+            failed = finish_report(lock, second, [], error="startup failed")
+            self.assertEqual("failed", failed["status"])
+        with self.assertRaises(BuildProcessError):
+            finish_report(lock, second, results)
+
+    def test_source_matrix_and_previously_recorded_output_changes_cannot_finish_successfully(self):
+        for mutation in ("source", "matrix", "output", "deleted", "scope", "exit"):
+            results = self.results()
+            with checkout_lock(self.root) as lock:
+                run_id = begin_report(lock, self.plan)
+                if mutation in {"source", "matrix"}:
+                    name = "common/src/main/Block.java" if mutation == "source" else "release/release-matrix.json"
+                    (self.root / name).write_text(mutation)
+                elif mutation == "output":
+                    (self.root / self.outputs["production"]).write_text("changed output")
+                elif mutation == "deleted":
+                    (self.root / self.outputs["harness"]).unlink()
+                elif mutation == "scope":
+                    results.clear()
+                else:
+                    results[0]["exit_code"] = True
+                with self.subTest(mutation=mutation):
+                    self.assertEqual("failed", finish_report(lock, run_id, results)["status"])
+            (self.root / "release/release-matrix.json").write_text("{}")
+
+    def test_report_links_and_stale_plan_are_rejected_without_overwriting_other_files(self):
+        self.results()
+        path = self.root / "build/build-matrix-report.json"
+        target = self.root / "untouched.json"
+        target.write_text("{}"); path.symlink_to(target)
+        with checkout_lock(self.root) as lock:
+            with self.assertRaises(BuildProcessError):
+                begin_report(lock, self.plan)
+            self.assertEqual("{}", target.read_text())
+            path.unlink()
+            (self.root / "release/release-matrix.json").write_text("changed")
+            with self.assertRaisesRegex(BuildProcessError, "matrix changed"):
+                begin_report(lock, self.plan)
 
 
 if __name__ == "__main__":

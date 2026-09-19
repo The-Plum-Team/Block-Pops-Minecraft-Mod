@@ -11,8 +11,10 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -149,6 +151,157 @@ def run_lane(command: list[str], *, lock: CheckoutLock, env: dict[str, str], out
                 raise
     finally:
         lock.guard.release()
+
+
+def file_snapshot(repository: Path, path: str | Path) -> dict[str, Any]:
+    """Hash a stable regular input/output without admitting links or escapes."""
+    repository = repository.resolve(strict=True)
+    relative = Path(path)
+    if relative.is_absolute():
+        relative = relative.relative_to(repository)
+    if not relative.parts or ".." in relative.parts or "\\" in str(relative):
+        raise BuildProcessError("snapshot path must stay inside the checkout")
+    candidate = repository / relative
+    for parent in reversed(candidate.parents):
+        if parent == repository or repository in parent.parents:
+            if _linked(parent.lstat()):
+                raise BuildProcessError("snapshot parent must not be linked")
+    before = candidate.lstat()
+    if _linked(before) or not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+        raise BuildProcessError("snapshot requires a regular, unlinked file")
+    descriptor = os.open(candidate, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    sha256, blob = hashlib.sha256(), hashlib.sha1(f"blob {before.st_size}\0".encode())
+    with os.fdopen(descriptor, "rb") as stream:
+        opened = os.fstat(stream.fileno())
+        if _identity(opened) != _identity(before) or not stat.S_ISREG(opened.st_mode):
+            raise BuildProcessError("file identity changed before snapshot read")
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            sha256.update(chunk)
+            blob.update(chunk)
+        after, current = os.fstat(stream.fileno()), candidate.lstat()
+    stamp = lambda info: (_identity(info), info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    if any(stamp(info) != stamp(before) for info in (opened, after, current)):
+        raise BuildProcessError("file changed while its snapshot was read")
+    return {"path": relative.as_posix(), "size": before.st_size, "sha256": sha256.hexdigest(),
+            "git_blob": blob.hexdigest(), "executable": bool(before.st_mode & stat.S_IXUSR)}
+
+
+def output_snapshot(repository: Path, outputs: dict[str, str]) -> dict[str, Any]:
+    return {kind: file_snapshot(repository, path) for kind, path in sorted(outputs.items())}
+
+
+def source_snapshot(repository: Path) -> dict[str, Any]:
+    """All tracked bytes plus untracked build inputs; raw CRLF drift is diagnostic."""
+    repository = repository.resolve(strict=True)
+    def git(*arguments):
+        result = subprocess.run(["git", "-C", str(repository), *arguments], capture_output=True, check=True)
+        return result.stdout
+    commit, tree = git("rev-parse", "HEAD", "HEAD^{tree}").decode().splitlines()
+    baseline = {}
+    for entry in git("ls-tree", "-rz", "--full-tree", commit).split(b"\0"):
+        if entry:
+            metadata, name = entry.split(b"\t", 1)
+            mode, kind, digest = metadata.decode().split()
+            if kind != "blob":
+                raise BuildProcessError("source submodules are not supported")
+            baseline[os.fsdecode(name)] = (digest, mode == "100755")
+    tracked = {os.fsdecode(name) for name in git("ls-files", "-z", "--cached").split(b"\0") if name}
+    index_sha256 = hashlib.sha256(git("ls-files", "--stage", "-z")).hexdigest()
+    roots = {"common", "fabric", "forge", "neoforge", "gradle", "release", "scripts", "e2e", "tests", ".github", "buildSrc"}
+    extra = set()
+    for name in git("ls-files", "-z", "--others").split(b"\0"):
+        if name:
+            path = Path(os.fsdecode(name))
+            parts = path.parts
+            if "__pycache__" in parts or (len(parts) > 1 and parts[0] in {"common", "fabric", "forge", "neoforge", "buildSrc"}
+                    and parts[1] in {"build", ".gradle", ".architectury-transformer", "run", "logs"}) or (
+                    len(parts) > 3 and parts[1] == "versions" and parts[3] == "build"):
+                continue
+            if path.parts[0] in roots or (len(path.parts) == 1 and (
+                path.suffix in {".gradle", ".kts", ".properties", ".json", ".toml", ".yaml", ".yml"}
+                or path.name in {"gradlew", "gradlew.bat", ".gitignore", ".gitattributes"}
+            )):
+                extra.add(path.as_posix())
+    files, dirty = [], bool(git("diff-index", "--cached", "--name-only", "-z", commit))
+    for name in sorted(set(baseline) | tracked | extra):
+        try:
+            record = file_snapshot(repository, name)
+            dirty |= baseline.get(name) != (record["git_blob"], record["executable"])
+        except FileNotFoundError:
+            record, dirty = {"path": name, "missing": True}, True
+        files.append(record)
+    if git("rev-parse", "HEAD").decode().strip() != commit:
+        raise BuildProcessError("source commit changed while its snapshot was read")
+    if hashlib.sha256(git("ls-files", "--stage", "-z")).hexdigest() != index_sha256:
+        raise BuildProcessError("source index changed while its snapshot was read")
+    fingerprint = hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
+    return {"commit": commit, "tree": tree, "index_sha256": index_sha256,
+            "dirty": dirty, "fingerprint": fingerprint, "files": files}
+
+
+def _atomic_report(lock: CheckoutLock, report: dict[str, Any]) -> None:
+    if not lock.guard.acquire(blocking=False):
+        raise BuildProcessError("cannot publish a report while a lane process is active")
+    try:
+        _write_report(lock, report)
+    finally:
+        lock.guard.release()
+
+
+def _write_report(lock: CheckoutLock, report: dict[str, Any]) -> None:
+    lock.verify()
+    path = lock.repository / "build/build-matrix-report.json"
+    if path.exists() or path.is_symlink():
+        file_snapshot(lock.repository, path)
+    descriptor, temporary = tempfile.mkstemp(prefix=".build-report-", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(report, stream, sort_keys=True, allow_nan=False)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        lock.verify()
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def begin_report(lock: CheckoutLock, plan: dict[str, Any]) -> str:
+    """Invalidate prior success before startup; this is build evidence, not qualification."""
+    lock.verify()
+    if plan.get("status") != "planned" or plan.get("kind") != "blockpops-build-plan":
+        raise BuildProcessError("a validated build plan is required")
+    if file_snapshot(lock.repository, plan["matrix"]["path"])["sha256"] != plan["matrix"]["sha256"]:
+        raise BuildProcessError("matrix changed since planning")
+    run_id = uuid.uuid4().hex
+    _atomic_report(lock, {"schema_version": 1, "kind": "blockpops-build-run", "status": "running",
+                         "run_id": run_id, "plan": plan, "source": source_snapshot(lock.repository), "lanes": []})
+    return run_id
+
+
+def finish_report(lock: CheckoutLock, run_id: str, results: list[dict[str, Any]], *, error: str | None = None):
+    lock.verify()
+    report, _ = read_secure_json(lock.repository / "build/build-matrix-report.json",
+                                 label="build report", max_bytes=8 * 1024 * 1024)
+    if report.get("status") != "running" or report.get("run_id") != run_id:
+        raise BuildProcessError("stale runner cannot finish this report")
+    try:
+        if source_snapshot(lock.repository) != report["source"]:
+            raise BuildProcessError("source or matrix changed during the run")
+        if [row["artifact_node"] for row in results] != report["plan"]["selected_nodes"]:
+            raise BuildProcessError("lane result scope is incomplete or reordered")
+        for lane, result in zip(report["plan"]["lanes"], results, strict=True):
+            if type(result["exit_code"]) is not int or result["exit_code"] != 0:
+                raise BuildProcessError("a lane process did not succeed")
+            if json.dumps(result["outputs"], sort_keys=True, allow_nan=False) != json.dumps(
+                output_snapshot(lock.repository, lane["outputs"]), sort_keys=True, allow_nan=False
+            ):
+                raise BuildProcessError("lane outputs changed or do not match the plan")
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError, BuildProcessError) as exc:
+        error = error or str(exc)
+    report.update(status="failed" if error is not None else "success", lanes=results, error=error)
+    _atomic_report(lock, report)
+    return report
 
 
 def numeric_version(version: str) -> tuple[int, ...]:
