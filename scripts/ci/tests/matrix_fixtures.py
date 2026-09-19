@@ -88,3 +88,64 @@ def write_matrix_fixture(root: Path, matrix: dict[str, Any]) -> Path:
         json.dumps(matrix, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     return path
+
+
+def schema2_configuration(*, shared: bool = False) -> dict[str, Any]:
+    """Synthetic controller test inputs; versions/hashes are not qualification pins."""
+    matrix = json.loads((Path(__file__).resolve().parents[3] / "release/release-matrix.json").read_bytes())
+    artifact_template, runtime_template = copy.deepcopy(matrix["artifacts"][0]), copy.deepcopy(matrix["runtimes"][0])
+    matrix["schema_version"] = 2
+    matrix["targets"] = [
+        {"artifact_node": f"{loader}-{minecraft}", "loader": loader, "minecraft": minecraft}
+        for minecraft in ("1.20.1", "1.21.1", "1.21.4", "1.21.5", "1.21.6", "1.21.7")
+        for loader in ("fabric", "forge" if minecraft == "1.20.1" else "neoforge")
+    ]
+    legacy = ["fabric-1.20.1", "forge-1.20.1"]
+    matrix["migration"] = {"mode": "shared" if shared else "preparing", "legacy_nodes": [] if shared else legacy}
+    matrix["artifacts"], matrix["runtimes"], matrix["installers"] = [], [], {}
+    matrix["source_routing"] = {
+        module: {"canonical": f"{module}/src/main", "e2e": f"{module}/src/e2e", "overlays": []}
+        for module in ("common", "fabric", "forge", "neoforge")
+    }
+    for target in matrix["targets"]:
+        node, loader, minecraft = (target[key] for key in ("artifact_node", "loader", "minecraft"))
+        if not shared and minecraft not in {"1.20.1", "1.21.1"}:
+            continue
+        artifact, runtime = copy.deepcopy(artifact_template), copy.deepcopy(runtime_template)
+        is_legacy = not shared and node in legacy
+        prefix = f":{loader}:" if is_legacy else f":{loader}:{minecraft}:"
+        output = loader if is_legacy else f"{loader}/versions/{minecraft}"
+        display = {"fabric": "Fabric", "forge": "Forge", "neoforge": "NeoForge"}[loader]
+        artifact.update(target, java=17 if minecraft == "1.20.1" else 21, no_remap=False,
+                        mod_version=matrix["project"]["mod_version"] if is_legacy else "2.3.4",
+                        build_layout="legacy" if is_legacy else "stonecutter", gradle_java=21,
+                        repository_family=loader, source_routes=["common", loader],
+                        gradle_task=prefix + "remapJar", harness_task=prefix + "remapE2EHarnessJar",
+                        jar=f"{output}/build/libs/BlockPops - {display} - {minecraft}-{{mod_version}}.jar",
+                        harness_jar=f"{output}/build/libs/BlockPops E2E - {display} - {minecraft}-0.0.0.jar")
+        artifact["metadata"]["file"] = {"fabric": "fabric.mod.json", "forge": "META-INF/mods.toml",
+                                          "neoforge": "META-INF/neoforge.mods.toml"}[loader]
+        artifact["metadata"]["minecraft"] = f"~{minecraft}" if loader == "fabric" else f"[{minecraft}]"
+        version = "0.17.3" if loader == "fabric" else (f"{minecraft}-47.4.9" if loader == "forge" else f"21.{minecraft.split('.')[-1]}.1")
+        installer = "fabric-1.1.0" if loader == "fabric" else f"{loader}-{version}"
+        origin = {"forge": "https://maven.minecraftforge.net/net/minecraftforge/forge",
+                  "neoforge": "https://maven.neoforged.net/releases/net/neoforged/neoforge"}
+        url = ("https://maven.fabricmc.net/net/fabricmc/fabric-installer/1.1.0/fabric-installer-1.1.0.jar"
+               if loader == "fabric" else f"{origin[loader]}/{version}/{loader}-{version}-installer.jar")
+        matrix["installers"][installer] = {"url": url, "sha256": "a" * 64}
+        dependencies = [
+            ("architectury", f"dev.architectury:architectury-{loader}:13.0.8", "https://maven.architectury.dev/"),
+            ("geckolib", f"software.bernie.geckolib:geckolib-{loader}-{minecraft}:4.8", "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/"),
+        ]
+        if loader == "fabric":
+            dependencies.append(("fabric-api", f"net.fabricmc.fabric-api:fabric-api:0.110.0+{minecraft}", "https://maven.fabricmc.net/"))
+        if loader == "forge":
+            dependencies.append(("mclib", "com.eliotlash.mclib:mclib:20", "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/"))
+        runtime.update(target, java=artifact["java"], loader_version=version, installer=installer,
+                       runtime_dependencies=[{"id": name, "coordinate": coordinate, "repository": repository, "side": "both"}
+                                             for name, coordinate, repository in dependencies])
+        matrix["artifacts"].append(artifact)
+        matrix["runtimes"].append(runtime)
+    matrix["lane_count"] = len(matrix["artifacts"])
+    matrix["unit_test_lane"] = "fabric-1.20.1"
+    return matrix

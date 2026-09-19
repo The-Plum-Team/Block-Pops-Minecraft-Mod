@@ -102,3 +102,20 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Preservation hashes confirm unchanged live matrix, `.gitignore` and `.pi` files. Existing planning files remain local. No Gradle or packaged-E2E success, global-suite pass, delivery authority or remote action is claimed.
 - Rollback: revert this projection/API/CLI addition and its tests/evidence only; execution consumers continue rejecting schema 2.
 - Final independent audit found no material task-3 blocker. Compared with `6f86bfd`, both current and arbitrary-named historical schema-1 matrices produced 14 identical API results, 28 identical CLI outputs and 24 identical mutation outcomes; the live matrix SHA-256 remains `c554bab87f188be57dccf5a1d14cc81d8dce8ca17663198c4d700f620f3f4fdb`.
+
+## Task 4a — protected E2E job graph consumes normalized lanes
+
+- Added an opt-in `MatrixDocument` API preserving the original schema and immutable lane snapshots. Default protected scope remains the two legacy lanes during preparation; shared mode uses every target. Lane selection is explicit and unknown/unresolved/full-incomplete selections fail.
+- Adapted only `scripts/ci/e2e_job_graph.py` in this consumer unit. It keeps exact attempts, job identities, conclusions and event-dependent public evidence behavior. Other execution readers remain schema-1-only until adapted.
+- Independent review reproduced 26 focused tests and compared 18 schema-1 graphs with HEAD: identical names/conclusions. Shared graphs reject missing lanes and legacy-only evidence.
+- Expanded CI discovery caught candidate-owned test-fixture imports; moved synthetic schema-2 controller fixtures into the protected `scripts/ci/tests/matrix_fixtures.py` surface. `python3 -m unittest scripts.ci.tests.test_e2e_job_graph scripts.ci.tests.test_sync_merge tests.test_release_matrix_schema2_reports tests.test_release_matrix_portability -q`: 31 tests passed, including protected import closure.
+- Task 4 remains partial: Gradle, artifact staging/verifier and packaged-runtime consumers follow separately. No live-matrix activation or publication occurred.
+- Rollback: this document/projection API, one graph consumer and its protected tests together.
+
+## Task 2 — Mac environment and checkout-byte recovery
+
+- JDK 21.0.10 launches the checksum-pinned Gradle 8.14 wrapper successfully with `--no-daemon --no-parallel --version`; cached JDK 17.0.19 also launches successfully. Wrapper entrypoint was invoked directly through Java before restoring `gradlew` LF/0755 bytes/mode to Git's exact baseline.
+- Read-only remote observation: default `master` remains `35c72713ccdb94205df4bc5cbafcd5264dd64377`, active account AkaNebur, private repository, no environments. Branch reports protected=false; protection/rulesets return HTTP 403, so absence of controls is not established. No account or remote changes.
+- Restored only clean gate/build files whose CRLF-to-LF bytes exactly matched both index and HEAD, revalidating hashes immediately before writing and skipping concurrent changes. This repairs transport-only byte mismatches without Git content changes or relaxed hash validation. `.gitignore`, `.pi` and the live matrix were excluded.
+- Full `python3 -m unittest discover -s tests -q`: 161 tests passed after repair. Bootstrap tests now pass 10/10. CI discovery exposed the protected-fixture dependency corrected above and the pre-existing macOS /tmp symlink test assumption; the latter remains separate from migration logic.
+- Detailed local environment/governance/repair logs are in ignored `build/diagnostics/task2/`; diagnostic `validateReleaseMatrix check` is running serially with Java 21 and strict checksums. No build or packaged-runtime qualification is claimed.

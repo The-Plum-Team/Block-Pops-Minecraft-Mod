@@ -15,7 +15,7 @@ from typing import Any
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
-from scripts.release.matrix import MatrixError, gha_matrix, load_matrix  # noqa: E402
+from scripts.release.matrix import MatrixError, load_matrix_document  # noqa: E402
 
 MAX_API_BYTES = 32 * 1024 * 1024
 MAX_JOBS = 1000
@@ -104,19 +104,19 @@ def expected_jobs(
         )
     if workflow != "on-demand-e2e.yml":
         raise JobGraphError("unsupported protected workflow")
-    matrix = load_matrix(matrix_path, validate_sources=False)
+    matrix = load_matrix_document(matrix_path, validate_sources=False)
     projection = "scheduled-anchors" if event == "schedule" else "pr-anchors"
-    rows = gha_matrix(matrix, projection)["include"]
+    rows = matrix.projection(projection)["include"]
     if not rows:
         raise JobGraphError("authoritative E2E matrix is empty")
     scenario = tuple(sorted(row["id"] + SCENARIO_SUFFIX for row in rows))
     if len(scenario) != len(set(scenario)):
         raise JobGraphError("authoritative E2E job names are duplicated")
-    selected_branch = matrix["branch"]["name"] if source_branch is None else source_branch
+    selected_branch = matrix.branch_name if source_branch is None else source_branch
     public_conclusion = (
         "success"
         if event in {"schedule", "workflow_dispatch"}
-        and selected_branch == matrix["branch"]["name"]
+        and selected_branch == matrix.branch_name
         else "skipped"
     )
     return (

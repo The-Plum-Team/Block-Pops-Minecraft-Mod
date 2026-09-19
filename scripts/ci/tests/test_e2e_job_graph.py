@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
+
+from scripts.release.matrix import MatrixError, load_matrix_document
+from scripts.ci.tests.matrix_fixtures import schema2_configuration
 
 from scripts.ci.e2e_job_graph import (
     E2E_AGGREGATE,
@@ -47,9 +54,9 @@ class JobGraphTests(unittest.TestCase):
                 {"id": "neo-era-9_9--pr-behavior"},
             ]
         }
-        with mock.patch("scripts.ci.e2e_job_graph.load_matrix", return_value=branch_matrix), mock.patch(
-            "scripts.ci.e2e_job_graph.gha_matrix", return_value=projected
-        ):
+        document = SimpleNamespace(branch_name=branch_matrix["branch"]["name"],
+                                   projection=mock.Mock(return_value=projected))
+        with mock.patch("scripts.ci.e2e_job_graph.load_matrix_document", return_value=document):
             names = expected_names(
                 None,  # type: ignore[arg-type]
                 "on-demand-e2e.yml",
@@ -125,9 +132,9 @@ class JobGraphTests(unittest.TestCase):
     def test_public_evidence_conclusion_follows_event_and_matrix_branch(self) -> None:
         branch_matrix = {"branch": {"name": "ship/aurora"}}
         projected = {"include": [{"id": "neo-9_9--pr-behavior"}]}
-        with mock.patch("scripts.ci.e2e_job_graph.load_matrix", return_value=branch_matrix), mock.patch(
-            "scripts.ci.e2e_job_graph.gha_matrix", return_value=projected
-        ):
+        document = SimpleNamespace(branch_name=branch_matrix["branch"]["name"],
+                                   projection=mock.Mock(return_value=projected))
+        with mock.patch("scripts.ci.e2e_job_graph.load_matrix_document", return_value=document):
             ordinary = expected_jobs(
                 None,  # type: ignore[arg-type]
                 "on-demand-e2e.yml",
@@ -160,11 +167,10 @@ class JobGraphTests(unittest.TestCase):
     def test_prt_uses_pr_anchors_and_legacy_pull_request_is_rejected(self) -> None:
         branch_matrix = {"branch": {"name": "master"}}
         projected = {"include": [{"id": "neo-9_9--pr-behavior"}]}
+        document = SimpleNamespace(branch_name="master", projection=mock.Mock(return_value=projected))
         with mock.patch(
-            "scripts.ci.e2e_job_graph.load_matrix", return_value=branch_matrix
-        ) as load, mock.patch(
-            "scripts.ci.e2e_job_graph.gha_matrix", return_value=projected
-        ) as projection:
+            "scripts.ci.e2e_job_graph.load_matrix_document", return_value=document
+        ) as load:
             expected_jobs(
                 None,  # type: ignore[arg-type]
                 "on-demand-e2e.yml",
@@ -172,13 +178,47 @@ class JobGraphTests(unittest.TestCase):
                 source_branch="master",
             )
         load.assert_called_once()
-        projection.assert_called_once_with(branch_matrix, "pr-anchors")
+        document.projection.assert_called_once_with("pr-anchors")
         with self.assertRaisesRegex(JobGraphError, "unsupported protected source event"):
             expected_jobs(
                 None,  # type: ignore[arg-type]
                 "build-gate.yml",
                 event="pull_request",
             )
+
+
+class NormalizedGraphTests(unittest.TestCase):
+    def test_preparing_preserves_legacy_graph_and_shared_covers_twelve(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "matrix.json"
+            for matrix, count in ((schema2_configuration(), 2), (schema2_configuration(shared=True), 12)):
+                path.write_text(json.dumps(matrix))
+                for event in ("schedule", "pull_request_target"):
+                    names = expected_names(path, "on-demand-e2e.yml", event=event)
+                    scenarios = [name for name in names if name.endswith(SCENARIO_SUFFIX)]
+                    self.assertEqual(count, len(scenarios))
+                    self.assertTrue(all("1_20_1" in name for name in scenarios) if count == 2 else True)
+                    expected = expected_jobs(path, "on-demand-e2e.yml", event=event)
+                    with self.assertRaises(JobGraphError):
+                        validate_jobs(graph(expected)[1:], expected=expected, run_attempt=2)
+
+    def test_selected_projection_is_explicit_and_cannot_hide_unresolved_full_scope(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "matrix.json"
+            path.write_text(json.dumps(schema2_configuration()))
+            document = load_matrix_document(path, validate_sources=False)
+            self.assertEqual(2, document.data["schema_version"])
+            rows = document.projection("runtime", scope="lane", artifact_node="neoforge-1.21.1")["include"]
+            self.assertEqual(["neoforge-1.21.1"], [row["artifact_node"] for row in rows])
+            for scope, node in (("full", None), ("lane", None), ("lane", "fabric-1.21.7"),
+                                ("legacy", "neoforge-1.21.1"), ("invented", None)):
+                with self.subTest(scope=scope, node=node), self.assertRaises(MatrixError):
+                    document.select_lanes(scope=scope, artifact_node=node)
+            matrix = schema2_configuration()
+            matrix["runtimes"][-1]["artifact_node"] = "forge-1.20.1"
+            path.write_text(json.dumps(matrix))
+            with self.assertRaises(MatrixError):
+                expected_names(path, "on-demand-e2e.yml")
 
 
 if __name__ == "__main__":

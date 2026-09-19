@@ -208,6 +208,54 @@ class MatrixError(ValueError):
     """Raised when the authoritative branch matrix is inconsistent."""
 
 
+@dataclass(frozen=True)
+class MatrixDocument:
+    """Validated input for individually adapted consumers; raw schema stays intact."""
+
+    inventory: MatrixInventory
+    _matrix_json: str = field(repr=False)
+
+    @property
+    def data(self) -> dict[str, Any]:
+        return json.loads(self._matrix_json)
+
+    @property
+    def branch_name(self) -> str:
+        return self.data["branch"]["name"]
+
+    @property
+    def default_scope(self) -> str:
+        return "legacy" if self.inventory.migration_mode == "preparing" else "full"
+
+    def select_lanes(
+        self, *, scope: str | None = None, artifact_node: str | None = None,
+    ) -> tuple[LaneConfiguration, ...]:
+        selected_scope = self.default_scope if scope is None else scope
+        if selected_scope == "lane":
+            if artifact_node is None:
+                _fail("lane scope requires one explicit artifact_node")
+            return (self.inventory.lane(artifact_node),)
+        if artifact_node is not None:
+            _fail("artifact_node is only valid with lane scope")
+        if selected_scope == "full":
+            return self.inventory.require_complete()
+        if selected_scope == "legacy" and self.inventory.migration_mode == "preparing":
+            legacy = set(self.inventory.legacy_nodes)
+            return tuple(lane for lane in self.inventory.lanes if lane.identity.artifact_node in legacy)
+        _fail(f"unsupported matrix scope {selected_scope!r}")
+
+    def projection(
+        self, kind: str, *, scope: str | None = None, artifact_node: str | None = None,
+        contract: ScenarioContract | None = None,
+    ) -> dict[str, Any]:
+        lanes = self.select_lanes(scope=scope, artifact_node=artifact_node)
+        return gha_matrix({
+            "artifacts": [lane.artifact for lane in lanes],
+            "runtimes": [lane.runtime for lane in lanes],
+            "gradle_java": self.data["gradle_java"],
+        }, kind, contract=contract)
+
+
 def _fail(message: str) -> None:
     raise MatrixError(message)
 
@@ -1027,6 +1075,18 @@ def load_matrix_inventory(path: Path, *, validate_sources: bool = True) -> Matri
         return normalize_matrix_inventory(
             data, repository=path.resolve().parents[1] if validate_sources else None,
         )
+    except (SecureJsonError, OSError) as exc:
+        raise MatrixError(str(exc)) from exc
+
+
+def load_matrix_document(path: Path, *, validate_sources: bool = True) -> MatrixDocument:
+    """Opt in one adapted consumer without enabling the legacy schema-1 reader."""
+    try:
+        data, _ = read_secure_json(path, label="release matrix", max_bytes=MAX_MATRIX_BYTES)
+        inventory = normalize_matrix_inventory(
+            data, repository=path.resolve().parents[1] if validate_sources else None,
+        )
+        return MatrixDocument(inventory, json.dumps(data))
     except (SecureJsonError, OSError) as exc:
         raise MatrixError(str(exc)) from exc
 
