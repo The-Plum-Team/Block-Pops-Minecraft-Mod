@@ -8,6 +8,7 @@ import hashlib
 import json
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -82,6 +83,49 @@ RUNTIME_KEYS = frozenset(
         "runtime_dependencies",
     }
 )
+SCHEMA2_ROOT_KEYS = ROOT_KEYS | {"targets", "migration"}
+TARGET_KEYS = frozenset({"artifact_node", "minecraft", "loader"})
+EXPECTED_TARGETS = frozenset(
+    {
+        ("fabric", "1.20.1"),
+        ("forge", "1.20.1"),
+        ("fabric", "1.21.1"),
+        ("neoforge", "1.21.1"),
+        ("fabric", "1.21.4"),
+        ("neoforge", "1.21.4"),
+        ("fabric", "1.21.5"),
+        ("neoforge", "1.21.5"),
+        ("fabric", "1.21.6"),
+        ("neoforge", "1.21.6"),
+        ("fabric", "1.21.7"),
+        ("neoforge", "1.21.7"),
+    }
+)
+LEGACY_TARGET_NODES = frozenset({"fabric-1.20.1", "forge-1.20.1"})
+
+
+@dataclass(frozen=True)
+class LaneIdentity:
+    """A validated loader/Minecraft identity from the authoritative matrix."""
+
+    artifact_node: str
+    minecraft: str
+    loader: str
+
+
+@dataclass(frozen=True)
+class MatrixInventory:
+    """Schema-neutral inventory; execution support remains an explicit boundary."""
+
+    schema_version: int
+    targets: tuple[LaneIdentity, ...]
+    migration_mode: str | None
+    legacy_nodes: tuple[str, ...]
+    execution_supported: bool
+
+    @property
+    def target_nodes(self) -> tuple[str, ...]:
+        return tuple(target.artifact_node for target in self.targets)
 
 
 class MatrixError(ValueError):
@@ -146,7 +190,7 @@ def valid_branch_name(name: Any) -> bool:
     return True
 
 
-def validate_matrix(
+def _validate_schema1_matrix(
     data: Any,
     *,
     contract: ScenarioContract | None = None,
@@ -445,6 +489,130 @@ def validate_matrix(
     if repository is not None:
         validate_source_tree(Path(repository), routing)
     return root
+
+
+def _schema_version(data: Any) -> int:
+    if not isinstance(data, dict):
+        _fail("release matrix must be an object")
+    if "schema_version" not in data:
+        _fail("release matrix is missing schema_version")
+    schema = data["schema_version"]
+    if isinstance(schema, bool) or not isinstance(schema, int):
+        _fail("release matrix schema_version must be an integer")
+    if schema not in {1, 2}:
+        _fail(f"unsupported release matrix schema_version {schema}")
+    return schema
+
+
+def _normalize_schema2_inventory(data: Any) -> MatrixInventory:
+    try:
+        root = require_object(
+            data, label="schema-2 release matrix", required=SCHEMA2_ROOT_KEYS
+        )
+    except SecureJsonError as exc:
+        raise MatrixError(str(exc)) from exc
+
+    raw_targets = root["targets"]
+    if not isinstance(raw_targets, list):
+        _fail("schema-2 targets must be an array")
+    targets: list[LaneIdentity] = []
+    nodes: set[str] = set()
+    pairs: set[tuple[str, str]] = set()
+    for index, raw_target in enumerate(raw_targets):
+        try:
+            target = require_object(
+                raw_target, label=f"targets[{index}]", required=TARGET_KEYS
+            )
+        except SecureJsonError as exc:
+            raise MatrixError(str(exc)) from exc
+        node = _text(target["artifact_node"], f"targets[{index}].artifact_node")
+        minecraft = _text(target["minecraft"], f"targets[{index}].minecraft")
+        loader = _text(target["loader"], f"targets[{index}].loader")
+        if loader not in KNOWN_LOADERS:
+            _fail(f"target {node} uses unsupported loader {loader!r}")
+        if node != f"{loader}-{minecraft}":
+            _fail(f"target artifact_node {node!r} must equal {loader}-{minecraft}")
+        if node in nodes or (loader, minecraft) in pairs:
+            _fail(f"duplicate schema-2 target {node}")
+        nodes.add(node)
+        pairs.add((loader, minecraft))
+        targets.append(LaneIdentity(node, minecraft, loader))
+
+    if pairs != EXPECTED_TARGETS:
+        missing = sorted(EXPECTED_TARGETS - pairs)
+        extra = sorted(pairs - EXPECTED_TARGETS)
+        _fail(f"schema-2 targets diverge: missing {missing}, extra {extra}")
+
+    try:
+        migration = require_object(
+            root["migration"],
+            label="migration",
+            required={"mode", "legacy_nodes"},
+        )
+    except SecureJsonError as exc:
+        raise MatrixError(str(exc)) from exc
+    mode = _text(migration["mode"], "migration.mode")
+    if mode not in {"preparing", "shared"}:
+        _fail("migration.mode must be preparing or shared")
+    raw_legacy_nodes = migration["legacy_nodes"]
+    if not isinstance(raw_legacy_nodes, list):
+        _fail("migration.legacy_nodes must be an array")
+    legacy_nodes = tuple(
+        _text(node, f"migration.legacy_nodes[{index}]")
+        for index, node in enumerate(raw_legacy_nodes)
+    )
+    if len(set(legacy_nodes)) != len(legacy_nodes):
+        _fail("migration.legacy_nodes must not contain duplicates")
+    if not set(legacy_nodes) <= nodes:
+        _fail("migration.legacy_nodes must reference declared targets")
+    if mode == "preparing" and set(legacy_nodes) != LEGACY_TARGET_NODES:
+        _fail("preparing migration must retain both 1.20.1 legacy nodes")
+    if mode == "shared" and legacy_nodes:
+        _fail("shared migration must not retain legacy nodes")
+
+    return MatrixInventory(2, tuple(targets), mode, legacy_nodes, False)
+
+
+def normalize_matrix_inventory(
+    data: Any,
+    *,
+    contract: ScenarioContract | None = None,
+    repository: Path | None = None,
+) -> MatrixInventory:
+    """Validate normalized lane identity without activating partial schema 2.
+
+    Schema 1 remains fully executable. Schema 2 currently exposes only its exact
+    target and migration-state foundation; execution consumers must keep rejecting
+    it until the remaining lane contracts are validated in later work units.
+    """
+
+    schema = _schema_version(data)
+    if schema == 2:
+        return _normalize_schema2_inventory(data)
+    root = _validate_schema1_matrix(
+        data, contract=contract, repository=repository
+    )
+    targets = tuple(
+        LaneIdentity(row["artifact_node"], row["minecraft"], row["loader"])
+        for row in root["artifacts"]
+    )
+    return MatrixInventory(1, targets, None, (), True)
+
+
+def validate_matrix(
+    data: Any,
+    *,
+    contract: ScenarioContract | None = None,
+    repository: Path | None = None,
+) -> dict[str, Any]:
+    """Validate a matrix for existing execution consumers."""
+
+    if _schema_version(data) == 1:
+        return _validate_schema1_matrix(
+            data, contract=contract, repository=repository
+        )
+    _normalize_schema2_inventory(data)
+    _fail("schema 2 is inventory only; execution consumers are not supported yet")
 
 
 def validate_source_tree(repository: Path, routing: dict[str, Any]) -> None:
