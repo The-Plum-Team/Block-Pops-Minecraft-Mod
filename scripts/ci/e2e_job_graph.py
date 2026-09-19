@@ -101,7 +101,7 @@ def expected_jobs(
     existing scheduled/PR gates cannot be reduced to one lane. Build job names
     alone do not prove lane coverage, which requires verified bundle/report data.
     """
-    if event not in SOURCE_EVENTS:
+    if event not in SOURCE_EVENTS and not (event == "push" and workflow == "build-gate.yml"):
         raise JobGraphError(f"unsupported protected source event {event!r}")
     if workflow not in {"build-gate.yml", "on-demand-e2e.yml"}:
         raise JobGraphError("unsupported protected workflow")
@@ -253,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--event",
-        choices=("pull_request_target", "schedule", "workflow_dispatch"),
+        choices=("pull_request_target", "schedule", "workflow_dispatch", "push"),
         default="workflow_dispatch",
     )
     parser.add_argument("--source-branch")
