@@ -15,10 +15,9 @@ import io
 import json
 import os
 import re
-import shutil
 import stat
 import sys
-import tempfile
+from contextvars import ContextVar
 import warnings
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
@@ -33,6 +32,7 @@ from e2e.packaged_runtime import (  # noqa: E402
     validate_packaged_result,
 )
 from e2e.scenario_contract import ScenarioContract, default_contract  # noqa: E402
+from scripts.lib import atomic_directory  # noqa: E402
 from scripts.lib.secure_json import (  # noqa: E402
     SecureJsonError,
     canonical_json,
@@ -257,31 +257,39 @@ def _json(path: Path, *, label: str, maximum: int) -> tuple[dict[str, Any], byte
     return value, raw
 
 
+_owned_output: ContextVar[tuple[Path, int] | None] = ContextVar("pages_owned_output", default=None)
+
+
 def _atomic_directory(output: Path, writer: Callable[[Path], Any]) -> Any:
-    output = output.absolute()
-    if output.exists() or output.is_symlink():
-        raise EvidenceError(f"refusing to replace existing output {output}")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=f".{output.name}.building-", dir=output.parent))
+    def bound_writer(stage: Path, descriptor: int):
+        token = _owned_output.set((stage, descriptor))
+        try:
+            return writer(stage)
+        finally:
+            _owned_output.reset(token)
     try:
-        result = writer(staging)
-        staging.rename(output)
-        return result
-    finally:
-        if staging.exists() and not staging.is_symlink():
-            shutil.rmtree(staging)
+        return atomic_directory.atomic_directory(output, bound_writer)
+    except atomic_directory.AtomicDirectoryError as exc:
+        raise EvidenceError(str(exc)) from exc
 
 
 def _write_json(path: Path, value: Any) -> None:
     data = (json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
     if len(data) > MAX_MANIFEST_BYTES:
         raise EvidenceError(f"generated JSON is oversized: {path.name}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("xb") as output:
-        output.write(data)
+    _copy_bytes(path, data)
 
 
 def _copy_bytes(destination: Path, data: bytes) -> None:
+    owned = _owned_output.get()
+    if owned is not None:
+        stage, descriptor = owned
+        try:
+            relative = destination.relative_to(stage).as_posix()
+        except ValueError as exc:
+            raise EvidenceError("write escapes the owned Pages output") from exc
+        atomic_directory.write_new(descriptor, relative, data)
+        return
     destination.parent.mkdir(parents=True, exist_ok=True)
     with destination.open("xb") as output:
         output.write(data)
