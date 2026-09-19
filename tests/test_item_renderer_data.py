@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = Path("common/src/main/java/com/theplumteam")
 NAMES = ("Box", "Figure", "ClawMachine")
 CLASSES = tuple(f"blockentity/{name}BlockEntity" for name in NAMES) + tuple(
-    f"client/renderer/{name}BlockItemRenderer" for name in NAMES)
+    f"client/renderer/{name}BlockItemRenderer" for name in NAMES) + ("item/GeoBlockItem",)
 HELPER = "item/BlockEntityItemData"
 SOURCES = tuple(PACKAGE / (name + ".java") for name in (*CLASSES, HELPER))
 REQUIRED = ("BLOCKPOPS_TEST_GRADLE", "BLOCKPOPS_TEST_GRADLE_HOME", "BLOCKPOPS_TEST_JAVA17",
@@ -182,6 +182,8 @@ stonecutter.create(rootProject, { tree ->
                         section = output.split("protected void loadAdditional(", 1)[1].split("public void loadForItemRendering(", 1)[0]
                         self.assertIn("BlockEntity.loadAdditional:", section)
                         self.assertIn("Method loadForItemRendering:", section)
+                    elif name == "item/GeoBlockItem":
+                        self.assertIn("Item$TooltipContext" if major == 21 else "net.minecraft.world.level.Level", output)
                 # Only vanilla ItemStack/helper execute: baseline declarations and mod renderers do not.
                 runtime_cp = os.pathsep.join(map(str, [destination, *classpaths[version]]))
                 code, output = invoke(f"native-item-states-{version}", [homes[major] / "bin/java", "-Djava.awt.headless=true",

@@ -100,8 +100,13 @@ public class GeoBlockItem extends BlockItem {
     }
 
     @Override
+    //? if >=1.21 {
+    /*public void appendHoverText(ItemStack stack, net.minecraft.world.item.Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
+        super.appendHoverText(stack, context, tooltip, flag);
+    *///? } else {
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
         super.appendHoverText(stack, level, tooltip, flag);
+    //? }
 
         String collectionId = null;
         String figureId = "";
