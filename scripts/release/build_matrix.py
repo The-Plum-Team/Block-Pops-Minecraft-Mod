@@ -7,7 +7,13 @@ import argparse
 import hashlib
 import json
 import os
+import signal
+import stat
+import subprocess
 import sys
+import threading
+import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +24,131 @@ from scripts.lib.secure_json import SecureJsonError, read as read_secure_json  #
 from scripts.release.matrix import (  # noqa: E402
     MAX_MATRIX_BYTES, MatrixDocument, MatrixError, normalize_matrix_inventory,
 )
+
+
+class BuildProcessError(RuntimeError):
+    """The checkout lock or owned process cannot be used safely."""
+
+
+def _identity(metadata):
+    return metadata.st_dev, metadata.st_ino
+
+
+def _linked(metadata):
+    return stat.S_ISLNK(metadata.st_mode) or bool(
+        getattr(metadata, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    )
+
+
+class CheckoutLock:
+    def __init__(self, repository, path, descriptor, parent):
+        self.repository, self.path, self.descriptor = repository, path, descriptor
+        self.parent = parent
+        self.guard = threading.Lock()
+        self.unsafe = False
+
+    def verify(self):
+        if self.descriptor is None or self.unsafe:
+            raise BuildProcessError("checkout lock is closed or unsafe")
+        try:
+            parent, current, opened = self.path.parent.lstat(), self.path.lstat(), os.fstat(self.descriptor)
+        except OSError as exc:
+            raise BuildProcessError("checkout lock identity is unavailable") from exc
+        if (_linked(parent) or _linked(current) or not stat.S_ISREG(current.st_mode)
+                or _identity(parent) != self.parent or _identity(current) != _identity(opened)):
+            raise BuildProcessError("checkout lock identity changed")
+
+
+@contextmanager
+def checkout_lock(repository: Path):
+    """Exclusive creation never steals even a stale lock; release only our inode."""
+    repository = repository.resolve(strict=True)
+    directory = repository / "build"
+    directory.mkdir(exist_ok=True)
+    parent = directory.lstat()
+    if _linked(parent) or not stat.S_ISDIR(parent.st_mode):
+        raise BuildProcessError("build lock parent must be a real directory")
+    path = directory / ".matrix-build.lock"
+    try:
+        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    except FileExistsError as exc:
+        raise BuildProcessError("checkout build lock already exists; no process started") from exc
+    lease = CheckoutLock(repository, path, descriptor, _identity(parent))
+    try:
+        lease.verify()
+        os.write(descriptor, (json.dumps({"pid": os.getpid()}) + "\n").encode())
+        yield lease
+    finally:
+        with lease.guard:
+            try:
+                if not lease.unsafe:
+                    lease.verify()
+                    path.unlink()
+            finally:
+                os.close(descriptor)
+                lease.descriptor = None
+
+
+def _group_alive(pid):
+    try:
+        os.killpg(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+
+
+def _finish_owned_group(process):
+    """The PID is the session/group leader created by our Popen call only."""
+    def send(signum):
+        try:
+            os.killpg(process.pid, signum)
+        except ProcessLookupError:
+            pass
+    def wait(timeout=None):
+        while True:
+            try:
+                return process.wait(timeout=timeout)
+            except KeyboardInterrupt:
+                continue  # Cancellation cannot release the checkout before reaping.
+    send(signal.SIGTERM)
+    try:
+        wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        send(signal.SIGKILL)
+        wait()
+    if _group_alive(process.pid):
+        send(signal.SIGKILL)
+    deadline = time.monotonic() + 5
+    while _group_alive(process.pid):
+        if time.monotonic() >= deadline:
+            raise BuildProcessError("owned process group did not exit; checkout lock retained")
+        try:
+            time.sleep(0.02)
+        except KeyboardInterrupt:
+            continue
+
+
+def run_lane(command: list[str], *, lock: CheckoutLock, env: dict[str, str], output=None) -> int:
+    """Synchronous POSIX process-tree primitive; CLI execution remains disabled."""
+    if os.name == "nt":
+        raise BuildProcessError("Windows owned process-tree cleanup is not implemented")
+    if not lock.guard.acquire(blocking=False):
+        raise BuildProcessError("a lane is already running under this checkout lock")
+    try:
+        lock.verify()
+        process = subprocess.Popen(command, cwd=lock.repository, env=dict(env),
+                                   stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT,
+                                   start_new_session=True, close_fds=True)
+        try:
+            return process.wait()
+        finally:
+            try:
+                _finish_owned_group(process)
+            except BaseException:
+                lock.unsafe = True
+                raise
+    finally:
+        lock.guard.release()
 
 
 def numeric_version(version: str) -> tuple[int, ...]:

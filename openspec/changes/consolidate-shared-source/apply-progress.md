@@ -198,3 +198,10 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Added round-trip coverage in an isolated committed fixture repository, including exact matrix/commit/tree/file hashes, cross-lane and duplicate manifest mutations, malformed matrix input and the preparatory/shared execution boundary.
 - Root reproduced 36 artifact/matrix tests and separately ran old and new staging/verifier implementations against the same fixture: manifests and verification results are identical. Synthetic archive contents test validation only, not real Minecraft qualification.
 - Rollback is this one consumer/tests/evidence unit. Dirty local user work remains preserved; no release staging was attempted against this working checkout.
+
+## Task 7b — checkout exclusion and owned process cleanup
+
+- Added an exclusive checkout lock that never steals stale locks, rejects linked/replaced paths and requires its live ownership token for process execution. Concurrent threads/processes cannot spawn another lane under that checkout lease.
+- POSIX subprocesses own a new session/group; cancellation terminates only that group, escalates when needed and waits before releasing the lock. Incomplete cleanup retains the lock. Windows execution fails before spawning until its process-tree implementation is ready; the CLI still requires `--plan`.
+- Root reproduced43 planner/runtime/context tests. A real Python parent/child cancellation test proves the owned tree exits while a separate sentinel survives; other tests cover startup failure, stale/replaced locks, cross-process contention, ordering and escalation. No Gradle ran in these tests.
+- Rollback is these lock/process primitives and tests. Task7 still needs toolchain/source/output validation, atomic status reports and CLI orchestration; this unit grants no build qualification.

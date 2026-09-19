@@ -6,14 +6,21 @@ import contextlib
 import hashlib
 import io
 import json
+import os
+import signal
+import subprocess
+import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from scripts.ci.tests.matrix_fixtures import schema2_configuration
 from scripts.lib.secure_json import SecureJsonError
-from scripts.release.build_matrix import main, numeric_version, plan_build
+from scripts.release.build_matrix import (
+    BuildProcessError, _finish_owned_group, checkout_lock, main, numeric_version, plan_build, run_lane,
+)
 from scripts.release.matrix import MatrixError
 from tests.test_release_matrix_portability import arbitrary_named_1211_release_matrix
 
@@ -149,6 +156,183 @@ class BuildMatrixPlanningTests(unittest.TestCase):
         with contextlib.redirect_stdout(output):
             self.assertEqual(0, main(arguments + ["--plan", "--scope", "legacy"]))
         self.assertEqual("planned", json.loads(output.getvalue())["status"])
+
+
+class BuildMatrixProcessTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        self.path = self.root / "build/.matrix-build.lock"
+
+    def test_cross_process_contention_never_enters_a_second_build(self):
+        code = (
+            "import sys; from pathlib import Path; "
+            "from scripts.release.build_matrix import checkout_lock, BuildProcessError\n"
+            "try:\n with checkout_lock(Path(sys.argv[1])): sys.exit(99)\n"
+            "except BuildProcessError: sys.exit(23)\n"
+        )
+        with checkout_lock(self.root):
+            with self.assertRaises(BuildProcessError), patch("subprocess.Popen") as spawn:
+                with checkout_lock(self.root):
+                    self.fail("contending lock admitted")
+            spawn.assert_not_called()
+            result = subprocess.run([sys.executable, "-c", code, str(self.root)], cwd=ROOT, timeout=15)
+            self.assertEqual(23, result.returncode)
+        self.assertFalse(self.path.exists())
+        with checkout_lock(self.root):
+            self.assertTrue(self.path.exists())
+
+    def test_stale_and_linked_lock_paths_are_not_stolen_or_followed(self):
+        self.path.parent.mkdir()
+        self.path.write_text('{"pid": 999999999}')
+        with self.assertRaises(BuildProcessError):
+            with checkout_lock(self.root):
+                self.fail("stale lock stolen")
+        self.assertEqual('{"pid": 999999999}', self.path.read_text())
+        self.path.unlink()
+        target = self.root / "outside"
+        target.write_text("untouched")
+        self.path.symlink_to(target)
+        with self.assertRaises(BuildProcessError):
+            with checkout_lock(self.root):
+                self.fail("symlink lock followed")
+        self.assertEqual("untouched", target.read_text())
+        self.path.unlink()
+        self.path.parent.rmdir()
+        elsewhere = self.root / "elsewhere"
+        elsewhere.mkdir()
+        self.path.parent.symlink_to(elsewhere, target_is_directory=True)
+        with self.assertRaises(BuildProcessError):
+            with checkout_lock(self.root):
+                self.fail("symlink parent followed")
+        self.assertEqual([], list(elsewhere.iterdir()))
+
+    def test_cleanup_never_unlinks_a_replacement_lock(self):
+        with self.assertRaises(BuildProcessError):
+            with checkout_lock(self.root):
+                self.path.rename(self.path.with_suffix(".owned"))
+                self.path.write_text("replacement")
+        self.assertEqual("replacement", self.path.read_text())
+
+    @unittest.skipIf(os.name == "nt", "POSIX process-group primitive")
+    def test_startup_failure_releases_lock_and_completed_handle_cannot_be_reused(self):
+        with patch("subprocess.Popen", side_effect=OSError("startup failed")) as spawn:
+            with self.assertRaises(OSError), checkout_lock(self.root) as lock:
+                run_lane(["missing"], lock=lock, env={})
+            self.assertFalse(self.path.exists())
+            with self.assertRaises(BuildProcessError):
+                run_lane(["missing"], lock=lock, env={})
+            self.assertEqual(1, spawn.call_count)
+        with checkout_lock(self.root) as lock, patch("os.name", "nt"), patch("subprocess.Popen") as spawn:
+            with self.assertRaisesRegex(BuildProcessError, "Windows"):
+                run_lane(["wrapper"], lock=lock, env={})
+            spawn.assert_not_called()
+
+    @unittest.skipIf(os.name == "nt", "POSIX process-group primitive")
+    def test_serial_calls_wait_and_clean_up_before_the_next_spawn(self):
+        events = []
+        process = Mock(pid=1234)
+        process.wait.side_effect = lambda: events.append("wait") or 7
+        def spawn(*args, **kwargs):
+            events.append("spawn")
+            self.assertTrue(kwargs["start_new_session"])
+            self.assertTrue(self.path.is_file())
+            return process
+        with checkout_lock(self.root) as lock, patch("subprocess.Popen", side_effect=spawn), patch(
+            "scripts.release.build_matrix._finish_owned_group", side_effect=lambda p: events.append("cleanup")
+        ):
+            for _ in range(2):
+                self.assertEqual(7, run_lane(["wrapper"], lock=lock, env={"JAVA_HOME": "selected"}))
+        self.assertEqual(["spawn", "wait", "cleanup"] * 2, events)
+
+    @unittest.skipIf(os.name == "nt", "POSIX process-group primitive")
+    def test_thread_contention_cannot_spawn_under_one_lease(self):
+        entered, release = threading.Event(), threading.Event()
+        process = Mock(pid=1234)
+        process.wait.side_effect = lambda: (entered.set(), release.wait(5), 0)[-1]
+        with checkout_lock(self.root) as lock, patch("subprocess.Popen", return_value=process) as spawn, patch(
+            "scripts.release.build_matrix._finish_owned_group"
+        ):
+            worker = threading.Thread(target=run_lane, args=(["wrapper"],), kwargs={"lock": lock, "env": {}})
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(5))
+                with self.assertRaises(BuildProcessError):
+                    run_lane(["second"], lock=lock, env={})
+                self.assertEqual(1, spawn.call_count)
+            finally:
+                release.set()
+                worker.join(5)
+            self.assertFalse(worker.is_alive())
+
+    @unittest.skipIf(os.name == "nt", "POSIX process-group primitive")
+    def test_cancellation_reaps_owned_process_group_before_unlock(self):
+        process = Mock(pid=1234)
+        process.wait.side_effect = [KeyboardInterrupt(), 0]
+        with patch("subprocess.Popen", return_value=process), patch("os.killpg") as kill, patch(
+            "scripts.release.build_matrix._group_alive", return_value=False
+        ):
+            with self.assertRaises(KeyboardInterrupt), checkout_lock(self.root) as lock:
+                run_lane(["wrapper"], lock=lock, env={})
+        kill.assert_called_once_with(1234, signal.SIGTERM)
+        self.assertEqual(2, process.wait.call_count)
+        self.assertFalse(self.path.exists())
+
+    @unittest.skipIf(os.name == "nt", "POSIX process-group primitive")
+    def test_stubborn_owned_process_escalates_and_cleanup_failure_retains_lock(self):
+        process = Mock(pid=1234)
+        process.wait.side_effect = [subprocess.TimeoutExpired("wrapper", 10), 0]
+        with patch("os.killpg") as kill, patch("scripts.release.build_matrix._group_alive", return_value=False):
+            _finish_owned_group(process)
+        self.assertEqual([(1234, signal.SIGTERM), (1234, signal.SIGKILL)],
+                         [call.args for call in kill.call_args_list])
+        process.wait.side_effect = None
+        with patch("subprocess.Popen", return_value=process), patch(
+            "scripts.release.build_matrix._finish_owned_group", side_effect=BuildProcessError("still alive")
+        ):
+            with self.assertRaises(BuildProcessError), checkout_lock(self.root) as lock:
+                run_lane(["wrapper"], lock=lock, env={})
+        self.assertTrue(self.path.is_file())
+
+    @unittest.skipIf(os.name == "nt", "POSIX process-group primitive")
+    def test_real_cancelled_python_tree_exits_without_touching_another_process(self):
+        code = ("import signal,subprocess,sys,time\n"
+                "child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(60)'])\n"
+                "def stop(*args):\n child.terminate(); child.wait(); sys.exit(0)\n"
+                "signal.signal(signal.SIGTERM,stop)\nprint(child.pid,flush=True)\ntime.sleep(60)\n")
+        factory = subprocess.Popen
+        unrelated = factory([sys.executable, "-c", "import time; time.sleep(60)"])
+        handles, descendants = [], []
+        def spawn(command, **kwargs):
+            kwargs.update(stdout=subprocess.PIPE, text=True)
+            process = factory(command, **kwargs)
+            handles.append(process)
+            descendants.append(int(process.stdout.readline()))
+            process.stdout.close()
+            wait = process.wait
+            responses = iter([True, False])
+            def cancelled_wait(**options):
+                if next(responses, False):
+                    raise KeyboardInterrupt()
+                return wait(**options)
+            process.wait = cancelled_wait
+            return process
+        try:
+            with patch("subprocess.Popen", side_effect=spawn):
+                with self.assertRaises(KeyboardInterrupt), checkout_lock(self.root) as lock:
+                    run_lane([sys.executable, "-c", code], lock=lock, env=dict(os.environ))
+            self.assertIsNone(unrelated.poll())
+            self.assertFalse(self.path.exists())
+            with self.assertRaises(ProcessLookupError):
+                os.kill(descendants[0], 0)
+        finally:
+            unrelated.terminate()
+            unrelated.wait(timeout=5)
+            for process in handles:
+                if process.poll() is None:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.wait(timeout=5)
 
 
 if __name__ == "__main__":
