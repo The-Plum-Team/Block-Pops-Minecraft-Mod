@@ -118,7 +118,11 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
             // This allows client-side skin mods that update the player's connection info to work.
             if (Minecraft.getInstance().getConnection() != null) {
                 PlayerInfo info = Minecraft.getInstance().getConnection().getPlayerInfo(figure.getPlayerUUID());
+                //? if >=1.21 {
+                /*if (info != null) return info.getSkin().texture();
+                *///? } else {
                 if (info != null) return info.getSkinLocation();
+                //? }
             }
 
             // 5. Discovery Snapshot Fallback
@@ -144,7 +148,11 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
                 Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, p) -> {}, false);
                 return true;
             });
+            //? if >=1.21 {
+            /*return Minecraft.getInstance().getSkinManager().getInsecureSkin(profile).texture();
+            *///? } else {
             return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
+            //? }
         }
 
         return figure.getTexturePath() != null ? figure.getTexturePath() : FALLBACK_TEXTURE;
@@ -162,7 +170,11 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
             Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, texture) -> {}, false);
             return true;
         });
+        //? if >=1.21 {
+        /*return Minecraft.getInstance().getSkinManager().getInsecureSkin(profile).texture();
+        *///? } else {
         return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
+        //? }
     }
 
     @Override

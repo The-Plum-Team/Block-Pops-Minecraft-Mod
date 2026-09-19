@@ -120,7 +120,11 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
             // 5. Live Mojang Fallback - Check PlayerInfo even for blocks
             if (Minecraft.getInstance().getConnection() != null) {
                 PlayerInfo playerInfo = Minecraft.getInstance().getConnection().getPlayerInfo(figure.getPlayerUUID());
+                //? if >=1.21 {
+                /*if (playerInfo != null) return playerInfo.getSkin().texture();
+                *///? } else {
                 if (playerInfo != null) return playerInfo.getSkinLocation();
+                //? }
             }
 
             // 6. Absolute Fallback
@@ -130,7 +134,11 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
                 Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, p) -> {}, false);
                 return true;
             });
+            //? if >=1.21 {
+            /*return Minecraft.getInstance().getSkinManager().getInsecureSkin(profile).texture();
+            *///? } else {
             return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
+            //? }
         }
 
         return figure.getTexturePath() != null ? figure.getTexturePath() : FALLBACK_TEXTURE;
@@ -148,7 +156,11 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
             Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, texture) -> {}, false);
             return true;
         });
+        //? if >=1.21 {
+        /*return Minecraft.getInstance().getSkinManager().getInsecureSkin(profile).texture();
+        *///? } else {
         return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
+        //? }
     }
 
     @Override

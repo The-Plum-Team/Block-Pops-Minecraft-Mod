@@ -3,6 +3,9 @@ package com.theplumteam.util;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.theplumteam.BlockPopsMod;
 import net.minecraft.client.Minecraft;
+//? if >=1.21 {
+/*import net.minecraft.client.resources.PlayerSkin;
+*///? }
 import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,10 +89,19 @@ public class SkinModelDetector {
             if (Minecraft.getInstance().getConnection() != null) {
                 var playerListEntries = Minecraft.getInstance().getConnection().getOnlinePlayers();
                 for (var playerInfo : playerListEntries) {
+                    //? if >=1.21 {
+                    /*PlayerSkin skin = playerInfo.getSkin();
+                    if (skin.texture().equals(textureLocation)) {
+                    *///? } else {
                     if (playerInfo.getSkinLocation().equals(textureLocation)) {
+                    //? }
                         // Found matching player - get their model type directly
+                        //? if >=1.21 {
+                        /*SkinModel model = skin.model() == PlayerSkin.Model.SLIM ? SkinModel.SLIM : SkinModel.CLASSIC;
+                        *///? } else {
                         String modelName = playerInfo.getModelName();
                         SkinModel model = "slim".equals(modelName) ? SkinModel.SLIM : SkinModel.CLASSIC;
+                        //? }
                         BlockPopsMod.logDebug("Detected {} skin from PlayerInfo for texture: {}", model, textureLocation);
                         DETECTION_CACHE.put(textureLocation, model);
                         return model;
