@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 
 
@@ -81,6 +82,38 @@ if name == "jq": print(os.environ.get("RECEIPT_HASH", "a" * 64))
         result, rows = self.run_step(True, "legacy", RECEIPT_HASH="b" * 64)
         self.assertNotEqual(0, result.returncode)
         self.assertEqual("jq", rows[-1][0])
+
+    def test_public_consumer_downloads_exact_source_bundle_and_forwards_scope(self):
+        text = WORKFLOW.read_text().split("  public-evidence:", 1)[1]
+        download = text.split("      - name: Download the matching aggregate artifact bundle", 1)[1].split("      - name:", 1)[0]
+        for binding in ("e2e-input-bundle-${{ inputs.attest_sha || github.sha }}-${{",
+                        "inputs.attest_run_attempt || github.run_attempt }}",
+                        "run-id: ${{ steps.identity.outputs.source_run_id }}", "digest-mismatch: error"):
+            self.assertIn(binding, download)
+        body = text.split("      - name: Revalidate the exact aggregate inventory", 1)[1].split("      - name:", 1)[0]
+        script = textwrap.dedent(body.split("        run: |\n", 1)[1]).replace("${{ inputs.attest_run_id }}", "")
+        for scope in ("unscoped", "legacy", "full", "lane"):
+            with self.subTest(scope=scope):
+                env = {**self.env, "MATRIX_SCOPE": scope, "GITHUB_EVENT_NAME": "schedule",
+                    "GITHUB_WORKSPACE": "/published checkout", "GITHUB_REPOSITORY": "owner/repo",
+                    "PUBLIC_AGGREGATE": "/downloaded aggregate", "PUBLIC_BUNDLE": "/downloaded bundle",
+                    "PACKAGED_BRANCH": "master", "PACKAGED_SHA": "1" * 40, "PACKAGED_TREE": "2" * 40,
+                    "PACKAGED_RUN_ID": "123", "PACKAGED_RUN_ATTEMPT": "2"}
+                result = subprocess.run(["bash", "-euo", "pipefail", "-c", script], cwd=self.root,
+                                        env=env, capture_output=True, text=True)
+                rows = [json.loads(line) for line in self.log.read_text().splitlines()]
+                self.log.unlink()
+                if scope == "lane":
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertEqual(1, len(rows))
+                    continue
+                self.assertEqual(0, result.returncode, result.stderr)
+                command = rows[-1]
+                self.assertEqual("scheduled-anchors", command[command.index("--projection") + 1])
+                if scope == "unscoped": self.assertNotIn("--artifact-repository", command)
+                else:
+                    self.assertEqual(["--scope", scope, "--artifact-repository", "/published checkout",
+                        "--stage", "/downloaded bundle", "--artifact-manifest", "/downloaded bundle/artifacts.json"], command[-8:])
 
 
 if __name__ == "__main__":

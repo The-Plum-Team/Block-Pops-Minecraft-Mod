@@ -500,3 +500,14 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 
 - The aggregate job now derives selection from the candidate matrix and forwards it to creation. Its fresh sealed validator derives selection independently, verifies scoped artifacts against the explicit local checkout and retains exact source-run fields plus the existing raw manifest/receipt digest comparison. Schema1 keeps its structural aggregate interface.
 - Root reproduced32 fan-in-shell/security/job-graph tests. Executed snippets cover all default scopes, quoted checkout paths, exact source identity and rejection of unknown scope or crossed manifest digest. Upload authorization/conditions are unchanged. The separate public-evidence consumer still needs its bundle adapter; no CI/game/publication run is claimed. Rollback is this aggregate-job adapter and shell tests.
+
+## Task 12m — verify scoped bundles before public aggregate consumption
+
+- The public-evidence job downloads the production/harness bundle from the same exact source run/attempt as its aggregate. Scoped validation supplies the explicit checkout/stage/manifest and derives scope from the matrix; schema1 keeps the existing unscoped aggregate interface. Source artifact digest checks remain required.
+- Root reproduced33 workflow/graph tests, including executed public-consumer shell checks for legacy/full/unscoped and rejected unknown scope. Downstream Pages/visual readers still need their own normalized adapters, so this does not claim complete public schema2 support. No upload, deployment or publication ran. Rollback is this bundle/validation step and test extension.
+
+## Task 7k — real preparing build, schema3 staging and failed-check stop
+
+- A clean isolated copy of `aee782221c7090deb655dcf65c2c54d27f5ae30c` added only a preparing-schema2 matrix in fixture commit `1b6f3063c8d64f3634eef79d9565635b46ee0316`, preserving the two real lanes' pins and declaring all twelve targets. The strict serial runner passed in61.97 seconds with `check`; all four archives contain exact clean identities. Stage/reverify passed with explicit `legacy` scope and partial2/12 coverage. Manifest SHA256: `341631451a2a22cc7a720661887ac935411684a96fd69c7a159d7eede4a69673`.
+- A separate clean fixture commit `37f580651f360393761a5ed8a3a1ba7cbae62619` added one deliberately invalid common Java test. The runner failed at `:common:compileTestJava`, never started Forge and produced no success manifest. Both runs released their leases/processes; all685 positive source inputs, report, manifest and JARs stayed unchanged afterward.
+- Evidence is under `build/diagnostics/task7k/` and `task7k-negative/`. This proves real local legacy compilation/provenance under preparing schema2, including failure propagation. It does not prove client interaction, modern game lanes or release qualification; the main checkout's matrix remains schema1.

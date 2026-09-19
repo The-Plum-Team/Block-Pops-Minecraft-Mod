@@ -792,11 +792,24 @@ jobs:
           run-id: ${{ steps.identity.outputs.source_run_id }}
           digest-mismatch: error
 
+      - name: Download the matching aggregate artifact bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: >-
+            e2e-input-bundle-${{ inputs.attest_sha || github.sha }}-${{
+            inputs.attest_run_attempt || github.run_attempt }}
+          path: ${{ runner.temp }}/blockpops-public-bundle
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.identity.outputs.source_run_id }}
+          digest-mismatch: error
+
       - name: Revalidate the exact aggregate inventory
         shell: bash
         env:
           PACKAGED_TREE: ${{ steps.identity.outputs.tree }}
           PUBLIC_AGGREGATE: ${{ runner.temp }}/blockpops-public-aggregate
+          PUBLIC_BUNDLE: ${{ runner.temp }}/blockpops-public-bundle
         run: |
           set -euo pipefail
           unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
@@ -804,7 +817,8 @@ jobs:
           if [[ -z "${{ inputs.attest_run_id }}" && "$GITHUB_EVENT_NAME" == schedule ]]; then
             projection=scheduled-anchors
           fi
-          python3 scripts/ci/e2e_fanin.py validate \
+          scope="$(python3 scripts/ci/matrix_scope.py --matrix release/release-matrix.json)"
+          fanin_command=(python3 scripts/ci/e2e_fanin.py validate \
             --input "$PUBLIC_AGGREGATE" \
             --matrix release/release-matrix.json \
             --contract e2e/scenario-contract.json \
@@ -814,7 +828,16 @@ jobs:
             --tree "$PACKAGED_TREE" \
             --run-id "$PACKAGED_RUN_ID" \
             --run-attempt "$PACKAGED_RUN_ATTEMPT" \
-            --projection "$projection"
+            --projection "$projection")
+          case "$scope" in
+            unscoped) ;;
+            legacy|full)
+              fanin_command+=(--scope "$scope" --artifact-repository "$GITHUB_WORKSPACE" \
+                --stage "$PUBLIC_BUNDLE" --artifact-manifest "$PUBLIC_BUNDLE/artifacts.json")
+              ;;
+            *) exit 2 ;;
+          esac
+          "${fanin_command[@]}"
 
       - name: Curate strict SHA-bound public evidence
         env:
