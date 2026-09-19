@@ -1,12 +1,17 @@
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
 
 def releaseMatrix = gradle.ext.blockPopsReleaseMatrix
-def artifacts = releaseMatrix.artifacts as List
-def runtimes = releaseMatrix.runtimes as List
+def laneContext = gradle.ext.blockPopsLaneContext
+def lanes = laneContext.lanes as List
+def artifacts = lanes.collect { it.artifact }
+def runtimes = lanes.collect { it.runtime }
+def modVersions = lanes.collect { it.mod_version as String }.toSet()
+def stonecutterLayout = lanes.every { it.build_layout == 'stonecutter' }
+def buildProjectPaths = gradle.ext.blockPopsBuildProjectPaths as Set
 def minecraftVersions = artifacts.collect { it.minecraft as String }.toSet()
 def javaVersions = artifacts.collect { (it.java as Number).intValue() }.toSet()
-if (minecraftVersions.size() != 1 || javaVersions.size() != 1) {
-    throw new GradleException('A BlockPops release branch must route exactly one Minecraft/Java era')
+if (minecraftVersions.size() != 1 || javaVersions.size() != 1 || modVersions.size() != 1) {
+    throw new GradleException('One Gradle context must route exactly one Minecraft/Java/mod-version era')
 }
 def minecraftVersion = minecraftVersions.first()
 def javaVersion = javaVersions.first()
@@ -23,7 +28,7 @@ def versionOf = { String loader, String dependencyId ->
     def coordinate = coordinateOf(loader, dependencyId)
     return coordinate.substring(coordinate.lastIndexOf(':') + 1)
 }
-def forgeFamilyLoaders = artifacts.collect { it.loader as String }
+def forgeFamilyLoaders = lanes.collect { it.repository_family as String }
         .findAll { it in ['forge', 'neoforge'] }
         .toSet()
 if (forgeFamilyLoaders.size() > 1) {
@@ -32,7 +37,7 @@ if (forgeFamilyLoaders.size() > 1) {
 def forgeFamilyLoader = forgeFamilyLoaders ? forgeFamilyLoaders.first() : null
 
 ext {
-    mod_version = releaseMatrix.project.mod_version as String
+    mod_version = modVersions.first()
     minecraft_version = minecraftVersion
     release_java_version = javaVersion
     enabled_platforms = artifacts.collect { it.loader as String }.sort().join(',')
@@ -77,13 +82,14 @@ allprojects {
     }
 }
 
-subprojects {
+configure(subprojects.findAll { it.path in buildProjectPaths }) {
     apply plugin: 'dev.architectury.loom'
     apply plugin: 'architectury-plugin'
     apply plugin: 'maven-publish'
 
-    def lane = artifacts.find { it.loader == project.name }
-    if (project.name != 'common' && lane == null) {
+    def module = stonecutterLayout ? project.parent.name : project.name
+    def lane = artifacts.find { it.loader == module }
+    if (module != 'common' && lane == null) {
         throw new GradleException("Project ${project.path} has no active matrix lane")
     }
 
@@ -92,7 +98,7 @@ subprojects {
             def loaderName = [fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge'][lane.loader]
             archivesName = "BlockPops - ${loaderName} - ${lane.minecraft}"
         } else {
-            archivesName = "$rootProject.archives_name-$project.name"
+            archivesName = "$rootProject.archives_name-$module"
         }
     }
 

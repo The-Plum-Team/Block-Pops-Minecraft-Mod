@@ -144,7 +144,7 @@ PLUGIN_ONLY_EXCLUSIONS = tuple(
 )
 EXPECTED_POLICY_SHA256 = "f101246914780e6d5fc4ea06e251ee6a584664c530bae489c02c5781b15ea25e"
 EXPECTED_PLUGIN_MANAGEMENT_SHA256 = "fb5e6e4641227587e68ce7180f2edbe3be84b5990e858e5b2c80af9b699521f8"
-EXPECTED_SETTINGS_SHA256 = "6113ea0201092da775aa7ba009f5c4fc9e112f3c33d495e257259c726b045f6f"
+EXPECTED_SETTINGS_SHA256 = "980a99629d3ead09393c796c9a2e8af937cd24a0da63b98dd3127be73b9edc3f"
 XML_DECLARATION = b'<?xml version="1.0" encoding="UTF-8"?>\n'
 
 
@@ -333,9 +333,10 @@ def validate_repository_layout(repository: Path) -> None:
     validate_settings_text(settings)
 
     build = _text(repository / "build.gradle")
+    controller = _text(repository / "stonecutter.gradle")
     conventions = _text(repository / "gradle/build-conventions.gradle")
     root_binding = "apply from: rootProject.file('gradle/build-conventions.gradle')"
-    if build.count(root_binding) != 1:
+    if build.count(root_binding) != 1 or controller.count(root_binding) != 1:
         raise DependencyPolicyError("root build conventions binding is not exact")
     binding = "apply from: rootProject.file('gradle/repository-policy.gradle')"
     if conventions.count(binding) != 1:
@@ -355,7 +356,9 @@ def validate_repository_layout(repository: Path) -> None:
         "gradle/build-conventions.gradle",
         "gradle/e2e-harness-conventions.gradle",
         "gradle/repository-policy.gradle",
+        "gradle/stonecutter-branch.gradle",
         "settings.gradle",
+        "stonecutter.gradle",
     }
     expected_gradle_files.update(
         f"{loader}/build.gradle"

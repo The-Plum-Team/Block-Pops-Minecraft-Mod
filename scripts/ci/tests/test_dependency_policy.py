@@ -400,7 +400,7 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
     def test_stonecutter_origin_is_limited_to_two_plugin_modules(self) -> None:
         settings = (REPO / "settings.gradle").read_text("utf-8")
         policy = POLICY.read_text("utf-8")
-        self.assertNotIn("id 'dev.kikugie.stonecutter'", settings)
+        self.assertIn("id 'dev.kikugie.stonecutter' version '0.7.11' apply false", settings)
         for exclusion in PLUGIN_ONLY_EXCLUSIONS:
             inclusion = exclusion.replace("excludeModule", "includeModule", 1)
             self.assertEqual(settings.count(inclusion), 1)
@@ -512,6 +512,7 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
 
     def test_missing_or_duplicate_convention_bindings_fail_closed(self) -> None:
         for relative, target in (("build.gradle", "build-conventions"),
+                                 ("stonecutter.gradle", "build-conventions"),
                                  ("gradle/build-conventions.gradle", "repository-policy")):
             binding = f"apply from: rootProject.file('gradle/{target}.gradle')"
             for replacement in ("", binding + "\n" + binding):

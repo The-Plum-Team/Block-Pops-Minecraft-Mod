@@ -205,3 +205,10 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - POSIX subprocesses own a new session/group; cancellation terminates only that group, escalates when needed and waits before releasing the lock. Incomplete cleanup retains the lock. Windows execution fails before spawning until its process-tree implementation is ready; the CLI still requires `--plan`.
 - Root reproduced43 planner/runtime/context tests. A real Python parent/child cancellation test proves the owned tree exits while a separate sentinel survives; other tests cover startup failure, stale/replaced locks, cross-process contention, ordering and escalation. No Gradle ran in these tests.
 - Rollback is these lock/process primitives and tests. Task7 still needs toolchain/source/output validation, atomic status reports and CLI orchestration; this unit grants no build qualification.
+
+## Task 6c — isolated Stonecutter topology and normalized build inputs
+
+- Settings can construct exactly the selected common/version and loader/version nodes with a detached `stonecutter.gradle` controller; parent descriptors remain empty. Shared conventions now derive version, runtime dependencies, repository family and configured project paths from selected normalized lanes.
+- An explicit pre-configuration guard keeps Stonecutter game execution disabled until common/loader/E2E adapters are complete. Selected FML legacy execution also reports the missing common annotation-dependency adapter; the existing default legacy aggregate remains intact. No silent cross-lane input is borrowed.
+- Root reproduced21 context/policy tests and the policy CLI. Serialized isolated probes used exact settings/controller bytes and strict metadata: modern topology was exact and hit the expected guard before game/plugin configuration; schema1 and preparing defaults retained legacy descriptors. Probe inputs remained unchanged; results are under `build/diagnostics/stonecutter-context-probe/`.
+- This is a selected-node foundation, not working Minecraft compilation or task6 completion. Rollback includes controller/descriptor/convention wiring and its policy inventory/digest updates.

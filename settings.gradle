@@ -89,6 +89,7 @@ pluginManagement {
 }
 
 plugins {
+    id 'dev.kikugie.stonecutter' version '0.7.11' apply false
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
@@ -123,7 +124,7 @@ def laneContext = new JsonSlurper().parseText(
     new String(matrixBytes, StandardCharsets.UTF_8)
 )
 def releaseMatrix = laneContext.matrix
-if (releaseMatrix.schema_version != 1) {
+if (!(releaseMatrix.schema_version in [1, 2])) {
     throw new GradleException('Unsupported release matrix schema')
 }
 if (!(releaseMatrix.artifacts instanceof List)
@@ -143,5 +144,33 @@ gradle.ext.blockPopsReleaseMatrix = releaseMatrix
 gradle.ext.blockPopsReleaseMatrixFile = matrixFile
 gradle.ext.blockPopsLaneContext = laneContext
 
-include 'common'
-activeLoaders.sort().each { include it }
+def layouts = laneContext.lanes.collect { it.build_layout }.toSet()
+if (layouts == ['legacy'] as Set) {
+    include 'common'
+    activeLoaders.sort().each { include it }
+    gradle.ext.blockPopsBuildProjectPaths = [':common'] + activeLoaders.sort().collect { ":${it}".toString() }
+    if (laneContext.scope == 'lane' && !activeLoaders.contains('fabric')) {
+        throw new GradleException('Selected FML lane requires an explicit common Fabric-annotation dependency adapter')
+    }
+} else if (layouts == ['stonecutter'] as Set && laneContext.lanes.size() == 1 && selectedNode != null) {
+    def lane = laneContext.lanes[0]
+    def minecraftVersion = lane.artifact.minecraft as String
+    def loader = lane.artifact.loader as String
+    apply plugin: 'dev.kikugie.stonecutter'
+    stonecutter.kotlinController.set(false)
+    stonecutter.centralScript.set('build.gradle')
+    stonecutter.create(rootProject, { tree ->
+        ['common', loader].each { module ->
+            tree.branch(module) { branch ->
+                branch.branchScript.set('../gradle/stonecutter-branch.gradle')
+                branch.version(minecraftVersion)
+            }
+        }
+    } as org.gradle.api.Action)
+    gradle.ext.blockPopsBuildProjectPaths = [":common:${minecraftVersion}".toString(), ":${loader}:${minecraftVersion}".toString()]
+    gradle.projectsLoaded {
+        throw new GradleException('Selected Stonecutter graph requires common, loader and E2E node adapters before game configuration')
+    }
+} else {
+    throw new GradleException('One Gradle process requires one supported build layout and explicit Stonecutter lane')
+}
