@@ -516,3 +516,8 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 
 - Historical schema1 tests and synthetic schema2 factories now use a frozen pre-enrollment matrix instead of inheriting future live-matrix changes. A separate live smoke still validates the real checkout's normalized configuration, source tree and default selection. Runtime recipe identities and legacy artifact/report contracts remain unchanged.
 - Root reproduced68 directly affected tests; the independent focused run covered177. The snapshot preserves the pre-migration matrix content, while receipts always hash the fixture's actual bytes rather than confusing CRLF checkout bytes with the LF Git blob. Trusted controller/bootstrap and source-backed visual fixtures remain for separate preparation units. No live matrix or production reader changed. Rollback is fixture/helpers and their test consumers together.
+
+## Task 8b — keep protected-policy fixtures independent of enrollment
+
+- PR-policy and loader-bootstrap temporary repositories now seed only their matrix from the frozen schema1 fixture. Every executable controller, verification metadata file, loader build and bootstrap contract still comes from the current checkout; mutations operate on those temporary repositories.
+- Root reproduced94 policy/bootstrap tests, including the existing restricted-evaluation schema2 rejection. No production admission rule was relaxed and no protected hash was frozen to stale bytes. Rollback is these two test-fixture adapters.

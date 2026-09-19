@@ -20,6 +20,7 @@ from scripts.ci.loader_bootstrap import (
 )
 from scripts.release.matrix import load_matrix
 from scripts.ci.tests.matrix_fixtures import schema2_configuration
+from tests.matrix_fixtures import SCHEMA1_MATRIX_PATH
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -50,7 +51,7 @@ class LoaderBootstrapTests(unittest.TestCase):
         _run(self.repository, "config", "user.name", "BlockPops Tests")
         _run(self.repository, "config", "user.email", "tests@blockpops.invalid")
         matrix = load_matrix(
-            REPO / "release/release-matrix.json",
+            SCHEMA1_MATRIX_PATH,
             validate_sources=False,
         )
         paths = {
@@ -67,7 +68,8 @@ class LoaderBootstrapTests(unittest.TestCase):
         for relative in sorted(paths):
             target = self.repository / relative
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(REPO / relative, target)
+            source = SCHEMA1_MATRIX_PATH if relative == "release/release-matrix.json" else REPO / relative
+            shutil.copyfile(source, target)
         self.write_contract(_current_contract())
         self.head = self.commit("valid active loader bootstrap")
 
@@ -233,7 +235,7 @@ class LoaderBootstrapTests(unittest.TestCase):
     def test_active_loaders_are_derived_from_this_branch_matrix(self) -> None:
         result = validate_commit(self.repository, head_sha=self.head)
         matrix = load_matrix(
-            REPO / "release/release-matrix.json",
+            self.repository / "release/release-matrix.json",
             validate_sources=False,
         )
         self.assertEqual(
@@ -244,7 +246,7 @@ class LoaderBootstrapTests(unittest.TestCase):
 
     def test_build_byte_mutation_is_rejected_by_protected_contract(self) -> None:
         loader = load_matrix(
-            REPO / "release/release-matrix.json", validate_sources=False
+            self.repository / "release/release-matrix.json", validate_sources=False
         )["artifacts"][0]["loader"]
         path = self.repository / loader / "build.gradle"
         path.write_text(path.read_text() + "\n// candidate mutation\n", encoding="utf-8")
@@ -258,7 +260,7 @@ class LoaderBootstrapTests(unittest.TestCase):
 
     def test_binding_must_be_unique_and_final_even_if_digest_is_allowlisted(self) -> None:
         loader = load_matrix(
-            REPO / "release/release-matrix.json", validate_sources=False
+            self.repository / "release/release-matrix.json", validate_sources=False
         )["artifacts"][0]["loader"]
         for label, mutation in (
             ("duplicated", lambda text: text + "\n" + HARNESS_BINDING + "\n"),
@@ -281,7 +283,7 @@ class LoaderBootstrapTests(unittest.TestCase):
 
     def test_missing_extra_and_executable_bootstrap_files_fail_closed(self) -> None:
         matrix = load_matrix(
-            REPO / "release/release-matrix.json", validate_sources=False
+            self.repository / "release/release-matrix.json", validate_sources=False
         )
         loader = matrix["artifacts"][0]["loader"]
         files = sorted((self.repository / loader / "src/e2e").rglob("*"))

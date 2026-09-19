@@ -16,6 +16,7 @@ from scripts.ci.e2e_job_graph import expected_jobs
 from scripts.ci.e2e_fanin import aggregate_artifact_name
 from scripts.ci.loader_bootstrap import HARNESS_BINDING
 from scripts.ci.tests.matrix_fixtures import schema2_configuration
+from tests.matrix_fixtures import SCHEMA1_MATRIX_PATH
 from scripts.ci.pr_gate import (
     CONTROLLER_UPGRADE_REQUIRED,
     CONTEXTS,
@@ -51,7 +52,7 @@ from scripts.ci.pr_gate import (
 
 
 REPO = Path(__file__).resolve().parents[3]
-MATRIX = REPO / "release/release-matrix.json"
+MATRIX = SCHEMA1_MATRIX_PATH
 MATRIX_IDENTITY = json.loads(MATRIX.read_text(encoding="utf-8"))["branch"]
 MERGE = "d" * 40
 HEAD = "c" * 40
@@ -1006,7 +1007,7 @@ class TreePolicyTests(unittest.TestCase):
         for relative in EXACT_BASE_OWNED_PATHS:
             target = self.repository / relative
             target.parent.mkdir(parents=True, exist_ok=True)
-            source = REPO / relative
+            source = MATRIX if relative == "release/release-matrix.json" else REPO / relative
             if source.is_file():
                 shutil.copyfile(source, target)
             else:
@@ -1051,7 +1052,7 @@ class TreePolicyTests(unittest.TestCase):
         current = self.merged()
         with mock.patch("scripts.ci.pr_gate.validate_controller_parity") as parity:
             matrix = validate_pr_tree(self.repository, current)
-        self.assertEqual((REPO / "release/release-matrix.json").read_bytes(), matrix)
+        self.assertEqual(MATRIX.read_bytes(), matrix)
         self.assertEqual(
             [
                 mock.call(self.repository.resolve(), protected_sha=self.base, candidate_sha=self.base),
@@ -1616,7 +1617,7 @@ class ControllerUpgradeTreeTests(unittest.TestCase):
         for relative in sorted(files):
             target = self.repository / relative
             target.parent.mkdir(parents=True, exist_ok=True)
-            source = REPO / relative
+            source = MATRIX if relative == "release/release-matrix.json" else REPO / relative
             if source.is_file():
                 shutil.copyfile(source, target)
             else:
