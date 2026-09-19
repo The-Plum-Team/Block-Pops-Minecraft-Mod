@@ -1,0 +1,163 @@
+import org.gradle.api.tasks.bundling.AbstractArchiveTask
+
+def releaseMatrix = gradle.ext.blockPopsReleaseMatrix
+def artifacts = releaseMatrix.artifacts as List
+def runtimes = releaseMatrix.runtimes as List
+def minecraftVersions = artifacts.collect { it.minecraft as String }.toSet()
+def javaVersions = artifacts.collect { (it.java as Number).intValue() }.toSet()
+if (minecraftVersions.size() != 1 || javaVersions.size() != 1) {
+    throw new GradleException('A BlockPops release branch must route exactly one Minecraft/Java era')
+}
+def minecraftVersion = minecraftVersions.first()
+def javaVersion = javaVersions.first()
+def runtimeByLoader = runtimes.collectEntries { [(it.loader as String): it] }
+def coordinateOf = { String loader, String dependencyId ->
+    def runtime = runtimeByLoader[loader]
+    def dependency = runtime?.runtime_dependencies?.find { it.id == dependencyId }
+    if (dependency == null) {
+        throw new GradleException("Release matrix has no ${dependencyId} runtime dependency for ${loader}")
+    }
+    return dependency.coordinate as String
+}
+def versionOf = { String loader, String dependencyId ->
+    def coordinate = coordinateOf(loader, dependencyId)
+    return coordinate.substring(coordinate.lastIndexOf(':') + 1)
+}
+def forgeFamilyLoaders = artifacts.collect { it.loader as String }
+        .findAll { it in ['forge', 'neoforge'] }
+        .toSet()
+if (forgeFamilyLoaders.size() > 1) {
+    throw new GradleException('A release branch cannot activate Forge and NeoForge together')
+}
+def forgeFamilyLoader = forgeFamilyLoaders ? forgeFamilyLoaders.first() : null
+
+ext {
+    mod_version = releaseMatrix.project.mod_version as String
+    minecraft_version = minecraftVersion
+    release_java_version = javaVersion
+    enabled_platforms = artifacts.collect { it.loader as String }.sort().join(',')
+    runtime_dependency_coordinate = coordinateOf
+    forge_family_loader = forgeFamilyLoader
+    architectury_api_version = versionOf(artifacts[0].loader as String, 'architectury')
+    geckolib_version = versionOf(artifacts[0].loader as String, 'geckolib')
+}
+runtimeByLoader.each { String loader, Object runtime ->
+    switch (loader) {
+        case 'fabric':
+            ext.fabric_loader_version = runtime.loader_version as String
+            ext.fabric_api_version = versionOf('fabric', 'fabric-api')
+            break
+        case 'forge':
+            ext.forge_version = runtime.loader_version as String
+            break
+        case 'neoforge':
+            ext.neoforge_version = runtime.loader_version as String
+            break
+        default:
+            throw new GradleException("Unsupported loader ${loader}")
+    }
+}
+
+architectury {
+    minecraft = minecraftVersion
+}
+
+allprojects {
+    group = rootProject.maven_group
+    version = rootProject.mod_version
+
+    // Network dependencies remain checksum-verified. The shared policy also
+    // makes Loom's generated namespaces unreachable from every remote Maven
+    // repository before dependency verification exempts those local outputs.
+    apply from: rootProject.file('gradle/repository-policy.gradle')
+
+    tasks.withType(AbstractArchiveTask).configureEach {
+        preserveFileTimestamps = false
+        reproducibleFileOrder = true
+    }
+}
+
+subprojects {
+    apply plugin: 'dev.architectury.loom'
+    apply plugin: 'architectury-plugin'
+    apply plugin: 'maven-publish'
+
+    def lane = artifacts.find { it.loader == project.name }
+    if (project.name != 'common' && lane == null) {
+        throw new GradleException("Project ${project.path} has no active matrix lane")
+    }
+
+    base {
+        if (lane != null) {
+            def loaderName = [fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge'][lane.loader]
+            archivesName = "BlockPops - ${loaderName} - ${lane.minecraft}"
+        } else {
+            archivesName = "$rootProject.archives_name-$project.name"
+        }
+    }
+
+    repositories {
+        maven {
+            name = 'GeckoLib'
+            url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
+            content {
+                includeGroupByRegex('software\\.bernie(\\..*)?')
+                includeGroup('com.eliotlash.mclib')
+            }
+        }
+    }
+
+    dependencies {
+        minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
+        mappings loom.officialMojangMappings()
+    }
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(javaVersion)
+        }
+        withSourcesJar()
+        sourceCompatibility = JavaVersion.toVersion(javaVersion)
+        targetCompatibility = JavaVersion.toVersion(javaVersion)
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.release = javaVersion
+        options.encoding = 'UTF-8'
+    }
+
+    publishing {
+        publications {
+            mavenJava(MavenPublication) {
+                artifactId = base.archivesName.get()
+                from components.java
+            }
+        }
+    }
+}
+
+tasks.register('validateReleaseMatrix', Exec) {
+    group = 'verification'
+    description = 'Validates the sole release/version/loader authority.'
+    workingDir rootProject.projectDir
+    commandLine(System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3',
+        'scripts/release/matrix.py', '--matrix', 'release/release-matrix.json')
+    standardOutput = new ByteArrayOutputStream()
+}
+
+tasks.register('buildAllLanes') {
+    group = 'build'
+    description = 'Builds every production artifact declared by this branch matrix.'
+    dependsOn artifacts.collect { it.gradle_task as String }
+}
+
+tasks.register('buildAllE2EHarnesses') {
+    group = 'verification'
+    description = 'Builds each physically separate packaged-E2E harness.'
+    dependsOn artifacts.collect { it.harness_task as String }
+}
+
+tasks.register('check') {
+    group = 'verification'
+    dependsOn tasks.named('validateReleaseMatrix')
+}

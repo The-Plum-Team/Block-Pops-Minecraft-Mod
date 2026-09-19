@@ -333,8 +333,12 @@ def validate_repository_layout(repository: Path) -> None:
     validate_settings_text(settings)
 
     build = _text(repository / "build.gradle")
+    conventions = _text(repository / "gradle/build-conventions.gradle")
+    root_binding = "apply from: rootProject.file('gradle/build-conventions.gradle')"
+    if build.count(root_binding) != 1:
+        raise DependencyPolicyError("root build conventions binding is not exact")
     binding = "apply from: rootProject.file('gradle/repository-policy.gradle')"
-    if build.count(binding) != 1:
+    if conventions.count(binding) != 1:
         raise DependencyPolicyError("project repository policy binding is not exact")
 
     properties = _text(repository / "gradle.properties").splitlines()
@@ -348,6 +352,7 @@ def validate_repository_layout(repository: Path) -> None:
     expected_gradle_files = {
         "build.gradle",
         "common/build.gradle",
+        "gradle/build-conventions.gradle",
         "gradle/e2e-harness-conventions.gradle",
         "gradle/repository-policy.gradle",
         "settings.gradle",

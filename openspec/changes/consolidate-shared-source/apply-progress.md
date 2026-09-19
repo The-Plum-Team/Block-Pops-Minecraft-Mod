@@ -178,3 +178,9 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Root reproduced 37 context/matrix/policy tests. Independent review compared two schema-1 API results and16 existing CLI outputs with HEAD: identical;16 lane selections and seven inconsistent-input mutations passed their expected checks.
 - Serial isolated Gradle8.14/Java21 probes exercised the actual settings body/parser with only the Foojay plugin request omitted: default includes common/Fabric/Forge; each selected lane includes only common and its loader; unknown selection fails during settings. Evidence is under `build/diagnostics/gradle-context-probe/`. No Loom/game configuration or schema2 execution is claimed.
 - Rollback is the settings consumer, context projection/tests and exact settings digest. The next build adapter must consume `context.lanes`, never infer a lane from the full matrix's first row.
+
+## Task 6b — reusable existing build conventions
+
+- Extracted the existing root build body/import verbatim to `gradle/build-conventions.gradle`; root plugin requests remain unchanged and apply that file once. This prepares reuse by the required `stonecutter.gradle` controller without copying build logic or changing its behavior.
+- Root independently compared the extracted content with the previous committed bytes. Sixteen dependency-policy tests and its CLI pass; the audited Gradle-file inventory now includes the conventions and rejects missing/duplicate root or repository-policy bindings.
+- The rename-independent authored count remains below400 including this evidence. No plugin application, selected-node activation or game build occurred; rollback restores this extraction and its binding checks together.

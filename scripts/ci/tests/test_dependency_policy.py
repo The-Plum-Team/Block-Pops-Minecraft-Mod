@@ -4,6 +4,7 @@ import copy
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 from xml.etree import ElementTree
 
@@ -466,8 +467,10 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
         self.assertIn("/.gradle/ @AkaNebur", codeowners)
         self.assertIn("/buildSrc/ @AkaNebur", codeowners)
         build_script = (REPO / "build.gradle").read_text("utf-8")
+        self.assertEqual(build_script.count("apply from: rootProject.file('gradle/build-conventions.gradle')"), 1)
+        conventions = (REPO / "gradle/build-conventions.gradle").read_text("utf-8")
         self.assertEqual(
-            build_script.count("apply from: rootProject.file('gradle/repository-policy.gradle')"),
+            conventions.count("apply from: rootProject.file('gradle/repository-policy.gradle')"),
             1,
         )
         properties = (REPO / "gradle.properties").read_text("utf-8").splitlines()
@@ -481,7 +484,7 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
             if (REPO / loader / "build.gradle").is_file()
         )
         for build_file in (
-            REPO / "build.gradle",
+            REPO / "gradle/build-conventions.gradle",
             REPO / "common" / "build.gradle",
             *loader_build_files,
         ):
@@ -506,6 +509,19 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
                     workflow,
                     r"--dependency-verification(?:=|\s+)(?:off|lenient)",
                 )
+
+    def test_missing_or_duplicate_convention_bindings_fail_closed(self) -> None:
+        for relative, target in (("build.gradle", "build-conventions"),
+                                 ("gradle/build-conventions.gradle", "repository-policy")):
+            binding = f"apply from: rootProject.file('gradle/{target}.gradle')"
+            for replacement in ("", binding + "\n" + binding):
+                def read(path):
+                    text = path.read_text("utf-8")
+                    return text.replace(binding, replacement, 1) if path == REPO / relative else text
+                with self.subTest(relative=relative, replacement=replacement), mock.patch(
+                    "scripts.ci.dependency_policy._text", side_effect=read
+                ), self.assertRaisesRegex(DependencyPolicyError, "binding is not exact"):
+                    validate_repository_layout(REPO)
 
 
 if __name__ == "__main__":
