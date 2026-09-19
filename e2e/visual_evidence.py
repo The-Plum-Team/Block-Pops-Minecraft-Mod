@@ -38,7 +38,9 @@ from scripts.lib.secure_json import (
     read as read_secure_json,
     require_object,
 )
-from scripts.release.matrix import MatrixError, load_matrix, matrix_sha256, valid_branch_name
+from scripts.release.matrix import (
+    MAX_MATRIX_BYTES, MatrixDocument, MatrixError, normalize_matrix_inventory, valid_branch_name,
+)
 
 
 SHA1 = re.compile(r"^[0-9a-f]{40}$")
@@ -1065,6 +1067,7 @@ def _validate_evidence_root_outputs(
     root: Path,
     results: list[dict[str, Any]],
     contract: ScenarioContract,
+    coverage: dict[str, Any],
 ) -> None:
     allowed = {
         "aggregate.json",
@@ -1110,7 +1113,7 @@ def _validate_evidence_root_outputs(
             root / "resolved-matrix.json", label="resolved E2E matrix", max_bytes=MAX_JSON_BYTES
         )
         resolved = require_object(
-            resolved, label="resolved E2E matrix", required={"schema_version", "rows"}
+            resolved, label="resolved E2E matrix", required={"schema_version", "rows"} | set(coverage)
         )
         summary, _ = read_secure_json(
             root / "summary.json", label="packaged E2E summary", max_bytes=MAX_JSON_BYTES
@@ -1118,7 +1121,7 @@ def _validate_evidence_root_outputs(
         summary = require_object(
             summary,
             label="packaged E2E summary",
-            required={"schema_version", "contract_sha256", "results", "runtime_store"},
+            required={"schema_version", "contract_sha256", "results", "runtime_store"} | set(coverage),
         )
         runtime, _ = read_secure_json(
             root / "runtime-store.json", label="runtime store summary", max_bytes=MAX_JSON_BYTES
@@ -1128,8 +1131,22 @@ def _validate_evidence_root_outputs(
         )
     except SecureJsonError as exc:
         raise VisualEvidenceError(str(exc)) from exc
-    if resolved["schema_version"] != 1 or summary["schema_version"] != 1 or runtime["schema_version"] != 1:
-        _fail("packaged orchestrator output schema_version must be 1")
+    for payload in (resolved, summary):
+        if canonical_json({key: payload[key] for key in coverage}) != canonical_json(coverage):
+            _fail("packaged evidence coverage disagrees with external scope")
+    if "aggregate_scope" in coverage:
+        try:
+            aggregate, _ = read_secure_json(root / "aggregate.json", label="visual aggregate receipt",
+                                           max_bytes=MAX_JSON_BYTES)
+        except SecureJsonError as exc:
+            raise VisualEvidenceError(str(exc)) from exc
+        if not isinstance(aggregate, dict) or canonical_json(aggregate.get("aggregate_scope")) != canonical_json(coverage["aggregate_scope"]):
+            _fail("visual aggregate receipt disagrees with external scope")
+    elif coverage and "aggregate.json" in observed:
+        _fail("aggregate evidence requires an external projection")
+    if any(type(payload["schema_version"]) is not int or payload["schema_version"] != 1
+           for payload in (resolved, summary, runtime)):
+        _fail("packaged orchestrator output schema_version must be integer 1")
     expected_rows = [
         {
             "artifact_node": result["artifact_node"],
@@ -1196,12 +1213,69 @@ def _validate_evidence_root_outputs(
         _fail("packaged E2E runtime-store metrics use an unknown schema")
 
 
+def _visual_selection(matrix, provenance, contract, *, scope, artifact_node, artifact_scope, projection):
+    """Scope arguments come from the caller; none are inferred from artifact contents.
+
+    artifact_scope is the scope of an externally verified artifact bundle. Execution
+    may select one lane from that bundle; an aggregate must cover the entire bundle.
+    This checks coverage only; the caller still authenticates fan-in and JAR provenance.
+    """
+    try:
+        document = MatrixDocument(normalize_matrix_inventory(matrix), canonical_json(matrix).decode("utf-8"))
+        if document.inventory.schema_version == 1:
+            if any(value is not None for value in (scope, artifact_node, artifact_scope, projection)):
+                _fail("scoped visual evidence requires schema2")
+            return {lane.identity.artifact_node: lane.runtime for lane in document.inventory.lanes}, {}
+        if scope not in {"lane", "legacy", "full"}:
+            _fail("schema2 visual evidence requires explicit external scope")
+        lanes = document.select_lanes(scope=scope, artifact_node=artifact_node)
+        nodes = sorted(lane.identity.artifact_node for lane in lanes)
+        if nodes != provenance["artifact_nodes"]:
+            _fail("attested visual lanes disagree with external scope")
+        if not isinstance(artifact_scope, dict) or artifact_scope.get("kind") not in {"lane", "legacy", "full"}:
+            _fail("schema2 visual evidence requires external artifact bundle scope")
+        bundle_nodes = artifact_scope.get("selected_nodes")
+        if not isinstance(bundle_nodes, list) or not bundle_nodes:
+            _fail("external artifact bundle scope has no selected nodes")
+        bundle_lanes = document.select_lanes(scope=artifact_scope["kind"],
+            artifact_node=bundle_nodes[0] if artifact_scope["kind"] == "lane" else None)
+        bundle_lanes = sorted(bundle_lanes, key=lambda lane: (
+            tuple(map(int, lane.identity.minecraft.split("."))), lane.identity.loader))
+        expected_bundle = {"kind": artifact_scope["kind"],
+            "selected_nodes": [lane.identity.artifact_node for lane in bundle_lanes],
+            "target_nodes": list(document.inventory.target_nodes),
+            "migration_mode": document.inventory.migration_mode,
+            "partial": len(bundle_lanes) != len(document.inventory.targets)}
+        if canonical_json(artifact_scope) != canonical_json(expected_bundle) or not set(nodes) <= set(bundle_nodes):
+            _fail("external artifact bundle scope disagrees with selected matrix lanes")
+        scenarios = provenance["scenarios"]
+        if projection is not None:
+            if projection not in {"pr-anchors", "scheduled-anchors"}:
+                _fail("visual aggregate projection is unsupported")
+            projected = document.projection(projection, scope=scope, artifact_node=artifact_node, contract=contract)
+            if (scope != artifact_scope["kind"] or set(nodes) != set(bundle_nodes)
+                    or scenarios != sorted({scenario for row in projected["include"] for scenario in row["scenarios"].split(",")})):
+                _fail("visual aggregate must cover the external bundle and projected scenarios")
+            coverage = {"aggregate_scope": {**expected_bundle, "projection": projection, "scenarios": scenarios}}
+        else:
+            coverage = {"execution_scope": {"kind": scope, "selected_nodes": [lane.identity.artifact_node for lane in lanes],
+                "scenarios": scenarios, "target_nodes": list(document.inventory.target_nodes),
+                "partial": len(lanes) != len(document.inventory.targets), "artifact_scope": expected_bundle}}
+        return {lane.identity.artifact_node: lane.runtime for lane in lanes}, coverage
+    except MatrixError as exc:
+        raise VisualEvidenceError(str(exc)) from exc
+
+
 def collect_evidence(
     root: Path,
     *,
     matrix: dict[str, Any],
     contract: ScenarioContract,
     provenance: dict[str, Any],
+    scope: str | None = None,
+    artifact_node: str | None = None,
+    artifact_scope: dict[str, Any] | None = None,
+    projection: str | None = None,
 ) -> tuple[VisualFrame, ...]:
     """Validate a complete attested lane/scenario inventory below an extracted artifact."""
 
@@ -1209,7 +1283,8 @@ def collect_evidence(
     profiles = _require_real_directory(root / "profiles", "packaged evidence profiles")
     nodes = _validated_string_list(provenance["artifact_nodes"], "artifact_nodes")
     scenarios = _validated_string_list(provenance["scenarios"], "scenarios")
-    matrix_rows = {row["artifact_node"]: row for row in matrix["runtimes"]}
+    matrix_rows, coverage = _visual_selection(matrix, provenance, contract, scope=scope,
+        artifact_node=artifact_node, artifact_scope=artifact_scope, projection=projection)
     if not set(nodes) <= set(matrix_rows):
         _fail("attested visual artifact contains lanes outside the branch matrix")
     if not set(scenarios) <= set(contract.scenario_ids):
@@ -1257,7 +1332,7 @@ def collect_evidence(
         )
     if len({frame.label for frame in frames}) != len(frames):
         _fail("packaged evidence contains duplicate semantic frame identities")
-    _validate_evidence_root_outputs(root, results, contract)
+    _validate_evidence_root_outputs(root, results, contract, coverage)
     return tuple(frames)
 
 
@@ -1269,14 +1344,19 @@ def load_archived_evidence(
     matrix_path: Path,
     contract_path: Path,
     extraction_destination: Path,
+    scope: str | None = None,
+    artifact_node: str | None = None,
+    artifact_scope: dict[str, Any] | None = None,
+    projection: str | None = None,
 ) -> EvidenceBundle:
     """High-level secretless boundary from authenticated ZIP to normalized frames."""
 
     try:
-        matrix = load_matrix(matrix_path)
+        matrix, matrix_bytes = read_secure_json(matrix_path, label="visual release matrix", max_bytes=MAX_MATRIX_BYTES)
+        normalize_matrix_inventory(matrix, repository=matrix_path.resolve().parents[1])
         contract = load_contract(contract_path)
-        selected_matrix_sha256 = matrix_sha256(matrix_path)
-    except (MatrixError, ScenarioContractError) as exc:
+        selected_matrix_sha256 = _sha256_bytes(matrix_bytes)
+    except (MatrixError, ScenarioContractError, SecureJsonError) as exc:
         raise VisualEvidenceError(str(exc)) from exc
     provenance = read_attestation(
         attestation_path,
@@ -1292,7 +1372,8 @@ def load_archived_evidence(
         expected_sha256=provenance["artifact_sha256"],
     )
     frames = collect_evidence(
-        extracted, matrix=matrix, contract=contract, provenance=provenance
+        extracted, matrix=matrix, contract=contract, provenance=provenance,
+        scope=scope, artifact_node=artifact_node, artifact_scope=artifact_scope, projection=projection,
     )
     return EvidenceBundle(
         provenance=provenance,

@@ -532,3 +532,9 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 
 - Build and E2E build jobs now share one repository-scoped concurrency group with running-job cancellation disabled and a multi-pending queue. Runtime-only jobs retain their existing scheduling. This adds the cross-workflow serialization required by the design, alongside each runner's local checkout lease.
 - Root reproduced39 workflow/graph tests. The `jobs.<job_id>.concurrency` and `queue: max` behavior was checked against [GitHub's current documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency). Existing workflow-level obsolete-run cancellation remains separate; no scheduler/CI execution is claimed locally. Rollback must retain equivalent cross-workflow Gradle serialization.
+
+## Task 12o — consume externally scoped visual evidence
+
+- The visual evidence reader normalizes both schemas and requires external execution selection plus verified artifact-bundle scope for schema2. A lane may execute within a wider bundle; an aggregate must match that bundle and its external anchor projection. Exact attested nodes, scenarios, images and coverage remain mandatory. Matrix authentication now hashes the same secure read used for normalization.
+- Root reproduced58 existing/scoped visual tests, then all8 scoped tests after six boolean/float output-schema mutations exposed and fixed an inherited numeric-alias acceptance. The final independent run passed59 tests. These synthetic pixels do not qualify gameplay, and this reader's coverage checks do not replace caller-owned bundle/fan-in authentication.
+- Curator/capsule callers remain fail-closed until their adapters. Rollback is the scoped evidence API/tests, retaining exact integer schema validation and single-read matrix binding.
