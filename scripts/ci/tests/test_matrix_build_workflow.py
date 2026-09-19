@@ -14,14 +14,18 @@ REPO = Path(__file__).resolve().parents[3]
 WORKFLOW = REPO / ".github/workflows/build-gate.yml"
 
 
-def script(step):
-    text = WORKFLOW.read_text().split("      - name: " + step, 1)[1].split("      - name:", 1)[0]
+def script(workflow, step):
+    text = workflow.read_text().split("      - name: " + step, 1)[1].split("      - name:", 1)[0]
     return re.search(r"bash -euo pipefail -c '\n(.*?)\n            ' _", text, re.S).group(1)
 
 
 class MatrixBuildWorkflowTests(unittest.TestCase):
+    workflow = WORKFLOW
+    build_step = "Validate and build entirely inside the credentialless account"
+    validate_step = "Reverify inert outputs under a fresh credentialless validator identity"
+
     def test_java17_path_is_a_positional_argument_and_gradle_jdk_remains_default(self):
-        workflow = WORKFLOW.read_text()
+        workflow = self.workflow.read_text()
         self.assertLess(workflow.index("name: Install the legacy compiler JDK"),
                         workflow.index("name: Install the matrix-owned Gradle JDK"))
         self.assertIn("BLOCKPOPS_JAVA17_HOME: ${{ steps.java17.outputs.path }}", workflow)
@@ -53,7 +57,7 @@ if args and args[0] == "scripts/release/build_matrix.py":
                     "GRADLE_USER_HOME": str(self.root), "BLOCKPOPS_TESTED_SHA": "a" * 40}
 
     def run_step(self, step, scope, argument, **env):
-        result = subprocess.run(["bash", "-euo", "pipefail", "-c", script(step), "_", argument],
+        result = subprocess.run(["bash", "-euo", "pipefail", "-c", script(self.workflow, step), "_", argument],
             cwd=self.root, env={**self.env, "MATRIX_SCOPE": scope, **env}, capture_output=True, text=True)
         rows = [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
         self.log.unlink(missing_ok=True)
@@ -63,8 +67,7 @@ if args and args[0] == "scripts/release/build_matrix.py":
         for scope in ("unscoped", "legacy", "full"):
             with self.subTest(scope=scope):
                 home17 = "/jdk17 home/$(touch forbidden)"
-                result, rows = self.run_step("Validate and build entirely inside the credentialless account",
-                                             scope, home17)
+                result, rows = self.run_step(self.build_step, scope, home17)
                 self.assertEqual(0, result.returncode, result.stderr)
                 builds = [row for row in rows if row[0] == "gradlew" or
                           row[1:2] == ["scripts/release/build_matrix.py"]]
@@ -85,8 +88,7 @@ if args and args[0] == "scripts/release/build_matrix.py":
         for scope in ("unscoped", "legacy", "full"):
             with self.subTest(scope=scope):
                 repository = "/sealed candidate"
-                result, rows = self.run_step("Reverify inert outputs under a fresh credentialless validator identity",
-                                             scope, repository)
+                result, rows = self.run_step(self.validate_step, scope, repository)
                 self.assertEqual(0, result.returncode, result.stderr)
                 self.assertEqual(["python3", "scripts/ci/matrix_scope.py", "--matrix",
                                   repository + "/release/release-matrix.json"], rows[0])
@@ -99,10 +101,15 @@ if args and args[0] == "scripts/release/build_matrix.py":
         for scope, env in (("lane", {}), ("legacy", {"SCOPE_EXIT": "2"}),
                            ("legacy", {"BUILD_EXIT": "1"})):
             with self.subTest(scope=scope, env=env):
-                result, rows = self.run_step("Validate and build entirely inside the credentialless account",
-                                             scope, "/jdk17", **env)
+                result, rows = self.run_step(self.build_step, scope, "/jdk17", **env)
                 self.assertNotEqual(0, result.returncode)
                 self.assertFalse(any(row[1:2] == ["scripts/release/verify_release.py"] for row in rows))
+
+
+class E2EInputBuildWorkflowTests(MatrixBuildWorkflowTests):
+    workflow = REPO / ".github/workflows/on-demand-e2e.yml"
+    build_step = "Build and stage inside the credentialless account"
+    validate_step = "Reverify inert runtime inputs under a fresh credentialless validator"
 
 
 if __name__ == "__main__":

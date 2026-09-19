@@ -480,3 +480,8 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Independent reproduction replaced the publication parent after validation and caused the old helper to publish an unvalidated external directory. Writes and cleanup now use no-follow directory descriptors, parent/stage identity is checked around publication, and exclusive rename preserves a concurrently created destination. Unsupported hosts fail before creating the output parent.
 - Root reproduced12 atomic/producer tests, then all7 final atomic adversaries including a parent swap immediately after rename. Five original adversaries were red before the fix. The reviewed macOS exclusive-rename backend ran locally; the Linux backend has not been executed here. Existing scope/reader tests also pass independently.
 - Rollback must retain equivalent directory binding and exclusive publication; returning to pathname-only writes/rename would reopen the reproduced defect. This change grants no remote evidence authority.
+
+## Task 12j — scoped E2E input-bundle build
+
+- The E2E workflow's build job now uses the same Java17/Gradle-JVM separation and normalized dispatch contract as Build. Schema2 runs serially, and staged verification under both candidate and fresh validator receives the exact matrix-owned scope. Existing schema1 aggregate/check behavior remains available.
+- Root reproduced41 workflow/boundary tests, reusing executed shell checks across both workflows for all scope tokens and failed-build/invalid-selection paths. Runtime action and fan-in call sites still await their separate adapters; no GitHub/client execution or publication is claimed. Rollback is this build-job adapter and shared shell test extension.
