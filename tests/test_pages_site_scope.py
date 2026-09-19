@@ -194,5 +194,6 @@ class ScopedSiteTests(unittest.TestCase):
         self.matrix_path.write_bytes(matrix_raw)
         copy_static = site._copy_static
         def extra(fd):
-            copy_static(fd); (self.collected / "extra").mkdir()
+            result = copy_static(fd); (self.collected / "extra").mkdir()
+            return result
         with patch.object(site, "_copy_static", side_effect=extra): self.rejected()

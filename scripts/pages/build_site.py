@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import stat
 import sys
 import tempfile
@@ -74,9 +75,10 @@ def _inventory(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _copy_static(stage_fd: int) -> None:
+def _copy_static(stage_fd: int) -> dict[str, bytes]:
     allowed = {"index.html", "assets/site.css", "assets/gallery.js"}
     actual: set[str] = set()
+    copied = {}
     for path in SITE_SOURCE.rglob("*"):
         info = path.lstat()
         if stat.S_ISLNK(info.st_mode):
@@ -91,8 +93,76 @@ def _copy_static(stage_fd: int) -> None:
             raise SiteError(f"site source contains an unapproved file: {relative}")
         _, data = _child_file(SITE_SOURCE, relative, label="protected static site source", maximum=MAX_SITE_BYTES)
         write_new(stage_fd, relative, data)
+        copied[relative] = data
     if actual != allowed:
         raise SiteError(f"site source inventory mismatch: {sorted(actual)}")
+    return copied
+
+
+def _seal_output(stage_fd: int, expected: dict[str, bytes]) -> tuple[int, int]:
+    """Check descriptor-bound bytes, then recheck every stamp and directory entry."""
+    count, total = len(expected), sum(len(data) for data in expected.values())
+    if count > MAX_SITE_FILES or total > MAX_SITE_BYTES:
+        raise SiteError("generated site exceeds its file-count or byte bound")
+    children = {"": set()}
+    for relative in expected:
+        parent = ""
+        for name in Path(relative).parts:
+            children.setdefault(parent, set()).add(name)
+            parent = f"{parent}/{name}" if parent else name
+    stamps = {}
+    def stamp(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_size,
+                info.st_mtime_ns, info.st_ctime_ns)
+    def walk(directory, parent, *, hash_bytes):
+        initial = stamp(os.fstat(directory))
+        if set(os.listdir(directory)) != children[parent]:
+            raise SiteError("generated site inventory differs from written paths")
+        for name in sorted(children[parent]):
+            relative = f"{parent}/{name}" if parent else name
+            before = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            is_directory = relative in children
+            if not (stat.S_ISDIR(before.st_mode) if is_directory else
+                    stat.S_ISREG(before.st_mode) and before.st_nlink == 1):
+                raise SiteError("generated site contains an unexpected file type/link")
+            flags = os.O_RDONLY | os.O_NOFOLLOW | (os.O_DIRECTORY if is_directory else os.O_NONBLOCK)
+            descriptor = os.open(name, flags, dir_fd=directory)
+            try:
+                if stamp(os.fstat(descriptor)) != stamp(before):
+                    raise SiteError("generated site entry changed while opening")
+                if is_directory:
+                    walk(descriptor, relative, hash_bytes=hash_bytes)
+                elif hash_bytes:
+                    wanted = expected[relative]
+                    if before.st_size != len(wanted):
+                        raise SiteError("generated site file size differs from written bytes")
+                    digest = hashlib.sha256()
+                    remaining = len(wanted) + 1
+                    while remaining:
+                        chunk = os.read(descriptor, min(65536, remaining))
+                        if not chunk: break
+                        digest.update(chunk); remaining -= len(chunk)
+                    if remaining != 1 or digest.digest() != hashlib.sha256(wanted).digest():
+                        raise SiteError("generated site bytes differ from written bytes")
+                elif stamps[relative] != stamp(before):
+                    raise SiteError("generated site file changed after byte verification")
+                if (stamp(os.fstat(descriptor)) != stamp(before)
+                        or stamp(os.stat(name, dir_fd=directory, follow_symlinks=False)) != stamp(before)):
+                    raise SiteError("generated site entry changed during verification")
+                if hash_bytes: stamps[relative] = stamp(before)
+            finally:
+                os.close(descriptor)
+        if stamp(os.fstat(directory)) != initial or set(os.listdir(directory)) != children[parent]:
+            raise SiteError("generated site directory changed during verification")
+        if hash_bytes: stamps[parent] = initial
+        elif stamps[parent] != initial:
+            raise SiteError("generated site directory changed after byte verification")
+    try:
+        walk(stage_fd, "", hash_bytes=True)
+        walk(stage_fd, "", hash_bytes=False)
+    except OSError as exc:
+        raise SiteError(f"cannot seal generated site: {exc}") from exc
+    return count, total
 
 
 def _candidate_directories(root: Path) -> list[Path]:
@@ -297,8 +367,9 @@ def _build(*, evidence_root, inventory_path, output, repository, canonical_matri
         raise SiteError("canonical project source URL disagrees with the repository")
 
     def writer(stage: Path, stage_fd: int) -> dict[str, int]:
-        _copy_static(stage_fd)
+        written = _copy_static(stage_fd)
         write_new(stage_fd, ".nojekyll", b"")
+        written[".nojekyll"] = b""
         releases: list[dict[str, Any]] = []
         frames: list[dict[str, Any]] = []
         copied: dict[str, bytes] = {}
@@ -364,6 +435,7 @@ def _build(*, evidence_root, inventory_path, output, repository, canonical_matri
                 )
         for relative, data in copied.items():
             write_new(stage_fd, relative, data)
+        written.update(copied)
         frames.sort(key=lambda frame: (frame["minecraft"], frame["loader"], frame["capture_id"], frame["branch"]))
         site_data = {
             "schema_version": 1,
@@ -379,23 +451,14 @@ def _build(*, evidence_root, inventory_path, output, repository, canonical_matri
         }
         encoded = (json.dumps(site_data, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
         write_new(stage_fd, "gallery-data.json", encoded)
-        total = 0
-        count = 0
-        for path in stage.rglob("*"):
-            info = path.lstat()
-            if stat.S_ISLNK(info.st_mode):
-                raise SiteError("generated site contains a symlink")
-            if stat.S_ISREG(info.st_mode):
-                count += 1
-                total += info.st_size
-        if count > MAX_SITE_FILES or total > MAX_SITE_BYTES:
-            raise SiteError("generated site exceeds its file-count or byte bound")
+        written["gallery-data.json"] = encoded
         if context:
             if set(_candidate_directories(evidence_root)) != {directory for directory, _ in manifests.values()}:
                 raise SiteError("collected cache inventory changed during rendering")
             for directory, manifest in manifests.values():
                 _validate_file_records(directory, manifest["files"] + [manifest["matrix"]], include_manifest="manifest.json")
             context["recheck"]()
+        count, total = _seal_output(stage_fd, written)
         return {"branches": len(releases), "frames": len(frames), "files": count, "bytes": total}
 
     try:

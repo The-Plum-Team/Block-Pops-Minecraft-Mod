@@ -69,9 +69,10 @@ class AtomicSiteTests(unittest.TestCase):
         original = site._copy_static
         def swapped(*arguments):
             stage = next(self.parent.glob(".site.building-*"))
-            original(*arguments)
+            result = original(*arguments)
             stage.rename(self.held); stage.mkdir()
             (stage / "impostor").write_bytes(b"keep")
+            return result
         with patch.object(site, "_copy_static", side_effect=swapped):
             with self.assertRaises(site.SiteError): self.build()
         self.assertFalse(self.output.exists())
@@ -82,8 +83,9 @@ class AtomicSiteTests(unittest.TestCase):
         original = site._copy_static
         occupied = []
         def occupied_output(*arguments):
-            original(*arguments)
+            result = original(*arguments)
             self.output.mkdir(); occupied.append(self.output.stat().st_ino)
+            return result
         with patch.object(site, "_copy_static", side_effect=occupied_output):
             with self.assertRaises(site.SiteError): self.build()
         self.assertEqual(occupied, [self.output.stat().st_ino])
