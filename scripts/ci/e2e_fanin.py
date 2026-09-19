@@ -424,6 +424,17 @@ def _scoped_lane_inputs(document, manifest, *, matrix_digest, contract, scope, a
     return hashes, expected_scope
 
 
+def _execution_coverage(lane, artifact_scope):
+    return {"execution_scope": {"kind": "lane", "selected_nodes": [lane.artifact_node],
+        "scenarios": list(lane.scenarios), "target_nodes": artifact_scope["target_nodes"],
+        "partial": True, "artifact_scope": artifact_scope}}
+
+
+def _aggregate_coverage(lanes, artifact_scope, projection):
+    return {"aggregate_scope": {**artifact_scope, "projection": projection,
+                                "scenarios": list(lanes[0].scenarios)}}
+
+
 def _profile_name(lane: ExpectedLane, scenario: str) -> str:
     value = f"{lane.artifact_node}--{lane.minecraft}--{scenario}"
     if SAFE_ARTIFACT.fullmatch(value) is None:
@@ -1003,9 +1014,7 @@ def validate_lane(
     if document.inventory.schema_version == 2:
         hashes, artifact_scope = _scoped_lane_inputs(document, artifact_manifest,
             matrix_digest=_sha256(matrix_bytes), contract=contract, scope=scope, artifact_node=artifact_node)
-        coverage = {"execution_scope": {"kind": "lane", "selected_nodes": [lane.artifact_node],
-            "scenarios": list(lane.scenarios), "target_nodes": list(document.inventory.target_nodes),
-            "partial": True, "artifact_scope": artifact_scope}}
+        coverage = _execution_coverage(lane, artifact_scope)
     else:
         hashes = _artifact_hashes(artifact_manifest, matrix=matrix,
                                  expected_nodes={item.artifact_node for item in lanes})
@@ -1255,24 +1264,43 @@ def create_aggregate(
     identity: SourceIdentity,
     artifact_manifest: dict[str, Any],
     artifact_manifest_sha256: str,
+    scope: str | None = None,
+    artifact_node: str | None = None,
 ) -> dict[str, Any]:
+    """Publish validated lane evidence using caller scope and a preverified artifact bundle.
+
+    SourceIdentity and the bundle's raw digest must come from the authenticated caller;
+    producing an aggregate does not authenticate a remote run or qualify its target set.
+    """
     identity.validate()
-    matrix = load_matrix(matrix_path, validate_sources=False)
+    matrix, matrix_bytes = read_secure_json(matrix_path, label="fan-in matrix", max_bytes=MAX_MATRIX_BYTES)
+    document = _selected_document(matrix, scope=scope, artifact_node=artifact_node)
     contract = load_contract(contract_path)
     lanes = expected_lanes(
         matrix,
         contract,
         identity.projection,
         artifact_prefix=run_artifact_prefix(identity.commit, identity.run_attempt),
+        scope=scope,
+        artifact_node=artifact_node,
     )
     _digest(artifact_manifest_sha256, "artifact manifest sha256")
-    by_node = _artifact_hashes(
-        artifact_manifest,
-        matrix=matrix,
-        expected_nodes={lane.artifact_node for lane in lanes},
-        commit=identity.commit,
-        tree=identity.tree,
-    )
+    scoped = document.inventory.schema_version == 2
+    coverage = {}
+    if scoped:
+        by_node, artifact_scope = _scoped_lane_inputs(document, artifact_manifest,
+            matrix_digest=_sha256(matrix_bytes), contract=contract, scope=scope, artifact_node=artifact_node)
+        if artifact_manifest["git_commit"] != identity.commit or artifact_manifest["git_tree"] != identity.tree:
+            raise FanInError("scoped fan-in bundle commit/tree disagrees with source identity")
+        coverage = _aggregate_coverage(lanes, artifact_scope, identity.projection)
+    else:
+        by_node = _artifact_hashes(
+            artifact_manifest,
+            matrix=matrix,
+            expected_nodes={lane.artifact_node for lane in lanes},
+            commit=identity.commit,
+            tree=identity.tree,
+        )
     root = input_root.absolute()
     root_snapshot = _inventory(root)
     root_directories, root_files = root_snapshot
@@ -1296,6 +1324,7 @@ def create_aggregate(
                 lane=lane,
                 contract=contract,
                 hashes=hashes,
+                coverage=_execution_coverage(lane, artifact_scope) if scoped else None,
             )
             all_results.extend(results)
             all_metrics.append(metrics)
@@ -1323,9 +1352,10 @@ def create_aggregate(
                         "contract_sha256": contract.sha256,
                         "results": all_results,
                         "runtime_store": metrics,
+                        **coverage,
                     }
                 ),
-                "resolved-matrix.json": _json_bytes({"schema_version": 1, "rows": resolved_rows}),
+                "resolved-matrix.json": _json_bytes({"schema_version": 1, "rows": resolved_rows, **coverage}),
                 "runtime-store.json": _json_bytes({"schema_version": 1, "metrics": metrics}),
             }
         )
@@ -1341,13 +1371,14 @@ def create_aggregate(
             ),
             "artifact_manifest": {
                 "path": "build/release/artifacts.json",
-                "schema_version": ARTIFACT_SCHEMA_VERSION,
+                "schema_version": 3 if scoped else ARTIFACT_SCHEMA_VERSION,
                 "sha256": artifact_manifest_sha256,
                 "commit": identity.commit,
                 "tree": identity.tree,
             },
             "lanes": lane_records,
             "files": records,
+            **coverage,
         }
         _write_new(stage / AGGREGATE_RECEIPT, _json_bytes(receipt))
         validate_aggregate(
@@ -1362,9 +1393,16 @@ def create_aggregate(
             expected_tree=identity.tree,
             expected_run_id=identity.run_id,
             expected_run_attempt=identity.run_attempt,
+            scope=scope,
+            artifact_node=artifact_node,
+            artifact_manifest=artifact_manifest if scoped else None,
+            artifact_manifest_sha256=artifact_manifest_sha256 if scoped else None,
         )
         if _inventory(root) != root_snapshot:
             raise FanInError("download root changed during fan-in")
+        if (read_secure_json(matrix_path, label="final fan-in matrix", max_bytes=MAX_MATRIX_BYTES)[1] != matrix_bytes
+                or load_contract(contract_path).sha256 != contract.sha256):
+            raise FanInError("loaded fan-in matrix or contract changed before publication")
         return receipt
 
     return _atomic_directory(output, writer)
@@ -1419,8 +1457,7 @@ def validate_aggregate(
         if expected_hashes is not None and expected_hashes != bound_hashes:
             raise FanInError("external hashes disagree with the verified scoped bundle")
         expected_hashes = bound_hashes
-        coverage = {"aggregate_scope": {**artifact_scope, "projection": projection,
-                                        "scenarios": list(structural_lanes[0].scenarios)}}
+        coverage = _aggregate_coverage(structural_lanes, artifact_scope, projection)
     elif artifact_manifest is not None or artifact_manifest_sha256 is not None:
         raise FanInError("external scoped bundle inputs require a schema2 matrix")
     root = root.absolute()

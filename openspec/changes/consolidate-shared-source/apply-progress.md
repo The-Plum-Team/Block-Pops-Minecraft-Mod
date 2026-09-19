@@ -446,3 +446,9 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - A fresh clean local copy of `e0bcd802285afcd2097a751aceed4de1ed19be1c` completed the real runner for Fabric/Forge1.20.1 in43.96 seconds, with Gradle JVM21 and observed Java17 compilers. All four archive boundaries passed. The unscoped verifier staged and reverified the historical schema2 manifest, whose digest is `7503f77776b3b8a1248458716889e0028f7c70f3b950315d1cd48337a1b5ad6f`; staged hashes match the runner report.
 - All680 source inputs, commit/tree and report stayed unchanged. The lease was released and both owned daemon processes exited. No DNS override or prewarming was needed. Evidence is under `build/diagnostics/task7j/`, including `result.json` and `staging-result.json`.
 - This is successful local compilation/staging of the existing two lanes, not packaged-client interaction, twelve-lane qualification or publication. User work and the live matrix remain untouched.
+
+## Task 12f — scoped aggregate producer
+
+- Aggregate creation now uses the same normalized external selection and coverage helpers as both readers. It binds every lane payload to the already-verified bundle, source commit/tree and raw inputs, then revalidates matrix/contract and the download inventory before publication. Legacy receipt behavior remains supported.
+- Root reproduced38 fan-in tests, including synthetic legacy2, scheduled Neo lane1 and shared12 producer/reader round trips. Missing/unknown lanes, crossed coverage, stale source identity and input drift fail without accepting an aggregate. These protocol fixtures are not game qualification.
+- Independent review reproduced a preexisting publication-parent swap in the shared atomic-directory helper. CLI activation is deferred until the next separate filesystem-hardening unit closes that race. Rollback is scoped producer/helpers/tests; external authentication still belongs to its caller.
