@@ -85,10 +85,6 @@ allprojects {
 }
 
 configure(subprojects.findAll { it.path in buildProjectPaths }) {
-    apply plugin: 'dev.architectury.loom'
-    apply plugin: 'architectury-plugin'
-    apply plugin: 'maven-publish'
-
     def module = stonecutterLayout ? project.parent.name : project.name
     def selectedLane = lanes.find { it.artifact.loader == module }
     def lane = selectedLane?.artifact
@@ -98,6 +94,25 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
     if (lane != null) {
         ext.blockPopsLane = selectedLane
     }
+    if (releaseMatrix.schema_version == 2) {
+        def expectedPlatform = module == 'common' ? 'fabric' : selectedLane.repository_family as String
+        def suppliedPlatform = findProperty('loom.platform')
+        if (suppliedPlatform != null && suppliedPlatform.toString().toLowerCase(Locale.ROOT) != expectedPlatform) {
+            throw new GradleException("Project ${project.path} requires loom.platform=${expectedPlatform}; conflicting external value")
+        }
+        def suppliedForge = findProperty('loom.forge')
+        if (suppliedForge != null) {
+            def value = suppliedForge.toString().toLowerCase(Locale.ROOT)
+            if (!(value in ['true', 'false']) || (value == 'true' ? 'forge' : 'fabric') != expectedPlatform) {
+                throw new GradleException("Project ${project.path} has a conflicting legacy loom.forge selector")
+            }
+        }
+        ext.set('loom.platform', expectedPlatform)
+    }
+
+    apply plugin: 'dev.architectury.loom'
+    apply plugin: 'architectury-plugin'
+    apply plugin: 'maven-publish'
 
     if (stonecutterLayout) {
         group = "${rootProject.maven_group}.${module}"
