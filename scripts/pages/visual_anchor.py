@@ -406,8 +406,15 @@ def create_anchor(
     raw_artifact_id: int,
     raw_artifact_name_value: str,
     raw_artifact_digest: str,
+    scope: str | None = None,
+    artifact_node: str | None = None,
+    projection: str | None = None,
 ) -> dict[str, Any]:
-    """Create one atomic canonical anchor from already-curated raw evidence."""
+    """Create one canonical anchor from externally authenticated raw evidence.
+
+    Schema2 requires the raw aggregate's caller-owned scope and projection. The
+    anchor always retains only the canonical lane, never aggregate qualification.
+    """
 
     if REPOSITORY_PATTERN.fullmatch(_text(repository, "repository")) is None:
         raise VisualAnchorError("repository must use owner/name form")
@@ -450,7 +457,8 @@ def create_anchor(
         },
     }
     raw = validate_raw(
-        input_root, matrix_path=matrix_path, expected=expected_provenance
+        input_root, matrix_path=matrix_path, expected=expected_provenance,
+        scope=scope, artifact_node=artifact_node, projection=projection,
     )
     expected_packaged = {
         "path": E2E_WORKFLOW,
@@ -484,6 +492,8 @@ def create_anchor(
         if lane["artifact_node"] == runtime["artifact_node"]
     ]
     images: dict[str, bytes] = {}
+    if not selected_lanes:
+        raise VisualAnchorError("raw scope does not include the canonical anchor lane")
     frames: list[dict[str, Any]] = []
     for frame in raw["frames"]:
         if frame["artifact_node"] != runtime["artifact_node"]:
@@ -826,6 +836,10 @@ def main(argv: list[str] | None = None) -> int:
     create_parser.add_argument("--raw-artifact-id", type=int, required=True)
     create_parser.add_argument("--raw-artifact-name", required=True)
     create_parser.add_argument("--raw-artifact-digest", required=True)
+    selection = create_parser.add_mutually_exclusive_group()
+    selection.add_argument("--scope", choices=("legacy", "full"), help="externally expected raw input scope")
+    selection.add_argument("--artifact-node", help="raw input lane; the output anchor remains canonical")
+    create_parser.add_argument("--projection", choices=("pr-anchors", "scheduled-anchors"))
 
     validate_parser = commands.add_parser("validate")
     validate_parser.add_argument("--input", type=Path, required=True)
@@ -877,6 +891,9 @@ def main(argv: list[str] | None = None) -> int:
                 raw_artifact_id=args.raw_artifact_id,
                 raw_artifact_name_value=args.raw_artifact_name,
                 raw_artifact_digest=args.raw_artifact_digest,
+                scope="lane" if args.artifact_node is not None else args.scope,
+                artifact_node=args.artifact_node,
+                projection=args.projection,
             )
         else:
             result = validate_anchor(

@@ -38,8 +38,8 @@ class VisualAnchorSchema2Tests(unittest.TestCase):
         self.matrix_path.write_text(json.dumps(self.matrix, indent=2) + "\n")
 
     def rebind_synthetic_anchor(self):
-        # Model an externally authenticated schema2 matrix without asserting that
-        # the still-legacy Pages producer can create such an anchor in production.
+        # Model an externally authenticated schema2 matrix while exercising the
+        # reader independently of the opt-in scoped producer.
         path = self.bundle / anchor.ANCHOR_MANIFEST
         manifest = json.loads(path.read_bytes())
         self.digest = hashlib.sha256(self.matrix_path.read_bytes()).hexdigest()
@@ -121,7 +121,7 @@ class VisualAnchorSchema2Tests(unittest.TestCase):
         self.matrix_path.symlink_to(real)
         with self.assertRaises(anchor.VisualAnchorError): self.identity()
 
-    def test_schema2_creation_stays_closed_until_raw_consumer_is_adapted(self):
+    def test_schema2_creation_requires_external_raw_scope(self):
         raw = self.root / "raw"
         shutil.copytree(self.fixture.raw, raw)
         path = raw / "pages-evidence.json"
