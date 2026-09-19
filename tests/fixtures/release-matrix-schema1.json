@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "gradle_java": 21,
+  "lane_count": 2,
+  "unit_test_lane": "fabric-1.20.1",
+  "branch": {
+    "role": "integration",
+    "name": "master",
+    "canonical": "master",
+    "sync": {
+      "enabled": false,
+      "source": "master"
+    }
+  },
+  "project": {
+    "name": "BlockPops",
+    "mod_id": "blockpops",
+    "description": "Collectible figures, animated blocks, and interactive claw-machine gameplay.",
+    "mod_version": "1.1.3",
+    "sources": "https://github.com/AkaNebur/BlockPops",
+    "issues": "https://github.com/AkaNebur/BlockPops/issues",
+    "license": "All Rights Reserved"
+  },
+  "visual_reference": {
+    "release_branch": "master",
+    "artifact_node": "fabric-1.20.1",
+    "scenario_contract": "e2e/scenario-contract.json"
+  },
+  "source_routing": {
+    "common": {
+      "canonical": "common/src/main",
+      "overlays": {}
+    },
+    "fabric": {
+      "canonical": "fabric/src/main",
+      "overlays": {}
+    },
+    "forge": {
+      "canonical": "forge/src/main",
+      "overlays": {}
+    }
+  },
+  "installers": {
+    "fabric-1.1.0": {
+      "url": "https://maven.fabricmc.net/net/fabricmc/fabric-installer/1.1.0/fabric-installer-1.1.0.jar",
+      "sha256": "c20c407d5ca4b119aae97847eb2fbb1d34c92969b647fbbb1de2fd36ca00738e"
+    },
+    "forge-1.20.1-47.4.9": {
+      "url": "https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.4.9/forge-1.20.1-47.4.9-installer.jar",
+      "sha256": "58fc5db6e3dc47745475375be6fa275e68320563c05d29b4203e0d2ca57a50c4"
+    }
+  },
+  "artifacts": [
+    {
+      "artifact_node": "fabric-1.20.1",
+      "minecraft": "1.20.1",
+      "loader": "fabric",
+      "java": 17,
+      "no_remap": false,
+      "gradle_task": ":fabric:remapJar",
+      "harness_task": ":fabric:remapE2EHarnessJar",
+      "jar": "fabric/build/libs/BlockPops - Fabric - 1.20.1-{mod_version}.jar",
+      "harness_jar": "fabric/build/libs/BlockPops E2E - Fabric - 1.20.1-0.0.0.jar",
+      "metadata": {
+        "file": "fabric.mod.json",
+        "minecraft": "~1.20.1",
+        "loader": ">=0.17.0",
+        "architectury": ">=9.2.14",
+        "geckolib": ">=4.7.4"
+      }
+    },
+    {
+      "artifact_node": "forge-1.20.1",
+      "minecraft": "1.20.1",
+      "loader": "forge",
+      "java": 17,
+      "no_remap": false,
+      "gradle_task": ":forge:remapJar",
+      "harness_task": ":forge:remapE2EHarnessJar",
+      "jar": "forge/build/libs/BlockPops - Forge - 1.20.1-{mod_version}.jar",
+      "harness_jar": "forge/build/libs/BlockPops E2E - Forge - 1.20.1-0.0.0.jar",
+      "metadata": {
+        "file": "META-INF/mods.toml",
+        "minecraft": "[1.20.1,1.20.2)",
+        "loader": "[47,)",
+        "architectury": "[9.2.14,)",
+        "geckolib": "[4.7.4,)"
+      }
+    }
+  ],
+  "runtimes": [
+    {
+      "artifact_node": "fabric-1.20.1",
+      "minecraft": "1.20.1",
+      "loader": "fabric",
+      "java": 17,
+      "loader_version": "0.17.3",
+      "installer": "fabric-1.1.0",
+      "pr_anchor": true,
+      "scheduled_anchor": true,
+      "runtime_dependencies": [
+        {
+          "id": "fabric-api",
+          "coordinate": "net.fabricmc.fabric-api:fabric-api:0.92.6+1.20.1",
+          "repository": "https://maven.fabricmc.net/",
+          "side": "both"
+        },
+        {
+          "id": "architectury",
+          "coordinate": "dev.architectury:architectury-fabric:9.2.14",
+          "repository": "https://maven.architectury.dev/",
+          "side": "both"
+        },
+        {
+          "id": "geckolib",
+          "coordinate": "software.bernie.geckolib:geckolib-fabric-1.20.1:4.7.4",
+          "repository": "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "artifact_node": "forge-1.20.1",
+      "minecraft": "1.20.1",
+      "loader": "forge",
+      "java": 17,
+      "loader_version": "1.20.1-47.4.9",
+      "installer": "forge-1.20.1-47.4.9",
+      "pr_anchor": true,
+      "scheduled_anchor": true,
+      "runtime_dependencies": [
+        {
+          "id": "architectury",
+          "coordinate": "dev.architectury:architectury-forge:9.2.14",
+          "repository": "https://maven.architectury.dev/",
+          "side": "both"
+        },
+        {
+          "id": "geckolib",
+          "coordinate": "software.bernie.geckolib:geckolib-forge-1.20.1:4.7.4",
+          "repository": "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/",
+          "side": "both"
+        },
+        {
+          "id": "mclib",
+          "coordinate": "com.eliotlash.mclib:mclib:20",
+          "repository": "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/",
+          "side": "both"
+        }
+      ]
+    }
+  ]
+}

@@ -13,6 +13,7 @@ from pathlib import Path
 from scripts.ci import matrix_scope
 from scripts.ci.tests.matrix_fixtures import schema2_configuration
 from scripts.release.matrix import MatrixError
+from tests.matrix_fixtures import schema1_matrix
 
 REPO = Path(__file__).resolve().parents[3]
 
@@ -29,7 +30,7 @@ class MatrixScopeTests(unittest.TestCase):
         self.path.write_text(json.dumps(matrix))
 
     def test_normalized_schema_and_mode_select_exact_default_dispatch(self):
-        legacy = json.loads((REPO / "release/release-matrix.json").read_bytes())
+        legacy = schema1_matrix()
         for matrix, token in ((legacy, "unscoped"), (schema2_configuration(), "legacy"),
                               (schema2_configuration(shared=True), "full")):
             self.write(matrix)

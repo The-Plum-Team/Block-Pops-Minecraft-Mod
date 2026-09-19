@@ -12,12 +12,11 @@ from scripts.release.matrix import (
     normalize_matrix_inventory,
     validate_matrix,
 )
+from tests.matrix_fixtures import schema1_matrix
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-BASE_MATRIX = json.loads(
-    (REPOSITORY / "release" / "release-matrix.json").read_bytes()
-)
+BASE_MATRIX = schema1_matrix()
 TARGETS = (
     ("fabric", "1.20.1"),
     ("forge", "1.20.1"),

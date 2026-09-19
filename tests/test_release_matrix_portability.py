@@ -15,10 +15,11 @@ from scripts.release.version_branches import (
     discover_repository,
     inspect_branch,
 )
+from tests.matrix_fixtures import SCHEMA1_MATRIX_PATH
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-BASE_MATRIX_BYTES = (REPOSITORY / "release" / "release-matrix.json").read_bytes()
+BASE_MATRIX_BYTES = SCHEMA1_MATRIX_PATH.read_bytes()
 
 
 def _base_matrix() -> dict[str, object]:

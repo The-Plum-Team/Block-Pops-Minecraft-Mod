@@ -28,10 +28,11 @@ from scripts.ci.e2e_fanin import (
     validate_lane,
 )
 from scripts.release.matrix import load_matrix
+from tests.matrix_fixtures import SCHEMA1_MATRIX_PATH
 
 
 REPO = Path(__file__).resolve().parents[3]
-MATRIX_PATH = REPO / "release/release-matrix.json"
+MATRIX_PATH = SCHEMA1_MATRIX_PATH
 CONTRACT_PATH = REPO / "e2e/scenario-contract.json"
 COMMIT = "1" * 40
 TREE = "2" * 40

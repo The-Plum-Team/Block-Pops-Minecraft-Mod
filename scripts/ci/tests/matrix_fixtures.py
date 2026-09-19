@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from tests.matrix_fixtures import schema1_matrix
+
 
 def canonical_integration_matrix(source: dict[str, Any]) -> dict[str, Any]:
     """Derive a valid canonical policy fixture from any enrolled branch matrix.
@@ -92,7 +94,7 @@ def write_matrix_fixture(root: Path, matrix: dict[str, Any]) -> Path:
 
 def schema2_configuration(*, shared: bool = False) -> dict[str, Any]:
     """Synthetic controller test inputs; versions/hashes are not qualification pins."""
-    matrix = json.loads((Path(__file__).resolve().parents[3] / "release/release-matrix.json").read_bytes())
+    matrix = schema1_matrix()
     artifact_template, runtime_template = copy.deepcopy(matrix["artifacts"][0]), copy.deepcopy(matrix["runtimes"][0])
     matrix["schema_version"] = 2
     matrix["targets"] = [

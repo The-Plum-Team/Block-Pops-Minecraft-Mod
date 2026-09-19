@@ -3,21 +3,13 @@
 from __future__ import annotations
 
 import copy
-import json
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 from e2e.packaged_runtime import RuntimeFailure, client_runtime_recipe
 from scripts.ci.tests.matrix_fixtures import schema2_configuration
 from tests.test_release_matrix_portability import arbitrary_named_1211_release_matrix
-
-
-ROOT = Path(__file__).resolve().parents[1]
-
-
-def current_matrix() -> dict:
-    return json.loads((ROOT / "release/release-matrix.json").read_text())
+from tests.matrix_fixtures import schema1_matrix
 
 
 class RuntimeRecipeTests(unittest.TestCase):
@@ -26,10 +18,10 @@ class RuntimeRecipeTests(unittest.TestCase):
         self.launcher = launcher.start()
         self.addCleanup(launcher.stop)
 
-    def test_schema_one_cache_identities_are_unchanged_for_current_and_historical_rows(self):
+    def test_schema_one_cache_identities_are_unchanged_for_frozen_and_historical_rows(self):
         # Captured from the previous consumer, before adding matrix validation.
         identities = (
-            (current_matrix(), "Linux", "x86_64", (
+            (schema1_matrix(), "Linux", "x86_64", (
                 "b9ee9c5e22cef0902770049ac872a671321dc50965ef08418c076456ebb1c456",
                 "cd616d6e986c788c189cfe1645e96b43aec7145e8c18e36da722d77b1707b792",
             )),
@@ -63,7 +55,7 @@ class RuntimeRecipeTests(unittest.TestCase):
         self.assertEqual(before, matrix)
 
     def test_runtime_projection_rejects_overrides_even_if_cache_fields_are_equal(self):
-        for matrix in (current_matrix(), schema2_configuration()):
+        for matrix in (schema1_matrix(), schema2_configuration()):
             original = matrix["runtimes"][0]
             mutations = (
                 ("java", str(original["java"])), ("java", float(original["java"])),

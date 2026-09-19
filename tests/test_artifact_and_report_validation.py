@@ -27,10 +27,11 @@ from scripts.release.artifact_manifest import (
     verify_production_jar,
 )
 from scripts.release.matrix import load_matrix_bytes
+from tests.matrix_fixtures import SCHEMA1_MATRIX_PATH
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-MATRIX = load_matrix_bytes((REPOSITORY / "release" / "release-matrix.json").read_bytes())
+MATRIX = load_matrix_bytes(SCHEMA1_MATRIX_PATH.read_bytes())
 FABRIC_ARTIFACT = next(row for row in MATRIX["artifacts"] if row["loader"] == "fabric")
 FABRIC_MINECRAFT = FABRIC_ARTIFACT["minecraft"]
 FML_ARTIFACT = next(

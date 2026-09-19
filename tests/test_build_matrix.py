@@ -24,6 +24,7 @@ from scripts.release.build_matrix import (
     validate_observation, verify_toolchains,
 )
 from scripts.release.matrix import MatrixError
+from tests.matrix_fixtures import SCHEMA1_MATRIX_PATH, schema1_matrix
 from tests.test_release_matrix_portability import arbitrary_named_1211_release_matrix
 from tests.test_artifact_and_report_validation import (
     _fabric_harness_entries, _fabric_production_entries, _fml_harness_entries, _write_zip,
@@ -48,9 +49,8 @@ class BuildMatrixPlanningTests(unittest.TestCase):
                     (self.root / route[key]).mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(matrix))
 
-    def test_schema_one_current_and_historical_commands_retain_owned_tasks_and_java(self):
-        current = json.loads((ROOT / "release/release-matrix.json").read_text())
-        for matrix in (current, arbitrary_named_1211_release_matrix()):
+    def test_schema_one_frozen_and_historical_commands_retain_owned_tasks_and_java(self):
+        for matrix in (schema1_matrix(), arbitrary_named_1211_release_matrix()):
             self.write_matrix(matrix)
             plan = plan_build(self.path, windows=False)
             self.assertEqual("full", plan["scope"])
@@ -358,7 +358,7 @@ class BuildMatrixObservationTests(unittest.TestCase):
         for legacy in (False, True):
             if legacy:
                 path = Path(self.plan["matrix"]["path"])
-                path.write_bytes((ROOT / "release/release-matrix.json").read_bytes())
+                path.write_bytes(SCHEMA1_MATRIX_PATH.read_bytes())
                 self.plan = plan_build(path)
             with self.prepared() as (lock, run_id, node, bound, request, receipt):
                 payload = Path(bound["request"]).read_bytes()
@@ -436,7 +436,7 @@ class BuildMatrixObservationTests(unittest.TestCase):
             node = "neoforge-1.21.1"
             if legacy:
                 path = Path(self.plan["matrix"]["path"])
-                path.write_bytes((ROOT / "release/release-matrix.json").read_bytes())
+                path.write_bytes(SCHEMA1_MATRIX_PATH.read_bytes())
                 self.plan = plan_build(path)
                 node = "fabric-1.20.1"
             for outcome in ("no_source", "compiled", "up_to_date"):
@@ -531,7 +531,7 @@ class BuildMatrixExecutionTests(unittest.TestCase):
     def setUp(self):
         BuildMatrixObservationTests.setUp(self)
         self.path = Path(self.plan["matrix"]["path"])
-        self.path.write_bytes((ROOT / "release/release-matrix.json").read_bytes())
+        self.path.write_bytes(SCHEMA1_MATRIX_PATH.read_bytes())
         self.plan = plan_build(self.path)
         self.events, self.commands, self.env_ids, self.failure = [], [], [], None
         self.report_path = self.root / "build/build-matrix-report.json"
