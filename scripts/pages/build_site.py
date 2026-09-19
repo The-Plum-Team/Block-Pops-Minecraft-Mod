@@ -4,25 +4,33 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import stat
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
-from scripts.lib.secure_json import SecureJsonError, read as read_secure_json, require_object  # noqa: E402
+from scripts.lib.secure_json import SecureJsonError, canonical_json, read as read_secure_json, require_object  # noqa: E402
 from scripts.lib.atomic_directory import AtomicDirectoryError, atomic_directory, write_new  # noqa: E402
 from scripts.pages.evidence import (  # noqa: E402
     EvidenceError,
+    SHA1,
     _child_file,
+    _digest,
+    _positive_int,
+    _validate_file_records,
     branch_token,
+    cache_artifact_name,
     sha256_bytes,
     validate_compact,
 )
-from scripts.release.matrix import MatrixError, load_matrix  # noqa: E402
+from scripts.release.matrix import MAX_MATRIX_BYTES, MatrixDocument, MatrixError, load_matrix, normalize_matrix_inventory  # noqa: E402
+from e2e.scenario_contract import DEFAULT_CONTRACT, MAX_CONTRACT_BYTES, default_contract  # noqa: E402
 
 SITE_SOURCE = REPO / "site"
 MAX_INVENTORY_BYTES = 2 * 1024 * 1024
@@ -103,8 +111,142 @@ def _candidate_directories(root: Path) -> list[Path]:
     return candidates
 
 
-def build(*, evidence_root: Path, inventory_path: Path, output: Path, repository: str, canonical_matrix: Path) -> dict[str, int]:
-    inventory = _inventory(inventory_path)
+def _scoped_inputs(branch_inputs, inventory_path, canonical_matrix, private):
+    snapshots = {}
+    def capture(path, maximum=MAX_INVENTORY_BYTES):
+        path = Path(path).absolute()
+        if path not in snapshots:
+            value, raw = read_secure_json(path, label="external Pages input", max_bytes=maximum)
+            snapshots[path] = (value, raw, maximum)
+        return snapshots[path][:2]
+    def recheck():
+        for path, (_, raw, maximum) in snapshots.items():
+            if read_secure_json(path, label="final Pages input", max_bytes=maximum)[1] != raw:
+                raise SiteError("external Pages input changed during rendering")
+    rows, _ = capture(inventory_path)
+    if not isinstance(rows, list) or not rows or len(rows) > 1000 or not isinstance(branch_inputs, dict):
+        raise SiteError("scoped Pages requires a bounded discovery inventory and external branch inputs")
+    canonical, _ = capture(canonical_matrix, MAX_MATRIX_BYTES)
+    normalize_matrix_inventory(canonical)
+    canonical_branch = canonical["branch"]["canonical"]
+    if canonical["branch"]["name"] != canonical_branch or canonical["branch"]["role"] != "integration":
+        raise SiteError("protected canonical matrix is not the integration branch")
+    _, contract_raw = capture(DEFAULT_CONTRACT, MAX_CONTRACT_BYTES)
+    if sha256_bytes(contract_raw) != default_contract().sha256:
+        raise SiteError("protected Pages contract snapshot differs")
+    prepared, tokens = {}, set()
+    for row in rows:
+        if not isinstance(row, dict):
+            raise SiteError("discovery rows must be objects")
+        branch = row.get("name")
+        token = branch_token(branch)
+        if token in tokens or branch not in branch_inputs:
+            raise SiteError("missing/duplicate Pages branch input")
+        tokens.add(token)
+        supplied = require_object(branch_inputs[branch], label="branch input",
+            required={"matrix_path", "selection_path", "selection_sha256"})
+        matrix, raw = capture(supplied["matrix_path"], MAX_MATRIX_BYTES)
+        document = MatrixDocument(normalize_matrix_inventory(matrix), json.dumps(matrix))
+        inventory = document.inventory
+        kind = "unscoped" if inventory.schema_version == 1 else document.default_scope
+        key = lambda lane: (tuple(map(int, lane.identity.minecraft.split("."))), lane.identity.loader)
+        selected = sorted(document.select_lanes(scope="full" if kind == "unscoped" else kind), key=key)
+        nodes = [lane.identity.artifact_node for lane in selected]
+        expected_row = dict(name=branch, commit=_digest(row.get("commit"), "discovery commit", SHA1),
+            tree=_digest(row.get("tree"), "discovery tree", SHA1),
+            matrix_blob=hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest(),
+            matrix_sha256=sha256_bytes(raw), matrix_schema_version=inventory.schema_version,
+            minecraft_versions=sorted({lane.identity.minecraft for lane in selected}, key=lambda value: tuple(map(int, value.split(".")))),
+            loaders=sorted({lane.identity.loader for lane in selected}), java=sorted({lane.artifact["java"] for lane in selected}),
+            configured_nodes=[lane.identity.artifact_node for lane in sorted(inventory.lanes, key=key)],
+            scope=dict(kind=kind, selected_nodes=nodes, target_nodes=list(inventory.target_nodes),
+                migration_mode=inventory.migration_mode, partial=set(nodes) != set(inventory.target_nodes)))
+        identity = matrix["branch"]
+        if (canonical_json(row) != canonical_json(expected_row) or identity["name"] != branch
+                or identity["canonical"] != canonical_branch
+                or identity["role"] != ("integration" if branch == canonical_branch else "release")):
+            raise SiteError("discovery differs from the exact external matrix/source")
+        selection = None
+        if kind == "unscoped":
+            if supplied["selection_path"] is not None or supplied["selection_sha256"] is not None:
+                raise SiteError("schema1 branch cannot accept a scoped selection")
+        else:
+            digest = _digest(supplied["selection_sha256"], "external selection SHA256")
+            selection, selection_raw = capture(supplied["selection_path"])
+            if sha256_bytes(selection_raw) != digest:
+                raise SiteError("external selection digest differs")
+        matrix_path = private / (token + ".json")
+        matrix_path.write_bytes(raw)
+        prepared[branch] = (matrix_path, selection, kind)
+    if set(branch_inputs) != set(prepared):
+        raise SiteError("external branch input coverage differs")
+    return dict(rows=rows, branches=prepared, canonical=canonical, capture=capture, recheck=recheck)
+
+
+def _scoped_compact(candidate, row, manifest_raw, expected, context):
+    matrix_path, selection, kind = context["branches"][row["name"]]
+    if kind == "unscoped":
+        return validate_compact(candidate, matrix_path=matrix_path, expected=expected)
+    if not isinstance(selection, dict) or not isinstance(selection.get("aggregate_scope"), dict):
+        raise SiteError("external Pages selection is malformed")
+    manifest = validate_compact(candidate, matrix_path=matrix_path, expected=expected,
+        scope=kind, projection=selection["aggregate_scope"].get("projection"))
+    provenance = manifest["provenance"]
+    chosen = require_object(selection.get("selected_artifact"), label="selected artifact",
+        required={"kind", "id", "name", "digest", "run_id", "run_attempt"})
+    for field in ("id", "run_id", "run_attempt"):
+        _positive_int(chosen[field], "selected " + field)
+    if not isinstance(chosen["digest"], str) or not chosen["digest"].startswith("sha256:"):
+        raise SiteError("selected artifact digest is malformed")
+    _digest(chosen["digest"][7:], "selected artifact digest")
+    if chosen["kind"] == "raw":
+        if canonical_json(chosen) != canonical_json(dict(kind="raw", **manifest["source_artifact"],
+                run_id=provenance["handoff"]["run_id"], run_attempt=provenance["handoff"]["run_attempt"])):
+            raise SiteError("selected raw artifact binding differs")
+    elif chosen["kind"] != "compact" or chosen["name"] != cache_artifact_name(row["name"], row["commit"]):
+        raise SiteError("selected cache artifact binding differs")
+    source = {key: provenance[key] for key in ("branch", "commit", "tree", "matrix_sha256", "contract_sha256")}
+    handoff, packaged = provenance["handoff"], provenance["packaged"]
+    attested = (handoff["run_id"], handoff["run_attempt"]) != (packaged["run_id"], packaged["run_attempt"])
+    canonical_branch = context["canonical"]["branch"]["canonical"]
+    if (handoff["controller_branch"] != canonical_branch or packaged["controller_branch"] != canonical_branch
+            or not attested and any(packaged[key] != provenance[key] for key in ("branch", "commit", "tree"))
+            or not attested and handoff["controller_sha"] != packaged["controller_sha"]
+            or manifest["aggregate_scope"]["projection"] == "scheduled-anchors" and (attested or row["name"] != canonical_branch)):
+        raise SiteError("compact handoff/projection contradicts source authentication")
+    exact = dict(schema_version=1, kind="pages-compact-selection", source=source, provenance=provenance,
+        aggregate_scope=manifest["aggregate_scope"], compact_manifest_sha256=sha256_bytes(manifest_raw),
+        source_artifact=manifest["source_artifact"], selected_artifact=chosen,
+        attested=attested,
+        handoff_run_id=handoff["run_id"], packaged_run_id=packaged["run_id"],
+        packaged_job_graph_sha256=_digest(selection.get("packaged_job_graph_sha256"), "packaged job graph"))
+    if canonical_json(selection) != canonical_json(exact):
+        raise SiteError("external compact selection binding differs")
+    return manifest
+
+
+def build(*, evidence_root: Path, inventory_path: Path, output: Path, repository: str,
+          canonical_matrix: Path, branch_inputs: dict | None = None) -> dict[str, int]:
+    """Render exact external selections; their bodies provide no authentication.
+
+    Opt-in requires caller-authenticated discovery and companion artifact ownership,
+    ID/digest, same Pages run/attempt/controller, and bounded extraction before its
+    raw selection SHA is supplied. This API never supplies that transport authority.
+    """
+    arguments = dict(evidence_root=evidence_root, inventory_path=inventory_path,
+        output=output, repository=repository, canonical_matrix=canonical_matrix)
+    if branch_inputs is None:
+        return _build(**arguments)
+    try:
+        with tempfile.TemporaryDirectory(prefix="blockpops-pages-render-") as temporary:
+            context = _scoped_inputs(branch_inputs, inventory_path, canonical_matrix, Path(temporary))
+            return _build(**arguments, context=context)
+    except (EvidenceError, MatrixError, SecureJsonError, TypeError) as exc:
+        raise SiteError(str(exc)) from exc
+
+
+def _build(*, evidence_root, inventory_path, output, repository, canonical_matrix, context=None):
+    inventory = context["rows"] if context else _inventory(inventory_path)
     expected = {row["name"]: row for row in inventory}
     manifests: dict[str, tuple[Path, dict[str, Any]]] = {}
     for candidate in _candidate_directories(evidence_root):
@@ -112,7 +254,8 @@ def build(*, evidence_root: Path, inventory_path: Path, output: Path, repository
         if not manifest_path.is_file():
             raise SiteError(f"collected artifact has no compact manifest: {candidate.name}")
         try:
-            raw, _ = read_secure_json(manifest_path, label="compact manifest", max_bytes=2 * 1024 * 1024)
+            raw, manifest_raw = (context["capture"](manifest_path) if context else
+                read_secure_json(manifest_path, label="compact manifest", max_bytes=2 * 1024 * 1024))
         except SecureJsonError as exc:
             raise SiteError(str(exc)) from exc
         if not isinstance(raw, dict) or not isinstance(raw.get("provenance"), dict):
@@ -129,11 +272,13 @@ def build(*, evidence_root: Path, inventory_path: Path, output: Path, repository
             "matrix_sha256": row["matrix_sha256"],
         }
         try:
-            manifest = validate_compact(
+            manifest = _scoped_compact(candidate, row, manifest_raw, expected_identity, context) if context else validate_compact(
                 candidate,
                 matrix_path=candidate / "release-matrix.json",
                 expected=expected_identity,
             )
+            if context and canonical_json(manifest) != canonical_json(raw):
+                raise SiteError("compact manifest changed during validation")
         except EvidenceError as exc:
             raise SiteError(str(exc)) from exc
         manifests[branch] = (candidate, manifest)
@@ -143,7 +288,7 @@ def build(*, evidence_root: Path, inventory_path: Path, output: Path, repository
             f"extra={sorted(set(manifests) - set(expected))}"
         )
     try:
-        canonical = load_matrix(canonical_matrix)
+        canonical = context["canonical"] if context else load_matrix(canonical_matrix)
     except MatrixError as exc:
         raise SiteError(str(exc)) from exc
     project = canonical["project"]
@@ -175,6 +320,7 @@ def build(*, evidence_root: Path, inventory_path: Path, output: Path, repository
                     "packaged_run_url": f"https://github.com/{repository}/actions/runs/{provenance['packaged']['run_id']}",
                     "packaged_branch": provenance["packaged"]["branch"],
                     "packaged_commit": provenance["packaged"]["commit"],
+                    **({"aggregate_scope": manifest["aggregate_scope"]} if "aggregate_scope" in manifest else {}),
                 }
             )
             token = branch_token(branch)
@@ -244,6 +390,12 @@ def build(*, evidence_root: Path, inventory_path: Path, output: Path, repository
                 total += info.st_size
         if count > MAX_SITE_FILES or total > MAX_SITE_BYTES:
             raise SiteError("generated site exceeds its file-count or byte bound")
+        if context:
+            if set(_candidate_directories(evidence_root)) != {directory for directory, _ in manifests.values()}:
+                raise SiteError("collected cache inventory changed during rendering")
+            for directory, manifest in manifests.values():
+                _validate_file_records(directory, manifest["files"] + [manifest["matrix"]], include_manifest="manifest.json")
+            context["recheck"]()
         return {"branches": len(releases), "frames": len(frames), "files": count, "bytes": total}
 
     try:
