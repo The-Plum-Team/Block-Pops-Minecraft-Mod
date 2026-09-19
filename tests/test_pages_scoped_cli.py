@@ -37,7 +37,7 @@ class ScopedPagesCliTests(unittest.TestCase):
             f.expected["matrix_sha256"] = hashlib.sha256(f.matrix_path.read_bytes()).hexdigest()
             self.selection = []
 
-    def arguments(self, command, *, source=None, output=None, selection=None):
+    def arguments(self, command, *, source=None, output=None, selection=None, digest_option="--matrix_sha256"):
         f = self.fixture
         if source is None:
             source = f.root / "compact" if command in {"validate-compact", "copy-compact"} else f.raw
@@ -45,7 +45,7 @@ class ScopedPagesCliTests(unittest.TestCase):
         for key in ("repository", "branch", "commit", "tree"):
             args += ["--" + key, f.expected[key]]
         if command != "curate":
-            args += ["--matrix_sha256", f.expected["matrix_sha256"]]
+            args += [digest_option, f.expected["matrix_sha256"]]
         if command in {"curate", "validate-raw", "compact"}:
             for key in ("run_id", "run_attempt", "controller_branch", "controller_sha"):
                 args += ["--" + key.replace("_", "-"), str(f.expected["handoff"][key])]
@@ -63,7 +63,7 @@ class ScopedPagesCliTests(unittest.TestCase):
             status = evidence.main(self.arguments(command, **kwargs))
         return status, stdout.getvalue(), stderr.getvalue()
 
-    def round_trip(self, *, schema1=False):
+    def round_trip(self, *, schema1=False, digest_option="--matrix_sha256"):
         f = self.fixture
         curated, compact, copied = (f.root / name for name in ("curated", "compact", "copied"))
         calls = (("curate", f.raw, curated), ("validate-raw", curated, None),
@@ -71,7 +71,7 @@ class ScopedPagesCliTests(unittest.TestCase):
                  ("copy-compact", compact, copied))
         for command, source, output in calls:
             with self.subTest(command=command):
-                status, stdout, stderr = self.invoke(command, source=source, output=output)
+                status, stdout, stderr = self.invoke(command, source=source, output=output, digest_option=digest_option)
                 self.assertEqual((0, ""), (status, stderr))
                 manifest_root = output or source
                 name = "pages-evidence.json" if command in {"curate", "validate-raw"} else "manifest.json"
@@ -109,6 +109,18 @@ class ScopedPagesCliTests(unittest.TestCase):
                     selection=["--scope", "legacy", "--projection", "pr-anchors"])
                 self.assertEqual((2, ""), (status, stdout))
                 self.assertIn("requires a schema2 matrix", stderr)
+                self.assertFalse(output.exists())
+
+    def test_hyphenated_matrix_digest_alias_preserves_bytes_scope_and_digest_validation(self):
+        self.prepare("lane", "neoforge-1.21.1", projection="scheduled-anchors")
+        self.round_trip(digest_option="--matrix-sha256")
+        self.fixture.expected["matrix_sha256"] = "f" * 64
+        for command in COMMANDS[1:]:
+            output = self.fixture.root / ("bad-alias-digest-" + command)
+            with self.subTest(command=command):
+                status, stdout, stderr = self.invoke(command, output=output, digest_option="--matrix-sha256")
+                self.assertEqual((2, ""), (status, stdout))
+                self.assertIn("matrix_sha256", stderr)
                 self.assertFalse(output.exists())
 
     def test_missing_crossed_or_unresolved_selection_never_publishes(self):

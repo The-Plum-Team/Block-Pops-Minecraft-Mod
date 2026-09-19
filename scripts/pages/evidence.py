@@ -1129,8 +1129,9 @@ def main(argv: list[str] | None = None) -> int:
         selection_arguments(selected)
         selected.add_argument("--input", type=Path, required=True)
         selected.add_argument("--matrix", type=Path, required=True)
-        for name in ("repository", "branch", "commit", "tree", "matrix_sha256"):
+        for name in ("repository", "branch", "commit", "tree"):
             selected.add_argument(f"--{name}", required=True)
+        selected.add_argument("--matrix_sha256", "--matrix-sha256", required=True)
         if command in {"compact", "copy-compact"}:
             selected.add_argument("--output", type=Path, required=True)
         if command in {"validate-raw", "compact"}:
