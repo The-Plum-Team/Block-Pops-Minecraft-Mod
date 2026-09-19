@@ -99,6 +99,21 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
         ext.blockPopsLane = selectedLane
     }
 
+    if (stonecutterLayout) {
+        // Detached nodes consume only the canonical tree processed by Stonecutter.
+        def generatedMain = stonecutter.tasks.generate['stonecutterGenerate']
+        sourceSets.main.java.setSrcDirs([
+            files(generatedMain.map { new File(it.destinationDir, 'java') }).builtBy(generatedMain)
+        ])
+        sourceSets.main.resources.setSrcDirs([
+            files(generatedMain.map { new File(it.destinationDir, 'resources') }).builtBy(generatedMain)
+        ])
+        if (module == 'common') {
+            // Only preprocessing is consumed; the loader compiles the combined harness.
+            sourceSets.create('e2e')
+        }
+    }
+
     base {
         if (lane != null) {
             def loaderName = [fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge'][lane.loader]

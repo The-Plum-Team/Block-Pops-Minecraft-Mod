@@ -19,7 +19,8 @@ if (loaderLabel == null) {
     throw new GradleException("Unsupported E2E harness loader: ${loaderId}")
 }
 def minecraftVersion = artifact.minecraft as String
-def nodeSuffix = lane.build_layout == 'stonecutter' ? ":${minecraftVersion}" : ''
+def stonecutterLayout = lane.build_layout == 'stonecutter'
+def nodeSuffix = stonecutterLayout ? ":${minecraftVersion}" : ''
 if (project.path != ":${loaderId}${nodeSuffix}"
         || rootProject.common_project_path != ":common${nodeSuffix}"
         || lane.runtime.loader != loaderId) {
@@ -30,25 +31,35 @@ def noRemap = artifact.no_remap as Boolean
 
 def mainSourceSet = sourceSets.main
 def e2eSourceSet = sourceSets.findByName('e2e') ?: sourceSets.create('e2e')
+def loaderSources = stonecutterLayout ? project.parent : project
+def commonSources = stonecutterLayout ? commonProject.parent : commonProject
 def protectedRoots = [
-    project.file('src/e2e/java'),
-    project.file('src/e2e/resources'),
-    commonProject.file('src/e2e/java'),
-    commonProject.file('src/e2e/resources')
+    loaderSources.file('src/e2e/java'),
+    loaderSources.file('src/e2e/resources'),
+    commonSources.file('src/e2e/java'),
+    commonSources.file('src/e2e/resources')
 ]
 protectedRoots.each {
     if (!it.isDirectory()) {
         throw new GradleException("Missing protected E2E harness source root: ${it}")
     }
 }
-e2eSourceSet.java.setSrcDirs([
-    project.file('src/e2e/java'),
-    commonProject.file('src/e2e/java')
-])
-e2eSourceSet.resources.setSrcDirs([
-    project.file('src/e2e/resources'),
-    commonProject.file('src/e2e/resources')
-])
+if (stonecutterLayout) {
+    def generators = [project, commonProject].collect {
+        it.stonecutter.tasks.generate['stonecutterGenerateE2e']
+    }
+    e2eSourceSet.java.setSrcDirs(generators.collect { generator ->
+        files(generator.map { new File(it.destinationDir, 'java') }).builtBy(generator)
+    })
+    e2eSourceSet.resources.setSrcDirs(generators.collect { generator ->
+        files(generator.map { new File(it.destinationDir, 'resources') }).builtBy(generator)
+    })
+} else {
+    e2eSourceSet.java.setSrcDirs([loaderSources.file('src/e2e/java'), commonSources.file('src/e2e/java')])
+    e2eSourceSet.resources.setSrcDirs([
+        loaderSources.file('src/e2e/resources'), commonSources.file('src/e2e/resources')
+    ])
+}
 e2eSourceSet.compileClasspath = files(mainSourceSet.output, mainSourceSet.compileClasspath)
 e2eSourceSet.runtimeClasspath = files(e2eSourceSet.output, e2eSourceSet.compileClasspath)
 
@@ -56,10 +67,17 @@ e2eSourceSet.runtimeClasspath = files(e2eSourceSet.output, e2eSourceSet.compileC
 // LoadingErrorScreen even when every class loaded successfully. Reuse the active loader's
 // production descriptor verbatim so the harness cannot carry a second version/pack-format
 // inventory. Fabric 1.20.1 has no loader-local descriptor and does not require one.
-def productionPackMetadata = mainSourceSet.resources.srcDirs
-        .collect { new File(it, 'pack.mcmeta') }
-        .findAll { it.isFile() }
-if (loaderId in ['forge', 'neoforge'] && productionPackMetadata.size() != 1) {
+def productionPackMetadata
+if (stonecutterLayout) {
+    def generatedMain = stonecutter.tasks.generate['stonecutterGenerate']
+    productionPackMetadata = files(generatedMain.map {
+        new File(it.destinationDir, 'resources/pack.mcmeta')
+    }).builtBy(generatedMain)
+} else {
+    productionPackMetadata = mainSourceSet.resources.srcDirs
+            .collect { new File(it, 'pack.mcmeta') }.findAll { it.isFile() }
+}
+if (!stonecutterLayout && loaderId in ['forge', 'neoforge'] && productionPackMetadata.size() != 1) {
     throw new GradleException(
             "${loaderLabel} E2E requires exactly one production-owned pack.mcmeta, "
                     + "found ${productionPackMetadata}")
@@ -97,8 +115,17 @@ tasks.named(e2eSourceSet.compileJavaTaskName) {
 tasks.named(e2eSourceSet.processResourcesTaskName) {
     inputs.property('e2eMinecraftRequirement', artifact.metadata.minecraft as String)
     inputs.property('e2eLoaderRequirement', artifact.metadata.loader as String)
-    if (!productionPackMetadata.isEmpty()) {
+    if (stonecutterLayout) {
+        from(productionPackMetadata)
+    } else if (!productionPackMetadata.isEmpty()) {
         from(productionPackMetadata.first())
+    }
+    if (stonecutterLayout && loaderId in ['forge', 'neoforge']) {
+        doFirst {
+            if (productionPackMetadata.files.count { it.isFile() } != 1) {
+                throw new GradleException("${loaderLabel} E2E requires generated production-owned pack.mcmeta")
+            }
+        }
     }
     filesMatching(['fabric.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml']) {
         expand(
