@@ -163,3 +163,10 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Added only the exact Kikugie plugin marker/implementation modules and four reviewed SHA-256 bindings. Other plugin origins and every remote project repository cannot supply these modules. The validator rejects other Kikugie components/versions, missing/extra artifacts, alternate digests and altered origin filters.
 - Root reproduced 15 dependency-policy tests; CLI policy validation passes. Existing XML components are unchanged. This unit does not apply the plugin or alter the project graph, wrapper, Loom, live matrix or sources.
 - Rollback is this plugin-origin/checksum/policy unit together. Task6 remains partial until selected-node integration and real configuration probes; publication still requires AUTH-1.
+
+## Task 7a — serial build planning without execution
+
+- Added `scripts/release/build_matrix.py --plan`, deriving numeric-version/loader order, exact production/harness tasks, target-local clean tasks, isolated Gradle homes and required Java majors from normalized lanes. The selector follows the designed `-PblockpopsLane=<node>` interface.
+- Full scope is the planner default, including during preparation; unresolved lanes fail instead of disappearing. `--scope legacy` and `--artifact-node` explicitly produce partial plans. Plans bind the exact securely read matrix bytes and label source/toolchain evidence unverified.
+- Fixed command construction always includes `--no-daemon --no-parallel --max-workers=1 --dependency-verification strict`; arbitrary Gradle flags and conflicting selectors are rejected. Planning starts no process and writes no success/report/cache.
+- Root reproduced 29 planner/runtime/portability tests; the current real schema-1 matrix produces a two-lane plan. This is task7's independent planning slice; locks, execution, cancellation and atomic failure/success evidence follow separately. Rollback is this new planner/tests/evidence only.
