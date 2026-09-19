@@ -1204,11 +1204,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--no-source-check", action="store_true")
     parser.add_argument("--pretty", action="store_true")
-    parser.add_argument("--artifact-node")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--artifact-node")
+    selection.add_argument("--scope", choices=("legacy", "full"))
     args = parser.parse_args(argv)
     try:
-        if args.artifact_node is not None and args.kind != "gradle-context":
-            _fail("--artifact-node is only valid with --kind gradle-context")
+        if args.kind in {None, "inventory"} and (args.artifact_node is not None or args.scope is not None):
+            _fail("matrix and inventory output cannot narrow their authoritative input")
+        if args.kind == "gradle-context" and args.scope is not None:
+            _fail("Gradle context accepts only an explicit --artifact-node, not --scope")
         if args.kind == "gradle-context":
             output: Any = load_matrix_document(
                 args.matrix, validate_sources=not args.no_source_check,
@@ -1218,10 +1222,13 @@ def main(argv: list[str] | None = None) -> int:
                 args.matrix, validate_sources=not args.no_source_check,
             ).report()
         else:
-            matrix = load_matrix(
+            document = load_matrix_document(
                 args.matrix, validate_sources=not args.no_source_check
             )
-            output = gha_matrix(matrix, args.kind) if args.kind else matrix
+            output = document.projection(
+                args.kind, scope="lane" if args.artifact_node else args.scope,
+                artifact_node=args.artifact_node,
+            ) if args.kind else document.data
     except MatrixError as exc:
         print(f"release matrix error: {exc}", file=sys.stderr)
         return 2

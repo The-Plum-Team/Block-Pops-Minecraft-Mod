@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import copy
+import contextlib
+import io
 import json
 import subprocess
 import sys
@@ -10,7 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.release.matrix import MatrixError, load_matrix_inventory, normalize_matrix_inventory
+from scripts.release.matrix import MatrixError, gha_matrix, load_matrix_inventory, main, normalize_matrix_inventory
 from tests.test_release_matrix_schema2 import BASE_MATRIX, REPOSITORY, schema2_matrix
 from tests.test_release_matrix_schema2_configuration import mixed_matrix
 
@@ -52,6 +54,49 @@ def shared_matrix() -> dict:
 
 
 class Schema2ReportTests(unittest.TestCase):
+    def cli(self, matrix, *arguments):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "matrix.json"
+            path.write_text(json.dumps(matrix))
+            output, error = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+                code = main(["--matrix", str(path), "--no-source-check", *arguments])
+            return code, output.getvalue(), error.getvalue()
+
+    def test_cli_schema_one_preserves_raw_and_every_projection_byte_for_byte(self):
+        for kind in (None, "artifacts", "java", "gradle-java", "runtime", "pr-anchors", "scheduled-anchors"):
+            expected = gha_matrix(BASE_MATRIX, kind) if kind else BASE_MATRIX
+            arguments = ("--kind", kind) if kind else ()
+            code, output, error = self.cli(BASE_MATRIX, *arguments)
+            self.assertEqual((0, ""), (code, error))
+            self.assertEqual(json.dumps(expected, separators=(",", ":"), sort_keys=True) + "\n", output)
+
+    def test_cli_preparing_dispatch_defaults_to_legacy_and_modern_lane_is_explicit(self):
+        matrix = mixed_matrix()
+        for kind in ("artifacts", "runtime", "pr-anchors", "scheduled-anchors"):
+            code, output, error = self.cli(matrix, "--kind", kind)
+            self.assertEqual((0, ""), (code, error))
+            self.assertEqual(["fabric-1.20.1", "forge-1.20.1"],
+                             [row["artifact_node"] for row in json.loads(output)["include"]])
+            code, output, error = self.cli(matrix, "--kind", kind, "--artifact-node", "neoforge-1.21.1")
+            self.assertEqual((0, ""), (code, error))
+            self.assertEqual(["neoforge-1.21.1"], [row["artifact_node"] for row in json.loads(output)["include"]])
+        for selection in (("--scope", "full"), ("--artifact-node", "fabric-1.21.7")):
+            code, output, _ = self.cli(matrix, "--kind", "artifacts", *selection)
+            self.assertEqual((2, ""), (code, output))
+
+    def test_cli_shared_projects_all_targets_and_rejects_legacy_or_narrowed_inventory(self):
+        matrix = shared_matrix()
+        code, output, error = self.cli(matrix, "--kind", "artifacts", "--scope", "full")
+        self.assertEqual((0, ""), (code, error))
+        self.assertEqual({row["artifact_node"] for row in matrix["targets"]},
+                         {row["artifact_node"] for row in json.loads(output)["include"]})
+        for arguments in (("--kind", "runtime", "--scope", "legacy"),
+                          ("--kind", "inventory", "--artifact-node", "fabric-1.20.1"),
+                          ("--scope", "full"), ("--kind", "gradle-context", "--scope", "full")):
+            code, output, _ = self.cli(matrix, *arguments)
+            self.assertEqual((2, ""), (code, output))
+
     def test_preparing_report_retains_twelve_targets_and_ten_unresolved(self):
         inventory = normalize_matrix_inventory(schema2_matrix())
         report = inventory.report()
@@ -122,7 +167,7 @@ class Schema2ReportTests(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaises(MatrixError):
                 normalize_matrix_inventory(matrix)
 
-    def test_inventory_file_and_cli_report_do_not_enable_execution(self):
+    def test_inventory_and_cli_projection_preserve_unresolved_targets(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "matrix.json"
             path.write_text(json.dumps(schema2_matrix()))
@@ -132,9 +177,14 @@ class Schema2ReportTests(unittest.TestCase):
             report = subprocess.run(command + ["--kind", "inventory"], capture_output=True, text=True)
             self.assertEqual(0, report.returncode, report.stderr)
             self.assertEqual(inventory.report(), json.loads(report.stdout))
-            execution = subprocess.run(command + ["--kind", "artifacts"], capture_output=True, text=True)
-            self.assertEqual(2, execution.returncode)
-            self.assertEqual("", execution.stdout)
+            projection = subprocess.run(command + ["--kind", "artifacts"], capture_output=True, text=True)
+            self.assertEqual(0, projection.returncode, projection.stderr)
+            self.assertEqual(list(inventory.configured_nodes),
+                             [row["artifact_node"] for row in json.loads(projection.stdout)["include"]])
+            unresolved = subprocess.run(command + ["--kind", "artifacts", "--scope", "full"],
+                                        capture_output=True, text=True)
+            self.assertEqual(2, unresolved.returncode)
+            self.assertEqual("", unresolved.stdout)
 
     def test_untrusted_inventory_inputs_fail_with_matrix_errors(self):
         for key in ("unit_test_lane", "side"):
