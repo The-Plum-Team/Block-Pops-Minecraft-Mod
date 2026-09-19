@@ -248,6 +248,37 @@ class ArtifactIdentityTests(unittest.TestCase):
 
 
 class ParityTests(unittest.TestCase):
+    def test_new_gradle_controllers_cannot_change_outside_protected_parity(self) -> None:
+        owner_rules = (Path(__file__).resolve().parents[3] / ".github/CODEOWNERS").read_text()
+        with tempfile.TemporaryDirectory() as raw:
+            repository = Path(raw)
+            def git(*arguments):
+                return subprocess.check_output(["git", "-C", raw, *arguments], text=True,
+                                               stderr=subprocess.PIPE).strip()
+            git("init", "-q")
+            git("config", "user.name", "Test")
+            git("config", "user.email", "t@example.test")
+            for relative in (*PROTECTED_PATHS, "release/release-matrix.json"):
+                path = repository / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("baseline\n")
+            git("add", ".")
+            git("commit", "-qm", "baseline")
+            for relative in ("gradle/build-conventions.gradle", "gradle/stonecutter-branch.gradle",
+                             "stonecutter.gradle"):
+                self.assertIn(f"/{relative} @AkaNebur", owner_rules)
+                base = git("rev-parse", "HEAD")
+                (repository / relative).write_text("changed controller\n")
+                git("add", relative)
+                git("commit", "-qm", relative)
+                head = git("rev-parse", "HEAD")
+                with self.subTest(relative=relative), mock.patch(
+                    "scripts.ci.gate_controller.load_matrix_bytes", return_value={"artifacts": []}
+                ), mock.patch("scripts.ci.gate_controller.validate_loader_bootstrap_commit"), self.assertRaisesRegex(
+                    GateControllerError, relative
+                ):
+                    validate_controller_parity(repository, protected_sha=base, candidate_sha=head)
+
     def test_all_evidence_publishers_and_visual_curators_are_protected(self) -> None:
         self.assertIn("scripts/pages", PROTECTED_PATHS)
         self.assertIn("scripts/visual", PROTECTED_PATHS)

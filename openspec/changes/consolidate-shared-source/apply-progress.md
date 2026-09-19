@@ -212,3 +212,9 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - An explicit pre-configuration guard keeps Stonecutter game execution disabled until common/loader/E2E adapters are complete. Selected FML legacy execution also reports the missing common annotation-dependency adapter; the existing default legacy aggregate remains intact. No silent cross-lane input is borrowed.
 - Root reproduced21 context/policy tests and the policy CLI. Serialized isolated probes used exact settings/controller bytes and strict metadata: modern topology was exact and hit the expected guard before game/plugin configuration; schema1 and preparing defaults retained legacy descriptors. Probe inputs remained unchanged; results are under `build/diagnostics/stonecutter-context-probe/`.
 - This is a selected-node foundation, not working Minecraft compilation or task6 completion. Rollback includes controller/descriptor/convention wiring and its policy inventory/digest updates.
+
+## Task 6 protection follow-up — cover every new Gradle controller
+
+- Added exact protected-parity and CODEOWNERS entries for the extracted conventions, Stonecutter parent descriptor and root controller. New executable build logic must not become an ordinary candidate-controlled input merely because it moved outside the previously protected root script.
+- Twenty-one controller/sync tests pass. A real temporary Git history independently changes each new path and confirms the unchanged parity evaluator rejects it; no exception or admission route was added.
+- These are local candidate protections, not evidence of deployed authority. Rollback must accompany removal of the corresponding new controller files; publication remains under AUTH-1.
