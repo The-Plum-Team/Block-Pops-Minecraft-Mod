@@ -101,17 +101,27 @@ runs:
             python3 -m pip install --user --disable-pip-version-check \
               --only-binary=:all: --require-hashes \
               --requirement e2e/requirements.txt
-            python3 scripts/release/verify_release.py --verify-staged
+            scope="$(python3 scripts/ci/matrix_scope.py --matrix release/release-matrix.json)"
+            verify_command=(python3 scripts/release/verify_release.py --verify-staged)
+            runtime_command=(python3 e2e/orchestrator.py \
+              --matrix release/release-matrix.json \
+              --row-json "$E2E_ROW_JSON" \
+              --projection "$BLOCKPOPS_PROJECTION" \
+              --artifacts-manifest build/release/artifacts.json \
+              --packaged --scenarios "$E2E_SCENARIOS")
+            case "$scope" in
+              unscoped) ;;
+              legacy|full)
+                verify_command+=(--scope "$scope")
+                runtime_command+=(--scope "$scope")
+                ;;
+              *) exit 2 ;;
+            esac
+            "${verify_command[@]}"
             export BLOCKPOPS_E2E_RUNTIME_STORE="$HOME/runtime-store"
             xvfb-run --auto-servernum \
               --server-args="-screen 0 1920x1080x24 -ac +extension GLX +render -noreset" \
-              python3 e2e/orchestrator.py \
-                --matrix release/release-matrix.json \
-                --row-json "$E2E_ROW_JSON" \
-                --projection "$BLOCKPOPS_PROJECTION" \
-                --artifacts-manifest build/release/artifacts.json \
-                --packaged \
-                --scenarios "$E2E_SCENARIOS"
+              "${runtime_command[@]}"
           '
 
     - name: Kill and lock Minecraft's identity before artifact upload
@@ -144,15 +154,24 @@ runs:
         python3 "$CONTROLLER_ROOT/scripts/ci/untrusted_runner.py" validate \
           --root "$SANDBOX_ROOT" --pass-env BLOCKPOPS_TESTED_SHA \
           --pass-env E2E_ROW_JSON -- \
-          python3 scripts/ci/e2e_fanin.py validate-lane \
-            --input "$repository/e2e-out/current" \
-            --repository "$repository" \
-            --matrix "$repository/release/release-matrix.json" \
-            --contract "$repository/e2e/scenario-contract.json" \
-            --projection "$E2E_PROJECTION" \
-            --row-json "$E2E_ROW_JSON" \
-            --stage "$repository/build/release" \
-            --artifact-manifest "$repository/build/release/artifacts.json"
+          bash -euo pipefail -c '
+            scope="$(python3 scripts/ci/matrix_scope.py --matrix "$1/release/release-matrix.json")"
+            validate_command=(python3 scripts/ci/e2e_fanin.py validate-lane \
+              --input "$1/e2e-out/current" \
+              --repository "$1" \
+              --matrix "$1/release/release-matrix.json" \
+              --contract "$1/e2e/scenario-contract.json" \
+              --projection "$2" \
+              --row-json "$E2E_ROW_JSON" \
+              --stage "$1/build/release" \
+              --artifact-manifest "$1/build/release/artifacts.json")
+            case "$scope" in
+              unscoped) ;;
+              legacy|full) validate_command+=(--scope "$scope") ;;
+              *) exit 2 ;;
+            esac
+            "${validate_command[@]}"
+          ' _ "$repository" "$E2E_PROJECTION"
 
     - name: Upload bounded packaged evidence
       if: >-

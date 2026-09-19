@@ -354,7 +354,8 @@ class WorkflowSecurityTests(unittest.TestCase):
         validator = action.split("    - name: Revalidate passing lane evidence", 1)[1].split(
             "    - name: Upload bounded packaged evidence", 1)[0]
         self.assertIn("E2E_PROJECTION: ${{ inputs.projection }}", validator)
-        self.assertIn('--projection "$E2E_PROJECTION"', validator)
+        self.assertIn('--projection "$2"', validator)
+        self.assertIn("' _ \"$repository\" \"$E2E_PROJECTION\"", validator)
 
     def test_all_candidate_execution_uses_protected_sandbox_controller_and_fresh_validation(self) -> None:
         build = (WORKFLOWS / "build-gate.yml").read_text("utf-8")

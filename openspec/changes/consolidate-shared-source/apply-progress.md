@@ -490,3 +490,8 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 
 - Create, aggregate validation and lane validation now accept one external scope or artifact node and forward it unchanged to staged-bundle verification and evidence APIs. Local artifact repository paths are separate from the remote owner/repository identity. Scoped validation verifies the bundle before reading aggregate evidence; legacy structural validation keeps its original interface and rejects ignored bundle options.
 - Root reproduced52 fan-in tests, including seven CLI cases for scoped round trips, wrong/missing selection, rejected bundles, typed manifest drift and repository-relative inputs under a fresh validator. Independent review found no blocker. Synthetic evidence remains distinct from authenticated game qualification. Rollback is CLI adapter/tests, retaining strict typed re-read validation.
+
+## Task 12k — match packaged runtime and sealed-lane scopes
+
+- The packaged-runtime action derives its artifact selection from the validated matrix and passes it to both staged verification and the orchestrator. The fresh credentialless lane validator independently derives that selection from the sealed checkout; projection/row inputs retain their existing explicit bindings.
+- Root reproduced35 action/workflow/boundary tests. Executed shell fragments confirm schema1 omission and exact legacy/full forwarding, unchanged quoted row/scenario values, and no display/game launch on invalid scope or rejected bundle. Upload conditions and environment allowlists remain unchanged. This is local action validation, not a Minecraft or GitHub run. Rollback is action and corresponding tests.
