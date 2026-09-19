@@ -9,6 +9,7 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import com.theplumteam.figure.PlayerCollectionHelper;
+import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.registry.ModItems;
 import com.theplumteam.server.ServerTickHandler;
 import com.theplumteam.util.AuthlibProfiles;
@@ -206,7 +207,7 @@ public class DropBoxPacket {
                         blockEntityTag.putString("QuickSkinId", quickSkinSnapshot);
                     }
 
-                    boxItem.getOrCreateTag().put("BlockEntityTag", blockEntityTag);
+                    BlockEntityItemData.write(boxItem, blockEntityTag, "blockpops:box_block");
                     player.getInventory().add(boxItem);
                     PlayerDataManager.markDirty(player, discovery);
                 }

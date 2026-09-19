@@ -13,6 +13,7 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import com.theplumteam.figure.PlayerCollectionHelper;
+import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.network.TokenType;
 import com.theplumteam.network.UnlockFigurePacket;
 import com.theplumteam.registry.ModItems;
@@ -211,7 +212,7 @@ public class GetBoxCommand {
                         blockEntityTag.putString("QuickSkinId", quickSkinSnapshot);
                     }
 
-                    boxItem.getOrCreateTag().put("BlockEntityTag", blockEntityTag);
+                    BlockEntityItemData.write(boxItem, blockEntityTag, "blockpops:box_block");
 
                     ItemEntity itemEntity = new ItemEntity(player.level(), player.getX(), player.getY() + 1.0, player.getZ(), boxItem);
                     itemEntity.setDeltaMovement(0, 0.2, 0);

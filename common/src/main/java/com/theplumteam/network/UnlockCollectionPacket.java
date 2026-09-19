@@ -9,6 +9,7 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import com.theplumteam.figure.PlayerCollectionHelper;
+import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.registry.ModItems;
 import com.theplumteam.util.AuthlibProfiles;
 import com.theplumteam.util.ResourceLocations;
@@ -180,7 +181,7 @@ public class UnlockCollectionPacket {
             blockEntityTag.putString("QuickSkinId", quickSkinSnapshot);
         }
 
-        boxItem.getOrCreateTag().put("BlockEntityTag", blockEntityTag);
+        BlockEntityItemData.write(boxItem, blockEntityTag, "blockpops:box_block");
 
         ItemEntity itemEntity = new ItemEntity(
                 player.level(),
