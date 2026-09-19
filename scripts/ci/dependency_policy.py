@@ -354,6 +354,7 @@ def validate_repository_layout(repository: Path) -> None:
         "build.gradle",
         "common/build.gradle",
         "gradle/build-conventions.gradle",
+        "gradle/build-observation.init.gradle",
         "gradle/e2e-harness-conventions.gradle",
         "gradle/repository-policy.gradle",
         "gradle/stonecutter-branch.gradle",

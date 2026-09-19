@@ -315,3 +315,8 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Added schema3 verification against an explicit caller scope and normalized configured lanes. Headers bind the full authoritative matrix, scenario contract, exact source commit/tree, twelve targets and selected inventory; each row binds its own version/toolchain/context and both embedded archive identities. Schema2 historical verification remains available without scoped arguments; schema2-matrix staging is still blocked pending its producer.
 - Root reproduced45 artifact tests. Negative cases cover partial-as-full/legacy claims, wrong lanes, duplicates, stale inputs, coercible numeric fields, linked parents/hardlinks and unlisted staged objects. Review reproduced a late hardlink race; final path, manifest bytes and inventory revalidation now reject it and equivalent late mutations. Git identity reads ignore replacement objects/grafts.
 - Fixtures exercise validation only, including a complete twelve-row context; no real schema3 Minecraft archives exist yet. Dirty tracked work still prevents release provenance. Rollback is the scoped context/reader/tests; producer, CLI and independent qualification remain subsequent units.
+
+## Observer integration correction — exact Gradle inventory
+
+- The first combined policy check rejected the new protected observer because its exact Gradle-file inventory had not been extended. Added that single path to the existing audited set; the normal script-content checks still apply to it.
+- Twenty-three context/policy tests and the policy CLI pass. No checksum, repository filter or exemption changed. Keep this inventory entry with the observer, including on rollback.
