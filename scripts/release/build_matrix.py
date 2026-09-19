@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan serial, isolated lane builds without starting Gradle or claiming success."""
+"""Plan or execute serial isolated lane builds; reports never qualify a release."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ sys.path.insert(0, str(REPO))
 
 from scripts.lib.secure_json import SecureJsonError, canonical_json, read as read_secure_json  # noqa: E402
 from scripts.release.matrix import (  # noqa: E402
-    MAX_MATRIX_BYTES, MatrixDocument, MatrixError, normalize_matrix_inventory,
+    MAX_MATRIX_BYTES, MatrixDocument, MatrixError, load_matrix_document, normalize_matrix_inventory,
 )
 
 
@@ -133,7 +133,7 @@ def _finish_owned_group(process):
 
 
 def run_lane(command: list[str], *, lock: CheckoutLock, env: dict[str, str], output=None) -> int:
-    """Synchronous POSIX process-tree primitive; CLI execution remains disabled."""
+    """Synchronous POSIX process-tree primitive; reap the owned group before returning."""
     if os.name == "nt":
         raise BuildProcessError("Windows owned process-tree cleanup is not implemented")
     if not lock.guard.acquire(blocking=False):
@@ -508,6 +508,9 @@ def verify_toolchains(plan: dict[str, Any], java_home: Path, java_homes: dict[in
     remains required during execution; these probes do not certify a build.
     """
     env = dict(os.environ if environment is None else environment)
+    for name, value in env.items():
+        if name.startswith("ORG_GRADLE_PROJECT_") and value:
+            raise BuildProcessError(f"{name} must be empty for explicit toolchain binding")
     for name in ("JAVA_OPTS", "GRADLE_OPTS", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS"):
         if env.get(name, "").strip():
             raise BuildProcessError(f"{name} must be empty for explicit toolchain binding")
@@ -614,6 +617,7 @@ def plan_build(
     wrapper = "gradlew.bat" if (os.name == "nt" if windows is None else windows) else "./gradlew"
     planned = []
     for lane in lanes:
+        document.gradle_context(artifact_node=lane.identity.artifact_node)
         artifact, runtime = lane.artifact, lane.runtime
         if artifact["java"] not in {17, 21} or runtime["java"] not in {17, 21}:
             raise MatrixError("the serial runner requires artifact/runtime Java 17 or 21")
@@ -647,23 +651,115 @@ def plan_build(
     }
 
 
+@contextmanager
+def _lane_log(lock, path):
+    """Anchor creation to owned directory descriptors, never a replaceable parent link."""
+    lock.verify()
+    relative = path.relative_to(lock.repository / "build")
+    if ".." in relative.parts or relative.name != "gradle.log":
+        raise BuildProcessError("lane log must stay in its build directory")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    directory = os.open(lock.path.parent, flags)
+    try:
+        if _identity(os.fstat(directory)) != lock.parent:
+            raise BuildProcessError("lane log build directory identity changed")
+        for part in relative.parts[:-1]:
+            child = os.open(part, flags, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        descriptor = os.open(relative.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                             0o600, dir_fd=directory)
+        with os.fdopen(descriptor, "wb") as output:
+            yield output
+    finally:
+        os.close(directory)
+
+
+def execute_build(matrix_path: Path, *, java_home: Path, java_homes: dict[int, Path],
+                  scope: str = "full", artifact_node: str | None = None, clean: bool = False,
+                  environment: dict[str, str] | None = None) -> dict[str, Any]:
+    """Fail-fast build diagnostics; process exit, observations and archive boundaries are separate evidence."""
+    from scripts.release.artifact_manifest import verify_harness_jar, verify_production_jar
+    plan = plan_build(matrix_path, scope=scope, artifact_node=artifact_node, clean=clean)
+    repository = Path(plan["source"]["repository"])
+    env, results = dict(os.environ if environment is None else environment), []
+    def unchanged_outputs():
+        for completed in results:
+            lane = next(row for row in plan["lanes"] if row["artifact_node"] == completed["artifact_node"])
+            if canonical_json(output_snapshot(repository, lane["outputs"])) != canonical_json(completed["outputs"]):
+                raise BuildProcessError("an earlier or current lane archive changed")
+    with checkout_lock(repository) as lock:
+        run_id = begin_report(lock, plan)
+        try:
+            if plan["lanes"][0]["command"][0] == "gradlew.bat":
+                raise BuildProcessError("Windows owned process-tree cleanup is not implemented")
+            toolchains = verify_toolchains(plan, java_home, java_homes, environment=env)
+            env.update(toolchains["environment"])
+            report = _observation_report(lock, run_id)
+            report["toolchains"] = toolchains
+            _atomic_report(lock, report)
+            document = load_matrix_document(Path(plan["matrix"]["path"]))
+            for lane in plan["lanes"]:
+                node = lane["artifact_node"]
+                bound = prepare_observation(lock, run_id, toolchains, node)
+                unchanged_outputs()
+                result = {"artifact_node": node, "command": bound["command"], "exit_code": None, "outputs": {}}
+                results.append(result)
+                report["lanes"] = results
+                _atomic_report(lock, report)
+                log = Path(bound["request"]).with_name("gradle.log")
+                with _lane_log(lock, log) as output:
+                    result["exit_code"] = run_lane(bound["command"], lock=lock, env=env, output=output)
+                result["log"] = file_snapshot(repository, log)
+                if type(result["exit_code"]) is not int or result["exit_code"] != 0:
+                    raise BuildProcessError(f"lane {node} exited with {result['exit_code']}")
+                result["observation"] = validate_observation(lock, run_id, node)
+                result["outputs"] = output_snapshot(repository, lane["outputs"])
+                artifact = document.inventory.lane(node).artifact
+                verify_production_jar(Path(lane["outputs"]["production"]), artifact)
+                verify_harness_jar(Path(lane["outputs"]["harness"]), artifact)
+                unchanged_outputs()
+                result["archive_validation"] = "boundary-and-metadata"
+                _atomic_report(lock, report)
+            return finish_report(lock, run_id, results)
+        except BaseException as exc:
+            failed = finish_report(lock, run_id, results, error=f"{type(exc).__name__}: {exc}")
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise
+            return failed
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--plan", action="store_true", required=True,
-                        help="emit a plan only; execution is not implemented")
+    parser.add_argument("--plan", action="store_true", help="emit a pure plan without probing JDKs or building")
+    parser.add_argument("--java-home", type=Path, help="explicit Java 21 home for Gradle (required for execution)")
+    parser.add_argument("--java17-home", type=Path, help="explicit compile/runtime Java 17 home when selected")
+    parser.add_argument("--java21-home", type=Path, help="optional Java 21 toolchain home; must equal --java-home")
     parser.add_argument("--matrix", type=Path, default=REPO / "release/release-matrix.json")
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--scope", choices=("full", "legacy"))
     selection.add_argument("--artifact-node")
     parser.add_argument("--clean", action="store_true")
     args = parser.parse_args(argv)
+    if args.plan and any((args.java_home, args.java17_home, args.java21_home)):
+        parser.error("--plan cannot be combined with execution JDK homes")
+    if not args.plan and args.java_home is None:
+        parser.error("execution requires --java-home; use --plan for planning only")
     try:
-        plan = plan_build(args.matrix, scope=args.scope or "full", artifact_node=args.artifact_node, clean=args.clean)
-    except (MatrixError, SecureJsonError, OSError) as exc:
-        print(f"build matrix plan failed: {exc}", file=sys.stderr)
+        options = dict(scope=args.scope or "full", artifact_node=args.artifact_node, clean=args.clean)
+        if args.plan:
+            result = plan_build(args.matrix, **options)
+        else:
+            homes = {major: home for major, home in ((17, args.java17_home), (21, args.java21_home)) if home is not None}
+            result = execute_build(args.matrix, java_home=args.java_home, java_homes=homes, **options)
+    except KeyboardInterrupt:
+        print("build matrix interrupted; execution did not complete", file=sys.stderr)
+        return 130
+    except (MatrixError, SecureJsonError, BuildProcessError, OSError) as exc:
+        print(f"build matrix failed: {exc}", file=sys.stderr)
         return 2
-    print(json.dumps(plan, indent=2))
-    return 0
+    print(json.dumps(result, indent=2))
+    return 0 if result["status"] in {"planned", "success"} else 1
 
 
 if __name__ == "__main__":

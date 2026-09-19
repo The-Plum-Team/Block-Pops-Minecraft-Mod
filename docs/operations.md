@@ -1,5 +1,24 @@
 # Repository configuration and incident recovery
 
+## Local serial build diagnostics
+
+Inspect a selected lane with `python3 scripts/release/build_matrix.py --plan --artifact-node fabric-1.20.1`.
+For execution, omit `--plan` and supply `--java-home /absolute/jdk21` plus
+`--java17-home /absolute/jdk17` when the selected lane compiles/runs on Java17.
+Use `--scope legacy` for preparing-mode legacy lanes or `--scope full` for a
+complete configured inventory; the default full scope rejects unresolved targets.
+`--clean` adds only the selected project's clean task.
+
+Execution owns one checkout lock, serial Gradle processes and isolated per-lane
+homes. Explicit JDK probes, observed compiler selections, source/output hashes
+and archive boundaries feed `build/build-matrix-report.json`; per-lane logs and
+receipts live under `build/observations/`. A new valid execution invalidates prior
+success before probing; failures stop subsequent lanes. Cancellation reaps only
+the owned process group. Windows execution remains unsupported until equivalent
+process-tree ownership is implemented. Inherited JVM/Gradle option variables and
+nonempty `ORG_GRADLE_PROJECT_*` variables are rejected. A successful diagnostic
+report does not certify clean release provenance or packaged Minecraft scenarios.
+
 ## Owner configuration required
 
 Build, E2E, evidence validation, and PR evaluation are secretless. Narrow

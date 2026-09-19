@@ -19,12 +19,15 @@ from unittest.mock import Mock, patch
 from scripts.ci.tests.matrix_fixtures import schema2_configuration
 from scripts.lib.secure_json import SecureJsonError
 from scripts.release.build_matrix import (
-    BuildProcessError, _finish_owned_group, begin_report, checkout_lock, file_snapshot, finish_report,
+    BuildProcessError, _finish_owned_group, begin_report, checkout_lock, execute_build, file_snapshot, finish_report,
     main, numeric_version, output_snapshot, plan_build, prepare_observation, run_lane, source_snapshot,
     validate_observation, verify_toolchains,
 )
 from scripts.release.matrix import MatrixError
 from tests.test_release_matrix_portability import arbitrary_named_1211_release_matrix
+from tests.test_artifact_and_report_validation import (
+    _fabric_harness_entries, _fabric_production_entries, _fml_harness_entries, _write_zip,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -127,6 +130,16 @@ class BuildMatrixPlanningTests(unittest.TestCase):
         self.write_matrix(matrix)
         with self.assertRaises(MatrixError):
             plan_build(self.path, scope="legacy")
+
+    def test_missing_same_era_common_annotation_fails_before_any_process(self):
+        matrix = schema2_configuration()
+        for key in ("artifacts", "runtimes"):
+            matrix[key] = [row for row in matrix[key] if row["artifact_node"] != "fabric-1.21.1"]
+        matrix["lane_count"] -= 1
+        self.write_matrix(matrix)
+        with patch("subprocess.run") as run, self.assertRaisesRegex(MatrixError, "common annotations"):
+            plan_build(self.path, artifact_node="neoforge-1.21.1")
+        run.assert_not_called()
 
     def test_plan_preserves_the_secure_reader_and_explicit_scope_boundary(self):
         self.write_matrix(schema2_configuration(shared=True))
@@ -234,9 +247,10 @@ class BuildMatrixToolchainTests(unittest.TestCase):
             run.assert_not_called()
 
     def test_inherited_option_injection_and_daemon_criteria_are_rejected_before_probes(self):
-        for key in ("JAVA_OPTS", "GRADLE_OPTS", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS"):
+        for key in ("JAVA_OPTS", "GRADLE_OPTS", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS",
+                    "ORG_GRADLE_PROJECT_org.gradle.jvmargs"):
             with self.subTest(key=key), patch("subprocess.run") as run:
-                self.env[key] = "-Dorg.gradle.parallel=true"
+                self.env[key] = "-javaagent:/unreviewed.jar" if key.startswith("ORG_GRADLE_PROJECT_") else "-Dorg.gradle.parallel=true"
                 with self.assertRaisesRegex(BuildProcessError, key):
                     self.verify()
                 run.assert_not_called(); del self.env[key]
@@ -443,6 +457,163 @@ class BuildMatrixObservationTests(unittest.TestCase):
                 with patch("scripts.release.build_matrix.source_snapshot", side_effect=mutate_after_scan):
                     with self.subTest(mutation=mutation), self.assertRaises(BuildProcessError):
                         validate_observation(lock, run_id, node)
+
+
+class BuildMatrixExecutionTests(unittest.TestCase):
+    def setUp(self):
+        BuildMatrixObservationTests.setUp(self)
+        self.path = Path(self.plan["matrix"]["path"])
+        self.path.write_bytes((ROOT / "release/release-matrix.json").read_bytes())
+        self.plan = plan_build(self.path)
+        self.events, self.commands, self.env_ids, self.failure = [], [], [], None
+        self.report_path = self.root / "build/build-matrix-report.json"
+
+    def verify(self, plan, *args, **kwargs):
+        self.events.append("probe")
+        self.env_ids.append(id(kwargs["environment"]))
+        self.assertEqual("running", json.loads(self.report_path.read_text())["status"])
+        with patch("subprocess.run", side_effect=lambda *a, **kw: BuildMatrixToolchainTests.probe(self, *a, **kw)):
+            return verify_toolchains(plan, *args, **kwargs)
+
+    def spawn(self, command, *, lock, env, output):
+        node = next(arg.split("=", 1)[1] for arg in command if arg.startswith("-PblockpopsLane="))
+        self.events.append(node); self.commands.append(command); self.env_ids.append(id(env))
+        self.assertEqual(str(self.homes[21]), env["JAVA_HOME"])
+        lock.verify(); output.write(b"synthetic subprocess fixture\n")
+        if self.failure == "nonzero": return 7
+        if self.failure == "startup": raise OSError("synthetic startup failure")
+        if self.failure == "cancel": raise KeyboardInterrupt()
+        report = json.loads(self.report_path.read_text())
+        binding = lock.observations[(report["run_id"], node)]
+        request = binding["request"]
+        receipt = {key: request[key] for key in ("schema_version", "run_id", "artifact_node", "caller_source")}
+        receipt.update(request_sha256=binding["request_file"]["sha256"], status="completed", compilers={},
+                       gradle_jvm={"home": request["gradle_home"], "major": 21})
+        for task, destination in binding["destinations"].items():
+            directory = Path(destination); directory.mkdir(parents=True, exist_ok=True)
+            (directory / "Fixture.class").write_bytes(b"synthetic compiler fixture")
+            receipt["compilers"][task] = {"selected": {"home": request["compile_home"], "major": request["compile_major"],
+                "release": request["compile_major"], "version": f"{request['compile_major']}.0.1+7-LTS",
+                "executable": str(Path(request["compile_home"]) / "bin/javac"), "destination": destination},
+                "outcome": {"did_work": True, "skipped": False, "up_to_date": False, "no_source": False,
+                            "skip_message": None, "failed": False}}
+        if self.failure == "receipt": receipt["gradle_jvm"]["major"] = 17
+        (lock.repository / binding["request_file"]["path"]).with_name("observation.json").write_text(json.dumps(receipt))
+        lane = next(row for row in self.plan["lanes"] if row["artifact_node"] == node)
+        artifact = next(row for row in json.loads(self.path.read_text())["artifacts"] if row["artifact_node"] == node)
+        if lane["loader"] == "fabric":
+            production, harness = _fabric_production_entries(), _fabric_harness_entries()
+        else:
+            text = '[[mods]]\nmodId = "blockpops"\n' + '\n'.join(
+                f'[[dependencies.blockpops]]\nmodId = "{key}"\nversionRange = "{artifact["metadata"][key]}"'
+                for key in ("minecraft", "architectury", "geckolib"))
+            production = {"com/theplumteam/BlockPopsMod.class": b"fixture", "blockpops.mixins.json": b"{}",
+                          "com/theplumteam/forge/BlockPopsModForge.class": b"fixture", artifact["metadata"]["file"]: text.encode()}
+            harness = _fml_harness_entries(include_pack=True)
+        if self.failure == "boundary": production["com/theplumteam/e2e/Forbidden.class"] = b"fixture"
+        for kind, entries in (("production", production), ("harness", harness)):
+            path = Path(lane["outputs"][kind]); path.parent.mkdir(parents=True, exist_ok=True)
+            _write_zip(path, entries)
+        if self.failure == "missing": Path(lane["outputs"]["production"]).unlink()
+        if self.failure == "source": (self.root / "common/src/main/Unexpected.java").write_text("changed")
+        return 0
+
+    def execute(self, **kwargs):
+        with patch("scripts.release.build_matrix.verify_toolchains", side_effect=self.verify), patch(
+            "scripts.release.build_matrix.run_lane", side_effect=self.spawn
+        ):
+            return execute_build(self.path, java_home=self.homes[21], java_homes=kwargs.pop("java_homes", {17: self.homes[17]}),
+                                 environment=self.env, **kwargs)
+
+    def test_serial_success_invalidates_prior_success_and_binds_exact_commands_and_environment(self):
+        self.report_path.parent.mkdir(); self.report_path.write_text('{"status":"success","run_id":"old"}')
+        report = self.execute()
+        self.assertEqual("success", report["status"])
+        self.assertEqual(["probe", *self.plan["selected_nodes"]], self.events)
+        self.assertEqual(1, len(set(self.env_ids)))
+        self.assertNotEqual("old", report["run_id"])
+        self.assertEqual(report, json.loads(self.report_path.read_text()))
+        self.assertFalse((self.root / "build/.matrix-build.lock").exists())
+        for lane, command in zip(report["lanes"], self.commands, strict=True):
+            self.assertEqual(command, lane["command"])
+            self.assertEqual("observed", lane["observation"]["status"])
+            self.assertEqual("boundary-and-metadata", lane["archive_validation"])
+            self.assertIn("--no-daemon", command); self.assertIn("--no-parallel", command)
+            self.assertIn("--max-workers=1", command); self.assertIn("strict", command)
+
+    def test_lane_failures_stop_before_next_spawn_and_replace_success_with_failed_report(self):
+        for failure in ("nonzero", "startup", "receipt", "boundary", "missing", "source"):
+            self.failure, self.commands = failure, []
+            with self.subTest(failure=failure):
+                report = self.execute()
+                self.assertEqual("failed", report["status"])
+                self.assertEqual(1, len(self.commands))
+                self.assertTrue(report["error"])
+                self.assertFalse((self.root / "build/.matrix-build.lock").exists())
+
+    def test_explicit_lane_reports_partial_build_scope_without_qualification(self):
+        report = self.execute(artifact_node="fabric-1.20.1")
+        self.assertEqual("success", report["status"])
+        self.assertTrue(report["plan"]["partial_scope"])
+        self.assertEqual(["fabric-1.20.1"], report["plan"]["selected_nodes"])
+        self.assertEqual(self.plan["target_nodes"], report["plan"]["target_nodes"])
+        self.assertTrue(report["source"]["dirty"])
+        self.assertNotIn("qualification", report)
+        self.assertEqual(1, len(self.commands))
+
+    def test_jdk_failure_collision_and_windows_never_spawn_gradle(self):
+        self.assertEqual("failed", self.execute(java_homes={})["status"])
+        self.assertEqual([], self.commands)
+        with checkout_lock(self.root), self.assertRaises(BuildProcessError): self.execute()
+        windows = plan_build(self.path, windows=True)
+        with patch("scripts.release.build_matrix.plan_build", return_value=windows):
+            report = self.execute()
+        self.assertEqual("failed", report["status"]); self.assertIn("Windows", report["error"])
+        self.assertEqual([], self.commands)
+
+    def test_cancellation_records_failure_after_process_primitive_returns_control(self):
+        self.failure = "cancel"
+        with self.assertRaises(KeyboardInterrupt): self.execute()
+        self.assertEqual("failed", json.loads(self.report_path.read_text())["status"])
+        self.assertFalse((self.root / "build/.matrix-build.lock").exists())
+
+    def test_archive_mutation_during_next_preparation_prevents_the_next_process(self):
+        prepare = prepare_observation
+        def mutate(lock, run_id, toolchains, node):
+            bound = prepare(lock, run_id, toolchains, node)
+            if self.commands:
+                Path(self.plan["lanes"][0]["outputs"]["production"]).write_bytes(b"changed previous archive")
+            return bound
+        with patch("scripts.release.build_matrix.prepare_observation", side_effect=mutate):
+            report = self.execute()
+        self.assertEqual("failed", report["status"]); self.assertIn("archive changed", report["error"])
+        self.assertEqual(1, len(self.commands))
+
+    def test_replaced_log_parent_cannot_redirect_output_or_start_a_process(self):
+        prepare = prepare_observation
+        with tempfile.TemporaryDirectory() as raw:
+            outside = Path(raw).resolve()
+            def replace_parent(lock, run_id, toolchains, node):
+                bound = prepare(lock, run_id, toolchains, node)
+                directory = Path(bound["request"]).parent
+                directory.rename(directory.with_name(node + ".owned"))
+                directory.symlink_to(outside, target_is_directory=True)
+                return bound
+            with patch("scripts.release.build_matrix.prepare_observation", side_effect=replace_parent):
+                report = self.execute()
+            self.assertEqual("failed", report["status"])
+            self.assertEqual([], self.commands)
+            self.assertFalse((outside / "gradle.log").exists())
+
+    def test_cli_execution_requires_explicit_homes_and_maps_outcomes_without_ambient_fallback(self):
+        args = ["--matrix", str(self.path), "--java-home", str(self.homes[21]), "--java17-home", str(self.homes[17])]
+        for status, code in (("success", 0), ("failed", 1)):
+            with patch("scripts.release.build_matrix.execute_build", return_value={"status": status}) as execute:
+                with contextlib.redirect_stdout(io.StringIO()): self.assertEqual(code, main(args))
+                self.assertEqual({17: self.homes[17]}, execute.call_args.kwargs["java_homes"])
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit): main(args + ["--plan"])
+        with patch("scripts.release.build_matrix.execute_build", side_effect=KeyboardInterrupt()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(130, main(args))
 
 
 class BuildMatrixProcessTests(unittest.TestCase):
