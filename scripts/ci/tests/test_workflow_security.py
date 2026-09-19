@@ -345,6 +345,17 @@ class WorkflowSecurityTests(unittest.TestCase):
             public,
         )
 
+    def test_runtime_and_validator_use_the_same_caller_owned_anchor_projection(self) -> None:
+        action = (REPO / ".github/actions/run-packaged-e2e/action.yml").read_text("utf-8")
+        runtime = action.split("    - name: Reverify and launch", 1)[1].split("    - name: Kill and lock", 1)[0]
+        self.assertIn("BLOCKPOPS_PROJECTION: ${{ inputs.projection }}", runtime)
+        self.assertIn("--pass-env BLOCKPOPS_PROJECTION", runtime)
+        self.assertIn('--projection "$BLOCKPOPS_PROJECTION"', runtime)
+        validator = action.split("    - name: Revalidate passing lane evidence", 1)[1].split(
+            "    - name: Upload bounded packaged evidence", 1)[0]
+        self.assertIn("E2E_PROJECTION: ${{ inputs.projection }}", validator)
+        self.assertIn('--projection "$E2E_PROJECTION"', validator)
+
     def test_all_candidate_execution_uses_protected_sandbox_controller_and_fresh_validation(self) -> None:
         build = (WORKFLOWS / "build-gate.yml").read_text("utf-8")
         e2e = (WORKFLOWS / "on-demand-e2e.yml").read_text("utf-8")

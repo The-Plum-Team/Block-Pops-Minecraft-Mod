@@ -412,3 +412,8 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - The per-lane API and expected-lane projection now consume normalized matrices with explicit external schema2 scopes. Already-verified schema3 bundles must match the loaded raw matrix/contract, complete selected inventory, per-lane metadata and embedded identities. Payload coverage distinguishes one executed lane from its wider artifact bundle; final input re-reads reject drift.
 - Root and independent reviewer reproduced24 legacy/scoped fan-in tests. Existing screenshot/report/profile checks run on synthetic payload fixtures for legacy2, modern lane1 and a full12 bundle; scope, typed-row, identity, scenario and late-input mutations fail. These fixtures do not qualify Minecraft gameplay.
 - Aggregate creation/validation and the CLI still reject schema2. Their next adapter must pass caller-owned scope to staged verification before invoking this API. Rollback is scoped per-lane helpers/payload validation/tests, preserving legacy aggregate shapes.
+
+## Task 12e — forward the action's anchor projection
+
+- The packaged-runtime action now forwards its existing authoritative projection input to the orchestrator through the already-permitted `BLOCKPOPS_PROJECTION` variable. Runtime selection and fresh validation therefore use the same PR/scheduled projection; credential/account boundaries and upload conditions are unchanged.
+- Root reproduced33 workflow/security-boundary tests. This completes the action wiring for12b, without claiming a GitHub or game run. Schema2 artifact scope wiring remains pending. Rollback is action argument/environment plus its contract test.

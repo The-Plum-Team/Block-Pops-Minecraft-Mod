@@ -15,7 +15,7 @@ inputs:
     description: Same-run Actions artifact containing build/release
     required: true
   row-json:
-    description: One exact authoritative PR-anchor matrix row
+    description: One exact row of the selected authoritative anchor projection
     required: true
   java-version:
     description: Matrix-owned Java major for this runtime lane
@@ -81,6 +81,7 @@ runs:
       shell: bash
       env:
         BLOCKPOPS_TESTED_SHA: ${{ inputs.tested-sha }}
+        BLOCKPOPS_PROJECTION: ${{ inputs.projection }}
         CONTROLLER_ROOT: ${{ inputs.controller-root }}
         E2E_ROW_JSON: ${{ inputs.row-json }}
         E2E_SCENARIOS: ${{ inputs.scenarios }}
@@ -92,6 +93,7 @@ runs:
         set -euo pipefail
         python3 "$CONTROLLER_ROOT/scripts/ci/untrusted_runner.py" run --root "$SANDBOX_ROOT" \
           --pass-env BLOCKPOPS_TESTED_SHA \
+          --pass-env BLOCKPOPS_PROJECTION \
           --pass-env E2E_ROW_JSON --pass-env E2E_SCENARIOS \
           --pass-env LIBGL_ALWAYS_SOFTWARE --pass-env GALLIUM_DRIVER \
           --pass-env __GLX_VENDOR_LIBRARY_NAME -- \
@@ -106,6 +108,7 @@ runs:
               python3 e2e/orchestrator.py \
                 --matrix release/release-matrix.json \
                 --row-json "$E2E_ROW_JSON" \
+                --projection "$BLOCKPOPS_PROJECTION" \
                 --artifacts-manifest build/release/artifacts.json \
                 --packaged \
                 --scenarios "$E2E_SCENARIOS"
