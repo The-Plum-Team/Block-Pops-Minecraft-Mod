@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 
 from scripts.lib import atomic_directory
-from scripts.pages.download_artifact import ArtifactDownloadError, _entry_type, _safe_name
+from scripts.pages.download_artifact import ArtifactDownloadError, _download_archive, _entry_type, _safe_name
 from scripts.release.run_evidence import ARTIFACT_LIMITS
 
 # Independent of Pages' smaller image-cache limits. Content readers subsequently
@@ -193,3 +193,24 @@ def extract_evidence_archive(archive, output, *, kind, expected_digest, expected
             os.close(parent)
     except (OSError, ValueError, RuntimeError, KeyError, TypeError, zipfile.BadZipFile, ArtifactDownloadError) as exc:
         raise EvidenceArchiveError(f"invalid evidence archive: {exc}") from exc
+
+
+def download_evidence_archive(*, repository, artifact_id, kind, expected_digest, expected_size,
+                              output, token, api_url="https://api.github.com"):
+    """Fetch an externally authenticated immutable ID, preserving its ZIP binding.
+
+    Ownership, current run/attempt and source authentication remain caller duties.
+    This uses the existing HTTPS/credential-safe redirect policy and stops download
+    at the API-bound size before the local extractor checks exact bytes/inventory.
+    """
+    try:
+        _check(kind in PROFILES and type(expected_size) is int
+               and 0 < expected_size <= ARTIFACT_LIMITS[kind], "invalid external archive profile/size")
+        def consume(archive, destination, *, expected_digest):
+            return extract_evidence_archive(archive, destination, kind=kind,
+                expected_digest=expected_digest, expected_size=expected_size)
+        result = _download_archive(repository=repository, artifact_id=artifact_id, digest=expected_digest,
+            output=Path(output), token=token, api_url=api_url, maximum_bytes=expected_size, consume_archive=consume)
+        return {"artifact_id": artifact_id, **result}
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError) as exc:
+        raise EvidenceArchiveError(f"invalid evidence download: {exc}") from exc

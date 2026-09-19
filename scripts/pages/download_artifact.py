@@ -15,8 +15,13 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 import zipfile
 from pathlib import Path, PurePosixPath
+
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO))
+from scripts.lib.atomic_directory import _directory_fd, _directory_identity, _real_directory
 
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 MAX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024
@@ -178,11 +183,14 @@ class _CredentialSafeRedirect(urllib.request.HTTPRedirectHandler):
         return redirected
 
 
-def download(*, repository: str, artifact_id: int, digest: str, output: Path, token: str, api_url: str) -> dict[str, int]:
+def _download_archive(*, repository: str, artifact_id: int, digest: str, output: Path,
+                      token: str, api_url: str, maximum_bytes: int, consume_archive):
     if REPOSITORY.fullmatch(repository) is None:
         raise ArtifactDownloadError("repository must use owner/name form")
-    if isinstance(artifact_id, bool) or artifact_id <= 0:
+    if type(artifact_id) is not int or artifact_id <= 0:
         raise ArtifactDownloadError("artifact id must be positive")
+    if type(maximum_bytes) is not int or not 0 < maximum_bytes <= MAX_ARCHIVE_BYTES:
+        raise ArtifactDownloadError("artifact download byte bound is invalid")
     if DIGEST.fullmatch(digest) is None:
         raise ArtifactDownloadError("artifact digest is invalid")
     if not isinstance(token, str) or not token or len(token) > 4096:
@@ -197,12 +205,32 @@ def download(*, repository: str, artifact_id: int, digest: str, output: Path, to
         or parsed_api.fragment
     ):
         raise ArtifactDownloadError("GitHub API URL must be absolute HTTPS")
+    if (not all(call in os.supports_dir_fd for call in (os.open, os.stat, os.unlink))
+            or not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY")):
+        raise ArtifactDownloadError("artifact download requires descriptor-relative filesystem primitives")
     output = output.absolute()
-    output.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=".pages-artifact-", suffix=".zip", dir=output.parent)
-    os.close(descriptor)
-    temporary = Path(temporary_name)
+    if output.parent.exists() or output.parent.is_symlink():
+        _real_directory(output.parent)
+    output = output.parent.resolve() / output.name
+    parent = _directory_fd(output.parent, create=True)
+    temporary_name = f".pages-artifact-{uuid.uuid4().hex}.zip"
+    temporary = output.parent / temporary_name
+    descriptor = None
     try:
+        descriptor = os.open(temporary_name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                             0o600, dir_fd=parent)
+        def bound_download():
+            current = _directory_fd(output.parent)
+            try:
+                same_parent = _directory_identity(os.fstat(current)) == _directory_identity(os.fstat(parent))
+            finally:
+                os.close(current)
+            entry = os.stat(temporary_name, dir_fd=parent, follow_symlinks=False)
+            owned = os.fstat(descriptor)
+            if (not same_parent or not stat.S_ISREG(entry.st_mode) or owned.st_nlink != 1
+                    or _directory_identity(entry) != _directory_identity(owned)):
+                raise ArtifactDownloadError("artifact download parent or file identity changed")
+        bound_download()
         request = urllib.request.Request(
             f"{api_url.rstrip('/')}/repos/{repository}/actions/artifacts/{artifact_id}/zip",
             headers={
@@ -218,23 +246,41 @@ def download(*, repository: str, artifact_id: int, digest: str, output: Path, to
             urllib.request.HTTPSHandler(context=ssl.create_default_context()),
         )
         try:
-            with opener.open(request, timeout=60) as response, temporary.open("wb") as target:
+            with opener.open(request, timeout=60) as response, os.fdopen(os.dup(descriptor), "wb") as target:
+                bound_download()
                 copied = 0
                 while True:
                     chunk = response.read(1024 * 1024)
                     if not chunk:
                         break
                     copied += len(chunk)
-                    if copied > MAX_ARCHIVE_BYTES:
+                    if copied > maximum_bytes:
                         raise ArtifactDownloadError("artifact archive download exceeds its byte bound")
                     target.write(chunk)
                 target.flush()
                 os.fsync(target.fileno())
         except (OSError, urllib.error.HTTPError) as exc:
             raise ArtifactDownloadError(f"artifact download failed: {exc}") from exc
-        return extract_archive(temporary, output, expected_digest=digest)
+        bound_download()
+        return consume_archive(temporary, output, expected_digest=digest)
     finally:
-        temporary.unlink(missing_ok=True)
+        try:
+            if descriptor is not None:
+                try:
+                    entry = os.stat(temporary_name, dir_fd=parent, follow_symlinks=False)
+                    if _directory_identity(entry) == _directory_identity(os.fstat(descriptor)):
+                        os.unlink(temporary_name, dir_fd=parent)
+                except FileNotFoundError:
+                    pass
+        finally:
+            if descriptor is not None: os.close(descriptor)
+            os.close(parent)
+
+
+def download(*, repository: str, artifact_id: int, digest: str, output: Path, token: str, api_url: str) -> dict[str, int]:
+    return _download_archive(repository=repository, artifact_id=artifact_id, digest=digest,
+        output=output, token=token, api_url=api_url, maximum_bytes=MAX_ARCHIVE_BYTES,
+        consume_archive=extract_archive)
 
 
 def main(argv: list[str] | None = None) -> int:
