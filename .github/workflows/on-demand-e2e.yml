@@ -271,6 +271,10 @@ jobs:
           printf 'Coverage projection: `%s`.\n' "$matrix_kind" >> "$GITHUB_STEP_SUMMARY"
 
   build:
+    concurrency:
+      group: blockpops-gradle-build
+      cancel-in-progress: false
+      queue: max
     name: Build immutable E2E input bundle
     needs: identity
     if: needs.identity.result == 'success'

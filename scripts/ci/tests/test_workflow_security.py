@@ -34,6 +34,19 @@ def _has_credentialless_candidate_boundary(text: str, position: int) -> bool:
 
 
 class WorkflowSecurityTests(unittest.TestCase):
+    def test_gradle_builders_share_one_noncancelling_repository_queue(self) -> None:
+        groups = []
+        for name in ("build-gate.yml", "on-demand-e2e.yml"):
+            text = (WORKFLOWS / name).read_text("utf-8")
+            build = text.split("\n  build:\n", 1)[1].split("    steps:", 1)[0]
+            # Read the full four-line job header, not the separate workflow cancellation policy.
+            header = build.splitlines()[:4]
+            self.assertEqual("    concurrency:", header[0])
+            self.assertEqual("      cancel-in-progress: false", header[2])
+            self.assertEqual("      queue: max", header[3])
+            groups.append(header[1].strip())
+        self.assertEqual(["group: blockpops-gradle-build"] * 2, groups)
+
     def test_only_protected_candidate_gates_trigger_on_prt_and_actions_are_pinned(self) -> None:
         files = [*WORKFLOWS.glob("*.yml"), REPO / ".github/actions/run-packaged-e2e/action.yml"]
         self.assertTrue(files)

@@ -223,6 +223,10 @@ jobs:
         working-directory: candidate
 
   build:
+    concurrency:
+      group: blockpops-gradle-build
+      cancel-in-progress: false
+      queue: max
     name: Build immutable release bundle
     needs: identity
     if: needs.identity.result == 'success'
