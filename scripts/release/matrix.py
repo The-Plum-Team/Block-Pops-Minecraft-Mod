@@ -373,12 +373,15 @@ def _validate_configuration(
             route = require_object(
                 raw_route,
                 label=f"source_routing.{module}",
-                required={"canonical", "overlays"},
+                required={"canonical", "e2e", "overlays"} if schema2 else {"canonical", "overlays"},
             )
         except SecureJsonError as exc:
             raise MatrixError(str(exc)) from exc
         if _safe_path(route["canonical"], f"source_routing.{module}.canonical") != f"{module}/src/main":
             _fail(f"source_routing.{module}.canonical must be {module}/src/main")
+        if schema2:
+            _validate_schema2_route(module, route, by_node)
+            continue
         if not isinstance(route["overlays"], dict):
             _fail(f"source_routing.{module}.overlays must be an object")
         allowed_versions = versions if module == "common" else {
@@ -517,7 +520,10 @@ def _validate_configuration(
         _fail("PR and release profiles must cover the same protected scenarios")
 
     if repository is not None:
-        validate_source_tree(Path(repository), routing)
+        if schema2:
+            _validate_schema2_source_tree(Path(repository), routing, by_node)
+        else:
+            validate_source_tree(Path(repository), routing)
     return root
 
 
@@ -606,6 +612,126 @@ def _validate_schema2_runtime_context(
         )
     if not valid:
         _fail(f"artifact {node} metadata Minecraft constraint disagrees with its era")
+
+
+def _strict_source_path(value: Any, label: str) -> str:
+    path = _safe_path(value, label)
+    if path != value or path == "." or any(ord(character) < 32 or ord(character) == 127 for character in path):
+        _fail(f"{label} is not a canonical source path")
+    return path
+
+
+def _validate_schema2_route(module: str, route: dict, artifacts: dict) -> None:
+    for key, source_set in (("canonical", "main"), ("e2e", "e2e")):
+        if _strict_source_path(route[key], f"{module}.{key}") != f"{module}/src/{source_set}":
+            _fail(f"{module}.{key} must select its canonical {source_set} root")
+    if not isinstance(route["overlays"], list):
+        _fail(f"{module}.overlays must be an array")
+    paths, scopes = set(), set()
+    allowed = {node for node, row in artifacts.items() if module in row["source_routes"]}
+    for raw in route["overlays"]:
+        try:
+            overlay = require_object(raw, label=f"{module} overlay", required={
+                "lanes", "source_set", "path", "adds", "replaces", "reason", "historical_source", "acceptance",
+            })
+        except SecureJsonError as exc:
+            raise MatrixError(str(exc)) from exc
+        source_set = _text(overlay["source_set"], "overlay.source_set")
+        if source_set not in {"main", "e2e"}:
+            _fail("overlay.source_set must be main or e2e")
+        path = _strict_source_path(overlay["path"], "overlay.path")
+        if re.fullmatch(rf"{module}/src/legacy[A-Za-z0-9_]+/{source_set}", path) is None or path in paths:
+            _fail(f"{module} overlay path must be unique and lane-local under src/legacy*")
+        paths.add(path)
+        lanes = overlay["lanes"]
+        if not isinstance(lanes, list) or not lanes or any(not isinstance(node, str) for node in lanes):
+            _fail("overlay.lanes must be a non-empty array of lane identities")
+        if len(set(lanes)) != len(lanes) or not set(lanes) <= allowed:
+            _fail(f"{module} overlay lanes must be unique configured lanes of this module")
+        for node in lanes:
+            if (node, source_set) in scopes:
+                _fail(f"{module} overlays overlap for {node}/{source_set}")
+            scopes.add((node, source_set))
+        declared = set()
+        for key in ("adds", "replaces"):
+            if not isinstance(overlay[key], list):
+                _fail(f"overlay.{key} must be an array")
+            for value in overlay[key]:
+                relative = _strict_source_path(value, f"overlay.{key}")
+                if not relative.startswith(("java/", "resources/")) or relative in declared:
+                    _fail("overlay files must be unique java/resources source-relative paths")
+                declared.add(relative)
+        if not declared:
+            _fail("overlay must declare added or replaced files")
+        for key in ("reason", "acceptance"):
+            _text(overlay[key], f"overlay.{key}")
+        historical = _text(overlay["historical_source"], "overlay.historical_source")
+        sha, separator, historical_path = historical.partition(":")
+        if not separator or re.fullmatch(r"[0-9a-f]{40}", sha) is None:
+            _fail("overlay.historical_source must bind an exact commit and source path")
+        _strict_source_path(historical_path, "overlay.historical_source path")
+
+
+def _source_files(repository: Path, relative: str) -> set[str]:
+    path = repository
+    for part in PurePosixPath(relative).parts:
+        path = path / part
+        if path.is_symlink():
+            _fail(f"source route contains a symlink: {relative}")
+    if not path.is_dir():
+        _fail(f"source route is missing: {relative}")
+    files = set()
+    for item in path.rglob("*"):
+        if item.is_symlink() or not (item.is_dir() or item.is_file()):
+            _fail(f"source route contains a symlink or special file: {item}")
+        if item.is_file():
+            files.add(item.relative_to(path).as_posix())
+    return files
+
+
+def _validate_schema2_source_tree(repository: Path, routing: dict, artifacts: dict) -> None:
+    root = repository.resolve()
+    canonical, overlays = {}, {}
+    for module, route in routing.items():
+        for source_set, key in (("main", "canonical"), ("e2e", "e2e")):
+            canonical[module, source_set] = _source_files(root, route[key])
+        for overlay in route["overlays"]:
+            files = _source_files(root, overlay["path"])
+            base = canonical[module, overlay["source_set"]]
+            replacements, additions = set(overlay["replaces"]), set(overlay["adds"])
+            if files != replacements | additions or not replacements <= base or additions & base:
+                _fail(f"overlay {overlay['path']} has missing files or undeclared shadowing/replacements")
+            for node in overlay["lanes"]:
+                overlays[module, node, overlay["source_set"]] = files
+        expected = {str(PurePosixPath(overlay["path"]).parent) for overlay in route["overlays"]}
+        live = set()
+        for path in (root / module / "src").iterdir():
+            if path.name.startswith(("legacy", "v")):
+                if path.is_symlink():
+                    _fail(f"source inventory contains a symlink: {path}")
+                if path.is_dir():
+                    relative = path.relative_to(root).as_posix()
+                    files = _source_files(root, relative)
+                    if files:
+                        live.add(relative)
+                    declared = {
+                        f"{overlay['source_set']}/{item}"
+                        for overlay in route["overlays"]
+                        if str(PurePosixPath(overlay["path"]).parent) == relative
+                        for item in overlay["adds"] + overlay["replaces"]
+                    }
+                    if files != declared:
+                        _fail(f"{module} live overlay inventory has undeclared files: {relative}")
+        if live != expected:
+            _fail(f"{module} live overlay inventory differs from the matrix")
+    for node, artifact in artifacts.items():
+        for source_set in ("main", "e2e"):
+            selected = set()
+            for module in artifact["source_routes"]:
+                files = canonical[module, source_set] | overlays.get((module, node, source_set), set())
+                if selected & files:
+                    _fail(f"source routes for {node}/{source_set} contain duplicate files")
+                selected.update(files)
 
 
 def _numeric_version(value: str) -> tuple[int, ...]:

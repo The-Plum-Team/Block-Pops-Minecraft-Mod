@@ -79,3 +79,13 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - `python3 -m unittest tests.test_release_matrix_schema2 tests.test_release_matrix_schema2_configuration tests.test_release_matrix_schema2_context tests.test_release_matrix_portability -q`: 25 tests passed. Schema-1 CLI remains byte-identical to baseline.
 - Schema-1 semantics, the live matrix, execution-consumer rejection of schema 2, and publication restrictions remain unchanged. Remaining task 3: main/E2E source routes/overlays and unresolved configuration projection.
 - Rollback is this helper/call, its new context test module, and this evidence entry; no runtime/build execution or remote mutation occurred.
+
+## Task 3 — explicit production/harness source routing
+
+- Schema 2 requires each configured module's canonical `main` and `e2e` roots. Artifact `source_routes` references exactly common plus its own loader; unconfigured targets make no filesystem claim.
+- Overlays declare configured lane scope, source set, exact added/replaced relative paths, incompatibility, historical commit/path, and acceptance check. Overlapping scope, opposite-loader routes, traversal, backslashes, undeclared files and version snapshots fail closed.
+- With `repository` supplied, validation checks all routed directories/files, declared replacements, common/loader collisions, symlinks and special files. It also checks the whole legacy directory so undeclared sibling E2E files cannot hide under an admitted main overlay.
+- Independent review and source mutations pass, including real checkout sources, temporary replacements/additions, lane-scoped collision checks, internal symlinks and FIFO files. Source existence is not inferred when repository validation is omitted.
+- `python3 -m unittest tests.test_release_matrix_schema2_sources tests.test_release_matrix_schema2 tests.test_release_matrix_schema2_configuration tests.test_release_matrix_schema2_context tests.test_release_matrix_portability tests.test_artifact_and_report_validation tests.test_scenario_contract -q`: 57 tests passed. Schema-1 CLI output remains byte-identical; diff hygiene passes.
+- Remaining task 3: expose configured lane lookup and explicit unresolved target reporting, with full/shared fixture coverage. No execution consumers or live matrix were activated; no publication action occurred.
+- Rollback: this schema-2 route validation and its fixtures/tests/progress entry only. The original schema-1 source validator remains intact.

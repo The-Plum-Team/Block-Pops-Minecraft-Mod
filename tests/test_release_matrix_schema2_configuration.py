@@ -14,6 +14,7 @@ def mixed_matrix() -> dict:
     matrix = schema2_matrix()
     modern = arbitrary_named_1211_release_matrix()
     matrix["source_routing"]["neoforge"] = modern["source_routing"]["neoforge"]
+    matrix["source_routing"]["neoforge"].update(e2e="neoforge/src/e2e", overlays=[])
     matrix["installers"].update(modern["installers"])
     matrix["runtimes"].extend(modern["runtimes"])
     for row in modern["artifacts"]:

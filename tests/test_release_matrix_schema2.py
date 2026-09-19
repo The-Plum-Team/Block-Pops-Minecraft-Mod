@@ -59,6 +59,8 @@ def schema2_matrix() -> dict[str, object]:
             repository_family=artifact["loader"],
             source_routes=["common", artifact["loader"]],
         )
+    for module, route in matrix["source_routing"].items():
+        route.update(e2e=f"{module}/src/e2e", overlays=[])
     return matrix
 
 
