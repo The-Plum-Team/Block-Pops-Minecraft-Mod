@@ -495,7 +495,14 @@ def curate(
     packaged_tree: str | None = None,
     packaged_controller_branch: str | None = None,
     packaged_controller_sha: str | None = None,
+    scope: str | None = None, artifact_node: str | None = None,
+    projection: str | None = None,
 ) -> dict[str, Any]:
+    """Curate caller-authenticated packaged evidence under an explicit matrix scope.
+
+    The caller must authenticate and validate the source aggregate/bundle first;
+    this producer preserves that supplied identity and reconstructs its pixels.
+    """
     if REPOSITORY.fullmatch(repository) is None:
         raise EvidenceError("repository must use owner/name form")
     _text(branch, "branch", maximum=240)
@@ -529,14 +536,12 @@ def curate(
     _digest(packaged_controller_sha, "packaged_controller_sha", SHA1)
     if packaged_tree != tree:
         raise EvidenceError("packaged source and current handoff must have the exact same tree")
-    try:
-        matrix = load_matrix(matrix_path, validate_sources=False)
-    except MatrixError as exc:
-        raise EvidenceError(str(exc)) from exc
+    contract = default_contract()
+    matrix, matrix_bytes, expected, coverage = _raw_matrix_context(matrix_path, contract,
+        scope=scope, artifact_node=artifact_node, projection=projection)
     if matrix["branch"]["name"] != branch:
         raise EvidenceError("matrix branch identity does not match the handoff")
-    contract = default_contract()
-    matrix_sha, _ = _matrix_identity(matrix_path, matrix)
+    matrix_sha = sha256_bytes(matrix_bytes)
     root = input_root.absolute()
     try:
         root_info = root.lstat()
@@ -544,7 +549,6 @@ def curate(
         raise EvidenceError(f"cannot inspect packaged evidence root: {exc}") from exc
     if stat.S_ISLNK(root_info.st_mode) or not stat.S_ISDIR(root_info.st_mode):
         raise EvidenceError("packaged evidence root must be a real directory")
-    expected = _expected_lanes(matrix, contract)
     expected_profiles = {_profile_name(row["artifact_node"], row["minecraft"], scenario) for row, scenario in expected}
     profiles_root = root / "profiles"
     try:
@@ -574,7 +578,7 @@ def curate(
     selected_files.sort(key=lambda item: item[0])
     records = [{"path": path, "sha256": sha256_bytes(raw), "size": len(raw)} for path, raw in selected_files]
     manifest = {
-        "schema_version": RAW_SCHEMA,
+        "schema_version": 2 if coverage else RAW_SCHEMA,
         "kind": RAW_KIND,
         "provenance": {
             "repository": repository,
@@ -604,13 +608,15 @@ def curate(
         "lanes": lanes,
         "frames": frames,
         "files": records,
+        **coverage,
     }
 
     def writer(stage: Path) -> None:
         for relative, raw in selected_files:
             _copy_bytes(stage / relative, raw)
         _write_json(stage / "pages-evidence.json", manifest)
-        validate_raw(stage, matrix_path=matrix_path, expected=manifest["provenance"])
+        validate_raw(stage, matrix_path=matrix_path, expected=manifest["provenance"],
+                     scope=scope, artifact_node=artifact_node, projection=projection)
 
     _atomic_directory(output, writer)
     return manifest
