@@ -8,8 +8,11 @@ import hashlib
 import json
 import os
 import stat
+import subprocess
 import sys
 import tempfile
+from contextlib import ExitStack
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +21,10 @@ sys.path.insert(0, str(REPO))
 
 from scripts.lib.secure_json import SecureJsonError, canonical_json, read as read_secure_json, require_object  # noqa: E402
 from scripts.lib.atomic_directory import AtomicDirectoryError, atomic_directory, write_new  # noqa: E402
+from scripts.lib import atomic_directory as atomic  # noqa: E402
+from scripts.pages.select_artifact import Artifact, GitHubApi, PAGES_EVENTS, PAGES_WORKFLOW, _validate_run  # noqa: E402
+from scripts.release.build_matrix import source_snapshot  # noqa: E402
+from scripts.release.evidence_archive import ARCHIVE_LIMITS, PROFILES, download_evidence_archive  # noqa: E402
 from scripts.pages.evidence import (  # noqa: E402
     EvidenceError,
     SHA1,
@@ -99,7 +106,7 @@ def _copy_static(stage_fd: int) -> dict[str, bytes]:
     return copied
 
 
-def _seal_output(stage_fd: int, expected: dict[str, bytes]) -> tuple[int, int]:
+def _seal_output(stage_fd: int, expected: dict[str, bytes], *, rechecks=None) -> tuple[int, int]:
     """Check descriptor-bound bytes, then recheck every stamp and directory entry."""
     count, total = len(expected), sum(len(data) for data in expected.values())
     if count > MAX_SITE_FILES or total > MAX_SITE_BYTES:
@@ -157,11 +164,14 @@ def _seal_output(stage_fd: int, expected: dict[str, bytes]) -> tuple[int, int]:
         if hash_bytes: stamps[parent] = initial
         elif stamps[parent] != initial:
             raise SiteError("generated site directory changed after byte verification")
+    def recheck():
+        walk(stage_fd, "", hash_bytes=False)
     try:
         walk(stage_fd, "", hash_bytes=True)
-        walk(stage_fd, "", hash_bytes=False)
+        recheck()
     except OSError as exc:
         raise SiteError(f"cannot seal generated site: {exc}") from exc
+    if rechecks is not None: rechecks.append(recheck)
     return count, total
 
 
@@ -467,6 +477,136 @@ def _build(*, evidence_root, inventory_path, output, repository, canonical_matri
         raise SiteError(str(exc)) from exc
 
 
+def _build_current_pages(api, args):
+    """Consume authenticated companions inside this exact in-progress Pages attempt.
+
+    No receipt authenticates itself. The workflow must supply its invocation and
+    protected implementation identity; API ownership, Git bytes and final seals
+    are checked here before the renderer publishes any output.
+    """
+    def check(condition, message):
+        if not condition:
+            raise SiteError(message)
+    run_id = _positive_int(args.pages_run_id, "Pages run")
+    attempt = _positive_int(args.pages_run_attempt, "Pages attempt")
+    implementation = _digest(args.implementation_sha, "Pages implementation", SHA1)
+    check(api.api_url == "https://api.github.com" and api.repository == args.repository, "Pages API origin/repository differs")
+    check(args.canonical_matrix.absolute() == REPO / "release/release-matrix.json", "Pages requires its implementation matrix")
+    invocation = dict(GITHUB_REPOSITORY=args.repository, GITHUB_REF=f"refs/heads/{args.canonical_branch}",
+        GITHUB_SHA=implementation, GITHUB_RUN_ID=str(run_id), GITHUB_RUN_ATTEMPT=str(attempt),
+        GITHUB_WORKFLOW_REF=f"{args.repository}/{PAGES_WORKFLOW}@refs/heads/{args.canonical_branch}")
+    def checkout():
+        check(all(os.environ.get(key) == value for key, value in invocation.items())
+              and not any(key.startswith("GIT_") for key in os.environ), "Pages invocation or inherited Git controls differ")
+        snapshot = source_snapshot(REPO)
+        check(snapshot["dirty"] is False and snapshot["commit"] == implementation, "Pages implementation is not clean/exact")
+        return canonical_json(snapshot)
+    source = checkout()
+    rows, inventory_raw = read_secure_json(args.inventory, label="Pages discovery", max_bytes=MAX_INVENTORY_BYTES)
+    check(isinstance(rows, list) and 0 < len(rows) <= 1000, "Pages discovery is not bounded")
+    names = [row["name"] for row in rows]
+    check(len(set(names)) == len(names) and names.count(args.canonical_branch) == 1, "Pages discovery branches differ")
+    companions = {row["name"]: f"pages-selection-{branch_token(row['name'])}--{_digest(row['commit'], 'commit', SHA1)}-{run_id}-{attempt}"
+                  for row in rows}
+    def matrix_blob(tree):
+        for name, mode, kind in (("release", "040000", "tree"), ("release-matrix.json", "100644", "blob")):
+            record = api.get(f"/repos/{api.repository}/git/trees/{_digest(tree, 'source tree', SHA1)}")
+            check(record.get("sha") == tree and record.get("truncated") is False
+                  and isinstance(record.get("tree"), list) and len(record["tree"]) <= 1000, "source tree response differs")
+            matches = [entry for entry in record["tree"] if entry.get("path") == name]
+            check(len(matches) == 1 and (matches[0].get("mode"), matches[0].get("type")) == (mode, kind), "matrix Git path differs")
+            tree = matches[0]["sha"]
+        return _digest(tree, "source matrix blob", SHA1)
+    def observe():
+        repository = api.get(f"/repos/{api.repository}")
+        check(repository.get("full_name") == api.repository and repository.get("default_branch") == args.canonical_branch,
+              "Pages API repository/default differs")
+        workflow = api.workflow("pages.yml")
+        check(type(workflow.get("id")) is int and workflow["id"] > 0 and workflow.get("path") == PAGES_WORKFLOW
+              and workflow.get("state") == "active",
+              "Pages workflow identity differs")
+        runs = (api.run(run_id), api.run_attempt(run_id, attempt))
+        for run in runs:
+            _validate_run(run, workflow_id=workflow["id"], workflow_path=PAGES_WORKFLOW, repository=api.repository,
+                branch=args.canonical_branch, sha=implementation, events=PAGES_EVENTS, require_success=False)
+            check(type(run.get("workflow_id")) is int and type(run.get("id")) is int and run["id"] == run_id and type(run.get("run_attempt")) is int
+                  and run["run_attempt"] == attempt and run.get("status") == "in_progress" and run.get("conclusion") is None,
+                  "Pages owner is not the exact in-progress attempt")
+        check(runs[0]["event"] == runs[1]["event"], "Pages owner event differs")
+        jobs = api.jobs_for_attempt(run_id, attempt)
+        check(isinstance(jobs, list) and 0 < len(jobs) <= 1000 and all(type(job.get("id")) is int and job["id"] > 0
+              and type(job.get("run_id")) is int and job["run_id"] == run_id and type(job.get("run_attempt")) is int
+              and job["run_attempt"] == attempt and isinstance(job.get("name"), str) for job in jobs), "Pages jobs differ")
+        check(len({job["id"] for job in jobs}) == len(jobs), "duplicate Pages job IDs")
+        selected_jobs = [job for job in jobs if job["name"].startswith("Validate and compact ")]
+        check(sorted(job["name"] for job in selected_jobs) == sorted("Validate and compact " + name for name in names)
+              and all(job.get("status") == "completed" and job.get("conclusion") == "success" for job in selected_jobs),
+              "Pages collect coverage/success differs")
+        artifacts = api.artifacts_for_run(run_id)
+        check(isinstance(artifacts, list) and len(artifacts) <= 1000 and all(isinstance(item, Artifact) for item in artifacts),
+              "Pages artifact inventory differs")
+        check(len({item.id for item in artifacts}) == len(artifacts), "duplicate Pages artifact IDs")
+        selected = {}
+        for row in rows:
+            check(api.branch_head(row["name"]) == (row["commit"], row["tree"])
+                  and matrix_blob(row["tree"]) == row["matrix_blob"], "discovery is not the current API Git source")
+            if row["name"] == args.canonical_branch:
+                check(row["commit"] == implementation and row["tree"] == json.loads(source)["tree"], "canonical source differs from the Pages implementation")
+            matches = [item for item in artifacts if item.name == companions[row["name"]]]
+            check(len(matches) == 1, "missing/duplicate exact Pages companion")
+            item = matches[0]
+            direct = Artifact.parse(api.get(f"/repos/{api.repository}/actions/artifacts/{item.id}"))
+            check(canonical_json(asdict(item)) == canonical_json(asdict(direct)) and item.run_id == run_id
+                  and item.head_branch == args.canonical_branch and item.head_sha == implementation and not item.expired
+                  and 0 < item.size <= ARCHIVE_LIMITS["pages-selection"], "Pages companion owner/digest/size differs")
+            selected[row["name"]] = asdict(direct)
+        return canonical_json(dict(workflow=workflow["id"], event=runs[0]["event"], artifacts=selected,
+            jobs=sorted((job["name"], job["id"]) for job in selected_jobs))), selected
+    observation, selected = observe()
+    check(len(selected) * PROFILES["pages-selection"][2] <= MAX_SITE_BYTES,
+          "Pages companions exceed the aggregate expanded-byte bound")
+    with tempfile.TemporaryDirectory(prefix="blockpops-pages-inputs-") as temporary, ExitStack() as handles:
+        private = Path(temporary).resolve()
+        parent = atomic._directory_fd(private); handles.callback(os.close, parent)
+        inputs, sealed = {}, []
+        for branch, item in selected.items():
+            destination = private / branch_token(branch)
+            receipt = download_evidence_archive(repository=api.repository, artifact_id=item["id"], kind="pages-selection",
+                expected_digest=item["digest"], expected_size=item["size"], output=destination, token=api.token, api_url=api.api_url)
+            payloads = {record["path"]: _child_file(destination, record["path"], label="Pages companion", maximum=2*1024*1024)[1]
+                        for record in receipt["files"]}
+            check(all(len(payloads[record["path"]]) == record["bytes"] and sha256_bytes(payloads[record["path"]]) == record["sha256"]
+                      for record in receipt["files"]), "Pages companion bytes changed")
+            matrix, _ = read_secure_json(destination / "release-matrix.json", label="companion matrix", max_bytes=MAX_MATRIX_BYTES)
+            scoped = normalize_matrix_inventory(matrix).schema_version == 2
+            check(set(payloads) == ({"release-matrix.json", "selection.json"} if scoped else {"release-matrix.json"}),
+                  "Pages companion inventory differs")
+            descriptor = atomic._directory_fd(Path(destination.name), root_fd=parent); handles.callback(os.close, descriptor)
+            sealed.append((destination, descriptor, payloads))
+            inputs[branch] = dict(matrix_path=destination / "release-matrix.json",
+                selection_path=destination / "selection.json" if scoped else None,
+                selection_sha256=sha256_bytes(payloads["selection.json"]) if scoped else None)
+        context = _scoped_inputs(inputs, args.inventory, args.canonical_matrix, private)
+        check(context["capture"](args.inventory)[1] == inventory_raw, "Pages discovery changed during acquisition")
+        original_recheck = context["recheck"]
+        def recheck():
+            check(observe()[0] == observation, "Pages ownership changed during rendering")
+            final_repository = api.get(f"/repos/{api.repository}")
+            check(final_repository.get("full_name") == api.repository and final_repository.get("default_branch") == args.canonical_branch,
+                  "Pages repository/default changed during final observation")
+            check(checkout() == source, "Pages source changed during rendering")
+            original_recheck()
+            final = []
+            for destination, descriptor, payloads in sealed:
+                _seal_output(descriptor, payloads, rechecks=final)
+            for unchanged, (destination, descriptor, _) in zip(final, sealed, strict=True):
+                unchanged()
+                atomic._bound_output_directory(destination, parent, destination.name, descriptor)
+        context["recheck"] = recheck
+        return _build(evidence_root=args.evidence_root, inventory_path=args.inventory, output=args.output,
+                      repository=args.repository, canonical_matrix=args.canonical_matrix, context=context)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--evidence-root", type=Path, required=True)
@@ -474,10 +614,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--repository", required=True)
     parser.add_argument("--canonical-matrix", type=Path, default=REPO / "release/release-matrix.json")
+    parser.add_argument("--pages-run-id", type=int)
+    parser.add_argument("--pages-run-attempt", type=int)
+    parser.add_argument("--implementation-sha")
+    parser.add_argument("--canonical-branch")
     args = parser.parse_args(argv)
     try:
-        result = build(evidence_root=args.evidence_root, inventory_path=args.inventory, output=args.output, repository=args.repository, canonical_matrix=args.canonical_matrix)
-    except (EvidenceError, MatrixError, SecureJsonError, SiteError, OSError, ValueError) as exc:
+        if any(value is not None for value in (args.pages_run_id, args.pages_run_attempt, args.implementation_sha, args.canonical_branch)):
+            api = GitHubApi(repository=args.repository, token=os.environ.get("GH_TOKEN", ""), api_url="https://api.github.com")
+            result = _build_current_pages(api, args)
+        else:
+            result = build(evidence_root=args.evidence_root, inventory_path=args.inventory, output=args.output, repository=args.repository, canonical_matrix=args.canonical_matrix)
+    except (EvidenceError, MatrixError, SecureJsonError, SiteError, OSError, ValueError, TypeError, KeyError, AttributeError,
+            RuntimeError, subprocess.SubprocessError) as exc:
         print(f"Pages site error: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, sort_keys=True))

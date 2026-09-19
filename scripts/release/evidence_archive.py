@@ -16,7 +16,9 @@ from scripts.release.run_evidence import ARTIFACT_LIMITS
 # enforce exact bundle/report/aggregate inventories, identities and pixel rules.
 PROFILES = {"bundle": (64, 256 * 1024 * 1024, 512 * 1024 * 1024, "artifacts.json"),
             "report": (1, 8 * 1024 * 1024, 8 * 1024 * 1024, "build-matrix-report.json"),
-            "aggregate": (8192, 32 * 1024 * 1024, 512 * 1024 * 1024, "aggregate.json")}
+            "aggregate": (8192, 32 * 1024 * 1024, 512 * 1024 * 1024, "aggregate.json"),
+            "pages-selection": (2, 2 * 1024 * 1024, 4 * 1024 * 1024, "release-matrix.json")}
+ARCHIVE_LIMITS = {**ARTIFACT_LIMITS, "pages-selection": 4 * 1024 * 1024}
 
 
 class EvidenceArchiveError(ValueError):
@@ -95,7 +97,7 @@ def extract_evidence_archive(archive, output, *, kind, expected_digest, expected
     """
     try:
         _check(kind in PROFILES, "unsupported evidence archive kind")
-        _check(type(expected_size) is int and 0 < expected_size <= ARTIFACT_LIMITS[kind],
+        _check(type(expected_size) is int and 0 < expected_size <= ARCHIVE_LIMITS[kind],
                "invalid external archive size")
         _check(isinstance(expected_digest, str) and re.fullmatch("sha256:[0-9a-f]{64}", expected_digest),
                "invalid external archive digest")
@@ -205,7 +207,7 @@ def download_evidence_archive(*, repository, artifact_id, kind, expected_digest,
     """
     try:
         _check(kind in PROFILES and type(expected_size) is int
-               and 0 < expected_size <= ARTIFACT_LIMITS[kind], "invalid external archive profile/size")
+               and 0 < expected_size <= ARCHIVE_LIMITS[kind], "invalid external archive profile/size")
         def consume(archive, destination, *, expected_digest):
             return extract_evidence_archive(archive, destination, kind=kind,
                 expected_digest=expected_digest, expected_size=expected_size)
