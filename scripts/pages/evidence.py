@@ -35,10 +35,11 @@ from e2e.packaged_runtime import (  # noqa: E402
 from e2e.scenario_contract import ScenarioContract, default_contract  # noqa: E402
 from scripts.lib.secure_json import (  # noqa: E402
     SecureJsonError,
+    canonical_json,
     read as read_secure_json,
     require_object,
 )
-from scripts.release.matrix import MatrixError, load_matrix  # noqa: E402
+from scripts.release.matrix import MatrixDocument, MatrixError, load_matrix, normalize_matrix_inventory  # noqa: E402
 
 RAW_SCHEMA = 1
 COMPACT_SCHEMA = 1
@@ -677,10 +678,12 @@ def _lane_keys(row: dict[str, Any]) -> tuple[str, str, str, str]:
     return row["artifact_node"], row["minecraft"], row["loader"], row["scenario"]
 
 
-def _validate_lane_rows(value: Any, matrix: dict[str, Any], contract: ScenarioContract) -> list[dict[str, Any]]:
+def _validate_lane_rows(value: Any, matrix: dict[str, Any], contract: ScenarioContract,
+                        *, expected_lanes=None) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         raise EvidenceError("lanes must be an array")
-    expected = {(row["artifact_node"], row["minecraft"], row["loader"], scenario): (row, scenario) for row, scenario in _expected_lanes(matrix, contract)}
+    selected = _expected_lanes(matrix, contract) if expected_lanes is None else expected_lanes
+    expected = {(row["artifact_node"], row["minecraft"], row["loader"], scenario): (row, scenario) for row, scenario in selected}
     lanes: list[dict[str, Any]] = []
     for index, raw in enumerate(value):
         lane = _object(raw, f"lanes[{index}]", {"artifact_node", "minecraft", "loader", "java", "scenario", "profile", "production_jar_sha256", "harness_jar_sha256"})
@@ -689,6 +692,7 @@ def _validate_lane_rows(value: Any, matrix: dict[str, Any], contract: ScenarioCo
         if authoritative is None or key in {_lane_keys(item) for item in lanes}:
             raise EvidenceError(f"unknown/duplicate lane {key}")
         row, _ = authoritative
+        _positive_int(lane["java"], f"lanes[{index}].java")
         if lane["java"] != row["java"] or lane["profile"] != f"profiles/{_profile_name(row['artifact_node'], row['minecraft'], lane['scenario'])}":
             raise EvidenceError(f"stale lane routing for {key}")
         _digest(lane["production_jar_sha256"], "production jar sha256")
@@ -777,27 +781,65 @@ def _validate_frames(
     return frames
 
 
-def validate_raw(root: Path, *, matrix_path: Path, expected: dict[str, Any] | None = None) -> dict[str, Any]:
-    manifest, raw = _json(root / "pages-evidence.json", label="raw Pages manifest", maximum=MAX_MANIFEST_BYTES)
-    value = _object(manifest, "raw Pages manifest", {"schema_version", "kind", "provenance", "lanes", "frames", "files"})
-    if value["schema_version"] != RAW_SCHEMA or value["kind"] != RAW_KIND:
-        raise EvidenceError("raw Pages manifest schema/kind is unsupported")
-    provenance = _validate_provenance(value["provenance"], expected=expected)
+def _raw_matrix_context(matrix_path, contract, *, scope, artifact_node, projection):
+    """Select raw aggregate coverage from caller authority, retaining all targets."""
+    matrix, matrix_bytes = _json(matrix_path, label="authenticated raw matrix", maximum=256 * 1024)
     try:
-        matrix = load_matrix(matrix_path, validate_sources=False)
+        document = MatrixDocument(normalize_matrix_inventory(matrix), json.dumps(matrix))
+        if document.inventory.schema_version == 1:
+            if any(value is not None for value in (scope, artifact_node, projection)):
+                raise EvidenceError("scoped raw evidence requires a schema2 matrix")
+            return matrix, matrix_bytes, _expected_lanes(matrix, contract), {}
+        if scope not in ("lane", "legacy", "full") or projection not in ("pr-anchors", "scheduled-anchors"):
+            raise EvidenceError("schema2 raw evidence requires explicit external scope and projection")
+        selected = sorted(document.select_lanes(scope=scope, artifact_node=artifact_node),
+            key=lambda lane: (tuple(map(int, lane.identity.minecraft.split("."))), lane.identity.loader))
+        projected = document.projection(projection, scope=scope, artifact_node=artifact_node, contract=contract)["include"]
+        scenarios = list(contract.scenarios_for_profile("pr" if projection == "pr-anchors" else "release"))
+        if set(scenarios) != set(contract.scenarios_for_profile("release")):
+            raise EvidenceError("raw projection must preserve every protected release scenario")
+        nodes = [lane.identity.artifact_node for lane in selected]
+        if {row["artifact_node"] for row in projected} != set(nodes):
+            raise EvidenceError("raw projection does not cover the external lane scope")
+        coverage = {"aggregate_scope": {"kind": scope, "selected_nodes": nodes,
+            "target_nodes": list(document.inventory.target_nodes),
+            "migration_mode": document.inventory.migration_mode,
+            "partial": set(nodes) != set(document.inventory.target_nodes),
+            "projection": projection, "scenarios": scenarios}}
+        return matrix, matrix_bytes, [(lane.runtime, scenario) for lane in selected for scenario in scenarios], coverage
     except MatrixError as exc:
         raise EvidenceError(str(exc)) from exc
-    matrix_sha, _ = _matrix_identity(matrix_path, matrix)
+
+
+def validate_raw(root: Path, *, matrix_path: Path, expected: dict[str, Any] | None = None,
+                 scope: str | None = None, artifact_node: str | None = None,
+                 projection: str | None = None) -> dict[str, Any]:
+    """Reconstruct exact raw coverage; API/run authentication remains the caller's job.
+
+    Schema2 opt-in requires an external scope and projection. The raw aggregate's
+    scope is never inferred from its own manifest, nor does this reader verify JARs.
+    """
+    manifest, _ = _json(root / "pages-evidence.json", label="raw Pages manifest", maximum=MAX_MANIFEST_BYTES)
     contract = default_contract()
+    matrix, matrix_bytes, selected, coverage = _raw_matrix_context(matrix_path, contract,
+        scope=scope, artifact_node=artifact_node, projection=projection)
+    value = _object(manifest, "raw Pages manifest", {"schema_version", "kind", "provenance", "lanes", "frames", "files"} | set(coverage))
+    if (type(value["schema_version"]) is not int or value["schema_version"] != (2 if coverage else RAW_SCHEMA)
+            or value["kind"] != RAW_KIND):
+        raise EvidenceError("raw Pages manifest schema/kind is unsupported")
+    if canonical_json({key: value[key] for key in coverage}) != canonical_json(coverage):
+        raise EvidenceError("raw aggregate coverage differs from external scope/projection")
+    provenance = _validate_provenance(value["provenance"], expected=expected)
+    matrix_sha = sha256_bytes(matrix_bytes)
     if matrix["branch"]["name"] != provenance["branch"] or matrix_sha != provenance["matrix_sha256"] or contract.sha256 != provenance["contract_sha256"]:
         raise EvidenceError("raw evidence disagrees with its authenticated matrix/contract")
-    lanes = _validate_lane_rows(value["lanes"], matrix, contract)
+    lanes = _validate_lane_rows(value["lanes"], matrix, contract, expected_lanes=selected)
     files = _validate_file_records(root, value["files"], include_manifest="pages-evidence.json")
     frames = _validate_frames(value["frames"], root=root, files=files, lanes=lanes, contract=contract)
     # Reconstruct the complete lane/frame view from the packaged result files with
     # the protected implementation.  This prevents candidate-owned curation code
     # from blessing an invented manifest around unrelated, probe-shaped images.
-    matrix_rows = {row["artifact_node"]: row for row in matrix["runtimes"]}
+    matrix_rows = {row["artifact_node"]: row for row, _ in selected}
     reconstructed_lanes: list[dict[str, Any]] = []
     reconstructed_frames: list[dict[str, Any]] = []
     reconstructed_files: set[str] = set()

@@ -128,7 +128,7 @@ class VisualAnchorSchema2Tests(unittest.TestCase):
         manifest = json.loads(path.read_bytes())
         manifest["provenance"]["matrix_sha256"] = self.digest
         path.write_text(json.dumps(manifest))
-        with self.assertRaisesRegex(anchor.VisualAnchorError, "inventory only"):
+        with self.assertRaisesRegex(anchor.VisualAnchorError, "external scope and projection"):
             anchor.create_anchor(input_root=raw, output=self.root / "new-anchor",
                 matrix_path=self.matrix_path, repository=legacy.REPO_NAME, branch=self.fixture.branch,
                 commit=legacy.COMMIT, tree=legacy.TREE, source_run_id=101, source_run_attempt=2,
