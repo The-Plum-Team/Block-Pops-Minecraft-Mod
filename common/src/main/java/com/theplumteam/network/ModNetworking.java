@@ -71,6 +71,12 @@ public class ModNetworking {
             UpdateGuaranteedResetHourPacket::handleServer
         );
 
+        //? if >=1.21 {
+        /*PacketNetworking.registerServerS2CPayloads(
+                SyncTokenDataPacket.ID, SyncDiscoveryDataPacket.ID, UnlockFigurePacket.ID,
+                SyncDynamicCollectionsPacket.ID, OpenFavoriteColorScreenPacket.ID);
+        *///? }
+
         BlockPopsMod.logDebug("BlockPops networking initialized");
     }
 

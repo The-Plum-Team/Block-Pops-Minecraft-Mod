@@ -33,4 +33,14 @@ public final class PacketNetworking {
         EnvExecutor.runInEnv(Env.CLIENT, () -> () ->
                 com.theplumteam.client.ClientPacketNetworking.sendToServer(id, encoder));
     }
+
+    public static void registerServerS2CPayloads(ResourceLocation... ids) {
+        //? if >=1.21 {
+        /*if (Platform.getEnvironment() == Env.SERVER) {
+            for (ResourceLocation id : ids) {
+                NetworkManager.registerS2CPayloadType(id);
+            }
+        }
+        *///? }
+    }
 }
