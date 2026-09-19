@@ -279,3 +279,9 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Archive verification now inspects bounded nested content, including renamed/prefixed ZIPs and effective Java multi-release paths. Production rejects harness namespaces/resources/loader IDs; harnesses reject production or third-party classes/resources/metadata. Entry, depth, total-byte and archive-count budgets apply across the whole tree.
 - Independent review reproduced two initial bypasses (prefixed ZIPs and multi-release classes); fixes and negative cases are included. Root reproduced38 artifact tests, and the reviewer reverified all four actual legacy JARs successfully. Those archives retain legacy provenance and are not client-E2E evidence.
 - Existing schema2 readers remain compatible. Rollback is the recursive boundary rule and tests; schema3 scope/producer work remains separate.
+
+## Task 5c — prepare the exact Fabric common-path transition
+
+- Prepared generation1 `current`/`next` for Fabric only. Current remains the complete prior contract; next changes only its build digest for two `':common'` references becoming `rootProject.common_project_path`. Executable files remain unchanged in this preparation commit.
+- Root reproduced14 bootstrap tests and independently checked the immutable current bytes, exact two substitutions and next SHA256 `d947288675e732491aa8a627543b432b02058892b539a01341e08de3dfe0cca4`. Fixture Git verification accepts current and rejects next without collapse. Test setup explicitly extracts current, preventing proposed next from becoming fixture authority.
+- Proposed bytes and fixture evidence are under `build/diagnostics/fabric-common-path-transition/`. The following local commit must contain only exact Fabric build bytes plus schema1 next collapse and pass `validate_transition` against this preparation commit. Rollback treats those two phases together; neither is deployed authority or permission to publish.

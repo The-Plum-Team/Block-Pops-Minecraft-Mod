@@ -33,6 +33,14 @@ def _run(repository: Path, *arguments: str) -> str:
     ).stdout.strip()
 
 
+def _current_contract() -> dict:
+    """Keep proposed next bytes out of the authority used to seed test fixtures."""
+    payload = (REPO / "e2e/loader-bootstrap-contract.json").read_bytes()
+    parsed = load_contract_bytes(payload)
+    document = json.loads(payload)
+    return document["current"] if parsed.schema_version == 2 else document
+
+
 class LoaderBootstrapTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -59,6 +67,7 @@ class LoaderBootstrapTests(unittest.TestCase):
             target = self.repository / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(REPO / relative, target)
+        self.write_contract(_current_contract())
         self.head = self.commit("valid active loader bootstrap")
 
     def tearDown(self) -> None:
@@ -308,7 +317,7 @@ class LoaderBootstrapTests(unittest.TestCase):
                 validate_commit(self.repository, head_sha=symlink, contract_sha=self.head)
 
     def test_loader_contract_schema_and_digest_mutations_are_rejected(self) -> None:
-        original = json.loads((REPO / "e2e/loader-bootstrap-contract.json").read_text())
+        original = _current_contract()
         mutations = {
             "unknown root": lambda value: value.__setitem__("trusted", True),
             "unknown loader": lambda value: value["loaders"].__setitem__(
@@ -331,7 +340,7 @@ class LoaderBootstrapTests(unittest.TestCase):
             mutate(value)
             with self.subTest(label=label), self.assertRaises(LoaderBootstrapError):
                 load_contract_bytes(json.dumps(value).encode("utf-8"))
-        duplicate = (REPO / "e2e/loader-bootstrap-contract.json").read_bytes().replace(
+        duplicate = json.dumps(original, indent=2).encode("utf-8").replace(
             b'{\n  "schema_version": 1,',
             b'{\n  "schema_version": 1,\n  "schema_version": 1,',
             1,
@@ -342,7 +351,7 @@ class LoaderBootstrapTests(unittest.TestCase):
 
 class LoaderBootstrapTransitionTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.current = json.loads((REPO / "e2e/loader-bootstrap-contract.json").read_bytes())
+        self.current = _current_contract()
         next_contract = copy.deepcopy(self.current)
         next_contract["loaders"]["fabric"]["build_sha256"] = "1" * 64
         self.document = {
