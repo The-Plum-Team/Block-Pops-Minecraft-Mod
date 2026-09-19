@@ -774,3 +774,9 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 
 - Retry09 stopped during Fabric configuration in 11.42 seconds on 51 exact sources.jar artifacts, before any task execution. All 51 official HTTPS downloads and SHA256 sidecars match historical pins and private resolved copies; root independently rehashed each source. Snapshots and the 19 original cached variants remain unchanged, and owned processes closed.
 - This admission adds those 51 source records to existing binary components in 153 XML lines, preserving every prior byte and record. All 18 policy tests pass. Metadata SHA256 is `fd56fccf2fe489a3d139358fd398daaaf41faf5bd1852974dbd8836b53f20946`; evidence is `build/diagnostics/fabric-1.21.1-probe/attempt09-{official,admission}-review.json`. No new coordinates, repository policy or trust exception are introduced. Rollback removes only these source records; modern compilation remains pending.
+
+## Task 10f — declare modern codecs for the three entity blocks
+
+- Added guarded MapCodec/simpleCodec declarations and codec overrides to BoxBlock, ClawMachineBlock and FigureBlock. Each fragment matches both historical references `6b5651e6`/`4f6e4039`; removing the additions restores prior source bytes exactly. Actual mapped API inspection confirms the modern abstract method.
+- Real Stonecutter 0.7.11 offline/strict preprocessing passes for all three complete classes on 1.20.1 and 1.21.1 in four tasks and seven seconds. Legacy Java tokens remain unchanged; modern output adds exactly the historical fragments. Root independently rehashed all six generated files, API receipts and metadata bound to commit `94137f0`. Evidence is `build/diagnostics/block-codecs/result.json`.
+- This unit does not compile complete modern blocks or execute codecs: interaction, destroy, clone and data ports remain pending. Rollback removes these 39 guarded lines. The main modern-build guard and publication restrictions remain active.

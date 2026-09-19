@@ -1,5 +1,8 @@
 package com.theplumteam.block;
 
+//? if >=1.21 {
+/*import com.mojang.serialization.MapCodec;
+*///? }
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
@@ -35,6 +38,9 @@ import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 public class ClawMachineBlock extends BaseEntityBlock {
+    //? if >=1.21 {
+    /*public static final MapCodec<ClawMachineBlock> CODEC = simpleCodec(ClawMachineBlock::new);
+    *///? }
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
     public static final EnumProperty<DoubleBlockHalf> HALF = BlockStateProperties.DOUBLE_BLOCK_HALF;
 
@@ -44,6 +50,13 @@ public class ClawMachineBlock extends BaseEntityBlock {
                 .setValue(FACING, Direction.NORTH)
                 .setValue(HALF, DoubleBlockHalf.LOWER));
     }
+
+    //? if >=1.21 {
+    /*@Override
+    protected MapCodec<? extends BaseEntityBlock> codec() {
+        return CODEC;
+    }
+    *///? }
 
     @Nullable
     @Override

@@ -1,5 +1,8 @@
 package com.theplumteam.block;
 
+//? if >=1.21 {
+/*import com.mojang.serialization.MapCodec;
+*///? }
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
@@ -37,6 +40,9 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
 public class BoxBlock extends BaseEntityBlock {
+    //? if >=1.21 {
+    /*public static final MapCodec<BoxBlock> CODEC = simpleCodec(BoxBlock::new);
+    *///? }
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
 
     // Hitbox matching the actual box model size
@@ -54,6 +60,13 @@ public class BoxBlock extends BaseEntityBlock {
         super(properties);
         this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
     }
+
+    //? if >=1.21 {
+    /*@Override
+    protected MapCodec<? extends BaseEntityBlock> codec() {
+        return CODEC;
+    }
+    *///? }
 
     @Override
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {

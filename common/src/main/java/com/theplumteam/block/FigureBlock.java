@@ -1,5 +1,8 @@
 package com.theplumteam.block;
 
+//? if >=1.21 {
+/*import com.mojang.serialization.MapCodec;
+*///? }
 import com.theplumteam.blockentity.FigureBlockEntity;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModItems;
@@ -30,6 +33,9 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
 public class FigureBlock extends BaseEntityBlock {
+    //? if >=1.21 {
+    /*public static final MapCodec<FigureBlock> CODEC = simpleCodec(FigureBlock::new);
+    *///? }
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
 
     private static final VoxelShape SHAPE = Block.box(5, 0, 5, 11, 12, 11);
@@ -38,6 +44,13 @@ public class FigureBlock extends BaseEntityBlock {
         super(properties);
         this.registerDefaultState(this.stateDefinition.any().setValue(FACING, Direction.NORTH));
     }
+
+    //? if >=1.21 {
+    /*@Override
+    protected MapCodec<? extends BaseEntityBlock> codec() {
+        return CODEC;
+    }
+    *///? }
 
     @Override
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
