@@ -4,6 +4,7 @@ package com.theplumteam.block;
 /*import com.mojang.serialization.MapCodec;
 *///? }
 import com.theplumteam.blockentity.FigureBlockEntity;
+import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModItems;
 import net.minecraft.core.BlockPos;
@@ -117,7 +118,7 @@ public class FigureBlock extends BaseEntityBlock {
         if (!level.isClientSide) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof FigureBlockEntity figureBlockEntity) {
-                CompoundTag tag = stack.getTagElement("BlockEntityTag");
+                CompoundTag tag = BlockEntityItemData.read(stack);
                 if (tag != null) {
                     if (tag.contains("QuickSkinId")) {
                         figureBlockEntity.setQuickSkinId(tag.getString("QuickSkinId"));

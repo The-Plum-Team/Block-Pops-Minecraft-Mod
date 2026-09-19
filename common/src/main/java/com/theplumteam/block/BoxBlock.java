@@ -6,6 +6,7 @@ package com.theplumteam.block;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
+import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.platform.PlatformHelper;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModItems;
@@ -200,7 +201,7 @@ public class BoxBlock extends BaseEntityBlock {
             if (boxBlockEntity.isOpen()) {
                 // Holding a figure block - try to put it back in the box
                 if (heldItem.getItem() == ModItems.FIGURE_BLOCK_ITEM.get() && boxBlockEntity.isFigureExtracted()) {
-                    CompoundTag blockEntityTag = heldItem.getTagElement("BlockEntityTag");
+                    CompoundTag blockEntityTag = BlockEntityItemData.read(heldItem);
                     if (blockEntityTag != null) {
                         String heldFigureId = blockEntityTag.getString("FigureId");
                         String heldCollectionId = blockEntityTag.getString("CollectionId");
@@ -249,7 +250,7 @@ public class BoxBlock extends BaseEntityBlock {
                         }
                     }
 
-                    figureBlockItem.addTagElement("BlockEntityTag", blockEntityTag);
+                    BlockEntityItemData.write(figureBlockItem, blockEntityTag, "blockpops:figure_block");
 
                     if (!player.getInventory().add(figureBlockItem)) {
                         player.drop(figureBlockItem, false);
@@ -290,7 +291,7 @@ public class BoxBlock extends BaseEntityBlock {
         if (!level.isClientSide) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
-                CompoundTag tag = stack.getTagElement("BlockEntityTag");
+                CompoundTag tag = BlockEntityItemData.read(stack);
                 if (tag != null) {
                     if (tag.contains("QuickSkinId")) {
                         boxBlockEntity.setQuickSkinId(tag.getString("QuickSkinId"));

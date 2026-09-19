@@ -51,7 +51,7 @@ public class BoxBlockItem extends GeoBlockItem {
         }
 
         if (!blockEntityTag.isEmpty()) {
-            stack.addTagElement("BlockEntityTag", blockEntityTag);
+            BlockEntityItemData.write(stack, blockEntityTag, "blockpops:box_block");
         }
 
         return stack;

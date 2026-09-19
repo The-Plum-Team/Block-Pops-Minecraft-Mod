@@ -36,7 +36,7 @@ public class GeoBlockItem extends BlockItem {
         String collectionId = null;
 
         if (getBlock() instanceof BoxBlock boxBlock) {
-            CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
+            CompoundTag blockEntityTag = BlockEntityItemData.read(stack);
             String figureId = "";
 
             if (blockEntityTag != null) {
@@ -69,7 +69,7 @@ public class GeoBlockItem extends BlockItem {
             return Component.literal(collectionName + " Box");
 
         } else if (getBlock() instanceof FigureBlock) {
-            CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
+            CompoundTag blockEntityTag = BlockEntityItemData.read(stack);
             String figureId = "";
 
             if (blockEntityTag != null) {
@@ -105,7 +105,7 @@ public class GeoBlockItem extends BlockItem {
 
         String collectionId = null;
         String figureId = "";
-        CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
+        CompoundTag blockEntityTag = BlockEntityItemData.read(stack);
 
         if (getBlock() instanceof BoxBlock boxBlock) {
             if (blockEntityTag != null) {
