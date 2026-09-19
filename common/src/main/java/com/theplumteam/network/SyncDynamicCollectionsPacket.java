@@ -80,14 +80,14 @@ public class SyncDynamicCollectionsPacket {
 
     public static void sendToPlayer(ServerPlayer player, List<FigureCollection> collections) {
         SyncDynamicCollectionsPacket packet = new SyncDynamicCollectionsPacket(collections);
-        NetworkManager.sendToPlayer(player, ID, packet.encode());
+        PacketNetworking.sendToPlayer(player, ID, packet.encode());
     }
 
     public static void sendToAllPlayers(net.minecraft.server.MinecraftServer server, List<FigureCollection> collections) {
         SyncDynamicCollectionsPacket packet = new SyncDynamicCollectionsPacket(collections);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             // Create a fresh buffer for each player - reusing buffers causes IndexOutOfBoundsException
-            NetworkManager.sendToPlayer(player, ID, packet.encode());
+            PacketNetworking.sendToPlayer(player, ID, packet.encode());
         }
     }
 

@@ -71,6 +71,6 @@ public class OpenFavoriteColorScreenPacket {
      */
     public static void sendToPlayer(ServerPlayer player) {
         OpenFavoriteColorScreenPacket packet = new OpenFavoriteColorScreenPacket();
-        NetworkManager.sendToPlayer(player, ID, packet.encode());
+        PacketNetworking.sendToPlayer(player, ID, packet.encode());
     }
 }

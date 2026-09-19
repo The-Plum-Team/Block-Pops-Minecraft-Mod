@@ -95,7 +95,7 @@ public class UnlockFigurePacket {
 
     public static void sendToPlayer(ServerPlayer player, String figureId, String figureName, @Nullable String skinSnapshot, @Nullable String quickSkinId) {
         UnlockFigurePacket packet = new UnlockFigurePacket(figureId, figureName, skinSnapshot, quickSkinId);
-        NetworkManager.sendToPlayer(player, ID, packet.encode());
+        PacketNetworking.sendToPlayer(player, ID, packet.encode());
     }
 
     public String getFigureId() {

@@ -100,7 +100,7 @@ public class SyncDiscoveryDataPacket {
 
     public static void sendToPlayer(ServerPlayer player, Set<String> discoveredFigures, Map<String, String> figureSkins, Map<String, String> figureQuickSkins) {
         SyncDiscoveryDataPacket packet = new SyncDiscoveryDataPacket(discoveredFigures, figureSkins, figureQuickSkins);
-        NetworkManager.sendToPlayer(player, ID, packet.encode());
+        PacketNetworking.sendToPlayer(player, ID, packet.encode());
     }
 
     public Set<String> getDiscoveredFigures() {

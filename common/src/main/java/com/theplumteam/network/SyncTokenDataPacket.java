@@ -78,7 +78,7 @@ public class SyncTokenDataPacket {
                                     boolean hasSpecialToken, long millisUntilNextSpecialReset) {
         SyncTokenDataPacket packet = new SyncTokenDataPacket(regularTokens, ticksUntilNextRegular,
                 hasSpecialToken, millisUntilNextSpecialReset);
-        NetworkManager.sendToPlayer(player, ID, packet.encode());
+        PacketNetworking.sendToPlayer(player, ID, packet.encode());
     }
 
     public int getRegularTokens() {
