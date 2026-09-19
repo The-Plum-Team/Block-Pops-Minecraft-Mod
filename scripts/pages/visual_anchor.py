@@ -41,7 +41,6 @@ from scripts.pages.evidence import (  # noqa: E402
     _object,
     _positive_int,
     _profile_name,
-    _stable_bytes,
     _text,
     _write_json,
     branch_token,
@@ -49,7 +48,7 @@ from scripts.pages.evidence import (  # noqa: E402
     sha256_bytes,
     validate_raw,
 )
-from scripts.release.matrix import MatrixError, load_matrix  # noqa: E402
+from scripts.release.matrix import MatrixDocument, MatrixError, normalize_matrix_inventory  # noqa: E402
 
 ANCHOR_SCHEMA = 1
 ANCHOR_KIND = "lossless-visual-anchor"
@@ -93,32 +92,29 @@ def _normalized_artifact_digest(value: Any, label: str) -> str:
 
 def _canonical_identity(
     matrix_path: Path, *, branch: str, commit: str
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], bytes]:
     _text(branch, "anchor branch", maximum=240)
     _digest(commit, "anchor commit", SHA1)
     try:
-        matrix = load_matrix(matrix_path, validate_sources=False)
+        matrix, matrix_bytes = _json(matrix_path, label="authenticated anchor matrix", maximum=256 * 1024)
+        document = MatrixDocument(normalize_matrix_inventory(matrix), json.dumps(matrix))
     except MatrixError as exc:
         raise VisualAnchorError(str(exc)) from exc
     if matrix["branch"]["name"] != branch:
         raise VisualAnchorError("anchor branch differs from its authenticated matrix")
     reference = matrix["visual_reference"]
-    runtime = next(
-        (
-            row
-            for row in matrix["runtimes"]
-            if row["artifact_node"] == reference["artifact_node"]
-        ),
-        None,
-    )
-    eligible = branch == reference["release_branch"] and runtime is not None
+    # This bundle always covers the canonical lane, independently of migration
+    # scope. It does not claim completion of the matrix's other target lanes.
+    runtime = (document.select_lanes(scope="lane", artifact_node=reference["artifact_node"])[0].runtime
+               if reference["artifact_node"] in document.inventory.configured_nodes else {})
+    eligible = branch == reference["release_branch"] and bool(runtime)
     identity = {
         "eligible": eligible,
         "branch": branch,
         "commit": commit,
         "artifact_node": reference["artifact_node"],
     }
-    return matrix, runtime or {}, identity
+    return matrix, runtime, identity, matrix_bytes
 
 
 def anchor_identity(
@@ -131,7 +127,7 @@ def anchor_identity(
 ) -> dict[str, Any]:
     """Project whether this branch owns the canonical lossless anchor."""
 
-    _, _, canonical = _canonical_identity(
+    _, _, canonical, _ = _canonical_identity(
         matrix_path, branch=branch, commit=commit
     )
     identity = canonical.copy()
@@ -421,7 +417,7 @@ def create_anchor(
     _text(source_controller_branch, "source controller branch", maximum=240)
     _digest(source_controller_sha, "source controller SHA", SHA1)
     _positive_int(raw_artifact_id, "raw artifact id")
-    matrix, runtime, identity = _canonical_identity(
+    matrix, runtime, identity, matrix_bytes = _canonical_identity(
         matrix_path, branch=branch, commit=commit
     )
     if not identity["eligible"]:
@@ -435,9 +431,6 @@ def create_anchor(
         raise VisualAnchorError("raw artifact name is not bound to the source run attempt")
     artifact_digest = _normalized_artifact_digest(
         raw_artifact_digest, "raw artifact digest"
-    )
-    matrix_bytes = _stable_bytes(
-        matrix_path, label="authenticated anchor matrix", maximum=256 * 1024
     )
     matrix_sha = sha256_bytes(matrix_bytes)
     contract = default_contract()
@@ -690,16 +683,13 @@ def validate_anchor(
     _positive_int(contract_record["schema_version"], "anchor contract schema_version")
     _digest(matrix_record["sha256"], "anchor matrix sha256")
     _digest(contract_record["sha256"], "anchor contract sha256")
-    matrix, runtime, identity = _canonical_identity(
+    matrix, runtime, identity, matrix_bytes = _canonical_identity(
         matrix_path,
         branch=provenance["branch"],
         commit=provenance["commit"],
     )
     if not identity["eligible"]:
         raise VisualAnchorError("anchor matrix no longer identifies the canonical lane")
-    matrix_bytes = _stable_bytes(
-        matrix_path, label="authenticated anchor matrix", maximum=256 * 1024
-    )
     contract = default_contract()
     if (
         matrix_record["branch"] != provenance["branch"]

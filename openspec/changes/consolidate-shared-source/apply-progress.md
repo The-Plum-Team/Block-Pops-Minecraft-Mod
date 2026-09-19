@@ -549,3 +549,13 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Settings now performs source validation for schema2 before creating the selected graph and compares its exact normalized context with the initial configuration read. Missing/linked/undeclared routes and input drift fail before Stonecutter or Loom. Schema1 retains its historical path; the modern-game guard remains active.
 - Root reproduced18 dependency-policy tests and checked every exact evidence binding. The independent combined policy/source run passed25 tests. Twelve strict/offline real-Gradle probes reproduce the prior undeclared-node defect, preserve both legacy paths, retain the modern guard and reject eight invalid source/drift cases before plugin/project configuration. Evidence is under `build/diagnostics/settings-source-validation/`; all unchanged-input cases and owned-process cleanup passed.
 - These settings probes do not compile Minecraft. Rollback must retain source validation and context binding before activating schema2 nodes; the exact settings policy hash changes with this implementation.
+
+## Task 12p — preserve the exact canonical visual anchor across schemas
+
+- Anchor identity/validation now selects the canonical lane through the normalized matrix API and hashes the same secure matrix read. Branch eligibility, one-lane membership and complete scenario frames remain unchanged; a canonical anchor never claims matrix-wide qualification. Schema2 creation still fails at the unadapted raw-evidence producer boundary.
+- The independent focused run passed45 anchor/workflow tests. Preparing/shared synthetic reader fixtures reject changed references, crossed lanes, missing frames, invalid schema types, malformed/linked matrices and stale raw hashes. No Minecraft or remote producer ran. Rollback is this reader adapter and focused tests together.
+
+## Pre-enrollment integrated verification
+
+- At `88bc6d5`, root ran both discovery suites:294 Python tests passed with3 opt-in Gradle skips, and290 CI tests passed. Logs are under `build/diagnostics/preparing-preenrollment-{python,ci}.log`. Real Gradle evidence remains recorded in the earlier bounded probes/builds; these skips are not new Gradle passes.
+- User `.gitignore` and `.pi/gentle-ai/sdd-preflight.json` retain their handoff hashes. The live schema1 matrix still has raw SHA256 `c554bab87f188be57dccf5a1d14cc81d8dce8ca17663198c4d700f620f3f4fdb`. All units since `2334a47` remain below400 authored lines. No remote mutation occurred.
