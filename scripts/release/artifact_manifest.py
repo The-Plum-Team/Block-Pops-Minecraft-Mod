@@ -26,11 +26,13 @@ from scripts.lib.secure_json import (  # noqa: E402
     require_object,
 )
 from scripts.release.matrix import (  # noqa: E402
+    MAX_MATRIX_BYTES,
     MatrixError,
     MatrixDocument,
     load_matrix_document,
     matrix_sha256,
     mod_version,
+    normalize_matrix_inventory,
 )
 
 SCHEMA_VERSION = 2
@@ -388,10 +390,15 @@ def verify_harness_jar(
         archive.close()
 
 
+def _git_identity_environment() -> dict[str, str]:
+    return {**os.environ, "GIT_NO_REPLACE_OBJECTS": "1", "GIT_GRAFT_FILE": os.devnull}
+
+
 def git_commit(repository: Path) -> str:
     result = subprocess.run(
         ["git", "-C", str(repository), "rev-parse", "HEAD"],
         check=False,
+        env=_git_identity_environment(),
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -407,6 +414,7 @@ def git_commit(repository: Path) -> str:
     cleanliness = subprocess.run(
         ["git", "-C", str(repository), "diff-index", "--quiet", "HEAD", "--"],
         check=False,
+        env=_git_identity_environment(),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
     )
@@ -428,6 +436,7 @@ def git_tree(repository: Path, commit: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(repository), "rev-parse", f"{commit}^{{tree}}"],
         check=False,
+        env=_git_identity_environment(),
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -572,12 +581,145 @@ def _manifest_file(
     return resolved
 
 
+
+def _scoped_path(repository: Path, path: Path) -> Path:
+    """Reject linked parents before any resolution could hide their presence."""
+    candidate = path if path.is_absolute() else repository / path
+    try:
+        relative = candidate.relative_to(repository)
+    except ValueError as exc:
+        raise ArtifactError("scoped artifact path is outside the repository") from exc
+    if ".." in relative.parts:
+        raise ArtifactError("scoped artifact path is not canonical")
+    current = repository
+    for part in relative.parts:
+        current = current / part
+        info = current.lstat()
+        if stat.S_ISLNK(info.st_mode) or (stat.S_ISREG(info.st_mode) and info.st_nlink != 1):
+            raise ArtifactError("scoped artifact paths must not contain symlinks or hardlinks")
+    return candidate
+
+
+def scoped_manifest_context(repository: Path, matrix_path: Path, *, scope: str,
+                            artifact_node: str | None = None):
+    """Derive schema3 expectations from caller-selected scope and current inputs."""
+    repo = repository.resolve()
+    records, values = {}, {}
+    for label, path, maximum in (("matrix", matrix_path, MAX_MATRIX_BYTES),
+                                 ("scenario_contract", Path("e2e/scenario-contract.json"), MAX_MANIFEST_BYTES)):
+        path = _scoped_path(repo, path)
+        value, payload = read_secure_json(path, label=label, max_bytes=maximum)
+        values[label] = value
+        records[label] = {"path": path.relative_to(repo).as_posix(), "sha256": hashlib.sha256(payload).hexdigest()}
+    document = MatrixDocument(normalize_matrix_inventory(values["matrix"], repository=repo),
+                              json.dumps(values["matrix"]))
+    if document.inventory.schema_version != 2:
+        raise ArtifactError("schema3 artifact manifests require a schema2 matrix")
+    if scope not in {"legacy", "lane", "full"}:
+        raise ArtifactError("schema3 verification requires an explicit trusted scope")
+    lanes = sorted(document.select_lanes(scope=scope, artifact_node=artifact_node),
+                   key=lambda lane: (tuple(map(int, lane.identity.minecraft.split("."))), lane.identity.loader))
+    commit = git_commit(repo)
+    tree = git_tree(repo, commit)
+    nodes = [lane.identity.artifact_node for lane in lanes]
+    header = {"schema_version": 3, **records, "git_commit": commit, "git_tree": tree,
+              "release_branch": document.branch_name,
+              "scope": {"kind": scope, "selected_nodes": nodes,
+                        "target_nodes": list(document.inventory.target_nodes),
+                        "migration_mode": document.inventory.migration_mode,
+                        "partial": set(nodes) != set(document.inventory.target_nodes)}}
+    rows = []
+    for lane in lanes:
+        row = {key: lane.artifact[key] for key in ("artifact_node", "minecraft", "loader", "java")}
+        row.update(mod_version=lane.mod_version, gradle_java=lane.gradle_java,
+                   build_identity=lane_build_identity(document, lane.identity.artifact_node,
+                       matrix_digest=records["matrix"]["sha256"], contract_digest=records["scenario_contract"]["sha256"],
+                       commit=commit, tree=tree))
+        rows.append(row)
+    return document, header, rows
+
+
+def _scoped_inventory(repo: Path, stage_root: Path, manifest_file: Path) -> set[str]:
+    actual_paths = set()
+    for item in stage_root.iterdir():
+        _scoped_path(repo, item)
+        if item.name in {"files", "harness"} and item.is_dir():
+            for child in item.iterdir():
+                _scoped_path(repo, child)
+                _regular_file(child, label="scoped artifact", maximum=MAX_JAR_BYTES)
+                actual_paths.add(child.relative_to(stage_root).as_posix())
+        elif item == manifest_file:
+            actual_paths.add(item.name)
+        else:
+            raise ArtifactError("scoped stage contains an unlisted object")
+    return actual_paths
+
+
+def verify_scoped_staged(*, repository: Path, matrix_path: Path, manifest_path: Path,
+                         stage: Path, scope: str, artifact_node: str | None = None) -> dict[str, Any]:
+    """Verify a schema3 bundle against an external scope, never its own claim."""
+    repo = repository.resolve()
+    try:
+        stage_root = _scoped_path(repo, stage)
+        manifest_file = _scoped_path(repo, manifest_path)
+        if stage_root.parent != repo / "build" or manifest_file.parent != stage_root:
+            raise ArtifactError("scoped stage must be one build child with a direct manifest")
+        manifest, manifest_payload = read_secure_json(manifest_file, label="artifact manifest", max_bytes=MAX_MANIFEST_BYTES)
+        document, header, expected_rows = scoped_manifest_context(repo, matrix_path, scope=scope, artifact_node=artifact_node)
+        require_object(manifest, label="scoped artifact manifest", required=set(header) | {"artifacts"})
+        canonical = lambda value: json.dumps(value, sort_keys=True, allow_nan=False)
+        if canonical({key: manifest[key] for key in header}) != canonical(header):
+            raise ArtifactError("scoped manifest source, matrix, contract or scope is stale")
+        rows = manifest["artifacts"]
+        if not isinstance(rows, list) or len(rows) != len(expected_rows):
+            raise ArtifactError("scoped manifest has an incomplete artifact inventory")
+        expected_paths = {manifest_file.relative_to(stage_root).as_posix()}
+        for row, expected in zip(rows, expected_rows, strict=True):
+            require_object(row, label="scoped artifact row", required=set(expected) | {"production", "harness"})
+            if canonical({key: row[key] for key in expected}) != canonical(expected):
+                raise ArtifactError("scoped manifest has a stale, duplicate or reordered lane identity")
+            lane = document.inventory.lane(expected["artifact_node"])
+            for kind, directory, source, verify in (
+                ("production", "files", lane.production_jar, verify_production_jar),
+                ("harness", "harness", lane.harness_jar, verify_harness_jar),
+            ):
+                record = require_object(row[kind], label=f"scoped {kind}", required=FILE_KEYS)
+                relative = f"{directory}/{Path(source).name}"
+                if (record["path"] != relative or record["filename"] != Path(source).name
+                        or type(record["bytes"]) is not int or relative in expected_paths):
+                    raise ArtifactError("scoped artifact path, size type or filename is invalid")
+                path = _scoped_path(repo, stage_root / relative)
+                _manifest_file(stage_root, record, label=f"scoped {kind}")
+                verify(path, lane.artifact, build_identity=expected["build_identity"])
+                expected_paths.add(relative)
+        actual_paths = _scoped_inventory(repo, stage_root, manifest_file)
+        if actual_paths != expected_paths:
+            raise ArtifactError("scoped stage file inventory differs from the manifest")
+        _, final_header, final_rows = scoped_manifest_context(repo, matrix_path, scope=scope, artifact_node=artifact_node)
+        if canonical((header, expected_rows)) != canonical((final_header, final_rows)):
+            raise ArtifactError("scoped inputs changed during artifact verification")
+        for row in rows:
+            for kind in ("production", "harness"):
+                _scoped_path(repo, stage_root / row[kind]["path"])
+                _manifest_file(stage_root, row[kind], label=f"final scoped {kind}")
+        _scoped_path(repo, manifest_file)
+        _, final_payload = read_secure_json(manifest_file, label="final artifact manifest", max_bytes=MAX_MANIFEST_BYTES)
+        if (final_payload != manifest_payload
+                or _scoped_inventory(repo, stage_root, manifest_file) != expected_paths):
+            raise ArtifactError("scoped staged inventory or manifest changed during verification")
+        return manifest
+    except (SecureJsonError, OSError) as exc:
+        raise ArtifactError(str(exc)) from exc
+
+
 def verify_staged(
     *,
     repository: Path,
     matrix_path: Path,
     manifest_path: Path,
     stage: Path,
+    scope: str | None = None,
+    artifact_node: str | None = None,
 ) -> dict[str, Any]:
     repo = repository.resolve()
     stage_root = stage.resolve()
@@ -591,6 +733,11 @@ def verify_staged(
             label="artifact manifest",
             max_bytes=MAX_MANIFEST_BYTES,
         )
+        if isinstance(raw_manifest, dict) and type(raw_manifest.get("schema_version")) is int and raw_manifest["schema_version"] == 3:
+            return verify_scoped_staged(repository=repo, matrix_path=matrix_path, manifest_path=manifest_path,
+                                        stage=stage, scope=scope, artifact_node=artifact_node)
+        if scope is not None or artifact_node is not None:
+            raise ArtifactError("explicit scoped verification requires a schema3 artifact manifest")
         manifest = require_object(
             raw_manifest, label="artifact manifest", required=ROOT_KEYS
         )
