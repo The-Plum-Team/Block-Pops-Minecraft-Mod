@@ -11,6 +11,10 @@ import net.minecraft.resources.ResourceLocation;
 
 public class LinkButton extends Button {
 
+    //? if >=1.21 {
+    /*private static final ResourceLocation NORMAL_BUTTON = ResourceLocation.withDefaultNamespace("widget/button");
+    *///? }
+
     private final ResourceLocation texture;
     private final int textureWidth;
     private final int textureHeight;
@@ -35,7 +39,11 @@ public class LinkButton extends Button {
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
         // Use the standard button background for the rounded shape.
         // We always use the "normal" (not hovered) state texture. The V-offset for this is 46 + 1 * 20 = 66.
+        //? if >=1.21 {
+        /*graphics.blitSprite(NORMAL_BUTTON, this.getX(), this.getY(), this.getWidth(), this.getHeight());
+        *///? } else {
         graphics.blitNineSliced(WIDGETS_LOCATION, this.getX(), this.getY(), this.getWidth(), this.getHeight(), 20, 4, 200, 20, 0, 46 + 1 * 20);
+        //? }
 
         // Enable blending for the transparent logo.
         RenderSystem.enableBlend();
