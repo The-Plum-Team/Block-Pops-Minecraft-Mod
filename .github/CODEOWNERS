@@ -13,6 +13,7 @@
 /neoforge/src/e2e/ @AkaNebur
 /gradle/e2e-harness-conventions.gradle @AkaNebur
 /gradle/build-conventions.gradle @AkaNebur
+/gradle/build-observation.init.gradle @AkaNebur
 /gradle/stonecutter-branch.gradle @AkaNebur
 /gradle/repository-policy.gradle @AkaNebur
 /gradle/verification-metadata.xml @AkaNebur

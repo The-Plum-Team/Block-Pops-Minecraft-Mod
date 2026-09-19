@@ -1,0 +1,103 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import org.gradle.api.tasks.compile.JavaCompile
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
+
+// Opt-in runner observer. This receipt records tool selection and task outcomes,
+// never release qualification or an independent source-tree observation.
+def requestName = System.getProperty('blockpops.observation.request')
+if (!requestName) throw new GradleException('Missing build observation request')
+def requestPath = new File(requestName).toPath().toAbsolutePath().normalize()
+if (requestPath != requestPath.toRealPath() ||
+        !Files.isRegularFile(requestPath, LinkOption.NOFOLLOW_LINKS) ||
+        Files.size(requestPath) < 1 || Files.size(requestPath) > 65536) {
+    throw new GradleException('Observation request must be a regular unlinked file')
+}
+def payload = Files.readAllBytes(requestPath)
+def request = new JsonSlurper().parse(payload)
+def expectedKeys = ['schema_version', 'run_id', 'artifact_node', 'repository', 'caller_source',
+                    'gradle_home', 'compile_home', 'compile_major', 'requested_tasks', 'compile_tasks', 'projects'] as Set
+if (!(request instanceof Map) || request.keySet() != expectedKeys ||
+        !(request.schema_version instanceof Integer) || request.schema_version != 1 ||
+        !(request.run_id ==~ /[a-f0-9]{32}/) || !(request.artifact_node ==~ /(?:fabric|forge|neoforge)-[0-9.]+/) ||
+        !(request.compile_major instanceof Integer) || !(request.compile_major in [17, 21]) ||
+        !(request.caller_source instanceof Map) ||
+        !(request.requested_tasks instanceof List) || !request.requested_tasks ||
+        !(request.compile_tasks instanceof List) || !request.compile_tasks ||
+        !(request.projects instanceof List) || request.projects.size() != 2) {
+    throw new GradleException('Invalid build observation request')
+}
+def output = requestPath.parent.resolve('observation.json')
+def observed = [schema_version: 1, run_id: request.run_id, artifact_node: request.artifact_node,
+                request_sha256: MessageDigest.getInstance('SHA-256').digest(payload).encodeHex().toString(),
+                caller_source: request.caller_source, status: 'started', compilers: [:]]
+def publish = {
+    def temporary = Files.createTempFile(output.parent, '.observation-', '.json')
+    try {
+        Files.writeString(temporary, JsonOutput.toJson(observed) + '\n')
+        Files.move(temporary, output, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+    } finally {
+        Files.deleteIfExists(temporary)
+    }
+}
+publish()
+gradle.buildFinished { result ->
+    observed.status = result.failure == null ? 'completed' : 'failed'
+    publish()
+}
+def require = { boolean valid, String reason ->
+    if (!valid) throw new GradleException("Build observation rejected: ${reason}")
+}
+def actualHome = new File(System.getProperty('java.home')).canonicalPath
+observed.gradle_jvm = [home: actualHome, major: JavaVersion.current().majorVersion as Integer]
+require(actualHome == new File(request.gradle_home as String).canonicalPath && observed.gradle_jvm.major == 21,
+        'Gradle must run on the explicit Java 21 home')
+require(!gradle.startParameter.parallelProjectExecutionEnabled && gradle.startParameter.maxWorkerCount == 1,
+        'parallel execution or multiple workers')
+require(!gradle.startParameter.configurationCacheRequested, 'configuration cache is unsupported by this observer')
+require(gradle.startParameter.taskNames == request.requested_tasks, 'requested tasks differ from the bound request')
+def inspectCompiler = { JavaCompile task ->
+    require(task.project.path in request.projects, "unexpected compilation project ${task.project.path}")
+    require(task.options.forkOptions.executable == null && task.options.forkOptions.javaHome == null,
+            "explicit compiler executable/home override on ${task.path}")
+    def metadata = task.javaCompiler.get().metadata
+    def home = metadata.installationPath.asFile.canonicalPath
+    def major = metadata.languageVersion.asInt()
+    require(home == new File(request.compile_home as String).canonicalPath && major == request.compile_major,
+            "compiler home/major mismatch on ${task.path}")
+    require(task.options.release.orNull == request.compile_major, "release mismatch on ${task.path}")
+    [home: home, major: major, version: metadata.javaRuntimeVersion,
+     executable: task.javaCompiler.get().executablePath.asFile.canonicalPath,
+     release: task.options.release.get(), destination: task.destinationDirectory.get().asFile.canonicalPath]
+}
+gradle.taskGraph.whenReady { graph ->
+    require(gradle.rootProject.projectDir.canonicalPath == request.repository, 'repository differs from request')
+    def compilers = graph.allTasks.findAll { it instanceof JavaCompile }
+    require(compilers.collect { it.path }.containsAll(request.compile_tasks), 'missing main/E2E compile tasks')
+    compilers.each { JavaCompile task ->
+        observed.compilers[task.path] = [selected: inspectCompiler(task), outcome: null]
+        task.javaCompiler.finalizeValue()
+        task.options.release.finalizeValue()
+    }
+    observed.status = 'graph_checked'
+    publish()
+}
+gradle.taskGraph.beforeTask { task ->
+    if (task instanceof JavaCompile) {
+        require(inspectCompiler(task) == observed.compilers[task.path].selected,
+                "compiler selection changed before ${task.path}")
+    }
+}
+gradle.taskGraph.afterTask { task, state ->
+    if (task instanceof JavaCompile) {
+        require(inspectCompiler(task) == observed.compilers[task.path].selected,
+                "compiler selection changed during ${task.path}")
+        observed.compilers[task.path].outcome = [did_work: state.didWork, skipped: state.skipped,
+                up_to_date: state.upToDate, no_source: state.noSource, skip_message: state.skipMessage,
+                failed: state.failure != null]
+        publish()
+    }
+}

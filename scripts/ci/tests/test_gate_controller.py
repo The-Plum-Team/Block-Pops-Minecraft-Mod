@@ -264,7 +264,8 @@ class ParityTests(unittest.TestCase):
                 path.write_text("baseline\n")
             git("add", ".")
             git("commit", "-qm", "baseline")
-            for relative in ("gradle/build-conventions.gradle", "gradle/stonecutter-branch.gradle",
+            for relative in ("gradle/build-conventions.gradle", "gradle/build-observation.init.gradle",
+                             "gradle/stonecutter-branch.gradle",
                              "stonecutter.gradle"):
                 self.assertIn(f"/{relative} @AkaNebur", owner_rules)
                 base = git("rev-parse", "HEAD")

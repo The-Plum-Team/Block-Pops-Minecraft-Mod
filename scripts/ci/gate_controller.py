@@ -53,6 +53,7 @@ PROTECTED_PATHS = (
     "e2e",
     "gradle.properties",
     "gradle/build-conventions.gradle",
+    "gradle/build-observation.init.gradle",
     "gradle/e2e-harness-conventions.gradle",
     "gradle/repository-policy.gradle",
     "gradle/stonecutter-branch.gradle",
