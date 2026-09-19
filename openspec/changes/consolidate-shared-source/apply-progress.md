@@ -357,3 +357,10 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Prepared generation1 for NeoForge's two common-project references, retaining the complete current contract and every other pin. Next build SHA256 is `edf6a066c9df73fc563419d21232c742c927991e7842fda164180991d036a77a`; no executable bytes change in this preparation commit.
 - Root independently checked the exact historical/current bytes and proposed two substitutions. Twenty bootstrap tests and isolated current/next fixtures pass, including the declared inactive NeoForge loader and rejection of next without collapse. Evidence is under `build/diagnostics/neoforge-common-path-transition/`.
 - Apply only NeoForge build plus exact schema1 next collapse in the following local commit, then validate against this preparation. Matrix schema/activation and publication remain unchanged; rollback preserves the same separate two-phase boundary.
+
+## NeoForge transition result and task 11e — embedded identity generation
+
+- NeoForge preparation `37b7cb3` and exact-next `c89e18d` pass self and protected-next validation, including the inactive declared loader. The next commit contains only its build script and contract collapse; exact evidence is in `neoforge-common-path-transition/exact-commit-verification.json`.
+- Added a deterministic lane-identity generator with fixed matrix-derived output paths and anchored atomic publication. Clean raw source bytes emit the reader's exact identity; dirty/hidden/untracked inputs produce an explicit diagnostic fingerprint that release verification rejects. No Gradle task invokes it yet.
+- Root reproduced10 generation/identity tests. Review reproduced a source mutation during atomic publication; a final raw snapshot now rejects that race and removes only the newly generated owned identity. Other cases cover clean legacy/detached paths, reproducibility, linked paths and mid-read drift.
+- This is a local producer primitive, not a qualified game build. Gradle resource wiring remains next; rollback is the generator/tests. Current legacy archive contents and the live matrix are unchanged.
