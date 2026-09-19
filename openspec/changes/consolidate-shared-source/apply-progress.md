@@ -452,3 +452,8 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Aggregate creation now uses the same normalized external selection and coverage helpers as both readers. It binds every lane payload to the already-verified bundle, source commit/tree and raw inputs, then revalidates matrix/contract and the download inventory before publication. Legacy receipt behavior remains supported.
 - Root reproduced38 fan-in tests, including synthetic legacy2, scheduled Neo lane1 and shared12 producer/reader round trips. Missing/unknown lanes, crossed coverage, stale source identity and input drift fail without accepting an aggregate. These protocol fixtures are not game qualification.
 - Independent review reproduced a preexisting publication-parent swap in the shared atomic-directory helper. CLI activation is deferred until the next separate filesystem-hardening unit closes that race. Rollback is scoped producer/helpers/tests; external authentication still belongs to its caller.
+
+## Task 12h — matrix-owned default dispatch selection
+
+- Added a small shared CLI for workflow callers: normalized schema1 emits `unscoped`, preparing emits `legacy`, and complete shared emits `full`. It reuses the matrix's selection API and accepts no bundle-derived or custom scope. Source inspection defaults on; disabling it still validates the complete configuration.
+- Root reproduced5 focused tests for malformed/incomplete/type-aliased inputs, explicit paths outside the checkout and misleading manifest data. The live matrix emits `unscoped`. This helper grants no authentication or qualification and changes no workflow yet. Rollback is helper/tests together.
