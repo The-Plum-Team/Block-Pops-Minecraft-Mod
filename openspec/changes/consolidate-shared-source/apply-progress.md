@@ -543,3 +543,9 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 
 - Source-backed Pages/visual fixtures now materialize the frozen schema1 matrix and its declared directories, keeping source validation enabled. Sync tests use the same explicit baseline. Protected CI helpers own the pure fixture reader so their tests no longer import candidate-owned `tests.*` code; the existing import policy remains unchanged.
 - Root reproduced33 sync/baseline/Pages/anchor tests; the independent focused run passed89. The remaining direct live-matrix reader is the deliberate checkout smoke test. Empty temporary source fixtures are compatibility inputs, not compiled-source evidence. No production admission rule or live matrix changed. Rollback is these fixture helpers and their consumers together.
+
+## Task 6k — validate schema2 sources before configuring nodes
+
+- Settings now performs source validation for schema2 before creating the selected graph and compares its exact normalized context with the initial configuration read. Missing/linked/undeclared routes and input drift fail before Stonecutter or Loom. Schema1 retains its historical path; the modern-game guard remains active.
+- Root reproduced18 dependency-policy tests and checked every exact evidence binding. The independent combined policy/source run passed25 tests. Twelve strict/offline real-Gradle probes reproduce the prior undeclared-node defect, preserve both legacy paths, retain the modern guard and reject eight invalid source/drift cases before plugin/project configuration. Evidence is under `build/diagnostics/settings-source-validation/`; all unchanged-input cases and owned-process cleanup passed.
+- These settings probes do not compile Minecraft. Rollback must retain source validation and context binding before activating schema2 nodes; the exact settings policy hash changes with this implementation.

@@ -110,22 +110,32 @@ def selectedNode = providers.gradleProperty('blockpopsLane').orNull
 if (selectedNode != null) {
     matrixCommand.addAll(['--artifact-node', selectedNode])
 }
-def matrixProcess = new ProcessBuilder(matrixCommand)
-        .directory(rootDir).redirectErrorStream(false).start()
-def matrixBytes = matrixProcess.inputStream.readNBytes(4 * 1024 * 1024 + 1)
-def matrixErrors = matrixProcess.errorStream.readNBytes(256 * 1024 + 1)
-def matrixExit = matrixProcess.waitFor()
-if (matrixExit != 0 || matrixBytes.length == 0 || matrixBytes.length > 4 * 1024 * 1024
-        || matrixErrors.length > 256 * 1024) {
-    def detail = new String(matrixErrors, StandardCharsets.UTF_8).trim()
-    throw new GradleException("Strict release matrix validation failed${detail ? ': ' + detail : ''}")
+def readMatrixContext = { List<String> command ->
+    def process = new ProcessBuilder(command)
+            .directory(rootDir).redirectErrorStream(false).start()
+    def bytes = process.inputStream.readNBytes(4 * 1024 * 1024 + 1)
+    def errors = process.errorStream.readNBytes(256 * 1024 + 1)
+    def exit = process.waitFor()
+    if (exit != 0 || bytes.length == 0 || bytes.length > 4 * 1024 * 1024
+            || errors.length > 256 * 1024) {
+        def detail = new String(errors, StandardCharsets.UTF_8).trim()
+        throw new GradleException("Strict release matrix validation failed${detail ? ': ' + detail : ''}")
+    }
+    bytes
 }
+def matrixBytes = readMatrixContext(matrixCommand)
 def laneContext = new JsonSlurper().parseText(
     new String(matrixBytes, StandardCharsets.UTF_8)
 )
 def releaseMatrix = laneContext.matrix
 if (!(releaseMatrix.schema_version in [1, 2])) {
     throw new GradleException('Unsupported release matrix schema')
+}
+if (releaseMatrix.schema_version == 2) {
+    def checkedBytes = readMatrixContext(matrixCommand.findAll { it != '--no-source-check' })
+    if (!Arrays.equals(matrixBytes, checkedBytes)) {
+        throw new GradleException('Release matrix context changed during source validation')
+    }
 }
 if (!(releaseMatrix.artifacts instanceof List)
         || releaseMatrix.artifacts.size() != releaseMatrix.lane_count) {

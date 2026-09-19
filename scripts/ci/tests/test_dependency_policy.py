@@ -356,6 +356,19 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
         with self.assertRaises(DependencyPolicyError):
             validate_build_script_text("build.gradle", injected)
 
+    def test_settings_source_validation_cannot_be_disabled_or_detached_from_context(self) -> None:
+        settings = (REPO / "settings.gradle").read_text("utf-8")
+        for before, after in (
+            ("matrixCommand.findAll { it != '--no-source-check' }", "matrixCommand"),
+            ("if (!Arrays.equals(matrixBytes, checkedBytes))", "if (false)"),
+            ("if (releaseMatrix.schema_version == 2)", "if (false)"),
+        ):
+            with self.subTest(before=before):
+                candidate = settings.replace(before, after, 1)
+                self.assertNotEqual(candidate, settings)
+                with self.assertRaises(DependencyPolicyError):
+                    validate_settings_text(candidate)
+
     def test_git_tracked_gradle_cache_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             repository = Path(raw)
