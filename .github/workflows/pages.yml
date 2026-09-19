@@ -363,22 +363,47 @@ jobs:
           digest-mismatch: error
 
       - name: Render all enrolled heads as one immutable site
+        shell: bash
         env:
+          CANONICAL_BRANCH: ${{ needs.discover.outputs.canonical_branch }}
+          GH_TOKEN: ${{ github.token }}
+          IMPLEMENTATION_SHA: ${{ needs.discover.outputs.implementation_sha }}
           INVENTORY: ${{ needs.discover.outputs.inventory }}
         run: |
           set -euo pipefail
-          printf '%s\n' "$INVENTORY" > pages-inventory.json
-          python3 scripts/pages/build_site.py \
-            --evidence-root collected-caches \
-            --inventory pages-inventory.json \
-            --output _site \
-            --repository "$GITHUB_REPOSITORY"
+          source_token="$GH_TOKEN"
+          unset GH_TOKEN
+          scope="$(python3 scripts/ci/matrix_scope.py --matrix release/release-matrix.json)"
+          inventory_path="$RUNNER_TEMP/pages-inventory.json"
+          render=(python3 scripts/pages/build_site.py --evidence-root collected-caches
+            --inventory "$inventory_path" --output _site --repository "$GITHUB_REPOSITORY")
+          case "$scope" in
+            unscoped) ;;
+            legacy|full)
+              [[ "$GITHUB_API_URL" == https://api.github.com && "$GITHUB_SERVER_URL" == https://github.com ]] || exit 2
+              [[ "$IMPLEMENTATION_SHA" =~ ^[0-9a-f]{40}$ && "$GITHUB_SHA" == "$IMPLEMENTATION_SHA" ]] || exit 2
+              [[ "$(git rev-parse HEAD)" == "$IMPLEMENTATION_SHA" ]] || exit 2
+              [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || exit 2
+              [[ -n "$CANONICAL_BRANCH" && "$GITHUB_REF" == "refs/heads/$CANONICAL_BRANCH" ]] || exit 2
+              [[ "$GITHUB_WORKFLOW_REF" == "$GITHUB_REPOSITORY/.github/workflows/pages.yml@refs/heads/$CANONICAL_BRANCH" ]] || exit 2
+              render+=(--pages-run-id "$GITHUB_RUN_ID" --pages-run-attempt "$GITHUB_RUN_ATTEMPT"
+                --implementation-sha "$IMPLEMENTATION_SHA" --canonical-branch "$CANONICAL_BRANCH") ;;
+            *) printf 'Unsupported matrix scope: %s\n' "$scope" >&2; exit 2 ;;
+          esac
+          # Keep discovery outside the exact clean implementation checkout.
+          printf '%s\n' "$INVENTORY" > "$inventory_path"
+          if [[ "$scope" == unscoped ]]; then
+            "${render[@]}"
+          else
+            GH_TOKEN="$source_token" "${render[@]}"
+          fi
+          unset source_token
 
       - name: Upload exact promotion inventory
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: pages-promotion
-          path: pages-inventory.json
+          path: ${{ runner.temp }}/pages-inventory.json
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
