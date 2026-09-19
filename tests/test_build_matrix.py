@@ -20,7 +20,7 @@ from scripts.ci.tests.matrix_fixtures import schema2_configuration
 from scripts.lib.secure_json import SecureJsonError
 from scripts.release.build_matrix import (
     BuildProcessError, _finish_owned_group, begin_report, checkout_lock, file_snapshot, finish_report,
-    main, numeric_version, output_snapshot, plan_build, run_lane, source_snapshot,
+    main, numeric_version, output_snapshot, plan_build, run_lane, source_snapshot, verify_toolchains,
 )
 from scripts.release.matrix import MatrixError
 from tests.test_release_matrix_portability import arbitrary_named_1211_release_matrix
@@ -157,6 +157,154 @@ class BuildMatrixPlanningTests(unittest.TestCase):
         with contextlib.redirect_stdout(output):
             self.assertEqual(0, main(arguments + ["--plan", "--scope", "legacy"]))
         self.assertEqual("planned", json.loads(output.getvalue())["status"])
+
+
+class BuildMatrixToolchainTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        matrix = schema2_configuration(shared=True)
+        for route in matrix["source_routing"].values():
+            for key in ("canonical", "e2e"):
+                if key in route:
+                    (self.root / route[key]).mkdir(parents=True, exist_ok=True)
+        path = self.root / "release/release-matrix.json"
+        path.parent.mkdir(); path.write_text(json.dumps(matrix))
+        self.plan = plan_build(path)
+        self.homes = {}
+        for major in (17, 21):
+            home = self.root / f"JDK {major}"
+            (home / "bin").mkdir(parents=True)
+            for name in ("java", "javac", "../release"):
+                binary = home / "bin" / name
+                binary.write_text(f"{major} {name}"); binary.chmod(0o755)
+            self.homes[major] = home
+        self.env = {"PATH": "/test/bin", "JAVA_HOME": "/unreviewed/ambient"}
+
+    def probe(self, command, **kwargs):
+        home = Path(command[0]).parents[1]
+        major = next(key for key, value in self.homes.items() if value == home)
+        output = (f"javac {major}.0.1\n" if Path(command[0]).name == "javac" else
+                  f'    java.home = {home}\n    java.version = {major}.0.1\n'
+                  f'    java.specification.version = {major}\nopenjdk version "{major}.0.1"\n')
+        return subprocess.CompletedProcess(command, 0, "", output)
+
+    def verify(self, **kwargs):
+        return verify_toolchains(self.plan, self.homes[21], {17: self.homes[17]},
+                                 environment=self.env, **kwargs)
+
+    def test_explicit_jdks_are_probed_once_and_bound_without_claiming_gradle_execution(self):
+        before = json.dumps(self.plan, sort_keys=True)
+        with patch("subprocess.run", side_effect=self.probe) as run:
+            result = self.verify()
+        self.assertEqual(4, run.call_count)
+        for call in run.call_args_list:
+            self.assertEqual(15, call.kwargs["timeout"])
+            self.assertEqual(str(Path(call.args[0][0]).parents[1]), call.kwargs["env"]["JAVA_HOME"])
+        self.assertEqual("probed", result["status"])
+        self.assertEqual("unverified", result["gradle_jvm"])
+        self.assertEqual("unverified", result["compiler_selection"])
+        self.assertEqual({"JAVA_HOME": str(self.homes[21])}, result["environment"])
+        self.assertEqual({"17", "21"}, set(result["homes"]))
+        self.assertEqual(before, json.dumps(self.plan, sort_keys=True))
+        for original, bound in zip(self.plan["lanes"], result["lanes"], strict=True):
+            self.assertEqual(original["artifact_node"], bound["artifact_node"])
+            self.assertEqual(str(self.homes[original["required_java"]["runtime"]]), bound["runtime_home"])
+            self.assertEqual(str(self.homes[original["required_java"]["artifact"]]), bound["compile_home"])
+            self.assertIn(f"-Dorg.gradle.java.home={self.homes[21]}", bound["command"])
+            self.assertIn("-Porg.gradle.java.installations.auto-download=false", bound["command"])
+            self.assertIn("-Porg.gradle.java.installations.auto-detect=false", bound["command"])
+            self.assertIn("-Porg.gradle.java.installations.fromEnv=", bound["command"])
+            self.assertIn(f"-Porg.gradle.java.installations.paths={self.homes[17]},{self.homes[21]}", bound["command"])
+            self.assertIn("--no-parallel", bound["command"])
+            self.assertIn("--max-workers=1", bound["command"])
+        self.assertEqual(hashlib.sha256((self.homes[17] / "bin/java").read_bytes()).hexdigest(),
+                         result["homes"]["17"]["files"]["java"]["sha256"])
+
+    def test_missing_conflicting_and_non_jdk_homes_fail_before_any_probe(self):
+        with patch("subprocess.run") as run:
+            for homes in ({}, {17: self.homes[17], 21: self.homes[17]}, {"17": self.homes[17]}):
+                with self.subTest(homes=homes), self.assertRaises(BuildProcessError):
+                    verify_toolchains(self.plan, self.homes[21], homes, environment={})
+            (self.homes[17] / "bin/javac").unlink()
+            with self.assertRaises(BuildProcessError):
+                self.verify()
+            run.assert_not_called()
+
+    def test_inherited_option_injection_and_daemon_criteria_are_rejected_before_probes(self):
+        for key in ("JAVA_OPTS", "GRADLE_OPTS", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS"):
+            with self.subTest(key=key), patch("subprocess.run") as run:
+                self.env[key] = "-Dorg.gradle.parallel=true"
+                with self.assertRaisesRegex(BuildProcessError, key):
+                    self.verify()
+                run.assert_not_called(); del self.env[key]
+        (self.root / "gradle").mkdir(exist_ok=True)
+        (self.root / "gradle/gradle-daemon-jvm.properties").write_text("toolchainVersion=25")
+        with patch("subprocess.run") as run, self.assertRaisesRegex(BuildProcessError, "daemon JVM"):
+            self.verify()
+        run.assert_not_called()
+
+    def test_probe_rejects_major_home_compiler_mismatch_failure_and_timeout(self):
+        changes = (("java.version = 17.0.1", "java.version = 25.0.1"),
+                   ("java.specification.version = 17", "java.specification.version = 21"),
+                   (str(self.homes[17]), str(self.homes[21])), ("javac 17.0.1", "javac 21.0.1"))
+        for old, new in changes:
+            def altered(command, **kwargs):
+                result = self.probe(command, **kwargs)
+                result.stderr = result.stderr.replace(old, new)
+                return result
+            with self.subTest(old=old), patch("subprocess.run", side_effect=altered):
+                with self.assertRaises(BuildProcessError):
+                    self.verify()
+        for failure in (subprocess.CompletedProcess([], 1, "", "failure"),
+                        subprocess.TimeoutExpired("java", 15)):
+            with patch("subprocess.run", side_effect=failure if isinstance(failure, Exception) else None,
+                       return_value=failure), self.assertRaises(BuildProcessError):
+                self.verify()
+
+    def test_linked_or_changing_binaries_cannot_be_reported_as_probed(self):
+        java = self.homes[17] / "bin/java"
+        java.unlink(); java.symlink_to(self.homes[21] / "bin/java")
+        with patch("subprocess.run") as run, self.assertRaises(BuildProcessError):
+            self.verify()
+        run.assert_not_called(); java.unlink(); java.write_text("original"); java.chmod(0o755)
+        def changing(command, **kwargs):
+            result = self.probe(command, **kwargs)
+            java.write_text("changed during probe")
+            return result
+        with patch("subprocess.run", side_effect=changing), self.assertRaisesRegex(BuildProcessError, "changed"):
+            self.verify()
+
+    def test_stale_or_injected_plan_cannot_supply_arbitrary_process_arguments(self):
+        original = json.dumps(self.plan)
+        for mutation in ("parallel", "required_java", "schema_type", "matrix"):
+            self.plan = json.loads(original)
+            if mutation == "parallel":
+                self.plan["lanes"][0]["command"].append("--parallel")
+            elif mutation == "required_java":
+                self.plan["lanes"][0]["required_java"]["artifact"] = 21
+            elif mutation == "schema_type":
+                self.plan["schema_version"] = True
+            else:
+                self.plan["matrix"]["sha256"] = "0" * 64
+            with self.subTest(mutation=mutation), patch("subprocess.run") as run:
+                with self.assertRaises(BuildProcessError):
+                    self.verify()
+                run.assert_not_called()
+
+    def test_modern_lane_reuses_launch_jdk_and_property_overrides_are_explicit(self):
+        self.plan = plan_build(Path(self.plan["matrix"]["path"]), artifact_node="neoforge-1.21.1")
+        (self.root / "gradle.properties").write_text(
+            "org.gradle.java.home=/old/jdk\norg.gradle.parallel=true\n"
+            "org.gradle.java.installations.auto-download=true\n")
+        with patch("subprocess.run", side_effect=self.probe) as run:
+            result = verify_toolchains(self.plan, self.homes[21], {}, environment=self.env)
+        self.assertEqual(2, run.call_count)
+        self.assertEqual({"21"}, set(result["homes"]))
+        self.assertIn("-Dorg.gradle.parallel=false", result["property_overrides"])
+        self.assertIn("-Dorg.gradle.workers.max=1", result["property_overrides"])
+        self.assertEqual(str(self.homes[21]), result["lanes"][0]["runtime_home"])
 
 
 class BuildMatrixProcessTests(unittest.TestCase):

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import signal
 import stat
 import subprocess
@@ -306,6 +307,101 @@ def finish_report(lock: CheckoutLock, run_id: str, results: list[dict[str, Any]]
 
 def numeric_version(version: str) -> tuple[int, ...]:
     return tuple(int(part) for part in version.split("."))
+
+
+def verify_toolchains(plan: dict[str, Any], java_home: Path, java_homes: dict[int, Path],
+                      *, environment: dict[str, str] | None = None) -> dict[str, Any]:
+    """Probe explicit JDKs only; callers must reuse the validated environment plus overlay.
+
+    Bindings override persistent Gradle properties. Gradle JVM/compiler observation
+    remains required during execution; these probes do not certify a build.
+    """
+    env = dict(os.environ if environment is None else environment)
+    for name in ("JAVA_OPTS", "GRADLE_OPTS", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS"):
+        if env.get(name, "").strip():
+            raise BuildProcessError(f"{name} must be empty for explicit toolchain binding")
+    try:
+        if plan.get("kind") != "blockpops-build-plan" or plan.get("status") != "planned":
+            raise BuildProcessError("a validated build plan is required")
+        first = plan["lanes"][0]["command"]
+        if not isinstance(first, list) or not all(isinstance(argument, str) for argument in first):
+            raise BuildProcessError("build command must contain only planned string arguments")
+        canonical = plan_build(
+            Path(plan["matrix"]["path"]), scope="full" if plan["scope"] == "lane" else plan["scope"],
+            artifact_node=plan["selected_nodes"][0] if plan["scope"] == "lane" else None,
+            clean=any(argument.endswith(":clean") for argument in first), windows=first[0] == "gradlew.bat",
+        )
+        if json.dumps(plan, sort_keys=True, allow_nan=False) != json.dumps(canonical, sort_keys=True):
+            raise BuildProcessError("build plan changed or contains unreviewed command overrides")
+        repository = Path(plan["source"]["repository"])
+        criteria = repository / "gradle/gradle-daemon-jvm.properties"
+        if criteria.exists() or criteria.is_symlink():
+            raise BuildProcessError("daemon JVM criteria can override explicit Java home; unsupported")
+        def home_path(value):
+            path = Path(value)
+            if not path.is_absolute() or any(character in str(path) for character in (",", "\n", "\r")):
+                raise BuildProcessError("JDK homes must be absolute, comma-free single-line paths")
+            return path.resolve(strict=True)
+        launch = home_path(java_home)
+        if any(type(major) is not int or major not in {17, 21} for major in java_homes):
+            raise BuildProcessError("explicit JDK keys must be integer 17 or 21")
+        homes = {major: home_path(path) for major, path in java_homes.items()}
+        if 21 in homes and homes[21] != launch:
+            raise BuildProcessError("Java 21 toolchain home conflicts with the Gradle launch home")
+        homes[21] = launch
+        required = {major for lane in plan["lanes"] for major in lane["required_java"].values()}
+        if required - homes.keys():
+            raise BuildProcessError("missing explicit JDK home for a selected compile/runtime major")
+        suffix = ".exe" if os.name == "nt" else ""
+        paths = {"java": f"bin/java{suffix}", "javac": f"bin/javac{suffix}", "release": "release"}
+        snapshots = {major: output_snapshot(home, paths) for major, home in sorted(homes.items())}
+        for files in snapshots.values():
+            if os.name != "nt" and any(not files[name]["executable"] for name in ("java", "javac")):
+                raise BuildProcessError("explicit JDK launchers must be executable")
+        observed = {}
+        for major, home in sorted(homes.items()):
+            probe_env = {**env, "JAVA_HOME": str(home)}
+            def probe(binary, *arguments):
+                result = subprocess.run([str(home / paths[binary]), *arguments], cwd=repository,
+                                        env=probe_env, stdin=subprocess.DEVNULL, capture_output=True,
+                                        text=True, timeout=15, check=False)
+                if result.returncode != 0:
+                    raise BuildProcessError(f"JDK {major} {binary} probe failed")
+                return result.stdout + "\n" + result.stderr
+            output = probe("java", "-XshowSettings:properties", "-version")
+            def property_value(name):
+                values = re.findall(r"^\s*" + re.escape(name) + r" = (.+)$", output, re.MULTILINE)
+                if len(values) != 1:
+                    raise BuildProcessError(f"JDK {major} probe lacks an unambiguous {name}")
+                return values[0].strip()
+            version = property_value("java.version")
+            headers = re.findall(r'^(?:openjdk|java) version "([^"]+)"', output, re.MULTILINE)
+            if (not re.match(rf"^{major}(?:\.|$)", version) or headers != [version]
+                    or property_value("java.specification.version") != str(major)):
+                raise BuildProcessError(f"JDK {major} reported a different Java version")
+            actual_home = home_path(property_value("java.home"))
+            if actual_home != home:
+                raise BuildProcessError(f"JDK {major} reported a different Java home")
+            compiler = probe("javac", "-version")
+            versions = re.findall(r"^javac (\S+)\s*$", compiler, re.MULTILINE)
+            if len(versions) != 1 or not re.match(rf"^{major}(?:\.|$)", versions[0]):
+                raise BuildProcessError(f"JDK {major} compiler reported a different Java version")
+            observed[str(major)] = {"home": str(home), "java_version": version,
+                                    "javac_version": versions[0], "files": snapshots[major]}
+        if snapshots != {major: output_snapshot(home, paths) for major, home in sorted(homes.items())}:
+            raise BuildProcessError("JDK files changed during toolchain probes")
+    except (OSError, ValueError, KeyError, IndexError, TypeError, subprocess.SubprocessError) as exc:
+        raise BuildProcessError(f"explicit toolchain validation failed: {exc}") from exc
+    flags = [f"-Dorg.gradle.java.home={launch}", "-Dorg.gradle.parallel=false", "-Dorg.gradle.workers.max=1",
+             "-Porg.gradle.java.installations.paths=" + ",".join(str(homes[major]) for major in sorted(homes)),
+             "-Porg.gradle.java.installations.fromEnv=", "-Porg.gradle.java.installations.auto-detect=false",
+             "-Porg.gradle.java.installations.auto-download=false"]
+    lanes = [{"artifact_node": lane["artifact_node"], "command": [lane["command"][0], *flags, *lane["command"][1:]],
+              "compile_home": str(homes[lane["required_java"]["artifact"]]),
+              "runtime_home": str(homes[lane["required_java"]["runtime"]])} for lane in plan["lanes"]]
+    return {"status": "probed", "gradle_jvm": "unverified", "compiler_selection": "unverified",
+            "homes": observed, "environment": {"JAVA_HOME": str(launch)},
+            "property_overrides": flags, "lanes": lanes}
 
 
 def plan_build(
