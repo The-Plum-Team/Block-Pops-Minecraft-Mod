@@ -462,3 +462,9 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 
 - Workflow review found that serial production/harness tasks omitted the `check` selector used by the existing gate. Each isolated command now also requests `check`, retaining common/loader verification tasks and their failure propagation.
 - The mocked executor regression first reproduced an incorrect success when only `check` would fail. Root then reproduced50 runner tests with the correction: that failure stops before the next lane and replaces prior success with a failed report. A real failing Java-test probe remains pending; no new game qualification is claimed. Rollback must retain equivalent lifecycle checks before using the runner in CI.
+
+## Task 12i — scoped Build workflow dispatch
+
+- The Build workflow installs Java17 before its matrix-owned Gradle JVM and passes the compiler path as a quoted positional argument through the existing credentialless boundary. Schema1 retains direct aggregate build/check; schema2 uses the serial runner with the normalized default scope. Staging and the fresh sealed validator independently derive the same selection from the matrix, never the artifact manifest.
+- Root reproduced37 workflow/boundary tests, including executed shell fragments with inert subprocesses for all three scope tokens, whitespace/metacharacter paths, malformed selection and failed build. The pinned action's `path` output was verified against [its exact action definition](https://github.com/actions/setup-java/blob/b6effb05e454b25005698d916606bdc6ffcbf961/action.yml). Review's missing-check finding was fixed in the preceding runner unit.
+- No GitHub execution or deployment occurred; trusted controller admission and upload conditions are unchanged. The E2E workflow/action still need corresponding adapters. Rollback is this workflow and shell tests together.
