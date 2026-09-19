@@ -71,6 +71,15 @@ exact manifest. Each packaged lane revalidates that manifest, installs genuine
 loader clients and a dedicated server, installs only hash-verified matrix
 dependencies, and places the harness on clients only.
 
+Schema-2 matrices use schema-3 manifests with an explicit caller scope:
+`verify_release.py --artifact-node fabric-1.20.1`, `--scope legacy` while preparing,
+or `--scope full` for all twelve configured lanes. Reverification adds
+`--verify-staged` with the same selection. Both archives must already embed the
+matching lane/build identity; these commands do not build, qualify or publish a
+lane. Schema-1 historical staging keeps its existing unscoped interface.
+Scoped staging currently requires POSIX no-follow directory descriptors;
+unsupported platforms fail before modifying staged outputs.
+
 The branch matrix owns the Gradle JVM independently from each artifact/runtime
 Java toolchain, plus the mod version and all full runtime dependency
 coordinates. This lets modern Loom run on Java 21 while Minecraft 1.20.1 output

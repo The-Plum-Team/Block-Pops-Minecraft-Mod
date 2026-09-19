@@ -3,6 +3,9 @@
 import copy
 import json
 import os
+import shutil
+import contextlib
+import io
 import subprocess
 import tempfile
 import unittest
@@ -11,7 +14,7 @@ from unittest.mock import patch
 
 from scripts.ci.tests.matrix_fixtures import schema2_configuration
 from scripts.release.artifact_manifest import (
-    ArtifactError, BUILD_IDENTITY_PATH, _file_record, scoped_manifest_context, verify_staged,
+    ArtifactError, BUILD_IDENTITY_PATH, _file_record, scoped_manifest_context, stage_release, verify_staged,
 )
 from scripts.release.matrix import MatrixError
 from tests.test_artifact_and_report_validation import _fabric_harness_entries, _fabric_production_entries, _write_zip
@@ -78,6 +81,145 @@ class ScopedManifestTests(unittest.TestCase):
         return verify_staged(repository=self.repo, matrix_path=self.matrix_path,
                              manifest_path=self.manifest_path, stage=self.stage,
                              **(kwargs or dict(scope='lane', artifact_node=self.node)))
+
+    def source_archives(self):
+        lane = self.document.inventory.lane(self.node)
+        for kind, relative in (('production', lane.production_jar), ('harness', lane.harness_jar)):
+            target = self.repo / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(self.stage / self.manifest['artifacts'][0][kind]['path'], target)
+        return lane
+
+    def stage_scoped(self):
+        return stage_release(repository=self.repo, matrix_path=self.matrix_path,
+                             manifest_path=self.manifest_path, stage=self.stage, scope='lane', artifact_node=self.node)
+
+    def test_schema3_producer_round_trip_and_repository_relative_cli(self):
+        from scripts.release.verify_release import main
+        self.source_archives()
+        self.assertEqual(self.manifest, self.stage_scoped())
+        args = ['--repository', str(self.repo), '--artifact-node', self.node]
+        self.assertEqual(0, main(args))
+        self.assertEqual(0, main(args + ['--verify-staged']))
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(2, main(['--repository', str(self.repo)]))
+            self.assertEqual(2, main(['--repository', str(self.repo), '--scope', 'full']))
+        self.assertEqual(self.manifest, self.verify())
+
+    def test_legacy_and_full_producers_stage_exactly_their_selected_loader_pairs(self):
+        for scope in ('legacy', 'full'):
+            if scope == 'full':
+                self.matrix_path.write_text(json.dumps(schema2_configuration(shared=True)))
+                self.git('add', 'release/release-matrix.json')
+                self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'full fixture')
+            document, header, rows = self.context(scope=scope)
+            for row in rows:
+                lane = document.inventory.lane(row['artifact_node'])
+                metadata, loader = lane.artifact['metadata'], lane.identity.loader
+                for harness, source in ((False, lane.production_jar), (True, lane.harness_jar)):
+                    if loader == 'fabric':
+                        entries = _fabric_harness_entries() if harness else _fabric_production_entries()
+                        record = json.loads(entries['fabric.mod.json'])
+                        record['version'] = '0.0.0' if harness else lane.mod_version
+                        for dep, key in (('minecraft', 'minecraft'), ('fabricloader', 'loader'),
+                                         ('architectury', 'architectury'), ('geckolib', 'geckolib')):
+                            if not harness or key in ('minecraft', 'loader'):
+                                record['depends'][dep] = metadata[key]
+                        entries['fabric.mod.json'] = json.dumps(record).encode()
+                    else:
+                        mod_id = 'blockpops_e2e' if harness else 'blockpops'
+                        mod_version = '0.0.0' if harness else lane.mod_version
+                        toml = (f'loaderVersion = "{metadata["loader"]}"\n[[mods]]\nmodId = "{mod_id}"\n'
+                                f'version = "{mod_version}"\ndisplayTest = "IGNORE_ALL_VERSION"\n')
+                        deps = {'blockpops': '*', 'minecraft': metadata['minecraft']} if harness else {
+                            key: metadata[key] for key in ('minecraft', 'architectury', 'geckolib')}
+                        for dep, version in deps.items():
+                            toml += f'[[dependencies.{mod_id}]]\nmodId = "{dep}"\nversionRange = "{version}"\n'
+                        if harness:
+                            label = 'Forge' if loader == 'forge' else 'NeoForge'
+                            entries = {'com/theplumteam/e2e/E2EHarness.class': b'class',
+                                       'com/theplumteam/e2e/generated/ScenarioContract.class': b'class',
+                                       f'com/theplumteam/e2e/{loader}/BlockPopsE2E{label}.class': b'class',
+                                       'pack.mcmeta': b'{}'}
+                        else:
+                            entries = {'com/theplumteam/BlockPopsMod.class': b'class',
+                                       f'com/theplumteam/{loader}/BlockPopsModForge.class': b'class',
+                                       'blockpops.mixins.json': b'{}'}
+                        entries[metadata['file']] = toml.encode()
+                    entries[BUILD_IDENTITY_PATH] = json.dumps(row['build_identity']).encode()
+                    path = self.repo / source
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    _write_zip(path, entries)
+            report = stage_release(repository=self.repo, matrix_path=self.matrix_path,
+                                   manifest_path=self.manifest_path, stage=self.stage, scope=scope)
+            self.assertEqual(header['scope'], report['scope'])
+            self.assertEqual(2 if scope == 'legacy' else 12, len(report['artifacts']))
+            self.assertEqual(report, self.verify(scope=scope))
+
+    def test_invalid_source_invalidates_prior_manifest_without_leaving_success(self):
+        lane = self.source_archives()
+        (self.repo / lane.harness_jar).write_bytes(b'invalid archive')
+        with self.assertRaises(ArtifactError): self.stage_scoped()
+        self.assertFalse(self.manifest_path.exists())
+
+    def test_producer_rejects_dirty_inputs_and_linked_output_parent_before_copy(self):
+        self.source_archives()
+        self.contract.write_text('{"dirty":true}')
+        with self.assertRaises(ArtifactError): self.stage_scoped()
+        self.assertEqual(self.manifest, json.loads(self.manifest_path.read_bytes()))
+        self.contract.write_text('{}')
+        self.git('update-index', '--refresh')  # Restore the fixture's clean index stat cache.
+        output = self.repo / 'build'
+        moved = self.repo / 'moved-output'
+        output.rename(moved); output.symlink_to(moved, target_is_directory=True)
+        with self.assertRaisesRegex(ArtifactError, 'symlink'): self.stage_scoped()
+
+    def test_hidden_tracked_edits_and_untracked_compile_inputs_deny_source_provenance(self):
+        self.source_archives()
+        self.git('update-index', '--assume-unchanged', 'e2e/scenario-contract.json')
+        self.contract.write_text('{"hidden":true}')
+        with self.assertRaisesRegex(ArtifactError, 'exact committed tree'): self.stage_scoped()
+        self.contract.write_text('{}')
+        self.git('update-index', '--no-assume-unchanged', 'e2e/scenario-contract.json')
+        self.git('update-index', '--refresh')
+        (self.repo / 'common/src/main/Untracked.java').write_text('class Untracked {}')
+        with self.assertRaisesRegex(ArtifactError, 'exact committed tree'): self.stage_scoped()
+
+    def test_stage_parent_swap_cannot_delete_or_write_into_an_unrelated_directory(self):
+        self.source_archives()
+        from scripts.release import artifact_manifest as module
+        foreign = self.repo / 'foreign'
+        (foreign / 'files').mkdir(parents=True)
+        sentinel = foreign / 'files/keep.txt'; sentinel.write_text('untouched')
+        original_verify = module.verify_harness_jar
+        def swap(*args, **kwargs):
+            original_verify(*args, **kwargs)
+            self.stage.rename(self.repo / 'build/owned-stage')
+            self.stage.symlink_to(foreign, target_is_directory=True)
+        with patch.object(module, 'verify_harness_jar', side_effect=swap), self.assertRaises(ArtifactError):
+            self.stage_scoped()
+        self.assertEqual('untouched', sentinel.read_text())
+        self.assertEqual([sentinel.name], [path.name for path in sentinel.parent.iterdir()])
+        self.assertFalse((foreign / 'artifacts.json').exists())
+
+    def test_later_copy_cannot_hide_change_to_an_earlier_source(self):
+        lane = self.source_archives()
+        from scripts.release import artifact_manifest as module
+        real_record = module._file_record
+        production = self.repo / lane.production_jar
+        harness = self.repo / lane.harness_jar
+        harness_reads = 0
+        def changed(path, **kwargs):
+            nonlocal harness_reads
+            value = real_record(path, **kwargs)
+            if path == harness:
+                harness_reads += 1
+                if harness_reads == 2:
+                    production.write_bytes(production.read_bytes() + b'changed')
+            return value
+        with patch.object(module, '_file_record', side_effect=changed), self.assertRaisesRegex(ArtifactError, 'earlier'):
+            self.stage_scoped()
+        self.assertFalse(self.manifest_path.exists())
 
     def test_lane_evidence_is_partial_and_legacy_scope_is_independently_derived(self):
         self.assertEqual(self.manifest, self.verify())

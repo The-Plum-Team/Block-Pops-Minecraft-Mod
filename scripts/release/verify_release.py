@@ -34,22 +34,24 @@ def main(argv: list[str] | None = None) -> int:
         "--manifest", type=Path, default=Path("build/release/artifacts.json")
     )
     parser.add_argument("--verify-staged", action="store_true")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--scope", choices=("legacy", "full"), help="expected schema3 bundle scope")
+    selection.add_argument("--artifact-node", help="stage or verify exactly one configured lane")
     args = parser.parse_args(argv)
     repository = args.repository.resolve()
+    paths = {name: value if value.is_absolute() else repository / value
+             for name, value in (("matrix_path", args.matrix), ("manifest_path", args.manifest), ("stage", args.stage))}
+    selection = {"scope": "lane" if args.artifact_node else args.scope, "artifact_node": args.artifact_node}
     try:
         if args.verify_staged:
             verify_staged(
                 repository=repository,
-                matrix_path=args.matrix,
-                manifest_path=args.manifest,
-                stage=args.stage,
+                **paths, **selection,
             )
         else:
             stage_release(
                 repository=repository,
-                matrix_path=args.matrix,
-                manifest_path=args.manifest,
-                stage=args.stage,
+                **paths, **selection,
             )
     except (ArtifactError, MatrixError) as exc:
         print(f"release verification error: {exc}", file=sys.stderr)

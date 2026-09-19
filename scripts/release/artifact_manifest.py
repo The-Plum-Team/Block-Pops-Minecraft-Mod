@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+from contextlib import ExitStack, contextmanager
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -412,7 +413,7 @@ def git_commit(repository: Path) -> str:
             f"BLOCKPOPS_TESTED_SHA {expected} does not equal checkout HEAD {commit}"
         )
     cleanliness = subprocess.run(
-        ["git", "-C", str(repository), "diff-index", "--quiet", "HEAD", "--"],
+        ["git", "-C", str(repository), "diff-index", "--quiet", "--ignore-submodules=none", "HEAD", "--"],
         check=False,
         env=_git_identity_environment(),
         stdout=subprocess.DEVNULL,
@@ -478,9 +479,19 @@ def stage_release(
     matrix_path: Path,
     manifest_path: Path,
     stage: Path,
+    scope: str | None = None,
+    artifact_node: str | None = None,
 ) -> dict[str, Any]:
     repo = repository.resolve()
     matrix_file = matrix_path.resolve()
+    document = load_matrix_document(matrix_file)
+    if document.inventory.schema_version == 2:
+        if scope is None:
+            raise ArtifactError("scoped schema-3 staging requires an explicit trusted scope")
+        return stage_scoped_release(repository=repo, matrix_path=matrix_path, manifest_path=manifest_path,
+                                     stage=stage, scope=scope, artifact_node=artifact_node)
+    if scope is not None or artifact_node is not None:
+        raise ArtifactError("explicit scoped staging requires a schema2 matrix")
     stage_root = stage.resolve()
     if repo not in stage_root.parents or stage_root.parent != repo / "build":
         raise ArtifactError("release stage must be a direct child of repository build/")
@@ -557,6 +568,131 @@ def stage_release(
     )
 
 
+
+@contextmanager
+def _scoped_stage_handles(repo: Path, stage: Path):
+    """Anchor all mutations to owned directories, never re-traverse mutable parents."""
+    if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
+        raise ArtifactError("scoped staging requires no-follow directory descriptor support")
+    with ExitStack() as stack:
+        def directory(name, parent=None):
+            if parent is not None:
+                try:
+                    os.mkdir(name, dir_fd=parent)
+                except FileExistsError:
+                    pass
+            descriptor = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+            stack.callback(os.close, descriptor)
+            return descriptor
+        repo_fd = directory(repo)
+        build_fd = directory("build", repo_fd)
+        stage_fd = directory(stage.name, build_fd)
+        children = {name: directory(name, stage_fd) for name in ("files", "harness")}
+        yield repo_fd, stage_fd, children
+
+
+def stage_scoped_release(*, repository: Path, matrix_path: Path, manifest_path: Path,
+                         stage: Path, scope: str, artifact_node: str | None = None) -> dict[str, Any]:
+    """Produce schema3 only from clean, matching production and harness archives."""
+    repo = repository.resolve()
+    try:
+        document, header, rows = scoped_manifest_context(repo, matrix_path, scope=scope, artifact_node=artifact_node)
+        stage_root = _scoped_path(repo, stage, allow_missing=True)
+        manifest_file = _scoped_path(repo, manifest_path, allow_missing=True)
+        if (stage_root.parent != repo / "build" or manifest_file.parent != stage_root
+                or manifest_file.name in {"files", "harness"}):
+            raise ArtifactError("scoped stage must be one build child with a direct manifest")
+        with _scoped_stage_handles(repo, stage_root) as (repo_fd, stage_fd, children):
+            _scoped_inventory(repo, stage_root, manifest_file)
+            sources, destinations = [], set()
+            try:
+                os.unlink(manifest_file.name, dir_fd=stage_fd)
+            except FileNotFoundError:
+                pass
+            try:
+                for row in rows:
+                    lane = document.inventory.lane(row["artifact_node"])
+                    for kind, directory, source, verify in (
+                        ("production", "files", lane.production_jar, verify_production_jar),
+                        ("harness", "harness", lane.harness_jar, verify_harness_jar),
+                    ):
+                        path = _scoped_path(repo, Path(source))
+                        relative = f"{directory}/{path.name}"
+                        if relative in destinations:
+                            raise ArtifactError("scoped lanes produce duplicate staged filenames")
+                        destinations.add(relative)
+                        verify(path, lane.artifact, build_identity=row["build_identity"])
+                        record = _file_record(path, relative=relative)
+                        sources.append((path, record))
+                        row[kind] = record
+                for descriptor in children.values():
+                    for name in os.listdir(descriptor):
+                        info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+                        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                            raise ArtifactError("scoped stage contains an unexpected linked/special object")
+                        os.unlink(name, dir_fd=descriptor)
+                for source, record in sources:
+                    with ExitStack() as stack:
+                        parent = repo_fd
+                        for part in source.relative_to(repo).parts[:-1]:
+                            parent = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+                            stack.callback(os.close, parent)
+                        descriptor = os.open(source.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+                        incoming = stack.enter_context(os.fdopen(descriptor, "rb"))
+                        info = os.fstat(incoming.fileno())
+                        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                            raise ArtifactError("scoped source changed to a non-regular/linked file")
+                        directory, filename = record["path"].split("/", 1)
+                        output = os.open(filename, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                         0o600, dir_fd=children[directory])
+                        outgoing = stack.enter_context(os.fdopen(output, "wb"))
+                        remaining = MAX_JAR_BYTES + 1
+                        while remaining:
+                            chunk = incoming.read(min(1024 * 1024, remaining))
+                            if not chunk:
+                                break
+                            outgoing.write(chunk)
+                            remaining -= len(chunk)
+                        if remaining == 0:
+                            raise ArtifactError("scoped source grew beyond its bounded size")
+                    _scoped_path(repo, source)
+                    if _file_record(source, relative=record["path"]) != record:
+                        raise ArtifactError("scoped source changed while staging")
+                    _scoped_path(repo, stage_root / record["path"])
+                    _manifest_file(stage_root, record, label="copied scoped artifact")
+                for source, record in sources:
+                    _scoped_path(repo, source)
+                    if _file_record(source, relative=record["path"]) != record:
+                        raise ArtifactError("an earlier scoped source changed during staging")
+                manifest = dict(header, artifacts=rows)
+                encoded = (json.dumps(manifest, sort_keys=True, indent=2) + "\n").encode()
+                if len(encoded) > MAX_MANIFEST_BYTES:
+                    raise ArtifactError("scoped manifest exceeds its bounded size")
+                temporary = ".artifacts-" + os.urandom(16).hex()
+                descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                     0o600, dir_fd=stage_fd)
+                try:
+                    with os.fdopen(descriptor, "wb") as stream:
+                        stream.write(encoded); stream.flush(); os.fsync(stream.fileno())
+                    os.replace(temporary, manifest_file.name, src_dir_fd=stage_fd, dst_dir_fd=stage_fd)
+                finally:
+                    try:
+                        os.unlink(temporary, dir_fd=stage_fd)
+                    except FileNotFoundError:
+                        pass
+                return verify_scoped_staged(repository=repo, matrix_path=matrix_path, manifest_path=manifest_file,
+                                            stage=stage_root, scope=scope, artifact_node=artifact_node)
+            except BaseException:
+                try:
+                    os.unlink(manifest_file.name, dir_fd=stage_fd)
+                except (FileNotFoundError, IsADirectoryError):
+                    pass
+                raise
+    except (SecureJsonError, OSError) as exc:
+        raise ArtifactError(str(exc)) from exc
+
+
+
 def _manifest_file(
     stage: Path, record: dict[str, Any], *, label: str
 ) -> Path:
@@ -582,7 +718,7 @@ def _manifest_file(
 
 
 
-def _scoped_path(repository: Path, path: Path) -> Path:
+def _scoped_path(repository: Path, path: Path, *, allow_missing: bool = False) -> Path:
     """Reject linked parents before any resolution could hide their presence."""
     candidate = path if path.is_absolute() else repository / path
     try:
@@ -594,7 +730,12 @@ def _scoped_path(repository: Path, path: Path) -> Path:
     current = repository
     for part in relative.parts:
         current = current / part
-        info = current.lstat()
+        try:
+            info = current.lstat()
+        except FileNotFoundError:
+            if allow_missing:
+                continue
+            raise
         if stat.S_ISLNK(info.st_mode) or (stat.S_ISREG(info.st_mode) and info.st_nlink != 1):
             raise ArtifactError("scoped artifact paths must not contain symlinks or hardlinks")
     return candidate
@@ -621,6 +762,17 @@ def scoped_manifest_context(repository: Path, matrix_path: Path, *, scope: str,
                    key=lambda lane: (tuple(map(int, lane.identity.minecraft.split("."))), lane.identity.loader))
     commit = git_commit(repo)
     tree = git_tree(repo, commit)
+    # Reuse the runner's raw tracked/untracked input audit; Git index flags and
+    # clean filters cannot hide changed compilation bytes from schema3 provenance.
+    from scripts.release.build_matrix import BuildProcessError, source_snapshot
+    try:
+        snapshot = source_snapshot(repo)
+    except (OSError, subprocess.SubprocessError, BuildProcessError) as exc:
+        raise ArtifactError(f"cannot authenticate scoped source bytes: {exc}") from exc
+    files = {row["path"]: row for row in snapshot["files"]}
+    if (snapshot["dirty"] or snapshot["commit"] != commit or snapshot["tree"] != tree
+            or any(files.get(row["path"], {}).get("sha256") != row["sha256"] for row in records.values())):
+        raise ArtifactError("scoped source/input bytes differ from the exact committed tree")
     nodes = [lane.identity.artifact_node for lane in lanes]
     header = {"schema_version": 3, **records, "git_commit": commit, "git_tree": tree,
               "release_branch": document.branch_name,
