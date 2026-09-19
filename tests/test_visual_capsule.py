@@ -44,6 +44,7 @@ from e2e.visual_review_output import (
     write_normalized_review,
 )
 from scripts.release.matrix import load_matrix, matrix_sha256
+from tests.matrix_fixtures import schema1_source_matrix
 from scripts.ci.tests.matrix_fixtures import (
     canonical_integration_matrix,
     reference_runtime,
@@ -52,7 +53,7 @@ from scripts.ci.tests.matrix_fixtures import (
 
 
 REPO = Path(__file__).resolve().parents[1]
-MATRIX_PATH = REPO / "release" / "release-matrix.json"
+MATRIX_PATH = schema1_source_matrix()
 CONTRACT_PATH = REPO / "e2e" / "scenario-contract.json"
 PRODUCTION_SHA = "1" * 64
 HARNESS_SHA = "2" * 64

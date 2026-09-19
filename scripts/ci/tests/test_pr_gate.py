@@ -15,8 +15,7 @@ from unittest import mock
 from scripts.ci.e2e_job_graph import expected_jobs
 from scripts.ci.e2e_fanin import aggregate_artifact_name
 from scripts.ci.loader_bootstrap import HARNESS_BINDING
-from scripts.ci.tests.matrix_fixtures import schema2_configuration
-from tests.matrix_fixtures import SCHEMA1_MATRIX_PATH
+from scripts.ci.tests.matrix_fixtures import SCHEMA1_MATRIX_PATH, schema2_configuration
 from scripts.ci.pr_gate import (
     CONTROLLER_UPGRADE_REQUIRED,
     CONTEXTS,

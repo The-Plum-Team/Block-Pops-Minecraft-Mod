@@ -16,7 +16,7 @@ from scripts.ci.sync_merge import (
     branch_specific_loader_roots,
     create_sync_merge,
 )
-from scripts.ci.tests.matrix_fixtures import canonical_integration_matrix
+from scripts.ci.tests.matrix_fixtures import canonical_integration_matrix, schema1_matrix
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -36,7 +36,7 @@ class SyncRepository:
         (root / "gradle").mkdir()
         (root / "common/src/e2e/java/com/theplumteam/e2e").mkdir(parents=True)
         (root / "e2e/server-template/datapack").mkdir(parents=True)
-        self.release = json.loads((REPO / MATRIX_PATH).read_text("utf-8"))
+        self.release = schema1_matrix()
         self.integration = canonical_integration_matrix(self.release)
         (root / MATRIX_PATH).write_text(json.dumps(self.integration, indent=2) + "\n", encoding="utf-8")
         (root / "gradle/verification-metadata.xml").write_text(

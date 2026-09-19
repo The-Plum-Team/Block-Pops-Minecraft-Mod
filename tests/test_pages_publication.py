@@ -37,10 +37,11 @@ from scripts.pages.rotate_artifacts import (
 )
 from scripts.pages.select_artifact import Artifact, SelectionError, select
 from scripts.release.matrix import load_matrix
+from tests.matrix_fixtures import schema1_source_matrix
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-MATRIX_PATH = REPOSITORY / "release" / "release-matrix.json"
+MATRIX_PATH = schema1_source_matrix()
 MATRIX = load_matrix(MATRIX_PATH)
 ACTIVE_BRANCH = MATRIX["branch"]["name"]
 CANONICAL_BRANCH = MATRIX["branch"]["canonical"]

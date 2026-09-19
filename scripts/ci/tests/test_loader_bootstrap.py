@@ -19,8 +19,7 @@ from scripts.ci.loader_bootstrap import (
     validate_transition,
 )
 from scripts.release.matrix import load_matrix
-from scripts.ci.tests.matrix_fixtures import schema2_configuration
-from tests.matrix_fixtures import SCHEMA1_MATRIX_PATH
+from scripts.ci.tests.matrix_fixtures import SCHEMA1_MATRIX_PATH, schema2_configuration
 
 
 REPO = Path(__file__).resolve().parents[3]

@@ -1,4 +1,9 @@
-"""Protected branch-portable matrix fixtures for shared controller tests."""
+"""Protected branch-portable matrix fixtures for shared controller tests.
+
+The frozen schema1 JSON contains Git blob 14ccfa09c5fd292a79926c3e30309eb55dbb3b6d
+from before preparing enrollment. Hash its checkout bytes, not the historical blob;
+this test data is never production authority or release qualification.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +12,12 @@ import json
 from pathlib import Path
 from typing import Any
 
-from tests.matrix_fixtures import schema1_matrix
+SCHEMA1_MATRIX_PATH = Path(__file__).resolve().parents[3] / "tests/fixtures/release-matrix-schema1.json"
+
+
+def schema1_matrix() -> dict[str, Any]:
+    """Return independent frozen input without importing candidate-owned test code."""
+    return json.loads(SCHEMA1_MATRIX_PATH.read_bytes())
 
 
 def canonical_integration_matrix(source: dict[str, Any]) -> dict[str, Any]:

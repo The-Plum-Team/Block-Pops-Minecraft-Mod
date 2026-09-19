@@ -11,9 +11,8 @@ import unittest
 from pathlib import Path
 
 from scripts.ci import matrix_scope
-from scripts.ci.tests.matrix_fixtures import schema2_configuration
+from scripts.ci.tests.matrix_fixtures import schema1_matrix, schema2_configuration
 from scripts.release.matrix import MatrixError
-from tests.matrix_fixtures import schema1_matrix
 
 REPO = Path(__file__).resolve().parents[3]
 

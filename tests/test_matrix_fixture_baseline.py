@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from scripts.release.matrix import load_matrix, load_matrix_document
-from tests.matrix_fixtures import SCHEMA1_MATRIX_PATH, schema1_matrix
+from tests.matrix_fixtures import SCHEMA1_MATRIX_PATH, schema1_matrix, schema1_source_matrix
 
 
 class MatrixFixtureBaselineTests(unittest.TestCase):
@@ -23,6 +23,13 @@ class MatrixFixtureBaselineTests(unittest.TestCase):
         document = load_matrix_document(path)
         self.assertTrue(document.inventory.sources_checked)
         self.assertTrue(document.select_lanes())
+
+    def test_legacy_source_fixture_preserves_raw_matrix_and_source_validation(self):
+        path = schema1_source_matrix()
+        self.assertEqual(SCHEMA1_MATRIX_PATH.read_bytes(), path.read_bytes())
+        self.assertEqual(schema1_matrix(), load_matrix(path))
+        self.assertTrue(load_matrix_document(path).inventory.sources_checked)
+        self.assertEqual(path, schema1_source_matrix())
 
 
 if __name__ == "__main__":

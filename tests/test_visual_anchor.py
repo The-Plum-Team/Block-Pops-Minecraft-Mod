@@ -18,6 +18,7 @@ from scripts.ci.tests.matrix_fixtures import (
 )
 from scripts.pages import evidence, visual_anchor
 from scripts.release.matrix import load_matrix
+from tests.matrix_fixtures import schema1_source_matrix
 from tests.test_pages_publication import (
     COMMIT,
     REPO_NAME,
@@ -29,7 +30,7 @@ from tests.test_pages_publication import (
 
 
 REPO = Path(__file__).resolve().parents[1]
-BRANCH_MATRIX_PATH = REPO / "release" / "release-matrix.json"
+BRANCH_MATRIX_PATH = schema1_source_matrix()
 
 
 class VisualAnchorTests(unittest.TestCase):

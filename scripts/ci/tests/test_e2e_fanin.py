@@ -28,7 +28,7 @@ from scripts.ci.e2e_fanin import (
     validate_lane,
 )
 from scripts.release.matrix import load_matrix
-from tests.matrix_fixtures import SCHEMA1_MATRIX_PATH
+from scripts.ci.tests.matrix_fixtures import SCHEMA1_MATRIX_PATH
 
 
 REPO = Path(__file__).resolve().parents[3]
