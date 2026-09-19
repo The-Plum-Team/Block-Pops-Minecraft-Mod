@@ -92,9 +92,29 @@ def expected_jobs(
     *,
     event: str = "workflow_dispatch",
     source_branch: str | None = None,
+    scope: str | None = None,
+    artifact_node: str | None = None,
 ) -> tuple[ExpectedJob, ...]:
+    """Derive jobs from caller-owned selection; observed jobs never select scope.
+
+    Explicit selection is schema2-only. Individual lanes require a dispatch;
+    existing scheduled/PR gates cannot be reduced to one lane. Build job names
+    alone do not prove lane coverage, which requires verified bundle/report data.
+    """
     if event not in SOURCE_EVENTS:
         raise JobGraphError(f"unsupported protected source event {event!r}")
+    if workflow not in {"build-gate.yml", "on-demand-e2e.yml"}:
+        raise JobGraphError("unsupported protected workflow")
+    matrix = None
+    selection = {}
+    if scope is not None or artifact_node is not None:
+        if scope is None or (scope == "lane" and event != "workflow_dispatch"):
+            raise JobGraphError("explicit lane selection requires scope and workflow_dispatch")
+        matrix = load_matrix_document(matrix_path, validate_sources=False)
+        if matrix.inventory.schema_version != 2:
+            raise JobGraphError("explicit job scope requires a schema2 matrix")
+        selection = {"scope": scope, "artifact_node": artifact_node}
+        matrix.select_lanes(**selection)
     if workflow == "build-gate.yml":
         return (
             ExpectedJob(BUILD_IDENTITY, "success"),
@@ -102,11 +122,10 @@ def expected_jobs(
             ExpectedJob(BUILD_GATE, "success"),
             ExpectedJob(BUILD_ATTEST, "skipped"),
         )
-    if workflow != "on-demand-e2e.yml":
-        raise JobGraphError("unsupported protected workflow")
-    matrix = load_matrix_document(matrix_path, validate_sources=False)
+    if matrix is None:
+        matrix = load_matrix_document(matrix_path, validate_sources=False)
     projection = "scheduled-anchors" if event == "schedule" else "pr-anchors"
-    rows = matrix.projection(projection)["include"]
+    rows = matrix.projection(projection, **selection)["include"]
     if not rows:
         raise JobGraphError("authoritative E2E matrix is empty")
     scenario = tuple(sorted(row["id"] + SCENARIO_SUFFIX for row in rows))
@@ -136,6 +155,8 @@ def expected_names(
     *,
     event: str = "workflow_dispatch",
     source_branch: str | None = None,
+    scope: str | None = None,
+    artifact_node: str | None = None,
 ) -> tuple[str, ...]:
     """Compatibility projection for callers that only display the exact names."""
 
@@ -146,6 +167,8 @@ def expected_names(
             workflow,
             event=event,
             source_branch=source_branch,
+            scope=scope,
+            artifact_node=artifact_node,
         )
     )
 
@@ -234,6 +257,9 @@ def main(argv: list[str] | None = None) -> int:
         default="workflow_dispatch",
     )
     parser.add_argument("--source-branch")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--scope", choices=("legacy", "full"))
+    selection.add_argument("--artifact-node")
     parser.add_argument("--run-attempt", type=int, required=True)
     args = parser.parse_args(argv)
     try:
@@ -244,6 +270,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.workflow,
                 event=args.event,
                 source_branch=args.source_branch,
+                scope="lane" if args.artifact_node is not None else args.scope,
+                artifact_node=args.artifact_node,
             ),
             run_attempt=args.run_attempt,
         )
