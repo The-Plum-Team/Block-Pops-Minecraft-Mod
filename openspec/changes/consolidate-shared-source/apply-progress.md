@@ -752,3 +752,8 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 
 - A separate clean checkout of `3a29d5c91176a83d5f225f1e8c9858c32a27c62f`, tree `d572c419f1d51905431580e596942c95914673a0`, passes379 Python tests with7 explicit real-Gradle opt-ins skipped and308 CI tests. Both suites ran without Gradle and left the checkout clean; commands/results/log hashes are `build/diagnostics/integrated-3a29d5c/result.json`. The new network probes passed separately against real APIs/backends; this suite does not launch Minecraft.
 - Root again verified original `.gitignore`/`.pi` bytes and the last seven work-unit sizes, all below400 authored lines. This milestone covers committed S2C/C2S/registration, branch inspection and producer metadata; subsequent dependency additions and Pages authentication work require their own checks. No remote mutation occurred.
+
+## Task 9j — admit the resolved Architectury Fabric backend
+
+- Retry08 reached Fabric1.21.1 configuration and stopped in 14.08 seconds before Java tasks on Architectury Fabric13.0.8 JAR/module checksums. Fresh official HTTPS artifacts and SHA256 sidecars match historical pins, prior runtime research and private resolved bytes; root independently rehashed both. Inputs and the 19 original cached variants remain unchanged, and owned processes closed.
+- This unit adds exactly those two records in eight XML lines, preserving all prior bytes. All 18 policy tests pass. Metadata SHA256 is `df94ced4e3b81ba80f02c3d60c07aada4077547ad28d0a0727cf972c79128e48`; receipts are `build/diagnostics/fabric-1.21.1-probe/attempt08-{official,admission}-review.json`. No sources or unobserved dependencies are admitted. Rollback removes this component; modern compilation and gameplay remain unqualified.
