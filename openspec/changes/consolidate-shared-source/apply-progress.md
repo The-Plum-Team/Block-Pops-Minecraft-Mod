@@ -495,3 +495,8 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 
 - The packaged-runtime action derives its artifact selection from the validated matrix and passes it to both staged verification and the orchestrator. The fresh credentialless lane validator independently derives that selection from the sealed checkout; projection/row inputs retain their existing explicit bindings.
 - Root reproduced35 action/workflow/boundary tests. Executed shell fragments confirm schema1 omission and exact legacy/full forwarding, unchanged quoted row/scenario values, and no display/game launch on invalid scope or rejected bundle. Upload conditions and environment allowlists remain unchanged. This is local action validation, not a Minecraft or GitHub run. Rollback is action and corresponding tests.
+
+## Task 12l — scoped authoritative workflow fan-in
+
+- The aggregate job now derives selection from the candidate matrix and forwards it to creation. Its fresh sealed validator derives selection independently, verifies scoped artifacts against the explicit local checkout and retains exact source-run fields plus the existing raw manifest/receipt digest comparison. Schema1 keeps its structural aggregate interface.
+- Root reproduced32 fan-in-shell/security/job-graph tests. Executed snippets cover all default scopes, quoted checkout paths, exact source identity and rejection of unknown scope or crossed manifest digest. Upload authorization/conditions are unchanged. The separate public-evidence consumer still needs its bundle adapter; no CI/game/publication run is claimed. Rollback is this aggregate-job adapter and shell tests.

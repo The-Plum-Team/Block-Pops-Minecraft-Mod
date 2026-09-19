@@ -559,20 +559,29 @@ jobs:
             --pass-env BLOCKPOPS_REPOSITORY --pass-env BLOCKPOPS_SOURCE_BRANCH \
             --pass-env BLOCKPOPS_RUN_ID --pass-env BLOCKPOPS_RUN_ATTEMPT \
             --pass-env BLOCKPOPS_PROJECTION -- \
-            python3 scripts/ci/e2e_fanin.py create \
-              --input packaged-e2e-lanes \
-              --output packaged-e2e-aggregate \
-              --matrix release/release-matrix.json \
-              --contract e2e/scenario-contract.json \
-              --stage build/release \
-              --artifact-manifest build/release/artifacts.json \
-              --repository "$BLOCKPOPS_REPOSITORY" \
-              --source-branch "$BLOCKPOPS_SOURCE_BRANCH" \
-              --commit "$BLOCKPOPS_TESTED_SHA" \
-              --tree "$BLOCKPOPS_TREE" \
-              --run-id "$BLOCKPOPS_RUN_ID" \
-              --run-attempt "$BLOCKPOPS_RUN_ATTEMPT" \
-              --projection "$BLOCKPOPS_PROJECTION"
+            bash -euo pipefail -c '
+              scope="$(python3 scripts/ci/matrix_scope.py --matrix release/release-matrix.json)"
+              fanin_command=(python3 scripts/ci/e2e_fanin.py create \
+                --input packaged-e2e-lanes \
+                --output packaged-e2e-aggregate \
+                --matrix release/release-matrix.json \
+                --contract e2e/scenario-contract.json \
+                --stage build/release \
+                --artifact-manifest build/release/artifacts.json \
+                --repository "$BLOCKPOPS_REPOSITORY" \
+                --source-branch "$BLOCKPOPS_SOURCE_BRANCH" \
+                --commit "$BLOCKPOPS_TESTED_SHA" \
+                --tree "$BLOCKPOPS_TREE" \
+                --run-id "$BLOCKPOPS_RUN_ID" \
+                --run-attempt "$BLOCKPOPS_RUN_ATTEMPT" \
+                --projection "$BLOCKPOPS_PROJECTION")
+              case "$scope" in
+                unscoped) ;;
+                legacy|full) fanin_command+=(--scope "$scope") ;;
+                *) exit 2 ;;
+              esac
+              "${fanin_command[@]}"
+            '
 
       - name: Kill and lock the evidence decoder before aggregate upload
         id: seal-fanin
@@ -611,7 +620,8 @@ jobs:
             --pass-env BLOCKPOPS_PROJECTION -- \
             bash -euo pipefail -c '
               repository="$1"
-              python3 scripts/ci/e2e_fanin.py validate \
+              scope="$(python3 scripts/ci/matrix_scope.py --matrix "$repository/release/release-matrix.json")"
+              fanin_command=(python3 scripts/ci/e2e_fanin.py validate \
                 --input "$repository/packaged-e2e-aggregate" \
                 --matrix "$repository/release/release-matrix.json" \
                 --contract "$repository/e2e/scenario-contract.json" \
@@ -621,13 +631,25 @@ jobs:
                 --tree "$BLOCKPOPS_TREE" \
                 --run-id "$BLOCKPOPS_RUN_ID" \
                 --run-attempt "$BLOCKPOPS_RUN_ATTEMPT" \
-                --projection "$BLOCKPOPS_PROJECTION"
-              python3 scripts/release/verify_release.py \
+                --projection "$BLOCKPOPS_PROJECTION")
+              verify_command=(python3 scripts/release/verify_release.py \
                 --repository "$repository" \
                 --matrix "$repository/release/release-matrix.json" \
                 --stage "$repository/build/release" \
                 --manifest "$repository/build/release/artifacts.json" \
-                --verify-staged
+                --verify-staged)
+              case "$scope" in
+                unscoped) ;;
+                legacy|full)
+                  fanin_command+=(--scope "$scope" --artifact-repository "$repository" \
+                    --stage "$repository/build/release" \
+                    --artifact-manifest "$repository/build/release/artifacts.json")
+                  verify_command+=(--scope "$scope")
+                  ;;
+                *) exit 2 ;;
+              esac
+              "${fanin_command[@]}"
+              "${verify_command[@]}"
               actual_manifest="$(sha256sum \
                 "$repository/build/release/artifacts.json" | cut -d" " -f1)"
               receipt_manifest="$(jq -er .artifact_manifest.sha256 \
