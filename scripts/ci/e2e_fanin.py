@@ -863,7 +863,7 @@ def _validate_lane_payload(
         f"{lane.artifact_name} summary",
         {"schema_version", "contract_sha256", "results", "runtime_store"} | set(coverage or {}),
     )
-    if summary["schema_version"] != 1 or summary["contract_sha256"] != contract.sha256:
+    if type(summary["schema_version"]) is not int or summary["schema_version"] != 1 or summary["contract_sha256"] != contract.sha256:
         raise FanInError(f"{lane.artifact_name} summary identity is stale")
     if coverage and _json_bytes({key: summary[key] for key in coverage}) != _json_bytes(coverage):
         raise FanInError(f"{lane.artifact_name} summary execution scope is stale")
@@ -896,7 +896,7 @@ def _validate_lane_payload(
         f"{lane.artifact_name} runtime store",
         {"schema_version", "metrics"},
     )
-    if runtime_store["schema_version"] != 1 or _runtime_metrics(
+    if type(runtime_store["schema_version"]) is not int or runtime_store["schema_version"] != 1 or _runtime_metrics(
         runtime_store["metrics"], f"{lane.artifact_name}.runtime-store.metrics"
     ) != metrics:
         raise FanInError(f"{lane.artifact_name} runtime-store records disagree")
@@ -1083,13 +1083,14 @@ def _optional_expected_identity(
     return identity
 
 
-def _validate_receipt_shape(value: Any) -> tuple[SourceIdentity, str]:
+def _validate_receipt_shape(value: Any, *, scoped: bool = False) -> tuple[SourceIdentity, str]:
     """Validate every primitive in the non-self-referential aggregate receipt."""
 
     receipt = _object(
         value,
         "aggregate receipt",
-        {"schema_version", "kind", "provenance", "artifact_manifest", "lanes", "files"},
+        {"schema_version", "kind", "provenance", "artifact_manifest", "lanes", "files"}
+        | ({"aggregate_scope"} if scoped else set()),
     )
     if type(receipt["schema_version"]) is not int or receipt["schema_version"] != SCHEMA_VERSION:
         raise FanInError("aggregate receipt schema version is unsupported")
@@ -1144,7 +1145,7 @@ def _validate_receipt_shape(value: Any) -> tuple[SourceIdentity, str]:
     _canonical_path(artifact["path"], "aggregate receipt artifact manifest path")
     if (
         type(artifact["schema_version"]) is not int
-        or artifact["schema_version"] != ARTIFACT_SCHEMA_VERSION
+        or artifact["schema_version"] != (3 if scoped else ARTIFACT_SCHEMA_VERSION)
     ):
         raise FanInError("aggregate receipt artifact manifest schema is stale")
     manifest_sha = _digest(
@@ -1382,10 +1383,22 @@ def validate_aggregate(
     expected_tree: str | None = None,
     expected_run_id: int | None = None,
     expected_run_attempt: int | None = None,
+    scope: str | None = None,
+    artifact_node: str | None = None,
+    artifact_manifest: dict[str, Any] | None = None,
+    artifact_manifest_sha256: str | None = None,
 ) -> dict[str, Any]:
+    """Validate exact aggregate coverage, independently of each lane's execution coverage.
+
+    Schema2 requires caller-selected scope and an already verified bundle plus its raw digest.
+    aggregate_scope covers every selected bundle lane and the exact projected scenarios; a
+    per-lane execution_scope cannot substitute for it. Source authentication still requires
+    the complete external expected-identity group; structural validation alone grants none.
+    """
     if projection not in {"pr-anchors", "scheduled-anchors"}:
         raise FanInError("projection must be pr-anchors or scheduled-anchors")
-    matrix = load_matrix(matrix_path, validate_sources=False)
+    matrix, matrix_bytes = read_secure_json(matrix_path, label="aggregate matrix", max_bytes=MAX_MATRIX_BYTES)
+    document = _selected_document(matrix, scope=scope, artifact_node=artifact_node)
     contract = load_contract(contract_path)
     externally_expected = _optional_expected_identity(
         repository=expected_repository,
@@ -1396,7 +1409,20 @@ def validate_aggregate(
         run_attempt=expected_run_attempt,
         projection=projection,
     )
-    structural_lanes = expected_lanes(matrix, contract, projection)
+    structural_lanes = expected_lanes(matrix, contract, projection, scope=scope, artifact_node=artifact_node)
+    scoped = document.inventory.schema_version == 2
+    coverage = {}
+    if scoped:
+        expected_manifest_sha = _digest(artifact_manifest_sha256, "expected scoped manifest sha256")
+        bound_hashes, artifact_scope = _scoped_lane_inputs(document, artifact_manifest,
+            matrix_digest=_sha256(matrix_bytes), contract=contract, scope=scope, artifact_node=artifact_node)
+        if expected_hashes is not None and expected_hashes != bound_hashes:
+            raise FanInError("external hashes disagree with the verified scoped bundle")
+        expected_hashes = bound_hashes
+        coverage = {"aggregate_scope": {**artifact_scope, "projection": projection,
+                                        "scenarios": list(structural_lanes[0].scenarios)}}
+    elif artifact_manifest is not None or artifact_manifest_sha256 is not None:
+        raise FanInError("external scoped bundle inputs require a schema2 matrix")
     root = root.absolute()
     if expected_hashes is not None and set(expected_hashes) != {
         lane.artifact_node for lane in structural_lanes
@@ -1431,11 +1457,15 @@ def validate_aggregate(
         raise FanInError("aggregate receipt must be an object")
     if receipt_bytes != _json_bytes(receipt):
         raise FanInError("aggregate receipt JSON is not canonical")
-    source_identity, artifact_manifest_sha256 = _validate_receipt_shape(receipt)
+    source_identity, observed_manifest_sha = _validate_receipt_shape(receipt, scoped=scoped)
     if source_identity.projection != projection:
         raise FanInError("aggregate receipt projection is stale")
     if externally_expected is not None and source_identity != externally_expected:
         raise FanInError("aggregate receipt source identity is stale")
+    if scoped and (observed_manifest_sha != expected_manifest_sha
+            or source_identity.commit != artifact_manifest["git_commit"]
+            or source_identity.tree != artifact_manifest["git_tree"]):
+        raise FanInError("aggregate source or manifest digest differs from the verified scoped bundle")
     lanes = expected_lanes(
         matrix,
         contract,
@@ -1443,6 +1473,7 @@ def validate_aggregate(
         artifact_prefix=run_artifact_prefix(
             source_identity.commit, source_identity.run_attempt
         ),
+        scope=scope, artifact_node=artifact_node,
     )
 
     all_results: list[dict[str, Any]] = []
@@ -1483,24 +1514,26 @@ def validate_aggregate(
     summary = _object(
         _json(root, "summary.json", "aggregate summary"),
         "aggregate summary",
-        {"schema_version", "contract_sha256", "results", "runtime_store"},
+        {"schema_version", "contract_sha256", "results", "runtime_store"} | set(coverage),
     )
-    if summary["schema_version"] != 1 or summary["contract_sha256"] != contract.sha256 or summary["results"] != all_results:
+    if type(summary["schema_version"]) is not int or summary["schema_version"] != 1 or summary["contract_sha256"] != contract.sha256 or summary["results"] != all_results:
         raise FanInError("aggregate summary identity/results are stale")
+    if coverage and _json_bytes({key: summary[key] for key in coverage}) != _json_bytes(coverage):
+        raise FanInError("aggregate summary coverage is stale")
     aggregate_metrics = _runtime_metrics(summary["runtime_store"], "aggregate summary.runtime_store")
     runtime_store = _object(
         _json(root, "runtime-store.json", "aggregate runtime store"),
         "aggregate runtime store",
         {"schema_version", "metrics"},
     )
-    if runtime_store["schema_version"] != 1 or _runtime_metrics(
+    if type(runtime_store["schema_version"]) is not int or runtime_store["schema_version"] != 1 or _runtime_metrics(
         runtime_store["metrics"], "aggregate runtime-store.metrics"
     ) != aggregate_metrics:
         raise FanInError("aggregate runtime telemetry disagrees")
     resolved = _object(
         _json(root, "resolved-matrix.json", "aggregate resolved matrix"),
         "aggregate resolved matrix",
-        {"schema_version", "rows"},
+        {"schema_version", "rows"} | set(coverage),
     )
     expected_rows = [
         {
@@ -1512,7 +1545,7 @@ def validate_aggregate(
         }
         for result in all_results
     ]
-    if resolved != {"schema_version": 1, "rows": expected_rows}:
+    if _json_bytes(resolved) != _json_bytes({"schema_version": 1, "rows": expected_rows, **coverage}):
         raise FanInError("aggregate resolved matrix is stale")
 
     non_self_records = [
@@ -1537,8 +1570,8 @@ def validate_aggregate(
         ),
         "artifact_manifest": {
             "path": "build/release/artifacts.json",
-            "schema_version": ARTIFACT_SCHEMA_VERSION,
-            "sha256": artifact_manifest_sha256,
+            "schema_version": 3 if scoped else ARTIFACT_SCHEMA_VERSION,
+            "sha256": observed_manifest_sha,
             "commit": source_identity.commit,
             "tree": source_identity.tree,
         },
@@ -1546,13 +1579,17 @@ def validate_aggregate(
             _manifest_lane(lane, observed_hashes[lane.artifact_node]) for lane in lanes
         ],
         "files": non_self_records,
+        **coverage,
     }
-    if receipt != expected_receipt:
+    if _json_bytes(receipt) != _json_bytes(expected_receipt):
         raise FanInError("aggregate receipt identity or non-self inventory is stale")
     if _read_file(root, AGGREGATE_RECEIPT) != receipt_bytes:
         raise FanInError("aggregate receipt changed during validation")
     if _inventory(root) != (directories, actual):
         raise FanInError("aggregate changed during validation")
+    if (read_secure_json(matrix_path, label="final aggregate matrix", max_bytes=MAX_MATRIX_BYTES)[1] != matrix_bytes
+            or load_contract(contract_path).sha256 != contract.sha256):
+        raise FanInError("aggregate matrix or contract changed during validation")
     return receipt
 
 
