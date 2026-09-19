@@ -399,6 +399,12 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     public void load(CompoundTag tag) {
         super.load(tag);
     //? }
+    //? if >=1.21 {
+    /*    loadForItemRendering(tag);
+    }
+
+    public void loadForItemRendering(CompoundTag tag) {
+    *///? }
         this.isOpen = tag.contains("IsOpen") ? tag.getBoolean("IsOpen") : false;
         if (tag.contains("FigureId")) this.figureId = tag.getString("FigureId");
         if (tag.contains("IsFigureExtracted")) this.isFigureExtracted = tag.getBoolean("IsFigureExtracted");

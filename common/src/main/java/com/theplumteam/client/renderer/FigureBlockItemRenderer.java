@@ -4,6 +4,9 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.theplumteam.block.FigureBlock;
 import com.theplumteam.blockentity.FigureBlockEntity;
 import com.theplumteam.item.GeoBlockItem;
+//? if >=1.21 {
+/*import com.theplumteam.item.BlockEntityItemData;
+*///? }
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -35,12 +38,19 @@ public class FigureBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
             }
 
             // Load NBT data from ItemStack to ensure figure data is available for rendering
+            //? if >=1.21 {
+            /*CompoundTag blockEntityTag = BlockEntityItemData.read(stack);
+            if (blockEntityTag != null) {
+                renderEntity.loadForItemRendering(blockEntityTag);
+            }
+            *///? } else {
             if (stack.hasTag()) {
                 CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
                 if (blockEntityTag != null) {
                     renderEntity.load(blockEntityTag);
                 }
             }
+            //? }
 
             // Apply transformations for item rendering
             poseStack.pushPose();
@@ -73,7 +83,11 @@ public class FigureBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
             }
 
             // Get the partial tick time for smooth animations
+            //? if >=1.21 {
+            /*float partialTick = Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true);
+            *///? } else {
             float partialTick = Minecraft.getInstance().getFrameTime();
+            //? }
 
             // Render using FigureBlockRenderer
             this.renderer.render(renderEntity, partialTick, poseStack, bufferSource, packedLight, packedOverlay);

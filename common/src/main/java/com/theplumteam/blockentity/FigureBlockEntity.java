@@ -179,6 +179,12 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     public void load(CompoundTag tag) {
         super.load(tag);
     //? }
+    //? if >=1.21 {
+    /*    loadForItemRendering(tag);
+    }
+
+    public void loadForItemRendering(CompoundTag tag) {
+    *///? }
         if (tag.contains("FigureId")) this.figureId = tag.getString("FigureId");
         if (tag.contains("CollectionId")) this.collectionId = tag.getString("CollectionId");
         if (tag.contains("AlternativeSkinIndex")) this.alternativeSkinIndex = tag.getInt("AlternativeSkinIndex");

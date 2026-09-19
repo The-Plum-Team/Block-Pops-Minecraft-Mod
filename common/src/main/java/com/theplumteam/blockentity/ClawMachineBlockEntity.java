@@ -69,6 +69,12 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
     public void load(CompoundTag tag) {
         super.load(tag);
     //? }
+    //? if >=1.21 {
+    /*    loadForItemRendering(tag);
+    }
+
+    public void loadForItemRendering(CompoundTag tag) {
+    *///? }
         if (tag.contains("CollectionId")) {
             this.collectionId = tag.getString("CollectionId");
         }

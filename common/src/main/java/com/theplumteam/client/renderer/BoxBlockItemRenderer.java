@@ -5,6 +5,9 @@ import com.mojang.math.Axis;
 import com.theplumteam.block.BoxBlock;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.item.GeoBlockItem;
+//? if >=1.21 {
+/*import com.theplumteam.item.BlockEntityItemData;
+*///? }
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -39,6 +42,14 @@ public class BoxBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
 
             // Load NBT data from ItemStack FIRST before any rendering
             // This ensures isOpen is set correctly before the animation controller evaluates
+            //? if >=1.21 {
+            /*CompoundTag blockEntityTag = BlockEntityItemData.read(stack);
+            if (blockEntityTag != null) {
+                renderEntity.loadForItemRendering(blockEntityTag);
+            } else if (stack.getComponentsPatch().isEmpty()) {
+                renderEntity.loadForItemRendering(new CompoundTag());
+            }
+            *///? } else {
             if (stack.hasTag()) {
                 CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
                 if (blockEntityTag != null) {
@@ -49,6 +60,7 @@ public class BoxBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
                 // This handles brand new boxes from creative menu
                 renderEntity.load(new CompoundTag());
             }
+            //? }
 
             // Apply transformations for item rendering
             poseStack.pushPose();
@@ -76,7 +88,11 @@ public class BoxBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
             }
 
             // Get the partial tick time for smooth animations
+            //? if >=1.21 {
+            /*float partialTick = Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true);
+            *///? } else {
             float partialTick = Minecraft.getInstance().getFrameTime();
+            //? }
 
             // Render using BoxBlockRenderer which includes figure face rendering
             this.renderer.render(renderEntity, partialTick, poseStack, bufferSource, packedLight, packedOverlay);
