@@ -860,6 +860,19 @@ def _validate_schema2_source_tree(repository: Path, routing: dict, artifacts: di
     root = repository.resolve()
     canonical, overlays = {}, {}
     for module, route in routing.items():
+        # Stonecutter's node-local src directory is an override input, not generated
+        # output. Only canonical roots and explicitly declared legacy overlays own sources.
+        versions = root / module / "versions"
+        if versions.is_symlink():
+            _fail(f"source inventory contains a linked version root: {versions}")
+        if versions.is_dir():
+            for node in versions.iterdir():
+                if node.is_symlink():
+                    _fail(f"source inventory contains a linked version node: {node}")
+                override = node / "src"
+                if override.exists() or override.is_symlink():
+                    if _source_files(root, override.relative_to(root).as_posix()):
+                        _fail(f"source inventory contains undeclared node overrides: {override}")
         for source_set, key in (("main", "canonical"), ("e2e", "e2e")):
             canonical[module, source_set] = _source_files(root, route[key])
         for overlay in route["overlays"]:

@@ -417,3 +417,8 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 
 - The packaged-runtime action now forwards its existing authoritative projection input to the orchestrator through the already-permitted `BLOCKPOPS_PROJECTION` variable. Runtime selection and fresh validation therefore use the same PR/scheduled projection; credential/account boundaries and upload conditions are unchanged.
 - Root reproduced33 workflow/security-boundary tests. This completes the action wiring for12b, without claiming a GitHub or game run. Schema2 artifact scope wiring remains pending. Rollback is action argument/environment plus its contract test.
+
+## Source-route correction — reject undeclared Stonecutter node overrides
+
+- Inspection of the pinned Stonecutter0.7.11 API confirmed that node-local `versions/<node>/src` is an override input, while generated sources live under `build/`. Schema2 source validation now rejects nonempty node overrides and linked version roots/nodes, preventing undeclared sources from bypassing canonical/legacy-overlay routing.
+- Root reproduced16 source/report tests, including main/E2E overrides, linked inputs and accepted generated build output/empty override directories. No source was moved and the Stonecutter game guard remains active. Rollback is this source-inventory check and tests.

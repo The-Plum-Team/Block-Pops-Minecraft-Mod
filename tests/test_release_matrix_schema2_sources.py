@@ -36,6 +36,36 @@ def repository(root: Path, matrix: dict) -> None:
 
 
 class Schema2SourceTests(unittest.TestCase):
+    def test_node_override_sources_cannot_bypass_canonical_or_declared_overlay_routes(self):
+        for module, source_set in (("common", "main"), ("fabric", "e2e")):
+            with self.subTest(module=module), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                matrix = schema2_matrix()
+                repository(root, matrix)
+                write(root, f"{module}/versions/1.20.1/build/generated/stonecutter/java/Generated.java")
+                override = root / module / "versions/1.20.1/src"
+                override.mkdir()
+                normalize_matrix_inventory(matrix, repository=root)
+                hidden = write(root, f"{module}/versions/1.20.1/src/{source_set}/java/Hidden.java")
+                with self.assertRaisesRegex(MatrixError, "undeclared node overrides"):
+                    normalize_matrix_inventory(matrix, repository=root)
+                hidden.unlink()
+                hidden.symlink_to(root / "common/src/main/java/demo/Shared.java")
+                with self.assertRaisesRegex(MatrixError, "symlink"):
+                    normalize_matrix_inventory(matrix, repository=root)
+
+    def test_version_directory_links_are_rejected_even_without_visible_override_sources(self):
+        for linked in ("versions", "versions/1.20.1"):
+            with self.subTest(linked=linked), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                matrix = schema2_matrix()
+                repository(root, matrix)
+                path = root / "common" / linked
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.symlink_to(root / "common/src", target_is_directory=True)
+                with self.assertRaisesRegex(MatrixError, "linked version"):
+                    normalize_matrix_inventory(matrix, repository=root)
+
     def test_current_canonical_main_and_harness_sources_exist(self):
         normalize_matrix_inventory(schema2_matrix(), repository=REPOSITORY)
 
