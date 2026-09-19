@@ -51,6 +51,14 @@ def schema2_matrix() -> dict[str, object]:
         "mode": "preparing",
         "legacy_nodes": ["fabric-1.20.1", "forge-1.20.1"],
     }
+    for artifact in matrix["artifacts"]:
+        artifact.update(
+            mod_version=matrix["project"]["mod_version"],
+            build_layout="legacy",
+            gradle_java=21,
+            repository_family=artifact["loader"],
+            source_routes=["common", artifact["loader"]],
+        )
     return matrix
 
 
@@ -124,9 +132,8 @@ class ReleaseMatrixSchema2FoundationTests(unittest.TestCase):
 
         shared = schema2_matrix()
         shared["migration"] = {"mode": "shared", "legacy_nodes": []}
-        self.assertEqual(
-            "shared", normalize_matrix_inventory(shared).migration_mode
-        )
+        with self.assertRaises(MatrixError):
+            normalize_matrix_inventory(shared)
 
 
 if __name__ == "__main__":

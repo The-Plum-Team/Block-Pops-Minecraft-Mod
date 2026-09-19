@@ -84,6 +84,9 @@ RUNTIME_KEYS = frozenset(
     }
 )
 SCHEMA2_ROOT_KEYS = ROOT_KEYS | {"targets", "migration"}
+SCHEMA2_ARTIFACT_KEYS = ARTIFACT_KEYS | {
+    "mod_version", "build_layout", "gradle_java", "repository_family", "source_routes",
+}
 TARGET_KEYS = frozenset({"artifact_node", "minecraft", "loader"})
 EXPECTED_TARGETS = frozenset(
     {
@@ -190,19 +193,26 @@ def valid_branch_name(name: Any) -> bool:
     return True
 
 
-def _validate_schema1_matrix(
+def _validate_configuration(
     data: Any,
     *,
     contract: ScenarioContract | None = None,
     repository: Path | None = None,
+    inventory: MatrixInventory | None = None,
 ) -> dict[str, Any]:
+    schema2 = inventory is not None
     try:
-        root = require_object(data, label="release matrix", required=ROOT_KEYS)
+        root = require_object(
+            data, label="release matrix",
+            required=SCHEMA2_ROOT_KEYS if schema2 else ROOT_KEYS,
+        )
     except SecureJsonError as exc:
         raise MatrixError(str(exc)) from exc
-    if root["schema_version"] != 1:
-        _fail("release matrix schema_version must be 1")
+    if root["schema_version"] != (2 if schema2 else 1):
+        _fail("release matrix schema_version disagrees with its inventory")
     gradle_java = _integer(root["gradle_java"], "gradle_java", minimum=21)
+    if schema2 and gradle_java != 21:
+        _fail("schema-2 gradle_java must be 21")
     lane_count = _integer(root["lane_count"], "lane_count")
 
     try:
@@ -265,7 +275,8 @@ def _validate_schema1_matrix(
     for index, raw in enumerate(artifacts):
         try:
             artifact = require_object(
-                raw, label=f"artifacts[{index}]", required=ARTIFACT_KEYS
+                raw, label=f"artifacts[{index}]",
+                required=SCHEMA2_ARTIFACT_KEYS if schema2 else ARTIFACT_KEYS,
             )
         except SecureJsonError as exc:
             raise MatrixError(str(exc)) from exc
@@ -281,9 +292,14 @@ def _validate_schema1_matrix(
         if node in by_node:
             _fail(f"duplicate artifact_node {node}")
         java = _integer(artifact["java"], f"artifact {node}.java", minimum=17)
+        if schema2:
+            _validate_schema2_artifact(artifact, root, inventory)
         no_remap = _boolean(artifact["no_remap"], f"artifact {node}.no_remap")
-        expected_task = f":{loader}:" + ("shadowJar" if no_remap else "remapJar")
-        expected_harness = f":{loader}:" + (
+        stonecutter = schema2 and artifact["build_layout"] == "stonecutter"
+        prefix = f":{loader}:{minecraft}:" if stonecutter else f":{loader}:"
+        output_root = f"{loader}/versions/{minecraft}" if stonecutter else loader
+        expected_task = prefix + ("shadowJar" if no_remap else "remapJar")
+        expected_harness = prefix + (
             "e2eHarnessJar" if no_remap else "remapE2EHarnessJar"
         )
         if artifact["gradle_task"] != expected_task:
@@ -292,10 +308,16 @@ def _validate_schema1_matrix(
             _fail(f"artifact {node} harness_task must be {expected_harness}")
         for key, marker in (("jar", "BlockPops - "), ("harness_jar", "BlockPops E2E - ")):
             path = _safe_path(artifact[key], f"artifact {node}.{key}")
-            if not path.startswith(f"{loader}/build/libs/") or minecraft not in Path(path).name:
+            if not path.startswith(f"{output_root}/build/libs/") or minecraft not in Path(path).name:
                 _fail(f"artifact {node}.{key} disagrees with the target Gradle layout")
             if marker not in Path(path).name:
                 _fail(f"artifact {node}.{key} has the wrong archive identity")
+            if schema2:
+                display = {"fabric": "Fabric", "forge": "Forge", "neoforge": "NeoForge"}[loader]
+                version = "{mod_version}" if key == "jar" else "0.0.0"
+                expected = f"{output_root}/build/libs/{marker}{display} - {minecraft}-{version}.jar"
+                if artifact[key] != expected:
+                    _fail(f"artifact {node}.{key} must be {expected}")
         metadata_required = (
             {"file", "minecraft", "loader", "architectury", "geckolib"}
         )
@@ -322,15 +344,19 @@ def _validate_schema1_matrix(
         artifact_java_versions.add(java)
 
     forge_family_loaders = active_loaders & {"forge", "neoforge"}
-    if len(forge_family_loaders) > 1:
+    if not schema2 and len(forge_family_loaders) > 1:
         _fail("a release branch cannot activate Forge and NeoForge together")
 
     if gradle_java < max(artifact_java_versions):
         _fail("gradle_java cannot be lower than an artifact Java toolchain")
 
-    if len(versions) != 1:
+    if not schema2 and len(versions) != 1:
         _fail("a release branch must contain exactly one Minecraft version")
-    only_version = next(iter(versions))
+    if schema2:
+        if not set(inventory.legacy_nodes) <= set(by_node):
+            _fail("preparing migration must configure both legacy nodes")
+        if inventory.migration_mode == "shared" and set(by_node) != set(inventory.target_nodes):
+            _fail("shared migration must configure every target")
     if root["unit_test_lane"] not in by_node:
         _fail("unit_test_lane must select an active artifact")
 
@@ -395,6 +421,8 @@ def _validate_schema1_matrix(
         artifact = by_node.get(node)
         if artifact is None or node in runtime_nodes:
             _fail(f"runtime row has unknown or duplicate artifact_node {node!r}")
+        if schema2:
+            _integer(runtime["java"], f"runtime {node}.java", minimum=17)
         for key in ("minecraft", "loader", "java"):
             if runtime[key] != artifact[key]:
                 _fail(f"runtime {node}.{key} disagrees with its artifact")
@@ -491,6 +519,32 @@ def _validate_schema1_matrix(
     return root
 
 
+def _validate_schema2_artifact(
+    artifact: dict[str, Any], root: dict[str, Any], inventory: MatrixInventory,
+) -> None:
+    node, loader, minecraft = (
+        artifact["artifact_node"], artifact["loader"], artifact["minecraft"],
+    )
+    if node not in inventory.target_nodes:
+        _fail(f"artifact {node} is not a migration target")
+    version = _text(artifact["mod_version"], f"artifact {node}.mod_version")
+    if re.fullmatch(r"[0-9]+(?:\.[0-9]+){2}(?:[-+][A-Za-z0-9.-]+)?", version) is None:
+        _fail(f"artifact {node}.mod_version must be a bounded semantic release version")
+    legacy = node in inventory.legacy_nodes
+    if artifact["build_layout"] != ("legacy" if legacy else "stonecutter"):
+        _fail(f"artifact {node}.build_layout disagrees with migration legacy_nodes")
+    if legacy and version != root["project"]["mod_version"]:
+        _fail(f"artifact {node}.mod_version disagrees with the legacy project version")
+    if artifact["java"] != (17 if minecraft == "1.20.1" else 21):
+        _fail(f"artifact {node}.java disagrees with its Minecraft era")
+    if _integer(artifact["gradle_java"], f"artifact {node}.gradle_java") != 21:
+        _fail(f"artifact {node}.gradle_java must be 21")
+    if artifact["repository_family"] != loader:
+        _fail(f"artifact {node}.repository_family must be {loader}")
+    if artifact["source_routes"] != ["common", loader]:
+        _fail(f"artifact {node}.source_routes must select common and {loader}")
+
+
 def _schema_version(data: Any) -> int:
     if not isinstance(data, dict):
         _fail("release matrix must be an object")
@@ -581,15 +635,19 @@ def normalize_matrix_inventory(
 ) -> MatrixInventory:
     """Validate normalized lane identity without activating partial schema 2.
 
-    Schema 1 remains fully executable. Schema 2 currently exposes only its exact
-    target and migration-state foundation; execution consumers must keep rejecting
-    it until the remaining lane contracts are validated in later work units.
+    Schema 1 remains fully executable. Schema 2 validates target membership and
+    configured lane inputs without enabling execution consumers. Source routing
+    and unresolved-target projections are extended in subsequent work units.
     """
 
     schema = _schema_version(data)
     if schema == 2:
-        return _normalize_schema2_inventory(data)
-    root = _validate_schema1_matrix(
+        inventory = _normalize_schema2_inventory(data)
+        _validate_configuration(
+            data, contract=contract, repository=repository, inventory=inventory,
+        )
+        return inventory
+    root = _validate_configuration(
         data, contract=contract, repository=repository
     )
     targets = tuple(
@@ -608,7 +666,7 @@ def validate_matrix(
     """Validate a matrix for existing execution consumers."""
 
     if _schema_version(data) == 1:
-        return _validate_schema1_matrix(
+        return _validate_configuration(
             data, contract=contract, repository=repository
         )
     _normalize_schema2_inventory(data)
