@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -52,6 +53,7 @@ ARTIFACT_KEYS = frozenset(
     {"artifact_node", "minecraft", "loader", "java", "production", "harness"}
 )
 FILE_KEYS = frozenset({"filename", "path", "bytes", "sha256"})
+BUILD_IDENTITY_PATH = "META-INF/blockpops-build.json"
 
 
 class ArtifactError(ValueError):
@@ -143,11 +145,50 @@ def _read_zip_json(
     return value
 
 
-def verify_production_jar(path: Path, artifact: dict[str, Any]) -> None:
+def lane_build_identity(
+    document: MatrixDocument, artifact_node: str, *, matrix_digest: str,
+    contract_digest: str, commit: str, tree: str,
+) -> dict[str, Any]:
+    """Expected embedded identity from trusted caller inputs, never archive claims."""
+    for value, size, label in ((matrix_digest, 64, "matrix"), (contract_digest, 64, "contract"),
+                               (commit, 40, "commit"), (tree, 40, "tree")):
+        if not isinstance(value, str) or re.fullmatch(f"[0-9a-f]{{{size}}}", value) is None:
+            raise ArtifactError(f"build identity {label} digest is invalid")
+    lane = document.inventory.lane(artifact_node)
+    context = document.gradle_context(artifact_node=artifact_node)
+    context.pop("matrix")  # The authoritative matrix bytes have their own digest.
+    context_digest = hashlib.sha256(json.dumps(context, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return {
+        "schema_version": 1, "artifact_node": artifact_node,
+        "minecraft": lane.identity.minecraft, "loader": lane.identity.loader,
+        "mod_version": lane.mod_version, "java": lane.artifact["java"], "gradle_java": lane.gradle_java,
+        "matrix_sha256": matrix_digest, "scenario_contract_sha256": contract_digest,
+        "git_commit": commit, "git_tree": tree, "build_context_sha256": context_digest,
+    }
+
+
+def _verify_build_identity(
+    archive: zipfile.ZipFile, expected: dict[str, Any] | None, artifact: dict[str, Any],
+) -> None:
+    if expected is None:
+        return  # Historical schema-2 manifests did not embed a build identity.
+    keys = ("artifact_node", "minecraft", "loader", "java", "mod_version", "gradle_java")
+    for key in keys:
+        if key in artifact and (type(expected.get(key)) is not type(artifact[key]) or expected[key] != artifact[key]):
+            raise ArtifactError("expected build identity is paired with a different artifact lane")
+    observed = _read_zip_json(archive, BUILD_IDENTITY_PATH, maximum=16 * 1024)
+    if json.dumps(observed, sort_keys=True) != json.dumps(expected, sort_keys=True):
+        raise ArtifactError("embedded build identity differs from the expected lane inputs")
+
+
+def verify_production_jar(
+    path: Path, artifact: dict[str, Any], *, build_identity: dict[str, Any] | None = None,
+) -> None:
     if any(marker in path.name for marker in ("dev-shadow", "-sources", "-javadoc")):
         raise ArtifactError(f"production path selects a development artifact: {path.name}")
     archive, _, names = inspect_zip(path)
     try:
+        _verify_build_identity(archive, build_identity, artifact)
         required = {
             "com/theplumteam/BlockPopsMod.class",
             "blockpops.mixins.json",
@@ -163,6 +204,8 @@ def verify_production_jar(path: Path, artifact: dict[str, Any]) -> None:
             metadata = _read_zip_json(archive, "fabric.mod.json")
             if metadata.get("id") != "blockpops":
                 raise ArtifactError("Fabric production mod id is not blockpops")
+            if build_identity is not None and metadata.get("version") != build_identity["mod_version"]:
+                raise ArtifactError("Fabric production mod version differs from its lane")
             dependencies = metadata.get("depends")
             if not isinstance(dependencies, dict):
                 raise ArtifactError("Fabric production metadata has no dependency object")
@@ -182,6 +225,15 @@ def verify_production_jar(path: Path, artifact: dict[str, Any]) -> None:
         else:
             metadata_name = artifact["metadata"]["file"]
             text = archive.read(metadata_name).decode("utf-8", "strict")
+            if build_identity is not None:
+                import tomllib
+                try:
+                    mods = tomllib.loads(text).get("mods", [])
+                    versions = [mod.get("version") for mod in mods if mod.get("modId") == "blockpops"]
+                except (tomllib.TOMLDecodeError, AttributeError, TypeError) as exc:
+                    raise ArtifactError("invalid FML production metadata") from exc
+                if versions != [build_identity["mod_version"]]:
+                    raise ArtifactError("FML production mod version differs from its lane")
             required_fragments = (
                 'modId = "blockpops"',
                 f'versionRange = "{artifact["metadata"]["minecraft"]}"',
@@ -202,9 +254,12 @@ def verify_production_jar(path: Path, artifact: dict[str, Any]) -> None:
         archive.close()
 
 
-def verify_harness_jar(path: Path, artifact: dict[str, Any]) -> None:
+def verify_harness_jar(
+    path: Path, artifact: dict[str, Any], *, build_identity: dict[str, Any] | None = None,
+) -> None:
     archive, _, names = inspect_zip(path)
     try:
+        _verify_build_identity(archive, build_identity, artifact)
         required = {
             "com/theplumteam/e2e/E2EHarness.class",
             "com/theplumteam/e2e/generated/ScenarioContract.class",

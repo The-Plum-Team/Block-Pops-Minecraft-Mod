@@ -233,3 +233,10 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - A separate pure binder ties an externally authenticated owner decision to repository/PR, generation, base/controller/head and declaration digest. Ordinary controller-upgrade approval, revoked/mismatched decisions and coercible numeric types fail.
 - Root reproduced41 PR-gate tests; independent review found no blocker within these helpers' contract. Neither helper is called by the evaluator, CLI or reauthorization paths. They authenticate no API/deployment and grant no admission; diff/mode/bootstrap/evidence enforcement and deployed authority remain pending.
 - Rollback is these inert helpers/tests. Task1 stays unchecked; AUTH-1 still blocks all delivery. Controller-policy changes cannot be smuggled into a Stonecutter payload scope.
+
+## Task 11a — opt-in embedded artifact identity rule
+
+- Added an expected lane identity derived from normalized build context plus caller-authenticated matrix/contract/commit/tree digests. Opt-in production and harness verification requires the exact same embedded `META-INF/blockpops-build.json`; renamed cross-lane pairs, stale inputs, extra keys and coercible numeric/boolean identities fail.
+- Production metadata must also carry the lane's actual mod version when this rule is enabled. Fabric uses its version field; FML parses the BlockPops mod record rather than accepting a matching text fragment elsewhere.
+- Root and independent review reproduced30 artifact tests, including both metadata formats and preserved legacy round trips. The legacy path remains unchanged when no identity is requested; schema2 matrix staging still fails pending the scoped manifest producer/reader.
+- This prepares one provenance rule, not schema3 activation or qualification. Future staging must authenticate the caller digests and require this identity for both archives. Rollback is these opt-in helpers/tests.
