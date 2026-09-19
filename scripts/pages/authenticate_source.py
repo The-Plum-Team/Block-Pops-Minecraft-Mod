@@ -26,10 +26,17 @@ from scripts.lib.secure_json import SecureJsonError, canonical_json, read as rea
 from scripts.pages.evidence import (  # noqa: E402
     E2E_WORKFLOW,
     EvidenceError,
+    MAX_DERIVATIVE_BYTES,
+    MAX_SCREENSHOT_BYTES,
+    _child_file,
+    _encode_webp,
     _raw_matrix_context,
+    _validate_file_records,
     _validate_provenance,
     cache_artifact_name,
     raw_artifact_name,
+    validate_compact,
+    validate_raw,
 )
 from scripts.pages.select_artifact import (  # noqa: E402
     ARTIFACT_DIGEST_PATTERN,
@@ -138,12 +145,66 @@ def _selected_artifact(
         )
 
 
+def _bind_compact(root, snapshot, compact_root, compact_snapshot, *, matrix_path, result, arguments):
+    """Bind validated bytes; transport ownership and newest selection remain external."""
+    original, kind, original_raw = snapshot
+    compact_manifest, compact_kind, compact_raw = compact_snapshot
+    if compact_kind != "compact":
+        raise SourceAuthenticationError("bind-compact requires a compact bundle")
+    selection = dict(matrix_path=matrix_path, expected=original["provenance"],
+        scope=result["aggregate_scope"]["kind"], projection=result["aggregate_scope"]["projection"])
+    original_validated = (validate_raw if kind == "raw" else validate_compact)(root, **selection)
+    compact_validated = validate_compact(compact_root, **selection)
+    if (canonical_json(original_validated) != canonical_json(original)
+            or canonical_json(compact_validated) != canonical_json(compact_manifest)
+            or canonical_json(compact_manifest["provenance"]) != canonical_json(original["provenance"])):
+        raise SourceAuthenticationError("compact binding manifest/provenance changed")
+    if kind == "raw":
+        artifact = {key: arguments["selected_artifact_" + key] for key in ("id", "name", "digest")}
+        frames = [{key: value for key, value in frame.items() if key != "derivative"}
+                  for frame in compact_manifest["frames"]]
+        if (canonical_json(compact_manifest["source_artifact"]) != canonical_json(artifact)
+                or canonical_json(compact_manifest["lanes"]) != canonical_json(original["lanes"])
+                or canonical_json(frames) != canonical_json(original["frames"])):
+            raise SourceAuthenticationError("compact does not preserve its selected raw source")
+        # Raw conversion and binding must share the encoder environment. Different
+        # Pillow/libwebp output fails closed; cache copies retain their exact bytes.
+        for frame in compact_manifest["frames"]:
+            source, derivative = frame["source"], frame["derivative"]
+            _, png = _child_file(root, source["path"], label="bound raw PNG", maximum=MAX_SCREENSHOT_BYTES)
+            if len(png) != source["size"] or hashlib.sha256(png).hexdigest() != source["sha256"]:
+                raise SourceAuthenticationError("raw PNG changed before compact derivation")
+            encoded = _encode_webp(png)
+            _, actual = _child_file(compact_root, derivative["path"], label="bound WebP", maximum=MAX_DERIVATIVE_BYTES)
+            # validate_compact already bound the decoded dimensions/format to this
+            # snapshot; now require the exact protected encoder bytes and identity.
+            if (actual != encoded or derivative["size"] != len(encoded)
+                    or derivative["sha256"] != hashlib.sha256(encoded).hexdigest()):
+                raise SourceAuthenticationError("compact derivative differs from authenticated raw pixels")
+    elif compact_raw != original_raw:
+        raise SourceAuthenticationError("compact cache copy differs from its selected manifest bytes")
+    # Close changes during validation/reencoding, without another pixel decode.
+    for directory, manifest, manifest_kind in ((root, original, kind), (compact_root, compact_manifest, "compact")):
+        records = manifest["files"] + ([manifest["matrix"]] if manifest_kind == "compact" else [])
+        _validate_file_records(directory, records,
+            include_manifest="manifest.json" if manifest_kind == "compact" else "pages-evidence.json")
+    return {**result, "kind": "pages-compact-selection", "provenance": original["provenance"],
+        "compact_manifest_sha256": hashlib.sha256(compact_raw).hexdigest(),
+        "source_artifact": compact_manifest["source_artifact"],
+        "selected_artifact": {"kind": kind,
+            **{key: arguments["selected_artifact_" + key] for key in ("id", "name", "digest")},
+            **{key: arguments["selected_" + key] for key in ("run_id", "run_attempt")}}}
+
+
 def authenticate(api: GitHubApi, *, matrix_path: Path, scope: str | None = None,
+                 bind_compact: Path | None = None,
                  expected: dict[str, Any] | None = None, **arguments: Any) -> dict[str, Any]:
     """Bind caller-authenticated source/scope to its exact public handoff.
 
     The caller supplies newest-run selection and authenticated extracted bytes.
-    This does not validate pixels, choose freshness or grant publication authority.
+    bind_compact additionally validates both bundles and binds an external selection
+    record to exact compact bytes. That record cannot authenticate itself or choose
+    freshness, and grants no publication authority. Default output is unchanged.
     """
     try:
         if set(arguments) != {"repository", "canonical_branch", "evidence_root", "selected_kind",
@@ -153,7 +214,7 @@ def authenticate(api: GitHubApi, *, matrix_path: Path, scope: str | None = None,
         matrix, raw = read_secure_json(matrix_path, label="Pages source matrix", max_bytes=MAX_MATRIX_BYTES)
         inventory = normalize_matrix_inventory(matrix)
         if inventory.schema_version == 1:
-            if scope is not None or expected is not None:
+            if scope is not None or expected is not None or bind_compact is not None:
                 raise SourceAuthenticationError("scoped source authentication requires schema2")
             return _authenticate(api, matrix_path=matrix_path, **arguments)
         if (scope not in ("legacy", "full") or not isinstance(expected, dict)
@@ -161,6 +222,7 @@ def authenticate(api: GitHubApi, *, matrix_path: Path, scope: str | None = None,
             raise SourceAuthenticationError("schema2 requires external scope and exact source binding")
         expected = dict(expected)
         snapshot = _manifest(arguments["evidence_root"])
+        compact_snapshot = _manifest(bind_compact) if bind_compact is not None else None
         _validate_provenance(snapshot[0]["provenance"], expected={**expected, "repository": arguments["repository"]})
         if (hashlib.sha256(raw).hexdigest() != expected["matrix_sha256"]
                 or matrix["branch"]["name"] != expected["branch"]
@@ -179,9 +241,13 @@ def authenticate(api: GitHubApi, *, matrix_path: Path, scope: str | None = None,
                 raise SourceAuthenticationError("Pages scenario contract binding differs")
             result = _authenticate(api, matrix_path=private_matrix, scope=scope,
                 contract=contract, manifest_snapshot=snapshot, **arguments)
+            if compact_snapshot is not None:
+                result = _bind_compact(arguments["evidence_root"], snapshot, bind_compact, compact_snapshot,
+                    matrix_path=private_matrix, result=result, arguments=arguments)
         if (read_secure_json(matrix_path, label="final Pages matrix", max_bytes=MAX_MATRIX_BYTES)[1] != raw
                 or read_secure_json(DEFAULT_CONTRACT, label="final Pages contract", max_bytes=MAX_CONTRACT_BYTES)[1] != contract_raw
-                or _manifest(arguments["evidence_root"])[2] != snapshot[2]):
+                or _manifest(arguments["evidence_root"])[2] != snapshot[2]
+                or compact_snapshot is not None and _manifest(bind_compact)[2] != compact_snapshot[2]):
             raise SourceAuthenticationError("Pages matrix, contract or manifest changed during authentication")
         return {**result, "source": {**expected, "contract_sha256": contract.sha256}}
     except (EvidenceError, MatrixError, SecureJsonError, OSError, ValueError) as exc:
@@ -441,6 +507,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--expected-handoff-run-id", type=int, required=True)
     parser.add_argument("--expected-handoff-run-attempt", type=int, required=True)
     parser.add_argument("--scope", choices=("legacy", "full"))
+    parser.add_argument("--bind-compact", type=Path)
     for name in ("branch", "commit", "tree", "matrix-sha256"):
         parser.add_argument("--expected-" + name)
     args = parser.parse_args(argv)
@@ -470,6 +537,7 @@ def main(argv: list[str] | None = None) -> int:
             expected_handoff_run_id=args.expected_handoff_run_id,
             expected_handoff_run_attempt=args.expected_handoff_run_attempt,
             scope=args.scope,
+            bind_compact=args.bind_compact,
             expected=({key: getattr(args, "expected_" + key) for key in ("branch", "commit", "tree", "matrix_sha256")}
                 if any(getattr(args, "expected_" + key) is not None for key in ("branch", "commit", "tree", "matrix_sha256")) else None),
         )
