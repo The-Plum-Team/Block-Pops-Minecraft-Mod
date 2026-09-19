@@ -4,11 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
@@ -20,12 +21,12 @@ from e2e.packaged_runtime import (  # noqa: E402
 )
 from e2e.runtime_store import RunWorkspace, RuntimeStoreError, WorkspacePromotion  # noqa: E402
 from e2e.scenario_contract import default_contract  # noqa: E402
-from scripts.lib.secure_json import SecureJsonError, loads  # noqa: E402
+from scripts.lib.secure_json import SecureJsonError, loads, read as read_secure_json  # noqa: E402
 from scripts.release.artifact_manifest import (  # noqa: E402
     ArtifactError,
     verify_staged,
 )
-from scripts.release.matrix import MatrixDocument, MatrixError, load_matrix_document  # noqa: E402
+from scripts.release.matrix import MAX_MATRIX_BYTES, MatrixDocument, MatrixError, normalize_matrix_inventory  # noqa: E402
 
 CONTRACT = default_contract()
 MAX_ROW_JSON_BYTES = 64 * 1024
@@ -51,7 +52,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def absolute(path: Path) -> Path:
-    return path.resolve() if path.is_absolute() else (REPO / path).resolve()
+    # Preserve parent links for the scoped verifier instead of resolving them away.
+    return path if path.is_absolute() else REPO / path
 
 
 def _selection(args: argparse.Namespace) -> dict[str, Any]:
@@ -119,11 +121,27 @@ def manifest_hash(manifest: dict[str, Any] | None, node: str) -> str:
     return records[0]["production"]["sha256"]
 
 
+def execution_scope(document: MatrixDocument, rows: list[dict[str, Any]],
+                    scenarios: list[str], manifest: dict[str, Any] | None,
+                    args: argparse.Namespace) -> dict[str, Any]:
+    if document.inventory.schema_version == 1:
+        return {}
+    nodes = [row["artifact_node"] for row in rows]
+    return {"execution_scope": {
+        "kind": "lane" if args.row_json else _selection(args)["scope"] or document.default_scope,
+        "selected_nodes": nodes, "scenarios": scenarios,
+        "target_nodes": list(document.inventory.target_nodes),
+        "partial": set(nodes) != set(document.inventory.target_nodes),
+        "artifact_scope": None if manifest is None else manifest["scope"],
+    }}
+
+
 def print_rows(
     rows: list[dict[str, Any]],
     scenarios: list[str],
     manifest: dict[str, Any] | None,
     *, document: MatrixDocument | None = None, scope: str | None = None,
+    coverage: dict[str, Any] | None = None,
 ) -> None:
     resolved = [
         {
@@ -136,7 +154,7 @@ def print_rows(
         for row in rows
         for scenario in scenarios
     ]
-    output = {"schema_version": 1, "rows": resolved}
+    output = {"schema_version": 1, "rows": resolved, **(coverage or {})}
     if document is not None and document.inventory.schema_version == 2:
         output.update(scope=scope or document.default_scope,
                       migration_mode=document.inventory.migration_mode,
@@ -159,6 +177,8 @@ def execute_packaged_rows(
     manifest: dict[str, Any],
     manifest_path: Path,
     output_root: Path,
+    *, coverage: dict[str, Any] | None = None,
+    verify_inputs: Callable[[], None] | None = None,
 ) -> tuple[list[dict[str, Any]], WorkspacePromotion]:
     results: list[dict[str, Any]] = []
     with RunWorkspace.create(output_root, prefix=".evidence-run-") as evidence:
@@ -204,7 +224,7 @@ def execute_packaged_rows(
         ]
         _write_json(
             evidence.path / "resolved-matrix.json",
-            {"schema_version": 1, "rows": resolved},
+            {"schema_version": 1, "rows": resolved, **(coverage or {})},
         )
         _write_json(
             evidence.path / "summary.json",
@@ -213,12 +233,15 @@ def execute_packaged_rows(
                 "contract_sha256": CONTRACT.sha256,
                 "results": results,
                 "runtime_store": store_metrics,
+                **(coverage or {}),
             },
         )
         _write_json(
             evidence.path / "runtime-store.json",
             {"schema_version": 1, "metrics": store_metrics},
         )
+        if verify_inputs is not None:
+            verify_inputs()
         promotion = evidence.promote_to(output_root / "current")
     return results, promotion
 
@@ -229,31 +252,44 @@ def main(argv: list[str] | None = None) -> int:
     manifest_path = absolute(args.artifacts_manifest)
     output_root = absolute(args.output_root)
     try:
-        document = load_matrix_document(matrix_path)
-        data = document.data
+        data, matrix_bytes = read_secure_json(matrix_path, label="release matrix", max_bytes=MAX_MATRIX_BYTES)
+        document = MatrixDocument(normalize_matrix_inventory(data, repository=matrix_path.resolve().parents[1]),
+                                  json.dumps(data))
+        matrix_digest = hashlib.sha256(matrix_bytes).hexdigest()
         rows = select_rows(document, args)
         scenarios = scenarios_for(args)
-        manifest = (
-            verify_staged(
+        scoped = document.inventory.schema_version == 2
+        if scoped and manifest_path.exists() and not (args.artifact_node or args.scope):
+            raise ValueError("schema-2 staged execution/listing requires --artifact-node or --scope")
+
+        def verify_manifest():
+            verified = verify_staged(
                 repository=REPO,
                 matrix_path=matrix_path,
                 manifest_path=manifest_path,
                 stage=manifest_path.parent,
+                **(_selection(args) if scoped else {}),
             )
-            if manifest_path.exists()
-            else None
-        )
+            if scoped and (verified["matrix"]["sha256"] != matrix_digest
+                           or verified["scenario_contract"]["sha256"] != CONTRACT.sha256):
+                raise ArtifactError("staged matrix/contract differs from the loaded execution inputs")
+            return verified
+        manifest = verify_manifest() if manifest_path.exists() else None
+        coverage = execution_scope(document, rows, scenarios, manifest, args)
         if args.list:
-            selected_scope = "lane" if args.row_json else _selection(args)["scope"]
-            print_rows(rows, scenarios, manifest, document=document, scope=selected_scope)
+            print_rows(rows, scenarios, manifest, document=document,
+                       scope=coverage.get("execution_scope", {}).get("kind"), coverage=coverage)
             return 0
         if not args.packaged:
             raise ValueError("pass --packaged to run staged production jars")
         if manifest is None:
             raise ValueError(f"packaged execution requires {manifest_path}")
+        def recheck():
+            if verify_manifest() != manifest:
+                raise ArtifactError("staged inputs changed during packaged execution")
+        options = {"coverage": coverage, "verify_inputs": recheck} if scoped else {}
         results, promotion = execute_packaged_rows(
-            data, rows, scenarios, manifest, manifest_path, output_root
-        )
+            data, rows, scenarios, manifest, manifest_path, output_root, **options)
         passed = sum(result["status"] == "pass" for result in results)
         action = "replaced" if promotion.replaced else "created"
         print(f"{passed}/{len(results)} packaged rows passed; {action} {promotion.current}")
