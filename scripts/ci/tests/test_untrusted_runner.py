@@ -9,7 +9,6 @@ from pathlib import Path
 from unittest import mock
 
 from scripts.ci.untrusted_runner import (
-    SANDBOX_BOUNDARY,
     SandboxError,
     _candidate_environment,
     _refresh_candidate_index,
@@ -27,15 +26,30 @@ REPO = Path(__file__).resolve().parents[3]
 
 class BoundaryTests(unittest.TestCase):
     def test_root_is_one_exact_private_boundary_child(self) -> None:
-        expected = SANDBOX_BOUNDARY / "blockpops-candidate-sandbox"
-        self.assertEqual(expected, _root(expected))
-        for invalid in (
-            SANDBOX_BOUNDARY,
-            SANDBOX_BOUNDARY / "other",
-            SANDBOX_BOUNDARY / "nested/blockpops-candidate-sandbox",
-        ):
-            with self.subTest(path=invalid), self.assertRaises(SandboxError):
-                _root(invalid)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            boundary = root / "boundary"
+            boundary.mkdir()
+            expected = boundary / "blockpops-candidate-sandbox"
+            with mock.patch("scripts.ci.untrusted_runner.SANDBOX_BOUNDARY", boundary):
+                self.assertEqual(expected, _root(expected))
+                for invalid in (
+                    boundary,
+                    boundary / "other",
+                    boundary / "nested/blockpops-candidate-sandbox",
+                ):
+                    with self.subTest(path=invalid), self.assertRaises(SandboxError):
+                        _root(invalid)
+                destination = root / "outside"
+                destination.mkdir()
+                expected.symlink_to(destination, target_is_directory=True)
+                with self.subTest(symlink="root"), self.assertRaises(SandboxError):
+                    _root(expected)
+                expected.unlink()
+                boundary.rmdir()
+                boundary.symlink_to(destination, target_is_directory=True)
+                with self.subTest(symlink="parent"), self.assertRaises(SandboxError):
+                    _root(expected)
 
     def test_export_paths_are_canonical_and_cannot_escape(self) -> None:
         self.assertEqual("build/release", _relative("build/release"))

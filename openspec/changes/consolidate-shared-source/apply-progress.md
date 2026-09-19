@@ -127,3 +127,10 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - `python3 -m unittest scripts.ci.tests.test_loader_bootstrap -v`: 10 tests passed after checkout-byte repair; the same tests passed in an exact Git-byte temporary snapshot beforehand. CLI verification of the existing exact HEAD's schema-1 contract passed.
 - Only validator/tests changed (162 authored lines before this evidence); no actual bootstrap contract, protected executable byte, digest, remote or publication was changed. Root review confirmed the fail-closed boundary.
 - Task 5 remains partial: implement and test base-owned current/next evaluation separately before preparing an exact transition record. Rollback is this parser/test addition only.
+
+## Task 2 — portable sandbox fixture and green Python baseline
+
+- Changed only the sandbox boundary test to use a resolved temporary directory, preserving the production runner's exact Linux boundary policy. Sibling/nested paths still fail; explicit root and parent symlink cases now fail in the portable fixture too.
+- The previous macOS `/tmp` alias failure was reproduced before the fixture change. `python3 -m unittest scripts.ci.tests.test_untrusted_runner -q`: 12 tests passed.
+- Full post-repair CI suite: `python3 -m unittest discover -s scripts/ci/tests -p 'test_*.py' -q`: 182 tests passed. The product/release Python suite passed 161 tests after byte repair. No protection, checksum, bootstrap digest or production sandbox behavior was relaxed.
+- Gradle diagnostic still awaits Fabric Maven connectivity; this separate network limitation does not invalidate the reproduced Java21/Gradle8.14 launch. Rollback of this unit changes only the host-independent test fixture and this evidence.
