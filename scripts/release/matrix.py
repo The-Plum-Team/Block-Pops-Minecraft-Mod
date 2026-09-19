@@ -255,6 +255,38 @@ class MatrixDocument:
             "gradle_java": self.data["gradle_java"],
         }, kind, contract=contract)
 
+    def gradle_context(self, *, artifact_node: str | None = None) -> dict[str, Any]:
+        """Describe one isolated build context, or the unchanged legacy aggregate."""
+        if artifact_node is None and self.inventory.migration_mode == "shared":
+            _fail("shared Gradle configuration requires one explicit artifact_node; use build_matrix.py")
+        scope = "lane" if artifact_node is not None else self.default_scope
+        lanes = self.select_lanes(scope=scope, artifact_node=artifact_node)
+        if artifact_node is None and any(lane.build_layout != "legacy" for lane in lanes):
+            _fail("Stonecutter configuration requires one explicit artifact_node")
+        eras = {(lane.identity.minecraft, lane.artifact["java"], lane.mod_version) for lane in lanes}
+        if len(eras) != 1:
+            _fail("one Gradle process requires one Minecraft/Java/mod-version context")
+        families = {lane.repository_family for lane in lanes}
+        if {"forge", "neoforge"} <= families:
+            _fail("one Gradle process cannot mix Forge and NeoForge repository families")
+        return {
+            "matrix": self.data,
+            "scope": scope,
+            "artifact_node": artifact_node,
+            "lanes": [
+                {
+                    "artifact": lane.artifact,
+                    "runtime": lane.runtime,
+                    "mod_version": lane.mod_version,
+                    "build_layout": lane.build_layout,
+                    "gradle_java": lane.gradle_java,
+                    "repository_family": lane.repository_family,
+                    "source_routes": list(lane.source_routes),
+                }
+                for lane in lanes
+            ],
+        }
+
 
 def _fail(message: str) -> None:
     raise MatrixError(message)
@@ -1151,6 +1183,7 @@ def main(argv: list[str] | None = None) -> int:
         "--kind",
         choices=(
             "inventory",
+            "gradle-context",
             "artifacts",
             "java",
             "gradle-java",
@@ -1161,9 +1194,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--no-source-check", action="store_true")
     parser.add_argument("--pretty", action="store_true")
+    parser.add_argument("--artifact-node")
     args = parser.parse_args(argv)
     try:
-        if args.kind == "inventory":
+        if args.artifact_node is not None and args.kind != "gradle-context":
+            _fail("--artifact-node is only valid with --kind gradle-context")
+        if args.kind == "gradle-context":
+            output: Any = load_matrix_document(
+                args.matrix, validate_sources=not args.no_source_check,
+            ).gradle_context(artifact_node=args.artifact_node)
+        elif args.kind == "inventory":
             output: Any = load_matrix_inventory(
                 args.matrix, validate_sources=not args.no_source_check,
             ).report()

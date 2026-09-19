@@ -99,12 +99,18 @@ if (!matrixFile.isFile()) {
     throw new GradleException("Missing authoritative release matrix: ${matrixFile}")
 }
 def pythonExecutable = System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3'
-def matrixProcess = new ProcessBuilder(
+def matrixCommand = [
     pythonExecutable,
     file('scripts/release/matrix.py').absolutePath,
     '--matrix', matrixFile.absolutePath,
-    '--no-source-check'
-).directory(rootDir).redirectErrorStream(false).start()
+    '--no-source-check', '--kind', 'gradle-context'
+]
+def selectedNode = providers.gradleProperty('blockpopsLane').orNull
+if (selectedNode != null) {
+    matrixCommand.addAll(['--artifact-node', selectedNode])
+}
+def matrixProcess = new ProcessBuilder(matrixCommand)
+        .directory(rootDir).redirectErrorStream(false).start()
 def matrixBytes = matrixProcess.inputStream.readNBytes(4 * 1024 * 1024 + 1)
 def matrixErrors = matrixProcess.errorStream.readNBytes(256 * 1024 + 1)
 def matrixExit = matrixProcess.waitFor()
@@ -113,9 +119,10 @@ if (matrixExit != 0 || matrixBytes.length == 0 || matrixBytes.length > 4 * 1024 
     def detail = new String(matrixErrors, StandardCharsets.UTF_8).trim()
     throw new GradleException("Strict release matrix validation failed${detail ? ': ' + detail : ''}")
 }
-def releaseMatrix = new JsonSlurper().parseText(
+def laneContext = new JsonSlurper().parseText(
     new String(matrixBytes, StandardCharsets.UTF_8)
 )
+def releaseMatrix = laneContext.matrix
 if (releaseMatrix.schema_version != 1) {
     throw new GradleException('Unsupported release matrix schema')
 }
@@ -123,16 +130,18 @@ if (!(releaseMatrix.artifacts instanceof List)
         || releaseMatrix.artifacts.size() != releaseMatrix.lane_count) {
     throw new GradleException('Release matrix lane_count does not match artifacts')
 }
-def activeLoaders = releaseMatrix.artifacts.collect { row -> row.loader as String }.toSet()
+def matrixLoaders = releaseMatrix.artifacts.collect { row -> row.loader as String }.toSet()
+def activeLoaders = laneContext.lanes.collect { lane -> lane.artifact.loader as String }.toSet()
 if (!activeLoaders || !activeLoaders.every { it in ['fabric', 'forge', 'neoforge'] }) {
     throw new GradleException("Unsupported release loader inventory: ${activeLoaders}")
 }
-if (releaseMatrix.source_routing.keySet() as Set != (['common'] + activeLoaders) as Set) {
+if (releaseMatrix.source_routing.keySet() as Set != (['common'] + matrixLoaders) as Set) {
     throw new GradleException('Release matrix source routing disagrees with active loaders')
 }
 
 gradle.ext.blockPopsReleaseMatrix = releaseMatrix
 gradle.ext.blockPopsReleaseMatrixFile = matrixFile
+gradle.ext.blockPopsLaneContext = laneContext
 
 include 'common'
 activeLoaders.sort().each { include it }
