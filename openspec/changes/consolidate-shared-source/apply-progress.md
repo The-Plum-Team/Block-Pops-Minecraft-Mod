@@ -134,3 +134,17 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - The previous macOS `/tmp` alias failure was reproduced before the fixture change. `python3 -m unittest scripts.ci.tests.test_untrusted_runner -q`: 12 tests passed.
 - Full post-repair CI suite: `python3 -m unittest discover -s scripts/ci/tests -p 'test_*.py' -q`: 182 tests passed. The product/release Python suite passed 161 tests after byte repair. No protection, checksum, bootstrap digest or production sandbox behavior was relaxed.
 - Gradle diagnostic still awaits Fabric Maven connectivity; this separate network limitation does not invalidate the reproduced Java21/Gradle8.14 launch. Rollback of this unit changes only the host-independent test fixture and this evidence.
+
+## Task 4b — normalized packaged-runtime selection
+
+- `e2e/orchestrator.py` now selects validated normalized lanes, preserving exact authoritative `--row-json` equality. Preparatory default dispatch stays legacy; a modern lane requires explicit `--artifact-node`; full scope requires complete configuration. Schema-2 version/loader filters cannot silently turn a full plan into a partial one.
+- Schema-2 listings expose scope, migration mode and target/configured counts; row-json selections are labeled lane scope. Existing schema-1 listing output remains unchanged.
+- 37 runtime-selection, matrix-portability and artifact-boundary tests passed. Independent review reproduced them and compared ten schema-1 `--list` outputs against HEAD: byte-identical.
+- Before schema-2 packaged execution is enabled, tasks 11/12 must add explicit scope/counts to persistent runtime evidence and compatible artifact/fan-in readers. Current artifact validation still rejects schema 2, so this listing/selection unit does not activate it.
+- Rollback is this one consumer and its focused selection tests; no real Minecraft, active-matrix change or publication occurred.
+
+## Task 2 verification gate status
+
+- Required local observation is complete: Java21 wrapper launch, available Java17/21, working-tree preservation and fresh read-only default/governance observations are recorded above. Task 2 can close as an environment-observation gate; it is not build qualification.
+- The additional strict Gradle configuration/check diagnostic was cancelled at 600 seconds, exit143, after repeated Fabric Maven connection waits and no task progress. Only its own wrapper/daemon were terminated and verified absent. Official IPv4/IPv6 DNS/TLS-preserving probes confirm the host connectivity limitation; no mirror, origin policy or verification weakening was applied.
+- Next build evidence is the isolated Groovy/Stonecutter compatibility probe, then the real selected-lane probes. Full build/E2E task15 remains open.

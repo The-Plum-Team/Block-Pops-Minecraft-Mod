@@ -25,7 +25,7 @@ from scripts.release.artifact_manifest import (  # noqa: E402
     ArtifactError,
     verify_staged,
 )
-from scripts.release.matrix import MatrixError, gha_matrix, load_matrix  # noqa: E402
+from scripts.release.matrix import MatrixDocument, MatrixError, load_matrix_document  # noqa: E402
 
 CONTRACT = default_contract()
 MAX_ROW_JSON_BYTES = 64 * 1024
@@ -38,7 +38,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--artifacts-manifest", type=Path, default=Path("build/release/artifacts.json")
     )
     parser.add_argument("--row-json")
-    parser.add_argument("--artifact-node")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--artifact-node")
+    selection.add_argument("--scope", choices=("legacy", "full"))
     parser.add_argument("--minecraft")
     parser.add_argument("--loader", choices=("fabric", "forge", "neoforge"))
     parser.add_argument("--scenarios")
@@ -52,12 +54,16 @@ def absolute(path: Path) -> Path:
     return path.resolve() if path.is_absolute() else (REPO / path).resolve()
 
 
-def _projected_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
-    return gha_matrix(data, "pr-anchors", contract=CONTRACT)["include"]
+def _selection(args: argparse.Namespace) -> dict[str, Any]:
+    return {"scope": "lane" if args.artifact_node else args.scope,
+            "artifact_node": args.artifact_node}
 
 
-def select_rows(data: dict[str, Any], args: argparse.Namespace) -> list[dict[str, Any]]:
-    rows = list(data["runtimes"])
+def select_rows(document: MatrixDocument, args: argparse.Namespace) -> list[dict[str, Any]]:
+    if document.inventory.schema_version == 2 and (args.minecraft or args.loader) and not args.artifact_node:
+        raise ValueError("schema-2 version/loader filters require an explicit --artifact-node")
+    selection = _selection(args)
+    rows = [lane.runtime for lane in document.select_lanes(**selection)]
     if args.row_json:
         try:
             requested = loads(
@@ -68,7 +74,9 @@ def select_rows(data: dict[str, Any], args: argparse.Namespace) -> list[dict[str
         except (UnicodeError, SecureJsonError) as exc:
             raise ValueError(f"invalid --row-json: {exc}") from exc
         matches = [
-            projected for projected in _projected_rows(data) if projected == requested
+            projected for projected in document.projection(
+                "pr-anchors", contract=CONTRACT, **selection,
+            )["include"] if projected == requested
         ]
         if len(matches) != 1:
             raise ValueError("--row-json is not one exact authoritative PR anchor row")
@@ -115,6 +123,7 @@ def print_rows(
     rows: list[dict[str, Any]],
     scenarios: list[str],
     manifest: dict[str, Any] | None,
+    *, document: MatrixDocument | None = None, scope: str | None = None,
 ) -> None:
     resolved = [
         {
@@ -127,7 +136,13 @@ def print_rows(
         for row in rows
         for scenario in scenarios
     ]
-    print(json.dumps({"schema_version": 1, "rows": resolved}, indent=2))
+    output = {"schema_version": 1, "rows": resolved}
+    if document is not None and document.inventory.schema_version == 2:
+        output.update(scope=scope or document.default_scope,
+                      migration_mode=document.inventory.migration_mode,
+                      target_count=len(document.inventory.targets),
+                      configured_lane_count=len(document.inventory.lanes))
+    print(json.dumps(output, indent=2))
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -214,8 +229,9 @@ def main(argv: list[str] | None = None) -> int:
     manifest_path = absolute(args.artifacts_manifest)
     output_root = absolute(args.output_root)
     try:
-        data = load_matrix(matrix_path)
-        rows = select_rows(data, args)
+        document = load_matrix_document(matrix_path)
+        data = document.data
+        rows = select_rows(document, args)
         scenarios = scenarios_for(args)
         manifest = (
             verify_staged(
@@ -228,7 +244,8 @@ def main(argv: list[str] | None = None) -> int:
             else None
         )
         if args.list:
-            print_rows(rows, scenarios, manifest)
+            selected_scope = "lane" if args.row_json else _selection(args)["scope"]
+            print_rows(rows, scenarios, manifest, document=document, scope=selected_scope)
             return 0
         if not args.packaged:
             raise ValueError("pass --packaged to run staged production jars")
