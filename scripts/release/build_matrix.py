@@ -23,7 +23,7 @@ from typing import Any
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
-from scripts.lib.secure_json import SecureJsonError, read as read_secure_json  # noqa: E402
+from scripts.lib.secure_json import SecureJsonError, canonical_json, read as read_secure_json  # noqa: E402
 from scripts.release.matrix import (  # noqa: E402
     MAX_MATRIX_BYTES, MatrixDocument, MatrixError, normalize_matrix_inventory,
 )
@@ -49,6 +49,7 @@ class CheckoutLock:
         self.parent = parent
         self.guard = threading.Lock()
         self.unsafe = False
+        self.observations = {}
 
     def verify(self):
         if self.descriptor is None or self.unsafe:
@@ -195,7 +196,8 @@ def source_snapshot(repository: Path) -> dict[str, Any]:
     """All tracked bytes plus untracked build inputs; raw CRLF drift is diagnostic."""
     repository = repository.resolve(strict=True)
     def git(*arguments):
-        result = subprocess.run(["git", "-C", str(repository), *arguments], capture_output=True, check=True)
+        result = subprocess.run(["git", "-C", str(repository), *arguments], capture_output=True, check=True,
+                                env={**os.environ, "GIT_NO_REPLACE_OBJECTS": "1", "GIT_GRAFT_FILE": os.devnull})
         return result.stdout
     commit, tree = git("rev-parse", "HEAD", "HEAD^{tree}").decode().splitlines()
     baseline = {}
@@ -216,7 +218,8 @@ def source_snapshot(repository: Path) -> dict[str, Any]:
             parts = path.parts
             if "__pycache__" in parts or (len(parts) > 1 and parts[0] in {"common", "fabric", "forge", "neoforge", "buildSrc"}
                     and parts[1] in {"build", ".gradle", ".architectury-transformer", "run", "logs"}) or (
-                    len(parts) > 3 and parts[1] == "versions" and parts[3] == "build"):
+                    len(parts) > 3 and parts[0] in {"common", "fabric", "forge", "neoforge"}
+                    and parts[1] == "versions" and parts[3] == "build"):
                 continue
             if path.parts[0] in roots or (len(path.parts) == 1 and (
                 path.suffix in {".gradle", ".kts", ".properties", ".json", ".toml", ".yaml", ".yml"}
@@ -309,6 +312,194 @@ def numeric_version(version: str) -> tuple[int, ...]:
     return tuple(int(part) for part in version.split("."))
 
 
+@contextmanager
+def _observation_access(lock):
+    if not lock.guard.acquire(blocking=False):
+        raise BuildProcessError("observation access requires an idle checkout lease")
+    try:
+        lock.verify()
+        yield
+    except (OSError, ValueError, KeyError, TypeError, IndexError) as exc:
+        raise BuildProcessError(f"invalid build observation: {exc}") from exc
+    finally:
+        lock.guard.release()
+
+
+def _observation_json(repository, path, limit=2 * 1024 * 1024):
+    if not 0 < path.lstat().st_size <= limit:
+        raise BuildProcessError("observation JSON is outside its size bound")
+    before = file_snapshot(repository, path)
+    data, payload = read_secure_json(path, label="build observation", max_bytes=limit)
+    if not isinstance(data, dict) or before != file_snapshot(repository, path) or hashlib.sha256(payload).hexdigest() != before["sha256"]:
+        raise BuildProcessError("observation JSON changed during read")
+    return data, before
+
+
+def _observation_report(lock, run_id):
+    if not isinstance(run_id, str) or not re.fullmatch(r"[a-f0-9]{32}", run_id):
+        raise BuildProcessError("invalid observation run identity")
+    report, _ = _observation_json(lock.repository, lock.repository / "build/build-matrix-report.json", 8 * 1024 * 1024)
+    if report.get("status") != "running" or report.get("run_id") != run_id:
+        raise BuildProcessError("observation requires the current running report")
+    return report
+
+
+def _verify_jdk_files(toolchains):
+    if (toolchains["status"] != "probed" or not isinstance(toolchains["homes"], dict)
+            or not set(toolchains["homes"]) <= {"17", "21"}):
+        raise BuildProcessError("explicit JDK probes are required")
+    for major, row in toolchains["homes"].items():
+        home = Path(row["home"])
+        suffix = ".exe" if os.name == "nt" else ""
+        paths = {"java": f"bin/java{suffix}", "javac": f"bin/javac{suffix}", "release": "release"}
+        if (str(home.resolve(strict=True)) != str(home) or not home.is_absolute()
+                or any(character in str(home) for character in ",\r\n")
+                or canonical_json(output_snapshot(home, paths)) != canonical_json(row["files"])
+                or any(not re.match(rf"^{major}(?:\.|$)", row[key]) for key in ("java_version", "javac_version"))):
+            raise BuildProcessError("JDK probe identity changed")
+
+
+def _observation_inputs(repository, binding):
+    for name in ("request_file", "init"):
+        if file_snapshot(repository, binding[name]["path"]) != binding[name]:
+            raise BuildProcessError("observation request/init changed during execution")
+    _verify_jdk_files(binding["toolchains"])
+
+
+def prepare_observation(lock: CheckoutLock, run_id: str, toolchains: dict[str, Any], artifact_node: str):
+    """Bind one fresh request; the private lease state owns validation expectations."""
+    with _observation_access(lock):
+        report = _observation_report(lock, run_id)
+        plan = report["plan"]
+        canonical = plan_build(Path(plan["matrix"]["path"]),
+            scope="full" if plan["scope"] == "lane" else plan["scope"],
+            artifact_node=plan["selected_nodes"][0] if plan["scope"] == "lane" else None,
+            clean=any(arg.endswith(":clean") for arg in plan["lanes"][0]["command"]),
+            windows=plan["lanes"][0]["command"][0] == "gradlew.bat")
+        if (canonical_json(plan) != canonical_json(canonical)
+                or canonical_json(source_snapshot(lock.repository)) != canonical_json(report["source"])):
+            raise BuildProcessError("planned source or matrix changed before observation")
+        lanes = [row for row in plan["lanes"] if row["artifact_node"] == artifact_node]
+        if len(lanes) != 1:
+            raise BuildProcessError("observation lane is outside the selected plan")
+        lane = lanes[0]
+        _verify_jdk_files(toolchains)
+        homes = {int(major): Path(row["home"]) for major, row in toolchains["homes"].items()}
+        major = lane["required_java"]["artifact"]
+        flags = _toolchain_flags(homes)
+        expected = {"artifact_node": artifact_node, "command": [lane["command"][0], *flags, *lane["command"][1:]],
+                    "compile_home": str(homes[major]), "runtime_home": str(homes[lane["required_java"]["runtime"]])}
+        selected = [row for row in toolchains["lanes"] if row["artifact_node"] == artifact_node]
+        if canonical_json(selected) != canonical_json([expected]) or toolchains["environment"] != {"JAVA_HOME": str(homes[21])}:
+            raise BuildProcessError("toolchain command binding differs from the selected plan")
+        suffix = f":{lane['minecraft']}" if lane["build_layout"] == "stonecutter" else ""
+        projects = [f":common{suffix}", f":{lane['loader']}{suffix}"]
+        compile_tasks = [f"{project}:compileJava" for project in projects] + [f"{projects[1]}:compileE2eJava"]
+        destinations = {}
+        for task in compile_tasks:
+            module = task.split(":")[1]
+            base = lock.repository / module
+            if suffix:
+                base = base / "versions" / lane["minecraft"]
+            destinations[task] = str(base / "build/classes/java" / ("e2e" if task.endswith("compileE2eJava") else "main"))
+        start = lane["command"].index("validateReleaseMatrix")
+        if start and lane["command"][start - 1].endswith(":clean"):
+            start -= 1
+        request = {"schema_version": 1, "run_id": run_id, "artifact_node": artifact_node,
+                   "repository": str(lock.repository), "caller_source": {**{key: value for key, value in report["source"].items()
+                    if key != "files"}, "matrix_sha256": plan["matrix"]["sha256"]}, "gradle_home": str(homes[21]),
+                   "compile_home": str(homes[major]), "compile_major": major, "requested_tasks": lane["command"][start:],
+                   "compile_tasks": compile_tasks, "projects": projects}
+        payload = canonical_json(request)
+        if len(payload) > 65536:
+            raise BuildProcessError("observation request exceeds its bounded protocol")
+        init = file_snapshot(lock.repository, "gradle/build-observation.init.gradle")
+        directory = lock.repository / "build"
+        for part in ("observations", run_id, artifact_node):
+            directory = directory / part
+            directory.mkdir(exist_ok=part != artifact_node)
+            if _linked(directory.lstat()) or not directory.is_dir():
+                raise BuildProcessError("observation directory must not be linked")
+        path = directory / "request.json"
+        with path.open("xb") as stream:
+            stream.write(payload)
+        request_file = file_snapshot(lock.repository, path)
+        command = [expected["command"][0], "--no-configuration-cache", "--init-script",
+                   str(lock.repository / init["path"]), f"-Dblockpops.observation.request={path}", *expected["command"][1:]]
+        lock.observations[(run_id, artifact_node)] = json.loads(json.dumps({"request": request, "request_file": request_file,
+            "init": init, "source": report["source"], "toolchains": toolchains, "destinations": destinations}))
+        return {"command": command, "request": str(path), "receipt": str(directory / "observation.json")}
+
+
+def validate_observation(lock: CheckoutLock, run_id: str, artifact_node: str):
+    """Validate selected/finished compilers and current class outputs; never qualify a release."""
+    with _observation_access(lock):
+        report = _observation_report(lock, run_id)
+        binding = lock.observations.get((run_id, artifact_node))
+        if binding is None:
+            raise BuildProcessError("observation does not belong to this checkout lease")
+        request = binding["request"]
+        _observation_inputs(lock.repository, binding)
+        receipt_path = lock.repository / binding["request_file"]["path"]
+        receipt, receipt_file = _observation_json(lock.repository, receipt_path.with_name("observation.json"))
+        expected = {"schema_version": 1, "run_id": run_id, "artifact_node": artifact_node,
+                    "request_sha256": binding["request_file"]["sha256"], "caller_source": request["caller_source"],
+                    "status": "completed", "gradle_jvm": {"home": request["gradle_home"], "major": 21}}
+        if canonical_json({key: value for key, value in receipt.items() if key != "compilers"}) != canonical_json(expected):
+            raise BuildProcessError("observation receipt identity or JVM differs from the bound request")
+        if not isinstance(receipt["compilers"], dict) or set(receipt["compilers"]) != set(request["compile_tasks"]):
+            raise BuildProcessError("observation receipt lacks the exact main/E2E compiler scope")
+        classes = {}
+        for task, row in receipt["compilers"].items():
+            selected, outcome = row["selected"], row["outcome"]
+            probe = binding["toolchains"]["homes"][str(request["compile_major"])]
+            version = selected["version"]
+            expected_selection = {"home": request["compile_home"], "major": request["compile_major"],
+                "release": request["compile_major"], "version": version,
+                "executable": str(Path(probe["home"]) / probe["files"]["javac"]["path"]),
+                "destination": binding["destinations"][task]}
+            compiled = {"did_work": True, "skipped": False, "up_to_date": False, "no_source": False, "skip_message": None, "failed": False}
+            unchanged = {"did_work": False, "skipped": True, "up_to_date": True, "no_source": False, "skip_message": "UP-TO-DATE", "failed": False}
+            if (set(row) != {"selected", "outcome"} or canonical_json(selected) != canonical_json(expected_selection)
+                    or not re.fullmatch(re.escape(probe["java_version"]) + r"(?:\+[A-Za-z0-9.+-]+)?", version)
+                    or canonical_json(outcome) not in (canonical_json(compiled), canonical_json(unchanged))):
+                raise BuildProcessError("compiler metadata or execution outcome is invalid")
+            destination = Path(selected["destination"])
+            for parent in (destination, *destination.parents):
+                if parent == lock.repository:
+                    break
+                if _linked(parent.lstat()) or not parent.is_dir():
+                    raise BuildProcessError("compiler output directory must be real and inside its build root")
+            outputs = []
+            for path in sorted(destination.rglob("*")):
+                if _linked(path.lstat()):
+                    raise BuildProcessError("compiler outputs must not contain links")
+                if not path.is_dir():
+                    output = file_snapshot(lock.repository, path)
+                    if path.suffix == ".class":
+                        outputs.append(output)
+            if not outputs:
+                raise BuildProcessError("mandatory main/E2E compiler produced no class outputs")
+            classes[task] = outputs
+        if (canonical_json(source_snapshot(lock.repository)) != canonical_json(binding["source"])
+                or canonical_json(report["source"]) != canonical_json(binding["source"])):
+            raise BuildProcessError("source or matrix changed during observation")
+        _observation_inputs(lock.repository, binding)
+        if file_snapshot(lock.repository, receipt_file["path"]) != receipt_file or any(
+            file_snapshot(lock.repository, row["path"]) != row for rows in classes.values() for row in rows
+        ):
+            raise BuildProcessError("receipt or compiler output changed during validation")
+        del lock.observations[(run_id, artifact_node)]
+        return {"status": "observed", "receipt": receipt_file, "compilers": receipt["compilers"], "classes": classes}
+
+
+def _toolchain_flags(homes):
+    return [f"-Dorg.gradle.java.home={homes[21]}", "-Dorg.gradle.parallel=false", "-Dorg.gradle.workers.max=1",
+            "-Porg.gradle.java.installations.paths=" + ",".join(str(homes[major]) for major in sorted(homes)),
+            "-Porg.gradle.java.installations.fromEnv=", "-Porg.gradle.java.installations.auto-detect=false",
+            "-Porg.gradle.java.installations.auto-download=false"]
+
+
 def verify_toolchains(plan: dict[str, Any], java_home: Path, java_homes: dict[int, Path],
                       *, environment: dict[str, str] | None = None) -> dict[str, Any]:
     """Probe explicit JDKs only; callers must reuse the validated environment plus overlay.
@@ -392,10 +583,7 @@ def verify_toolchains(plan: dict[str, Any], java_home: Path, java_homes: dict[in
             raise BuildProcessError("JDK files changed during toolchain probes")
     except (OSError, ValueError, KeyError, IndexError, TypeError, subprocess.SubprocessError) as exc:
         raise BuildProcessError(f"explicit toolchain validation failed: {exc}") from exc
-    flags = [f"-Dorg.gradle.java.home={launch}", "-Dorg.gradle.parallel=false", "-Dorg.gradle.workers.max=1",
-             "-Porg.gradle.java.installations.paths=" + ",".join(str(homes[major]) for major in sorted(homes)),
-             "-Porg.gradle.java.installations.fromEnv=", "-Porg.gradle.java.installations.auto-detect=false",
-             "-Porg.gradle.java.installations.auto-download=false"]
+    flags = _toolchain_flags(homes)
     lanes = [{"artifact_node": lane["artifact_node"], "command": [lane["command"][0], *flags, *lane["command"][1:]],
               "compile_home": str(homes[lane["required_java"]["artifact"]]),
               "runtime_home": str(homes[lane["required_java"]["runtime"]])} for lane in plan["lanes"]]

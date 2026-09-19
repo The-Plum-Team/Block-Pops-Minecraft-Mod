@@ -332,3 +332,9 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Loader bootstrap verification now normalizes secure immutable Git matrix bytes for either schema. It verifies every configured loader, including a NeoForge configuration outside preparing mode's legacy dispatch; unresolved targets do not invent executable bootstraps. No mutable worktree source validation or new execution route is introduced.
 - Root reproduced20 bootstrap tests; the agent also passed76 PR-gate/bootstrap tests and compared schema1 report bytes with the prior implementation. Fixtures cover preparing2, preparing4, shared12, malformed pairs, exact-next transitions and isolation from later worktree mutation. The report format and authoritative raw matrix hash remain unchanged.
 - Live matrix/contract bytes are unchanged. Synthetic complete inventories test reader behavior only. Rollback is this one consumer and its tests.
+
+## Task 7f — bind and validate fresh build observations
+
+- The runner can now generate one canonical observation request per leased run/lane and validate a fresh exact receipt against private lease-owned expectations. Commands, source/matrix identity, JDK/init/request hashes, compiler homes/versions/outcomes and real class-output snapshots must agree; missing, stale, replayed, no-source or arbitrary skipped receipts fail.
+- Root reproduced46 runner/context tests plus the final receipt-shape regression. These receipt fixtures are synthetic protocol tests; actual Gradle observation was verified separately in7e. Raw source snapshots now ignore Git replacements/grafts and retain consumer override sources while excluding only observed Stonecutter generated build directories.
+- CLI execution remains pending. The next executor must call these primitives around each serial process and preserve runtime/qualification separation. Rollback is request/receipt binding and tests, retaining equivalent immutable Git identity hardening.

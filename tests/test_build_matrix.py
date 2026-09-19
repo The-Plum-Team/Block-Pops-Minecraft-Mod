@@ -20,7 +20,8 @@ from scripts.ci.tests.matrix_fixtures import schema2_configuration
 from scripts.lib.secure_json import SecureJsonError
 from scripts.release.build_matrix import (
     BuildProcessError, _finish_owned_group, begin_report, checkout_lock, file_snapshot, finish_report,
-    main, numeric_version, output_snapshot, plan_build, run_lane, source_snapshot, verify_toolchains,
+    main, numeric_version, output_snapshot, plan_build, prepare_observation, run_lane, source_snapshot,
+    validate_observation, verify_toolchains,
 )
 from scripts.release.matrix import MatrixError
 from tests.test_release_matrix_portability import arbitrary_named_1211_release_matrix
@@ -307,6 +308,143 @@ class BuildMatrixToolchainTests(unittest.TestCase):
         self.assertEqual(str(self.homes[21]), result["lanes"][0]["runtime_home"])
 
 
+class BuildMatrixObservationTests(unittest.TestCase):
+    def setUp(self):
+        BuildMatrixToolchainTests.setUp(self)
+        (self.root / "gradle").mkdir(exist_ok=True)
+        (self.root / "gradle/build-observation.init.gradle").write_bytes((ROOT / "gradle/build-observation.init.gradle").read_bytes())
+        for args in (("init", "-q"), ("add", "."),
+                     ("-c", "user.name=Test", "-c", "user.email=t@example.test", "commit", "-qm", "fixture")):
+            subprocess.run(["git", "-C", str(self.root), *args], check=True, capture_output=True)
+
+    @contextlib.contextmanager
+    def prepared(self, node=None):
+        node = node or self.plan["selected_nodes"][0]
+        with patch("subprocess.run", side_effect=lambda *args, **kw: BuildMatrixToolchainTests.probe(self, *args, **kw)):
+            toolchains = verify_toolchains(self.plan, self.homes[21], {17: self.homes[17]}, environment=self.env)
+        with checkout_lock(self.root) as lock:
+            run_id = begin_report(lock, self.plan)
+            result = prepare_observation(lock, run_id, toolchains, node)
+            request = json.loads(Path(result["request"]).read_bytes())
+            receipt = {key: request[key] for key in ("schema_version", "run_id", "artifact_node", "caller_source")}
+            receipt.update(request_sha256=hashlib.sha256(Path(result["request"]).read_bytes()).hexdigest(),
+                           status="completed", gradle_jvm={"home": request["gradle_home"], "major": 21}, compilers={})
+            for task, destination in lock.observations[(run_id, node)]["destinations"].items():
+                directory = Path(destination); directory.mkdir(parents=True, exist_ok=True)
+                (directory / "Compiled.class").write_bytes(b"synthetic unit fixture")
+                receipt["compilers"][task] = {"selected": {"home": request["compile_home"], "major": request["compile_major"],
+                    "release": request["compile_major"], "version": f"{request['compile_major']}.0.1+7-LTS",
+                    "executable": str(Path(request["compile_home"]) / "bin/javac"), "destination": destination},
+                    "outcome": {"did_work": True, "skipped": False, "up_to_date": False, "no_source": False,
+                                "skip_message": None, "failed": False}}
+            Path(result["receipt"]).write_text(json.dumps(receipt))
+            yield lock, run_id, node, result, request, receipt
+
+    def test_canonical_request_scopes_destinations_and_consumes_receipt_once(self):
+        for legacy in (False, True):
+            if legacy:
+                path = Path(self.plan["matrix"]["path"])
+                path.write_bytes((ROOT / "release/release-matrix.json").read_bytes())
+                self.plan = plan_build(path)
+            with self.prepared() as (lock, run_id, node, bound, request, receipt):
+                payload = Path(bound["request"]).read_bytes()
+                self.assertEqual(json.dumps(request, sort_keys=True, separators=(",", ":")).encode(), payload)
+                self.assertIn("--no-configuration-cache", bound["command"])
+                self.assertIn("--init-script", bound["command"])
+                self.assertEqual(3, len(request["compile_tasks"]))
+                self.assertEqual("validateReleaseMatrix", request["requested_tasks"][0])
+                with self.assertRaises((BuildProcessError, FileExistsError)):
+                    prepare_observation(lock, run_id, lock.observations[(run_id, node)]["toolchains"], node)
+                with patch("scripts.release.build_matrix.source_snapshot", wraps=source_snapshot) as snapshot:
+                    evidence = validate_observation(lock, run_id, node)
+                    self.assertEqual(1, snapshot.call_count)
+                self.assertEqual("observed", evidence["status"])
+                self.assertEqual(3, len(evidence["classes"]))
+                for task, rows in evidence["classes"].items():
+                    self.assertEqual(1, len(rows))
+                    self.assertEqual(not legacy, "/versions/" in rows[0]["path"])
+                with self.assertRaises(BuildProcessError):
+                    validate_observation(lock, run_id, node)
+
+    def test_receipt_identity_scope_metadata_outcome_and_json_types_are_exact(self):
+        for mutation in ("run", "node", "hash", "source", "jvm", "scope", "compilers_list", "version", "home", "executable", "destination", "no_source", "failed", "skipped", "float", "duplicate"):
+            with self.prepared() as (lock, run_id, node, bound, request, receipt):
+                compiler = next(iter(receipt["compilers"].values()))
+                if mutation in {"run", "node", "hash"}:
+                    receipt[{"run": "run_id", "node": "artifact_node", "hash": "request_sha256"}[mutation]] = "wrong"
+                elif mutation == "source": receipt["caller_source"] = {}
+                elif mutation == "jvm": receipt["gradle_jvm"]["major"] = 17
+                elif mutation == "scope": receipt["compilers"].pop(next(iter(receipt["compilers"])))
+                elif mutation == "compilers_list": receipt["compilers"] = list(receipt["compilers"])
+                elif mutation in {"version", "home", "executable", "destination"}: compiler["selected"][mutation] = "wrong"
+                elif mutation == "float": compiler["selected"]["major"] = float(request["compile_major"])
+                elif mutation != "duplicate": compiler["outcome"][mutation] = True
+                payload = json.dumps(receipt)
+                if mutation == "duplicate": payload = payload.replace('"schema_version": 1', '"schema_version": 1, "schema_version": 1')
+                Path(bound["receipt"]).write_text(payload)
+                with self.subTest(mutation=mutation), self.assertRaises((BuildProcessError, SecureJsonError)):
+                    validate_observation(lock, run_id, node)
+
+    def test_up_to_date_requires_existing_classes_and_real_unlinked_output_paths(self):
+        with self.prepared() as (lock, run_id, node, bound, request, receipt):
+            for compiler in receipt["compilers"].values():
+                compiler["outcome"].update(did_work=False, skipped=True, up_to_date=True, skip_message="UP-TO-DATE")
+            Path(bound["receipt"]).write_text(json.dumps(receipt))
+            self.assertEqual("observed", validate_observation(lock, run_id, node)["status"])
+        for linked in (False, True):
+            with self.prepared() as (lock, run_id, node, bound, request, receipt):
+                compiler = next(iter(receipt["compilers"].values()))
+                path = Path(compiler["selected"]["destination"]) / "Compiled.class"
+                path.unlink()
+                if linked: path.symlink_to(self.homes[17] / "bin/java")
+                with self.subTest(linked=linked), self.assertRaises(BuildProcessError):
+                    validate_observation(lock, run_id, node)
+                path.unlink(missing_ok=True)
+
+    def test_request_init_jdk_source_matrix_and_receipt_links_cannot_change(self):
+        for mutation in ("request", "init", "jdk", "source", "matrix", "receipt_link"):
+            with self.prepared() as (lock, run_id, node, bound, request, receipt):
+                paths = {"request": Path(bound["request"]), "init": self.root / "gradle/build-observation.init.gradle",
+                         "jdk": self.homes[17] / "bin/javac", "source": self.root / "common/src/main/New.java",
+                         "matrix": Path(self.plan["matrix"]["path"]), "receipt_link": Path(bound["receipt"])}
+                path = paths[mutation]
+                original = path.read_bytes() if path.exists() else None
+                if mutation == "receipt_link":
+                    path.unlink(); path.symlink_to(bound["request"])
+                else:
+                    path.write_bytes((original or b"") + b"\nchanged")
+                try:
+                    with self.subTest(mutation=mutation), self.assertRaises((BuildProcessError, OSError)):
+                        validate_observation(lock, run_id, node)
+                finally:
+                    if path.is_symlink(): path.unlink()
+                    if original is None: path.unlink()
+                    else: path.write_bytes(original)
+
+    def test_running_lease_and_matching_run_are_required(self):
+        with self.prepared() as (lock, run_id, node, bound, request, receipt):
+            with lock.guard, self.assertRaisesRegex(BuildProcessError, "idle"):
+                validate_observation(lock, run_id, node)
+            with self.assertRaises(BuildProcessError): validate_observation(lock, "f" * 32, node)
+            begin_report(lock, self.plan)
+            with self.assertRaises(BuildProcessError): validate_observation(lock, run_id, node)
+        with self.assertRaises(BuildProcessError): validate_observation(lock, run_id, node)
+
+    def test_input_changes_during_final_source_scan_cannot_escape_validation(self):
+        for mutation in ("jdk", "receipt", "class"):
+            with self.prepared() as (lock, run_id, node, bound, request, receipt):
+                compiler = next(iter(receipt["compilers"].values()))
+                path = {"jdk": self.homes[17] / "bin/javac", "receipt": Path(bound["receipt"]),
+                        "class": Path(compiler["selected"]["destination"]) / "Compiled.class"}[mutation]
+                def mutate_after_scan(repository):
+                    snapshot = source_snapshot(repository)
+                    path.write_bytes(b"changed after initial identity check")
+                    return snapshot
+                with patch("scripts.release.build_matrix.source_snapshot", side_effect=mutate_after_scan):
+                    with self.subTest(mutation=mutation), self.assertRaises(BuildProcessError):
+                        validate_observation(lock, run_id, node)
+
+
 class BuildMatrixProcessTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -541,6 +679,24 @@ class BuildMatrixEvidenceTests(unittest.TestCase):
         self.assertEqual(before["fingerprint"], after["fingerprint"])
         self.assertNotEqual(before["index_sha256"], after["index_sha256"])
 
+    def test_replace_refs_cannot_hide_the_real_tree_or_dirty_source(self):
+        head = self.git("rev-parse", "HEAD").decode().strip()
+        tree = self.git("rev-parse", "HEAD^{tree}").decode().strip()
+        (self.root / "common/src/main/Block.java").write_text("class Block { int replacement; }")
+        self.git("add", ".")
+        self.git("-c", "user.name=Test", "-c", "user.email=t@example.test", "commit", "-qm", "replacement")
+        replacement = self.git("rev-parse", "HEAD").decode().strip()
+        self.git("reset", "--soft", head)
+        self.git("replace", head, replacement)
+        self.assertNotEqual(tree, self.git("rev-parse", "HEAD^{tree}").decode().strip())
+        run = subprocess.run
+        with patch("subprocess.run", wraps=run) as calls:
+            snapshot = source_snapshot(self.root)
+        self.assertEqual((head, tree, True), (snapshot["commit"], snapshot["tree"], snapshot["dirty"]))
+        for call in calls.call_args_list:
+            self.assertEqual("1", call.kwargs["env"]["GIT_NO_REPLACE_OBJECTS"])
+            self.assertEqual(os.devnull, call.kwargs["env"]["GIT_GRAFT_FILE"])
+
     def test_ignored_java_inputs_are_bound_and_changes_invalidate_a_running_report(self):
         with (self.root / ".gitignore").open("a") as stream:
             stream.write("common/src/main/Ignored.java\n")
@@ -570,12 +726,15 @@ class BuildMatrixEvidenceTests(unittest.TestCase):
 
     def test_untracked_inputs_and_both_contracts_are_bound_but_pi_and_generated_files_are_excluded(self):
         before = source_snapshot(self.root)
-        for name in (".pi/state.json", "build/cache.bin", "common/build/generated.java", ".gradle/cache.bin"):
+        for name in (".pi/state.json", "build/cache.bin", "common/build/generated.java", ".gradle/cache.bin",
+                     "common/versions/1.21.1/build/generated/stonecutter/main/Generated.java",
+                     "fabric/versions/1.21.1/build/stonecutter-cache/sources/e2e/Cached.java"):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("irrelevant")
         self.assertEqual(before, source_snapshot(self.root))
-        for name in ("common/src/main/New.java", "scripts/new.py", "stonecutter.gradle", ".gitignore",
+        for name in ("common/src/main/New.java", "common/versions/1.21.1/src/main/Override.java",
+                     "scripts/new.py", "scripts/versions/example/build/hook.py", "stonecutter.gradle", ".gitignore",
                      "release/release-matrix.json", "e2e/scenario-contract.json", "e2e/loader-bootstrap-contract.json"):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
