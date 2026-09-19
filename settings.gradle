@@ -57,8 +57,19 @@ pluginManagement {
                 includeGroupByRegex('org\\.spongepowered(\\..*)?')
             }
         }
+        maven {
+            name = 'KikugiePluginRepository'
+            url = 'https://maven.kikugie.dev/releases'
+            mavenContent { releasesOnly() }
+            content {
+                includeModule('dev.kikugie.stonecutter', 'dev.kikugie.stonecutter.gradle.plugin')
+                includeModule('dev.kikugie', 'stonecutter')
+            }
+        }
         gradlePluginPortal {
             content {
+                excludeModule('dev.kikugie.stonecutter', 'dev.kikugie.stonecutter.gradle.plugin')
+                excludeModule('dev.kikugie', 'stonecutter')
                 excludeGroup('loom')
                 excludeGroup('net.minecraft')
                 excludeGroupByRegex('net\\.minecraftforge\\.[0-9a-f]{64}')

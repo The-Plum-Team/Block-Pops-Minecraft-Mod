@@ -127,11 +127,24 @@ REMOTE_EXCLUSIONS = (
     "excludeGroupByRegex('net\\\\.neoforged\\\\.fancymodloader\\\\.[0-9a-f]{64}')",
     "excludeGroupByRegex('remapped\\\\..+')",
 )
-EXPECTED_POLICY_SHA256 = "3bfd5b790aebcd374aa43eb78d50bbfe9b77b9da1ff413c31358da0cda251064"
-EXPECTED_PLUGIN_MANAGEMENT_SHA256 = (
-    "a328bf5c434347f69cd58825c1f60bc809e38fdf78184109f73bb3df43ae857d"
+STONECUTTER_COMPONENTS = {
+    ("dev.kikugie", "stonecutter", "0.7.11"): {
+        "stonecutter-0.7.11.jar": "6c4e06b16eb5a89dbc5375a8626511f203b1dbb3e17d84a0f9a1cf617dcd559a",
+        "stonecutter-0.7.11.module": "f80adecb5dd27664fc6fecd42dc6a21275ba9e92a844e175ab41d2de0dc15b3e",
+        "stonecutter-0.7.11.pom": "90ee51b5d1a54a6947122241aa7c304e5a1f089df85fd204c184737a80bc88a6",
+    },
+    ("dev.kikugie.stonecutter", "dev.kikugie.stonecutter.gradle.plugin", "0.7.11"): {
+        "dev.kikugie.stonecutter.gradle.plugin-0.7.11.pom": "17c78927965542007002094ef130e5ce90d41b6405dd95f9840edf71c042de0d",
+    },
+}
+STONECUTTER_CHECKSUM_ORIGIN = "Reviewed Kikugie release 0.7.11"
+PLUGIN_ONLY_EXCLUSIONS = tuple(
+    f"excludeModule('{group}', '{name}')"
+    for group, name, _ in STONECUTTER_COMPONENTS
 )
-EXPECTED_SETTINGS_SHA256 = "bbcbba903fc635fec906110fda2de04f0eec88688c2d2b53f0929a5256ba6f86"
+EXPECTED_POLICY_SHA256 = "f101246914780e6d5fc4ea06e251ee6a584664c530bae489c02c5781b15ea25e"
+EXPECTED_PLUGIN_MANAGEMENT_SHA256 = "fb5e6e4641227587e68ce7180f2edbe3be84b5990e858e5b2c80af9b699521f8"
+EXPECTED_SETTINGS_SHA256 = "cfde4885e934d1746fbe80b94813a99f9e223cd97890b9de91ec859f048041f1"
 XML_DECLARATION = b'<?xml version="1.0" encoding="UTF-8"?>\n'
 
 
@@ -194,7 +207,7 @@ def validate_repository_policy_text(policy: str) -> None:
         > before_hosts.index("repositoryScheme != 'https'")
     ):
         raise DependencyPolicyError("repository scheme policy is not fail closed")
-    for exclusion in REMOTE_EXCLUSIONS:
+    for exclusion in REMOTE_EXCLUSIONS + PLUGIN_ONLY_EXCLUSIONS:
         if before_hosts.count(exclusion) != 1:
             raise DependencyPolicyError(f"remote exclusion is not exact: {exclusion}")
     identities = frozenset(re.findall(r"case '([^']+)':", after_hosts))
@@ -244,14 +257,15 @@ def validate_plugin_management_text(plugin_management: str) -> None:
             "https://maven.minecraftforge.net/",
             "https://maven.neoforged.net/releases/",
             "https://repo.spongepowered.org/repository/maven-public/",
+            "https://maven.kikugie.dev/releases",
         }
     )
     if plugin_urls != expected_plugin_urls:
         raise DependencyPolicyError("plugin repository URLs are not exact")
     if (
-        plugin_management.count("maven {") != 6
-        or plugin_management.count("content {") != 7
-        or plugin_management.count("mavenContent { releasesOnly() }") != 6
+        plugin_management.count("maven {") != 7
+        or plugin_management.count("content {") != 8
+        or plugin_management.count("mavenContent { releasesOnly() }") != 7
     ):
         raise DependencyPolicyError("plugin repositories are not release-only")
     expected_plugin_exclusion_counts = (1, 1, 2, 2, 1)
@@ -259,6 +273,10 @@ def validate_plugin_management_text(plugin_management: str) -> None:
         expected_plugin_exclusion_counts
     ):
         raise DependencyPolicyError("plugin portal generated exclusions are not exact")
+    for exclusion in PLUGIN_ONLY_EXCLUSIONS:
+        inclusion = exclusion.replace("excludeModule", "includeModule", 1)
+        if plugin_management.count(exclusion) != 1 or plugin_management.count(inclusion) != 1:
+            raise DependencyPolicyError("Stonecutter plugin origins are not exact")
     for forbidden in ("mavenLocal(", "flatDir {", "ivy {", "google()"):
         if forbidden in plugin_management:
             raise DependencyPolicyError(f"settings declare forbidden repository {forbidden}")
@@ -416,6 +434,7 @@ def validate_metadata(path: Path) -> None:
         raise DependencyPolicyError("dependency verification trust exceptions are not exact")
 
     component_identities: set[tuple[str, str, str]] = set()
+    stonecutter_identities: set[tuple[str, str, str]] = set()
     for component in components[0]:
         if component.tag != f"{TAG}component" or set(component.attrib) != {
             "group",
@@ -429,6 +448,12 @@ def validate_metadata(path: Path) -> None:
         if not group or not name or not version:
             raise DependencyPolicyError("dependency component identity cannot be empty")
         identity = (group, name, version)
+        stonecutter_artifacts = None
+        if group == "dev.kikugie" or group.startswith("dev.kikugie."):
+            stonecutter_artifacts = STONECUTTER_COMPONENTS.get(identity)
+            if stonecutter_artifacts is None:
+                raise DependencyPolicyError("unreviewed Kikugie component or version")
+            stonecutter_identities.add(identity)
         if identity in component_identities:
             raise DependencyPolicyError("dependency component identities must be unique")
         component_identities.add(identity)
@@ -437,6 +462,10 @@ def validate_metadata(path: Path) -> None:
                 f"generated component {group}:{name} must not carry inert checksums"
             )
         artifacts = list(component)
+        if stonecutter_artifacts is not None and {
+            artifact.attrib.get("name") for artifact in artifacts
+        } != set(stonecutter_artifacts):
+            raise DependencyPolicyError("Stonecutter artifact closure is not exact")
         if not artifacts:
             raise DependencyPolicyError(f"dependency component {group}:{name} is empty")
         artifact_names: set[str] = set()
@@ -453,10 +482,18 @@ def validate_metadata(path: Path) -> None:
                     f"dependency artifact {group}:{name}:{artifact_name} needs one SHA-256"
                 )
             checksum = checksums[0]
+            expected_origin = (
+                STONECUTTER_CHECKSUM_ORIGIN if stonecutter_artifacts is not None
+                else "Generated by Gradle"
+            )
             if set(checksum.attrib) != {"value", "origin"} or re.fullmatch(
                 r"[0-9a-f]{64}", checksum.attrib["value"]
-            ) is None or checksum.attrib["origin"] != "Generated by Gradle":
+            ) is None or checksum.attrib["origin"] != expected_origin:
                 raise DependencyPolicyError("dependency SHA-256 declaration is not exact")
+            if stonecutter_artifacts is not None and (
+                checksum.attrib["value"] != stonecutter_artifacts[artifact_name] or list(checksum)
+            ):
+                raise DependencyPolicyError("Stonecutter SHA-256 binding is not exact")
             alternate_values: set[str] = set()
             for alternate in checksum:
                 if (
@@ -470,6 +507,8 @@ def validate_metadata(path: Path) -> None:
                 ):
                     raise DependencyPolicyError("alternate SHA-256 declaration is not exact")
                 alternate_values.add(alternate.attrib["value"])
+    if stonecutter_identities != set(STONECUTTER_COMPONENTS):
+        raise DependencyPolicyError("Stonecutter component closure is incomplete")
 
 
 def main() -> int:
