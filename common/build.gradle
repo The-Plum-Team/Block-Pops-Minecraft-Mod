@@ -2,6 +2,12 @@ architectury {
     common rootProject.enabled_platforms.split(',')
 }
 
+// Architectury's transformer requests a dynamic loader independently of the
+// mod compile classpath. Keep that tool input on the same reviewed matrix pin.
+configurations.matching { it.name == 'architecturyTransformerClasspath' }.configureEach {
+    resolutionStrategy.force("net.fabricmc:fabric-loader:$rootProject.fabric_loader_version")
+}
+
 repositories {
     maven {
         name = 'GeckoLib'
