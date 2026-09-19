@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import unittest
 import urllib.request
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -38,6 +39,7 @@ from scripts.ci.pr_gate import (
     validate_exact_artifact,
     validate_controller_upgrade_tree,
     validate_pr_tree,
+    validate_restricted_transition_tree,
 )
 
 
@@ -959,6 +961,143 @@ class TreePolicyTests(unittest.TestCase):
             ],
             parity.call_args_list,
         )
+
+
+class RestrictedTransitionTreeTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.repository = Path(self.temporary.name)
+        self.git("init", "-q", "-b", "master")
+        self.git("config", "user.name", "Tests")
+        self.git("config", "user.email", "tests@invalid.test")
+        for path in ("release/release-matrix.json", "settings.gradle", "scripts/ci/pr_gate.py"):
+            self.write(path, "base\n")
+        self.git("add", ".")
+        self.git("commit", "-qm", "base")
+        self.base = self.git("rev-parse", "HEAD")
+        self.addCleanup(self.temporary.cleanup)
+
+    def git(self, *arguments):
+        return subprocess.check_output(["git", "-C", str(self.repository), *arguments], text=True).strip()
+
+    def write(self, path, content):
+        target = self.repository / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.is_symlink() or target.is_file():
+            target.unlink()
+        if content is not None:
+            target.write_text(content, encoding="utf-8")
+
+    def merged(self, changes, *, mode=None, head_base=None, merge_tree=None):
+        self.git("switch", "--discard-changes", "-qC", "candidate", head_base or self.base)
+        for path, content in changes.items():
+            self.write(path, content)
+        self.git("add", "-A")
+        if mode is not None:
+            path, bits = mode
+            oid = self.base if bits == "160000" else self.git("hash-object", "-w", "settings.gradle")
+            self.git("update-index", "--add", "--cacheinfo", f"{bits},{oid},{path}")
+        self.git("commit", "--allow-empty", "-qm", "candidate")
+        head = self.git("rev-parse", "HEAD")
+        tree = merge_tree or self.git("rev-parse", "HEAD^{tree}")
+        merge = self.git("commit-tree", tree, "-p", self.base, "-p", head, "-m", "synthetic merge")
+        self.git("checkout", "-qf", merge)
+        return identity(default_sha=self.base, base_sha=self.base, head_sha=head,
+                        merge_sha=merge, merge_tree=tree)
+
+    def validate(self, current, paths, *, scope="stonecutter-bootstrap"):
+        declaration = {"schema_version": 1, "controller_generation": 1, "scope": scope,
+                       "paths": sorted(paths), "controller_sha": self.base,
+                       "base_sha": self.base, "head_sha": current.head_sha}
+        return validate_restricted_transition_tree(
+            self.repository, current, declaration=json.dumps(declaration).encode(),
+            deployed_controller_sha=self.base, deployed_generation=1)
+
+    def test_exact_add_modify_delete_and_immutable_objects(self):
+        current = self.merged({"settings.gradle": "changed\n", "stonecutter.gradle": "new\n"})
+        self.write("settings.gradle", "uncommitted attacker bytes\n")
+        result = self.validate(current, ["settings.gradle", "stonecutter.gradle"])
+        self.assertEqual(("settings.gradle", "stonecutter.gradle"), result.paths)
+        self.git("restore", "settings.gradle")
+        current = self.merged({"settings.gradle": None})
+        self.validate(current, ["settings.gradle"])
+
+    def test_extras_authority_updates_undeclared_and_unchanged_paths_fail(self):
+        for changes, declared in (
+            ({"settings.gradle": "next", "product.txt": "extra"}, ["settings.gradle"]),
+            ({"settings.gradle": "next", "scripts/ci/pr_gate.py": "self-authorize"}, ["settings.gradle"]),
+            ({"settings.gradle": "next"}, ["settings.gradle", "stonecutter.gradle"]),
+            ({"stonecutter.gradle": "next"}, ["settings.gradle"]),
+            ({}, ["settings.gradle"]),
+        ):
+            with self.subTest(changes=changes), self.assertRaises(PrGateError):
+                self.validate(self.merged(changes), declared)
+
+    def test_rename_detection_cannot_widen_scope(self):
+        self.git("config", "diff.renames", "true")
+        current = self.merged({"settings.gradle": None, "outside.gradle": "base\n"})
+        with self.assertRaises(PrGateError):
+            self.validate(current, ["settings.gradle"])
+
+    def test_symlink_gitlink_and_executable_entries_fail(self):
+        for mode in ("120000", "160000", "100755"):
+            with self.subTest(mode=mode):
+                current = self.merged({}, mode=("stonecutter.gradle", mode))
+                with self.assertRaisesRegex(PrGateError, "non-executable blobs"):
+                    self.validate(current, ["stonecutter.gradle"])
+
+    def test_local_config_cannot_hide_an_out_of_scope_submodule(self):
+        self.git("config", "diff.ignoreSubmodules", "all")
+        current = self.merged({"settings.gradle": "next"}, mode=("hidden", "160000"))
+        with self.assertRaises(PrGateError):
+            self.validate(current, ["settings.gradle"])
+
+    def test_replacement_base_cannot_hide_an_extra_candidate_path(self):
+        current = self.merged({"settings.gradle": "next", "product.txt": "extra"})
+        base_blob = self.git("rev-parse", f"{self.base}:settings.gradle")
+        self.git("read-tree", current.merge_sha)
+        self.git("update-index", "--cacheinfo", f"100644,{base_blob},settings.gradle")
+        replacement = self.git("commit-tree", self.git("write-tree"), "-m", "forged base")
+        self.git("replace", self.base, replacement)
+        with self.assertRaises(PrGateError):
+            self.validate(current, ["settings.gradle"])
+
+    def test_grafts_cannot_invent_base_ancestry(self):
+        base_tree = self.git("rev-parse", f"{self.base}^{{tree}}")
+        unrelated = self.git("commit-tree", base_tree, "-m", "unrelated root")
+        current = self.merged({"settings.gradle": "next"}, head_base=unrelated)
+        grafts = self.repository / ".git/info/grafts"
+        grafts.write_text(f"{current.head_sha} {self.base}\n", encoding="utf-8")
+        with self.assertRaises(PrGateError):
+            self.validate(current, ["settings.gradle"])
+
+    def test_mode_and_type_changes_fail_even_for_an_exact_declared_path(self):
+        for mode in ("100755", "120000", "160000"):
+            with self.subTest(mode=mode):
+                current = self.merged({}, mode=("settings.gradle", mode))
+                with self.assertRaises(PrGateError):
+                    self.validate(current, ["settings.gradle"])
+
+    def test_stale_checkout_tree_parents_and_divergent_head_fail(self):
+        current = self.merged({"settings.gradle": "next"})
+        with self.assertRaisesRegex(PrGateError, "tree disagrees"):
+            self.validate(replace(current, merge_tree="f" * 40), ["settings.gradle"])
+        self.git("checkout", "-q", current.head_sha)
+        with self.assertRaisesRegex(PrGateError, "exact current synthetic merge"):
+            self.validate(current, ["settings.gradle"])
+        bad_merge = self.git("commit-tree", current.merge_tree, "-p", current.head_sha,
+                             "-p", self.base, "-m", "reordered")
+        self.git("checkout", "-q", bad_merge)
+        with self.assertRaisesRegex(PrGateError, "stale or reordered parents"):
+            self.validate(replace(current, merge_sha=bad_merge), ["settings.gradle"])
+        base_tree = self.git("rev-parse", f"{self.base}^{{tree}}")
+        mismatch = self.merged({"settings.gradle": "next"}, merge_tree=base_tree)
+        with self.assertRaisesRegex(PrGateError, "different trees"):
+            self.validate(mismatch, ["settings.gradle"])
+        unrelated = self.git("commit-tree", base_tree, "-m", "unrelated root")
+        divergent = self.merged({"settings.gradle": "next"}, head_base=unrelated)
+        with self.assertRaises(PrGateError):
+            self.validate(divergent, ["settings.gradle"])
 
 
 class ControllerUpgradeTreeTests(unittest.TestCase):

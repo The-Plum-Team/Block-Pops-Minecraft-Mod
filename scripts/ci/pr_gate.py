@@ -810,6 +810,8 @@ def _git(repository: Path, *arguments: str, accepted: Iterable[int] = (0,)) -> b
             **os.environ,
             "GIT_CONFIG_GLOBAL": os.devnull,
             "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_NO_REPLACE_OBJECTS": "1",
+            "GIT_GRAFT_FILE": os.devnull,
             "GIT_TERMINAL_PROMPT": "0",
             "GIT_PAGER": "cat",
             "LC_ALL": "C",
@@ -878,6 +880,52 @@ def _validate_local_pull_tree(repository: Path, identity: PullIdentity) -> Path:
     if tree != identity.merge_tree:
         _fail("local synthetic merge tree disagrees with GitHub API")
     return repository
+
+
+def validate_restricted_transition_tree(
+    repository: Path, identity: PullIdentity, *, declaration: bytes,
+    deployed_controller_sha: str, deployed_generation: int,
+) -> RestrictedTransition:
+    """Check exact proposal/tree boundaries; return no admission or authorization.
+
+    Deployment and PR state must be authenticated externally, as required by the parser.
+    Scope-specific semantics (including both loader phases), owner decisions and required
+    gate evidence remain separate checks. No existing gate calls this opt-in helper.
+    """
+    transition = parse_restricted_transition(
+        declaration, identity=identity, deployed_controller_sha=deployed_controller_sha,
+        deployed_generation=deployed_generation,
+    )
+    repository = _validate_local_pull_tree(repository, identity)
+    _git(repository, "merge-base", "--is-ancestor", identity.base_sha, identity.head_sha)
+    head_tree = _git(repository, "rev-parse", f"{identity.head_sha}^{{tree}}").decode().strip()
+    if head_tree != identity.merge_tree:
+        _fail("restricted transition head and synthetic merge have different trees")
+    raw = _git(
+        repository, "diff", "--no-ext-diff", "--no-renames", "--ignore-submodules=none",
+        "--name-status", "-z", identity.base_sha, identity.merge_sha, "--",
+    )
+    fields = raw.rstrip(b"\0").split(b"\0") if raw else []
+    if not fields or len(fields) % 2 or len(fields) // 2 > len(transition.paths):
+        _fail("restricted transition diff is empty, malformed or exceeds its declaration")
+    seen: set[str] = set()
+    for index in range(0, len(fields), 2):
+        status = fields[index]
+        path = _canonical_upgrade_path(fields[index + 1])
+        if status not in {b"A", b"M", b"D"} or path in seen or path not in transition.paths:
+            _fail("restricted transition diff has an undeclared path, status or duplicate")
+        seen.add(path)
+        base = _tree_entry(repository, identity.base_sha, path)
+        candidate = _tree_entry(repository, identity.merge_sha, path)
+        if any(entry is not None and entry[:2] != ("100644", "blob") for entry in (base, candidate)):
+            _fail(f"restricted transition requires regular non-executable blobs: {path!r}")
+        if (status == b"A" and (base is not None or candidate is None)
+                or status == b"D" and (base is None or candidate is not None)
+                or status == b"M" and (base is None or candidate is None)):
+            _fail("restricted transition status disagrees with immutable tree entries")
+    if seen != set(transition.paths):
+        _fail("restricted transition changed paths differ from its exact declaration")
+    return transition
 
 
 def _require_exact_base_owned(repository: Path, identity: PullIdentity) -> None:

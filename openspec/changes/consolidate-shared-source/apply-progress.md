@@ -254,3 +254,10 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Run reports atomically replace prior success with `running`, bind a fresh run ID and live checkout lease, and finish successfully only for exact planned lane order, zero exits, unchanged source/matrix/contract inputs and unchanged output hashes. They do not claim runtime qualification or clean release provenance; CLI execution remains disabled.
 - Root reproduced54 planner/runtime/context tests. Review caught and fixed ignored-source omission and concurrent index drift; dedicated tests prove both invalidate evidence. Other mutations cover missing/changed outputs, stale runners and publication while a process is active.
 - Rollback is these snapshot/report primitives and tests. Toolchain validation and orchestration remain task7 follow-ups; Windows process execution is still explicitly unavailable.
+
+## Task 1b — exact restricted-tree boundaries
+
+- Added an opt-in structural verifier binding the declaration to authenticated base/head/synthetic-merge identities, exact ancestry/tree equality, declared changed-file inventory and regular non-executable Git blobs. Extra authority/product paths, hidden submodules, unsafe modes and widened rename scope fail.
+- Independent adversarial Git fixtures reproduced replacement-object and graft bypasses. The existing protected Git reader now sets `GIT_NO_REPLACE_OBJECTS=1` and `GIT_GRAFT_FILE` to the null device; neither user refs nor configuration were modified.
+- Root reproduced50 PR-gate tests, including nine new real-Git structural/adversarial cases. The helper still supplies no admission and has no evaluator/CLI wiring. Loader-phase semantics, owner-API authentication and exact gate evidence remain separate pending checks.
+- Rollback is this structural helper/tests; retain equivalent exact-object hardening if reorganizing the reader. Task1/AUTH-1 remains unresolved for deployment and delivery.
