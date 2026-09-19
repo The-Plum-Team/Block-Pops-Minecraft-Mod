@@ -163,7 +163,11 @@ public class ClawMachineBlock extends BaseEntityBlock {
     }
 
     @Override
+    //? if >=1.21 {
+    /*public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+    *///? } else {
     public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+    //? }
         if (!level.isClientSide) {
             if (player.isCreative()) {
                 preventCreativeDropFromBottomPart(level, pos, state, player);
@@ -171,7 +175,11 @@ public class ClawMachineBlock extends BaseEntityBlock {
                 dropResources(state, level, pos, null, player, player.getMainHandItem());
             }
         }
+        //? if >=1.21 {
+        /*return super.playerWillDestroy(level, pos, state, player);
+        *///? } else {
         super.playerWillDestroy(level, pos, state, player);
+        //? }
     }
 
     @Override
