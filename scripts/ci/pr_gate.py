@@ -106,6 +106,37 @@ CONTROLLER_UPGRADE_REQUIRED = frozenset(
     }
 )
 MAX_CONTROLLER_UPGRADE_PATHS = 300
+# Inert until a separately deployed evaluator authenticates deployment and runtime decisions.
+# These are exact files, never directory grants or paths supplied by a candidate controller.
+RESTRICTED_TRANSITION_GENERATION = 1
+RESTRICTED_TRANSITION_SCOPES = {
+    "matrix": ("release/release-matrix.json",),
+    "verification": ("gradle/verification-metadata.xml",),
+    "vanilla-shim": ("common/src/e2e/java/com/theplumteam/e2e/VanillaShim.java",),
+    "datapack-metadata": ("e2e/server-template/datapack/pack.mcmeta",),
+    "stonecutter-bootstrap": (
+        "settings.gradle", "build.gradle", "gradle/build-conventions.gradle",
+        "gradle/stonecutter-branch.gradle", "stonecutter.gradle", "gradle/repository-policy.gradle",
+    ),
+    "fabric-contract": ("e2e/loader-bootstrap-contract.json",),
+    "forge-contract": ("e2e/loader-bootstrap-contract.json",),
+    "neoforge-contract": ("e2e/loader-bootstrap-contract.json",),
+    "fabric-next": (
+        "e2e/loader-bootstrap-contract.json", "fabric/build.gradle",
+        "fabric/src/e2e/java/com/theplumteam/e2e/fabric/BlockPopsE2EFabric.java",
+        "fabric/src/e2e/resources/fabric.mod.json",
+    ),
+    "forge-next": (
+        "e2e/loader-bootstrap-contract.json", "forge/build.gradle",
+        "forge/src/e2e/java/com/theplumteam/e2e/forge/BlockPopsE2EForge.java",
+        "forge/src/e2e/resources/META-INF/mods.toml",
+    ),
+    "neoforge-next": (
+        "e2e/loader-bootstrap-contract.json", "neoforge/build.gradle",
+        "neoforge/src/e2e/java/com/theplumteam/e2e/neoforge/BlockPopsE2ENeoForge.java",
+        "neoforge/src/e2e/resources/META-INF/neoforge.mods.toml",
+    ),
+}
 SHA1 = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 SHA256_DIGEST = re.compile(r"^sha256:([0-9a-f]{64})$")
@@ -369,6 +400,118 @@ class PullIdentity:
     head_sha: str
     merge_sha: str
     merge_tree: str
+
+
+@dataclass(frozen=True)
+class RestrictedTransition:
+    schema_version: int
+    controller_generation: int
+    controller_sha: str
+    base_sha: str
+    head_sha: str
+    scope: str
+    paths: tuple[str, ...]
+
+    @property
+    def digest(self) -> str:
+        canonical = json.dumps(asdict(self), sort_keys=True, separators=(",", ":")).encode()
+        return hashlib.sha256(canonical).hexdigest()
+
+
+def parse_restricted_transition(
+    raw: bytes, *, identity: PullIdentity, deployed_controller_sha: str, deployed_generation: int
+) -> RestrictedTransition:
+    """Validate an inert proposal against independently authenticated deployment/PR state.
+
+    The caller must obtain deployment, generation and identity from protected repository state,
+    never this declaration or candidate code. This does not authenticate an owner, inspect a
+    tree, validate bootstrap phases/evidence, admit a candidate, or authorize initial deployment.
+    """
+    if not isinstance(raw, bytes) or not 1 <= len(raw) <= 8192:
+        _fail("restricted transition declaration must be bounded JSON bytes")
+    try:
+        value = json.loads(
+            raw.decode("utf-8", "strict"), object_pairs_hook=_reject_duplicates,
+            parse_constant=_reject_nonfinite,
+        )
+    except (ValueError, RecursionError) as exc:
+        raise PrGateError("restricted transition declaration is malformed") from exc
+    fields = {
+        "schema_version", "controller_generation", "controller_sha", "base_sha",
+        "head_sha", "scope", "paths",
+    }
+    if not isinstance(value, dict) or set(value) != fields:
+        _fail("restricted transition declaration has missing or extra fields")
+    if type(value["schema_version"]) is not int or value["schema_version"] != 1:
+        _fail("unsupported restricted transition schema")
+    if (
+        type(deployed_generation) is not int
+        or deployed_generation != RESTRICTED_TRANSITION_GENERATION
+        or type(value["controller_generation"]) is not int
+        or value["controller_generation"] != deployed_generation
+    ):
+        _fail("unsupported or undeployed restricted transition controller generation")
+    controller = _sha(deployed_controller_sha, "deployed controller SHA")
+    if (
+        identity.default_branch != identity.base_branch
+        or controller != identity.default_sha or controller != identity.base_sha
+    ):
+        _fail("restricted transition requires the exact deployed default branch base")
+    for field, expected in (
+        ("controller_sha", controller), ("base_sha", identity.base_sha), ("head_sha", identity.head_sha),
+    ):
+        if _sha(value[field], field) != _sha(expected, f"authenticated {field}"):
+            _fail(f"restricted transition {field} disagrees with authenticated state")
+    if value["head_sha"] == controller:
+        _fail("restricted transition requires a distinct candidate head")
+    scope, paths = value["scope"], value["paths"]
+    if not isinstance(scope, str) or scope not in RESTRICTED_TRANSITION_SCOPES:
+        _fail("unknown restricted transition scope")
+    if (
+        not isinstance(paths, list) or not paths
+        or any(not isinstance(path, str) for path in paths)
+        or len(set(paths)) != len(paths) or paths != sorted(paths)
+        or any(path not in RESTRICTED_TRANSITION_SCOPES[scope] for path in paths)
+    ):
+        _fail("restricted transition paths must be sorted unique exact files in the static scope")
+    return RestrictedTransition(**{**value, "paths": tuple(paths)})
+
+
+def bind_restricted_transition_decision(
+    transition: RestrictedTransition, *, repository: str, pull_number: int,
+    authenticated_owner_decision: dict[str, Any],
+) -> str:
+    """Return an audit digest, not admission, for a separately authenticated current decision.
+
+    The caller supplies the parsed transition, fetches/authenticates the latest existing owner
+    decision, and rechecks it after evidence selection. Candidate documents and ordinary
+    controller-upgrade comments are not this authority. This pure binder cannot detect deleted,
+    edited, stale or spoofed API records.
+    """
+    if not isinstance(repository, str) or REPOSITORY.fullmatch(repository) is None:
+        _fail("restricted transition repository is invalid")
+    expected = {
+        "schema_version": 1, "purpose": "restricted-transition-owner-authorization",
+        "repository": repository, "pull_request": _positive(pull_number, "pull request number"),
+        "owner": CONTROLLER_UPGRADE_OWNER, "decision": "approve",
+        "controller_generation": transition.controller_generation,
+        "controller_sha": transition.controller_sha, "base_sha": transition.base_sha,
+        "head_sha": transition.head_sha, "declaration_sha256": transition.digest,
+    }
+    decision = authenticated_owner_decision
+    if (
+        not isinstance(decision, dict)
+        or set(decision) != set(expected) | {"comment_id", "comment_updated_at"}
+        or any(
+            type(decision[key]) is not type(value) or decision[key] != value
+            for key, value in expected.items()
+        )
+    ):
+        _fail("restricted transition owner decision disagrees with its exact declaration and identity")
+    _positive(decision["comment_id"], "owner decision comment id")
+    _timestamp(decision["comment_updated_at"], "owner decision updated_at")
+    canonical = json.dumps(decision, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(canonical).hexdigest()
 
 
 @dataclass(frozen=True)

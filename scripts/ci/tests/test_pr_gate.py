@@ -20,14 +20,17 @@ from scripts.ci.pr_gate import (
     NotEligible,
     PrGateError,
     PullIdentity,
+    RESTRICTED_TRANSITION_SCOPES,
     SelectedRun,
     UpgradeAuthorization,
     _source_outputs,
     _upgrade_path_allowed,
+    bind_restricted_transition_decision,
     controller_upgrade_authorization,
     _gate_result,
     _result,
     main as pr_gate_main,
+    parse_restricted_transition,
     reauthorize,
     resolve_dispatch_source,
     resolve_pull_identity,
@@ -90,6 +93,117 @@ def run(
         "head_repository": {"full_name": "owner/repo"},
         "pull_requests": [{"number": pull}],
     }
+
+
+class RestrictedTransitionDeclarationTests(unittest.TestCase):
+    def declaration(self, **overrides: object) -> dict[str, object]:
+        return {
+            "schema_version": 1, "controller_generation": 1, "controller_sha": BASE,
+            "base_sha": BASE, "head_sha": HEAD, "scope": "matrix",
+            "paths": ["release/release-matrix.json"], **overrides,
+        }
+
+    def parse(self, declaration=None, **overrides):
+        arguments = {
+            "identity": identity(default_sha=BASE), "deployed_controller_sha": BASE,
+            "deployed_generation": 1, **overrides,
+        }
+        raw = json.dumps(self.declaration() if declaration is None else declaration).encode()
+        return parse_restricted_transition(raw, **arguments)
+
+    def decision(self, transition, **overrides):
+        return {
+            "schema_version": 1, "purpose": "restricted-transition-owner-authorization",
+            "repository": "AkaNebur/BlockPops", "pull_request": 17, "owner": "AkaNebur",
+            "decision": "approve", "controller_generation": 1, "controller_sha": BASE,
+            "base_sha": BASE, "head_sha": HEAD, "declaration_sha256": transition.digest,
+            "comment_id": 91, "comment_updated_at": "2026-09-19T10:00:00Z", **overrides,
+        }
+
+    def bind(self, transition, decision):
+        return bind_restricted_transition_decision(
+            transition, repository="AkaNebur/BlockPops", pull_number=17,
+            authenticated_owner_decision=decision)
+
+    def test_exact_static_scopes_and_external_deployment_bind_inert_proposals(self):
+        self.assertEqual(
+            {"matrix", "verification", "vanilla-shim", "datapack-metadata", "stonecutter-bootstrap",
+             "fabric-contract", "forge-contract", "neoforge-contract", "fabric-next", "forge-next", "neoforge-next"},
+            set(RESTRICTED_TRANSITION_SCOPES))
+        self.assertTrue(set(EXACT_BASE_OWNED_PATHS).issubset(
+            {path for paths in RESTRICTED_TRANSITION_SCOPES.values() for path in paths}))
+        for scope, paths in RESTRICTED_TRANSITION_SCOPES.items():
+            with self.subTest(scope=scope):
+                result = self.parse(self.declaration(scope=scope, paths=sorted(paths)))
+                self.assertEqual(tuple(sorted(paths)), result.paths)
+                self.assertRegex(self.bind(result, self.decision(result)), r"^[0-9a-f]{64}$")
+                self.assertTrue(all(not path.startswith(("scripts/", ".github/")) for path in paths))
+
+    def test_bounded_strict_json_rejects_malformed_duplicate_and_extra_fields(self):
+        for raw in (b"", b"[", b"\xff", b"{}", b"[]", b'{"scope":"matrix","scope":"matrix"}',
+                    b'{"schema_version":NaN}', b" " * 8193, "{}"):
+            with self.subTest(raw=repr(raw)[:80]), self.assertRaises(PrGateError):
+                parse_restricted_transition(raw, identity=identity(default_sha=BASE),
+                                            deployed_controller_sha=BASE, deployed_generation=1)
+        for value in (self.declaration(authority=True), {"schema_version": 1}):
+            with self.assertRaises(PrGateError):
+                self.parse(value)
+
+    def test_unknown_versions_generations_and_self_reported_deployment_fail(self):
+        for field in ("schema_version", "controller_generation"):
+            for value in (True, "1", 0, 2, None):
+                with self.subTest(field=field, value=value), self.assertRaises(PrGateError):
+                    self.parse(self.declaration(**{field: value}))
+        for arguments in ({"deployed_generation": True}, {"deployed_generation": 2},
+                          {"deployed_controller_sha": HEAD}, {"deployed_controller_sha": "bad"},
+                          {"identity": identity()}, {"identity": identity(default_sha=BASE, base_branch="1.20.1")},
+                          {"identity": identity(default_sha=HEAD, base_sha=HEAD), "deployed_controller_sha": HEAD}):
+            with self.subTest(arguments=arguments), self.assertRaises(PrGateError):
+                self.parse(**arguments)
+        with self.assertRaisesRegex(PrGateError, "distinct candidate"):
+            self.parse(self.declaration(head_sha=BASE), identity=identity(default_sha=BASE, head_sha=BASE))
+
+    def test_paths_cannot_be_inferred_expanded_aliased_duplicated_or_cross_loader(self):
+        for paths in ([], ["release/*"], ["release"], ["release/release-matrix.json/"],
+                      ["./release/release-matrix.json"], ["release/../release/release-matrix.json"],
+                      ["release\\release-matrix.json"], ["release/release-matrix.json"] * 2,
+                      ["release/release-matrix.json", "scripts/ci/pr_gate.py"], [None], [{}], "matrix"):
+            with self.subTest(paths=paths), self.assertRaises(PrGateError):
+                self.parse(self.declaration(paths=paths))
+        for declaration in (self.declaration(scope="future"), self.declaration(scope=[]),
+                            self.declaration(scope="fabric-next", paths=["forge/build.gradle"]),
+                            self.declaration(scope="neoforge-contract", paths=["neoforge/build.gradle"]),
+                            self.declaration(scope="stonecutter-bootstrap", paths=["settings.gradle", "build.gradle"])):
+            with self.subTest(declaration=declaration), self.assertRaises(PrGateError):
+                self.parse(declaration)
+        result = self.parse(self.declaration(scope="stonecutter-bootstrap", paths=["stonecutter.gradle"]))
+        self.assertEqual(("stonecutter.gradle",), result.paths)
+
+    def test_declaration_and_owner_decision_bind_every_identity_and_generation(self):
+        for field in ("controller_sha", "base_sha", "head_sha"):
+            with self.subTest(field=field), self.assertRaises(PrGateError):
+                self.parse(self.declaration(**{field: "f" * 40}))
+        transition = self.parse()
+        mutations = {"schema_version": True, "purpose": "controller-upgrade-owner-authorization",
+                     "repository": "other/repo", "pull_request": 18, "owner": "collaborator",
+                     "decision": "revoke", "controller_generation": 2, "controller_sha": HEAD,
+                     "base_sha": HEAD, "head_sha": BASE, "declaration_sha256": "0" * 64,
+                     "comment_id": True, "comment_updated_at": "yesterday", "extra": True}
+        for field, value in mutations.items():
+            with self.subTest(field=field), self.assertRaises(PrGateError):
+                self.bind(transition, self.decision(transition, **{field: value}))
+        for decision in ({}, None, self.decision(transition, controller_generation=True)):
+            with self.assertRaises(PrGateError):
+                self.bind(transition, decision)
+        other = self.parse(self.declaration(scope="verification", paths=["gradle/verification-metadata.xml"]))
+        with self.assertRaises(PrGateError):
+            self.bind(other, self.decision(transition))
+        self.assertNotEqual(self.bind(transition, self.decision(transition)),
+                            self.bind(transition, self.decision(transition, comment_id=92)))
+        narrowed = self.parse(self.declaration(scope="stonecutter-bootstrap", paths=["stonecutter.gradle"]))
+        expanded = self.parse(self.declaration(scope="stonecutter-bootstrap", paths=["build.gradle", "stonecutter.gradle"]))
+        with self.assertRaises(PrGateError):
+            self.bind(expanded, self.decision(narrowed))
 
 
 class RunSelectionTests(unittest.TestCase):
