@@ -192,10 +192,16 @@ jobs:
             --digest "$ARTIFACT_DIGEST" \
             --output selected-evidence
 
-      - name: Authenticate original packaged run and exact job graph
+      - name: Authenticate and compact the exact selected source
+        id: compact
+        shell: bash
         env:
+          BRANCH: ${{ matrix.branch.name }}
           CANONICAL_BRANCH: ${{ needs.discover.outputs.canonical_branch }}
+          COMMIT_SHA: ${{ matrix.branch.commit }}
           GH_TOKEN: ${{ github.token }}
+          MATRIX_SHA: ${{ matrix.branch.matrix_sha256 }}
+          TREE_SHA: ${{ matrix.branch.tree }}
           EXPECTED_HANDOFF_RUN_ATTEMPT: ${{ steps.source.outputs.expected_handoff_run_attempt }}
           EXPECTED_HANDOFF_RUN_ID: ${{ steps.source.outputs.expected_handoff_run_id }}
           SELECTED_ARTIFACT_DIGEST: ${{ steps.source.outputs.artifact_digest }}
@@ -204,39 +210,38 @@ jobs:
           SELECTED_KIND: ${{ steps.source.outputs.kind }}
           SELECTED_RUN_ATTEMPT: ${{ steps.source.outputs.run_attempt }}
           SELECTED_RUN_ID: ${{ steps.source.outputs.run_id }}
-        run: |
-          set -euo pipefail
-          python3 scripts/pages/authenticate_source.py \
-            --repository "$GITHUB_REPOSITORY" \
-            --canonical-branch "$CANONICAL_BRANCH" \
-            --matrix "$RUNNER_TEMP/release-matrix.json" \
-            --evidence selected-evidence \
-            --selected-kind "$SELECTED_KIND" \
-            --selected-artifact-id "$SELECTED_ARTIFACT_ID" \
-            --selected-artifact-name "$SELECTED_ARTIFACT_NAME" \
-            --selected-artifact-digest "$SELECTED_ARTIFACT_DIGEST" \
-            --selected-run-id "$SELECTED_RUN_ID" \
-            --selected-run-attempt "$SELECTED_RUN_ATTEMPT" \
-            --expected-handoff-run-id "$EXPECTED_HANDOFF_RUN_ID" \
-            --expected-handoff-run-attempt "$EXPECTED_HANDOFF_RUN_ATTEMPT"
-
-      - name: Reconstruct raw results or validate the immutable cache
-        shell: bash
-        env:
-          BRANCH: ${{ matrix.branch.name }}
-          COMMIT_SHA: ${{ matrix.branch.commit }}
-          MATRIX_SHA: ${{ matrix.branch.matrix_sha256 }}
-          SOURCE_DIGEST: ${{ steps.source.outputs.artifact_digest }}
-          SOURCE_ID: ${{ steps.source.outputs.artifact_id }}
-          SOURCE_KIND: ${{ steps.source.outputs.kind }}
-          SOURCE_NAME: ${{ steps.source.outputs.artifact_name }}
           SOURCE_CONTROLLER_BRANCH: ${{ steps.source.outputs.expected_handoff_controller_branch }}
           SOURCE_CONTROLLER_SHA: ${{ steps.source.outputs.expected_handoff_controller_sha }}
-          SOURCE_RUN_ATTEMPT: ${{ steps.source.outputs.run_attempt }}
-          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
-          TREE_SHA: ${{ matrix.branch.tree }}
         run: |
           set -euo pipefail
+          source_token="$GH_TOKEN"
+          unset GH_TOKEN
+          scope="$(python3 scripts/ci/matrix_scope.py --matrix "$RUNNER_TEMP/release-matrix.json" --no-source-check)"
+          scoped=()
+          case "$scope" in
+            unscoped) ;;
+            legacy|full)
+              scoped=(--scope "$scope" --expected-branch "$BRANCH" --expected-commit "$COMMIT_SHA"
+                --expected-tree "$TREE_SHA" --expected-matrix-sha256 "$MATRIX_SHA") ;;
+            *) printf 'Unsupported matrix scope: %s\n' "$scope" >&2; exit 2 ;;
+          esac
+          authenticate=(
+            python3 scripts/pages/authenticate_source.py
+            --repository "$GITHUB_REPOSITORY"
+            --canonical-branch "$CANONICAL_BRANCH"
+            --matrix "$RUNNER_TEMP/release-matrix.json"
+            --evidence selected-evidence
+            --selected-kind "$SELECTED_KIND"
+            --selected-artifact-id "$SELECTED_ARTIFACT_ID"
+            --selected-artifact-name "$SELECTED_ARTIFACT_NAME"
+            --selected-artifact-digest "$SELECTED_ARTIFACT_DIGEST"
+            --selected-run-id "$SELECTED_RUN_ID"
+            --selected-run-attempt "$SELECTED_RUN_ATTEMPT"
+            --expected-handoff-run-id "$EXPECTED_HANDOFF_RUN_ID"
+            --expected-handoff-run-attempt "$EXPECTED_HANDOFF_RUN_ATTEMPT"
+          )
+          if [[ "$scope" != unscoped ]]; then authenticate+=("${scoped[@]}"); fi
+          GH_TOKEN="$source_token" "${authenticate[@]}" > "$RUNNER_TEMP/pages-source-authentication.json"
           common=(
             --input selected-evidence
             --output candidate-cache
@@ -247,21 +252,60 @@ jobs:
             --tree "$TREE_SHA"
             --matrix-sha256 "$MATRIX_SHA"
           )
-          if [[ "$SOURCE_KIND" == raw ]]; then
+          if [[ "$scope" != unscoped ]]; then
+            projection="$(jq -er --arg scope "$scope" '.aggregate_scope | select(.kind == $scope) |
+              .projection | select(. == "pr-anchors" or . == "scheduled-anchors")' "$RUNNER_TEMP/pages-source-authentication.json")"
+            common+=(--scope "$scope" --projection "$projection")
+          fi
+          if [[ "$SELECTED_KIND" == raw ]]; then
             python3 scripts/pages/evidence.py compact "${common[@]}" \
-              --run-id "$SOURCE_RUN_ID" \
-              --run-attempt "$SOURCE_RUN_ATTEMPT" \
+              --run-id "$SELECTED_RUN_ID" \
+              --run-attempt "$SELECTED_RUN_ATTEMPT" \
               --controller-branch "$SOURCE_CONTROLLER_BRANCH" \
               --controller-sha "$SOURCE_CONTROLLER_SHA" \
-              --source-artifact-id "$SOURCE_ID" \
-              --source-artifact-name "$SOURCE_NAME" \
-              --source-artifact-digest "$SOURCE_DIGEST"
-          elif [[ "$SOURCE_KIND" == compact ]]; then
+              --source-artifact-id "$SELECTED_ARTIFACT_ID" \
+              --source-artifact-name "$SELECTED_ARTIFACT_NAME" \
+              --source-artifact-digest "$SELECTED_ARTIFACT_DIGEST"
+          elif [[ "$SELECTED_KIND" == compact ]]; then
             python3 scripts/pages/evidence.py copy-compact "${common[@]}"
           else
-            printf 'Unsupported selected source kind: %s\n' "$SOURCE_KIND" >&2
+            printf 'Unsupported selected source kind: %s\n' "$SELECTED_KIND" >&2
             exit 2
           fi
+          if [[ "$scope" != unscoped ]]; then
+            GH_TOKEN="$source_token" "${authenticate[@]}" --bind-compact candidate-cache > "$RUNNER_TEMP/pages-bound-selection.json"
+          fi
+          unset source_token
+          # The companion is transported separately; its JSON supplies no authority.
+          python3 - "$scope" <<'PY'
+          import hashlib, os, re, sys
+          from pathlib import Path
+          from scripts.lib.atomic_directory import atomic_directory, write_new
+          from scripts.lib.secure_json import canonical_json, read
+          from scripts.pages.evidence import branch_token
+          from scripts.release.matrix import MAX_MATRIX_BYTES
+          temporary = Path(os.environ["RUNNER_TEMP"])
+          _, matrix_raw = read(temporary / "release-matrix.json", label="external matrix", max_bytes=MAX_MATRIX_BYTES)
+          if hashlib.sha256(matrix_raw).hexdigest() != os.environ["MATRIX_SHA"]:
+              raise ValueError("external matrix changed before companion transport")
+          files = {"release-matrix.json": matrix_raw}
+          if sys.argv[1] != "unscoped":
+              before, _ = read(temporary / "pages-source-authentication.json", label="source authentication", max_bytes=2*1024*1024)
+              selection, raw = read(temporary / "pages-bound-selection.json", label="compact binding", max_bytes=2*1024*1024)
+              if canonical_json(before) != canonical_json({key: selection.get(key) for key in before}):
+                  raise ValueError("authenticated source changed during compact binding")
+              files["selection.json"] = raw
+          commit, run, attempt = (os.environ[key] for key in ("COMMIT_SHA", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT"))
+          if not re.fullmatch("[0-9a-f]{40}", commit) or any(not re.fullmatch("[1-9][0-9]*", value) for value in (run, attempt)):
+              raise ValueError("companion requires exact commit and Pages run/attempt")
+          name = f"pages-selection-{branch_token(os.environ['BRANCH'])}--{commit}-{run}-{attempt}"
+          def writer(stage, descriptor):
+              for filename, raw in files.items():
+                  write_new(descriptor, filename, raw)
+          atomic_directory(Path("candidate-selection"), writer)
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a") as stream:
+              stream.write(f"name={name}\nready=true\n")
+          PY
 
       - name: Upload one short-lived validated fan-in bundle
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -270,6 +314,16 @@ jobs:
           path: candidate-cache/
           if-no-files-found: error
           compression-level: 6
+          retention-days: 1
+
+      - name: Upload the exact external branch selection companion
+        if: steps.compact.outputs.ready == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.compact.outputs.name }}
+          path: candidate-selection/
+          if-no-files-found: error
+          compression-level: 0
           retention-days: 1
 
   build:
