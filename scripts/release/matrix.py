@@ -475,6 +475,8 @@ def _validate_configuration(
                 f"runtime {node} dependencies must be exactly "
                 f"{sorted(required_dependencies)}, found {sorted(dependency_ids)}"
             )
+        if schema2:
+            _validate_schema2_runtime_context(artifact, runtime, installers[installer])
         runtime_nodes.add(node)
         used_installers.add(installer)
     if runtime_nodes != set(by_node):
@@ -543,6 +545,74 @@ def _validate_schema2_artifact(
         _fail(f"artifact {node}.repository_family must be {loader}")
     if artifact["source_routes"] != ["common", loader]:
         _fail(f"artifact {node}.source_routes must select common and {loader}")
+
+
+def _validate_schema2_runtime_context(
+    artifact: dict[str, Any], runtime: dict[str, Any], installer: dict[str, Any],
+) -> None:
+    node, loader, minecraft = (
+        artifact["artifact_node"], artifact["loader"], artifact["minecraft"],
+    )
+    version = runtime["loader_version"]
+    if re.fullmatch(r"[0-9]+(?:\.[0-9]+)*(?:[-+][A-Za-z0-9.-]+)?", version) is None:
+        _fail(f"runtime {node}.loader_version is not a bounded version")
+    installer_id = runtime["installer"]
+    if loader == "fabric":
+        match = re.fullmatch(r"fabric-([0-9]+(?:\.[0-9]+)+)", installer_id)
+        if match is None:
+            _fail(f"runtime {node} must use a Fabric installer")
+        installer_version = match[1]
+        expected_url = (
+            "https://maven.fabricmc.net/net/fabricmc/fabric-installer/"
+            f"{installer_version}/fabric-installer-{installer_version}.jar"
+        )
+    else:
+        if installer_id != f"{loader}-{version}":
+            _fail(f"runtime {node} installer identity disagrees with loader_version")
+        if loader == "forge":
+            prefix = f"{minecraft}-"
+            origin = "https://maven.minecraftforge.net/net/minecraftforge/forge"
+        else:
+            prefix = ".".join(minecraft.split(".")[1:]) + "."
+            origin = "https://maven.neoforged.net/releases/net/neoforged/neoforge"
+        if not version.startswith(prefix):
+            _fail(f"runtime {node}.loader_version disagrees with its Minecraft era")
+        expected_url = f"{origin}/{version}/{loader}-{version}-installer.jar"
+    if installer["url"] != expected_url:
+        _fail(f"runtime {node} installer URL disagrees with its loader identity")
+
+    dependency_contexts = {
+        "architectury": (f"dev.architectury:architectury-{loader}", "https://maven.architectury.dev/"),
+        "geckolib": (f"software.bernie.geckolib:geckolib-{loader}-{minecraft}",
+                    "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/"),
+        "fabric-api": ("net.fabricmc.fabric-api:fabric-api", "https://maven.fabricmc.net/"),
+        "mclib": ("com.eliotlash.mclib:mclib", "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/"),
+    }
+    for dependency in runtime["runtime_dependencies"]:
+        coordinate, repository = dependency_contexts[dependency["id"]]
+        if dependency["coordinate"].rsplit(":", 1)[0] != coordinate or dependency["repository"] != repository:
+            _fail(f"runtime {node} dependency {dependency['id']} disagrees with its loader context")
+        if dependency["id"] == "fabric-api" and not dependency["coordinate"].endswith(f"+{minecraft}"):
+            _fail(f"runtime {node} Fabric API dependency disagrees with its Minecraft era")
+
+    constraint = artifact["metadata"]["minecraft"]
+    if loader == "fabric":
+        valid = constraint == f"~{minecraft}"
+    else:
+        upper = re.fullmatch(r"\[" + re.escape(minecraft) + r",([0-9]+(?:\.[0-9]+)+)\)", constraint)
+        valid = constraint == f"[{minecraft}]" or (
+            upper is not None
+            and _numeric_version(upper[1]) > _numeric_version(minecraft)
+        )
+    if not valid:
+        _fail(f"artifact {node} metadata Minecraft constraint disagrees with its era")
+
+
+def _numeric_version(value: str) -> tuple[int, ...]:
+    parts = list(map(int, value.split(".")))
+    while len(parts) > 1 and parts[-1] == 0:
+        parts.pop()
+    return tuple(parts)
 
 
 def _schema_version(data: Any) -> int:

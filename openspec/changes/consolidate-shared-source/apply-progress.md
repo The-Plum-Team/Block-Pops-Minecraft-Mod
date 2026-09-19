@@ -70,3 +70,12 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Remaining task 3: those runtime-context checks, explicit main/E2E source-tree and overlay validation, normalized configured/unresolved projection, and further negative coverage. No build or qualification success is implied.
 - Live matrix and user `.gitignore`/`.pi` bytes are preserved. No push, PR, merge, publication, protection change or sync-workflow retirement.
 - Rollback: revert only this unit's matrix validator, tests and progress entry; the live schema-1 matrix has no dependency on it.
+
+## Task 3 — bind schema-2 runtime inputs to their lane
+
+- Installer IDs, loader versions and exact reviewed URLs now agree with the loader/Minecraft era. Runtime dependency group/artifact identities and repository origins cannot borrow another loader context; Fabric API and GeckoLib retain their Minecraft identity.
+- Loader metadata must identify the artifact Minecraft version; FML ranges allow a higher numeric upper bound or an exact version, rejecting empty/reversed ranges including equivalent trailing-zero versions.
+- A separate verifier authored the context mutation tests and reviewed the helper. The new tests were first run after implementation and passed; no RED run is claimed for this unit.
+- `python3 -m unittest tests.test_release_matrix_schema2 tests.test_release_matrix_schema2_configuration tests.test_release_matrix_schema2_context tests.test_release_matrix_portability -q`: 25 tests passed. Schema-1 CLI remains byte-identical to baseline.
+- Schema-1 semantics, the live matrix, execution-consumer rejection of schema 2, and publication restrictions remain unchanged. Remaining task 3: main/E2E source routes/overlays and unresolved configuration projection.
+- Rollback is this helper/call, its new context test module, and this evidence entry; no runtime/build execution or remote mutation occurred.
