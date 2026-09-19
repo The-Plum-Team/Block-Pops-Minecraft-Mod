@@ -42,6 +42,8 @@ ext {
     release_java_version = javaVersion
     enabled_platforms = artifacts.collect { it.loader as String }.sort().join(',')
     runtime_dependency_coordinate = coordinateOf
+    common_project_path = stonecutterLayout ? ":common:${minecraftVersion}".toString() : ':common'
+    common_annotation_coordinate = laneContext.common_annotation_dependency.coordinate as String
     forge_family_loader = forgeFamilyLoader
     architectury_api_version = versionOf(artifacts[0].loader as String, 'architectury')
     geckolib_version = versionOf(artifacts[0].loader as String, 'geckolib')
@@ -88,9 +90,13 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
     apply plugin: 'maven-publish'
 
     def module = stonecutterLayout ? project.parent.name : project.name
-    def lane = artifacts.find { it.loader == module }
+    def selectedLane = lanes.find { it.artifact.loader == module }
+    def lane = selectedLane?.artifact
     if (module != 'common' && lane == null) {
         throw new GradleException("Project ${project.path} has no active matrix lane")
+    }
+    if (lane != null) {
+        ext.blockPopsLane = selectedLane
     }
 
     base {

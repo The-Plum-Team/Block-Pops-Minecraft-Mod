@@ -149,9 +149,6 @@ if (layouts == ['legacy'] as Set) {
     include 'common'
     activeLoaders.sort().each { include it }
     gradle.ext.blockPopsBuildProjectPaths = [':common'] + activeLoaders.sort().collect { ":${it}".toString() }
-    if (laneContext.scope == 'lane' && !activeLoaders.contains('fabric')) {
-        throw new GradleException('Selected FML lane requires an explicit common Fabric-annotation dependency adapter')
-    }
 } else if (layouts == ['stonecutter'] as Set && laneContext.lanes.size() == 1 && selectedNode != null) {
     def lane = laneContext.lanes[0]
     def minecraftVersion = lane.artifact.minecraft as String

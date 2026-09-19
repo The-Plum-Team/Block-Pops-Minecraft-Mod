@@ -261,3 +261,9 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Independent adversarial Git fixtures reproduced replacement-object and graft bypasses. The existing protected Git reader now sets `GIT_NO_REPLACE_OBJECTS=1` and `GIT_GRAFT_FILE` to the null device; neither user refs nor configuration were modified.
 - Root reproduced50 PR-gate tests, including nine new real-Git structural/adversarial cases. The helper still supplies no admission and has no evaluator/CLI wiring. Loader-phase semantics, owner-API authentication and exact gate evidence remain separate pending checks.
 - Rollback is this structural helper/tests; retain equivalent exact-object hardening if reorganizing the reader. Task1/AUTH-1 remains unresolved for deployment and delivery.
+
+## Task 6e — selected common and loader conventions
+
+- Common annotations and both independent loader-resolution configurations now use the explicit same-era matrix coordinate. Conventions expose the selected common project path and normalized loader record; the resolved legacy FML guard is removed, while Stonecutter game execution remains guarded.
+- Root reproduced23 context/policy tests and the strict policy CLI. Serial isolated Forge and Fabric archive rebuilds passed with Java21 launching Gradle and Java17 compilers observed; all four production/harness JARs are byte-identical to the verified legacy baseline. The Fabric rebuild first rejected GeckoLib's alternate loader pin, then passed with the matrix pin on `modCompileOnly`; metadata/checksums remained unchanged.
+- Evidence in `build/diagnostics/selected-context/result.json` records498 unchanged inputs, archive hashes and no remaining Gradle process. These are dirty local diagnostics, without release staging or client E2E. Rollback is the convention/guard changes plus exact settings-policy digest.
