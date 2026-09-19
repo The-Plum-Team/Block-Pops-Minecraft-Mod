@@ -74,12 +74,21 @@ def inspect_pages_branch(repository: Path, *, branch: str, ref: str,
 
     Callers authenticate the advertised ref/head separately. This opt-in API does
     not select a run, infer a projection, inspect worktree sources or qualify any
-    lane. Existing discovery/sync interfaces remain schema1-only.
+    lane. Existing sync/default discovery interfaces remain schema1-only.
     """
+    if scope not in ("unscoped", "legacy", "full"):
+        raise BranchDiscoveryError("Pages requires explicit unscoped/legacy/full scope")
+    return _inspect_pages_branch(repository, branch=branch, ref=ref,
+                                 canonical_branch=canonical_branch, scope=scope)
+
+
+def _inspect_pages_branch(repository: Path, *, branch: str, ref: str,
+                          canonical_branch: str, scope: str | None = None,
+                          enrolled_only: bool = False) -> dict[str, object] | None:
     if not valid_branch_name(branch) or not valid_branch_name(canonical_branch):
         raise BranchDiscoveryError("Pages branch identity is unsafe")
-    if not isinstance(ref, str) or not ref or scope not in ("unscoped", "legacy", "full"):
-        raise BranchDiscoveryError("Pages requires an exact ref and explicit unscoped/legacy/full scope")
+    if not isinstance(ref, str) or not ref:
+        raise BranchDiscoveryError("Pages requires an exact ref")
 
     def oid(raw: bytes, label: str) -> str:
         value = raw.strip().decode("ascii", "strict")
@@ -93,6 +102,8 @@ def inspect_pages_branch(repository: Path, *, branch: str, ref: str,
         tree = oid(_pages_git(repository, "rev-parse", f"{commit}^{{tree}}"), "tree")
         path = "release/release-matrix.json"
         record = _pages_git(repository, "ls-tree", "-z", commit, "--", path)
+        if not record and enrolled_only and branch != canonical_branch:
+            return None
         metadata, separator, filename = record.rstrip(b"\0").partition(b"\t")
         fields = metadata.split()
         if (separator != b"\t" or filename != path.encode() or len(fields) != 3
@@ -106,15 +117,26 @@ def inspect_pages_branch(repository: Path, *, branch: str, ref: str,
         if (len(raw) != size
                 or hashlib.sha1(b"blob " + str(size).encode() + b"\0" + raw).hexdigest() != blob):
             raise BranchDiscoveryError("Pages matrix bytes differ from their Git blob identity")
-        matrix = secure_loads(raw, label="Pages branch matrix", max_bytes=MAX_MATRIX_BYTES)
+        try:
+            matrix = secure_loads(raw, label="Pages branch matrix", max_bytes=MAX_MATRIX_BYTES)
+        except SecureJsonError:
+            if enrolled_only and branch != canonical_branch:
+                return None
+            raise
+        if enrolled_only and branch != canonical_branch:
+            claim = matrix.get("branch") if isinstance(matrix, dict) else None
+            if not isinstance(claim, dict) or claim.get("name") != branch or claim.get("role") != "release":
+                return None
         inventory = normalize_matrix_inventory(matrix)
+        document = MatrixDocument(inventory, json.dumps(matrix))
+        if scope is None:
+            scope = "unscoped" if inventory.schema_version == 1 else document.default_scope
         identity = matrix["branch"]
         role = "integration" if branch == canonical_branch else "release"
         if (identity["name"] != branch or identity["canonical"] != canonical_branch or identity["role"] != role):
             raise BranchDiscoveryError("Pages matrix branch/canonical/role identity is inconsistent")
         if (inventory.schema_version == 1) != (scope == "unscoped"):
             raise BranchDiscoveryError("Pages scope is incompatible with its matrix schema")
-        document = MatrixDocument(inventory, json.dumps(matrix))
         key = lambda lane: (tuple(map(int, lane.identity.minecraft.split("."))), lane.identity.loader)
         lanes = sorted(document.select_lanes(scope="full" if scope == "unscoped" else scope), key=key)
         selected = [lane.identity.artifact_node for lane in lanes]
@@ -132,6 +154,58 @@ def inspect_pages_branch(repository: Path, *, branch: str, ref: str,
         if isinstance(exc, BranchDiscoveryError):
             raise
         raise BranchDiscoveryError(f"invalid Pages branch matrix: {exc}") from exc
+
+
+def _pages_refs(repository: Path, remote: str) -> dict[str, str]:
+    if not valid_branch_name(remote) or "/" in remote:
+        raise BranchDiscoveryError("Pages remote name is unsafe")
+    prefix = f"refs/remotes/{remote}/"
+    raw = _pages_git(repository, "for-each-ref", "--count=1002",
+        "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(symref)", prefix)
+    refs = {}
+    for record in raw.decode("utf-8", "strict").splitlines():
+        fields = record.split("\0")
+        if len(fields) != 4 or not fields[0].startswith(prefix):
+            raise BranchDiscoveryError("Pages remote ref inventory is malformed")
+        ref, commit, kind, symbolic = fields
+        if ref == prefix + "HEAD":
+            continue
+        branch = ref[len(prefix):]
+        if (not valid_branch_name(branch) or branch in refs or kind != "commit" or symbolic
+                or len(commit) != 40 or any(char not in "0123456789abcdef" for char in commit)):
+            raise BranchDiscoveryError("Pages remote ref identity is invalid")
+        refs[branch] = commit
+    if len(refs) > 1000:
+        raise BranchDiscoveryError("Pages remote ref inventory exceeds 1000 branches")
+    return refs
+
+
+def discover_pages_repository(repository: Path, *, remote: str, canonical_branch: str,
+                              include_integration: bool = False) -> list[dict[str, object]]:
+    """Inspect each enrolled head using that immutable matrix's default dispatch.
+
+    The caller authenticates remote advertisements separately. No run/projection,
+    published authority or game qualification follows from this local inventory.
+    """
+    if not valid_branch_name(canonical_branch) or type(include_integration) is not bool:
+        raise BranchDiscoveryError("Pages canonical branch or integration selector is invalid")
+    try:
+        refs = _pages_refs(repository, remote)
+        if canonical_branch not in refs:
+            raise BranchDiscoveryError("Pages canonical branch is absent from the remote inventory")
+        results = []
+        for branch, commit in sorted(refs.items()):
+            row = _inspect_pages_branch(repository, branch=branch, ref=commit,
+                canonical_branch=canonical_branch, enrolled_only=True)
+            if row is not None and (branch != canonical_branch or include_integration):
+                results.append(row)
+        if _pages_refs(repository, remote) != refs:
+            raise BranchDiscoveryError("Pages remote inventory changed during discovery")
+        return results
+    except (OSError, UnicodeError, ValueError) as exc:
+        if isinstance(exc, BranchDiscoveryError):
+            raise
+        raise BranchDiscoveryError(f"invalid Pages remote inventory: {exc}") from exc
 
 
 def _git(repository: Path, *args: str, check: bool = True) -> bytes:
@@ -418,8 +492,25 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--target")
     parser.add_argument("--include-integration", action="store_true")
     parser.add_argument("--objects", action="store_true")
+    parser.add_argument("--pages", action="store_true")
+    parser.add_argument("--canonical-branch")
     args = parser.parse_args(argv)
     try:
+        if args.pages:
+            branches = discover_pages_repository(args.repository, remote=args.remote,
+                canonical_branch=args.canonical_branch,
+                include_integration=args.include_integration or args.target == args.canonical_branch)
+            if args.target is not None:
+                if not valid_branch_name(args.target):
+                    raise BranchDiscoveryError("Pages target branch is unsafe")
+                branches = [row for row in branches if row["name"] == args.target]
+                if not branches:
+                    raise BranchDiscoveryError("Pages target is not an enrolled branch")
+            output = branches if args.objects else [row["name"] for row in branches]
+            print(json.dumps(output, sort_keys=True, separators=(",", ":")))
+            return 0
+        if args.canonical_branch is not None:
+            raise BranchDiscoveryError("--canonical-branch requires the opt-in --pages mode")
         local = load_matrix(args.matrix)
         integration = local["branch"]["canonical"]
         if args.target:
