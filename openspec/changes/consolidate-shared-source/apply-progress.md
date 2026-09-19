@@ -401,3 +401,8 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Matrix CLI projections now use normalized lane selection: preparing defaults to legacy dispatch, shared requires complete coverage, and explicit node/full/legacy selectors remain validated. Raw and inventory output always retain the whole authority. The schema1-only programmatic reader remains fail-closed for consumers not yet adapted.
 - Root reproduced25 matrix/report/portability tests, including byte-for-byte schema1 output for all six projections, partial preparation, explicit modern selection and unresolved/full rejection. Independent review reproduced29 matrix/graph tests. The dependency-policy CLI also passes.
 - This emits dispatch data without qualifying or building a lane. Live schema1 matrix bytes remain identical; workflow scope arguments, fan-in and trusted-controller readers still need separate adapters before preparing-mode enrollment. Rollback is CLI selection/tests.
+
+## Task 12b — exact scheduled versus PR runtime selection
+
+- Added an explicit `--projection` for row-json validation, preserving PR anchors as the default. Scheduled rows previously failed because the orchestrator always compared them with PR rows. Each request now matches only its selected authoritative projection; runtime/non-anchor projections and numeric/boolean type aliases are rejected.
+- Root reproduced19 runtime-selection/recipe tests across schema1, preparing legacy/modern and shared inventories, including crossed projection failures. The action still needs to forward its already-owned projection in a later workflow unit; no scheduled game execution is claimed. Rollback is this selector/comparison/tests.

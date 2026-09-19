@@ -46,6 +46,34 @@ class RuntimeSelectionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             select_rows(source, parse_args(["--artifact-node", "fabric-1.21.1", "--loader", "neoforge"]))
 
+    def test_scheduled_rows_require_the_exact_explicit_projection_in_both_schemas(self):
+        for matrix, selection in ((arbitrary_named_1211_release_matrix(), []),
+                                  (schema2_configuration(), ["--scope", "legacy"]),
+                                  (schema2_configuration(), ["--artifact-node", "neoforge-1.21.1"]),
+                                  (schema2_configuration(shared=True), ["--scope", "full"])):
+            source = document(matrix)
+            kwargs = ({"scope": "lane", "artifact_node": selection[1]} if "--artifact-node" in selection
+                      else {"scope": selection[1]} if selection else {})
+            for projection in ("pr-anchors", "scheduled-anchors"):
+                row = source.projection(projection, contract=CONTRACT, **kwargs)["include"][0]
+                arguments = selection + ["--row-json", json.dumps(row)]
+                with self.subTest(schema=matrix["schema_version"], selection=selection, projection=projection):
+                    result = select_rows(source, parse_args(arguments + ["--projection", projection]))
+                    self.assertEqual([row["artifact_node"]], [item["artifact_node"] for item in result])
+                    other = "scheduled-anchors" if projection == "pr-anchors" else "pr-anchors"
+                    with self.assertRaisesRegex(ValueError, "exact authoritative"):
+                        select_rows(source, parse_args(arguments + ["--projection", other]))
+                    if projection == "scheduled-anchors":
+                        with self.assertRaises(ValueError): select_rows(source, parse_args(arguments))
+
+    def test_runtime_projection_cannot_bypass_the_anchor_contract(self):
+        source = document(schema2_configuration())
+        arguments = parse_args([])
+        arguments.projection = "runtime"
+        with self.assertRaisesRegex(ValueError, "row projection"): select_rows(source, arguments)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            parse_args(["--projection", "runtime"])
+
     def test_shared_default_covers_every_target(self):
         source = document(schema2_configuration(shared=True))
         self.assertEqual(set(source.inventory.target_nodes),
@@ -58,7 +86,7 @@ class RuntimeSelectionTests(unittest.TestCase):
     def test_caller_runtime_overrides_never_replace_the_authoritative_row(self):
         source = document(schema2_configuration())
         expected = source.projection("pr-anchors", contract=CONTRACT)["include"][0]
-        for key, value in (("java", 21), ("artifact_node", "fabric-1.21.1"),
+        for key, value in (("java", 21), ("java", 17.0), ("pr_anchor", 1), ("artifact_node", "fabric-1.21.1"),
                            ("scenarios", "skip"), ("id", "wrong"), ("loader_version", "latest")):
             changed = copy.deepcopy(expected)
             changed[key] = value

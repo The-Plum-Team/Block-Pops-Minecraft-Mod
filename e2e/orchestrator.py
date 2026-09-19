@@ -21,7 +21,7 @@ from e2e.packaged_runtime import (  # noqa: E402
 )
 from e2e.runtime_store import RunWorkspace, RuntimeStoreError, WorkspacePromotion  # noqa: E402
 from e2e.scenario_contract import default_contract  # noqa: E402
-from scripts.lib.secure_json import SecureJsonError, loads, read as read_secure_json  # noqa: E402
+from scripts.lib.secure_json import SecureJsonError, canonical_json, loads, read as read_secure_json  # noqa: E402
 from scripts.release.artifact_manifest import (  # noqa: E402
     ArtifactError,
     verify_staged,
@@ -39,6 +39,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--artifacts-manifest", type=Path, default=Path("build/release/artifacts.json")
     )
     parser.add_argument("--row-json")
+    parser.add_argument("--projection", choices=("pr-anchors", "scheduled-anchors"), default="pr-anchors",
+                        help="authoritative projection used to validate --row-json")
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--artifact-node")
     selection.add_argument("--scope", choices=("legacy", "full"))
@@ -62,6 +64,8 @@ def _selection(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def select_rows(document: MatrixDocument, args: argparse.Namespace) -> list[dict[str, Any]]:
+    if args.projection not in {"pr-anchors", "scheduled-anchors"}:
+        raise ValueError("runtime row projection must be pr-anchors or scheduled-anchors")
     if document.inventory.schema_version == 2 and (args.minecraft or args.loader) and not args.artifact_node:
         raise ValueError("schema-2 version/loader filters require an explicit --artifact-node")
     selection = _selection(args)
@@ -77,11 +81,11 @@ def select_rows(document: MatrixDocument, args: argparse.Namespace) -> list[dict
             raise ValueError(f"invalid --row-json: {exc}") from exc
         matches = [
             projected for projected in document.projection(
-                "pr-anchors", contract=CONTRACT, **selection,
-            )["include"] if projected == requested
+                args.projection, contract=CONTRACT, **selection,
+            )["include"] if canonical_json(projected) == canonical_json(requested)
         ]
         if len(matches) != 1:
-            raise ValueError("--row-json is not one exact authoritative PR anchor row")
+            raise ValueError(f"--row-json is not one exact authoritative {args.projection} row")
         identity = matches[0]["artifact_node"]
         rows = [row for row in rows if row["artifact_node"] == identity]
     if args.artifact_node:
