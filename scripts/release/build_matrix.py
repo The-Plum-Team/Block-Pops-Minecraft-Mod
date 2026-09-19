@@ -402,6 +402,8 @@ def prepare_observation(lock: CheckoutLock, run_id: str, toolchains: dict[str, A
             if suffix:
                 base = base / "versions" / lane["minecraft"]
             destinations[task] = str(base / "build/classes/java" / ("e2e" if task.endswith("compileE2eJava") else "main"))
+        optional_destinations = {f"{project}:compileTestJava": str(Path(destinations[f"{project}:compileJava"]).with_name("test"))
+                                 for project in projects}
         start = lane["command"].index("validateReleaseMatrix")
         if start and lane["command"][start - 1].endswith(":clean"):
             start -= 1
@@ -427,7 +429,8 @@ def prepare_observation(lock: CheckoutLock, run_id: str, toolchains: dict[str, A
         command = [expected["command"][0], "--no-configuration-cache", "--init-script",
                    str(lock.repository / init["path"]), f"-Dblockpops.observation.request={path}", *expected["command"][1:]]
         lock.observations[(run_id, artifact_node)] = json.loads(json.dumps({"request": request, "request_file": request_file,
-            "init": init, "source": report["source"], "toolchains": toolchains, "destinations": destinations}))
+            "init": init, "source": report["source"], "toolchains": toolchains, "destinations": destinations,
+            "optional_destinations": optional_destinations}))
         return {"command": command, "request": str(path), "receipt": str(directory / "observation.json")}
 
 
@@ -447,8 +450,10 @@ def validate_observation(lock: CheckoutLock, run_id: str, artifact_node: str):
                     "status": "completed", "gradle_jvm": {"home": request["gradle_home"], "major": 21}}
         if canonical_json({key: value for key, value in receipt.items() if key != "compilers"}) != canonical_json(expected):
             raise BuildProcessError("observation receipt identity or JVM differs from the bound request")
-        if not isinstance(receipt["compilers"], dict) or set(receipt["compilers"]) != set(request["compile_tasks"]):
-            raise BuildProcessError("observation receipt lacks the exact main/E2E compiler scope")
+        destinations = {**binding["destinations"], **binding["optional_destinations"]}
+        if (not isinstance(receipt["compilers"], dict)
+                or not set(request["compile_tasks"]) <= set(receipt["compilers"]) <= set(destinations)):
+            raise BuildProcessError("observation receipt has missing required or unexpected compiler scope")
         classes = {}
         for task, row in receipt["compilers"].items():
             selected, outcome = row["selected"], row["outcome"]
@@ -457,18 +462,26 @@ def validate_observation(lock: CheckoutLock, run_id: str, artifact_node: str):
             expected_selection = {"home": request["compile_home"], "major": request["compile_major"],
                 "release": request["compile_major"], "version": version,
                 "executable": str(Path(probe["home"]) / probe["files"]["javac"]["path"]),
-                "destination": binding["destinations"][task]}
+                "destination": destinations[task]}
             compiled = {"did_work": True, "skipped": False, "up_to_date": False, "no_source": False, "skip_message": None, "failed": False}
             unchanged = {"did_work": False, "skipped": True, "up_to_date": True, "no_source": False, "skip_message": "UP-TO-DATE", "failed": False}
+            empty = {"did_work": False, "skipped": True, "up_to_date": False, "no_source": True, "skip_message": "NO-SOURCE", "failed": False}
+            no_source = task in binding["optional_destinations"] and canonical_json(outcome) == canonical_json(empty)
             if (set(row) != {"selected", "outcome"} or canonical_json(selected) != canonical_json(expected_selection)
                     or not re.fullmatch(re.escape(probe["java_version"]) + r"(?:\+[A-Za-z0-9.+-]+)?", version)
-                    or canonical_json(outcome) not in (canonical_json(compiled), canonical_json(unchanged))):
+                    or (not no_source and canonical_json(outcome) not in (canonical_json(compiled), canonical_json(unchanged)))):
                 raise BuildProcessError("compiler metadata or execution outcome is invalid")
             destination = Path(selected["destination"])
             for parent in (destination, *destination.parents):
                 if parent == lock.repository:
                     break
-                if _linked(parent.lstat()) or not parent.is_dir():
+                try:
+                    metadata = parent.lstat()
+                except FileNotFoundError:
+                    if no_source:
+                        continue
+                    raise
+                if _linked(metadata) or not stat.S_ISDIR(metadata.st_mode):
                     raise BuildProcessError("compiler output directory must be real and inside its build root")
             outputs = []
             for path in sorted(destination.rglob("*")):
@@ -478,8 +491,8 @@ def validate_observation(lock: CheckoutLock, run_id: str, artifact_node: str):
                     output = file_snapshot(lock.repository, path)
                     if path.suffix == ".class":
                         outputs.append(output)
-            if not outputs:
-                raise BuildProcessError("mandatory main/E2E compiler produced no class outputs")
+            if (no_source and outputs) or (not no_source and not outputs):
+                raise BuildProcessError("compiler class outputs disagree with its execution outcome")
             classes[task] = outputs
         if (canonical_json(source_snapshot(lock.repository)) != canonical_json(binding["source"])
                 or canonical_json(report["source"]) != canonical_json(binding["source"])):

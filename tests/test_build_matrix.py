@@ -415,6 +415,74 @@ class BuildMatrixObservationTests(unittest.TestCase):
                     validate_observation(lock, run_id, node)
                 path.unlink(missing_ok=True)
 
+    def optional_test_compiler(self, receipt, project, outcome="no_source"):
+        compiler = json.loads(json.dumps(receipt["compilers"][f"{project}:compileJava"]))
+        destination = Path(compiler["selected"]["destination"]).with_name("test")
+        compiler["selected"]["destination"] = str(destination)
+        if outcome == "no_source":
+            compiler["outcome"] = {"did_work": False, "skipped": True, "up_to_date": False,
+                                  "no_source": True, "skip_message": "NO-SOURCE", "failed": False}
+        else:
+            destination.mkdir(parents=True, exist_ok=True)
+            (destination / "Test.class").write_bytes(b"synthetic optional test compiler")
+            if outcome == "up_to_date":
+                compiler["outcome"].update(did_work=False, skipped=True, up_to_date=True, skip_message="UP-TO-DATE")
+        receipt["compilers"][f"{project}:compileTestJava"] = compiler
+        return compiler
+
+    def test_observed_loom_optional_test_compilers_preserve_required_main_and_e2e(self):
+        # The real 7h Fabric receipt adds compileTestJava with this exact NO-SOURCE outcome.
+        for legacy in (False, True):
+            node = "neoforge-1.21.1"
+            if legacy:
+                path = Path(self.plan["matrix"]["path"])
+                path.write_bytes((ROOT / "release/release-matrix.json").read_bytes())
+                self.plan = plan_build(path)
+                node = "fabric-1.20.1"
+            for outcome in ("no_source", "compiled", "up_to_date"):
+                with self.prepared(node) as (lock, run_id, node, bound, request, receipt):
+                    for project in request["projects"]:
+                        self.optional_test_compiler(receipt, project, outcome)
+                    Path(bound["receipt"]).write_text(json.dumps(receipt))
+                    evidence = validate_observation(lock, run_id, node)
+                    self.assertEqual(3, len(request["compile_tasks"]))
+                    self.assertEqual(5, len(evidence["compilers"]))
+                    for project in request["projects"]:
+                        self.assertEqual(0 if outcome == "no_source" else 1,
+                                         len(evidence["classes"][f"{project}:compileTestJava"]))
+
+    def test_optional_test_compilers_cannot_expand_scope_or_weaken_outcome_and_output_checks(self):
+        mutations = ("extra", "foreign_project", "destination", "home", "major", "release", "executable",
+                     "version", "required_no_source", "failed", "skipped", "missing_classes", "stale_classes", "link")
+        for mutation in mutations:
+            with self.prepared() as (lock, run_id, node, bound, request, receipt):
+                project = request["projects"][1]
+                compiler = self.optional_test_compiler(receipt, project)
+                destination = Path(compiler["selected"]["destination"])
+                if mutation in {"extra", "foreign_project"}:
+                    task = f"{project}:compileOtherJava" if mutation == "extra" else ":unselected:compileTestJava"
+                    receipt["compilers"][task] = receipt["compilers"].pop(f"{project}:compileTestJava")
+                elif mutation in {"destination", "home", "executable", "version"}:
+                    compiler["selected"][mutation] = "wrong"
+                elif mutation in {"major", "release"}: compiler["selected"][mutation] = 21
+                elif mutation == "required_no_source":
+                    receipt["compilers"][request["compile_tasks"][2]]["outcome"] = compiler["outcome"]
+                elif mutation == "failed": compiler["outcome"]["failed"] = True
+                elif mutation == "skipped": compiler["outcome"].update(no_source=False, skip_message="SKIPPED")
+                elif mutation == "missing_classes":
+                    compiler["outcome"] = receipt["compilers"][request["compile_tasks"][0]]["outcome"]
+                elif mutation == "stale_classes":
+                    destination.mkdir(parents=True); (destination / "Stale.class").write_bytes(b"stale")
+                elif mutation == "link": destination.symlink_to(Path(receipt["compilers"][request["compile_tasks"][0]]["selected"]["destination"]))
+                Path(bound["receipt"]).write_text(json.dumps(receipt))
+                try:
+                    with self.subTest(mutation=mutation), self.assertRaises(BuildProcessError):
+                        validate_observation(lock, run_id, node)
+                finally:
+                    if destination.is_symlink(): destination.unlink()
+                    elif destination.exists():
+                        (destination / "Stale.class").unlink(missing_ok=True); destination.rmdir()
+
     def test_request_init_jdk_source_matrix_and_receipt_links_cannot_change(self):
         for mutation in ("request", "init", "jdk", "source", "matrix", "receipt_link"):
             with self.prepared() as (lock, run_id, node, bound, request, receipt):
