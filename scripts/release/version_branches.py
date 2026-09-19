@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -17,9 +18,11 @@ sys.path.insert(0, str(REPO))
 
 from scripts.release.matrix import (  # noqa: E402
     MAX_MATRIX_BYTES,
+    MatrixDocument,
     MatrixError,
     load_matrix,
     load_matrix_bytes,
+    normalize_matrix_inventory,
     valid_branch_name,
 )
 from scripts.lib.secure_json import SecureJsonError, loads as secure_loads  # noqa: E402
@@ -51,6 +54,84 @@ class ReleaseBranch:
             "loaders": list(self.loaders),
             "java": list(self.java),
         }
+
+
+def _pages_git(repository: Path, *args: str) -> bytes:
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    environment.update(GIT_NO_REPLACE_OBJECTS="1", GIT_GRAFT_FILE=os.devnull,
+        GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull)
+    result = subprocess.run(["git", "-C", str(repository), *args], check=False,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        env=environment)
+    if result.returncode:
+        raise BranchDiscoveryError("Pages Git inspection failed: " + result.stderr.decode("utf-8", "replace").strip())
+    return result.stdout
+
+
+def inspect_pages_branch(repository: Path, *, branch: str, ref: str,
+                         canonical_branch: str, scope: str) -> dict[str, object]:
+    """Inspect immutable matrix bytes under an explicit Pages selection.
+
+    Callers authenticate the advertised ref/head separately. This opt-in API does
+    not select a run, infer a projection, inspect worktree sources or qualify any
+    lane. Existing discovery/sync interfaces remain schema1-only.
+    """
+    if not valid_branch_name(branch) or not valid_branch_name(canonical_branch):
+        raise BranchDiscoveryError("Pages branch identity is unsafe")
+    if not isinstance(ref, str) or not ref or scope not in ("unscoped", "legacy", "full"):
+        raise BranchDiscoveryError("Pages requires an exact ref and explicit unscoped/legacy/full scope")
+
+    def oid(raw: bytes, label: str) -> str:
+        value = raw.strip().decode("ascii", "strict")
+        if len(value) != 40 or any(char not in "0123456789abcdef" for char in value):
+            raise BranchDiscoveryError(f"Pages {label} is not one exact Git identity")
+        return value
+
+    try:
+        head_command = ("rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}")
+        commit = oid(_pages_git(repository, *head_command), "commit")
+        tree = oid(_pages_git(repository, "rev-parse", f"{commit}^{{tree}}"), "tree")
+        path = "release/release-matrix.json"
+        record = _pages_git(repository, "ls-tree", "-z", commit, "--", path)
+        metadata, separator, filename = record.rstrip(b"\0").partition(b"\t")
+        fields = metadata.split()
+        if (separator != b"\t" or filename != path.encode() or len(fields) != 3
+                or fields[:2] != [b"100644", b"blob"]):
+            raise BranchDiscoveryError("Pages matrix must be one regular non-executable Git blob")
+        blob = oid(fields[2], "matrix blob")
+        size = int(_pages_git(repository, "cat-file", "-s", blob))
+        if not 0 < size <= MAX_MATRIX_BYTES:
+            raise BranchDiscoveryError("Pages matrix blob exceeds its bounded size")
+        raw = _pages_git(repository, "cat-file", "blob", blob)
+        if (len(raw) != size
+                or hashlib.sha1(b"blob " + str(size).encode() + b"\0" + raw).hexdigest() != blob):
+            raise BranchDiscoveryError("Pages matrix bytes differ from their Git blob identity")
+        matrix = secure_loads(raw, label="Pages branch matrix", max_bytes=MAX_MATRIX_BYTES)
+        inventory = normalize_matrix_inventory(matrix)
+        identity = matrix["branch"]
+        role = "integration" if branch == canonical_branch else "release"
+        if (identity["name"] != branch or identity["canonical"] != canonical_branch or identity["role"] != role):
+            raise BranchDiscoveryError("Pages matrix branch/canonical/role identity is inconsistent")
+        if (inventory.schema_version == 1) != (scope == "unscoped"):
+            raise BranchDiscoveryError("Pages scope is incompatible with its matrix schema")
+        document = MatrixDocument(inventory, json.dumps(matrix))
+        key = lambda lane: (tuple(map(int, lane.identity.minecraft.split("."))), lane.identity.loader)
+        lanes = sorted(document.select_lanes(scope="full" if scope == "unscoped" else scope), key=key)
+        selected = [lane.identity.artifact_node for lane in lanes]
+        result = {"name": branch, "commit": commit, "tree": tree, "matrix_blob": blob,
+            "matrix_sha256": hashlib.sha256(raw).hexdigest(), "matrix_schema_version": inventory.schema_version,
+            "minecraft_versions": sorted({lane.identity.minecraft for lane in lanes}, key=lambda version: tuple(map(int, version.split(".")))),
+            "loaders": sorted({lane.identity.loader for lane in lanes}), "java": sorted({lane.artifact["java"] for lane in lanes}),
+            "configured_nodes": [lane.identity.artifact_node for lane in sorted(inventory.lanes, key=key)],
+            "scope": {"kind": scope, "selected_nodes": selected, "target_nodes": list(inventory.target_nodes),
+                "migration_mode": inventory.migration_mode, "partial": set(selected) != set(inventory.target_nodes)}}
+        if oid(_pages_git(repository, *head_command), "final commit") != commit:
+            raise BranchDiscoveryError("Pages branch ref changed during inspection")
+        return result
+    except (MatrixError, SecureJsonError, OSError, UnicodeError, ValueError) as exc:
+        if isinstance(exc, BranchDiscoveryError):
+            raise
+        raise BranchDiscoveryError(f"invalid Pages branch matrix: {exc}") from exc
 
 
 def _git(repository: Path, *args: str, check: bool = True) -> bytes:
