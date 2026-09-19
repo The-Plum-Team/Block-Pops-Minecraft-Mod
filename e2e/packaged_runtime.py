@@ -41,6 +41,7 @@ from e2e.runtime_store import (
 )
 from e2e.scenario_contract import OpaqueStarsProbe, RequiredGuiTextProbe, default_contract
 from scripts.lib.secure_json import SecureJsonError, read as read_secure_json, require_object
+from scripts.release.matrix import MatrixError, normalize_matrix_inventory
 
 
 FATAL_LOG_PATTERNS = (
@@ -416,18 +417,25 @@ def launcher_library_version() -> str:
 def client_runtime_recipe(
     matrix: dict[str, Any], row: dict[str, Any]
 ) -> RuntimeRecipe:
-    installer = matrix.get("installers", {}).get(row.get("installer"))
-    if not isinstance(installer, dict):
-        raise RuntimeFailure(f"runtime installer is missing for {row.get('installer')!r}")
-    installer_sha256 = installer.get("sha256")
-    if not isinstance(installer_sha256, str) or SHA256_PATTERN.fullmatch(installer_sha256) is None:
-        raise RuntimeFailure("runtime installer must have one exact lowercase SHA-256")
+    try:
+        inventory = normalize_matrix_inventory(matrix)
+        if not isinstance(row, dict) or not isinstance(row.get("artifact_node"), str):
+            raise MatrixError("runtime row requires an exact artifact_node")
+        runtime = inventory.lane(row["artifact_node"]).runtime
+        # JSON equality retains numeric/boolean types that dict equality conflates.
+        if json.dumps(row, sort_keys=True, allow_nan=False) != json.dumps(
+            runtime, sort_keys=True, allow_nan=False
+        ):
+            raise MatrixError("runtime row must exactly match its normalized matrix lane")
+    except (MatrixError, TypeError, ValueError) as exc:
+        raise RuntimeFailure(f"invalid runtime recipe input: {exc}") from exc
+    installer_sha256 = matrix["installers"][runtime["installer"]]["sha256"]
     launcher_library_version()
     return RuntimeRecipe.for_host(
-        java_major=int(row["java"]),
-        minecraft_version=row["minecraft"],
-        loader=row["loader"],
-        loader_version=row["loader_version"],
+        java_major=runtime["java"],
+        minecraft_version=runtime["minecraft"],
+        loader=runtime["loader"],
+        loader_version=runtime["loader_version"],
         installer_sha256=installer_sha256,
         launcher_library_revision=LAUNCHER_LIBRARY_REVISION,
         normalizer_revision=PROFILE_NORMALIZER_REVISION,

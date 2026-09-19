@@ -148,3 +148,10 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Required local observation is complete: Java21 wrapper launch, available Java17/21, working-tree preservation and fresh read-only default/governance observations are recorded above. Task 2 can close as an environment-observation gate; it is not build qualification.
 - The additional strict Gradle configuration/check diagnostic was cancelled at 600 seconds, exit143, after repeated Fabric Maven connection waits and no task progress. Only its own wrapper/daemon were terminated and verified absent. Official IPv4/IPv6 DNS/TLS-preserving probes confirm the host connectivity limitation; no mirror, origin policy or verification weakening was applied.
 - Next build evidence is the isolated Groovy/Stonecutter compatibility probe, then the real selected-lane probes. Full build/E2E task15 remains open.
+
+## Task 4c — normalized client runtime recipes
+
+- Adapted `e2e/packaged_runtime.py`, the actual matrix-to-cache recipe boundary found during inspection; `runtime_store.py` remains a generic cache and needs no separate matrix inventory. Recipes now use the canonical validated runtime row and installer digest from the same matrix.
+- Exact JSON equality rejects cross-lane rows, coercible numeric/boolean types, additional fields and installer overrides before launcher or network work. Schema-1 cache identity and host normalization are unchanged.
+- Root reproduced `python3 -m unittest tests.test_runtime_recipe tests.test_runtime_selection tests.test_release_matrix_portability -q`: 22 tests passed. Six recipe tests include four independently captured pre-change schema-1 cache digests, current/historical rows, modern configured lanes and malformed/unresolved inputs.
+- This corrects task 4's anticipated file boundary to its observed owner, without changing the generic cache or activating schema 2 execution. Rollback is this consumer, its tests and this evidence; no installation, live matrix change or publication occurred.
