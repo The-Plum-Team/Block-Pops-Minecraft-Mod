@@ -3,6 +3,10 @@ package com.theplumteam.blockentity;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.registry.ModBlockEntities;
+//? if >=1.21 {
+/*import com.theplumteam.item.BlockEntityItemData;
+import net.minecraft.core.HolderLookup;
+*///? }
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
@@ -148,8 +152,13 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     @Override
+    //? if >=1.21 {
+    /*protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.saveAdditional(tag, registries);
+    *///? } else {
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
+    //? }
         tag.putString("FigureId", figureId);
         tag.putString("CollectionId", collectionId);
         tag.putInt("AlternativeSkinIndex", alternativeSkinIndex);
@@ -163,8 +172,13 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     @Override
+    //? if >=1.21 {
+    /*protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.loadAdditional(tag, registries);
+    *///? } else {
     public void load(CompoundTag tag) {
         super.load(tag);
+    //? }
         if (tag.contains("FigureId")) this.figureId = tag.getString("FigureId");
         if (tag.contains("CollectionId")) this.collectionId = tag.getString("CollectionId");
         if (tag.contains("AlternativeSkinIndex")) this.alternativeSkinIndex = tag.getInt("AlternativeSkinIndex");
@@ -178,15 +192,26 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     @Override
+    //? if >=1.21 {
+    /*public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        CompoundTag tag = super.getUpdateTag(registries);
+        saveAdditional(tag, registries);
+    *///? } else {
     public CompoundTag getUpdateTag() {
         CompoundTag tag = super.getUpdateTag();
         saveAdditional(tag);
+    //? }
         return tag;
     }
 
     // Forge-specific method - no @Override in common
+    //? if >=1.21 {
+    /*public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
+        loadAdditional(tag, registries);
+    *///? } else {
     public void handleUpdateTag(CompoundTag tag) {
         load(tag);
+    //? }
     }
 
     @Override
@@ -195,20 +220,39 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     // Forge-specific method - no @Override in common
+    //? if >=1.21 {
+    /*public void onDataPacket(Connection connection, ClientboundBlockEntityDataPacket packet, HolderLookup.Provider registries) {
+    *///? } else {
     public void onDataPacket(Connection connection, ClientboundBlockEntityDataPacket packet) {
+    //? }
         CompoundTag tag = packet.getTag();
         if (tag != null) {
+            //? if >=1.21 {
+            /*loadAdditional(tag, registries);
+            *///? } else {
             load(tag);
+            //? }
             if (level != null && level.isClientSide) {
                 level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
             }
         }
     }
 
+    //? if >=1.21 {
+    /*@Override
+    public void saveToItem(net.minecraft.world.item.ItemStack stack, HolderLookup.Provider registries) {
+        CompoundTag tag = new CompoundTag();
+        saveAdditional(tag, registries);
+    *///? } else {
     public void saveToItem(net.minecraft.world.item.ItemStack stack) {
         CompoundTag tag = new CompoundTag();
         saveAdditional(tag);
+    //? }
+        //? if >=1.21 {
+        /*BlockEntityItemData.write(stack, tag, "blockpops:figure_block");
+        *///? } else {
         stack.addTagElement("BlockEntityTag", tag);
+        //? }
     }
 
     public static <T extends BlockEntity> void tick(Level level, BlockPos pos, BlockState state, T blockEntity) {

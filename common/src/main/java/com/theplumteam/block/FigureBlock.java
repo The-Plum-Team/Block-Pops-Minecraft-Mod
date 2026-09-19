@@ -21,6 +21,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+//? if >=1.21 {
+/*import net.minecraft.world.level.LevelReader;
+*///? }
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
@@ -137,24 +140,44 @@ public class FigureBlock extends BaseEntityBlock {
     }
 
     @Override
+    //? if >=1.21 {
+    /*public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+    *///? } else {
     public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+    //? }
         if (!level.isClientSide) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof FigureBlockEntity figureBlockEntity) {
                 ItemStack dropStack = new ItemStack(ModItems.FIGURE_BLOCK_ITEM.get());
+                //? if >=1.21 {
+                /*figureBlockEntity.saveToItem(dropStack, level.registryAccess());
+                *///? } else {
                 figureBlockEntity.saveToItem(dropStack);
+                //? }
                 popResource(level, pos, dropStack);
             }
         }
 
+        //? if >=1.21 {
+        /*return super.playerWillDestroy(level, pos, state, player);
+        *///? } else {
         super.playerWillDestroy(level, pos, state, player);
+        //? }
     }
 
     @Override
+    //? if >=1.21 {
+    /*public ItemStack getCloneItemStack(LevelReader level, BlockPos pos, BlockState state) {
+    *///? } else {
     public ItemStack getCloneItemStack(BlockGetter level, BlockPos pos, BlockState state) {
+    //? }
         ItemStack stack = super.getCloneItemStack(level, pos, state);
         if (level.getBlockEntity(pos) instanceof FigureBlockEntity figureBlockEntity) {
+            //? if >=1.21 {
+            /*figureBlockEntity.saveToItem(stack, level.registryAccess());
+            *///? } else {
             figureBlockEntity.saveToItem(stack);
+            //? }
         }
         return stack;
     }

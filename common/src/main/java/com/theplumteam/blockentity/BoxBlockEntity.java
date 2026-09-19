@@ -4,6 +4,10 @@ import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.registry.ModBlockEntities;
+//? if >=1.21 {
+/*import com.theplumteam.item.BlockEntityItemData;
+import net.minecraft.core.HolderLookup;
+*///? }
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
@@ -353,8 +357,13 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     @Override
+    //? if >=1.21 {
+    /*protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.saveAdditional(tag, registries);
+    *///? } else {
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
+    //? }
         tag.putBoolean("IsOpen", isOpen);
         tag.putString("FigureId", figureId);
         tag.putBoolean("IsFigureExtracted", isFigureExtracted);
@@ -383,8 +392,13 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     @Override
+    //? if >=1.21 {
+    /*protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.loadAdditional(tag, registries);
+    *///? } else {
     public void load(CompoundTag tag) {
         super.load(tag);
+    //? }
         this.isOpen = tag.contains("IsOpen") ? tag.getBoolean("IsOpen") : false;
         if (tag.contains("FigureId")) this.figureId = tag.getString("FigureId");
         if (tag.contains("IsFigureExtracted")) this.isFigureExtracted = tag.getBoolean("IsFigureExtracted");
@@ -413,15 +427,26 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     @Override
+    //? if >=1.21 {
+    /*public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        CompoundTag tag = super.getUpdateTag(registries);
+        saveAdditional(tag, registries);
+    *///? } else {
     public CompoundTag getUpdateTag() {
         CompoundTag tag = super.getUpdateTag();
         saveAdditional(tag);
+    //? }
         return tag;
     }
 
     // Forge-specific method - no @Override in common
+    //? if >=1.21 {
+    /*public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
+        loadAdditional(tag, registries);
+    *///? } else {
     public void handleUpdateTag(CompoundTag tag) {
         load(tag);
+    //? }
     }
 
     @Override
@@ -430,21 +455,40 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     // Forge-specific method - no @Override in common
+    //? if >=1.21 {
+    /*public void onDataPacket(Connection connection, ClientboundBlockEntityDataPacket packet, HolderLookup.Provider registries) {
+    *///? } else {
     public void onDataPacket(Connection connection, ClientboundBlockEntityDataPacket packet) {
+    //? }
         CompoundTag tag = packet.getTag();
         if (tag != null) {
+            //? if >=1.21 {
+            /*loadAdditional(tag, registries);
+            *///? } else {
             load(tag);
+            //? }
             if (level != null && level.isClientSide) {
                 level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
             }
         }
     }
 
+    //? if >=1.21 {
+    /*@Override
+    public void saveToItem(net.minecraft.world.item.ItemStack stack, HolderLookup.Provider registries) {
+        CompoundTag tag = new CompoundTag();
+        saveAdditional(tag, registries);
+    *///? } else {
     public void saveToItem(net.minecraft.world.item.ItemStack stack) {
         CompoundTag tag = new CompoundTag();
         saveAdditional(tag);
+    //? }
         tag.putBoolean("IsOpen", false);
+        //? if >=1.21 {
+        /*BlockEntityItemData.write(stack, tag, "blockpops:box_block");
+        *///? } else {
         stack.addTagElement("BlockEntityTag", tag);
+        //? }
     }
 
     public static <T extends BlockEntity> void tick(Level level, BlockPos pos, BlockState state, T blockEntity) {
