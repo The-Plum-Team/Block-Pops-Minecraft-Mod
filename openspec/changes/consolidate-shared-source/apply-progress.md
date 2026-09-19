@@ -434,3 +434,15 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Aggregate validation accepts schema2 only with external scope, an already-verified schema3 bundle and its raw digest. Exact aggregate coverage binds selected/target nodes, migration state, projection and scenarios in receipt/summary/resolved records; artifact hashes and source commit/tree stay bound. Source API authentication still requires the existing complete external identity group.
 - Root reproduced32 fan-in tests. Synthetic legacy2, scheduled Neo lane1 and shared12 aggregates pass existing profile/pixel validation; omitted lanes, partial-as-full, stale source/input/digest and pixel tampering fail. Eight red-to-green cases also corrected boolean/float schema aliases in lane and aggregate summary/runtime-store records. Independent review found no blocker.
 - Producer and CLI remain schema1-only until their next units. Structural receipt validation alone is not source-run authentication or game qualification. Rollback is the dual aggregate reader/tests, retaining exact typed schema checks.
+
+## Task 11f — wire one identity into both loader archives
+
+- Schema2 loader builds now generate one shared identity before source generation, preprocessing and compilation, then include it in production and harness resources. The generator compares the complete captured Gradle context with freshly validated inputs. Preparing legacy aggregate builds remain usable but carry an explicit diagnostic identity; only an isolated clean lane can match release verification. Schema1 output is unchanged.
+- Root reproduced18 identity/context tests. Four strict/offline Gradle8.14 fixtures passed on JVM21 with Java17/21: schema1, isolated legacy, detached Neo and preparing aggregate. Both archives share the expected identity; schema1 fixture bytes are unchanged, and diagnostic identities fail release checks. These fixtures exercise the exact convention wiring without Loom/Minecraft. Inputs remained unchanged; evidence is under `build/diagnostics/build-identity-wiring/complete-context-*`.
+- Rollback is generator/context validation and both convention adapters together. Real schema2 game compilation remains pending.
+
+## Task 7j — real serial legacy build and staged round trip
+
+- A fresh clean local copy of `e0bcd802285afcd2097a751aceed4de1ed19be1c` completed the real runner for Fabric/Forge1.20.1 in43.96 seconds, with Gradle JVM21 and observed Java17 compilers. All four archive boundaries passed. The unscoped verifier staged and reverified the historical schema2 manifest, whose digest is `7503f77776b3b8a1248458716889e0028f7c70f3b950315d1cd48337a1b5ad6f`; staged hashes match the runner report.
+- All680 source inputs, commit/tree and report stayed unchanged. The lease was released and both owned daemon processes exited. No DNS override or prewarming was needed. Evidence is under `build/diagnostics/task7j/`, including `result.json` and `staging-result.json`.
+- This is successful local compilation/staging of the existing two lanes, not packaged-client interaction, twelve-lane qualification or publication. User work and the live matrix remain untouched.

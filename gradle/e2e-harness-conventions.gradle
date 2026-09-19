@@ -60,6 +60,12 @@ if (stonecutterLayout) {
         loaderSources.file('src/e2e/resources'), commonSources.file('src/e2e/resources')
     ])
 }
+if (gradle.ext.blockPopsLaneContext.matrix.schema_version == 2) {
+    if (!project.ext.has('blockPopsIdentityResources')) {
+        throw new GradleException("Project ${project.path} has no shared build identity generator")
+    }
+    e2eSourceSet.resources.srcDir(blockPopsIdentityResources)
+}
 e2eSourceSet.compileClasspath = files(mainSourceSet.output, mainSourceSet.compileClasspath)
 e2eSourceSet.runtimeClasspath = files(e2eSourceSet.output, e2eSourceSet.compileClasspath)
 

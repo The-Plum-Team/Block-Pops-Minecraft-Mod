@@ -1,6 +1,7 @@
 """Embedded identity distinguishes clean reproducibility from dirty diagnostics."""
 
 import contextlib
+import copy
 import io
 import json
 import os
@@ -14,6 +15,7 @@ from scripts.ci.tests.matrix_fixtures import schema2_configuration
 from scripts.release.artifact_manifest import ArtifactError, BUILD_IDENTITY_PATH, scoped_manifest_context, verify_production_jar
 from scripts.release.build_identity import generate_identity, main
 from scripts.release.build_matrix import BuildProcessError, source_snapshot
+from scripts.release.matrix import load_matrix_document
 from tests.test_artifact_and_report_validation import _fabric_production_entries, _write_zip
 
 
@@ -82,6 +84,51 @@ class BuildIdentityGenerationTests(unittest.TestCase):
         self.assertFalse(list(self.repo.glob('*/build/generated/build-identity/**/*.json')))
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(2, main(['--repository', str(self.repo), '--artifact-node', 'unknown']))
+
+    def test_clean_legacy_aggregate_is_diagnostic_and_cannot_pass_the_release_reader(self):
+        document, _, rows = scoped_manifest_context(self.repo, self.matrix, scope='lane', artifact_node='fabric-1.20.1')
+        contexts = set()
+        expected = json.dumps(document.gradle_context())
+        for node in ('fabric-1.20.1', 'forge-1.20.1'):
+            output = generate_identity(self.repo, self.matrix, node, aggregate_context=True,
+                                       expected_context_json=expected)
+            identity = json.loads(output.read_bytes())
+            self.assertEqual('aggregate-legacy-context', identity['diagnostic']['reason'])
+            self.assertEqual(identity['build_context_sha256'], identity['diagnostic']['context_sha256'])
+            contexts.add(identity['build_context_sha256'])
+            if node == 'fabric-1.20.1':
+                entries = _fabric_production_entries(); entries[BUILD_IDENTITY_PATH] = output.read_bytes()
+                archive = self.repo / 'build/aggregate.jar'; archive.parent.mkdir(exist_ok=True)
+                _write_zip(archive, entries)
+                with self.assertRaisesRegex(ArtifactError, 'embedded build identity'):
+                    verify_production_jar(archive, document.inventory.lane(node).artifact, build_identity=rows[0]['build_identity'])
+        self.assertEqual(1, len(contexts))
+        self.assertFalse(source_snapshot(self.repo)['dirty'])
+        with self.assertRaisesRegex(ArtifactError, 'preparing legacy lane'):
+            generate_identity(self.repo, self.matrix, 'neoforge-1.21.1', aggregate_context=True)
+
+    def test_captured_gradle_context_must_match_without_boolean_coercion(self):
+        context = load_matrix_document(self.matrix).gradle_context(artifact_node='fabric-1.20.1')
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(0, main(['--repository', str(self.repo), '--artifact-node', 'fabric-1.20.1',
+                                      '--expected-context-json', json.dumps(context)]))
+        for field, value in (('loader_version', '0.17.4'), ('no_remap', 0)):
+            stale = copy.deepcopy(context)
+            stale['lanes'][0]['runtime' if field == 'loader_version' else 'artifact'][field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(ArtifactError, 'configured Gradle inputs'):
+                generate_identity(self.repo, self.matrix, 'fabric-1.20.1', expected_context_json=json.dumps(stale))
+        for field in ('installers', 'source_routing'):
+            stale = copy.deepcopy(context)
+            if field == 'installers':
+                installer = context['lanes'][0]['runtime']['installer']
+                stale['matrix']['installers'][installer]['sha256'] = 'b' * 64
+            else:
+                stale['matrix']['source_routing']['common']['e2e'] = 'common/src/legacy-stale'
+            with self.subTest(field=field), self.assertRaisesRegex(ArtifactError, 'configured Gradle inputs'):
+                generate_identity(self.repo, self.matrix, 'fabric-1.20.1', expected_context_json=json.dumps(stale))
+        with self.assertRaisesRegex(ArtifactError, 'configured Gradle inputs'):
+            generate_identity(self.repo, self.matrix, 'fabric-1.20.1', aggregate_context=True,
+                              expected_context_json=json.dumps(context))
 
     def test_source_change_during_atomic_publication_invalidates_new_identity(self):
         replace = os.replace

@@ -115,6 +115,52 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
         }
     }
 
+    if (releaseMatrix.schema_version == 2 && lane != null) {
+        def aggregateContext = laneContext.scope == 'legacy' && laneContext.artifact_node == null
+                && lanes.size() > 1 && lanes.every { it.build_layout == 'legacy' }
+        def isolatedContext = laneContext.scope == 'lane' && lanes.size() == 1
+                && laneContext.artifact_node == lane.artifact_node
+        if (!aggregateContext && !isolatedContext) {
+            throw new GradleException('Build identity requires an exact lane or preparing legacy aggregate')
+        }
+        def identityContext = groovy.json.JsonOutput.toJson(laneContext)
+        def identityDirectory = layout.buildDirectory.dir('generated/build-identity')
+        def generator = rootProject.file('scripts/release/build_identity.py')
+        def defaultPython = System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3'
+        def identityPython = providers.environmentVariable('BLOCKPOPS_PYTHON').orElse(defaultPython)
+        def generateIdentity = tasks.register('generateBuildIdentity', Exec) {
+            group = 'build'
+            description = 'Binds both loader archives to the same exact build inputs.'
+            inputs.files(generator, gradle.ext.blockPopsReleaseMatrixFile,
+                    rootProject.file('e2e/scenario-contract.json'))
+            inputs.property('artifactNode', lane.artifact_node as String)
+            inputs.property('gradleContext', identityContext)
+            inputs.property('pythonExecutable', identityPython)
+            outputs.file(identityDirectory.map { it.file('META-INF/blockpops-build.json') })
+            // Git/index/raw input identity must be observed on every invocation.
+            outputs.upToDateWhen { false }
+            outputs.cacheIf { false }
+            workingDir rootProject.projectDir
+            commandLine(identityPython.get(), generator.absolutePath,
+                    '--repository', rootProject.projectDir.absolutePath,
+                    '--matrix', gradle.ext.blockPopsReleaseMatrixFile.absolutePath,
+                    '--artifact-node', lane.artifact_node as String,
+                    '--expected-context-json', identityContext)
+            if (aggregateContext) args('--aggregate-context')
+        }
+        ext.blockPopsIdentityResources = files(identityDirectory).builtBy(generateIdentity)
+        sourceSets.main.resources.srcDir(blockPopsIdentityResources)
+        // Bind inputs before any canonical source is copied, preprocessed or compiled.
+        [project, project(rootProject.common_project_path)].each { sourceProject ->
+            sourceProject.tasks.withType(JavaCompile).configureEach { dependsOn generateIdentity }
+            sourceProject.tasks.matching { it.name in [
+                'processResources', 'processE2eResources', 'generateE2EContractJava',
+                'stonecutterPrepare', 'stonecutterGenerate',
+                'stonecutterPrepareE2e', 'stonecutterGenerateE2e'
+            ] }.configureEach { dependsOn generateIdentity }
+        }
+    }
+
     base {
         if (lane != null) {
             def loaderName = [fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge'][lane.loader]
