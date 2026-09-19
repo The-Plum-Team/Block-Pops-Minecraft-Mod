@@ -39,7 +39,7 @@ from scripts.lib.secure_json import (  # noqa: E402
     read as read_secure_json,
     require_object,
 )
-from scripts.release.matrix import MatrixDocument, MatrixError, load_matrix, normalize_matrix_inventory  # noqa: E402
+from scripts.release.matrix import MatrixDocument, MatrixError, normalize_matrix_inventory  # noqa: E402
 
 RAW_SCHEMA = 1
 COMPACT_SCHEMA = 1
@@ -293,11 +293,6 @@ def _copy_bytes(destination: Path, data: bytes) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     with destination.open("xb") as output:
         output.write(data)
-
-
-def _matrix_identity(matrix_path: Path, matrix: dict[str, Any]) -> tuple[str, bytes]:
-    raw = _stable_bytes(matrix_path, label="release matrix", maximum=256 * 1024)
-    return sha256_bytes(raw), raw
 
 
 def _expected_lanes(matrix: dict[str, Any], contract: ScenarioContract) -> list[tuple[dict[str, Any], str]]:
@@ -906,9 +901,14 @@ def _encode_webp(raw: bytes) -> bytes:
 def compact(
     *, input_root: Path, output: Path, matrix_path: Path, expected: dict[str, Any],
     source_artifact_id: int, source_artifact_name: str, source_artifact_digest: str,
+    scope: str | None = None, artifact_node: str | None = None, projection: str | None = None,
 ) -> dict[str, Any]:
-    raw = validate_raw(input_root, matrix_path=matrix_path, expected=expected)
+    selection = dict(scope=scope, artifact_node=artifact_node, projection=projection)
+    raw = validate_raw(input_root, matrix_path=matrix_path, expected=expected, **selection)
     matrix_bytes = _stable_bytes(matrix_path, label="branch release matrix", maximum=256 * 1024)
+    if sha256_bytes(matrix_bytes) != raw["provenance"]["matrix_sha256"]:
+        raise EvidenceError("matrix changed after raw validation")
+    coverage = {"aggregate_scope": raw["aggregate_scope"]} if scope is not None else {}
     _positive_int(source_artifact_id, "source artifact id")
     if source_artifact_name != raw_artifact_name(
         raw["provenance"]["branch"], raw["provenance"]["handoff"]["run_attempt"]
@@ -920,6 +920,8 @@ def compact(
     frames: list[dict[str, Any]] = []
     for frame in raw["frames"]:
         _, source = _child_file(input_root, frame["source"]["path"], label="raw frame", maximum=MAX_SCREENSHOT_BYTES)
+        if len(source) != frame["source"]["size"] or sha256_bytes(source) != frame["source"]["sha256"]:
+            raise EvidenceError("raw frame changed after validation")
         encoded = _encode_webp(source)
         digest = sha256_bytes(encoded)
         decoded = _image(encoded, expected_format="WEBP", label=f"derivative {frame['capture_id']}")
@@ -931,7 +933,7 @@ def compact(
             {**frame, "derivative": {"path": relative, "sha256": digest, "size": len(encoded), "width": decoded["width"], "height": decoded["height"], "format": "WEBP"}}
         )
     manifest = {
-        "schema_version": COMPACT_SCHEMA,
+        "schema_version": 2 if coverage else COMPACT_SCHEMA,
         "kind": COMPACT_KIND,
         "provenance": raw["provenance"],
         "source_artifact": {"id": source_artifact_id, "name": source_artifact_name, "digest": source_artifact_digest},
@@ -939,6 +941,7 @@ def compact(
         "lanes": raw["lanes"],
         "frames": frames,
         "files": [{"path": path, "sha256": sha256_bytes(data), "size": len(data)} for path, data in sorted(derivatives.items())],
+        **coverage,
     }
 
     def writer(stage: Path) -> None:
@@ -946,17 +949,25 @@ def compact(
         for relative, data in derivatives.items():
             _copy_bytes(stage / relative, data)
         _write_json(stage / "manifest.json", manifest)
-        validate_compact(stage, matrix_path=matrix_path, expected=expected)
+        validate_compact(stage, matrix_path=matrix_path, expected=expected, **selection)
 
     _atomic_directory(output, writer)
     return manifest
 
 
-def validate_compact(root: Path, *, matrix_path: Path, expected: dict[str, Any] | None = None) -> dict[str, Any]:
+def validate_compact(root: Path, *, matrix_path: Path, expected: dict[str, Any] | None = None,
+                     scope: str | None = None, artifact_node: str | None = None,
+                     projection: str | None = None) -> dict[str, Any]:
     manifest, _ = _json(root / "manifest.json", label="compact Pages manifest", maximum=MAX_MANIFEST_BYTES)
-    value = _object(manifest, "compact Pages manifest", {"schema_version", "kind", "provenance", "source_artifact", "matrix", "lanes", "frames", "files"})
-    if value["schema_version"] != COMPACT_SCHEMA or value["kind"] != COMPACT_KIND:
+    contract = default_contract()
+    matrix, external_matrix, selected, coverage = _raw_matrix_context(matrix_path, contract,
+        scope=scope, artifact_node=artifact_node, projection=projection)
+    value = _object(manifest, "compact Pages manifest", {"schema_version", "kind", "provenance", "source_artifact", "matrix", "lanes", "frames", "files"} | set(coverage))
+    if (type(value["schema_version"]) is not int or value["schema_version"] != (2 if coverage else COMPACT_SCHEMA)
+            or value["kind"] != COMPACT_KIND):
         raise EvidenceError("compact Pages manifest schema/kind is unsupported")
+    if canonical_json({key: value[key] for key in coverage}) != canonical_json(coverage):
+        raise EvidenceError("compact aggregate coverage differs from external scope/projection")
     provenance = _validate_provenance(value["provenance"], expected=expected)
     source_artifact = _object(value["source_artifact"], "source_artifact", {"id", "name", "digest"})
     _positive_int(source_artifact["id"], "source_artifact.id")
@@ -967,28 +978,24 @@ def validate_compact(root: Path, *, matrix_path: Path, expected: dict[str, Any] 
     if not isinstance(source_artifact["digest"], str) or not source_artifact["digest"].startswith("sha256:") or SHA256.fullmatch(source_artifact["digest"][7:]) is None:
         raise EvidenceError("compact source artifact digest is invalid")
     matrix_record = _object(value["matrix"], "compact matrix", {"path", "sha256", "size"})
+    _positive_int(matrix_record["size"], "compact matrix size")
     if matrix_record["path"] != "release-matrix.json":
         raise EvidenceError("compact matrix path is invalid")
     _, embedded_matrix = _child_file(root, "release-matrix.json", label="compact release matrix", maximum=256 * 1024)
     if matrix_record["sha256"] != sha256_bytes(embedded_matrix) or matrix_record["size"] != len(embedded_matrix):
         raise EvidenceError("compact matrix record is stale")
-    external_matrix = _stable_bytes(matrix_path, label="authenticated release matrix", maximum=256 * 1024)
     if external_matrix != embedded_matrix:
         raise EvidenceError("compact embedded matrix differs from the authenticated matrix")
-    try:
-        matrix = load_matrix(matrix_path, validate_sources=False)
-    except MatrixError as exc:
-        raise EvidenceError(str(exc)) from exc
-    matrix_sha, _ = _matrix_identity(matrix_path, matrix)
-    contract = default_contract()
+    matrix_sha = sha256_bytes(external_matrix)
     if matrix["branch"]["name"] != provenance["branch"] or matrix_sha != provenance["matrix_sha256"] or contract.sha256 != provenance["contract_sha256"]:
         raise EvidenceError("compact evidence disagrees with its matrix/contract")
-    lanes = _validate_lane_rows(value["lanes"], matrix, contract)
+    lanes = _validate_lane_rows(value["lanes"], matrix, contract, expected_lanes=selected)
     if not isinstance(value["files"], list):
         raise EvidenceError("compact files must be an array")
     derivative_bytes: dict[str, bytes] = {}
     for index, raw_record in enumerate(value["files"]):
         record = _object(raw_record, f"files[{index}]", {"path", "sha256", "size"})
+        _positive_int(record["size"], f"files[{index}].size")
         relative = _canonical_path(record["path"], "compact file path")
         if relative in derivative_bytes or not relative.startswith("images/") or not relative.endswith(".webp"):
             raise EvidenceError("compact file path is duplicate or outside images/")
@@ -1003,6 +1010,7 @@ def validate_compact(root: Path, *, matrix_path: Path, expected: dict[str, Any] 
     if not isinstance(value["frames"], list):
         raise EvidenceError("compact frames must be an array")
     seen: set[tuple[str, str]] = set()
+    used_derivatives: set[str] = set()
     expected_frames = {(lane["artifact_node"], capture.capture_id) for lane in lanes for role in contract.scenario(lane["scenario"]).roles for step in role.steps if step.capture is not None for capture in [step.capture]}
     lanes_by_node = {lane["artifact_node"]: lane for lane in lanes}
     for index, raw_frame in enumerate(value["frames"]):
@@ -1026,30 +1034,42 @@ def validate_compact(root: Path, *, matrix_path: Path, expected: dict[str, Any] 
         _canonical_path(source["path"], "source path")
         _digest(source["sha256"], "source sha256")
         _positive_int(source["size"], "source size")
+        _positive_int(source["width"], "source width")
+        _positive_int(source["height"], "source height")
         if (source["width"], source["height"]) != contract.gui_text_reference_size:
             raise EvidenceError("compact frame source dimensions are incompatible")
         derivative = _object(frame["derivative"], "compact derivative", {"path", "sha256", "size", "width", "height", "format"})
+        for dimension in ("size", "width", "height"):
+            _positive_int(derivative[dimension], f"derivative {dimension}")
         data = derivative_bytes.get(derivative["path"])
         if data is None or derivative["format"] != "WEBP" or derivative["sha256"] != sha256_bytes(data) or derivative["size"] != len(data):
             raise EvidenceError(f"compact derivative is stale for {identity}")
         decoded = _image(data, expected_format="WEBP", label=f"compact frame {identity}")
         if decoded["width"] != derivative["width"] or decoded["height"] != derivative["height"] or decoded["width"] > source["width"] or decoded["height"] > source["height"]:
             raise EvidenceError(f"compact derivative dimensions are stale for {identity}")
+        used_derivatives.add(derivative["path"])
         seen.add(identity)
     if seen != expected_frames:
         raise EvidenceError("compact semantic frame inventory is incomplete")
+    if used_derivatives != set(derivative_bytes):
+        raise EvidenceError("unreferenced compact derivatives")
     return value
 
 
-def copy_compact(*, input_root: Path, output: Path, matrix_path: Path, expected: dict[str, Any]) -> dict[str, Any]:
-    manifest = validate_compact(input_root, matrix_path=matrix_path, expected=expected)
+def copy_compact(*, input_root: Path, output: Path, matrix_path: Path, expected: dict[str, Any],
+                 scope: str | None = None, artifact_node: str | None = None,
+                 projection: str | None = None) -> dict[str, Any]:
+    selection = dict(scope=scope, artifact_node=artifact_node, projection=projection)
+    manifest = validate_compact(input_root, matrix_path=matrix_path, expected=expected, **selection)
     inventory = _inventory(input_root)
 
     def writer(stage: Path) -> None:
         for relative in sorted(inventory):
             _, data = _child_file(input_root, relative, label="compact cache file", maximum=MAX_MANIFEST_BYTES if relative == "manifest.json" else MAX_DERIVATIVE_BYTES)
             _copy_bytes(stage / relative, data)
-        validate_compact(stage, matrix_path=stage / "release-matrix.json", expected=expected)
+        copied = validate_compact(stage, matrix_path=matrix_path, expected=expected, **selection)
+        if canonical_json(copied) != canonical_json(manifest):
+            raise EvidenceError("compact manifest changed during copy")
 
     _atomic_directory(output, writer)
     return manifest
