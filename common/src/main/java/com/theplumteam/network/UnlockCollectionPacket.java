@@ -205,6 +205,6 @@ public class UnlockCollectionPacket {
     }
 
     public void sendToServer() {
-        NetworkManager.sendToServer(ID, encode());
+        PacketNetworking.sendToServer(ID, this::encode);
     }
 }

@@ -153,6 +153,6 @@ public class FigurePositionPacket {
      * Send this packet to the server
      */
     public void sendToServer() {
-        NetworkManager.sendToServer(ModNetworking.FIGURE_POSITION, encode());
+        PacketNetworking.sendToServer(ModNetworking.FIGURE_POSITION, this::encode);
     }
 }

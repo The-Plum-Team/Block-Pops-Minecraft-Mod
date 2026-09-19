@@ -87,6 +87,6 @@ public class SetFavoriteColorPacket {
      * Send this packet to the server
      */
     public void sendToServer() {
-        NetworkManager.sendToServer(ID, encode());
+        PacketNetworking.sendToServer(ID, this::encode);
     }
 }

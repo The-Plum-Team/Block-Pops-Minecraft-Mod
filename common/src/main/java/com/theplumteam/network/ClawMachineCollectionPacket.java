@@ -75,6 +75,6 @@ public class ClawMachineCollectionPacket {
      * Send this packet to the server
      */
     public void sendToServer() {
-        NetworkManager.sendToServer(ModNetworking.CLAW_MACHINE_COLLECTION, encode());
+        PacketNetworking.sendToServer(ModNetworking.CLAW_MACHINE_COLLECTION, this::encode);
     }
 }

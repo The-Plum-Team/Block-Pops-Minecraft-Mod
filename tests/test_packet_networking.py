@@ -14,6 +14,7 @@ from scripts.release.build_matrix import _finish_owned_group
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = Path("common/src/main/java/com/theplumteam/network/PacketNetworking.java")
+CLIENT_HELPER = Path("common/src/main/java/com/theplumteam/client/ClientPacketNetworking.java")
 REQUIRED = ("BLOCKPOPS_TEST_GRADLE", "BLOCKPOPS_TEST_GRADLE_HOME", "BLOCKPOPS_TEST_JAVA17",
             "BLOCKPOPS_TEST_JAVA21", "BLOCKPOPS_TEST_NETWORK_CLASSPATHS")
 BUFFER_PROBE = """
@@ -83,8 +84,10 @@ class PacketNetworkingApiTests(unittest.TestCase):
             self.assertEqual({"1.20.1", "1.21.1"}, set(classpaths))
             homes = {major: Path(os.environ[f"BLOCKPOPS_TEST_JAVA{major}"]).resolve() for major in (17, 21)}
             source = (ROOT / HELPER).read_bytes()
-            (root / HELPER).parent.mkdir(parents=True)
-            (root / HELPER).write_bytes(source)
+            client_source = (ROOT / CLIENT_HELPER).read_bytes()
+            for path, data in ((HELPER, source), (CLIENT_HELPER, client_source)):
+                (root / path).parent.mkdir(parents=True, exist_ok=True)
+                (root / path).write_bytes(data)
             (root / "gradle").mkdir()
             shutil.copyfile(ROOT / "gradle/verification-metadata.xml", root / "gradle/verification-metadata.xml")
             (root / "settings.gradle").write_text("""
@@ -130,13 +133,15 @@ stonecutter.create(rootProject, { tree ->
             observations, wires, generated_sources = {}, {}, {}
             for version, major in (("1.20.1", 17), ("1.21.1", 21)):
                 generated = root / f"common/versions/{version}/build/generated/stonecutter/main/java/com/theplumteam/network/PacketNetworking.java"
-                generated_sources[version] = generated
+                generated_client = generated.parent.parent / "client/ClientPacketNetworking.java"
+                generated_sources[version] = [generated, generated_client]
                 self.assertTrue(generated.is_file())
                 (logs / f"PacketNetworking-{version}.java").write_bytes(generated.read_bytes())
+                (logs / f"ClientPacketNetworking-{version}.java").write_bytes(generated_client.read_bytes())
                 destination = root / f"classes-{version}"
                 cp = os.pathsep.join(map(str, classpaths[version]))
                 code, output = invoke(f"compile-{version}", [homes[major] / "bin/javac", "-proc:none", "--release", str(major),
-                    "-cp", cp, "-d", destination, generated])
+                    "-cp", cp, "-d", destination, generated, generated_client])
                 self.assertEqual(0, code, output)
                 bytecode = destination / "com/theplumteam/network/PacketNetworking.class"
                 self.assertEqual(major + 44, int.from_bytes(bytecode.read_bytes()[6:8], "big"))
@@ -172,13 +177,16 @@ stonecutter.create(rootProject, { tree ->
             self.assertEqual(wires["1.20.1"], wires["1.21.1"])
             for version, major, other in (("1.20.1", 21, "1.21.1"), ("1.21.1", 17, "1.20.1")):
                 code, output = invoke(f"reject-crossed-{version}", [homes[major] / "bin/javac", "-proc:none", "--release", str(major),
-                    "-cp", os.pathsep.join(map(str, classpaths[other])), "-d", root / f"wrong-{version}", generated_sources[version]])
+                    "-cp", os.pathsep.join(map(str, classpaths[other])), "-d", root / f"wrong-{version}", *generated_sources[version]])
                 self.assertNotEqual(0, code, "wrong API unexpectedly accepted the branch")
                 self.assertIn("cannot be converted to RegistryFriendlyByteBuf" if version == "1.20.1" else "cannot find symbol", output)
             code, output = invoke("compile-unprocessed-legacy", [homes[17] / "bin/javac", "-proc:none", "--release", "17",
-                "-cp", os.pathsep.join(map(str, classpaths["1.20.1"])), "-d", root / "raw-legacy", root / HELPER])
+                "-cp", os.pathsep.join(map(str, classpaths["1.20.1"])), "-d", root / "raw-legacy", root / HELPER, root / CLIENT_HELPER])
             self.assertEqual(0, code, output)
             self.assertEqual(source, (root / HELPER).read_bytes())
             self.assertEqual(source, (ROOT / HELPER).read_bytes())
+            self.assertEqual(client_source, (root / CLIENT_HELPER).read_bytes())
+            self.assertEqual(client_source, (ROOT / CLIENT_HELPER).read_bytes())
             (logs / "result.json").write_text(json.dumps({"kind": "api-and-buffer-compatibility-probe", "qualified": False,
-                "source_sha256": hashlib.sha256(source).hexdigest(), "observations": observations}, indent=2) + "\n")
+                "source_sha256": hashlib.sha256(source).hexdigest(), "client_source_sha256": hashlib.sha256(client_source).hexdigest(),
+                "observations": observations}, indent=2) + "\n")
