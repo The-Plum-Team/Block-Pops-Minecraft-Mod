@@ -269,10 +269,20 @@ class MatrixDocument:
         families = {lane.repository_family for lane in lanes}
         if {"forge", "neoforge"} <= families:
             _fail("one Gradle process cannot mix Forge and NeoForge repository families")
+        minecraft, _, _ = next(iter(eras))
+        annotation_node = f"fabric-{minecraft}"
+        try:
+            annotation_lane = self.inventory.lane(annotation_node)
+        except MatrixError as exc:
+            raise MatrixError(f"common annotations require configured {annotation_node}: {exc}") from exc
         return {
             "matrix": self.data,
             "scope": scope,
             "artifact_node": artifact_node,
+            "common_annotation_dependency": {
+                "artifact_node": annotation_node,
+                "coordinate": f"net.fabricmc:fabric-loader:{annotation_lane.runtime['loader_version']}",
+            },
             "lanes": [
                 {
                     "artifact": lane.artifact,

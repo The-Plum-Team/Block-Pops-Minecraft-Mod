@@ -240,3 +240,10 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - Production metadata must also carry the lane's actual mod version when this rule is enabled. Fabric uses its version field; FML parses the BlockPops mod record rather than accepting a matching text fragment elsewhere.
 - Root and independent review reproduced30 artifact tests, including both metadata formats and preserved legacy round trips. The legacy path remains unchanged when no identity is requested; schema2 matrix staging still fails pending the scoped manifest producer/reader.
 - This prepares one provenance rule, not schema3 activation or qualification. Future staging must authenticate the caller digests and require this identity for both archives. Rollback is these opt-in helpers/tests.
+
+## Task 6d — explicit common annotation input
+
+- Normalized Gradle context now names the exact same-era Fabric lane supplying the common Fabric annotations/transformer coordinate. This is an explicit common compile-tool dependency, not a second selected runtime or repository family; no first-row or other-era fallback exists.
+- Missing/unconfigured same-era Fabric input fails before Gradle. Reordered matrices preserve the selected Forge/NeoForge runtime, mod version and repository family and do not add another loader project.
+- Root reproduced23 context/portability/provenance tests; the agent also ran32 context/schema2 tests. The real Forge projection retains only Forge while explicitly naming `net.fabricmc:fabric-loader:0.17.3` for common annotations. No Gradle/source-adapter activation occurred in this unit.
+- Rollback is this projection field/tests; the next convention unit consumes it. Embedded context digests include this explicit common input in addition to the full authoritative matrix digest.

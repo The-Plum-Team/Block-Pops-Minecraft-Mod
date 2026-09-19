@@ -29,6 +29,9 @@ class GradleContextTests(unittest.TestCase):
                          {lane["mod_version"] for lane in context["lanes"]})
         self.assertEqual({"legacy"}, {lane["build_layout"] for lane in context["lanes"]})
         self.assertEqual(("full", None), (context["scope"], context["artifact_node"]))
+        self.assertEqual({"artifact_node": "fabric-1.21.1",
+                          "coordinate": "net.fabricmc:fabric-loader:0.17.0"},
+                         context["common_annotation_dependency"])
 
     def test_preparing_defaults_only_to_legacy_context(self):
         source = document(schema2_configuration())
@@ -37,8 +40,62 @@ class GradleContextTests(unittest.TestCase):
         self.assertEqual(["fabric-1.20.1", "forge-1.20.1"],
                          [lane["artifact"]["artifact_node"] for lane in context["lanes"]])
         self.assertEqual(4, len(context["matrix"]["artifacts"]))
+        self.assertEqual({"artifact_node": "fabric-1.20.1",
+                          "coordinate": "net.fabricmc:fabric-loader:0.17.3"},
+                         context["common_annotation_dependency"])
         context["lanes"][0]["artifact"]["java"] = 99
         self.assertEqual(17, source.gradle_context()["lanes"][0]["artifact"]["java"])
+
+    def test_annotation_dependency_uses_same_era_regardless_of_row_order(self):
+        matrix = schema2_configuration()
+        next(row for row in matrix["runtimes"]
+             if row["artifact_node"] == "fabric-1.21.1")["loader_version"] = "0.17.0"
+        for reordered in (False, True):
+            if reordered:
+                matrix["artifacts"].reverse()
+                matrix["runtimes"] = matrix["runtimes"][1:] + matrix["runtimes"][:1]
+            source = document(matrix)
+            for node, fabric_node, version in (
+                ("forge-1.20.1", "fabric-1.20.1", "0.17.3"),
+                ("neoforge-1.21.1", "fabric-1.21.1", "0.17.0"),
+                ("fabric-1.21.1", "fabric-1.21.1", "0.17.0"),
+            ):
+                with self.subTest(reordered=reordered, node=node):
+                    context = source.gradle_context(artifact_node=node)
+                    expected = source.inventory.lane(node)
+                    self.assertEqual({"artifact_node": fabric_node,
+                                      "coordinate": f"net.fabricmc:fabric-loader:{version}"},
+                                     context["common_annotation_dependency"])
+                    self.assertEqual([node], [lane["artifact"]["artifact_node"]
+                                              for lane in context["lanes"]])
+                    selected = context["lanes"][0]
+                    self.assertEqual(expected.runtime, selected["runtime"])
+                    self.assertEqual(expected.mod_version, selected["mod_version"])
+                    self.assertEqual(expected.repository_family, selected["repository_family"])
+                    context["common_annotation_dependency"]["coordinate"] = "mutated"
+                    self.assertEqual(f"net.fabricmc:fabric-loader:{version}",
+                                     source.gradle_context(artifact_node=node)
+                                     ["common_annotation_dependency"]["coordinate"])
+
+    def test_annotation_dependency_rejects_missing_same_era_fabric_configuration(self):
+        for matrix in (arbitrary_named_1211_release_matrix(), schema2_configuration()):
+            with self.subTest(schema=matrix["schema_version"]):
+                for key in ("artifacts", "runtimes"):
+                    matrix[key] = [row for row in matrix[key]
+                                   if row["artifact_node"] != "fabric-1.21.1"]
+                matrix["lane_count"] -= 1
+                if matrix["schema_version"] == 1:
+                    matrix["unit_test_lane"] = "neoforge-1.21.1"
+                    del matrix["source_routing"]["fabric"]
+                    del matrix["installers"]["fabric-1.1.0"]
+                source = document(matrix)
+                self.assertEqual("neoforge-1.21.1",
+                                 source.inventory.lane("neoforge-1.21.1").identity.artifact_node)
+                with self.assertRaisesRegex(MatrixError, "common annotations.*fabric-1.21.1"):
+                    source.gradle_context(artifact_node="neoforge-1.21.1")
+                if matrix["schema_version"] == 2:
+                    self.assertEqual("fabric-1.20.1", source.gradle_context()
+                                     ["common_annotation_dependency"]["artifact_node"])
 
     def test_selected_context_never_inherits_another_lane(self):
         for shared in (False, True):
