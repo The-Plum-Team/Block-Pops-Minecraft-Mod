@@ -2,6 +2,9 @@ package com.theplumteam.blockentity;
 
 import com.theplumteam.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
+//? if >=1.21 {
+/*import net.minecraft.core.HolderLookup;
+*///? }
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
@@ -48,14 +51,24 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
     }
 
     @Override
+    //? if >=1.21 {
+    /*protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.saveAdditional(tag, registries);
+    *///? } else {
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
+    //? }
         tag.putString("CollectionId", collectionId);
     }
 
     @Override
+    //? if >=1.21 {
+    /*protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.loadAdditional(tag, registries);
+    *///? } else {
     public void load(CompoundTag tag) {
         super.load(tag);
+    //? }
         if (tag.contains("CollectionId")) {
             this.collectionId = tag.getString("CollectionId");
         }
@@ -63,15 +76,26 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
 
     // ===== CHUNK LOAD SYNCHRONIZATION =====
     @Override
+    //? if >=1.21 {
+    /*public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        CompoundTag tag = super.getUpdateTag(registries);
+        saveAdditional(tag, registries);
+    *///? } else {
     public CompoundTag getUpdateTag() {
         CompoundTag tag = super.getUpdateTag();
         saveAdditional(tag);
+    //? }
         return tag;
     }
 
     // Forge-specific method - no @Override in common
+    //? if >=1.21 {
+    /*public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
+        loadAdditional(tag, registries);
+    *///? } else {
     public void handleUpdateTag(CompoundTag tag) {
         load(tag);
+    //? }
     }
 
     // ===== REAL-TIME SYNCHRONIZATION =====
@@ -81,10 +105,18 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
     }
 
     // Forge-specific method - no @Override in common
+    //? if >=1.21 {
+    /*public void onDataPacket(Connection connection, ClientboundBlockEntityDataPacket packet, HolderLookup.Provider registries) {
+    *///? } else {
     public void onDataPacket(Connection connection, ClientboundBlockEntityDataPacket packet) {
+    //? }
         CompoundTag tag = packet.getTag();
         if (tag != null) {
+            //? if >=1.21 {
+            /*loadAdditional(tag, registries);
+            *///? } else {
             load(tag);
+            //? }
             if (level != null && level.isClientSide) {
                 level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
             }
