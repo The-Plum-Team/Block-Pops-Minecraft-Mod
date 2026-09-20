@@ -1,4 +1,4 @@
-"""Real API probe: modern model registration remains an explicit compilation boundary."""
+"""Real API compilation of both models and their modern skin-registration bindings."""
 
 import hashlib
 import json
@@ -18,7 +18,8 @@ MODELS = ("client/model/FigureModel", "client/model/FigureBlockModel")
 DETECTOR = "util/SkinModelDetector"
 TARGETS = (*MODELS, DETECTOR)
 DEPENDENCIES = ("blockentity/BoxBlockEntity", "blockentity/FigureBlockEntity",
-                "item/BlockEntityItemData", "util/ResourceLocations")
+                "item/BlockEntityItemData", "util/ResourceLocations",
+                "client/SkinProfilePreparation", "client/LocalProfileProperties", "client/ClientSkinRegistration")
 CLASSES = (*TARGETS, *DEPENDENCIES)
 SOURCES = tuple(PACKAGE / (name + ".java") for name in CLASSES)
 REQUIRED = ("BLOCKPOPS_TEST_GRADLE", "BLOCKPOPS_TEST_GRADLE_HOME", "BLOCKPOPS_TEST_JAVA17",
@@ -28,7 +29,7 @@ REQUIRED = ("BLOCKPOPS_TEST_GRADLE", "BLOCKPOPS_TEST_GRADLE_HOME", "BLOCKPOPS_TE
 
 @unittest.skipUnless(all(os.environ.get(key) for key in REQUIRED), "explicit Gradle/JDK/API/baseline inputs required")
 class PlayerSkinReadApiTests(unittest.TestCase):
-    def test_complete_detector_and_legacy_models_with_four_explicit_modern_registration_errors(self):
+    def test_complete_models_detector_and_native_registration_bindings(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             logs = Path(os.environ.get("BLOCKPOPS_TEST_LOGS", str(root / "logs")))
@@ -46,7 +47,7 @@ class PlayerSkinReadApiTests(unittest.TestCase):
             forbidden = {name.rsplit("/", 1)[-1] for name in CLASSES}
             self.assertFalse({path.stem.split("$")[0] for path in symbols} & forbidden)
             inputs = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in
-                      [*baselines.values(), *symbols, *(p for paths in classpaths.values() for p in paths)]}
+                      [Path(__file__).resolve(), *baselines.values(), *symbols, *(p for paths in classpaths.values() for p in paths)]}
             for path, raw in sources.items():
                 (root / path).parent.mkdir(parents=True, exist_ok=True); (root / path).write_bytes(raw)
             copied_symbols = root / "symbols"
@@ -107,7 +108,7 @@ stonecutter.create(rootProject, { tree ->
                         self.assertEqual(java_tokens(baselines[name].read_text()), java_tokens(path.read_text()), name)
                 destination = root / f"classes-{version}"
                 cp = os.pathsep.join(map(str, [copied_symbols, *classpaths[version]]))
-                compiled = CLASSES if major == 17 else (DETECTOR, *DEPENDENCIES)
+                compiled = CLASSES
                 code, output = invoke(f"compile-complete-classes-{version}", [homes[major] / "bin/javac", "-proc:none",
                     "--release", str(major), "-cp", cp, "-d", destination, *(generated[name] for name in compiled)])
                 self.assertEqual(0, code, output)
@@ -124,17 +125,34 @@ stonecutter.create(rootProject, { tree ->
                     self.assertIn("PlayerSkin.texture:", output); self.assertIn("PlayerSkin.model:", output)
                     self.assertIn("PlayerSkin$Model.SLIM:", output)
                     self.assertNotIn("PlayerInfo.getSkinLocation:", output); self.assertNotIn("PlayerInfo.getModelName:", output)
-                    code, output = invoke("complete-modern-models-registration-boundary", [homes[21] / "bin/javac",
-                        "-proc:none", "-Xmaxerrs", "1000", "--release", "21", "-cp", str(destination) + os.pathsep + cp,
-                        "-d", root / "modern-models", *(generated[name] for name in MODELS)])
-                    self.assertNotEqual(0, code)
-                    errors = re.findall(r"(?m)^(.+\.java):\d+: error: (.+)$", output)
-                    self.assertCountEqual([(str(generated[name]), "cannot find symbol") for name in MODELS for _ in range(2)], errors)
-                    self.assertEqual(4, len(re.findall(r"symbol:\s+method registerSkins\(GameProfile,", output)))
-                    self.assertFalse(list((root / "modern-models").rglob("*.class")))
+                for name in MODELS:
+                    code, output = invoke(f"model-bytecode-{version}-{name.rsplit('/', 1)[1]}", [homes[major] / "bin/javap",
+                        "-p", "-c", "-classpath", destination, "com.theplumteam." + name.replace("/", ".")])
+                    self.assertEqual(0, code, output)
+                    self.assertEqual(2 if major == 17 else 0, output.count("SkinManager.registerSkins:"))
+                    self.assertEqual(0 if major == 17 else 2, output.count("ClientSkinRegistration.register:"))
+                code, output = invoke(f"adapter-bytecode-{version}", [homes[major] / "bin/javap", "-p", "-c", "-v",
+                    "-classpath", destination, "com.theplumteam.client.ClientSkinRegistration"])
+                self.assertEqual(0, code, output)
+                if major == 17:
+                    self.assertNotIn("register(", output)
+                    self.assertNotIn(b"net/minecraft", (destination / "com/theplumteam/client/ClientSkinRegistration.class").read_bytes())
+                else:
+                    instructions = "\n".join(line for line in output.splitlines() if re.match(r"\s*\d+:\s+\w", line))
+                    bindings = ["Minecraft.getInstance:", "Minecraft.getMinecraftSessionService:", "Minecraft.getUser:",
+                        "User.getProfileId:", "LocalProfileProperties.blockpops$getInitialProfileProperties:",
+                        "Util.backgroundExecutor:", "Minecraft.getSkinManager:", "SkinProfilePreparation.schedule:"]
+                    for binding in bindings:
+                        self.assertEqual(1, instructions.count(binding), binding)
+                    self.assertEqual(sorted(instructions.index(binding) for binding in bindings),
+                                     [instructions.index(binding) for binding in bindings])
+                    self.assertIn("REF_invokeVirtual net/minecraft/util/thread/BlockableEventLoop.execute:(Ljava/lang/Runnable;)V", output)
+                    self.assertIn("REF_invokeVirtual net/minecraft/client/resources/SkinManager.getOrLoad:", output)
+                    self.assertNotIn("getGameProfile", output); self.assertNotIn("fetchProfile", output)
+                    self.assertNotIn('PropertyMap."<init>"', output)
                 observations[version] = {"generated_sha256": {name: hashlib.sha256(p.read_bytes()).hexdigest() for name, p in generated.items()},
                     "class_major": major + 44, "complete_class_sha256": bytecodes,
-                    "models_compiled": major == 17, "pending_registration_errors": 4 if major == 21 else 0}
+                    "models_compiled": True, "pending_registration_errors": 0}
             self.assertEqual(inputs, {path: hashlib.sha256(Path(path).read_bytes()).hexdigest() for path in inputs})
             for path, raw in sources.items(): self.assertEqual(raw, (ROOT / path).read_bytes())
             self.assertEqual(metadata, (ROOT / "gradle/verification-metadata.xml").read_bytes())
@@ -142,5 +160,6 @@ stonecutter.create(rootProject, { tree ->
                 "sources_sha256": {str(path): hashlib.sha256(raw).hexdigest() for path, raw in sources.items()},
                 "inputs_sha256": inputs, "metadata_sha256": hashlib.sha256(metadata).hexdigest(),
                 "observations": observations, "commands": commands, "baseline_symbols_executed": False,
-                "legacy_active_sources_identical": True, "modern_models_compiled": False,
+                "legacy_active_sources_identical": True, "modern_models_compiled": True,
+                "adapter_executed": False,
                 "rendering_or_network_executed": False}, indent=2) + "\n")

@@ -4,6 +4,9 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.blockentity.BoxBlockEntity;
+//? if >=1.21 {
+/*import com.theplumteam.client.ClientSkinRegistration;
+*///? }
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
@@ -145,7 +148,11 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
             GameProfile profile = liveProfileCache.computeIfAbsent(figure.getPlayerUUID(), uuid ->
                     new GameProfile(uuid, figure.getName()));
             liveRegistrationCache.computeIfAbsent(figure.getPlayerUUID(), uuid -> {
+                //? if >=1.21 {
+                /*ClientSkinRegistration.register(profile);
+                *///? } else {
                 Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, p) -> {}, false);
+                //? }
                 return true;
             });
             //? if >=1.21 {
@@ -167,7 +174,11 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
             return newProfile;
         });
         snapshotRegistrationCache.computeIfAbsent(uniqueCacheKey, id -> {
+            //? if >=1.21 {
+            /*ClientSkinRegistration.register(profile);
+            *///? } else {
             Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, texture) -> {}, false);
+            //? }
             return true;
         });
         //? if >=1.21 {

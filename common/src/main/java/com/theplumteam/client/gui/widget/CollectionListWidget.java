@@ -10,7 +10,7 @@ import net.minecraft.client.gui.components.ObjectSelectionList;
 /**
  * Scrollable list widget for displaying available collections
  */
-public class CollectionListWidget extends ObjectSelectionList<CollectionEntry> {
+public class CollectionListWidget extends BoundedSelectionList<CollectionEntry> {
     private final CollectionSelectionScreen parentScreen;
 
     public CollectionListWidget(CollectionSelectionScreen parentScreen, Minecraft mc,
@@ -58,7 +58,11 @@ public class CollectionListWidget extends ObjectSelectionList<CollectionEntry> {
     }
 
     @Override
+    //? if >=1.21 {
+    /*public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    *///? } else {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    //? }
         if (GuiScaleManager.isUsingInverseScale()) {
             float scale = GuiScaleManager.getRenderScaleFactor();
 
@@ -89,7 +93,11 @@ public class CollectionListWidget extends ObjectSelectionList<CollectionEntry> {
             this.setScrollAmount(origScroll * scale);
 
             // Render with scaled values
+            //? if >=1.21 {
+            /*super.renderWidget(graphics, scaledMouseX, scaledMouseY, partialTick);
+            *///? } else {
             super.render(graphics, scaledMouseX, scaledMouseY, partialTick);
+            //? }
 
             // Restore original values
             this.x0 = origX0;
@@ -101,7 +109,11 @@ public class CollectionListWidget extends ObjectSelectionList<CollectionEntry> {
 
             this.setScrollAmount(origScroll);
         } else {
+            //? if >=1.21 {
+            /*super.renderWidget(graphics, mouseX, mouseY, partialTick);
+            *///? } else {
             super.render(graphics, mouseX, mouseY, partialTick);
+            //? }
         }
     }
 
@@ -148,7 +160,11 @@ public class CollectionListWidget extends ObjectSelectionList<CollectionEntry> {
     }
 
     @Override
+    //? if >=1.21 {
+    /*public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double amount) {
+    *///? } else {
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+    //? }
         // Smooth scrolling: use fixed pixel amount instead of itemHeight-based
         // We use 15 pixels per scroll tick for smooth, consistent control
         this.setScrollAmount(this.getScrollAmount() - amount * 15.0);

@@ -13,6 +13,7 @@ import urllib.request
 from collections.abc import Mapping
 from contextlib import ExitStack, contextmanager
 from datetime import datetime, timedelta, timezone
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 from types import SimpleNamespace
@@ -41,6 +42,7 @@ from scripts.pages.select_artifact import (  # noqa: E402
     PAGES_WORKFLOW,
     SelectionError,
     _validate_run,
+    newest_exact_source,
 )
 
 
@@ -116,10 +118,10 @@ def current_rotation_inputs(api, *, repository, pages_run_id, pages_run_attempt,
             manifests[row["name"]] = manifest
             cached.append(unchanged)
         live = True
-        def recheck():
+        def recheck(*, _after_api=None):
             if not live:
                 raise RotationError("rotation input lease is closed")
-            context["recheck"]()
+            context["recheck"](_after_api=_after_api)
             for unchanged in cached: unchanged()
             inventory()
         try:
@@ -254,10 +256,11 @@ def _plan_anchor_rotation(
     return replacement.id, deletions
 
 
-def plan_rotation(
+def _plan_rotation(
     *, api: RotationApi, repository: str, pages_run_id: int, pages_run_sha: str,
     inventory: list[dict[str, Any]], caches_root: Path, canonical_branch: str,
     now: datetime | None = None, current_run_attempt: int | None = None,
+    manifests: dict | None = None,
 ) -> list[int]:
     rotation_time = datetime.now(timezone.utc) if now is None else now
     pages_workflow = api.workflow("pages.yml")
@@ -334,7 +337,7 @@ def plan_rotation(
             )
         deletions.add(collected[0].id)
         bundle = caches_root / cache_name
-        manifest = validate_compact(
+        manifest = manifests[branch] if manifests is not None else validate_compact(
             bundle,
             matrix_path=bundle / "release-matrix.json",
             expected={
@@ -426,6 +429,114 @@ def plan_rotation(
     if deletions & keep_ids:
         raise RotationError("rotation plan attempts to delete a retained cache")
     return sorted(deletions)
+
+
+def plan_rotation(
+    *, api: RotationApi, repository: str, pages_run_id: int, pages_run_sha: str,
+    inventory: list[dict[str, Any]], caches_root: Path, canonical_branch: str,
+    now: datetime | None = None, current_run_attempt: int | None = None,
+) -> list[int]:
+    return _plan_rotation(api=api, repository=repository, pages_run_id=pages_run_id,
+        pages_run_sha=pages_run_sha, inventory=inventory, caches_root=caches_root,
+        canonical_branch=canonical_branch, now=now, current_run_attempt=current_run_attempt)
+
+
+class _RotationReads:
+    """Pin policy reads; only this invocation's successful deletions may disappear."""
+    methods = frozenset({"workflow", "run", "run_attempt", "runs", "branch_head",
+                         "artifacts_for_run", "all_artifacts", "artifacts_named"})
+    run_fields = ("id", "run_attempt", "workflow_id", "path", "head_branch", "head_sha", "event",
+                  "display_title", "created_at", "status", "conclusion", "head_repository")
+
+    def __init__(self, api):
+        self.api, self.records, self.artifacts = api, {}, {}
+
+    def stable(self, name, value, deleted=()):
+        if name in {"artifacts_for_run", "all_artifacts", "artifacts_named"}:
+            if not isinstance(value, list) or not all(isinstance(item, Artifact) for item in value):
+                raise RotationError("rotation artifact response is malformed")
+            if len({item.id for item in value}) != len(value):
+                raise RotationError("rotation artifact IDs are duplicated")
+            for item in value:
+                raw = site.canonical_json(asdict(item))
+                if item.id in self.artifacts and self.artifacts[item.id] != raw:
+                    raise RotationError("rotation artifact metadata changed")
+                self.artifacts.setdefault(item.id, raw)
+            return [asdict(item) for item in sorted(value, key=lambda item: item.id) if item.id not in deleted]
+        if name == "branch_head": return value
+        fields = ("id", "path", "state") if name == "workflow" else self.run_fields
+        records = value if name == "runs" else [value]
+        projected = [{key: row.get(key) for key in fields} for row in records]
+        return sorted(site.canonical_json(row) for row in projected)
+
+    def __getattr__(self, name):
+        if name not in self.methods: raise AttributeError(name)
+        def read(*args):
+            value = getattr(self.api, name)(*args)
+            key = (name, args); encoded = site.canonical_json(self.stable(name, value))
+            if key in self.records and self.records[key][1] != encoded:
+                raise RotationError("rotation policy input changed while planning")
+            self.records[key] = (value, encoded)
+            return value
+        return read
+
+    def pin_current_attempts(self):
+        for (name, args), (historical, _) in list(self.records.items()):
+            if name == "run_attempt":
+                current = self.run(args[0])
+                if site.canonical_json(self.stable("run", current)) != site.canonical_json(self.stable("run", historical)):
+                    raise RotationError("rotation historical owner is no longer the current attempt")
+
+    def recheck(self, deleted):
+        for (name, args), (original, _) in self.records.items():
+            current = getattr(self.api, name)(*args)
+            if site.canonical_json(self.stable(name, current, deleted)) != site.canonical_json(self.stable(name, original, deleted)):
+                raise RotationError("rotation inventory or owner changed")
+
+
+@contextmanager
+def current_rotation_actions(api, *, repository, pages_run_id, pages_run_attempt,
+                             implementation_sha, canonical_branch, inventory_path, caches_root, now=None):
+    """Keep exact-ID actions inside live authenticated leases; no caller-supplied permits."""
+    with current_rotation_inputs(api, repository=repository, pages_run_id=pages_run_id,
+            pages_run_attempt=pages_run_attempt, implementation_sha=implementation_sha,
+            canonical_branch=canonical_branch, inventory_path=inventory_path, caches_root=caches_root) as (rows, manifests, recheck):
+        reads = _RotationReads(api)
+        for row in rows:
+            source = newest_exact_source(reads, repository=repository, branch=row["name"], commit=row["commit"],
+                tree=row["tree"], canonical_branch=canonical_branch)
+            handoff = manifests[row["name"]]["provenance"]["handoff"]
+            if source != tuple(handoff[key] for key in ("run_id", "run_attempt", "controller_branch", "controller_sha")):
+                raise RotationError("rotation cache does not describe the newest exact source")
+        planned = tuple(_plan_rotation(api=reads, repository=repository, pages_run_id=pages_run_id,
+            pages_run_sha=implementation_sha, inventory=rows, caches_root=caches_root,
+            canonical_branch=canonical_branch, now=now, current_run_attempt=pages_run_attempt, manifests=manifests))
+        reads.pin_current_attempts()
+        permits = {identifier: reads.artifacts[identifier] for identifier in planned}
+        deleted, live, failed = set(), True, False
+        def delete_next():
+            nonlocal failed
+            if not live or failed or len(deleted) == len(planned):
+                raise RotationError("rotation action lease is closed, failed or exhausted")
+            identifier = planned[len(deleted)]
+            def observe():
+                reads.recheck(deleted)
+                item = Artifact.parse(api.get(f"/repos/{repository}/actions/artifacts/{identifier}"))
+                if site.canonical_json(asdict(item)) != permits[identifier]:
+                    raise RotationError("rotation exact-ID permit changed")
+            try:
+                recheck(_after_api=observe)
+                api.delete_artifact(identifier)
+            except BaseException:
+                failed = True
+                raise
+            deleted.add(identifier)
+            return identifier
+        try:
+            recheck(_after_api=lambda: reads.recheck(deleted))
+            yield planned, delete_next
+        finally:
+            live = False
 
 
 def main(argv: list[str] | None = None) -> int:

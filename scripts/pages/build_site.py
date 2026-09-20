@@ -603,11 +603,12 @@ def _current_pages_inputs(api, args, *, phase="build"):
         context = _scoped_inputs(inputs, args.inventory, args.canonical_matrix, private)
         check(context["capture"](args.inventory)[1] == inventory_raw, "Pages discovery changed during acquisition")
         original_recheck = context["recheck"]
-        def recheck():
+        def recheck(*, _after_api=None):
             check(observe()[0] == observation, "Pages ownership changed during rendering")
             final_repository = api.get(f"/repos/{api.repository}")
             check(final_repository.get("full_name") == api.repository and final_repository.get("default_branch") == args.canonical_branch,
                   "Pages repository/default changed during final observation")
+            if _after_api is not None: _after_api()
             check(checkout() == source, "Pages source changed during rendering")
             original_recheck()
             final = []

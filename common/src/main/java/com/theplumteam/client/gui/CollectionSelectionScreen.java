@@ -2,6 +2,9 @@ package com.theplumteam.client.gui;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
+//? if >=1.21 {
+/*import com.mojang.blaze3d.vertex.BufferUploader;
+*///? }
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -582,6 +585,17 @@ public class CollectionSelectionScreen extends Screen {
         RenderSystem.setShaderTexture(0, cacheTexture);
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
 
+        //? if >=1.21 {
+        /*int starHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
+        int starWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
+
+        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        bufferBuilder.addVertex(pose.last().pose(), 0, starHeight, 0).setUv(u0, v1);
+        bufferBuilder.addVertex(pose.last().pose(), starWidth, starHeight, 0).setUv(u1, v1);
+        bufferBuilder.addVertex(pose.last().pose(), starWidth, 0, 0).setUv(u1, v0);
+        bufferBuilder.addVertex(pose.last().pose(), 0, 0, 0).setUv(u0, v0);
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
+        *///? } else {
         Tesselator tesselator = Tesselator.getInstance();
         BufferBuilder bufferBuilder = tesselator.getBuilder();
 
@@ -593,6 +607,7 @@ public class CollectionSelectionScreen extends Screen {
         bufferBuilder.vertex(pose.last().pose(), starWidth, 0, 0).uv(u1, v0).endVertex();
         bufferBuilder.vertex(pose.last().pose(), 0, 0, 0).uv(u0, v0).endVertex();
         tesselator.end();
+        //? }
 
         pose.popPose();
 
@@ -833,12 +848,20 @@ public class CollectionSelectionScreen extends Screen {
     }
 
     @Override
+    //? if >=1.21 {
+    /*public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double delta) {
+    *///? } else {
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    //? }
         if (GuiScaleManager.isUsingInverseScale()) {
             mouseX = GuiScaleManager.transformMouseX(mouseX);
             mouseY = GuiScaleManager.transformMouseY(mouseY);
         }
+        //? if >=1.21 {
+        /*return super.mouseScrolled(mouseX, mouseY, horizontal, delta);
+        *///? } else {
         return super.mouseScrolled(mouseX, mouseY, delta);
+        //? }
     }
 
     @Override
