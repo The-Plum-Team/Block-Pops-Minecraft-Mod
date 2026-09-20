@@ -491,20 +491,45 @@ jobs:
           digest-mismatch: error
 
       - name: Revalidate the promoted compact bundle
+        shell: bash
         env:
           BRANCH: ${{ matrix.branch.name }}
+          CANONICAL_BRANCH: ${{ needs.discover.outputs.canonical_branch }}
           COMMIT_SHA: ${{ matrix.branch.commit }}
+          GH_TOKEN: ${{ github.token }}
+          IMPLEMENTATION_SHA: ${{ needs.discover.outputs.implementation_sha }}
+          INVENTORY: ${{ needs.discover.outputs.inventory }}
           MATRIX_SHA: ${{ matrix.branch.matrix_sha256 }}
           TREE_SHA: ${{ matrix.branch.tree }}
-        run: >-
-          python3 scripts/pages/evidence.py validate-compact
-          --input promoted-cache
-          --matrix promoted-cache/release-matrix.json
-          --repository "$GITHUB_REPOSITORY"
-          --branch "$BRANCH"
-          --commit "$COMMIT_SHA"
-          --tree "$TREE_SHA"
-          --matrix-sha256 "$MATRIX_SHA"
+        run: |
+          set -euo pipefail
+          source_token="$GH_TOKEN"
+          unset GH_TOKEN
+          scope="$(python3 scripts/ci/matrix_scope.py --matrix release/release-matrix.json)"
+          case "$scope" in
+            unscoped)
+              python3 scripts/pages/evidence.py validate-compact \
+                --input promoted-cache --matrix promoted-cache/release-matrix.json \
+                --repository "$GITHUB_REPOSITORY" --branch "$BRANCH" \
+                --commit "$COMMIT_SHA" --tree "$TREE_SHA" --matrix-sha256 "$MATRIX_SHA" ;;
+            legacy|full)
+              [[ "$GITHUB_API_URL" == https://api.github.com && "$GITHUB_SERVER_URL" == https://github.com ]] || exit 2
+              [[ "$IMPLEMENTATION_SHA" =~ ^[0-9a-f]{40}$ && "$GITHUB_SHA" == "$IMPLEMENTATION_SHA" ]] || exit 2
+              [[ "$(git rev-parse HEAD)" == "$IMPLEMENTATION_SHA" ]] || exit 2
+              [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || exit 2
+              [[ -n "$CANONICAL_BRANCH" && "$GITHUB_REF" == "refs/heads/$CANONICAL_BRANCH" ]] || exit 2
+              [[ "$GITHUB_WORKFLOW_REF" == "$GITHUB_REPOSITORY/.github/workflows/pages.yml@refs/heads/$CANONICAL_BRANCH" ]] || exit 2
+              inventory_path="$RUNNER_TEMP/pages-inventory.json"
+              printf '%s\n' "$INVENTORY" > "$inventory_path"
+              # Download is current-run; the companion binds this exact attempt and manifest.
+              refresh=(python3 scripts/pages/refresh_cache.py --input promoted-cache --branch "$BRANCH"
+                --inventory "$inventory_path" --repository "$GITHUB_REPOSITORY"
+                --pages-run-id "$GITHUB_RUN_ID" --pages-run-attempt "$GITHUB_RUN_ATTEMPT"
+                --implementation-sha "$IMPLEMENTATION_SHA" --canonical-branch "$CANONICAL_BRANCH")
+              GH_TOKEN="$source_token" "${refresh[@]}" ;;
+            *) printf 'Unsupported matrix scope: %s\n' "$scope" >&2; exit 2 ;;
+          esac
+          unset source_token
 
       - name: Upload the sole candidate for this branch's rolling cache
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
