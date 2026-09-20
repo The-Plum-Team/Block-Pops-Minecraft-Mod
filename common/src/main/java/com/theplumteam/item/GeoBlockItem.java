@@ -17,6 +17,7 @@ import net.minecraft.world.level.block.Block;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Base BlockItem for GeckoLib animated blocks.
@@ -101,12 +102,20 @@ public class GeoBlockItem extends BlockItem {
     }
 
     @Override
-    //? if >=1.21 {
+    //? if >=1.21.5 {
+    /*public void appendHoverText(ItemStack stack, net.minecraft.world.item.Item.TooltipContext context,
+                                net.minecraft.world.item.component.TooltipDisplay display,
+                                Consumer<Component> tooltip, TooltipFlag flag) {
+        super.appendHoverText(stack, context, display, tooltip, flag);
+        Consumer<Component> lines = tooltip;
+    *///? } elif >=1.21 {
     /*public void appendHoverText(ItemStack stack, net.minecraft.world.item.Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         super.appendHoverText(stack, context, tooltip, flag);
+        Consumer<Component> lines = tooltip::add;
     *///? } else {
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
         super.appendHoverText(stack, level, tooltip, flag);
+        Consumer<Component> lines = tooltip::add;
     //? }
 
         String collectionId = null;
@@ -142,16 +151,16 @@ public class GeoBlockItem extends BlockItem {
 
         FigureCollection collection = CollectionRegistry.getCollection(collectionId).orElse(null);
         if (collection != null && figureId != null && !figureId.isEmpty()) {
-            tooltip.add(Component.literal(collection.getName()).withStyle(ChatFormatting.GRAY));
+            lines.accept(Component.literal(collection.getName()).withStyle(ChatFormatting.GRAY));
 
             FigureDefinition figure = collection.getFigure(figureId).orElse(null);
             if (figure != null && figure.hasAlternatives()) {
-                tooltip.add(Component.translatable("tooltip.blockpops.has_alternatives")
+                lines.accept(Component.translatable("tooltip.blockpops.has_alternatives")
                         .withStyle(ChatFormatting.DARK_PURPLE, ChatFormatting.ITALIC));
             }
 
             if (getBlock() instanceof FigureBlock) {
-                tooltip.add(Component.translatable("tooltip.blockpops.pose_hint")
+                lines.accept(Component.translatable("tooltip.blockpops.pose_hint")
                         .withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
             }
         }

@@ -85,6 +85,15 @@ public final class TagReads {
         //? }
     }
 
+    /** Lists the keys a compound holds. */
+    public static java.util.Set<String> keys(CompoundTag tag) {
+        //? if >=1.21.5 {
+        /*return tag.keySet();
+        *///? } else {
+        return tag.getAllKeys();
+        //? }
+    }
+
     /** Answers whether the entry exists and holds a compound. */
     public static boolean hasCompound(CompoundTag tag, String key) {
         //? if >=1.21.5 {

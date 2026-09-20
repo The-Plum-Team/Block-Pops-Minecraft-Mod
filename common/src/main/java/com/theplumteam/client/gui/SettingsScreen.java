@@ -255,14 +255,18 @@ public class SettingsScreen extends Screen {
         // Flush the parent screen rendering
         graphics.flush();
 
-        // Disable scissor test to ensure our overlay covers everything
-        RenderSystem.disableScissor();
-
-        // Re-enable depth test and clear depth buffer to force our modal on top
+        // Force the modal above the parent. 1.21.5 removed the global scissor and
+        // depth state, so the modal is pushed forward in the pose instead.
+        //? if >=1.21.5 {
+        /*graphics.pose().pushPose();
+        graphics.pose().translate(0, 0, 200);
+        *///? } elif >=1.21.2 {
+        /*RenderSystem.disableScissor();
         RenderSystem.enableDepthTest();
-        //? if >=1.21.2 {
-        /*RenderSystem.clear(256); // Clear depth buffer only
+        RenderSystem.clear(256); // Clear depth buffer only
         *///? } else {
+        RenderSystem.disableScissor();
+        RenderSystem.enableDepthTest();
         RenderSystem.clear(256, false); // Clear depth buffer only
         //? }
 
@@ -414,6 +418,10 @@ public class SettingsScreen extends Screen {
 
         // Render our modal buttons and widgets
         super.render(graphics, mouseX, mouseY, partialTicks);
+
+        //? if >=1.21.5 {
+        /*graphics.pose().popPose();
+        *///? }
     }
 
     @Override

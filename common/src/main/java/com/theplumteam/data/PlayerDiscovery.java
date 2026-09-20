@@ -254,7 +254,7 @@ public class PlayerDiscovery implements IPlayerDiscovery {
         figureSkins.clear();
         if (TagReads.hasCompound(tag, NBT_FIGURE_SKINS_KEY)) {
             CompoundTag skinsTag = TagReads.compound(tag, NBT_FIGURE_SKINS_KEY);
-            for (String key : skinsTag.getAllKeys()) {
+            for (String key : TagReads.keys(skinsTag)) {
                 figureSkins.put(key, TagReads.string(skinsTag, key, ""));
             }
         }
@@ -263,7 +263,7 @@ public class PlayerDiscovery implements IPlayerDiscovery {
         figureQuickSkins.clear();
         if (TagReads.hasCompound(tag, NBT_FIGURE_QUICK_SKINS_KEY)) {
             CompoundTag qsTag = TagReads.compound(tag, NBT_FIGURE_QUICK_SKINS_KEY);
-            for (String key : qsTag.getAllKeys()) {
+            for (String key : TagReads.keys(qsTag)) {
                 figureQuickSkins.put(key, TagReads.string(qsTag, key, ""));
             }
         }

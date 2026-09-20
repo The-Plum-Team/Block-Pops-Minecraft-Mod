@@ -209,6 +209,24 @@ public class ClawMachineBlock extends BaseEntityBlock {
         //? }
     }
 
+    // 1.21.5 replaced onRemove by a hook that runs after the block is already gone
+    // and is only given the removed state, so the "did the block change" guard the
+    // older hook needed is implicit there.
+    //? if >=1.21.5 {
+    /*@Override
+    protected void affectNeighborsAfterRemoval(BlockState state, net.minecraft.server.level.ServerLevel level,
+                                               BlockPos pos, boolean movedByPiston) {
+        DoubleBlockHalf half = state.getValue(HALF);
+        BlockPos otherPos = half == DoubleBlockHalf.LOWER ? pos.above() : pos.below();
+        BlockState otherState = level.getBlockState(otherPos);
+
+        if (otherState.is(this) && otherState.getValue(HALF) != half) {
+            level.setBlock(otherPos, Blocks.AIR.defaultBlockState(), 35);
+            level.levelEvent(null, 2001, otherPos, Block.getId(otherState));
+        }
+        super.affectNeighborsAfterRemoval(state, level, pos, movedByPiston);
+    }
+    *///? } else {
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos,
                          BlockState newState, boolean isMoving) {
@@ -224,6 +242,7 @@ public class ClawMachineBlock extends BaseEntityBlock {
         }
         super.onRemove(state, level, pos, newState, isMoving);
     }
+    //? }
 
     protected static void preventCreativeDropFromBottomPart(Level level, BlockPos pos,
                                                             BlockState state, Player player) {

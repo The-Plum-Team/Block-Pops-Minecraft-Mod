@@ -50,10 +50,13 @@ public class LinkButton extends Button {
         graphics.blitNineSliced(WIDGETS_LOCATION, this.getX(), this.getY(), this.getWidth(), this.getHeight(), 20, 4, 200, 20, 0, 46 + 1 * 20);
         //? }
 
-        // Enable blending for the transparent logo.
+        // Enable blending for the transparent logo. From 1.21.5 the GUI render
+        // type owns blending and depth, so there is no global state to set.
+        //? if <1.21.5 {
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.enableDepthTest();
+        //? }
 
         // Set color to white (no tint).
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, this.alpha);

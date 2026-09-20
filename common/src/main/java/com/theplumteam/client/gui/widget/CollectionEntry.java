@@ -79,6 +79,15 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         int textStartX = logoContainerX + logoContainerWidth + effectivePadding;
 
         if (logoTexture != null) {
+            // Logos keep their aspect ratio, so the drawn size comes from the texture's
+            // own size. 1.21.5 exposes that on the uploaded texture; below it the size
+            // is only reachable through the raw GL object.
+            //? if >=1.21.5 {
+            /*com.mojang.blaze3d.textures.GpuTexture logoGpuTexture =
+                    mc.getTextureManager().getTexture(logoTexture).getTexture();
+            int textureWidth = logoGpuTexture.getWidth(0) > 0 ? logoGpuTexture.getWidth(0) : 256;
+            int textureHeight = logoGpuTexture.getHeight(0) > 0 ? logoGpuTexture.getHeight(0) : 256;
+            *///? } else {
             // Enable blending for transparent logos
             RenderSystem.enableBlend();
             RenderSystem.defaultBlendFunc();
@@ -99,6 +108,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
 
             int textureWidth = width[0] > 0 ? width[0] : 256;
             int textureHeight = height[0] > 0 ? height[0] : 256;
+            //? }
 
             // Calculate scaled dimensions preserving aspect ratio
             float aspectRatio = (float) textureWidth / textureHeight;
@@ -216,6 +226,17 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             if (this.isLinkHovered && collection.getAuthorUrl() != null && !collection.getAuthorUrl().isEmpty()) {
                 // Open the URL in the default browser
                 try {
+                    // 1.21.5 made ClickEvent a sealed hierarchy whose open-url case
+                    // carries a URI instead of a string.
+                    //? if >=1.21.5 {
+                    /*mc.screen.handleComponentClicked(
+                        net.minecraft.network.chat.Style.EMPTY.withClickEvent(
+                            new net.minecraft.network.chat.ClickEvent.OpenUrl(
+                                java.net.URI.create(collection.getAuthorUrl())
+                            )
+                        )
+                    );
+                    *///? } else {
                     mc.screen.handleComponentClicked(
                         net.minecraft.network.chat.Style.EMPTY.withClickEvent(
                             new net.minecraft.network.chat.ClickEvent(
@@ -224,6 +245,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
                             )
                         )
                     );
+                    //? }
                 } catch (Exception e) {
                     // Fallback: just log the error
                     System.err.println("Failed to open URL: " + collection.getAuthorUrl());
