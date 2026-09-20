@@ -32,7 +32,7 @@ class PagesCompanionTests(unittest.TestCase):
         fixtures.ScopedSiteTests.setUpClass()
         cls.addClassCleanup(fixtures.ScopedSiteTests.doClassCleanups)
 
-    def prepare(self, *, shared=False, mixed=False):
+    def prepare(self, *, shared=False, mixed=False, additional_paths=()):
         f = fixtures.ScopedSiteTests(); f.setUp(); self.addCleanup(f.doCleanups); self.fixture = f
         if shared: f.configure(True)
         if mixed: f.test_preparing_shared_and_mixed_schema_gallery_keep_exact_scope_and_pixels()
@@ -41,7 +41,7 @@ class PagesCompanionTests(unittest.TestCase):
         isolated = patch.dict(os.environ, clean, clear=True); isolated.start(); self.addCleanup(isolated.stop)
         self.git("init", "-q"); self.git("config", "user.name", "Fixture"); self.git("config", "user.email", "fixture@example.invalid")
         self.git("config", "core.autocrlf", "false")
-        for path in ("scripts/pages/build_site.py", "site/index.html", "site/assets/site.css", "site/assets/gallery.js"):
+        for path in ("scripts/pages/build_site.py", "site/index.html", "site/assets/site.css", "site/assets/gallery.js", *additional_paths):
             target = self.repo / path; target.parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(ROOT / path, target)
         (self.repo / "release").mkdir(); shutil.copyfile(f.matrix_path, self.repo / "release/release-matrix.json")
         self.git("add", "."); self.git("commit", "-qm", "protected controller")

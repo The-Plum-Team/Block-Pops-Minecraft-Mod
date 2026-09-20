@@ -11,7 +11,7 @@ import stat
 import subprocess
 import sys
 import tempfile
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -477,16 +477,20 @@ def _build(*, evidence_root, inventory_path, output, repository, canonical_matri
         raise SiteError(str(exc)) from exc
 
 
-def _build_current_pages(api, args):
+@contextmanager
+def _current_pages_inputs(api, args, *, phase="build"):
     """Consume authenticated companions inside this exact in-progress Pages attempt.
 
     No receipt authenticates itself. The workflow must supply its invocation and
     protected implementation identity; API ownership, Git bytes and final seals
-    are checked here before the renderer publishes any output.
+    are checked here; callers recheck before sealing their final bytes.
     """
     def check(condition, message):
         if not condition:
             raise SiteError(message)
+    check(phase in ("build", "refresh"), "unknown Pages consumer phase")
+    prerequisites = () if phase == "build" else (
+        "Assemble one atomic current-head gallery", "Deploy current-head evidence")
     run_id = _positive_int(args.pages_run_id, "Pages run")
     attempt = _positive_int(args.pages_run_attempt, "Pages attempt")
     implementation = _digest(args.implementation_sha, "Pages implementation", SHA1)
@@ -542,6 +546,11 @@ def _build_current_pages(api, args):
         check(sorted(job["name"] for job in selected_jobs) == sorted("Validate and compact " + name for name in names)
               and all(job.get("status") == "completed" and job.get("conclusion") == "success" for job in selected_jobs),
               "Pages collect coverage/success differs")
+        for name in prerequisites:
+            matches = [job for job in jobs if job["name"] == name]
+            check(len(matches) == 1 and matches[0].get("status") == "completed"
+                  and matches[0].get("conclusion") == "success", "Pages build/deploy prerequisite differs")
+            selected_jobs.extend(matches)
         artifacts = api.artifacts_for_run(run_id)
         check(isinstance(artifacts, list) and len(artifacts) <= 1000 and all(isinstance(item, Artifact) for item in artifacts),
               "Pages artifact inventory differs")
@@ -603,6 +612,12 @@ def _build_current_pages(api, args):
                 unchanged()
                 atomic._bound_output_directory(destination, parent, destination.name, descriptor)
         context["recheck"] = recheck
+        # The caller rechecks before its final payload seal, while every lease is live.
+        yield context
+
+
+def _build_current_pages(api, args):
+    with _current_pages_inputs(api, args) as context:
         return _build(evidence_root=args.evidence_root, inventory_path=args.inventory, output=args.output,
                       repository=args.repository, canonical_matrix=args.canonical_matrix, context=context)
 
