@@ -14,7 +14,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-//? if >=1.21 {
+//? if >=1.21.2 {
+/*// 1.21.2 restored InteractionResult on useItemOn.
+*///? } elif >=1.21 {
 /*import net.minecraft.world.ItemInteractionResult;
 *///? }
 import net.minecraft.world.entity.LivingEntity;
@@ -33,7 +35,11 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+//? if >=1.21.2 {
+/*import net.minecraft.world.level.block.state.properties.EnumProperty;
+*///? } else {
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
+//? }
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.BlockHitResult;
@@ -44,7 +50,11 @@ public class ClawMachineBlock extends BaseEntityBlock {
     //? if >=1.21 {
     /*public static final MapCodec<ClawMachineBlock> CODEC = simpleCodec(ClawMachineBlock::new);
     *///? }
+    //? if >=1.21.2 {
+    /*public static final EnumProperty<Direction> FACING = HorizontalDirectionalBlock.FACING;
+    *///? } else {
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
+    //? }
     public static final EnumProperty<DoubleBlockHalf> HALF = BlockStateProperties.DOUBLE_BLOCK_HALF;
 
     public ClawMachineBlock(Properties properties) {
@@ -87,7 +97,12 @@ public class ClawMachineBlock extends BaseEntityBlock {
         return RenderShape.ENTITYBLOCK_ANIMATED;
     }
 
-    //? if >=1.21 {
+    //? if >=1.21.2 {
+    /*@Override
+    protected InteractionResult useItemOn(ItemStack heldItem, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+        return BlockInteractionResults.forItem(interact(state, level, pos, player, hand, hit));
+    }
+    *///? } elif >=1.21 {
     /*@Override
     protected ItemInteractionResult useItemOn(ItemStack heldItem, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         return BlockInteractionResults.forItem(interact(state, level, pos, player, hand, hit));

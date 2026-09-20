@@ -19,7 +19,9 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-//? if >=1.21 {
+//? if >=1.21.2 {
+/*// 1.21.2 restored InteractionResult on useItemOn.
+*///? } elif >=1.21 {
 /*import net.minecraft.world.ItemInteractionResult;
 *///? }
 import net.minecraft.world.entity.LivingEntity;
@@ -40,7 +42,11 @@ import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
+//? if >=1.21.2 {
+/*import net.minecraft.world.level.block.state.properties.EnumProperty;
+*///? } else {
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
+//? }
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -50,7 +56,11 @@ public class BoxBlock extends BaseEntityBlock {
     //? if >=1.21 {
     /*public static final MapCodec<BoxBlock> CODEC = simpleCodec(BoxBlock::new);
     *///? }
+    //? if >=1.21.2 {
+    /*public static final EnumProperty<Direction> FACING = HorizontalDirectionalBlock.FACING;
+    *///? } else {
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
+    //? }
 
     // Hitbox matching the actual box model size
     // Width: 10 units, Height: 14 units, Depth: 10 units
@@ -163,7 +173,12 @@ public class BoxBlock extends BaseEntityBlock {
         return RenderShape.ENTITYBLOCK_ANIMATED;
     }
 
-    //? if >=1.21 {
+    //? if >=1.21.2 {
+    /*@Override
+    protected InteractionResult useItemOn(ItemStack heldItem, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+        return BlockInteractionResults.forItem(interact(heldItem, state, level, pos, player, hand, hit));
+    }
+    *///? } elif >=1.21 {
     /*@Override
     protected ItemInteractionResult useItemOn(ItemStack heldItem, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
         return BlockInteractionResults.forItem(interact(heldItem, state, level, pos, player, hand, hit));
