@@ -221,7 +221,11 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 partialTick,
                 15728880,
                 net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY,
+                //? if >=1.21 {
+                /*0xFFFFFFFF
+                *///? } else {
                 1f, 1f, 1f, 1f
+                //? }
             );
 
             bufferSource.endBatch();

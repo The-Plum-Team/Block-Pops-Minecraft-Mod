@@ -37,10 +37,18 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
             @Override
             public void preRender(PoseStack poseStack, BoxBlockEntity animatable, BakedGeoModel model,
                                  MultiBufferSource bufferSource, VertexConsumer buffer, boolean isReRender,
+                                 //? if >=1.21 {
+                                 /*float partialTick, int packedLight, int packedOverlay, int colour) {
+                                 *///? } else {
                                  float partialTick, int packedLight, int packedOverlay, float red, float green,
                                  float blue, float alpha) {
+                                 //? }
                 super.preRender(poseStack, animatable, model, bufferSource, buffer, isReRender, partialTick,
+                               //? if >=1.21 {
+                               /*packedLight, packedOverlay, colour);
+                               *///? } else {
                                packedLight, packedOverlay, red, green, blue, alpha);
+                               //? }
 
                 // Detect skin model and show/hide appropriate arms
                 if (animatable.hasFigure()) {
@@ -77,10 +85,18 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     public void actuallyRender(PoseStack poseStack, BoxBlockEntity animatable, BakedGeoModel model,
                               RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer,
                               boolean isReRender, float partialTick, int packedLight, int packedOverlay,
+                              //? if >=1.21 {
+                              /*int colour) {
+                              *///? } else {
                               float red, float green, float blue, float alpha) {
+                              //? }
         // First, render the box model (the main model)
         super.actuallyRender(poseStack, animatable, model, renderType, bufferSource, buffer,
+                           //? if >=1.21 {
+                           /*isReRender, partialTick, packedLight, packedOverlay, colour);
+                           *///? } else {
                            isReRender, partialTick, packedLight, packedOverlay, red, green, blue, alpha);
+                           //? }
 
         // Then, render the figure model if one exists
         if (animatable.hasFigure()) {
@@ -130,14 +146,22 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                 // Render base skin layer (head front: UV 8,8 to 16,16 on 64x64 skin)
                 poseStack.pushPose();
                 renderRecursively(poseStack, animatable, bone, skinRenderType, bufferSource, skinBuffer,
+                                //? if >=1.21 {
+                                /*true, partialTick, packedLight, packedOverlay, 0xFFFFFFFF);
+                                *///? } else {
                                 true, partialTick, packedLight, packedOverlay, 1, 1, 1, 1);
+                                //? }
                 poseStack.popPose();
             } else if (bone.getName().equals("figure_face_3d")) {
                 // Render hat/overlay layer (hat front: UV 40,8 to 48,16 on 64x64 skin)
                 // Same render type for consistency with player rendering
                 poseStack.pushPose();
                 renderRecursively(poseStack, animatable, bone, skinRenderType, bufferSource, skinBuffer,
+                                //? if >=1.21 {
+                                /*true, partialTick, packedLight, packedOverlay, 0xFFFFFFFF);
+                                *///? } else {
                                 true, partialTick, packedLight, packedOverlay, 1, 1, 1, 1);
+                                //? }
                 poseStack.popPose();
             }
         }
@@ -188,7 +212,11 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
 
                 // Render this bone with the logo texture using a special flag
                 renderRecursively(poseStack, animatable, bone, logoRenderType, bufferSource, logoBuffer,
+                                //? if >=1.21 {
+                                /*true, partialTick, packedLight, packedOverlay, 0xFFFFFFFF);
+                                *///? } else {
                                 true, partialTick, packedLight, packedOverlay, 1, 1, 1, 1);
+                                //? }
 
                 poseStack.popPose();
                 break;
@@ -199,8 +227,12 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     @Override
     public void renderRecursively(PoseStack poseStack, BoxBlockEntity animatable, GeoBone bone, RenderType renderType,
                                   MultiBufferSource bufferSource, VertexConsumer buffer, boolean isReRender,
+                                  //? if >=1.21 {
+                                  /*float partialTick, int packedLight, int packedOverlay, int colour) {
+                                  *///? } else {
                                   float partialTick, int packedLight, int packedOverlay,
                                   float red, float green, float blue, float alpha) {
+                                  //? }
         // Skip rendering the "figure_face", "figure_head_3d", and "logo" bone during normal box rendering
         // They will be rendered separately with their own textures
         // When isReRender is true, we're rendering them with the appropriate texture
@@ -210,6 +242,10 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         }
 
         super.renderRecursively(poseStack, animatable, bone, renderType, bufferSource, buffer, isReRender,
+                              //? if >=1.21 {
+                              /*partialTick, packedLight, packedOverlay, colour);
+                              *///? } else {
                               partialTick, packedLight, packedOverlay, red, green, blue, alpha);
+                              //? }
     }
 }
