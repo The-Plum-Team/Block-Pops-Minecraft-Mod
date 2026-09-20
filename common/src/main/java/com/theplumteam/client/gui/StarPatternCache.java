@@ -1,14 +1,18 @@
 package com.theplumteam.client.gui;
 
 import com.mojang.blaze3d.platform.NativeImage;
+//? if <1.21.5 {
 import com.mojang.blaze3d.platform.GlStateManager;
+//? }
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.util.ResourceLocations;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
+//? if <1.21.5 {
 import org.lwjgl.opengl.GL11;
+//? }
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -51,21 +55,24 @@ public class StarPatternCache {
             cachedTextureWidth = cachedImage.getWidth();
             cachedTextureHeight = cachedImage.getHeight();
 
-            // Upload to GPU
-            cachedTexture = new DynamicTexture(cachedImage);
-            //? if >=1.21.2 {
+            // Upload to GPU. 1.21.5 names the texture through a supplier and owns
+            // its sampler state, where earlier versions set raw GL parameters.
+            //? if >=1.21.5 {
             /*cachedTextureLocation = ResourceLocations.of("blockpops", "star_cache");
+            cachedTexture = new DynamicTexture(cachedTextureLocation::toString, cachedImage);
             mc.getTextureManager().register(cachedTextureLocation, cachedTexture);
+            cachedTexture.setFilter(true, false);
+            cachedTexture.setClamp(false);
+            *///? } elif >=1.21.2 {
+            /*cachedTexture = new DynamicTexture(cachedImage);
+            cachedTextureLocation = ResourceLocations.of("blockpops", "star_cache");
+            mc.getTextureManager().register(cachedTextureLocation, cachedTexture);
+            applyLinearRepeat();
             *///? } else {
+            cachedTexture = new DynamicTexture(cachedImage);
             cachedTextureLocation = mc.getTextureManager().register("blockpops_star_cache", cachedTexture);
+            applyLinearRepeat();
             //? }
-
-            // Set linear filtering for smooth scrolling and repeat wrapping for seamless tiling
-            GlStateManager._bindTexture(cachedTexture.getId());
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_REPEAT);
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL11.GL_REPEAT);
 
             BlockPopsMod.logDebug("Star pattern cache loaded: {}x{} (pre-generated texture with linear filtering)",
                 cachedTextureWidth, cachedTextureHeight);
@@ -74,6 +81,18 @@ public class StarPatternCache {
             BlockPopsMod.LOGGER.error("Failed to load star pattern cache", e);
         }
     }
+
+    // Linear filtering keeps the sub-pixel scroll smooth and repeat wrapping keeps
+    // the tiling seamless. Below 1.21.5 both are raw GL texture parameters.
+    //? if <1.21.5 {
+    private static void applyLinearRepeat() {
+        GlStateManager._bindTexture(cachedTexture.getId());
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_REPEAT);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL11.GL_REPEAT);
+    }
+    //? }
 
     /**
      * Get the cached texture location

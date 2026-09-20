@@ -3,6 +3,7 @@ package com.theplumteam.figure;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.theplumteam.block.PopBlockColor;
+import com.theplumteam.util.GeoAssets;
 import net.minecraft.resources.ResourceLocation;
 
 import org.jetbrains.annotations.Nullable;
@@ -79,8 +80,8 @@ public class FigureDefinition {
     public static FigureDefinition fromJson(JsonObject json) {
         String id = json.get("id").getAsString();
         String name = json.get("name").getAsString();
-        ResourceLocation modelPath = ResourceLocation.tryParse(json.get("model").getAsString());
-        ResourceLocation animationPath = ResourceLocation.tryParse(json.get("animation").getAsString());
+        ResourceLocation modelPath = GeoAssets.declared(ResourceLocation.tryParse(json.get("model").getAsString()));
+        ResourceLocation animationPath = GeoAssets.declared(ResourceLocation.tryParse(json.get("animation").getAsString()));
 
         // Check if this is a player figure
         String type = json.has("type") ? json.get("type").getAsString() : "static";

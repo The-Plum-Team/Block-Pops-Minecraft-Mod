@@ -19,7 +19,12 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.bernie.geckolib.animatable.GeoBlockEntity;
-//? if >=1.21 {
+//? if >=1.21.5 {
+/*import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.animatable.manager.AnimatableManager;
+import software.bernie.geckolib.animatable.processing.AnimationController;
+import software.bernie.geckolib.animation.RawAnimation;
+*///? } elif >=1.21 {
 /*import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.animation.AnimatableManager;
 import software.bernie.geckolib.animation.AnimationController;
@@ -58,7 +63,12 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         // Animation controller for figure poses (5 ticks = 0.25 seconds transition)
-        controllers.add(new AnimationController<>(this, "pose_controller", 5, state -> {
+        controllers.add(
+        //? if >=1.21.5 {
+        /*new AnimationController<>("pose_controller", 5, state -> {
+        *///? } else {
+        new AnimationController<>(this, "pose_controller", 5, state -> {
+        //? }
             if (this.poseIndex == 1) {
                 // "Pose_Sit" must match the name inside the pose animation file exactly
                 return state.setAndContinue(RawAnimation.begin().thenLoop("Pose_Sit"));

@@ -14,7 +14,12 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import software.bernie.geckolib.animatable.GeoBlockEntity;
-//? if >=1.21 {
+//? if >=1.21.5 {
+/*import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.animatable.manager.AnimatableManager;
+import software.bernie.geckolib.animatable.processing.AnimationController;
+import software.bernie.geckolib.animation.RawAnimation;
+*///? } elif >=1.21 {
 /*import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.animation.AnimatableManager;
 import software.bernie.geckolib.animation.AnimationController;
@@ -40,7 +45,12 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        controllers.add(new AnimationController<>(this, "controller", 0, state ->
+        controllers.add(
+        //? if >=1.21.5 {
+        /*new AnimationController<>("controller", 0, state ->
+        *///? } else {
+        new AnimationController<>(this, "controller", 0, state ->
+        //? }
             state.setAndContinue(IDLE_ANIMATION)
         ));
     }

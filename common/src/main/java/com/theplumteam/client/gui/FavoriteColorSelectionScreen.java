@@ -2,7 +2,9 @@ package com.theplumteam.client.gui;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
-//? if >=1.21 {
+//? if >=1.21.5 {
+/*import net.minecraft.client.renderer.RenderType;
+*///? } elif >=1.21 {
 /*import com.mojang.blaze3d.vertex.BufferUploader;
 *///? }
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
@@ -297,57 +299,102 @@ public class FavoriteColorSelectionScreen extends Screen {
         double smoothTime = (tickCount + partialTick) / 20.0;
         double offsetX = (smoothTime * pixelsPerSecond) % tileSize;
 
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-
         // Apply star color tint and opacity from config
         ClientConfig config = ClientConfig.getInstance();
-        RenderSystem.setShaderColor(config.starColorR, config.starColorG, config.starColorB, config.starOpacity);
 
         // Use the pre-tiled cached texture
         ResourceLocation cacheTexture = StarPatternCache.getTextureLocation();
         int cacheWidth = StarPatternCache.getTextureWidth();
         int cacheHeight = StarPatternCache.getTextureHeight();
+        int starWidth = this.width;
+        int starHeight = this.height;
 
-        // Calculate UV coordinates for smooth sub-pixel scrolling
-        // The offset creates the scrolling effect via UV manipulation
-        float u0 = (float) offsetX / (float) cacheWidth;
+        //? if >=1.21.5 {
+        /*// 1.21.5 tints and blends inside the GUI render type, so the scrolling quad is
+        // one blit with a packed colour instead of a hand-built buffer.
+        int argb = ((int) (config.starOpacity * 255) << 24)
+                | ((int) (config.starColorR * 255) << 16)
+                | ((int) (config.starColorG * 255) << 8)
+                | (int) (config.starColorB * 255);
+        graphics.blit(RenderType::guiTextured, cacheTexture, 0, 0, (float) offsetX, 0.0f,
+                starWidth, starHeight, cacheWidth, cacheHeight, argb);
+        *///? } elif >=1.21.2 {
+        /*float u0 = (float) offsetX / (float) cacheWidth;
         float v0 = 0.0f;
-        float u1 = u0 + ((float) this.width / (float) cacheWidth);
-        float v1 = (float) this.height / (float) cacheHeight;
+        float u1 = u0 + ((float) starWidth / (float) cacheWidth);
+        float v1 = (float) starHeight / (float) cacheHeight;
 
-        // Render a single quad with the scrolling UV coordinates
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShaderColor(config.starColorR, config.starColorG, config.starColorB, config.starOpacity);
+
         var pose = graphics.pose();
         pose.pushPose();
-
         RenderSystem.setShaderTexture(0, cacheTexture);
-        //? if <1.21.2 {
-        RenderSystem.setShader(GameRenderer::getPositionTexShader);
-        //? }
 
-        //? if >=1.21 {
-        /*BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        bufferBuilder.addVertex(pose.last().pose(), 0, this.height, 0).setUv(u0, v1);
-        bufferBuilder.addVertex(pose.last().pose(), this.width, this.height, 0).setUv(u1, v1);
-        bufferBuilder.addVertex(pose.last().pose(), this.width, 0, 0).setUv(u1, v0);
+        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        bufferBuilder.addVertex(pose.last().pose(), 0, starHeight, 0).setUv(u0, v1);
+        bufferBuilder.addVertex(pose.last().pose(), starWidth, starHeight, 0).setUv(u1, v1);
+        bufferBuilder.addVertex(pose.last().pose(), starWidth, 0, 0).setUv(u1, v0);
         bufferBuilder.addVertex(pose.last().pose(), 0, 0, 0).setUv(u0, v0);
         BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
-        *///? } else {
-        Tesselator tesselator = Tesselator.getInstance();
-        BufferBuilder bufferBuilder = tesselator.getBuilder();
-
-        bufferBuilder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        bufferBuilder.vertex(pose.last().pose(), 0, this.height, 0).uv(u0, v1).endVertex();
-        bufferBuilder.vertex(pose.last().pose(), this.width, this.height, 0).uv(u1, v1).endVertex();
-        bufferBuilder.vertex(pose.last().pose(), this.width, 0, 0).uv(u1, v0).endVertex();
-        bufferBuilder.vertex(pose.last().pose(), 0, 0, 0).uv(u0, v0).endVertex();
-        tesselator.end();
-        //? }
 
         pose.popPose();
-
         RenderSystem.disableBlend();
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        *///? } elif >=1.21 {
+        /*float u0 = (float) offsetX / (float) cacheWidth;
+        float v0 = 0.0f;
+        float u1 = u0 + ((float) starWidth / (float) cacheWidth);
+        float v1 = (float) starHeight / (float) cacheHeight;
+
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShaderColor(config.starColorR, config.starColorG, config.starColorB, config.starOpacity);
+
+        var pose = graphics.pose();
+        pose.pushPose();
+        RenderSystem.setShaderTexture(0, cacheTexture);
+        RenderSystem.setShader(GameRenderer::getPositionTexShader);
+
+        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        bufferBuilder.addVertex(pose.last().pose(), 0, starHeight, 0).setUv(u0, v1);
+        bufferBuilder.addVertex(pose.last().pose(), starWidth, starHeight, 0).setUv(u1, v1);
+        bufferBuilder.addVertex(pose.last().pose(), starWidth, 0, 0).setUv(u1, v0);
+        bufferBuilder.addVertex(pose.last().pose(), 0, 0, 0).setUv(u0, v0);
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
+
+        pose.popPose();
+        RenderSystem.disableBlend();
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        *///? } else {
+        float u0 = (float) offsetX / (float) cacheWidth;
+        float v0 = 0.0f;
+        float u1 = u0 + ((float) starWidth / (float) cacheWidth);
+        float v1 = (float) starHeight / (float) cacheHeight;
+
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShaderColor(config.starColorR, config.starColorG, config.starColorB, config.starOpacity);
+
+        var pose = graphics.pose();
+        pose.pushPose();
+        RenderSystem.setShaderTexture(0, cacheTexture);
+        RenderSystem.setShader(GameRenderer::getPositionTexShader);
+
+        Tesselator tesselator = Tesselator.getInstance();
+        BufferBuilder bufferBuilder = tesselator.getBuilder();
+        bufferBuilder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        bufferBuilder.vertex(pose.last().pose(), 0, starHeight, 0).uv(u0, v1).endVertex();
+        bufferBuilder.vertex(pose.last().pose(), starWidth, starHeight, 0).uv(u1, v1).endVertex();
+        bufferBuilder.vertex(pose.last().pose(), starWidth, 0, 0).uv(u1, v0).endVertex();
+        bufferBuilder.vertex(pose.last().pose(), 0, 0, 0).uv(u0, v0).endVertex();
+        tesselator.end();
+
+        pose.popPose();
+        RenderSystem.disableBlend();
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+        //? }
     }
 
     /**

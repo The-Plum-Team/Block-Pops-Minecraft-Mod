@@ -10,6 +10,21 @@ configurations.matching {
     resolutionStrategy.force(rootProject.common_annotation_coordinate)
 }
 
+// GeckoLib 5 reads models from `geckolib/models` and animations from
+// `geckolib/animations`, where GeckoLib 4 reads `geo` and `animations`. The
+// assets are authored once in the older layout and re-rooted for the lanes
+// whose GeckoLib expects the newer one, so neither layout is duplicated.
+if ((rootProject.geckolib_version =~ /^(\d+)/)[0][1].toInteger() >= 5) {
+    processResources {
+        eachFile { details ->
+            details.path = details.path
+                    .replaceFirst(/^assets\/([^\/]+)\/geo\//, 'assets/$1/geckolib/models/')
+                    .replaceFirst(/^assets\/([^\/]+)\/animations\//, 'assets/$1/geckolib/animations/')
+        }
+        includeEmptyDirs = false
+    }
+}
+
 repositories {
     maven {
         name = 'GeckoLib'

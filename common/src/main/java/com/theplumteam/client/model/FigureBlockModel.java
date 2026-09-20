@@ -10,13 +10,17 @@ import com.theplumteam.blockentity.FigureBlockEntity;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
+import com.theplumteam.util.GeoAssets;
 import com.theplumteam.util.ResourceLocations;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.model.GeoModel;
-//? if >=1.21.2 {
+//? if >=1.21.5 {
+/*import software.bernie.geckolib.constant.dataticket.DataTicket;
+import software.bernie.geckolib.renderer.base.GeoRenderState;
+*///? } elif >=1.21.2 {
 /*import software.bernie.geckolib.renderer.GeoRenderer;
 *///? }
 
@@ -25,10 +29,19 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
-    private static final ResourceLocation FALLBACK_MODEL = ResourceLocations.of(BlockPopsMod.MOD_ID, "geo/block/box_block.geo.json");
+    private static final ResourceLocation FALLBACK_MODEL = GeoAssets.model(BlockPopsMod.MOD_ID, "block/box_block");
     private static final ResourceLocation FALLBACK_TEXTURE = ResourceLocations.of("minecraft", "textures/entity/player/wide/steve.png");
-    private static final ResourceLocation FALLBACK_ANIMATION = ResourceLocations.of(BlockPopsMod.MOD_ID, "animations/block/box_block.animation.json");
-    private static final ResourceLocation POSE_ANIMATION = ResourceLocations.of(BlockPopsMod.MOD_ID, "animations/figure/figure_poses.animation.json");
+    private static final ResourceLocation FALLBACK_ANIMATION = GeoAssets.animation(BlockPopsMod.MOD_ID, "block/box_block");
+    private static final ResourceLocation POSE_ANIMATION = GeoAssets.animation(BlockPopsMod.MOD_ID, "figure/figure_poses");
+
+    // GeckoLib 5 resolves the model and texture from the render state alone, so
+    // what the figure resolves to is carried across as render data.
+    //? if >=1.21.5 {
+    /*private static final DataTicket<ResourceLocation> FIGURE_MODEL =
+            DataTicket.create("blockpops:figure_model", ResourceLocation.class);
+    private static final DataTicket<ResourceLocation> FIGURE_TEXTURE =
+            DataTicket.create("blockpops:figure_texture", ResourceLocation.class);
+    *///? }
 
     private static final Map<String, GameProfile> snapshotProfileCache = new ConcurrentHashMap<>();
     private static final Map<String, Boolean> snapshotRegistrationCache = new ConcurrentHashMap<>();
@@ -76,23 +89,54 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
         }
     }
 
+    //? if >=1.21.5 {
+    /*@Override
+    public ResourceLocation getModelResource(GeoRenderState renderState) {
+        return renderState.getOrDefaultGeckolibData(FIGURE_MODEL, FALLBACK_MODEL);
+    }
+
     @Override
-    //? if >=1.21.2 {
-    /*public ResourceLocation getModelResource(FigureBlockEntity animatable, GeoRenderer<FigureBlockEntity> renderer) {
+    public ResourceLocation getTextureResource(GeoRenderState renderState) {
+        return renderState.getOrDefaultGeckolibData(FIGURE_TEXTURE, FALLBACK_TEXTURE);
+    }
+
+    @Override
+    public void addAdditionalStateData(FigureBlockEntity animatable, GeoRenderState renderState) {
+        super.addAdditionalStateData(animatable, renderState);
+        ResourceLocation model = resolveModel(animatable);
+        renderState.addGeckolibData(FIGURE_MODEL, model != null ? model : FALLBACK_MODEL);
+        ResourceLocation texture = resolveTexture(animatable);
+        renderState.addGeckolibData(FIGURE_TEXTURE, texture != null ? texture : FALLBACK_TEXTURE);
+    }
+    *///? } elif >=1.21.2 {
+    /*@Override
+    public ResourceLocation getModelResource(FigureBlockEntity animatable, GeoRenderer<FigureBlockEntity> renderer) {
+        return resolveModel(animatable);
+    }
+
+    @Override
+    public ResourceLocation getTextureResource(FigureBlockEntity animatable, GeoRenderer<FigureBlockEntity> renderer) {
+        return resolveTexture(animatable);
+    }
     *///? } else {
+    @Override
     public ResourceLocation getModelResource(FigureBlockEntity animatable) {
+        return resolveModel(animatable);
+    }
+
+    @Override
+    public ResourceLocation getTextureResource(FigureBlockEntity animatable) {
+        return resolveTexture(animatable);
+    }
     //? }
+
+    private ResourceLocation resolveModel(FigureBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure == null) return FALLBACK_MODEL;
         return figure.getModelPath();
     }
 
-    @Override
-    //? if >=1.21.2 {
-    /*public ResourceLocation getTextureResource(FigureBlockEntity animatable, GeoRenderer<FigureBlockEntity> renderer) {
-    *///? } else {
-    public ResourceLocation getTextureResource(FigureBlockEntity animatable) {
-    //? }
+    private ResourceLocation resolveTexture(FigureBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure == null) return FALLBACK_TEXTURE;
 
@@ -191,14 +235,17 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
         return POSE_ANIMATION;
     }
 
+    //? if >=1.21.5 {
+    /*@Override
+    public RenderType getRenderType(GeoRenderState renderState, ResourceLocation texture) {
+        return RenderType.entityCutoutNoCull(texture != null ? texture : FALLBACK_TEXTURE);
+    }
+    *///? } else {
     @Override
     public RenderType getRenderType(FigureBlockEntity animatable, ResourceLocation texture) {
-        //? if >=1.21.2 {
-        /*ResourceLocation textureToUse = getTextureResource(animatable, null);
-        *///? } else {
-        ResourceLocation textureToUse = getTextureResource(animatable);
-        //? }
+        ResourceLocation textureToUse = resolveTexture(animatable);
         if (textureToUse == null) textureToUse = FALLBACK_TEXTURE;
         return RenderType.entityCutoutNoCull(textureToUse);
     }
+    //? }
 }

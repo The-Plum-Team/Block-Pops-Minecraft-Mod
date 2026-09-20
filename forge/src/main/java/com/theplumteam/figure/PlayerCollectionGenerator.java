@@ -6,6 +6,7 @@ import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.server.config.ServerConfig;
+import com.theplumteam.util.GeoAssets;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.Tag;
@@ -44,8 +45,8 @@ public class PlayerCollectionGenerator {
             GameProfileCache profileCache = server.getProfileCache();
 
             // Use default model and animation paths
-            ResourceLocation defaultModel = new ResourceLocation("blockpops", "geo/figure/box_figure_default.geo.json");
-            ResourceLocation defaultAnimation = new ResourceLocation("blockpops", "animations/figure/box_figure_default.animation.json");
+            ResourceLocation defaultModel = GeoAssets.model("blockpops", "figure/box_figure_default");
+            ResourceLocation defaultAnimation = GeoAssets.animation("blockpops", "figure/box_figure_default");
 
             // First, process existing .dat files (if directory exists)
             if (playerdataDir.exists() && playerdataDir.isDirectory()) {

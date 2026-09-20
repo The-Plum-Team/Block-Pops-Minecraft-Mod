@@ -11,6 +11,7 @@ import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.network.SyncDynamicCollectionsPacket;
 import com.theplumteam.server.config.ServerConfig;
+import com.theplumteam.util.GeoAssets;
 import com.theplumteam.util.ResourceLocations;
 import net.minecraft.nbt.CompoundTag;
 //? if >=1.21 {
@@ -51,8 +52,8 @@ public class PlayerCollectionHelperImpl {
             GameProfileCache profileCache = server.getProfileCache();
 
             // Use default model and animation paths
-            ResourceLocation defaultModel = ResourceLocations.of("blockpops", "geo/figure/box_figure_default.geo.json");
-            ResourceLocation defaultAnimation = ResourceLocations.of("blockpops", "animations/figure/box_figure_default.animation.json");
+            ResourceLocation defaultModel = GeoAssets.model("blockpops", "figure/box_figure_default");
+            ResourceLocation defaultAnimation = GeoAssets.animation("blockpops", "figure/box_figure_default");
 
             // First, process existing .dat files (if directory exists)
             if (playerdataDir.exists() && playerdataDir.isDirectory()) {

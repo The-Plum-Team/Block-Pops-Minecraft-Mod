@@ -10,13 +10,17 @@ import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
+import com.theplumteam.util.GeoAssets;
 import com.theplumteam.util.ResourceLocations;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.model.GeoModel;
-//? if >=1.21.2 {
+//? if >=1.21.5 {
+/*import software.bernie.geckolib.constant.dataticket.DataTicket;
+import software.bernie.geckolib.renderer.base.GeoRenderState;
+*///? } elif >=1.21.2 {
 /*import software.bernie.geckolib.renderer.GeoRenderer;
 *///? }
 
@@ -25,8 +29,18 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class FigureModel extends GeoModel<BoxBlockEntity> {
+    private static final ResourceLocation FALLBACK_MODEL = GeoAssets.model(BlockPopsMod.MOD_ID, "figure/box_figure_default");
     private static final ResourceLocation FALLBACK_TEXTURE = ResourceLocations.of("minecraft", "textures/entity/steve.png");
-    private static final ResourceLocation POSE_ANIMATION = ResourceLocations.of(BlockPopsMod.MOD_ID, "animations/figure/figure_poses.animation.json");
+    private static final ResourceLocation POSE_ANIMATION = GeoAssets.animation(BlockPopsMod.MOD_ID, "figure/figure_poses");
+
+    // GeckoLib 5 resolves the model and texture from the render state alone, so
+    // what the figure resolves to is carried across as render data.
+    //? if >=1.21.5 {
+    /*private static final DataTicket<ResourceLocation> FIGURE_MODEL =
+            DataTicket.create("blockpops:figure_model", ResourceLocation.class);
+    private static final DataTicket<ResourceLocation> FIGURE_TEXTURE =
+            DataTicket.create("blockpops:figure_texture", ResourceLocation.class);
+    *///? }
 
     private static final Map<String, GameProfile> snapshotProfileCache = new ConcurrentHashMap<>();
     private static final Map<String, Boolean> snapshotRegistrationCache = new ConcurrentHashMap<>();
@@ -78,22 +92,53 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
         }
     }
 
+    //? if >=1.21.5 {
+    /*@Override
+    public ResourceLocation getModelResource(GeoRenderState renderState) {
+        return renderState.getOrDefaultGeckolibData(FIGURE_MODEL, FALLBACK_MODEL);
+    }
+
     @Override
-    //? if >=1.21.2 {
-    /*public ResourceLocation getModelResource(BoxBlockEntity animatable, GeoRenderer<BoxBlockEntity> renderer) {
+    public ResourceLocation getTextureResource(GeoRenderState renderState) {
+        return renderState.getOrDefaultGeckolibData(FIGURE_TEXTURE, FALLBACK_TEXTURE);
+    }
+
+    @Override
+    public void addAdditionalStateData(BoxBlockEntity animatable, GeoRenderState renderState) {
+        super.addAdditionalStateData(animatable, renderState);
+        ResourceLocation model = resolveModel(animatable);
+        renderState.addGeckolibData(FIGURE_MODEL, model != null ? model : FALLBACK_MODEL);
+        ResourceLocation texture = resolveTexture(animatable);
+        renderState.addGeckolibData(FIGURE_TEXTURE, texture != null ? texture : FALLBACK_TEXTURE);
+    }
+    *///? } elif >=1.21.2 {
+    /*@Override
+    public ResourceLocation getModelResource(BoxBlockEntity animatable, GeoRenderer<BoxBlockEntity> renderer) {
+        return resolveModel(animatable);
+    }
+
+    @Override
+    public ResourceLocation getTextureResource(BoxBlockEntity animatable, GeoRenderer<BoxBlockEntity> renderer) {
+        return resolveTexture(animatable);
+    }
     *///? } else {
+    @Override
     public ResourceLocation getModelResource(BoxBlockEntity animatable) {
+        return resolveModel(animatable);
+    }
+
+    @Override
+    public ResourceLocation getTextureResource(BoxBlockEntity animatable) {
+        return resolveTexture(animatable);
+    }
     //? }
+
+    private ResourceLocation resolveModel(BoxBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
         return (figure != null) ? figure.getModelPath() : null;
     }
 
-    @Override
-    //? if >=1.21.2 {
-    /*public ResourceLocation getTextureResource(BoxBlockEntity animatable, GeoRenderer<BoxBlockEntity> renderer) {
-    *///? } else {
-    public ResourceLocation getTextureResource(BoxBlockEntity animatable) {
-    //? }
+    private ResourceLocation resolveTexture(BoxBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure == null) return FALLBACK_TEXTURE;
 
@@ -205,14 +250,17 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
         return POSE_ANIMATION;
     }
 
+    //? if >=1.21.5 {
+    /*@Override
+    public RenderType getRenderType(GeoRenderState renderState, ResourceLocation texture) {
+        return RenderType.entityCutoutNoCull(texture != null ? texture : FALLBACK_TEXTURE);
+    }
+    *///? } else {
     @Override
     public RenderType getRenderType(BoxBlockEntity animatable, ResourceLocation texture) {
-        //? if >=1.21.2 {
-        /*ResourceLocation textureToUse = getTextureResource(animatable, null);
-        *///? } else {
-        ResourceLocation textureToUse = getTextureResource(animatable);
-        //? }
+        ResourceLocation textureToUse = resolveTexture(animatable);
         if (textureToUse == null) textureToUse = FALLBACK_TEXTURE;
         return RenderType.entityCutoutNoCull(textureToUse);
     }
+    //? }
 }
