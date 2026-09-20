@@ -3,6 +3,7 @@ package com.theplumteam.client.gui.widget;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
+import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.registry.ModItems;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -45,7 +46,10 @@ public class ColorSelectionButton extends Button {
         this.boxItem = new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(color).get());
 
         // Configure NBT to show the player inside the box
-        CompoundTag blockEntityTag = this.boxItem.getOrCreateTagElement("BlockEntityTag");
+        CompoundTag blockEntityTag = BlockEntityItemData.read(this.boxItem);
+        if (blockEntityTag == null) {
+            blockEntityTag = new CompoundTag();
+        }
 
         // 1. Existing settings: Set Color and Hide Logo
         blockEntityTag.putBoolean("HideLogo", true);
@@ -69,6 +73,7 @@ public class ColorSelectionButton extends Button {
             blockEntityTag.putDouble("FigureOffsetZ", -0.55);
             blockEntityTag.putDouble("FigureScale", 1.0);
         }
+        BlockEntityItemData.write(this.boxItem, blockEntityTag, "blockpops:box_block");
     }
 
     public void setSelected(boolean selected) {
@@ -96,7 +101,10 @@ public class ColorSelectionButton extends Button {
      * Toggle whether the player figure is shown inside the box
      */
     public void setShowFigure(boolean showFigure) {
-        CompoundTag blockEntityTag = this.boxItem.getOrCreateTagElement("BlockEntityTag");
+        CompoundTag blockEntityTag = BlockEntityItemData.read(this.boxItem);
+        if (blockEntityTag == null) {
+            blockEntityTag = new CompoundTag();
+        }
 
         if (showFigure) {
             // Add figure-related NBT tags
@@ -117,6 +125,7 @@ public class ColorSelectionButton extends Button {
             blockEntityTag.putString("CollectionId", "");
             blockEntityTag.putString("FigureId", "");
         }
+        BlockEntityItemData.write(this.boxItem, blockEntityTag, "blockpops:box_block");
     }
 
     @Override
