@@ -53,6 +53,27 @@ Chain strategy: stacked-to-main
 - AUTH-1 blocks initial foundation delivery and every later published restricted-path admission; it does not block the user's authorized unpublished local implementation, tests, configuration, or conventional work-unit commits on the existing feature branch. Local readiness does not create authority, alter a deployed evaluator, or permit a workaround. A clean committed checkout/CI is required later for release-grade staging; existing dirty `.gitignore` and `.pi` work must be retained and never stashed, reset, or committed.
 - Strict TDD is unconfirmed. Use proportional tests for each runnable surface and packaged-E2E acceptance for gameplay; record the exact command, environment, scope, and result. The inherited 136-test result (2 failures, 38 errors) and Gradle class-major-69 failure are baseline limitations, not passing verification.
 
+## Scope decision — 1.20.1 and 1.21.1 only
+
+The owner narrowed delivery to four lanes: Minecraft 1.20.1 Fabric/Forge and 1.21.1
+Fabric/NeoForge. The eight 1.21.4/1.21.5/1.21.6/1.21.7 targets stay declared in the matrix
+and explicitly unresolved, so every projection keeps reporting them as unconfigured. Tasks
+whose text says "repeat per lane" or "all twelve" are therefore complete only for the four
+in-scope lanes, and are annotated below rather than checked, so the twelve-lane obligation
+is never silently dropped.
+
+Status against that scope:
+
+| Task | State under the 1.20.1 + 1.21.1 scope |
+|---|---|
+| 9 | Complete for all four in-scope lanes; eight targets remain unconfigured by decision. |
+| 10 | Complete for the in-scope seams: all four lanes compile and package with zero errors. |
+| 12 | Reader complete (`configured` scope). CI/E2E consumers still dispatch `legacy` only. |
+| 14 | No change needed: the bootstrap contract already binds all three loaders and validates. |
+| 15 | Not started: requires real packaged gameplay runs in an authorized clean CI/checkout. |
+| 16 | Build graph activated; the `preparing` to `shared` switch stays bound to all twelve. |
+| 1, 17 | Blocked on governance/authorization outside this session. |
+
 ## Tasks
 
 - [ ] 1. **Delivery gate — establish and prove the foundation before published restricted admission.** Use [`authorization-plan.md`](authorization-plan.md) to guide local development and review of the minimal controller foundation, but do not let candidate policy authorize its own deployment. Before delivery, obtain fresh governance evidence and explicit human authority for the exact reviewed foundation commit and action; after admission, independently prove that generation active on the exact live default branch. Then require authenticated base/controller generation, exact-head owner decisions, schema/graph evidence, and rollback boundaries for later restricted transitions. **Edit scope:** local foundation code/tests/docs may be implemented under the existing migration and commit authorization; this draft grants no push, PR, merge, default-branch update, publication, release, or protection change. **Depends on:** none. **Verification/acceptance:** evidence covers foundation self-admission prevention and the future bounded routes for `release/release-matrix.json`, `gradle/verification-metadata.xml`, both `VERSION_SPECIFIC_PATHS`, Stonecutter admission, and NeoForge bootstrap without disabling protections or reusing a bypass. Keep task 1 unchecked until the foundation is deployed and observed active; its pending state does not block authorized unpublished local tasks. **Rollback:** revise local candidate work normally; revoke or roll back deployed authority only through a fresh reviewed and explicitly authorized action, never reset or context disabling. **Estimate:** foundation slices remain subject to the 400-line cap.
