@@ -1,0 +1,40 @@
+modLoader = "javafml"
+loaderVersion = "[21.1.77,)"
+license = "All Rights Reserved"
+
+[[mods]]
+modId = "blockpops"
+version = "${version}"
+displayName = "BlockPops"
+authors = "ThePlumTeam"
+description = '''
+BlockPops - A Minecraft mod featuring animated blocks and interactive gameplay mechanics.
+'''
+
+[[dependencies.blockpops]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1.77,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.blockpops]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.21.2)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.blockpops]]
+modId = "geckolib"
+type = "required"
+versionRange = "[4.8,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.blockpops]]
+modId = "architectury"
+type = "required"
+versionRange = "[13.0.8,)"
+ordering = "AFTER"
+side = "BOTH"
