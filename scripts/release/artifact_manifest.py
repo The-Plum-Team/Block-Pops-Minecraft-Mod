@@ -383,13 +383,28 @@ def verify_harness_jar(
                 or 'version = "0.0.0"' not in text
                 or 'displayTest = "IGNORE_ALL_VERSION"' not in text
                 or 'modId = "blockpops"' not in text
-                or f'loaderVersion = "{artifact["metadata"]["loader"]}"' not in text
+                or not _fml_loader_bound_declared(text, artifact)
                 or f'versionRange = "{artifact["metadata"]["minecraft"]}"' not in text
             ):
                 raise ArtifactError("FML E2E metadata identity is invalid")
     finally:
         archive.close()
 
+
+
+def _fml_loader_bound_declared(text: str, artifact: dict[str, Any]) -> bool:
+    """Check the loader bound where its own loader actually reads it.
+
+    Forge reads its own version from loaderVersion. NeoForge reads the javafml
+    language provider version there instead, and takes its own bound from the
+    neoforge dependency, so requiring the matrix bound in loaderVersion would
+    reject a manifest the loader accepts and accept one it rejects.
+    """
+
+    bound = artifact["metadata"]["loader"]
+    if artifact["loader"] != "neoforge":
+        return f'loaderVersion = "{bound}"' in text
+    return 'loaderVersion = "[4,)"' in text and f'versionRange = "{bound}"' in text
 
 def _git_identity_environment() -> dict[str, str]:
     return {**os.environ, "GIT_NO_REPLACE_OBJECTS": "1", "GIT_GRAFT_FILE": os.devnull}
