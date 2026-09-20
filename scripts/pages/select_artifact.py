@@ -359,10 +359,14 @@ def _run_order(run: dict[str, Any]) -> tuple[datetime, int, int]:
     return created, run_id, attempt
 
 
-def select(
+def newest_exact_source(
     api: GitHubApi, *, repository: str, branch: str, commit: str, tree: str,
     canonical_branch: str,
-) -> tuple[str, Artifact, int, int, int, str, str]:
+) -> tuple[int, int, str, str]:
+    """Observe newest successful source metadata; no artifact/byte authority is returned.
+
+    Callers that require freshness must repeat this observation at their boundary.
+    """
     if REPOSITORY_PATTERN.fullmatch(repository) is None:
         raise SelectionError("repository must use owner/name form")
     branch_token(branch)
@@ -424,6 +428,16 @@ def select(
         or SHA1_PATTERN.fullmatch(controller_sha) is None
     ):
         raise SelectionError("source run id/attempt is invalid")
+    return source_run_id, attempt, canonical_branch, controller_sha
+
+
+def select(
+    api: GitHubApi, *, repository: str, branch: str, commit: str, tree: str,
+    canonical_branch: str,
+) -> tuple[str, Artifact, int, int, int, str, str]:
+    source_run_id, attempt, canonical_branch, controller_sha = newest_exact_source(
+        api, repository=repository, branch=branch, commit=commit, tree=tree,
+        canonical_branch=canonical_branch)
     expected_name = raw_artifact_name(branch, attempt)
     artifacts = [
         artifact for artifact in api.artifacts_for_run(source_run_id)
