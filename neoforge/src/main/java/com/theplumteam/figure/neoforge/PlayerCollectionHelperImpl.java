@@ -13,6 +13,7 @@ import com.theplumteam.network.SyncDynamicCollectionsPacket;
 import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.util.GeoAssets;
 import com.theplumteam.util.ResourceLocations;
+import com.theplumteam.util.TagReads;
 import net.minecraft.nbt.CompoundTag;
 //? if >=1.21 {
 /*import net.minecraft.nbt.NbtAccounter;
@@ -104,12 +105,12 @@ public class PlayerCollectionHelperImpl {
                                         //? }
                                         if (playerData != null) {
                                             // NeoForge persists getPersistentData() under NeoForgeData
-                                            CompoundTag persistentData = playerData.getCompound("NeoForgeData");
+                                            CompoundTag persistentData = TagReads.compound(playerData, "NeoForgeData");
                                             if (persistentData.contains(PlayerDataManager.DATA_KEY)) {
-                                                CompoundTag discoveryTag = persistentData.getCompound(PlayerDataManager.DATA_KEY);
-                                                if (discoveryTag.contains("FavoriteColor", Tag.TAG_STRING)) {
+                                                CompoundTag discoveryTag = TagReads.compound(persistentData, PlayerDataManager.DATA_KEY);
+                                                if (TagReads.hasString(discoveryTag, "FavoriteColor")) {
                                                     try {
-                                                        favoriteColor = PopBlockColor.valueOf(discoveryTag.getString("FavoriteColor").toUpperCase());
+                                                        favoriteColor = PopBlockColor.valueOf(TagReads.string(discoveryTag, "FavoriteColor", "").toUpperCase());
                                                     } catch (IllegalArgumentException e) {
                                                         BlockPopsMod.LOGGER.warn("Invalid favorite color found for player {}, defaulting to ORIGINAL", playerUUID);
                                                     }

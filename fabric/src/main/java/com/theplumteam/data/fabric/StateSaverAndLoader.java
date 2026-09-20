@@ -1,6 +1,7 @@
 package com.theplumteam.data.fabric;
 
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.util.TagReads;
 //? if >=1.21 {
 /*import net.minecraft.core.HolderLookup;
 import net.minecraft.util.datafix.DataFixTypes;
@@ -42,11 +43,11 @@ public class StateSaverAndLoader extends SavedData {
     public static StateSaverAndLoader createFromTag(CompoundTag tag) {
     //? }
         StateSaverAndLoader state = new StateSaverAndLoader();
-        CompoundTag playersTag = tag.getCompound("players");
+        CompoundTag playersTag = TagReads.compound(tag, "players");
         playersTag.getAllKeys().forEach(key -> {
             try {
                 UUID uuid = UUID.fromString(key);
-                state.players.put(uuid, playersTag.getCompound(key).copy());
+                state.players.put(uuid, TagReads.compound(playersTag, key).copy());
             } catch (IllegalArgumentException e) {
                 BlockPopsMod.LOGGER.warn("Invalid UUID in saved data: {}", key);
             }

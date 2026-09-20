@@ -1,6 +1,7 @@
 package com.theplumteam.blockentity;
 
 import com.theplumteam.registry.ModBlockEntities;
+import com.theplumteam.util.TagReads;
 import net.minecraft.core.BlockPos;
 //? if >=1.21 {
 /*import net.minecraft.core.HolderLookup;
@@ -86,7 +87,7 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
     public void loadForItemRendering(CompoundTag tag) {
     *///? }
         if (tag.contains("CollectionId")) {
-            this.collectionId = tag.getString("CollectionId");
+            this.collectionId = TagReads.string(tag, "CollectionId", "");
         }
     }
 

@@ -1,6 +1,7 @@
 package com.theplumteam.data;
 
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.util.TagReads;
 import dev.architectury.injectables.annotations.ExpectPlatform;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.player.Player;
@@ -34,8 +35,8 @@ public class PlayerDataManager {
         PlayerDiscovery discovery = new PlayerDiscovery();
         CompoundTag persistentData = getPersistentData(player);
 
-        if (persistentData.contains(DATA_KEY, CompoundTag.TAG_COMPOUND)) {
-            discovery.deserializeNBT(persistentData.getCompound(DATA_KEY));
+        if (TagReads.hasCompound(persistentData, DATA_KEY)) {
+            discovery.deserializeNBT(TagReads.compound(persistentData, DATA_KEY));
         }
 
         cache.put(player, discovery);
@@ -75,8 +76,8 @@ public class PlayerDataManager {
      */
     public static void copyData(Player from, Player to) {
         CompoundTag fromData = getPersistentData(from);
-        if (fromData.contains(DATA_KEY, CompoundTag.TAG_COMPOUND)) {
-            getPersistentData(to).put(DATA_KEY, fromData.getCompound(DATA_KEY).copy());
+        if (TagReads.hasCompound(fromData, DATA_KEY)) {
+            getPersistentData(to).put(DATA_KEY, TagReads.compound(fromData, DATA_KEY).copy());
             // Invalidate cache for new player so it loads fresh
             cache.remove(to);
         }

@@ -4,6 +4,7 @@ import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.registry.ModBlockEntities;
+import com.theplumteam.util.TagReads;
 //? if >=1.21 {
 /*import com.theplumteam.item.BlockEntityItemData;
 import net.minecraft.core.HolderLookup;
@@ -421,31 +422,31 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     public void loadForItemRendering(CompoundTag tag) {
     *///? }
-        this.isOpen = tag.contains("IsOpen") ? tag.getBoolean("IsOpen") : false;
-        if (tag.contains("FigureId")) this.figureId = tag.getString("FigureId");
-        if (tag.contains("IsFigureExtracted")) this.isFigureExtracted = tag.getBoolean("IsFigureExtracted");
-        if (tag.contains("AlternativeSkinIndex")) this.alternativeSkinIndex = tag.getInt("AlternativeSkinIndex");
-        if (tag.contains("PoseIndex")) this.poseIndex = tag.getInt("PoseIndex");
-        this.skinSnapshot = tag.contains("SkinSnapshot", 8) ? tag.getString("SkinSnapshot") : null;
-        this.quickSkinId = tag.contains("QuickSkinId", 8) ? tag.getString("QuickSkinId") : null;
-        if (tag.contains("CollectionId")) this.collectionIdOverride = tag.getString("CollectionId");
-        if (tag.contains("Color")) this.colorOverride = tag.getString("Color");
-        if (tag.contains("FigureOffsetX")) this.figureOffsetX = tag.getDouble("FigureOffsetX");
-        if (tag.contains("FigureOffsetY")) this.figureOffsetY = tag.getDouble("FigureOffsetY");
-        if (tag.contains("FigureOffsetZ")) this.figureOffsetZ = tag.getDouble("FigureOffsetZ");
-        if (tag.contains("FigureScale")) this.figureScale = tag.getDouble("FigureScale");
-        if (tag.contains("HitboxOffsetX")) this.hitboxOffsetX = tag.getDouble("HitboxOffsetX");
-        if (tag.contains("HitboxOffsetY")) this.hitboxOffsetY = tag.getDouble("HitboxOffsetY");
-        if (tag.contains("HitboxOffsetZ")) this.hitboxOffsetZ = tag.getDouble("HitboxOffsetZ");
-        if (tag.contains("HitboxScaleX")) this.hitboxScaleX = tag.getDouble("HitboxScaleX");
-        if (tag.contains("HitboxScaleY")) this.hitboxScaleY = tag.getDouble("HitboxScaleY");
-        if (tag.contains("HitboxScaleZ")) this.hitboxScaleZ = tag.getDouble("HitboxScaleZ");
-        this.logoPositionX = tag.contains("LogoPositionX") ? tag.getDouble("LogoPositionX") : null;
-        this.logoPositionY = tag.contains("LogoPositionY") ? tag.getDouble("LogoPositionY") : null;
-        this.logoPositionZ = tag.contains("LogoPositionZ") ? tag.getDouble("LogoPositionZ") : null;
-        this.logoScaleX = tag.contains("LogoScaleX") ? tag.getDouble("LogoScaleX") : null;
-        this.logoScaleY = tag.contains("LogoScaleY") ? tag.getDouble("LogoScaleY") : null;
-        if (tag.contains("HideLogo")) this.hideLogo = tag.getBoolean("HideLogo");
+        this.isOpen = tag.contains("IsOpen") ? TagReads.bool(tag, "IsOpen", false) : false;
+        if (tag.contains("FigureId")) this.figureId = TagReads.string(tag, "FigureId", "");
+        if (tag.contains("IsFigureExtracted")) this.isFigureExtracted = TagReads.bool(tag, "IsFigureExtracted", false);
+        if (tag.contains("AlternativeSkinIndex")) this.alternativeSkinIndex = TagReads.integer(tag, "AlternativeSkinIndex", 0);
+        if (tag.contains("PoseIndex")) this.poseIndex = TagReads.integer(tag, "PoseIndex", 0);
+        this.skinSnapshot = TagReads.hasString(tag, "SkinSnapshot") ? TagReads.string(tag, "SkinSnapshot", "") : null;
+        this.quickSkinId = TagReads.hasString(tag, "QuickSkinId") ? TagReads.string(tag, "QuickSkinId", "") : null;
+        if (tag.contains("CollectionId")) this.collectionIdOverride = TagReads.string(tag, "CollectionId", "");
+        if (tag.contains("Color")) this.colorOverride = TagReads.string(tag, "Color", "");
+        if (tag.contains("FigureOffsetX")) this.figureOffsetX = TagReads.dbl(tag, "FigureOffsetX", 0.0);
+        if (tag.contains("FigureOffsetY")) this.figureOffsetY = TagReads.dbl(tag, "FigureOffsetY", 0.0);
+        if (tag.contains("FigureOffsetZ")) this.figureOffsetZ = TagReads.dbl(tag, "FigureOffsetZ", 0.0);
+        if (tag.contains("FigureScale")) this.figureScale = TagReads.dbl(tag, "FigureScale", 0.0);
+        if (tag.contains("HitboxOffsetX")) this.hitboxOffsetX = TagReads.dbl(tag, "HitboxOffsetX", 0.0);
+        if (tag.contains("HitboxOffsetY")) this.hitboxOffsetY = TagReads.dbl(tag, "HitboxOffsetY", 0.0);
+        if (tag.contains("HitboxOffsetZ")) this.hitboxOffsetZ = TagReads.dbl(tag, "HitboxOffsetZ", 0.0);
+        if (tag.contains("HitboxScaleX")) this.hitboxScaleX = TagReads.dbl(tag, "HitboxScaleX", 0.0);
+        if (tag.contains("HitboxScaleY")) this.hitboxScaleY = TagReads.dbl(tag, "HitboxScaleY", 0.0);
+        if (tag.contains("HitboxScaleZ")) this.hitboxScaleZ = TagReads.dbl(tag, "HitboxScaleZ", 0.0);
+        this.logoPositionX = tag.contains("LogoPositionX") ? TagReads.dbl(tag, "LogoPositionX", 0.0) : null;
+        this.logoPositionY = tag.contains("LogoPositionY") ? TagReads.dbl(tag, "LogoPositionY", 0.0) : null;
+        this.logoPositionZ = tag.contains("LogoPositionZ") ? TagReads.dbl(tag, "LogoPositionZ", 0.0) : null;
+        this.logoScaleX = tag.contains("LogoScaleX") ? TagReads.dbl(tag, "LogoScaleX", 0.0) : null;
+        this.logoScaleY = tag.contains("LogoScaleY") ? TagReads.dbl(tag, "LogoScaleY", 0.0) : null;
+        if (tag.contains("HideLogo")) this.hideLogo = TagReads.bool(tag, "HideLogo", false);
     }
 
     @Override

@@ -3,6 +3,7 @@ package com.theplumteam.blockentity;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.registry.ModBlockEntities;
+import com.theplumteam.util.TagReads;
 //? if >=1.21 {
 /*import com.theplumteam.item.BlockEntityItemData;
 import net.minecraft.core.HolderLookup;
@@ -195,16 +196,16 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     public void loadForItemRendering(CompoundTag tag) {
     *///? }
-        if (tag.contains("FigureId")) this.figureId = tag.getString("FigureId");
-        if (tag.contains("CollectionId")) this.collectionId = tag.getString("CollectionId");
-        if (tag.contains("AlternativeSkinIndex")) this.alternativeSkinIndex = tag.getInt("AlternativeSkinIndex");
-        if (tag.contains("PoseIndex")) this.poseIndex = tag.getInt("PoseIndex");
-        this.skinSnapshot = tag.contains("SkinSnapshot", 8) ? tag.getString("SkinSnapshot") : null;
-        this.quickSkinId = tag.contains("QuickSkinId", 8) ? tag.getString("QuickSkinId") : null;
-        if (tag.contains("FigureOffsetX")) this.figureOffsetX = tag.getDouble("FigureOffsetX");
-        if (tag.contains("FigureOffsetY")) this.figureOffsetY = tag.getDouble("FigureOffsetY");
-        if (tag.contains("FigureOffsetZ")) this.figureOffsetZ = tag.getDouble("FigureOffsetZ");
-        if (tag.contains("FigureScale")) this.figureScale = tag.getDouble("FigureScale");
+        if (tag.contains("FigureId")) this.figureId = TagReads.string(tag, "FigureId", "");
+        if (tag.contains("CollectionId")) this.collectionId = TagReads.string(tag, "CollectionId", "");
+        if (tag.contains("AlternativeSkinIndex")) this.alternativeSkinIndex = TagReads.integer(tag, "AlternativeSkinIndex", 0);
+        if (tag.contains("PoseIndex")) this.poseIndex = TagReads.integer(tag, "PoseIndex", 0);
+        this.skinSnapshot = TagReads.hasString(tag, "SkinSnapshot") ? TagReads.string(tag, "SkinSnapshot", "") : null;
+        this.quickSkinId = TagReads.hasString(tag, "QuickSkinId") ? TagReads.string(tag, "QuickSkinId", "") : null;
+        if (tag.contains("FigureOffsetX")) this.figureOffsetX = TagReads.dbl(tag, "FigureOffsetX", 0.0);
+        if (tag.contains("FigureOffsetY")) this.figureOffsetY = TagReads.dbl(tag, "FigureOffsetY", 0.0);
+        if (tag.contains("FigureOffsetZ")) this.figureOffsetZ = TagReads.dbl(tag, "FigureOffsetZ", 0.0);
+        if (tag.contains("FigureScale")) this.figureScale = TagReads.dbl(tag, "FigureScale", 0.0);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.theplumteam.data;
 
 import com.theplumteam.block.PopBlockColor;
+import com.theplumteam.util.TagReads;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
@@ -220,50 +221,50 @@ public class PlayerDiscovery implements IPlayerDiscovery {
     public void deserializeNBT(CompoundTag tag) {
         discoveredFigures.clear();
 
-        if (tag.contains(NBT_KEY, Tag.TAG_LIST)) {
-            ListTag listTag = tag.getList(NBT_KEY, Tag.TAG_STRING);
+        if (TagReads.hasList(tag, NBT_KEY)) {
+            ListTag listTag = TagReads.list(tag, NBT_KEY, Tag.TAG_STRING);
             for (int i = 0; i < listTag.size(); i++) {
-                discoveredFigures.add(listTag.getString(i));
+                discoveredFigures.add(TagReads.string(listTag, i, ""));
             }
         }
 
         // Deserialize token data
         if (tag.contains("RegularTokens")) {
-            this.regularTokens = tag.getInt("RegularTokens");
+            this.regularTokens = TagReads.integer(tag, "RegularTokens", 0);
         }
         if (tag.contains("NextRegularTokenTime")) {
-            this.nextRegularTokenTime = tag.getLong("NextRegularTokenTime");
+            this.nextRegularTokenTime = TagReads.lng(tag, "NextRegularTokenTime", 0L);
         }
         if (tag.contains("LastSpecialTokenResetTimestamp")) {
-            this.lastSpecialTokenResetTimestamp = tag.getLong("LastSpecialTokenResetTimestamp");
+            this.lastSpecialTokenResetTimestamp = TagReads.lng(tag, "LastSpecialTokenResetTimestamp", 0L);
         }
         if (tag.contains("UsedTodaySpecialToken")) {
-            this.usedTodaySpecialToken = tag.getBoolean("UsedTodaySpecialToken");
+            this.usedTodaySpecialToken = TagReads.bool(tag, "UsedTodaySpecialToken", false);
         }
 
         // Deserialize favorite color data
-        this.hasChosenFavoriteColor = tag.getBoolean("HasChosenFavoriteColor");
-        if (tag.contains("FavoriteColor", Tag.TAG_STRING)) {
-            this.favoriteColor = tag.getString("FavoriteColor");
+        this.hasChosenFavoriteColor = TagReads.bool(tag, "HasChosenFavoriteColor", false);
+        if (TagReads.hasString(tag, "FavoriteColor")) {
+            this.favoriteColor = TagReads.string(tag, "FavoriteColor", "");
         } else {
             this.favoriteColor = null;
         }
 
         // Deserialize figure skins
         figureSkins.clear();
-        if (tag.contains(NBT_FIGURE_SKINS_KEY, Tag.TAG_COMPOUND)) {
-            CompoundTag skinsTag = tag.getCompound(NBT_FIGURE_SKINS_KEY);
+        if (TagReads.hasCompound(tag, NBT_FIGURE_SKINS_KEY)) {
+            CompoundTag skinsTag = TagReads.compound(tag, NBT_FIGURE_SKINS_KEY);
             for (String key : skinsTag.getAllKeys()) {
-                figureSkins.put(key, skinsTag.getString(key));
+                figureSkins.put(key, TagReads.string(skinsTag, key, ""));
             }
         }
 
         // Deserialize Quick Skins
         figureQuickSkins.clear();
-        if (tag.contains(NBT_FIGURE_QUICK_SKINS_KEY, Tag.TAG_COMPOUND)) {
-            CompoundTag qsTag = tag.getCompound(NBT_FIGURE_QUICK_SKINS_KEY);
+        if (TagReads.hasCompound(tag, NBT_FIGURE_QUICK_SKINS_KEY)) {
+            CompoundTag qsTag = TagReads.compound(tag, NBT_FIGURE_QUICK_SKINS_KEY);
             for (String key : qsTag.getAllKeys()) {
-                figureQuickSkins.put(key, qsTag.getString(key));
+                figureQuickSkins.put(key, TagReads.string(qsTag, key, ""));
             }
         }
     }

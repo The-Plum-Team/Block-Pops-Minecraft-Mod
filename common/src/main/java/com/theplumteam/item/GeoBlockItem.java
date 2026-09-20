@@ -5,6 +5,7 @@ import com.theplumteam.block.FigureBlock;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.util.TagReads;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -41,10 +42,10 @@ public class GeoBlockItem extends BlockItem {
 
             if (blockEntityTag != null) {
                 if (blockEntityTag.contains("CollectionId")) {
-                    collectionId = blockEntityTag.getString("CollectionId");
+                    collectionId = TagReads.string(blockEntityTag, "CollectionId", "");
                 }
                 if (blockEntityTag.contains("FigureId")) {
-                    figureId = blockEntityTag.getString("FigureId");
+                    figureId = TagReads.string(blockEntityTag, "FigureId", "");
                 }
             }
 
@@ -74,10 +75,10 @@ public class GeoBlockItem extends BlockItem {
 
             if (blockEntityTag != null) {
                 if (blockEntityTag.contains("CollectionId")) {
-                    collectionId = blockEntityTag.getString("CollectionId");
+                    collectionId = TagReads.string(blockEntityTag, "CollectionId", "");
                 }
                 if (blockEntityTag.contains("FigureId")) {
-                    figureId = blockEntityTag.getString("FigureId");
+                    figureId = TagReads.string(blockEntityTag, "FigureId", "");
                 }
             }
 
@@ -115,20 +116,20 @@ public class GeoBlockItem extends BlockItem {
         if (getBlock() instanceof BoxBlock boxBlock) {
             if (blockEntityTag != null) {
                 if (blockEntityTag.contains("CollectionId")) {
-                    collectionId = blockEntityTag.getString("CollectionId");
+                    collectionId = TagReads.string(blockEntityTag, "CollectionId", "");
                 }
                 if (blockEntityTag.contains("FigureId")) {
-                    figureId = blockEntityTag.getString("FigureId");
+                    figureId = TagReads.string(blockEntityTag, "FigureId", "");
                 }
             }
 
         } else if (getBlock() instanceof FigureBlock) {
             if (blockEntityTag != null) {
                 if (blockEntityTag.contains("CollectionId")) {
-                    collectionId = blockEntityTag.getString("CollectionId");
+                    collectionId = TagReads.string(blockEntityTag, "CollectionId", "");
                 }
                 if (blockEntityTag.contains("FigureId")) {
-                    figureId = blockEntityTag.getString("FigureId");
+                    figureId = TagReads.string(blockEntityTag, "FigureId", "");
                 }
             }
         } else {

@@ -13,6 +13,7 @@ import com.theplumteam.network.SyncDynamicCollectionsPacket;
 import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.util.GeoAssets;
 import com.theplumteam.util.ResourceLocations;
+import com.theplumteam.util.TagReads;
 import net.minecraft.nbt.CompoundTag;
 //? if >=1.21 {
 /*import net.minecraft.nbt.NbtAccounter;
@@ -104,12 +105,12 @@ public class PlayerCollectionHelperImpl {
                                         //? }
                                         if (playerData != null) {
                                             // Fabric stores cardinal components data differently
-                                            CompoundTag cardinalComponents = playerData.getCompound("cardinal_components");
+                                            CompoundTag cardinalComponents = TagReads.compound(playerData, "cardinal_components");
                                             if (cardinalComponents.contains("blockpops:player_discovery")) {
-                                                CompoundTag discoveryTag = cardinalComponents.getCompound("blockpops:player_discovery");
-                                                if (discoveryTag.contains("FavoriteColor", Tag.TAG_STRING)) {
+                                                CompoundTag discoveryTag = TagReads.compound(cardinalComponents, "blockpops:player_discovery");
+                                                if (TagReads.hasString(discoveryTag, "FavoriteColor")) {
                                                     try {
-                                                        favoriteColor = PopBlockColor.valueOf(discoveryTag.getString("FavoriteColor").toUpperCase());
+                                                        favoriteColor = PopBlockColor.valueOf(TagReads.string(discoveryTag, "FavoriteColor", "").toUpperCase());
                                                     } catch (IllegalArgumentException e) {
                                                         BlockPopsMod.LOGGER.warn("Invalid favorite color found for player {}, defaulting to ORIGINAL", playerUUID);
                                                     }

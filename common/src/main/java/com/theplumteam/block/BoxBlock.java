@@ -10,6 +10,7 @@ import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.platform.PlatformHelper;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModItems;
+import com.theplumteam.util.TagReads;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -229,17 +230,17 @@ public class BoxBlock extends BaseEntityBlock {
                 if (heldItem.getItem() == ModItems.FIGURE_BLOCK_ITEM.get() && boxBlockEntity.isFigureExtracted()) {
                     CompoundTag blockEntityTag = BlockEntityItemData.read(heldItem);
                     if (blockEntityTag != null) {
-                        String heldFigureId = blockEntityTag.getString("FigureId");
-                        String heldCollectionId = blockEntityTag.getString("CollectionId");
+                        String heldFigureId = TagReads.string(blockEntityTag, "FigureId", "");
+                        String heldCollectionId = TagReads.string(blockEntityTag, "CollectionId", "");
 
                         if (heldFigureId.equals(boxBlockEntity.getFigureId()) &&
                                 heldCollectionId.equals(boxBlockEntity.getCollectionId())) {
 
                             if (blockEntityTag.contains("QuickSkinId")) {
-                                boxBlockEntity.setQuickSkinId(blockEntityTag.getString("QuickSkinId"));
+                                boxBlockEntity.setQuickSkinId(TagReads.string(blockEntityTag, "QuickSkinId", ""));
                             }
                             if (blockEntityTag.contains("SkinSnapshot")) {
-                                boxBlockEntity.setSkinSnapshot(blockEntityTag.getString("SkinSnapshot"));
+                                boxBlockEntity.setSkinSnapshot(TagReads.string(blockEntityTag, "SkinSnapshot", ""));
                             }
 
                             boxBlockEntity.setFigureExtracted(false);
@@ -324,10 +325,10 @@ public class BoxBlock extends BaseEntityBlock {
                 CompoundTag tag = BlockEntityItemData.read(stack);
                 if (tag != null) {
                     if (tag.contains("QuickSkinId")) {
-                        boxBlockEntity.setQuickSkinId(tag.getString("QuickSkinId"));
+                        boxBlockEntity.setQuickSkinId(TagReads.string(tag, "QuickSkinId", ""));
                     }
                     if (tag.contains("SkinSnapshot")) {
-                        boxBlockEntity.setSkinSnapshot(tag.getString("SkinSnapshot"));
+                        boxBlockEntity.setSkinSnapshot(TagReads.string(tag, "SkinSnapshot", ""));
                     }
                 }
             }

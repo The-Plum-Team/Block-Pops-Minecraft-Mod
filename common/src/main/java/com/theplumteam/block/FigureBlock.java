@@ -7,6 +7,7 @@ import com.theplumteam.blockentity.FigureBlockEntity;
 import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModItems;
+import com.theplumteam.util.TagReads;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -147,10 +148,10 @@ public class FigureBlock extends BaseEntityBlock {
                 CompoundTag tag = BlockEntityItemData.read(stack);
                 if (tag != null) {
                     if (tag.contains("QuickSkinId")) {
-                        figureBlockEntity.setQuickSkinId(tag.getString("QuickSkinId"));
+                        figureBlockEntity.setQuickSkinId(TagReads.string(tag, "QuickSkinId", ""));
                     }
                     if (tag.contains("SkinSnapshot")) {
-                        figureBlockEntity.setSkinSnapshot(tag.getString("SkinSnapshot"));
+                        figureBlockEntity.setSkinSnapshot(TagReads.string(tag, "SkinSnapshot", ""));
                     }
                 }
             }
