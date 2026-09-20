@@ -2,6 +2,9 @@ package com.theplumteam.client.gui;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
+//? if >=1.21 {
+/*import com.mojang.blaze3d.vertex.BufferUploader;
+*///? }
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -320,6 +323,14 @@ public class FavoriteColorSelectionScreen extends Screen {
         RenderSystem.setShaderTexture(0, cacheTexture);
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
 
+        //? if >=1.21 {
+        /*BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        bufferBuilder.addVertex(pose.last().pose(), 0, this.height, 0).setUv(u0, v1);
+        bufferBuilder.addVertex(pose.last().pose(), this.width, this.height, 0).setUv(u1, v1);
+        bufferBuilder.addVertex(pose.last().pose(), this.width, 0, 0).setUv(u1, v0);
+        bufferBuilder.addVertex(pose.last().pose(), 0, 0, 0).setUv(u0, v0);
+        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
+        *///? } else {
         Tesselator tesselator = Tesselator.getInstance();
         BufferBuilder bufferBuilder = tesselator.getBuilder();
 
@@ -329,6 +340,7 @@ public class FavoriteColorSelectionScreen extends Screen {
         bufferBuilder.vertex(pose.last().pose(), this.width, 0, 0).uv(u1, v0).endVertex();
         bufferBuilder.vertex(pose.last().pose(), 0, 0, 0).uv(u0, v0).endVertex();
         tesselator.end();
+        //? }
 
         pose.popPose();
 
