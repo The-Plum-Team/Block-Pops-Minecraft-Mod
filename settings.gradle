@@ -175,9 +175,6 @@ if (layouts == ['legacy'] as Set) {
         }
     } as org.gradle.api.Action)
     gradle.ext.blockPopsBuildProjectPaths = [":common:${minecraftVersion}".toString(), ":${loader}:${minecraftVersion}".toString()]
-    gradle.projectsLoaded {
-        throw new GradleException('Selected Stonecutter graph requires common, loader and E2E node adapters before game configuration')
-    }
 } else {
     throw new GradleException('One Gradle process requires one supported build layout and explicit Stonecutter lane')
 }
