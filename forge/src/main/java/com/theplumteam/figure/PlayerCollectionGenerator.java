@@ -3,7 +3,8 @@ package com.theplumteam.figure;
 import com.mojang.authlib.GameProfile;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
-import com.theplumteam.capability.PlayerDiscoveryProvider;
+import com.theplumteam.data.IPlayerDiscovery;
+import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.server.config.ServerConfig;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
@@ -16,7 +17,6 @@ import net.minecraft.server.players.GameProfileCache;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Generates a dynamic figure collection based on players who have joined the world.
@@ -79,14 +79,10 @@ public class PlayerCollectionGenerator {
                             ServerPlayer onlinePlayer = server.getPlayerList().getPlayer(playerUUID);
                             if (onlinePlayer != null) {
                                 // Player is online, read from their in-memory capability
-                                AtomicReference<PopBlockColor> colorRef = new AtomicReference<>(defaultColor);
-                                onlinePlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
-                                    PopBlockColor color = discovery.getFavoriteColor();
-                                    if (color != null) {
-                                        colorRef.set(color);
-                                    }
-                                });
-                                favoriteColor = colorRef.get();
+                                IPlayerDiscovery liveDiscovery = PlayerDataManager.getDiscovery(onlinePlayer);
+                                if (liveDiscovery.hasChosenFavoriteColor() && liveDiscovery.getFavoriteColor() != null) {
+                                    favoriteColor = liveDiscovery.getFavoriteColor();
+                                }
                                 BlockPopsMod.LOGGER.debug("Loaded favorite color from online player {}: {}", playerName, favoriteColor.getSerializedName());
                             } else {
                                 // Player is offline, read from disk
@@ -95,9 +91,16 @@ public class PlayerCollectionGenerator {
                                     if (playerDataFile.exists()) {
                                         CompoundTag playerData = NbtIo.readCompressed(playerDataFile);
                                         if (playerData != null) {
-                                            CompoundTag capabilities = playerData.getCompound("ForgeCaps");
-                                            if (capabilities.contains("blockpops:player_discovery")) {
-                                                CompoundTag discoveryTag = capabilities.getCompound("blockpops:player_discovery");
+                                            // Prefer the current persistent-data location; the
+                                            // ForgeCaps copy only exists for worlds that predate
+                                            // the login migration.
+                                            CompoundTag forgeData = playerData.getCompound("ForgeData");
+                                            CompoundTag discoveryTag = forgeData.getCompound(PlayerDataManager.DATA_KEY);
+                                            if (discoveryTag.isEmpty()) {
+                                                discoveryTag = playerData.getCompound("ForgeCaps")
+                                                        .getCompound("blockpops:player_discovery");
+                                            }
+                                            {
                                                 if (discoveryTag.contains("FavoriteColor", Tag.TAG_STRING)) {
                                                     try {
                                                         favoriteColor = PopBlockColor.valueOf(discoveryTag.getString("FavoriteColor").toUpperCase());
@@ -151,14 +154,13 @@ public class PlayerCollectionGenerator {
                 // Get favorite color from online player's capability
                 PopBlockColor defaultColorOnline = ServerConfig.getInstance().getDefaultPlayerColor();
                 PopBlockColor favoriteColor = defaultColorOnline;
-                AtomicReference<PopBlockColor> colorRef = new AtomicReference<>(defaultColorOnline);
-                onlinePlayer.getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(discovery -> {
-                    PopBlockColor color = discovery.getFavoriteColor();
-                    if (color != null) {
-                        colorRef.set(color);
-                    }
-                });
-                favoriteColor = colorRef.get();
+                // Read the live store the packet handler writes. The capability is legacy:
+                // CapabilityEvents migrates it into persistent data once at login and never
+                // writes it again, so reading it here would always miss the chosen colour.
+                IPlayerDiscovery liveDiscovery = PlayerDataManager.getDiscovery(onlinePlayer);
+                if (liveDiscovery.hasChosenFavoriteColor() && liveDiscovery.getFavoriteColor() != null) {
+                    favoriteColor = liveDiscovery.getFavoriteColor();
+                }
 
                 // Create a player figure definition
                 FigureDefinition playerFigure = new FigureDefinition(
