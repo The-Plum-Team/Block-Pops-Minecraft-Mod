@@ -224,7 +224,7 @@ class ScopedManifestTests(unittest.TestCase):
     def test_lane_evidence_is_partial_and_legacy_scope_is_independently_derived(self):
         self.assertEqual(self.manifest, self.verify())
         self.assertTrue(self.manifest['scope']['partial'])
-        self.assertEqual(12, len(self.manifest['scope']['target_nodes']))
+        self.assertEqual(18, len(self.manifest['scope']['target_nodes']))
         _, legacy, rows = self.context(scope='legacy')
         self.assertEqual(['fabric-1.20.1', 'forge-1.20.1'], legacy['scope']['selected_nodes'])
         self.assertEqual(2, len(rows))
@@ -249,13 +249,13 @@ class ScopedManifestTests(unittest.TestCase):
             with self.subTest(mutate=mutate), self.assertRaises(ArtifactError):
                 self.verify()
 
-    def test_complete_context_retains_all_twelve_targets_and_rejects_legacy_scope(self):
+    def test_complete_context_retains_every_target_and_rejects_legacy_scope(self):
         self.matrix_path.write_text(json.dumps(schema2_configuration(shared=True)))
         self.git('add', 'release/release-matrix.json')
         self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'shared fixture')
         _, header, rows = self.context(scope='full')
         self.assertFalse(header['scope']['partial'])
-        self.assertEqual(12, len(rows))
+        self.assertEqual(18, len(rows))
         self.assertEqual(set(header['scope']['target_nodes']), set(header['scope']['selected_nodes']))
         with self.assertRaises(MatrixError): self.context(scope='legacy')
 

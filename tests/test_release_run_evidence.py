@@ -77,7 +77,7 @@ class CurrentReleaseEvidenceTests(unittest.TestCase):
     def test_exact_jobs_and_two_distinct_artifacts_for_both_producers_and_scopes(self):
         for workflow in ("build-gate.yml", "on-demand-e2e.yml"):
             for scope, node, shared, count in (("legacy", None, False, 2),
-                    ("lane", "neoforge-1.21.1", False, 1), ("full", None, True, 12)):
+                    ("lane", "neoforge-1.21.1", False, 1), ("full", None, True, 18)):
                 self.matrix.write_text(json.dumps(schema2_configuration(shared=shared)))
                 self.digest = hashlib.sha256(self.matrix.read_bytes()).hexdigest()
                 api = self.api(workflow, scope, node)

@@ -98,7 +98,7 @@ class BuildMatrixPlanningTests(unittest.TestCase):
         self.write_matrix(matrix)
         plan = plan_build(self.path)
         self.assertEqual(expected, plan["selected_nodes"])
-        self.assertEqual(12, len({row["gradle_user_home"] for row in plan["lanes"]}))
+        self.assertEqual(18, len({row["gradle_user_home"] for row in plan["lanes"]}))
         self.assertFalse(plan["partial_scope"])
         self.assertEqual(["1.20.1", "1.21.7", "1.21.10"],
                          sorted(["1.21.10", "1.21.7", "1.20.1"], key=numeric_version))

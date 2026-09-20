@@ -188,10 +188,10 @@ class JobGraphTests(unittest.TestCase):
 
 
 class NormalizedGraphTests(unittest.TestCase):
-    def test_preparing_preserves_legacy_graph_and_shared_covers_twelve(self):
+    def test_preparing_preserves_legacy_graph_and_shared_covers_every_target(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "matrix.json"
-            for matrix, count in ((schema2_configuration(), 2), (schema2_configuration(shared=True), 12)):
+            for matrix, count in ((schema2_configuration(), 2), (schema2_configuration(shared=True), 18)):
                 path.write_text(json.dumps(matrix))
                 for event in ("schedule", "pull_request_target"):
                     names = expected_names(path, "on-demand-e2e.yml", event=event)

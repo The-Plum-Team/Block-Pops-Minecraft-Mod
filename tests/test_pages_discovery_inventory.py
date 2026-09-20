@@ -70,7 +70,7 @@ class PagesInventoryTests(unittest.TestCase):
             self.assertEqual(self.git("rev-parse", commit + ":release/release-matrix.json"), row["matrix_blob"])
             self.assertEqual(hashlib.sha256(raw).hexdigest(), row["matrix_sha256"])
             self.assertEqual(scope, row["scope"]["kind"])
-            self.assertEqual(12 if scope == "full" else 2, len(row["scope"]["selected_nodes"]))
+            self.assertEqual(18 if scope == "full" else 2, len(row["scope"]["selected_nodes"]))
             self.assertNotIn("projection", row["scope"])
             self.assertNotIn("projection", row)
             self.assertNotIn("qualified", row)

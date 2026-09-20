@@ -96,7 +96,7 @@ class ReleaseSelectionTests(unittest.TestCase):
             self.assertEqual(content["build_identity"][key], selected[key])
         matrix = json.loads(self.fixture.matrix_path.read_bytes())
         self.assertEqual([target["artifact_node"] for target in matrix["targets"]], plan["coverage"]["target_nodes"])
-        self.assertEqual((12, 11, [self.fixture.node], True), (len(plan["coverage"]["target_nodes"]),
+        self.assertEqual((18, 17, [self.fixture.node], True), (len(plan["coverage"]["target_nodes"]),
             len(plan["coverage"]["remaining_nodes"]), plan["coverage"]["selected_nodes"], plan["coverage"]["partial"]))
         self.assertEqual(("legacy", "lane"), (content["build"]["scope"]["kind"], content["e2e"]["scope"]["kind"]))
         self.assertEqual(4, len(plan["evidence"]["downloads"]))

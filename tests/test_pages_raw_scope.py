@@ -76,7 +76,7 @@ class ScopedRawPagesTests(unittest.TestCase):
     def test_legacy_modern_lane_and_full_shared_reconstruct_exact_pixels(self):
         cases = (("legacy", None, False, "pr-anchors", 2),
                  ("lane", "neoforge-1.21.1", False, "scheduled-anchors", 1),
-                 ("full", None, True, "pr-anchors", 12))
+                 ("full", None, True, "pr-anchors", 18))
         for index, (scope, node, shared, projection, count) in enumerate(cases):
             with self.subTest(scope=scope):
                 self.root = Path(self.temporary.name) / str(index)
@@ -85,8 +85,8 @@ class ScopedRawPagesTests(unittest.TestCase):
                 result = self.validate()
                 self.assertEqual(count, len(result["lanes"]))
                 self.assertEqual(count * len(self.contract.capture_ids), len(result["frames"]))
-                self.assertEqual(count != 12, result["aggregate_scope"]["partial"])
-                self.assertEqual(12, len(result["aggregate_scope"]["target_nodes"]))
+                self.assertEqual(count != 18, result["aggregate_scope"]["partial"])
+                self.assertEqual(18, len(result["aggregate_scope"]["target_nodes"]))
 
     def test_external_scope_projection_and_resolved_selection_are_required(self):
         self.prepare()

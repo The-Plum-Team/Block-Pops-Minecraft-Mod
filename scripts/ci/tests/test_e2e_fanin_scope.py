@@ -86,7 +86,7 @@ class ScopedLaneFanInTests(unittest.TestCase):
         self.populate_lane(lane)
         self.assertEqual("neoforge-1.21.1", self.validate()["artifact_node"])
         self.configure("full", shared=True)
-        self.assertEqual(12, len(self.fixture.lanes))
+        self.assertEqual(18, len(self.fixture.lanes))
         lane = self.fixture.lanes[-1]
         self.populate_lane(lane)
         result = self.validate(lane)

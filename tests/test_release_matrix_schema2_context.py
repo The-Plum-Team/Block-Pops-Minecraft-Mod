@@ -20,7 +20,7 @@ class Schema2RuntimeContextTests(unittest.TestCase):
     def test_legacy_and_mixed_contexts_remain_valid(self):
         for factory in (schema2_matrix, mixed_matrix):
             with self.subTest(factory=factory.__name__):
-                self.assertEqual(12, len(normalize_matrix_inventory(factory()).targets))
+                self.assertEqual(18, len(normalize_matrix_inventory(factory()).targets))
         for version_range in ("[1.21.1]", "[1.21.1,1.22)"):
             matrix = mixed_matrix()
             matrix["artifacts"][-1]["metadata"]["minecraft"] = version_range

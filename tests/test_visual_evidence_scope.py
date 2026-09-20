@@ -150,7 +150,7 @@ class ScopedVisualEvidenceTests(unittest.TestCase):
                       "scenarios": sorted(self.contract.scenarios_for_profile("release"))}
         rows, coverage = visual._visual_selection(matrix, provenance, self.contract, scope="full",
             artifact_node=None, artifact_scope=bundle, projection="pr-anchors")
-        self.assertEqual(12, len(rows))
+        self.assertEqual(18, len(rows))
         self.assertIs(False, coverage["aggregate_scope"]["partial"])
         with self.assertRaises(visual.VisualEvidenceError):
             visual._visual_selection(self.matrix, provenance, self.contract, scope="full",

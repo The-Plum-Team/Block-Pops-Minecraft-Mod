@@ -49,7 +49,7 @@ def shared_matrix() -> dict:
             }
         matrix["artifacts"].append(artifact)
         matrix["runtimes"].append(runtime)
-    matrix.update(lane_count=12, migration={"mode": "shared", "legacy_nodes": []})
+    matrix.update(lane_count=18, migration={"mode": "shared", "legacy_nodes": []})
     return matrix
 
 
@@ -97,17 +97,17 @@ class Schema2ReportTests(unittest.TestCase):
             code, output, _ = self.cli(matrix, *arguments)
             self.assertEqual((2, ""), (code, output))
 
-    def test_preparing_report_retains_twelve_targets_and_ten_unresolved(self):
+    def test_preparing_report_retains_every_target_and_its_unresolved_rest(self):
         inventory = normalize_matrix_inventory(schema2_matrix())
         report = inventory.report()
-        self.assertEqual((12, 2), (report["target_count"], report["lane_count"]))
+        self.assertEqual((18, 2), (report["target_count"], report["lane_count"]))
         self.assertEqual((2, "preparing"), (report["schema_version"], report["migration_mode"]))
         self.assertFalse(report["configuration_complete"])
         self.assertFalse(report["execution_supported"])
         self.assertFalse(report["sources_checked"])
         self.assertEqual(("fabric-1.20.1", "forge-1.20.1"), inventory.configured_nodes)
         unresolved = [row for row in report["targets"] if row["configuration"] == "unresolved"]
-        self.assertEqual(10, len(unresolved))
+        self.assertEqual(16, len(unresolved))
         self.assertTrue(all(row["missing_inputs"] == ["artifact", "runtime"] for row in unresolved))
         self.assertTrue(all(row["missing_inputs"] == [] for row in report["targets"]
                             if row["configuration"] == "configured"))
@@ -149,7 +149,7 @@ class Schema2ReportTests(unittest.TestCase):
 
     def test_shared_configuration_requires_all_pairs_without_claiming_execution(self):
         inventory = normalize_matrix_inventory(shared_matrix())
-        self.assertEqual(12, len(inventory.require_complete()))
+        self.assertEqual(18, len(inventory.require_complete()))
         self.assertTrue(inventory.report()["configuration_complete"])
         self.assertFalse(inventory.execution_supported)
         for mutation in ("missing pair", "orphan", "metadata", "harness"):

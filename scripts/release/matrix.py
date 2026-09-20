@@ -102,6 +102,12 @@ EXPECTED_TARGETS = frozenset(
         ("neoforge", "1.21.6"),
         ("fabric", "1.21.7"),
         ("neoforge", "1.21.7"),
+        ("fabric", "1.21.8"),
+        ("neoforge", "1.21.8"),
+        ("fabric", "1.21.10"),
+        ("neoforge", "1.21.10"),
+        ("fabric", "1.21.11"),
+        ("neoforge", "1.21.11"),
     }
 )
 LEGACY_TARGET_NODES = frozenset({"fabric-1.20.1", "forge-1.20.1"})

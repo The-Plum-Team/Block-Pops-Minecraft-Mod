@@ -79,7 +79,8 @@ class ScopedSiteTests(unittest.TestCase):
             summary = self.build()
             gallery = json.loads((self.output / "gallery-data.json").read_bytes())
             self.assertEqual(self.templates[shared][1]["aggregate_scope"], gallery["releases"][0]["aggregate_scope"])
-            self.assertEqual(60 if shared is True else 10, summary["frames"])
+            # A shared gallery carries five frames for every lane in the migration scope.
+            self.assertEqual(90 if shared is True else 10, summary["frames"])
             for frame in gallery["frames"]:
                 self.assertEqual(frame["published_sha256"], evidence.sha256_bytes((self.output / frame["image"]).read_bytes()))
         self.configure()

@@ -36,7 +36,7 @@ class Schema2ConfigurationTests(unittest.TestCase):
         before = copy.deepcopy(matrix)
         inventory = normalize_matrix_inventory(matrix)
         self.assertEqual(before, matrix)
-        self.assertEqual(12, len(inventory.targets))
+        self.assertEqual(18, len(inventory.targets))
         self.assertFalse(inventory.execution_supported)
 
     def test_lane_inputs_are_explicit_and_consistent(self):

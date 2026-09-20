@@ -30,6 +30,12 @@ TARGETS = (
     ("neoforge", "1.21.6"),
     ("fabric", "1.21.7"),
     ("neoforge", "1.21.7"),
+    ("fabric", "1.21.8"),
+    ("neoforge", "1.21.8"),
+    ("fabric", "1.21.10"),
+    ("neoforge", "1.21.10"),
+    ("fabric", "1.21.11"),
+    ("neoforge", "1.21.11"),
 )
 
 
@@ -74,11 +80,11 @@ class ReleaseMatrixSchema2FoundationTests(unittest.TestCase):
         self.assertIsNone(inventory.migration_mode)
         self.assertTrue(inventory.execution_supported)
 
-    def test_schema2_preparing_inventory_normalizes_exact_twelve_targets(self) -> None:
+    def test_schema2_preparing_inventory_normalizes_every_declared_target(self) -> None:
         inventory = normalize_matrix_inventory(schema2_matrix())
 
         self.assertEqual(2, inventory.schema_version)
-        self.assertEqual(12, len(inventory.targets))
+        self.assertEqual(18, len(inventory.targets))
         self.assertEqual(
             {f"{loader}-{minecraft}" for loader, minecraft in TARGETS},
             set(inventory.target_nodes),

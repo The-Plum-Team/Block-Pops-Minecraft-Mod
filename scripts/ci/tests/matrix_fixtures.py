@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from scripts.release.matrix import EXPECTED_TARGETS, _numeric_version
+
 SCHEMA1_MATRIX_PATH = Path(__file__).resolve().parents[3] / "tests/fixtures/release-matrix-schema1.json"
 
 
@@ -107,10 +109,14 @@ def schema2_configuration(*, shared: bool = False) -> dict[str, Any]:
     matrix = schema1_matrix()
     artifact_template, runtime_template = copy.deepcopy(matrix["artifacts"][0]), copy.deepcopy(matrix["runtimes"][0])
     matrix["schema_version"] = 2
+    # The migration scope is declared once, by the validator. Deriving the fixture from
+    # it keeps these controller tests honest when the scope grows.
     matrix["targets"] = [
         {"artifact_node": f"{loader}-{minecraft}", "loader": loader, "minecraft": minecraft}
-        for minecraft in ("1.20.1", "1.21.1", "1.21.4", "1.21.5", "1.21.6", "1.21.7")
-        for loader in ("fabric", "forge" if minecraft == "1.20.1" else "neoforge")
+        for minecraft, loader in sorted(
+            ((minecraft, loader) for loader, minecraft in EXPECTED_TARGETS),
+            key=lambda pair: (_numeric_version(pair[0]), pair[1]),
+        )
     ]
     legacy = ["fabric-1.20.1", "forge-1.20.1"]
     matrix["migration"] = {"mode": "shared" if shared else "preparing", "legacy_nodes": [] if shared else legacy}

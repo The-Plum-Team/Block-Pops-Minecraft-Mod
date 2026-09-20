@@ -82,7 +82,7 @@ class ScopedPagesCliTests(unittest.TestCase):
                 if not schema1:
                     expected["aggregate_scope"] = f.manifest["aggregate_scope"]
                     self.assertEqual(expected["aggregate_scope"], manifest["aggregate_scope"])
-                    self.assertEqual(12, len(expected["aggregate_scope"]["target_nodes"]))
+                    self.assertEqual(18, len(expected["aggregate_scope"]["target_nodes"]))
                 self.assertEqual(json.dumps(expected, sort_keys=True) + "\n", stdout)
         self.assertEqual((compact / "manifest.json").read_bytes(), (copied / "manifest.json").read_bytes())
 

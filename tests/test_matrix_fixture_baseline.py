@@ -24,7 +24,8 @@ class MatrixFixtureBaselineTests(unittest.TestCase):
         self.assertTrue(document.inventory.sources_checked)
         expected = {"fabric-1.20.1", "forge-1.20.1"} | {
             f"{loader}-{version}" for loader in ("fabric", "neoforge")
-            for version in ("1.21.1", "1.21.4", "1.21.5", "1.21.6", "1.21.7")
+            for version in ("1.21.1", "1.21.4", "1.21.5", "1.21.6", "1.21.7",
+                            "1.21.8", "1.21.10", "1.21.11")
         }
         inventory = document.inventory
         self.assertEqual(2, inventory.schema_version)

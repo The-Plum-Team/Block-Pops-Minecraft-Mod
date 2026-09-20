@@ -114,7 +114,7 @@ class RuntimeSelectionTests(unittest.TestCase):
             with contextlib.redirect_stdout(output):
                 self.assertEqual(0, main(arguments + ["--list"]))
             report = json.loads(output.getvalue())
-            self.assertEqual(("legacy", "preparing", 12, 4),
+            self.assertEqual(("legacy", "preparing", 18, 4),
                              tuple(report[key] for key in ("scope", "migration_mode", "target_count", "configured_lane_count")))
             error = io.StringIO()
             with contextlib.redirect_stderr(error):

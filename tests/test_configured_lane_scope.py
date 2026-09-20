@@ -22,9 +22,13 @@ class ConfiguredLaneScopeTests(unittest.TestCase):
         return [lane.identity.artifact_node for lane in self.document.select_lanes(**options)]
 
     def test_configured_scope_selects_every_configured_lane_in_matrix_order(self):
+        # Which lanes are configured moves as the migration advances, so this binds the
+        # scope's own contract rather than a snapshot of the list: matrix order, the
+        # legacy pair always present, and never a lane outside the declared targets.
         self.assertEqual(list(self.inventory.configured_nodes), self.nodes(scope="configured"))
-        self.assertEqual({"fabric-1.20.1", "forge-1.20.1", "fabric-1.21.1", "neoforge-1.21.1"},
-                         set(self.nodes(scope="configured")))
+        configured = set(self.nodes(scope="configured"))
+        self.assertTrue({"fabric-1.20.1", "forge-1.20.1"} <= configured)
+        self.assertTrue(configured <= set(self.inventory.target_nodes))
 
     def test_configured_scope_excludes_unresolved_targets_and_never_implies_completion(self):
         unresolved = set(self.inventory.target_nodes) - set(self.inventory.configured_nodes)
@@ -71,7 +75,7 @@ class NeoForge1211ConfigurationTests(unittest.TestCase):
         plan = plan_build(MATRIX, artifact_node="neoforge-1.21.1")
         self.assertEqual(["neoforge-1.21.1"], plan["selected_nodes"])
         self.assertTrue(plan["partial_scope"])
-        self.assertEqual(12, len(plan["target_nodes"]))
+        self.assertEqual(18, len(plan["target_nodes"]))
         self.assertEqual([":neoforge:1.21.1:remapJar", ":neoforge:1.21.1:remapE2EHarnessJar"],
                          plan["lanes"][0]["command"][-3:-1])
         outputs = plan["lanes"][0]["outputs"]

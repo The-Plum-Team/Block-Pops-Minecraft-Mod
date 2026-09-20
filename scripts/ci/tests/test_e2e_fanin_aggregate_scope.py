@@ -76,12 +76,12 @@ class ScopedAggregateReaderTests(unittest.TestCase):
                           for key in ("repository", "source_branch", "commit", "tree", "run_id", "run_attempt")})
         return fanin.validate_aggregate(**{**arguments, **overrides})
 
-    def test_legacy_aggregate_binds_two_lanes_without_claiming_twelve_target_coverage(self):
+    def test_legacy_aggregate_binds_two_lanes_without_claiming_full_target_coverage(self):
         self.prepare()
         result = self.validate()
         self.assertEqual(self.receipt, result)
         self.assertEqual(["fabric-1.20.1", "forge-1.20.1"], result["aggregate_scope"]["selected_nodes"])
-        self.assertEqual(12, len(result["aggregate_scope"]["target_nodes"]))
+        self.assertEqual(18, len(result["aggregate_scope"]["target_nodes"]))
         self.assertTrue(result["aggregate_scope"]["partial"])
         self.assertNotIn("execution_scope", result)
         no_source = {"expected_" + key: None for key in
@@ -99,7 +99,7 @@ class ScopedAggregateReaderTests(unittest.TestCase):
     def test_shared_full_aggregate_requires_every_lane(self):
         self.prepare("full", shared=True)
         result = self.validate()
-        self.assertEqual(12, len(result["lanes"]))
+        self.assertEqual(18, len(result["lanes"]))
         self.assertFalse(result["aggregate_scope"]["partial"])
         omitted = self.lanes[-1]
         for path in (self.output / "profiles").iterdir():

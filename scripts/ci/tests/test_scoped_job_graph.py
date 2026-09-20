@@ -29,7 +29,7 @@ class ScopedJobGraphTests(unittest.TestCase):
 
     def test_legacy_lane_and_full_keep_exact_control_jobs(self):
         for scope, node, shared, count in (("legacy", None, False, 2),
-                ("lane", "neoforge-1.21.1", False, 1), ("full", None, True, 12)):
+                ("lane", "neoforge-1.21.1", False, 1), ("full", None, True, 18)):
             with self.subTest(scope=scope):
                 self.write(schema2_configuration(shared=shared))
                 selected = self.expected(scope=scope, artifact_node=node)

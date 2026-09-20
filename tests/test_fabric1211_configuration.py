@@ -27,7 +27,7 @@ class Fabric1211ConfigurationTests(unittest.TestCase):
         plan = plan_build(self.path, artifact_node="fabric-1.21.1")
         self.assertEqual(["fabric-1.21.1"], plan["selected_nodes"])
         self.assertTrue(plan["partial_scope"])
-        self.assertEqual(12, len(plan["target_nodes"]))
+        self.assertEqual(18, len(plan["target_nodes"]))
         self.assertEqual(["validateReleaseMatrix", ":fabric:1.21.1:remapJar",
                           ":fabric:1.21.1:remapE2EHarnessJar", "check"], plan["lanes"][0]["command"][-4:])
         self.assertTrue(plan["lanes"][0]["outputs"]["production"].endswith(

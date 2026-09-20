@@ -417,7 +417,7 @@ class LoaderBootstrapMatrixTests(unittest.TestCase):
         self.assertEqual(original["verified"], report["verified"])
         self.assertEqual(["fabric", "forge"], report["active_loaders"])
         self.assertEqual(1, report["schema_version"])
-        self.assertEqual(12, len(matrix["targets"]))
+        self.assertEqual(18, len(matrix["targets"]))
         self.assertFalse((self.repository / "neoforge").exists())
         matrix_path = self.repository / "release/release-matrix.json"
         self.assertEqual(hashlib.sha256(matrix_path.read_bytes()).hexdigest(), report["matrix_sha256"])
@@ -444,12 +444,12 @@ class LoaderBootstrapMatrixTests(unittest.TestCase):
         with self.assertRaisesRegex(LoaderBootstrapError, "neoforge build script differs"):
             validate_commit(self.repository, head_sha=stale)
 
-    def test_shared_twelve_lanes_verify_three_pinned_bootstraps_without_qualification(self):
+    def test_shared_lanes_verify_three_pinned_bootstraps_without_qualification(self):
         self.pin_neoforge_fixture()
         matrix = schema2_configuration(shared=True)
         candidate = self.write_matrix(matrix)
         report = validate_commit(self.repository, head_sha=candidate)
-        self.assertEqual(12, matrix["lane_count"])
+        self.assertEqual(18, matrix["lane_count"])
         self.assertEqual(["fabric", "forge", "neoforge"], report["active_loaders"])
         self.assertEqual(3, len(report["verified"]))
         base, next_contract, changes = self.prepare_transition()
