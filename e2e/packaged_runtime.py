@@ -1068,9 +1068,13 @@ def client_command(
                 f"-Dblockpops.e2e.role={role}",
                 f"-Dblockpops.e2e.scenario={scenario}",
                 f"-Dblockpops.e2e.minecraft={row['minecraft']}",
-                # Exercise injector `expect` counts in packaged clients without making optional
-                # integrations fail-closed in ordinary production launches.
-                "-Dmixin.debug.countInjections=true",
+                # Injector counts are not raised here. `mixin.debug.countInjections` is a
+                # global switch: it also validates every other mod's optional mixins, and
+                # GeckoLib's Forge-variant armour layer is optional by design. On 1.21.4
+                # and later it reports "expected 1 invocation(s) but 0 succeeded" and takes
+                # the client down before any BlockPops code runs, so no modern lane could
+                # ever finish a scenario. Our own injectors are still validated: this mod's
+                # mixin config declares `defaultRequire: 1`, which fails closed on its own.
                 "-Dfml.earlyprogresswindow=false",
             ],
         }
