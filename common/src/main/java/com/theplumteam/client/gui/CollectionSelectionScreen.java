@@ -569,6 +569,7 @@ public class CollectionSelectionScreen extends Screen {
         ClientConfig config = ClientConfig.getInstance();
 
         // Use the pre-tiled cached texture
+        StarPatternCache.ensureSmoothFiltering();
         ResourceLocation cacheTexture = StarPatternCache.getTextureLocation();
         int cacheWidth = StarPatternCache.getTextureWidth();
         int cacheHeight = StarPatternCache.getTextureHeight();

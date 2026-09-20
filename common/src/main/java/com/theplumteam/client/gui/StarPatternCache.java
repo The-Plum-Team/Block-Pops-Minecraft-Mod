@@ -95,6 +95,24 @@ public class StarPatternCache {
     //? }
 
     /**
+     * Re-applies the smooth filtering the scrolling pattern needs. The render type or
+     * pipeline that draws the quad can reset a texture's sampler state between frames,
+     * which leaves the stars sharp and far brighter than the design intends, so this is
+     * called immediately before each draw.
+     */
+    public static void ensureSmoothFiltering() {
+        if (cachedTexture == null) {
+            return;
+        }
+        //? if >=1.21.5 {
+        /*cachedTexture.setFilter(true, false);
+        cachedTexture.setClamp(false);
+        *///? } else {
+        applyLinearRepeat();
+        //? }
+    }
+
+    /**
      * Get the cached texture location
      */
     public static ResourceLocation getTextureLocation() {
