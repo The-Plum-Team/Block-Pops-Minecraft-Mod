@@ -2,7 +2,12 @@ package com.theplumteam.data.fabric;
 
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.util.TagReads;
-//? if >=1.21 {
+//? if >=1.21.5 {
+/*import com.mojang.serialization.Codec;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.util.datafix.DataFixTypes;
+import net.minecraft.world.level.saveddata.SavedDataType;
+*///? } elif >=1.21 {
 /*import net.minecraft.core.HolderLookup;
 import net.minecraft.util.datafix.DataFixTypes;
 *///? }
@@ -23,6 +28,21 @@ public class StateSaverAndLoader extends SavedData {
     // Store player data keyed by UUID
     private final HashMap<UUID, CompoundTag> players = new HashMap<>();
 
+    //? if >=1.21.5 {
+    /*// 1.21.5 replaced the save/load pair by one codec for the whole saved object.
+    // It stores the same document: a `players` compound keyed by player UUID.
+    public static final Codec<StateSaverAndLoader> CODEC =
+            Codec.unboundedMap(UUIDUtil.STRING_CODEC, CompoundTag.CODEC)
+                    .fieldOf("players")
+                    .xmap(StateSaverAndLoader::fromMap, state -> state.players)
+                    .codec();
+
+    private static StateSaverAndLoader fromMap(java.util.Map<UUID, CompoundTag> players) {
+        StateSaverAndLoader state = new StateSaverAndLoader();
+        players.forEach((uuid, playerData) -> state.players.put(uuid, playerData.copy()));
+        return state;
+    }
+    *///? } else {
     @Override
     //? if >=1.21 {
     /*public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
@@ -44,7 +64,7 @@ public class StateSaverAndLoader extends SavedData {
     //? }
         StateSaverAndLoader state = new StateSaverAndLoader();
         CompoundTag playersTag = TagReads.compound(tag, "players");
-        playersTag.getAllKeys().forEach(key -> {
+        TagReads.keys(playersTag).forEach(key -> {
             try {
                 UUID uuid = UUID.fromString(key);
                 state.players.put(uuid, TagReads.compound(playersTag, key).copy());
@@ -54,13 +74,24 @@ public class StateSaverAndLoader extends SavedData {
         });
         return state;
     }
+    //? }
 
     /**
      * Get the server state from the overworld's data storage.
      */
     public static StateSaverAndLoader getServerState(MinecraftServer server) {
         var persistentStateManager = server.overworld().getDataStorage();
-        //? if >=1.21 {
+        //? if >=1.21.5 {
+        /*StateSaverAndLoader state = persistentStateManager.computeIfAbsent(
+                new SavedDataType<>(
+                        BlockPopsMod.MOD_ID + "_player_data",
+                        StateSaverAndLoader::new,
+                        CODEC,
+                        // A null type makes vanilla's reader throw and silently discard saved data.
+                        DataFixTypes.SAVED_DATA_COMMAND_STORAGE
+                )
+        );
+        *///? } elif >=1.21 {
         /*StateSaverAndLoader state = persistentStateManager.computeIfAbsent(
                 new SavedData.Factory<>(
                         StateSaverAndLoader::new,

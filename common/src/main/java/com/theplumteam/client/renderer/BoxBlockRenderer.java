@@ -8,7 +8,6 @@ import com.theplumteam.client.model.FigureModel;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
-import com.theplumteam.util.SkinModelDetector;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.Direction;
@@ -18,11 +17,23 @@ import org.slf4j.LoggerFactory;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
+//? if >=1.21.5 {
+/*import net.minecraft.world.phys.Vec3;
+import software.bernie.geckolib.renderer.base.GeoRenderState;
+*///? }
 
 public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     private static final Logger LOGGER = LoggerFactory.getLogger(BoxBlockRenderer.class);
     private final GeoBlockRenderer<BoxBlockEntity> figureRenderer;
-    private boolean renderingFigure = false;
+
+    //? if >=1.21.5 {
+    /*// From 1.21.5 the render methods only see the render state, so the box being
+    // drawn is held for the length of one render pass, which is where the figure,
+    // its face and the collection logo read their placement from.
+    private BoxBlockEntity currentBox;
+    private float currentPartialTick;
+    private Vec3 currentCamPos = Vec3.ZERO;
+    *///? }
 
     public BoxBlockRenderer() {
         super(new BoxBlockModel());
@@ -34,6 +45,16 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                 // or we can apply a custom rotation here
             }
 
+            //? if >=1.21.5 {
+            /*@Override
+            public void preRender(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel model,
+                                  MultiBufferSource bufferSource, VertexConsumer buffer, boolean isReRender,
+                                  int packedLight, int packedOverlay, int colour) {
+                super.preRender(renderState, poseStack, model, bufferSource, buffer, isReRender,
+                        packedLight, packedOverlay, colour);
+                FigureBlockRenderer.applyArmVisibility(model, this.getGeoModel().getTextureResource(renderState));
+            }
+            *///? } else {
             @Override
             public void preRender(PoseStack poseStack, BoxBlockEntity animatable, BakedGeoModel model,
                                  MultiBufferSource bufferSource, VertexConsumer buffer, boolean isReRender,
@@ -53,38 +74,128 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                 // Detect skin model and show/hide appropriate arms
                 if (animatable.hasFigure()) {
                     //? if >=1.21.2 {
-                    /*ResourceLocation texture = this.getGeoModel().getTextureResource(animatable, this);
+                    /*FigureBlockRenderer.applyArmVisibility(model, this.getGeoModel().getTextureResource(animatable, this));
                     *///? } else {
-                    ResourceLocation texture = this.getGeoModel().getTextureResource(animatable);
+                    FigureBlockRenderer.applyArmVisibility(model, this.getGeoModel().getTextureResource(animatable));
                     //? }
-                    SkinModelDetector.SkinModel skinModel = SkinModelDetector.detectSkinModel(texture);
-
-                    // Hide/show arms based on detection
-                    boolean isSlim = (skinModel == SkinModelDetector.SkinModel.SLIM);
-
-                    // Find and set visibility for arm bones
-                    GeoBone rightArmSlim = model.getBone("RightArmSlim").orElse(null);
-                    GeoBone leftArmSlim = model.getBone("LeftArmSlim").orElse(null);
-                    GeoBone rightArmClassic = model.getBone("RightArmClassic").orElse(null);
-                    GeoBone leftArmClassic = model.getBone("LeftArmClassic").orElse(null);
-
-                    if (rightArmSlim != null) {
-                        rightArmSlim.setHidden(!isSlim);
-                    }
-                    if (leftArmSlim != null) {
-                        leftArmSlim.setHidden(!isSlim);
-                    }
-                    if (rightArmClassic != null) {
-                        rightArmClassic.setHidden(isSlim);
-                    }
-                    if (leftArmClassic != null) {
-                        leftArmClassic.setHidden(isSlim);
-                    }
                 }
             }
+            //? }
         };
     }
 
+    //? if >=1.21.5 {
+    /*@Override
+    public void render(BoxBlockEntity animatable, float partialTick, PoseStack poseStack,
+                       MultiBufferSource bufferSource, int packedLight, int packedOverlay, Vec3 camPos) {
+        this.currentBox = animatable;
+        this.currentPartialTick = partialTick;
+        this.currentCamPos = camPos;
+        try {
+            super.render(animatable, partialTick, poseStack, bufferSource, packedLight, packedOverlay, camPos);
+        } finally {
+            this.currentBox = null;
+        }
+    }
+
+    @Override
+    public void actuallyRender(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel model,
+                               RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer,
+                               boolean isReRender, int packedLight, int packedOverlay, int colour) {
+        // First, render the box model (the main model)
+        super.actuallyRender(renderState, poseStack, model, renderType, bufferSource, buffer,
+                isReRender, packedLight, packedOverlay, colour);
+
+        BoxBlockEntity animatable = this.currentBox;
+        if (isReRender || animatable == null) {
+            return;
+        }
+
+        // Then, render the figure model if one exists
+        if (animatable.hasFigure()) {
+            // Only render the 3D figure model if it hasn't been extracted
+            if (!animatable.isFigureExtracted()) {
+                poseStack.pushPose();
+
+                // Apply figure offset and scale
+                poseStack.translate(animatable.getFigureOffsetX(),
+                                  animatable.getFigureOffsetY(),
+                                  animatable.getFigureOffsetZ());
+                poseStack.scale((float) animatable.getFigureScale(),
+                              (float) animatable.getFigureScale(),
+                              (float) animatable.getFigureScale());
+
+                // Render the figure using separate renderer
+                figureRenderer.render(animatable, this.currentPartialTick, poseStack, bufferSource,
+                                    packedLight, packedOverlay, this.currentCamPos);
+
+                poseStack.popPose();
+            }
+
+            // Always render the figure face on the box (even when extracted)
+            renderFigureFace(renderState, poseStack, animatable, model, bufferSource, packedLight, packedOverlay);
+        }
+
+        // Render the collection logo on the box
+        renderLogo(renderState, poseStack, animatable, model, bufferSource, packedLight, packedOverlay);
+    }
+
+    private void renderFigureFace(GeoRenderState renderState, PoseStack poseStack, BoxBlockEntity animatable,
+                                  BakedGeoModel model, MultiBufferSource bufferSource,
+                                  int packedLight, int packedOverlay) {
+        FigureDefinition figure = animatable.getFigureDefinition();
+        if (figure == null) return;
+
+        // Get the player skin texture directly (bypassing figure model)
+        ResourceLocation skinTexture = ((FigureModel) figureRenderer.getGeoModel()).resolveTexture(animatable);
+        if (skinTexture == null) return; // Safety check
+
+        RenderType skinRenderType = RenderType.entityTranslucent(skinTexture);
+        VertexConsumer skinBuffer = bufferSource.getBuffer(skinRenderType);
+
+        for (GeoBone bone : model.topLevelBones()) {
+            if (isFaceBone(bone.getName())) {
+                poseStack.pushPose();
+                renderRecursively(renderState, poseStack, bone, skinRenderType, bufferSource, skinBuffer,
+                        true, packedLight, packedOverlay, 0xFFFFFFFF);
+                poseStack.popPose();
+            }
+        }
+    }
+
+    private void renderLogo(GeoRenderState renderState, PoseStack poseStack, BoxBlockEntity animatable,
+                            BakedGeoModel model, MultiBufferSource bufferSource,
+                            int packedLight, int packedOverlay) {
+        float[] placement = logoPlacement(animatable);
+        if (placement == null) return;
+
+        RenderType logoRenderType = RenderType.entityCutoutNoCull(logoTexture(animatable));
+        VertexConsumer logoBuffer = bufferSource.getBuffer(logoRenderType);
+
+        for (GeoBone bone : model.topLevelBones()) {
+            if (bone.getName().equals("logo")) {
+                poseStack.pushPose();
+                poseStack.translate(placement[0], placement[1], placement[2]);
+                poseStack.scale(placement[3], placement[4], placement[5]);
+                renderRecursively(renderState, poseStack, bone, logoRenderType, bufferSource, logoBuffer,
+                        true, packedLight, packedOverlay, 0xFFFFFFFF);
+                poseStack.popPose();
+                break;
+            }
+        }
+    }
+
+    @Override
+    public void renderRecursively(GeoRenderState renderState, PoseStack poseStack, GeoBone bone,
+                                  RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer,
+                                  boolean isReRender, int packedLight, int packedOverlay, int colour) {
+        if (isSeparatelyTexturedBone(bone.getName()) && !isReRender) {
+            return;
+        }
+        super.renderRecursively(renderState, poseStack, bone, renderType, bufferSource, buffer, isReRender,
+                packedLight, packedOverlay, colour);
+    }
+    *///? } else {
     @Override
     public void actuallyRender(PoseStack poseStack, BoxBlockEntity animatable, BakedGeoModel model,
                               RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer,
@@ -154,19 +265,9 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         VertexConsumer skinBuffer = bufferSource.getBuffer(skinRenderType);
 
         for (GeoBone bone : model.topLevelBones()) {
-            if (bone.getName().equals("figure_face")) {
-                // Render base skin layer (head front: UV 8,8 to 16,16 on 64x64 skin)
-                poseStack.pushPose();
-                renderRecursively(poseStack, animatable, bone, skinRenderType, bufferSource, skinBuffer,
-                                //? if >=1.21 {
-                                /*true, partialTick, packedLight, packedOverlay, 0xFFFFFFFF);
-                                *///? } else {
-                                true, partialTick, packedLight, packedOverlay, 1, 1, 1, 1);
-                                //? }
-                poseStack.popPose();
-            } else if (bone.getName().equals("figure_face_3d")) {
-                // Render hat/overlay layer (hat front: UV 40,8 to 48,16 on 64x64 skin)
-                // Same render type for consistency with player rendering
+            if (isFaceBone(bone.getName())) {
+                // Base skin layer is the head front; the 3D bone is the hat overlay.
+                // Both use the same render type for consistency with player rendering.
                 poseStack.pushPose();
                 renderRecursively(poseStack, animatable, bone, skinRenderType, bufferSource, skinBuffer,
                                 //? if >=1.21 {
@@ -181,33 +282,10 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
 
     private void renderLogo(PoseStack poseStack, BoxBlockEntity animatable, BakedGeoModel model,
                            MultiBufferSource bufferSource, float partialTick, int packedLight, int packedOverlay) {
-        // Check if logo should be hidden (e.g., in UI displays)
-        if (animatable.isHideLogo()) return;
+        float[] placement = logoPlacement(animatable);
+        if (placement == null) return;
 
-        // Get logo configuration from collection
-        String collectionId = animatable.getCollectionId();
-        FigureCollection collection = CollectionRegistry.getCollection(collectionId).orElse(null);
-
-        if (collection == null) return;
-
-        FigureCollection.LogoConfig collectionLogoConfig = collection.getLogoConfig();
-        if (collectionLogoConfig == null) return;
-
-        // Use entity-specific logo config if set, otherwise use collection defaults
-        float logoPositionX = animatable.getLogoPositionX() != null ?
-                              animatable.getLogoPositionX().floatValue() : collectionLogoConfig.getPositionX();
-        float logoPositionY = animatable.getLogoPositionY() != null ?
-                              animatable.getLogoPositionY().floatValue() : collectionLogoConfig.getPositionY();
-        float logoPositionZ = animatable.getLogoPositionZ() != null ?
-                              animatable.getLogoPositionZ().floatValue() : collectionLogoConfig.getPositionZ();
-        float logoScaleX = animatable.getLogoScaleX() != null ?
-                           animatable.getLogoScaleX().floatValue() : collectionLogoConfig.getScaleX();
-        float logoScaleY = animatable.getLogoScaleY() != null ?
-                           animatable.getLogoScaleY().floatValue() : collectionLogoConfig.getScaleY();
-        float logoScaleZ = animatable.getLogoScaleZ() != null ?
-                           animatable.getLogoScaleZ().floatValue() : collectionLogoConfig.getScaleZ();
-
-        RenderType logoRenderType = RenderType.entityCutoutNoCull(collectionLogoConfig.getTexture());
+        RenderType logoRenderType = RenderType.entityCutoutNoCull(logoTexture(animatable));
         VertexConsumer logoBuffer = bufferSource.getBuffer(logoRenderType);
 
         // Find the generic "logo" bone
@@ -216,11 +294,9 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                 poseStack.pushPose();
 
                 // Apply translate first, then scale (matrices apply in reverse order!)
-                // A vertex goes through: scale → translate
-                // This scales the 1x1 cube to desired size, then positions it correctly
-                // Note: logoScaleX controls width (X axis), logoScaleY controls height (Y axis), logoScaleZ controls depth (Z axis)
-                poseStack.translate(logoPositionX, logoPositionY, logoPositionZ);
-                poseStack.scale(logoScaleX, logoScaleY, logoScaleZ);
+                // A vertex goes through: scale -> translate
+                poseStack.translate(placement[0], placement[1], placement[2]);
+                poseStack.scale(placement[3], placement[4], placement[5]);
 
                 // Render this bone with the logo texture using a special flag
                 renderRecursively(poseStack, animatable, bone, logoRenderType, bufferSource, logoBuffer,
@@ -245,11 +321,9 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                                   float partialTick, int packedLight, int packedOverlay,
                                   float red, float green, float blue, float alpha) {
                                   //? }
-        // Skip rendering the "figure_face", "figure_head_3d", and "logo" bone during normal box rendering
-        // They will be rendered separately with their own textures
-        // When isReRender is true, we're rendering them with the appropriate texture
-        String boneName = bone.getName();
-        if ((boneName.equals("figure_face") || boneName.equals("figure_face_3d") || boneName.equals("logo")) && !isReRender) {
+        // Skip the face and logo bones during normal box rendering. They are rendered
+        // separately with their own textures, which is what isReRender marks.
+        if (isSeparatelyTexturedBone(bone.getName()) && !isReRender) {
             return;
         }
 
@@ -259,5 +333,46 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                               *///? } else {
                               partialTick, packedLight, packedOverlay, red, green, blue, alpha);
                               //? }
+    }
+    //? }
+
+    private static boolean isFaceBone(String boneName) {
+        return boneName.equals("figure_face") || boneName.equals("figure_face_3d");
+    }
+
+    private static boolean isSeparatelyTexturedBone(String boneName) {
+        return isFaceBone(boneName) || boneName.equals("logo");
+    }
+
+    /** The logo texture the box's collection declares. */
+    private static ResourceLocation logoTexture(BoxBlockEntity animatable) {
+        return CollectionRegistry.getCollection(animatable.getCollectionId())
+                .map(FigureCollection::getLogoConfig)
+                .map(FigureCollection.LogoConfig::getTexture)
+                .orElse(null);
+    }
+
+    /**
+     * The logo's position and scale as {x, y, z, scaleX, scaleY, scaleZ}, or null when
+     * this box shows no logo. The block entity overrides the collection's defaults.
+     */
+    private static float[] logoPlacement(BoxBlockEntity animatable) {
+        // Check if logo should be hidden (e.g., in UI displays)
+        if (animatable.isHideLogo()) return null;
+
+        FigureCollection collection = CollectionRegistry.getCollection(animatable.getCollectionId()).orElse(null);
+        if (collection == null) return null;
+
+        FigureCollection.LogoConfig config = collection.getLogoConfig();
+        if (config == null) return null;
+
+        return new float[] {
+            animatable.getLogoPositionX() != null ? animatable.getLogoPositionX().floatValue() : config.getPositionX(),
+            animatable.getLogoPositionY() != null ? animatable.getLogoPositionY().floatValue() : config.getPositionY(),
+            animatable.getLogoPositionZ() != null ? animatable.getLogoPositionZ().floatValue() : config.getPositionZ(),
+            animatable.getLogoScaleX() != null ? animatable.getLogoScaleX().floatValue() : config.getScaleX(),
+            animatable.getLogoScaleY() != null ? animatable.getLogoScaleY().floatValue() : config.getScaleY(),
+            animatable.getLogoScaleZ() != null ? animatable.getLogoScaleZ().floatValue() : config.getScaleZ(),
+        };
     }
 }

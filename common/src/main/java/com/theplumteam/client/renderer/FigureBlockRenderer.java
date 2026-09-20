@@ -11,6 +11,10 @@ import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
+//? if >=1.21.5 {
+/*import net.minecraft.world.phys.Vec3;
+import software.bernie.geckolib.renderer.base.GeoRenderState;
+*///? }
 
 public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
 
@@ -18,6 +22,27 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
         super(new FigureBlockModel());
     }
 
+    //? if >=1.21.5 {
+    /*// From 1.21.5 the render methods only see the render state, so the "is there a
+    // figure yet" question is answered once, where the block entity is still in hand.
+    @Override
+    public void render(FigureBlockEntity animatable, float partialTick, PoseStack poseStack,
+                       MultiBufferSource bufferSource, int packedLight, int packedOverlay, Vec3 camPos) {
+        if (!animatable.hasFigure()) {
+            return;
+        }
+        super.render(animatable, partialTick, poseStack, bufferSource, packedLight, packedOverlay, camPos);
+    }
+
+    @Override
+    public void preRender(GeoRenderState renderState, PoseStack poseStack, BakedGeoModel model,
+                          MultiBufferSource bufferSource, VertexConsumer buffer, boolean isReRender,
+                          int packedLight, int packedOverlay, int colour) {
+        super.preRender(renderState, poseStack, model, bufferSource, buffer, isReRender,
+                packedLight, packedOverlay, colour);
+        applyArmVisibility(model, this.getGeoModel().getTextureResource(renderState));
+    }
+    *///? } else {
     @Override
     public void preRender(PoseStack poseStack, FigureBlockEntity animatable, BakedGeoModel model,
                          MultiBufferSource bufferSource, VertexConsumer buffer, boolean isReRender,
@@ -37,33 +62,10 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
         // Detect skin model and show/hide appropriate arms
         if (animatable.hasFigure()) {
             //? if >=1.21.2 {
-            /*ResourceLocation texture = this.getGeoModel().getTextureResource(animatable, this);
+            /*applyArmVisibility(model, this.getGeoModel().getTextureResource(animatable, this));
             *///? } else {
-            ResourceLocation texture = this.getGeoModel().getTextureResource(animatable);
+            applyArmVisibility(model, this.getGeoModel().getTextureResource(animatable));
             //? }
-            SkinModelDetector.SkinModel skinModel = SkinModelDetector.detectSkinModel(texture);
-
-            // Hide/show arms based on detection
-            boolean isSlim = (skinModel == SkinModelDetector.SkinModel.SLIM);
-
-            // Find and set visibility for arm bones
-            GeoBone rightArmSlim = model.getBone("RightArmSlim").orElse(null);
-            GeoBone leftArmSlim = model.getBone("LeftArmSlim").orElse(null);
-            GeoBone rightArmClassic = model.getBone("RightArmClassic").orElse(null);
-            GeoBone leftArmClassic = model.getBone("LeftArmClassic").orElse(null);
-
-            if (rightArmSlim != null) {
-                rightArmSlim.setHidden(!isSlim);
-            }
-            if (leftArmSlim != null) {
-                leftArmSlim.setHidden(!isSlim);
-            }
-            if (rightArmClassic != null) {
-                rightArmClassic.setHidden(isSlim);
-            }
-            if (leftArmClassic != null) {
-                leftArmClassic.setHidden(isSlim);
-            }
         }
     }
 
@@ -89,5 +91,29 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
                            *///? } else {
                            isReRender, partialTick, packedLight, packedOverlay, red, green, blue, alpha);
                            //? }
+    }
+    //? }
+
+    /** Shows the arm pair that matches the skin the figure is wearing. */
+    static void applyArmVisibility(BakedGeoModel model, ResourceLocation texture) {
+        boolean isSlim = SkinModelDetector.detectSkinModel(texture) == SkinModelDetector.SkinModel.SLIM;
+
+        GeoBone rightArmSlim = model.getBone("RightArmSlim").orElse(null);
+        GeoBone leftArmSlim = model.getBone("LeftArmSlim").orElse(null);
+        GeoBone rightArmClassic = model.getBone("RightArmClassic").orElse(null);
+        GeoBone leftArmClassic = model.getBone("LeftArmClassic").orElse(null);
+
+        if (rightArmSlim != null) {
+            rightArmSlim.setHidden(!isSlim);
+        }
+        if (leftArmSlim != null) {
+            leftArmSlim.setHidden(!isSlim);
+        }
+        if (rightArmClassic != null) {
+            rightArmClassic.setHidden(isSlim);
+        }
+        if (leftArmClassic != null) {
+            leftArmClassic.setHidden(isSlim);
+        }
     }
 }

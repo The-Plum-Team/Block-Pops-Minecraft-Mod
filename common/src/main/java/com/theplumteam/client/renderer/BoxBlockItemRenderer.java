@@ -128,7 +128,12 @@ public class BoxBlockItemRenderer
             //? }
 
             // Render using BoxBlockRenderer which includes figure face rendering
+            //? if >=1.21.5 {
+            /*this.renderer.render(renderEntity, partialTick, poseStack, bufferSource, packedLight, packedOverlay,
+                    net.minecraft.world.phys.Vec3.ZERO);
+            *///? } else {
             this.renderer.render(renderEntity, partialTick, poseStack, bufferSource, packedLight, packedOverlay);
+            //? }
 
             poseStack.popPose();
         }

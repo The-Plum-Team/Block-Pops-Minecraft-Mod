@@ -164,8 +164,11 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         // Enable scissor test to clip rendering to the figure box
         graphics.enableScissor(x, y, x + size, y + size);
 
-        // Disable depth test to prevent z-fighting and clipping issues
+        // Disable depth test to prevent z-fighting and clipping issues.
+        // 1.21.5 removed the global depth state; the render type owns it there.
+        //? if <1.21.5 {
         RenderSystem.disableDepthTest();
+        //? }
 
         float centerX = (x + size / 2.0f) + xOffset;
         float centerY = (y + size * 0.6f) + yOffset;
@@ -190,31 +193,57 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         var figureRenderer = FigureWidgetRenderer.getRenderer();
 
         try {
-            //? if >=1.21.2 {
+            //? if >=1.21.5 {
+            /*// GeckoLib 5 resolves everything from a render state, so the widget builds
+            // the same state the block renderer would and draws from that.
+            software.bernie.geckolib.renderer.base.GeoRenderState renderState =
+                    figureRenderer.fillRenderState(renderEntity, null,
+                            new software.bernie.geckolib.renderer.base.GeoRenderState.Impl(), partialTick);
+            ResourceLocation modelResource = figureModel.getModelResource(renderState);
+            *///? } elif >=1.21.2 {
             /*ResourceLocation modelResource = figureModel.getModelResource(renderEntity, null);
             *///? } else {
             ResourceLocation modelResource = figureModel.getModelResource(renderEntity);
             //? }
             if (modelResource == null) {
-                RenderSystem.enableDepthTest();
+                restoreDepthTest();
                 graphics.disableScissor();
                 poseStack.popPose();
                 return;
             }
 
             BakedGeoModel bakedModel = figureModel.getBakedModel(modelResource);
-            //? if >=1.21.2 {
+            //? if >=1.21.5 {
+            /*ResourceLocation textureResource = figureModel.getTextureResource(renderState);
+            *///? } elif >=1.21.2 {
             /*ResourceLocation textureResource = figureModel.getTextureResource(renderEntity, null);
             *///? } else {
             ResourceLocation textureResource = figureModel.getTextureResource(renderEntity);
             //? }
             if (textureResource == null) {
-                RenderSystem.enableDepthTest();
+                restoreDepthTest();
                 graphics.disableScissor();
                 poseStack.popPose();
                 return;
             }
 
+            //? if >=1.21.5 {
+            /*RenderType renderType = figureModel.getRenderType(renderState, textureResource);
+            VertexConsumer buffer = bufferSource.getBuffer(renderType);
+
+            figureRenderer.actuallyRender(
+                renderState,
+                poseStack,
+                bakedModel,
+                renderType,
+                bufferSource,
+                buffer,
+                false,
+                15728880,
+                net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY,
+                0xFFFFFFFF
+            );
+            *///? } else {
             RenderType renderType = figureModel.getRenderType(renderEntity, textureResource);
             VertexConsumer buffer = bufferSource.getBuffer(renderType);
 
@@ -235,6 +264,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 1f, 1f, 1f, 1f
                 //? }
             );
+            //? }
 
             bufferSource.endBatch();
         } catch (Exception e) {
@@ -242,11 +272,18 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         }
 
         // Re-enable depth test and disable scissor
-        RenderSystem.enableDepthTest();
+        restoreDepthTest();
         graphics.disableScissor();
 
         Lighting.setupFor3DItems();
         poseStack.popPose();
+    }
+
+    /** Restores the global depth test, which only exists below 1.21.5. */
+    private static void restoreDepthTest() {
+        //? if <1.21.5 {
+        RenderSystem.enableDepthTest();
+        //? }
     }
 
     @Override

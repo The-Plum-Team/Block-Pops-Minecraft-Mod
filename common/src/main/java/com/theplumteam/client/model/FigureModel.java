@@ -138,7 +138,8 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
         return (figure != null) ? figure.getModelPath() : null;
     }
 
-    private ResourceLocation resolveTexture(BoxBlockEntity animatable) {
+    /** Resolves a box's figure skin. Public so the box renderer can draw the face with it. */
+    public ResourceLocation resolveTexture(BoxBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure == null) return FALLBACK_TEXTURE;
 
