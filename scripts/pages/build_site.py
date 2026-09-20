@@ -488,7 +488,7 @@ def _current_pages_inputs(api, args, *, phase="build"):
     def check(condition, message):
         if not condition:
             raise SiteError(message)
-    check(phase in ("build", "refresh"), "unknown Pages consumer phase")
+    check(phase in ("build", "refresh", "rotate-current"), "unknown Pages consumer phase")
     prerequisites = () if phase == "build" else (
         "Assemble one atomic current-head gallery", "Deploy current-head evidence")
     run_id = _positive_int(args.pages_run_id, "Pages run")
@@ -509,6 +509,8 @@ def _current_pages_inputs(api, args, *, phase="build"):
     rows, inventory_raw = read_secure_json(args.inventory, label="Pages discovery", max_bytes=MAX_INVENTORY_BYTES)
     check(isinstance(rows, list) and 0 < len(rows) <= 1000, "Pages discovery is not bounded")
     names = [row["name"] for row in rows]
+    if phase == "rotate-current":
+        prerequisites += tuple("Promote rolling cache for " + name for name in names)
     check(len(set(names)) == len(names) and names.count(args.canonical_branch) == 1, "Pages discovery branches differ")
     companions = {row["name"]: f"pages-selection-{branch_token(row['name'])}--{_digest(row['commit'], 'commit', SHA1)}-{run_id}-{attempt}"
                   for row in rows}
@@ -546,6 +548,9 @@ def _current_pages_inputs(api, args, *, phase="build"):
         check(sorted(job["name"] for job in selected_jobs) == sorted("Validate and compact " + name for name in names)
               and all(job.get("status") == "completed" and job.get("conclusion") == "success" for job in selected_jobs),
               "Pages collect coverage/success differs")
+        if phase == "rotate-current":
+            check(sorted(job["name"] for job in jobs if job["name"].startswith("Promote rolling cache for "))
+                  == sorted("Promote rolling cache for " + name for name in names), "Pages promotion coverage differs")
         for name in prerequisites:
             matches = [job for job in jobs if job["name"] == name]
             check(len(matches) == 1 and matches[0].get("status") == "completed"

@@ -11,14 +11,17 @@ import sys
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
+from contextlib import ExitStack, contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from types import SimpleNamespace
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 from scripts.pages.build_site import SiteError, _inventory  # noqa: E402
+from scripts.pages import build_site as site, refresh_cache  # noqa: E402
 from scripts.pages.evidence import (  # noqa: E402
     E2E_WORKFLOW,
     EvidenceError,
@@ -70,6 +73,60 @@ class RotationApi(GitHubApi):
             raise RotationError(f"cannot delete exact artifact {artifact_id}: {exc}") from exc
         except OSError as exc:
             raise RotationError(f"cannot delete exact artifact {artifact_id}: {exc}") from exc
+
+
+@contextmanager
+def current_rotation_inputs(api, *, repository, pages_run_id, pages_run_attempt,
+                            implementation_sha, canonical_branch, inventory_path, caches_root):
+    """Hold authenticated current-attempt inputs; no plan or deletion is authorized here.
+
+    The caller must keep this context open and recheck before planning/each action.
+    Cache transport remains the caller's same-run digest-checked download.
+    """
+    if not REPO == site.REPO == refresh_cache.REPO:
+        raise RotationError("rotation and cache validators must share their protected checkout")
+    args = SimpleNamespace(repository=repository, pages_run_id=pages_run_id,
+        pages_run_attempt=pages_run_attempt, implementation_sha=implementation_sha,
+        canonical_branch=canonical_branch, inventory=inventory_path,
+        canonical_matrix=REPO / "release/release-matrix.json")
+    with site._current_pages_inputs(api, args, phase="rotate-current") as context, ExitStack() as handles:
+        root = caches_root.absolute()
+        site.atomic._real_directory(root.parent)
+        root = root.parent.resolve(strict=True) / root.name
+        parent = site.atomic._directory_fd(root.parent); handles.callback(os.close, parent)
+        descriptor = site.atomic._directory_fd(Path(root.name), root_fd=parent); handles.callback(os.close, descriptor)
+        names = {cache_artifact_name(row["name"], row["commit"]) for row in context["rows"]}
+        def stamp():
+            info = os.fstat(descriptor)
+            return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        initial = stamp()
+        def inventory():
+            if set(os.listdir(descriptor)) != names or stamp() != initial:
+                raise RotationError("rotation cache inventory changed or differs")
+            site.atomic._bound_output_directory(root, parent, root.name, descriptor)
+        inventory()
+        manifests, cached, size, count = {}, [], 0, 0
+        for row in context["rows"]:
+            manifest, files, total, unchanged = handles.enter_context(refresh_cache._cache_input(
+                context, root=root / cache_artifact_name(row["name"], row["commit"]),
+                branch=row["name"], repository=repository, byte_budget=site.MAX_SITE_BYTES-size))
+            size += total; count += files
+            if count > site.MAX_SITE_FILES:
+                raise RotationError("rotation caches exceed the aggregate file-count bound")
+            manifests[row["name"]] = manifest
+            cached.append(unchanged)
+        live = True
+        def recheck():
+            if not live:
+                raise RotationError("rotation input lease is closed")
+            context["recheck"]()
+            for unchanged in cached: unchanged()
+            inventory()
+        try:
+            recheck()
+            yield context["rows"], manifests, recheck
+        finally:
+            live = False
 
 
 def validate_current_invocation(
