@@ -968,7 +968,14 @@ class BuildMatrixEvidenceTests(unittest.TestCase):
         before = source_snapshot(self.root)
         for name in (".pi/state.json", "build/cache.bin", "common/build/generated.java", ".gradle/cache.bin",
                      "common/versions/1.21.1/build/generated/stonecutter/main/Generated.java",
-                     "fabric/versions/1.21.1/build/stonecutter-cache/sources/e2e/Cached.java"):
+                     "fabric/versions/1.21.1/build/stonecutter-cache/sources/e2e/Cached.java",
+                     # Gradle's own per-node state; a selected Stonecutter lane always
+                     # creates these, and treating them as inputs made every modern lane
+                     # look dirty and blocked its release staging.
+                     "neoforge/versions/1.21.1/.gradle/8.14/checksums.bin",
+                     "common/versions/1.21.4/.gradle/configuration-cache/entry.bin",
+                     "fabric/versions/1.21.1/run/logs/latest.log",
+                     "neoforge/versions/1.21.4/.architectury-transformer/cache.json"):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("irrelevant")

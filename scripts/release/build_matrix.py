@@ -219,7 +219,8 @@ def source_snapshot(repository: Path) -> dict[str, Any]:
             if "__pycache__" in parts or (len(parts) > 1 and parts[0] in {"common", "fabric", "forge", "neoforge", "buildSrc"}
                     and parts[1] in {"build", ".gradle", ".architectury-transformer", "run", "logs"}) or (
                     len(parts) > 3 and parts[0] in {"common", "fabric", "forge", "neoforge"}
-                    and parts[1] == "versions" and parts[3] == "build"):
+                    and parts[1] == "versions"
+                    and parts[3] in {"build", ".gradle", ".architectury-transformer", "run", "logs"}):
                 continue
             if path.parts[0] in roots or (len(path.parts) == 1 and (
                 path.suffix in {".gradle", ".kts", ".properties", ".json", ".toml", ".yaml", ".yml"}
