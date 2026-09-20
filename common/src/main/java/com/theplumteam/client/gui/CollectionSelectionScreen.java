@@ -812,8 +812,8 @@ public class CollectionSelectionScreen extends Screen {
         int tokenInfoY = bottomY - font.lineHeight - scaledSpacing; // Above the token buttons
 
         // Colors
-        int blueColor = 0x5599FF;  // Blue for regular tokens
-        int goldColor = 0xFFD700;  // Gold for guaranteed tokens
+        int blueColor = 0xFF5599FF;  // Blue for regular tokens
+        int goldColor = 0xFFFFD700;  // Gold for guaranteed tokens
 
         // Calculate button positions (same as in init())
         int fullWidthX = panelX + scaledPadding;

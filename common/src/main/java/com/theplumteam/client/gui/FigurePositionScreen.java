@@ -301,11 +301,11 @@ public class FigurePositionScreen extends Screen {
         //? }
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
-        guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 20, 0xFFFFFF);
+        guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 20, 0xFFFFFFFF);
 
         // Detect and display skin model type
         String skinTypeText = "Skin Type: Unknown";
-        int skinTypeColor = 0xAAAAAA;
+        int skinTypeColor = 0xFFAAAAAA;
 
         if (minecraft != null && minecraft.level != null) {
             BlockEntity blockEntity = minecraft.level.getBlockEntity(blockPos);
@@ -327,17 +327,17 @@ public class FigurePositionScreen extends Screen {
                         SkinModelDetector.SkinModel skinModel = SkinModelDetector.detectSkinModel(texture);
                         if (skinModel == SkinModelDetector.SkinModel.SLIM) {
                             skinTypeText = "Skin Type: SLIM (Alex)";
-                            skinTypeColor = 0xFF6B9D;
+                            skinTypeColor = 0xFFFF6B9D;
                         } else {
                             skinTypeText = "Skin Type: CLASSIC (Steve)";
-                            skinTypeColor = 0x5DADE2;
+                            skinTypeColor = 0xFF5DADE2;
                         }
                     } else {
                         skinTypeText = "Skin Type: No Texture";
                     }
                 } catch (Exception e) {
                     skinTypeText = "Skin Type: Detection Error";
-                    skinTypeColor = 0xFF0000;
+                    skinTypeColor = 0xFFFF0000;
                 }
             } else {
                 skinTypeText = "Skin Type: No Figure";
@@ -350,9 +350,9 @@ public class FigurePositionScreen extends Screen {
         int columnSpacing = 200;
         int headerY = 35;
 
-        guiGraphics.drawCenteredString(this.font, "FIGURE", centerX - columnSpacing, headerY, 0xFFD700);
-        guiGraphics.drawCenteredString(this.font, "HITBOX", centerX, headerY, 0x00FF00);
-        guiGraphics.drawCenteredString(this.font, "LOGO", centerX + columnSpacing, headerY, 0x00BFFF);
+        guiGraphics.drawCenteredString(this.font, "FIGURE", centerX - columnSpacing, headerY, 0xFFFFD700);
+        guiGraphics.drawCenteredString(this.font, "HITBOX", centerX, headerY, 0xFF00FF00);
+        guiGraphics.drawCenteredString(this.font, "LOGO", centerX + columnSpacing, headerY, 0xFF00BFFF);
     }
 
     private ResourceLocation getTextureForFigure(FigureDefinition figure, int skinIndex) {

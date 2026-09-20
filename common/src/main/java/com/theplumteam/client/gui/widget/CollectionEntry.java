@@ -161,7 +161,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         // Draw collection name
         int textX = textStartX;
         int textY = y + effectiveTopPadding;
-        int textColor = isSelected ? 0xFFFFFF : 0xE0E0E0;
+        int textColor = isSelected ? 0xFFFFFFFF : 0xFFE0E0E0;
 
         graphics.drawString(mc.font, collection.getName(), textX, textY, textColor, false);
 
@@ -176,7 +176,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         }
         String figureCount = discoveredCount + "/" + totalFigures + " figures";
         int subTextY = textY + mc.font.lineHeight + 2;
-        int subTextColor = isSelected ? 0xAAAAAA : 0x808080;
+        int subTextColor = isSelected ? 0xFFAAAAAA : 0xFF808080;
         graphics.drawString(mc.font, figureCount, textX, subTextY, subTextColor, false);
 
         // Draw collection author below the figure count
@@ -194,7 +194,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
                 .append(Component.literal(author).withStyle(ChatFormatting.GOLD));
         }
         int authorY = subTextY + mc.font.lineHeight + 2;
-        graphics.drawString(mc.font, authorText, textX, authorY, 0xFFFFFF, false);
+        graphics.drawString(mc.font, authorText, textX, authorY, 0xFFFFFFFF, false);
 
         // Render link button on hover if author URL is available
         this.isLinkHovered = false;
@@ -220,7 +220,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             int emojiWidth = mc.font.width(planetEmoji);
             int emojiX = linkButtonX + (effectiveLinkButtonSize - emojiWidth) / 2; // Moved 1px left
             int emojiY = linkButtonY + (effectiveLinkButtonSize - 8) / 2; // Moved 1px up (8 is approximate emoji height)
-            graphics.drawString(mc.font, planetEmoji, emojiX, emojiY, 0xFFFFFF, false);
+            graphics.drawString(mc.font, planetEmoji, emojiX, emojiY, 0xFFFFFFFF, false);
 
             this.isLinkHovered = linkHovered;
         }

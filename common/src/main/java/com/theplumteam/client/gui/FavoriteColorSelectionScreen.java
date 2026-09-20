@@ -442,20 +442,20 @@ public class FavoriteColorSelectionScreen extends Screen {
         String title = "Choose Your Favorite Color";
         int titleWidth = font.width(title);
         int titleX = panelX + (panelWidth - titleWidth) / 2;
-        graphics.drawString(this.font, title, titleX, titleY, 0xFFFFFF, false);
+        graphics.drawString(this.font, title, titleX, titleY, 0xFFFFFFFF, false);
 
         // Description (2 lines)
         titleY += font.lineHeight + 8;
         String desc1 = "This color will be used for your figure box";
         int desc1Width = font.width(desc1);
         int desc1X = panelX + (panelWidth - desc1Width) / 2;
-        graphics.drawString(this.font, desc1, desc1X, titleY, 0xAAAAAA, false);
+        graphics.drawString(this.font, desc1, desc1X, titleY, 0xFFAAAAAA, false);
 
         titleY += font.lineHeight + 2;
         String desc2 = "in the World Players collection.";
         int desc2Width = font.width(desc2);
         int desc2X = panelX + (panelWidth - desc2Width) / 2;
-        graphics.drawString(this.font, desc2, desc2X, titleY, 0xAAAAAA, false);
+        graphics.drawString(this.font, desc2, desc2X, titleY, 0xFFAAAAAA, false);
     }
 
     @Override

@@ -137,7 +137,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
                     int nameX = figureX + (effectiveFigureSize - mc.font.width(figureName)) / 2;
                     int nameY = y + effectiveFigureSize - mc.font.lineHeight - 2;
-                    graphics.drawString(mc.font, figureName, nameX, nameY, 0xFFFFFF, true);
+                    graphics.drawString(mc.font, figureName, nameX, nameY, 0xFFFFFFFF, true);
                 }
             } else {
                 // Draw a question mark for undiscovered figures
@@ -145,7 +145,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 int qmWidth = mc.font.width(questionMark);
                 int qmX = figureX + (effectiveFigureSize - qmWidth) / 2;
                 int qmY = y + (effectiveFigureSize - mc.font.lineHeight) / 2;
-                graphics.drawString(mc.font, questionMark, qmX, qmY, 0x808080, false);
+                graphics.drawString(mc.font, questionMark, qmX, qmY, 0xFF808080, false);
 
                 // Don't show name for undiscovered figures
             }

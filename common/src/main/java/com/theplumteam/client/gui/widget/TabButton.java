@@ -42,7 +42,7 @@ public class TabButton extends Button {
         // Add hover effect for unselected tabs
         if (!this.selected && this.isHovered()) {
             bgColor = 0x80000000; // Slightly darker on hover
-            textColor = 0xCCCCCC;  // Slightly brighter text on hover
+            textColor = 0xFFCCCCCC;  // Slightly brighter text on hover
         }
 
         // Draw tab background
