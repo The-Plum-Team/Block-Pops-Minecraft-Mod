@@ -1083,3 +1083,17 @@ Testing policy remains conditional-by-test-surface, not strict TDD. No Gradle co
 - `require_configured()` adds that selection. It returns every configured lane, fails closed when no lane is configured, and fails closed when a configured lane is not a declared target, so a partial migration can never be presented as a complete one. It deliberately does not call `require_complete()`, and its docstring records that it claims no build, harness or gameplay qualification for the lanes it returns.
 - Nothing dispatches differently yet. `preparing` still defaults to `legacy`, `full` still refuses while targets are unresolved, and the CI consumers keep their own closed scope sets (`lane`, `legacy`, `full`, `unscoped`), so adopting the new scope is a separate per-consumer slice as the task requires.
 - New focused tests cover the selection order, the exclusion of unresolved targets, the unchanged preparing default, rejection of an unknown scope, rejection of an `artifact_node` argument, and both fail-closed mutations. A companion group covers the neoforge-1.21.1 lane: its detached Gradle context, its own Java/layout/source routes, a partial plan naming only its own tasks and distinct production and harness outputs, and the guard that keeps the legacy aggregate free of any Stonecutter lane. 544 Python tests pass with 23 opt-in skips and 308 CI tests pass.
+
+## Integrated four-lane checkpoint — clean commit d5661a1
+
+- Every configured lane now builds from a completely clean checkout of `d5661a1` with no fixture edit of any kind: the runner reports an empty patch list, so this is the committed controller rather than a diagnostic variant. Each lane runs as one Gradle process with no daemon, no parallelism, `--max-workers=1`, strict dependency verification, a private APFS-cloned Gradle home and a blocked resolver host file.
+
+| Lane | Production + harness | Time | Compiler errors |
+|---|---|---|---|
+| fabric-1.20.1 | built | 32.79s | 0 |
+| forge-1.20.1 | built | 45.51s | 0 |
+| fabric-1.21.1 | built | 27.68s | 0 |
+| neoforge-1.21.1 | built | 44.05s | 0 |
+
+- The broad suites pass at this checkpoint: 544 Python tests with 23 opt-in native/Gradle skips, and 308 CI tests. `scripts/ci/loader_bootstrap.py` verifies all three loader bootstrap generations against the contract at this exact head, and `scripts/release/matrix.py` validates the four-lane schema-2 document.
+- What this is not. No client, server, world or gameplay runs anywhere in this checkpoint, so no lane is qualified: packaged-E2E acceptance, deterministic scenario assertions and visual review remain entirely unexercised for all four lanes. The migration stays in `preparing`, CI still dispatches only the two legacy lanes, and the eight 1.21.4-1.21.7 targets remain declared and unresolved by explicit owner scope. Nothing here grants release, publication or default-branch authority, and the NeoForge runtime behaviour in particular — event bus timing, client extension binding and offline colour reads — has never been observed in a running game.
