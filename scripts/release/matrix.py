@@ -181,6 +181,21 @@ class MatrixInventory:
             _fail(f"unresolved targets (missing artifact and runtime configuration): {', '.join(missing)}")
         return self.lanes
 
+    def require_configured(self) -> tuple[LaneConfiguration, ...]:
+        """Select every configured lane, leaving unresolved targets explicitly out.
+
+        Unlike require_complete this does not demand that every declared target is
+        configured, so it never presents a partial migration as a complete one. It
+        also claims no build, harness or gameplay qualification for the lanes it
+        returns; callers that need that must check their own evidence.
+        """
+        if not self.lanes:
+            _fail("no configured lane is available for the configured scope")
+        unknown = sorted(set(self.configured_nodes) - set(self.target_nodes))
+        if unknown:
+            _fail(f"configured lanes are not declared targets: {', '.join(unknown)}")
+        return self.lanes
+
     def report(self) -> dict[str, Any]:
         configured = set(self.configured_nodes)
         return {
@@ -239,6 +254,8 @@ class MatrixDocument:
             _fail("artifact_node is only valid with lane scope")
         if selected_scope == "full":
             return self.inventory.require_complete()
+        if selected_scope == "configured":
+            return self.inventory.require_configured()
         if selected_scope == "legacy" and self.inventory.migration_mode == "preparing":
             legacy = set(self.inventory.legacy_nodes)
             return tuple(lane for lane in self.inventory.lanes if lane.identity.artifact_node in legacy)
