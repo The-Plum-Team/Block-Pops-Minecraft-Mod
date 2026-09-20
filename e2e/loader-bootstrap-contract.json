@@ -19,7 +19,7 @@
       "build_sha256": "edf6a066c9df73fc563419d21232c742c927991e7842fda164180991d036a77a",
       "files": {
         "neoforge/src/e2e/java/com/theplumteam/e2e/neoforge/BlockPopsE2ENeoForge.java": "d1bdc682e8e74cd4af3e39cb417a51a0f9c441262e028265d73b5784de666332",
-        "neoforge/src/e2e/resources/META-INF/neoforge.mods.toml": "e18bf7db19f9acec702947867c4ea1e922f43e6abaf2f83e24306b342cb52e3e"
+        "neoforge/src/e2e/resources/META-INF/neoforge.mods.toml": "c078e7b4d632504626f0311394b5a98e7c765007a056af56b4d2d8489e81e13f"
       }
     }
   }

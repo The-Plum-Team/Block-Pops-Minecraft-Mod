@@ -1,6 +1,7 @@
 # Packaged-E2E harness metadata. This physically separate client jar is never shipped.
 modLoader = "javafml"
-loaderVersion = "${loader_requirement}"
+# javafml is the language provider; the NeoForge bound lives in the dependency below.
+loaderVersion = "[4,)"
 license = "All Rights Reserved"
 
 [[mods]]
