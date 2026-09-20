@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "gradle_java": 21,
-  "lane_count": 14,
+  "lane_count": 16,
   "unit_test_lane": "fabric-1.20.1",
   "branch": {
     "role": "integration",
@@ -80,6 +80,10 @@
     "neoforge-21.8.52": {
       "url": "https://maven.neoforged.net/releases/net/neoforged/neoforge/21.8.52/neoforge-21.8.52-installer.jar",
       "sha256": "5143db4f3ea53b7f58f92cc32271f9ecdfc773b1e04ac1681836f7a0e471f839"
+    },
+    "neoforge-21.11.38-beta": {
+      "url": "https://maven.neoforged.net/releases/net/neoforged/neoforge/21.11.38-beta/neoforge-21.11.38-beta-installer.jar",
+      "sha256": "305eb5c8185dd1ace6484b97db4e79011cc1529aeb4b0d2e2cb3903623b84e72"
     }
   },
   "artifacts": [
@@ -437,6 +441,58 @@
         "loader": "[21.8.52,)",
         "architectury": "[17.0.8,)",
         "geckolib": "[5.2.2,)"
+      },
+      "mod_version": "1.1.2",
+      "build_layout": "stonecutter",
+      "gradle_java": 21,
+      "repository_family": "neoforge",
+      "source_routes": [
+        "common",
+        "neoforge"
+      ]
+    },
+    {
+      "artifact_node": "fabric-1.21.11",
+      "minecraft": "1.21.11",
+      "loader": "fabric",
+      "java": 21,
+      "no_remap": false,
+      "gradle_task": ":fabric:1.21.11:remapJar",
+      "harness_task": ":fabric:1.21.11:remapE2EHarnessJar",
+      "jar": "fabric/versions/1.21.11/build/libs/BlockPops - Fabric - 1.21.11-{mod_version}.jar",
+      "harness_jar": "fabric/versions/1.21.11/build/libs/BlockPops E2E - Fabric - 1.21.11-0.0.0.jar",
+      "metadata": {
+        "file": "fabric.mod.json",
+        "minecraft": "~1.21.11",
+        "loader": ">=0.17.0",
+        "architectury": ">=19.0.1",
+        "geckolib": ">=5.4.5"
+      },
+      "mod_version": "1.1.2",
+      "build_layout": "stonecutter",
+      "gradle_java": 21,
+      "repository_family": "fabric",
+      "source_routes": [
+        "common",
+        "fabric"
+      ]
+    },
+    {
+      "artifact_node": "neoforge-1.21.11",
+      "minecraft": "1.21.11",
+      "loader": "neoforge",
+      "java": 21,
+      "no_remap": false,
+      "gradle_task": ":neoforge:1.21.11:remapJar",
+      "harness_task": ":neoforge:1.21.11:remapE2EHarnessJar",
+      "jar": "neoforge/versions/1.21.11/build/libs/BlockPops - NeoForge - 1.21.11-{mod_version}.jar",
+      "harness_jar": "neoforge/versions/1.21.11/build/libs/BlockPops E2E - NeoForge - 1.21.11-0.0.0.jar",
+      "metadata": {
+        "file": "META-INF/neoforge.mods.toml",
+        "minecraft": "[1.21.11,1.21.12)",
+        "loader": "[21.11.38-beta,)",
+        "architectury": "[19.0.1,)",
+        "geckolib": "[5.4.5,)"
       },
       "mod_version": "1.1.2",
       "build_layout": "stonecutter",
@@ -828,6 +884,60 @@
         {
           "id": "geckolib",
           "coordinate": "software.bernie.geckolib:geckolib-neoforge-1.21.8:5.2.2",
+          "repository": "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "artifact_node": "fabric-1.21.11",
+      "minecraft": "1.21.11",
+      "loader": "fabric",
+      "java": 21,
+      "loader_version": "0.17.0",
+      "installer": "fabric-1.1.0",
+      "pr_anchor": true,
+      "scheduled_anchor": true,
+      "runtime_dependencies": [
+        {
+          "id": "fabric-api",
+          "coordinate": "net.fabricmc.fabric-api:fabric-api:0.141.3+1.21.11",
+          "repository": "https://maven.fabricmc.net/",
+          "side": "both"
+        },
+        {
+          "id": "architectury",
+          "coordinate": "dev.architectury:architectury-fabric:19.0.1",
+          "repository": "https://maven.architectury.dev/",
+          "side": "both"
+        },
+        {
+          "id": "geckolib",
+          "coordinate": "software.bernie.geckolib:geckolib-fabric-1.21.11:5.4.5",
+          "repository": "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "artifact_node": "neoforge-1.21.11",
+      "minecraft": "1.21.11",
+      "loader": "neoforge",
+      "java": 21,
+      "loader_version": "21.11.38-beta",
+      "installer": "neoforge-21.11.38-beta",
+      "pr_anchor": true,
+      "scheduled_anchor": true,
+      "runtime_dependencies": [
+        {
+          "id": "architectury",
+          "coordinate": "dev.architectury:architectury-neoforge:19.0.1",
+          "repository": "https://maven.architectury.dev/",
+          "side": "both"
+        },
+        {
+          "id": "geckolib",
+          "coordinate": "software.bernie.geckolib:geckolib-neoforge-1.21.11:5.4.5",
           "repository": "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/",
           "side": "both"
         }
