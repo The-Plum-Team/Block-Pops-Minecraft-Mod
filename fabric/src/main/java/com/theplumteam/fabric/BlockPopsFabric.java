@@ -1,5 +1,6 @@
 package com.theplumteam.fabric;
 
+import com.theplumteam.util.ServerLevels;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.FigureBlockEntity;
@@ -171,7 +172,7 @@ public class BlockPopsFabric implements ModInitializer {
                             serverPlayer.getName().getString());
 
                     // Sync token data
-                    long gameTime = serverPlayer.serverLevel().getGameTime();
+                    long gameTime = ServerLevels.of(serverPlayer).getGameTime();
                     long nextRegularTime = discovery.getNextRegularTokenTime();
                     long ticksUntilNext = Math.max(0, nextRegularTime - gameTime);
 

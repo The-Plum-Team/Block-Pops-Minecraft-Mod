@@ -1,5 +1,6 @@
 package com.theplumteam.client.gui;
 
+import com.theplumteam.client.gui.util.GuiPose;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.gui.util.ButtonFactory;
@@ -253,11 +254,14 @@ public class SettingsScreen extends Screen {
         }
 
         // Flush the parent screen rendering
-        graphics.flush();
+        GuiPose.flush(graphics);
 
         // Force the modal above the parent. 1.21.5 removed the global scissor and
-        // depth state, so the modal is pushed forward in the pose instead.
-        //? if >=1.21.5 {
+        // depth state, so the modal is pushed forward in the pose instead; 1.21.6's
+        // pose is two-dimensional, so there it relies on draw order alone.
+        //? if >=1.21.6 {
+        /*GuiPose.push(graphics);
+        *///? } elif >=1.21.5 {
         /*graphics.pose().pushPose();
         graphics.pose().translate(0, 0, 200);
         *///? } elif >=1.21.2 {
@@ -420,7 +424,7 @@ public class SettingsScreen extends Screen {
         super.render(graphics, mouseX, mouseY, partialTicks);
 
         //? if >=1.21.5 {
-        /*graphics.pose().popPose();
+        /*GuiPose.pop(graphics);
         *///? }
     }
 

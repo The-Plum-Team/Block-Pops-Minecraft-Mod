@@ -35,7 +35,12 @@ import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsE
 import java.util.ArrayList;
 import java.util.List;
 
+// NeoForge 21.6 picks the bus from the event type, so the attribute is gone.
+//? if >=1.21.6 {
+/*@EventBusSubscriber(modid = "blockpops", value = Dist.CLIENT)
+*///? } else {
 @EventBusSubscriber(modid = "blockpops", bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+//? }
 public class BlockPopsModForgeClient {
 
     @SubscribeEvent

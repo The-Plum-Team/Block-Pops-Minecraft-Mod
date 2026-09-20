@@ -163,4 +163,13 @@ public class ClawMachineBlockItemRenderer
         }
     }
     *///? }
+
+    //? if >=1.21.6 {
+    /*@Override
+    public void getExtents(java.util.Set<org.joml.Vector3f> extents) {
+        // The model occupies the block's own unit cube.
+        extents.add(new org.joml.Vector3f(0, 0, 0));
+        extents.add(new org.joml.Vector3f(1, 1, 1));
+    }
+    *///? }
 }

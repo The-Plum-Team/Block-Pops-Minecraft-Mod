@@ -110,6 +110,11 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
                 includeGroupByRegex('net\\.neoforged(\\..*)?')
                 if (useNeoForgeRepositoryOrigins) {
                     includeGroupByRegex('cpw\\.mods(\\..*)?')
+                    // NeoForge's own module metadata imports the LWJGL bill of materials,
+                    // which Mojang's library host does not publish. Only that dependency
+                    // management document is taken from here; every LWJGL artifact still
+                    // comes from Mojang.
+                    includeModule('org.lwjgl', 'lwjgl-bom')
                 }
             }
             break

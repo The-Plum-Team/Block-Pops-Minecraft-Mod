@@ -1,5 +1,6 @@
 package com.theplumteam.network;
 
+import com.theplumteam.util.ServerLevels;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
@@ -62,7 +63,7 @@ public class UpdateGuaranteedResetHourPacket {
     private static void syncTokenData(ServerPlayer player) {
         IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(player);
 
-        long gameTime = player.serverLevel().getGameTime();
+        long gameTime = ServerLevels.of(player).getGameTime();
         long nextRegularTime = discovery.getNextRegularTokenTime();
         long ticksUntilNext = Math.max(0, nextRegularTime - gameTime);
         long millisUntilReset = ServerTickHandler.calculateMillisUntilNextReset();

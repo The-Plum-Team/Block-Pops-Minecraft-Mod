@@ -1,5 +1,6 @@
 package com.theplumteam.client.gui.widget;
 
+import com.theplumteam.client.gui.util.GuiPose;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
@@ -173,7 +174,18 @@ public class ColorSelectionButton extends Button {
         int itemX = getX() + (width - itemSize) / 2;
         int itemY = getY() + (height - itemSize) / 2;
 
-        // Apply transformations and render the item
+        // Apply transformations and render the item.
+        float finalScale = (itemSize / 16f) * this.scale;
+        //? if >=1.21.6 {
+        /*// 1.21.6's GUI pose is two-dimensional, so the swatch keeps its placement and
+        // its scale but not the extra tilt the older versions apply to it.
+        GuiPose.push(graphics);
+        GuiPose.translate(graphics, itemX + itemSize / 2f + offsetX, itemY + itemSize / 2f + offsetY);
+        GuiPose.scale(graphics, finalScale, finalScale);
+        GuiPose.translate(graphics, -8, -8);
+        graphics.renderItem(boxItem, 0, 0);
+        GuiPose.pop(graphics);
+        *///? } else {
         PoseStack pose = graphics.pose();
         pose.pushPose();
 
@@ -191,7 +203,6 @@ public class ColorSelectionButton extends Button {
         ));
 
         // 4. Apply scale (scales from the current center point)
-        float finalScale = (itemSize / 16f) * this.scale;
         pose.scale(finalScale, finalScale, finalScale);
 
         // 5. Translate to center the 16x16 item for rendering
@@ -201,5 +212,6 @@ public class ColorSelectionButton extends Button {
         // The BoxBlockItemRenderer will read the NBT we set above and render the player inside
         graphics.renderItem(boxItem, 0, 0);
         pose.popPose();
+        //? }
     }
 }

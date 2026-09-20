@@ -135,7 +135,14 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             int logoY = y + (entryHeight - logoHeight) / 2;
 
             // Draw the logo centered within its container
-            //? if >=1.21.2 {
+            //? if >=1.21.6 {
+            /*graphics.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, logoTexture,
+                    logoX, logoY,
+                    0.0f, 0.0f,
+                    logoWidth, logoHeight,
+                    textureWidth, textureHeight,
+                    textureWidth, textureHeight);
+            *///? } elif >=1.21.2 {
             /*graphics.blit(RenderType::guiTextured, logoTexture,
                     logoX, logoY,
                     0.0f, 0.0f,

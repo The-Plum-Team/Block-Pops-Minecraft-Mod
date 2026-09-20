@@ -4,6 +4,14 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.util.TagReads;
+import com.theplumteam.util.FieldSink;
+import com.theplumteam.util.FieldSource;
+//? if >=1.21.6 {
+/*import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
+*///? }
 //? if >=1.21 {
 /*import com.theplumteam.item.BlockEntityItemData;
 import net.minecraft.core.HolderLookup;
@@ -163,53 +171,80 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     @Override
-    //? if >=1.21 {
+    //? if >=1.21.6 {
+    /*protected void saveAdditional(ValueOutput output) {
+        super.saveAdditional(output);
+        saveFields(new FieldSink(output));
+    }
+    *///? } elif >=1.21 {
     /*protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
+        saveFields(new FieldSink(tag));
+    }
     *///? } else {
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
+        saveFields(new FieldSink(tag));
+    }
     //? }
-        tag.putString("FigureId", figureId);
-        tag.putString("CollectionId", collectionId);
-        tag.putInt("AlternativeSkinIndex", alternativeSkinIndex);
-        tag.putInt("PoseIndex", poseIndex);
-        if (skinSnapshot != null) tag.putString("SkinSnapshot", skinSnapshot);
-        if (quickSkinId != null) tag.putString("QuickSkinId", quickSkinId);
-        tag.putDouble("FigureOffsetX", figureOffsetX);
-        tag.putDouble("FigureOffsetY", figureOffsetY);
-        tag.putDouble("FigureOffsetZ", figureOffsetZ);
-        tag.putDouble("FigureScale", figureScale);
+
+    private void saveFields(FieldSink sink) {
+        sink.putString("FigureId", figureId);
+        sink.putString("CollectionId", collectionId);
+        sink.putInt("AlternativeSkinIndex", alternativeSkinIndex);
+        sink.putInt("PoseIndex", poseIndex);
+        if (skinSnapshot != null) sink.putString("SkinSnapshot", skinSnapshot);
+        if (quickSkinId != null) sink.putString("QuickSkinId", quickSkinId);
+        sink.putDouble("FigureOffsetX", figureOffsetX);
+        sink.putDouble("FigureOffsetY", figureOffsetY);
+        sink.putDouble("FigureOffsetZ", figureOffsetZ);
+        sink.putDouble("FigureScale", figureScale);
     }
 
     @Override
-    //? if >=1.21 {
+    //? if >=1.21.6 {
+    /*protected void loadAdditional(ValueInput input) {
+        super.loadAdditional(input);
+        loadFields(new FieldSource(input));
+    }
+    *///? } elif >=1.21 {
     /*protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
+        loadForItemRendering(tag);
+    }
     *///? } else {
     public void load(CompoundTag tag) {
         super.load(tag);
+        loadForItemRendering(tag);
+    }
     //? }
-    //? if >=1.21 {
-    /*    loadForItemRendering(tag);
+
+    /** Reads the same fields from the raw tag an item stack carries. */
+    public void loadForItemRendering(CompoundTag tag) {
+        loadFields(new FieldSource(tag));
     }
 
-    public void loadForItemRendering(CompoundTag tag) {
-    *///? }
-        if (tag.contains("FigureId")) this.figureId = TagReads.string(tag, "FigureId", "");
-        if (tag.contains("CollectionId")) this.collectionId = TagReads.string(tag, "CollectionId", "");
-        if (tag.contains("AlternativeSkinIndex")) this.alternativeSkinIndex = TagReads.integer(tag, "AlternativeSkinIndex", 0);
-        if (tag.contains("PoseIndex")) this.poseIndex = TagReads.integer(tag, "PoseIndex", 0);
-        this.skinSnapshot = TagReads.hasString(tag, "SkinSnapshot") ? TagReads.string(tag, "SkinSnapshot", "") : null;
-        this.quickSkinId = TagReads.hasString(tag, "QuickSkinId") ? TagReads.string(tag, "QuickSkinId", "") : null;
-        if (tag.contains("FigureOffsetX")) this.figureOffsetX = TagReads.dbl(tag, "FigureOffsetX", 0.0);
-        if (tag.contains("FigureOffsetY")) this.figureOffsetY = TagReads.dbl(tag, "FigureOffsetY", 0.0);
-        if (tag.contains("FigureOffsetZ")) this.figureOffsetZ = TagReads.dbl(tag, "FigureOffsetZ", 0.0);
-        if (tag.contains("FigureScale")) this.figureScale = TagReads.dbl(tag, "FigureScale", 0.0);
+    private void loadFields(FieldSource source) {
+        this.figureId = source.getString("FigureId", this.figureId);
+        this.collectionId = source.getString("CollectionId", this.collectionId);
+        this.alternativeSkinIndex = source.getInt("AlternativeSkinIndex", this.alternativeSkinIndex);
+        this.poseIndex = source.getInt("PoseIndex", this.poseIndex);
+        this.skinSnapshot = source.getStringOrNull("SkinSnapshot");
+        this.quickSkinId = source.getStringOrNull("QuickSkinId");
+        this.figureOffsetX = source.getDouble("FigureOffsetX", this.figureOffsetX);
+        this.figureOffsetY = source.getDouble("FigureOffsetY", this.figureOffsetY);
+        this.figureOffsetZ = source.getDouble("FigureOffsetZ", this.figureOffsetZ);
+        this.figureScale = source.getDouble("FigureScale", this.figureScale);
     }
 
     @Override
-    //? if >=1.21 {
+    //? if >=1.21.6 {
+    /*public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        CompoundTag tag = super.getUpdateTag(registries);
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, registries);
+        saveAdditional(output);
+        tag.merge(output.buildResult());
+    *///? } elif >=1.21 {
     /*public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
         CompoundTag tag = super.getUpdateTag(registries);
         saveAdditional(tag, registries);
@@ -222,7 +257,10 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     // Forge-specific method - no @Override in common
-    //? if >=1.21 {
+    //? if >=1.21.6 {
+    /*public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
+        loadForItemRendering(tag);
+    *///? } elif >=1.21 {
     /*public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
         loadAdditional(tag, registries);
     *///? } else {
@@ -245,7 +283,7 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         CompoundTag tag = packet.getTag();
         if (tag != null) {
             //? if >=1.21 {
-            /*loadAdditional(tag, registries);
+            /*loadForItemRendering(tag);
             *///? } else {
             load(tag);
             //? }
@@ -259,11 +297,11 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     /*// 1.21.2 removed BlockEntity.saveToItem, so this is a local helper there.
     public void saveToItem(net.minecraft.world.item.ItemStack stack, HolderLookup.Provider registries) {
         CompoundTag tag = new CompoundTag();
-        saveAdditional(tag, registries);
+        saveFields(new FieldSink(tag));
     *///? } else {
     public void saveToItem(net.minecraft.world.item.ItemStack stack) {
         CompoundTag tag = new CompoundTag();
-        saveAdditional(tag);
+        saveFields(new FieldSink(tag));
     //? }
         //? if >=1.21 {
         /*BlockEntityItemData.write(stack, tag, "blockpops:figure_block");

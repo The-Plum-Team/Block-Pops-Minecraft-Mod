@@ -1,5 +1,6 @@
 package com.theplumteam.forge;
 
+import com.theplumteam.util.ServerLevels;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.command.ModCommands;
 import com.theplumteam.data.IPlayerDiscovery;
@@ -129,7 +130,7 @@ public final class BlockPopsModForge {
                             serverPlayer.getName().getString());
 
                     // Sync token data using cross-platform networking
-                    long gameTime = serverPlayer.serverLevel().getGameTime();
+                    long gameTime = ServerLevels.of(serverPlayer).getGameTime();
                     long nextRegularTime = discovery.getNextRegularTokenTime();
                     long ticksUntilNext = Math.max(0, nextRegularTime - gameTime);
 

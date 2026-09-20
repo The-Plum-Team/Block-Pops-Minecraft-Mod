@@ -1,5 +1,6 @@
 package com.theplumteam.client.gui.widget;
 
+import com.theplumteam.client.gui.util.GuiLighting;
 import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -152,7 +153,13 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     }
 
     private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick) {
+        // From 1.21.6 the GUI's own pose is two-dimensional, so the model is placed in a
+        // stack of its own and drawn straight into the buffer source below.
+        //? if >=1.21.6 {
+        /*PoseStack poseStack = new PoseStack();
+        *///? } else {
         PoseStack poseStack = graphics.pose();
+        //? }
         poseStack.pushPose();
 
         BoxBlockEntity renderEntity = FigureWidgetRenderer.getOrCreateRenderEntity(figure, collectionId);
@@ -176,7 +183,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         float baseZ = 100.0f + zOffset;
         float centerZ = baseZ * (size / (float)FIGURE_SIZE);
 
-        Lighting.setupForFlatItems();
+        GuiLighting.flatItems();
 
         poseStack.translate(centerX, centerY, centerZ);
         float scale = size * modelScale;
@@ -275,7 +282,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         restoreDepthTest();
         graphics.disableScissor();
 
-        Lighting.setupFor3DItems();
+        GuiLighting.items3D();
         poseStack.popPose();
     }
 

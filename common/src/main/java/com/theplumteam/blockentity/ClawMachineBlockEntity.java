@@ -3,6 +3,14 @@ package com.theplumteam.blockentity;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.util.TagReads;
 import net.minecraft.core.BlockPos;
+import com.theplumteam.util.FieldSink;
+import com.theplumteam.util.FieldSource;
+//? if >=1.21.6 {
+/*import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
+*///? }
 //? if >=1.21 {
 /*import net.minecraft.core.HolderLookup;
 *///? }
@@ -62,38 +70,63 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
     }
 
     @Override
-    //? if >=1.21 {
+    //? if >=1.21.6 {
+    /*protected void saveAdditional(ValueOutput output) {
+        super.saveAdditional(output);
+        saveFields(new FieldSink(output));
+    }
+    *///? } elif >=1.21 {
     /*protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
+        saveFields(new FieldSink(tag));
+    }
     *///? } else {
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
+        saveFields(new FieldSink(tag));
+    }
     //? }
-        tag.putString("CollectionId", collectionId);
+
+    private void saveFields(FieldSink sink) {
+        sink.putString("CollectionId", collectionId);
     }
 
     @Override
-    //? if >=1.21 {
+    //? if >=1.21.6 {
+    /*protected void loadAdditional(ValueInput input) {
+        super.loadAdditional(input);
+        loadFields(new FieldSource(input));
+    }
+    *///? } elif >=1.21 {
     /*protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
+        loadForItemRendering(tag);
+    }
     *///? } else {
     public void load(CompoundTag tag) {
         super.load(tag);
+        loadForItemRendering(tag);
+    }
     //? }
-    //? if >=1.21 {
-    /*    loadForItemRendering(tag);
+
+    /** Reads the same fields from the raw tag an item stack carries. */
+    public void loadForItemRendering(CompoundTag tag) {
+        loadFields(new FieldSource(tag));
     }
 
-    public void loadForItemRendering(CompoundTag tag) {
-    *///? }
-        if (tag.contains("CollectionId")) {
-            this.collectionId = TagReads.string(tag, "CollectionId", "");
-        }
+    private void loadFields(FieldSource source) {
+        this.collectionId = source.getString("CollectionId", this.collectionId);
     }
 
     // ===== CHUNK LOAD SYNCHRONIZATION =====
     @Override
-    //? if >=1.21 {
+    //? if >=1.21.6 {
+    /*public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
+        CompoundTag tag = super.getUpdateTag(registries);
+        TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, registries);
+        saveAdditional(output);
+        tag.merge(output.buildResult());
+    *///? } elif >=1.21 {
     /*public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
         CompoundTag tag = super.getUpdateTag(registries);
         saveAdditional(tag, registries);
@@ -106,7 +139,10 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
     }
 
     // Forge-specific method - no @Override in common
-    //? if >=1.21 {
+    //? if >=1.21.6 {
+    /*public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
+        loadForItemRendering(tag);
+    *///? } elif >=1.21 {
     /*public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
         loadAdditional(tag, registries);
     *///? } else {
@@ -130,7 +166,7 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
         CompoundTag tag = packet.getTag();
         if (tag != null) {
             //? if >=1.21 {
-            /*loadAdditional(tag, registries);
+            /*loadForItemRendering(tag);
             *///? } else {
             load(tag);
             //? }

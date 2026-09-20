@@ -1,5 +1,6 @@
 package com.theplumteam.command;
 
+import com.theplumteam.util.ServerLevels;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
 import com.theplumteam.BlockPopsMod;
@@ -44,7 +45,7 @@ public class ReloadRegularTokensCommand {
             BlockPopsMod.logDebug("Reloaded regular tokens for player {}", player.getName().getString());
 
             // Sync token data back to client
-            long gameTime = player.serverLevel().getGameTime();
+            long gameTime = ServerLevels.of(player).getGameTime();
             long nextRegularTime = discovery.getNextRegularTokenTime();
             long ticksUntilNext = Math.max(0, nextRegularTime - gameTime);
 

@@ -16,7 +16,12 @@ import net.neoforged.fml.common.EventBusSubscriber;
  * Uses Forge's event system to intercept shift+right-click,
  * which doesn't trigger the normal block use() method when sneaking.
  */
+// NeoForge 21.6 picks the bus from the event type, so the attribute is gone.
+//? if >=1.21.6 {
+/*@EventBusSubscriber(modid = BlockPopsMod.MOD_ID)
+*///? } else {
 @EventBusSubscriber(modid = BlockPopsMod.MOD_ID, bus = EventBusSubscriber.Bus.GAME)
+//? }
 public class FigurePoseEventHandler {
 
     @SubscribeEvent

@@ -1,5 +1,6 @@
 package com.theplumteam.network;
 
+import com.theplumteam.util.ServerLevels;
 import com.mojang.authlib.GameProfile;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
@@ -237,7 +238,7 @@ public class DropBoxPacket {
     }
 
     private static void syncTokenDataToClient(ServerPlayer player, IPlayerDiscovery discovery) {
-        long gameTime = player.serverLevel().getGameTime();
+        long gameTime = ServerLevels.of(player).getGameTime();
         long nextRegularTime = discovery.getNextRegularTokenTime();
         long ticksUntilNext = Math.max(0, nextRegularTime - gameTime);
         long millisUntilReset = ServerTickHandler.calculateMillisUntilNextReset();

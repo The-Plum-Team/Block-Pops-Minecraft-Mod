@@ -10,7 +10,12 @@ import net.neoforged.fml.common.EventBusSubscriber;
  * Client-side event handler for NeoForge game bus events.
  * Handles cleanup tasks when disconnecting from servers/worlds.
  */
+// NeoForge 21.6 picks the bus from the event type, so the attribute is gone.
+//? if >=1.21.6 {
+/*@EventBusSubscriber(modid = "blockpops", value = Dist.CLIENT)
+*///? } else {
 @EventBusSubscriber(modid = "blockpops", bus = EventBusSubscriber.Bus.GAME, value = Dist.CLIENT)
+//? }
 public class ClientEventHandler {
 
     /**

@@ -1,5 +1,6 @@
 package com.theplumteam.client.gui;
 
+import com.theplumteam.client.gui.util.GuiPose;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 //? if >=1.21.5 {
@@ -388,9 +389,9 @@ public class CollectionSelectionScreen extends Screen {
 
         // Apply inverse scale transformation if shaders are active
         if (GuiScaleManager.isUsingInverseScale()) {
-            graphics.pose().pushPose();
+            GuiPose.push(graphics);
             float scale = GuiScaleManager.getRenderScaleFactor();
-            graphics.pose().scale(scale, scale, 1.0f);
+            GuiPose.scale(graphics, scale, scale);
         }
 
         // Render animated starry background
@@ -413,7 +414,7 @@ public class CollectionSelectionScreen extends Screen {
 
         // Pop the inverse scale transformation before rendering lists
         if (GuiScaleManager.isUsingInverseScale()) {
-            graphics.pose().popPose();
+            GuiPose.pop(graphics);
         }
 
         // Render lists OUTSIDE the scaled pose - they handle their own scaling
@@ -571,7 +572,15 @@ public class CollectionSelectionScreen extends Screen {
         int starWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
         int starHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
 
-        //? if >=1.21.5 {
+        //? if >=1.21.6 {
+        /*// 1.21.6 selects the GUI shader by render pipeline rather than render type.
+        int argb = ((int) (config.starOpacity * 255) << 24)
+                | ((int) (config.starColorR * 255) << 16)
+                | ((int) (config.starColorG * 255) << 8)
+                | (int) (config.starColorB * 255);
+        graphics.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, cacheTexture,
+                0, 0, (float) offsetX, 0.0f, starWidth, starHeight, cacheWidth, cacheHeight, argb);
+        *///? } elif >=1.21.5 {
         /*// 1.21.5 tints and blends inside the GUI render type, so the scrolling quad is
         // one blit with a packed colour instead of a hand-built buffer.
         int argb = ((int) (config.starOpacity * 255) << 24)

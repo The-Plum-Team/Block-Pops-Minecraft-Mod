@@ -42,7 +42,9 @@ public class LinkButton extends Button {
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
         // Use the standard button background for the rounded shape.
         // We always use the "normal" (not hovered) state texture. The V-offset for this is 46 + 1 * 20 = 66.
-        //? if >=1.21.2 {
+        //? if >=1.21.6 {
+        /*graphics.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, NORMAL_BUTTON, this.getX(), this.getY(), this.getWidth(), this.getHeight());
+        *///? } elif >=1.21.2 {
         /*graphics.blitSprite(RenderType::guiTextured, NORMAL_BUTTON, this.getX(), this.getY(), this.getWidth(), this.getHeight());
         *///? } elif >=1.21 {
         /*graphics.blitSprite(NORMAL_BUTTON, this.getX(), this.getY(), this.getWidth(), this.getHeight());
@@ -58,12 +60,23 @@ public class LinkButton extends Button {
         RenderSystem.enableDepthTest();
         //? }
 
-        // Set color to white (no tint).
+        // Set color to white (no tint). 1.21.6 has no global shader colour; the
+        // widget's own alpha reaches the blit through the render pipeline instead.
+        //? if <1.21.6 {
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, this.alpha);
+        //? }
 
         // Draw the logo texture on top, inset slightly to fit within the rounded border.
         int padding = 2;
-        //? if >=1.21.2 {
+        //? if >=1.21.6 {
+        /*graphics.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, this.texture,
+                this.getX() + padding, this.getY() + padding,
+                0.0F, 0.0F,
+                this.width - (padding * 2), this.height - (padding * 2),
+                this.textureWidth, this.textureHeight,
+                this.textureWidth, this.textureHeight
+        );
+        *///? } elif >=1.21.2 {
         /*// 1.21.4 takes the RenderType function first and reads UV before the on-screen size.
         graphics.blit(RenderType::guiTextured, this.texture,
                 this.getX() + padding, this.getY() + padding,

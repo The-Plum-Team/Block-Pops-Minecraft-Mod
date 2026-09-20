@@ -1,5 +1,6 @@
 package com.theplumteam.server;
 
+import com.theplumteam.util.ServerLevels;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
@@ -68,7 +69,7 @@ public class ServerTickHandler {
      * @return true if tokens were updated and sync is needed
      */
     private static boolean processRegularTokens(ServerPlayer player, IPlayerDiscovery discovery) {
-        ServerLevel world = player.serverLevel();
+        ServerLevel world = ServerLevels.of(player);
         long gameTime = world.getGameTime();
 
         // If player has less than max tokens and enough time has passed
@@ -147,7 +148,7 @@ public class ServerTickHandler {
      * Send a sync packet to the client with updated token data.
      */
     private static void sendSyncPacket(ServerPlayer player, IPlayerDiscovery discovery) {
-        ServerLevel world = player.serverLevel();
+        ServerLevel world = ServerLevels.of(player);
         long gameTime = world.getGameTime();
         long nextRegularTime = discovery.getNextRegularTokenTime();
 

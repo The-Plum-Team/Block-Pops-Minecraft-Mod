@@ -309,7 +309,15 @@ public class FavoriteColorSelectionScreen extends Screen {
         int starWidth = this.width;
         int starHeight = this.height;
 
-        //? if >=1.21.5 {
+        //? if >=1.21.6 {
+        /*// 1.21.6 selects the GUI shader by render pipeline rather than render type.
+        int argb = ((int) (config.starOpacity * 255) << 24)
+                | ((int) (config.starColorR * 255) << 16)
+                | ((int) (config.starColorG * 255) << 8)
+                | (int) (config.starColorB * 255);
+        graphics.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, cacheTexture,
+                0, 0, (float) offsetX, 0.0f, starWidth, starHeight, cacheWidth, cacheHeight, argb);
+        *///? } elif >=1.21.5 {
         /*// 1.21.5 tints and blends inside the GUI render type, so the scrolling quad is
         // one blit with a packed colour instead of a hand-built buffer.
         int argb = ((int) (config.starOpacity * 255) << 24)
