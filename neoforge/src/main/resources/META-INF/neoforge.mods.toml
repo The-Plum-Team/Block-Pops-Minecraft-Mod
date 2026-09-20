@@ -1,5 +1,5 @@
 modLoader = "javafml"
-loaderVersion = "[21.1.77,)"
+loaderVersion = "[4,)"
 license = "All Rights Reserved"
 
 [[mods]]
@@ -14,7 +14,7 @@ BlockPops - A Minecraft mod featuring animated blocks and interactive gameplay m
 [[dependencies.blockpops]]
 modId = "neoforge"
 type = "required"
-versionRange = "[21.1.77,)"
+versionRange = "[21.1.251,)"
 ordering = "NONE"
 side = "BOTH"
 
