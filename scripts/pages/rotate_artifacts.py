@@ -467,7 +467,7 @@ class _RotationReads:
         fields = ("id", "path", "state") if name == "workflow" else self.run_fields
         records = value if name == "runs" else [value]
         projected = [{key: row.get(key) for key in fields} for row in records]
-        return sorted(site.canonical_json(row) for row in projected)
+        return sorted(site.canonical_json(row).decode() for row in projected)
 
     def __getattr__(self, name):
         if name not in self.methods: raise AttributeError(name)
