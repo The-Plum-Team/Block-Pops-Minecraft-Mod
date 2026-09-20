@@ -13,13 +13,10 @@ public final class BlockInteractionResults {
     }
 
     //? if >=1.21.2 {
-    /*// 1.21.2 restored InteractionResult, so the mapping is the identity again.
+    /*// 1.21.2 restored InteractionResult on useItemOn. It is also no longer an enum
+    // but a sealed interface of constants, so the mapping is simply the identity.
     public static InteractionResult forItem(InteractionResult result) {
-        return switch (result) {
-            case SUCCESS, CONSUME, PASS, FAIL -> result;
-            case SUCCESS_SERVER, TRY_WITH_EMPTY_HAND -> throw new IllegalArgumentException(
-                    "Result is not part of the legacy block interaction contract: " + result);
-        };
+        return result;
     }
     *///? } elif >=1.21 {
     /*public static ItemInteractionResult forItem(InteractionResult result) {

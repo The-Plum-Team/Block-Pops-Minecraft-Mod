@@ -8,23 +8,49 @@ import com.theplumteam.item.GeoBlockItem;
 /*import com.theplumteam.item.BlockEntityItemData;
 *///? }
 import net.minecraft.client.Minecraft;
+//? if >=1.21.4 {
+/*import net.minecraft.client.renderer.special.SpecialModelRenderer;
+*///? } else {
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
+//? }
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 
-public class FigureBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
+public class FigureBlockItemRenderer
+    //? if >=1.21.4 {
+    /*implements SpecialModelRenderer<ItemStack>
+    *///? } else {
+    extends BlockEntityWithoutLevelRenderer
+    //? }
+{
     private final FigureBlockRenderer renderer;
     private FigureBlockEntity renderEntity;
 
     public FigureBlockItemRenderer() {
+        //? if <1.21.4 {
         super(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
+        //? }
         this.renderer = new FigureBlockRenderer();
     }
 
+    //? if >=1.21.4 {
+    /*@Override
+    public ItemStack extractArgument(ItemStack stack) {
+        // Snapshot the stack so the render pass never observes a later mutation.
+        return stack.copy();
+    }
+
     @Override
+    public void render(ItemStack stack, ItemDisplayContext displayContext, PoseStack poseStack,
+                       MultiBufferSource bufferSource, int packedLight, int packedOverlay, boolean hasGlint) {
+        renderByItem(stack, displayContext, poseStack, bufferSource, packedLight, packedOverlay);
+    }
+    *///? } else {
+    @Override
+    //? }
     public void renderByItem(ItemStack stack, ItemDisplayContext displayContext, PoseStack poseStack,
                             MultiBufferSource bufferSource, int packedLight, int packedOverlay) {
         if (stack.getItem() instanceof GeoBlockItem geoBlockItem) {
@@ -83,7 +109,9 @@ public class FigureBlockItemRenderer extends BlockEntityWithoutLevelRenderer {
             }
 
             // Get the partial tick time for smooth animations
-            //? if >=1.21 {
+            //? if >=1.21.4 {
+            /*float partialTick = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(true);
+            *///? } elif >=1.21 {
             /*float partialTick = Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true);
             *///? } else {
             float partialTick = Minecraft.getInstance().getFrameTime();
