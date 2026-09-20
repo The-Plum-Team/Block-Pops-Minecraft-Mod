@@ -548,6 +548,9 @@ public class CollectionSelectionScreen extends Screen {
 
         // 2. Render the moving star pattern
         renderStarPattern(graphics, partialTick);
+
+        // Close the background layer so the panel and its text draw above it
+        GuiPose.nextStratum(graphics);
     }
 
     /**

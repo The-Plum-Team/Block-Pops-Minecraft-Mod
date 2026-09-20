@@ -54,4 +54,16 @@ public final class GuiPose {
         graphics.flush();
         //? }
     }
+
+    /**
+     * Closes the current drawing layer so everything after it is drawn above everything
+     * before it. 1.21.6 orders its deferred GUI state by stratum rather than by call
+     * order, so without this a full-screen background lands on top of the panel and its
+     * text. Earlier versions already draw in call order and need nothing.
+     */
+    public static void nextStratum(GuiGraphics graphics) {
+        //? if >=1.21.6 {
+        /*graphics.nextStratum();
+        *///? }
+    }
 }

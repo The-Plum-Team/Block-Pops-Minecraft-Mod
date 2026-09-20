@@ -1,5 +1,6 @@
 package com.theplumteam.client.gui;
 
+import com.theplumteam.client.gui.util.GuiPose;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 //? if >=1.21.5 {
@@ -285,6 +286,9 @@ public class FavoriteColorSelectionScreen extends Screen {
 
         // 2. Render the moving star pattern
         renderStarPattern(graphics, partialTick);
+
+        // 3. Close the background layer so the panel and its text draw above it
+        GuiPose.nextStratum(graphics);
     }
 
     /**
