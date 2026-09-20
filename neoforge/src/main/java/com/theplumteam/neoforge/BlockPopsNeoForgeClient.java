@@ -12,7 +12,11 @@ import com.theplumteam.client.renderer.FigureBlockRenderer;
 import com.theplumteam.network.ModNetworking;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModItems;
+//? if >=1.21.4 {
+/*import net.neoforged.neoforge.client.event.RegisterSpecialModelRendererEvent;
+*///? } else {
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
+//? }
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
@@ -21,8 +25,12 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+//? if <1.21.4 {
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
+//? }
+//? if <1.21.4 {
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
+//? }
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,6 +51,16 @@ public class BlockPopsNeoForgeClient {
         event.registerBlockEntityRenderer(ModBlockEntities.FIGURE_BLOCK.get(), context -> new FigureBlockRenderer());
     }
 
+    //? if >=1.21.4 {
+    /*// 1.21.4 registers special model renderers through their own event instead of
+    // client item extensions, so the renderer is bound to the item model by id.
+    @SubscribeEvent
+    public static void registerSpecialModelRenderers(RegisterSpecialModelRendererEvent event) {
+        event.register(BoxBlockItemRenderer.ID, BoxBlockItemRenderer.Unbaked.MAP_CODEC);
+        event.register(FigureBlockItemRenderer.ID, FigureBlockItemRenderer.Unbaked.MAP_CODEC);
+        event.register(ClawMachineBlockItemRenderer.ID, ClawMachineBlockItemRenderer.Unbaked.MAP_CODEC);
+    }
+    *///? } else {
     /**
      * NeoForge 21.1 removed Item#initializeClient, so the custom item renderers that
      * Forge attaches per item are bound here instead. The renderer chosen for an item
@@ -96,4 +114,5 @@ public class BlockPopsNeoForgeClient {
         };
         event.registerItem(extensions, items.toArray(new Item[0]));
     }
+    //? }
 }

@@ -15,7 +15,11 @@ import com.theplumteam.registry.ModItems;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry;
+//? if >=1.21.4 {
+/*import net.minecraft.client.renderer.special.SpecialModelRenderers;
+*///? } else {
 import net.fabricmc.fabric.api.client.rendering.v1.BuiltinItemRendererRegistry;
+//? }
 
 /**
  * Fabric client entry point for BlockPops
@@ -52,6 +56,16 @@ public class BlockPopsFabricClient implements ClientModInitializer {
         BlockPopsMod.logDebug("BlockPops Fabric client initialization complete");
     }
 
+    //? if >=1.21.4 {
+    /*// Fabric API dropped BuiltinItemRendererRegistry in 1.21.4. Special renderers are
+    // now bound to item models through the vanilla id mapper instead.
+    private void registerItemRenderers() {
+        SpecialModelRenderers.ID_MAPPER.put(BoxBlockItemRenderer.ID, BoxBlockItemRenderer.Unbaked.MAP_CODEC);
+        SpecialModelRenderers.ID_MAPPER.put(FigureBlockItemRenderer.ID, FigureBlockItemRenderer.Unbaked.MAP_CODEC);
+        SpecialModelRenderers.ID_MAPPER.put(ClawMachineBlockItemRenderer.ID, ClawMachineBlockItemRenderer.Unbaked.MAP_CODEC);
+        BlockPopsMod.logDebug("Registered special model renderers for GeckoLib blocks");
+    }
+    *///? } else {
     private void registerItemRenderers() {
         // Create lazy-initialized renderers (created on first use to avoid early Minecraft access)
         BoxBlockItemRenderer boxRenderer = null;
@@ -90,4 +104,5 @@ public class BlockPopsFabricClient implements ClientModInitializer {
 
         BlockPopsMod.logDebug("Registered item renderers for GeckoLib blocks");
     }
+    //? }
 }

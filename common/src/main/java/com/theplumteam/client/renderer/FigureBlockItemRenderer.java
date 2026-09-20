@@ -9,7 +9,12 @@ import com.theplumteam.item.GeoBlockItem;
 *///? }
 import net.minecraft.client.Minecraft;
 //? if >=1.21.4 {
-/*import net.minecraft.client.renderer.special.SpecialModelRenderer;
+/*import com.mojang.serialization.MapCodec;
+import com.theplumteam.BlockPopsMod;
+import com.theplumteam.util.ResourceLocations;
+import net.minecraft.client.model.geom.EntityModelSet;
+import net.minecraft.client.renderer.special.SpecialModelRenderer;
+import net.minecraft.resources.ResourceLocation;
 *///? } else {
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 //? }
@@ -123,4 +128,23 @@ public class FigureBlockItemRenderer
             poseStack.popPose();
         }
     }
+    //? if >=1.21.4 {
+    /*public static final ResourceLocation ID =
+            ResourceLocations.of(BlockPopsMod.MOD_ID, "figure_block");
+
+    // 1.21.4 binds a special renderer to an item model through this unbaked codec.
+    public record Unbaked() implements SpecialModelRenderer.Unbaked {
+        public static final MapCodec<Unbaked> MAP_CODEC = MapCodec.unit(Unbaked::new);
+
+        @Override
+        public MapCodec<? extends SpecialModelRenderer.Unbaked> type() {
+            return MAP_CODEC;
+        }
+
+        @Override
+        public SpecialModelRenderer<?> bake(EntityModelSet modelSet) {
+            return new FigureBlockItemRenderer();
+        }
+    }
+    *///? }
 }
