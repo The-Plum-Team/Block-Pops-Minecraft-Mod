@@ -28,9 +28,9 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
 @Mod(BlockPopsMod.MOD_ID)
-public final class BlockPopsNeoForge {
+public final class BlockPopsModForge {
 
-    public BlockPopsNeoForge(IEventBus modEventBus) {
+    public BlockPopsModForge(IEventBus modEventBus) {
         // Architectury's NeoForge platform registers the mod event bus itself, so the
         // bus is accepted here only to bind this entrypoint to the loader's constructor.
 

@@ -36,7 +36,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @EventBusSubscriber(modid = "blockpops", bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
-public class BlockPopsNeoForgeClient {
+public class BlockPopsModForgeClient {
 
     @SubscribeEvent
     public static void clientSetup(FMLClientSetupEvent event) {
