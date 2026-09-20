@@ -52,10 +52,24 @@ dependencies {
 }
 
 processResources {
+    // The manifest bounds are owned by the release matrix, exactly as the
+    // packaged-E2E harness manifests already are, so every selected lane
+    // declares its own versions instead of one hard-coded era.
+    def laneMetadata = project.ext.blockPopsLane.artifact.metadata
     inputs.property 'version', project.version
+    inputs.property 'minecraft_requirement', laneMetadata.minecraft as String
+    inputs.property 'loader_requirement', laneMetadata.loader as String
+    inputs.property 'architectury_requirement', laneMetadata.architectury as String
+    inputs.property 'geckolib_requirement', laneMetadata.geckolib as String
 
     filesMatching('fabric.mod.json') {
-        expand version: inputs.properties.version
+        expand(
+            version: inputs.properties.version,
+            minecraft_requirement: inputs.properties.minecraft_requirement,
+            loader_requirement: inputs.properties.loader_requirement,
+            architectury_requirement: inputs.properties.architectury_requirement,
+            geckolib_requirement: inputs.properties.geckolib_requirement
+        )
     }
 }
 

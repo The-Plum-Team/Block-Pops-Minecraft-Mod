@@ -14,27 +14,27 @@ BlockPops - A Minecraft mod featuring animated blocks and interactive gameplay m
 [[dependencies.blockpops]]
 modId = "neoforge"
 type = "required"
-versionRange = "[21.1.251,)"
+versionRange = "${loader_requirement}"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.blockpops]]
 modId = "minecraft"
 type = "required"
-versionRange = "[1.21.1,1.21.2)"
+versionRange = "${minecraft_requirement}"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.blockpops]]
 modId = "geckolib"
 type = "required"
-versionRange = "[4.8,)"
+versionRange = "${geckolib_requirement}"
 ordering = "AFTER"
 side = "BOTH"
 
 [[dependencies.blockpops]]
 modId = "architectury"
 type = "required"
-versionRange = "[13.0.8,)"
+versionRange = "${architectury_requirement}"
 ordering = "AFTER"
 side = "BOTH"

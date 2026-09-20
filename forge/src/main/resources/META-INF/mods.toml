@@ -1,5 +1,5 @@
 modLoader = "javafml"
-loaderVersion = "[47,)"
+loaderVersion = "${loader_requirement}"
 #issueTrackerURL = ""
 license = "All Rights Reserved"
 
@@ -16,27 +16,27 @@ BlockPops - A Minecraft mod featuring animated blocks and interactive gameplay m
 [[dependencies.blockpops]]
 modId = "forge"
 mandatory = true
-versionRange = "[47,)"
+versionRange = "${loader_requirement}"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.blockpops]]
 modId = "minecraft"
 mandatory = true
-versionRange = "[1.20.1,1.20.2)"
+versionRange = "${minecraft_requirement}"
 ordering = "NONE"
 side = "BOTH"
 
 [[dependencies.blockpops]]
 modId = "geckolib"
 mandatory = true
-versionRange = "[4.7.4,)"
+versionRange = "${geckolib_requirement}"
 ordering = "AFTER"
 side = "BOTH"
 
 [[dependencies.blockpops]]
 modId = "architectury"
 mandatory = true
-versionRange = "[9.2.14,)"
+versionRange = "${architectury_requirement}"
 ordering = "AFTER"
 side = "BOTH"
