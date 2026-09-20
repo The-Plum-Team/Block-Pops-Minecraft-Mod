@@ -1,6 +1,9 @@
 package com.theplumteam.client.gui;
 
 import com.mojang.authlib.GameProfile;
+//? if >=1.21 {
+/*import com.theplumteam.client.ClientSkinRegistration;
+*///? }
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.FigureBlockEntity;
 import com.theplumteam.figure.FigureDefinition;
@@ -291,7 +294,11 @@ public class FigurePositionScreen extends Screen {
 
     @Override
     public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        //? if >=1.21 {
+        /*this.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+        *///? } else {
         this.renderBackground(guiGraphics);
+        //? }
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
         guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 20, 0xFFFFFF);
@@ -364,9 +371,17 @@ public class FigurePositionScreen extends Screen {
 
             GameProfile profile = profileCache.computeIfAbsent(figure.getPlayerUUID(), uuid -> new GameProfile(uuid, figure.getName()));
             if (registeredSkins.add(figure.getPlayerUUID())) {
+                //? if >=1.21 {
+                /*ClientSkinRegistration.register(profile);
+                *///? } else {
                 Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, p) -> {}, false);
+                //? }
             }
+            //? if >=1.21 {
+            /*return Minecraft.getInstance().getSkinManager().getInsecureSkin(profile).texture();
+            *///? } else {
             return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
+            //? }
         }
 
         return figure.getTexturePath();

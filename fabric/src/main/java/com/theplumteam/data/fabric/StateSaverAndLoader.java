@@ -1,6 +1,10 @@
 package com.theplumteam.data.fabric;
 
 import com.theplumteam.BlockPopsMod;
+//? if >=1.21 {
+/*import net.minecraft.core.HolderLookup;
+import net.minecraft.util.datafix.DataFixTypes;
+*///? }
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.player.Player;
@@ -19,7 +23,11 @@ public class StateSaverAndLoader extends SavedData {
     private final HashMap<UUID, CompoundTag> players = new HashMap<>();
 
     @Override
+    //? if >=1.21 {
+    /*public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
+    *///? } else {
     public CompoundTag save(CompoundTag tag) {
+    //? }
         CompoundTag playersTag = new CompoundTag();
         players.forEach((uuid, playerData) -> {
             playersTag.put(uuid.toString(), playerData.copy());
@@ -28,7 +36,11 @@ public class StateSaverAndLoader extends SavedData {
         return tag;
     }
 
+    //? if >=1.21 {
+    /*public static StateSaverAndLoader createFromTag(CompoundTag tag, HolderLookup.Provider registries) {
+    *///? } else {
     public static StateSaverAndLoader createFromTag(CompoundTag tag) {
+    //? }
         StateSaverAndLoader state = new StateSaverAndLoader();
         CompoundTag playersTag = tag.getCompound("players");
         playersTag.getAllKeys().forEach(key -> {
@@ -47,11 +59,23 @@ public class StateSaverAndLoader extends SavedData {
      */
     public static StateSaverAndLoader getServerState(MinecraftServer server) {
         var persistentStateManager = server.overworld().getDataStorage();
+        //? if >=1.21 {
+        /*StateSaverAndLoader state = persistentStateManager.computeIfAbsent(
+                new SavedData.Factory<>(
+                        StateSaverAndLoader::new,
+                        StateSaverAndLoader::createFromTag,
+                        // A null type makes vanilla's reader throw and silently discard saved data.
+                        DataFixTypes.SAVED_DATA_COMMAND_STORAGE
+                ),
+                BlockPopsMod.MOD_ID + "_player_data"
+        );
+        *///? } else {
         StateSaverAndLoader state = persistentStateManager.computeIfAbsent(
                 StateSaverAndLoader::createFromTag,
                 StateSaverAndLoader::new,
                 BlockPopsMod.MOD_ID + "_player_data"
         );
+        //? }
         state.setDirty(); // Mark for saving
         return state;
     }

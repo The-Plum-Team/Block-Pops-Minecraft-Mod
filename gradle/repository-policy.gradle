@@ -91,6 +91,10 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
                 includeGroupByRegex('com\\.mojang(\\..*)?')
                 if (useNeoForgeRepositoryOrigins) {
                     includeGroupByRegex('org\\.lwjgl(\\..*)?')
+                } else {
+                    // Minecraft 1.21+ links a Mojang-patched FreeType native that is
+                    // published only here; every other LWJGL module stays on Central.
+                    includeModule('org.lwjgl', 'lwjgl-freetype')
                 }
             }
             break

@@ -13,6 +13,9 @@ import com.theplumteam.network.SyncDynamicCollectionsPacket;
 import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.util.ResourceLocations;
 import net.minecraft.nbt.CompoundTag;
+//? if >=1.21 {
+/*import net.minecraft.nbt.NbtAccounter;
+*///? }
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
@@ -93,7 +96,11 @@ public class PlayerCollectionHelperImpl {
                                 try {
                                     File playerDataFile = new File(playerdataDir, uuidString + ".dat");
                                     if (playerDataFile.exists()) {
+                                        //? if >=1.21 {
+                                        /*CompoundTag playerData = NbtIo.readCompressed(playerDataFile.toPath(), NbtAccounter.unlimitedHeap());
+                                        *///? } else {
                                         CompoundTag playerData = NbtIo.readCompressed(playerDataFile);
+                                        //? }
                                         if (playerData != null) {
                                             // Fabric stores cardinal components data differently
                                             CompoundTag cardinalComponents = playerData.getCompound("cardinal_components");
