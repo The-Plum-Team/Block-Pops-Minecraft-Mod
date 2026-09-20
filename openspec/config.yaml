@@ -1,0 +1,63 @@
+schema_version: 1
+project:
+  name: BlockPops
+  repository_root: C:/Users/nebur/Documents/GitHub/BlockPops
+  build_system: Gradle (Groovy DSL; Architectury/Loom)
+  primary_remote_ref: origin/master
+sdd:
+  artifact_store: openspec
+  execution_mode: auto
+  delivery_strategy: auto-chain
+  review_budget_changed_lines: 400
+  model_routing: balanced-default
+  delivery_planning:
+    selected_chain_strategy: stacked-to-main
+    activation: "Apply only when auto-chain selects chaining; this is delivery planning, not a preflight field."
+  language: English
+  phase_order:
+    - inventory
+    - proposal
+    - spec
+    - design
+    - tasks
+    - apply
+    - verify
+  implementation_gate: "No implementation before inventory, proposal, spec, design, and tasks are complete."
+testing:
+  policy: unconfirmed
+  effective_mode: conditional-by-test-surface
+  policy_source: "No repository policy or explicit user consent establishes strict TDD; the assigned Gentle AI skill recommends it when tests exist, which is guidance rather than consent."
+  runner:
+    command: python -m unittest discover -s tests -v
+    scope: Python release, E2E, visual, and security tooling
+  gradle:
+    commands:
+      - ./gradlew validateReleaseMatrix
+      - ./gradlew check
+      - ./gradlew buildAllLanes
+      - ./gradlew buildAllE2EHarnesses
+    status: blocked-on-current-JDK
+  evidence:
+    - "136 Python tests were discovered; baseline execution on this host produced 2 failures and 38 errors."
+    - "Windows symlink privilege and repository line-ending/byte-stability assumptions cause much of the Python baseline failure."
+    - "No Java src/test source set or JUnit test suite was found; packaged E2E harnesses exist under common, fabric, and forge src/e2e."
+    - "Gradle fails before task configuration with Unsupported class file major version 69."
+  rules:
+    - "Use RED-GREEN-TRIANGULATE-REFACTOR for behavior with a runnable automated test surface."
+    - "For Minecraft runtime behavior without a unit-test surface, define executable acceptance and packaged-E2E evidence in the design and tasks artifacts before implementation."
+    - "Do not treat the existence of E2E harness sources as proof that strict TDD is runnable."
+project_context:
+  current_branch: codex/claude-visual-e2e
+  current_commit: a200152
+  current_release_matrix: "Minecraft 1.20.1 on Fabric and Forge only"
+  future_migration_goal: "Inventory all BlockPops Minecraft versions/loaders before design, then consolidate to one primary branch using the Quick-Skin-Mod shared-source model, a central release matrix, Stonecutter, narrow overlays, independent lane releases, serialized Gradle builds, and separate production versus packaged-E2E JARs."
+  constraints:
+    - "Keep sync-release-branches.yml until the new architecture is verified."
+    - "Quick-Skin-Mod is reference-only."
+    - "Do not assume main: origin/HEAD is origin/master."
+    - "Do not alter existing branches, working-tree changes, commits, pushes, pull requests, or source files during initialization."
+  inventory_seeds:
+    - origin/1.21.1-neoforge-fabric
+    - origin/feat/1.21.1-multiversion-e2e
+    - origin/feat/multiversion-e2e-architecture
+    - origin/feature/multi-version-stonecraft
