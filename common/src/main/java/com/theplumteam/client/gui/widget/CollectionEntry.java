@@ -8,6 +8,9 @@ import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.client.Minecraft;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
+//? if >=1.21.2 {
+/*import net.minecraft.client.renderer.RenderType;
+*///? }
 import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -122,11 +125,20 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             int logoY = y + (entryHeight - logoHeight) / 2;
 
             // Draw the logo centered within its container
+            //? if >=1.21.2 {
+            /*graphics.blit(RenderType::guiTextured, logoTexture,
+                    logoX, logoY,
+                    0.0f, 0.0f,
+                    logoWidth, logoHeight,
+                    textureWidth, textureHeight,
+                    textureWidth, textureHeight);
+            *///? } else {
             graphics.blit(logoTexture,
                     logoX, logoY, logoWidth, logoHeight,
                     0.0f, 0.0f,
                     textureWidth, textureHeight,
                     textureWidth, textureHeight);
+            //? }
         }
 
         // Draw collection name

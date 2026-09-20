@@ -29,7 +29,9 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
+//? if <1.21.2 {
 import net.minecraft.world.level.block.RenderShape;
+//? }
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -86,10 +88,12 @@ public class FigureBlock extends BaseEntityBlock {
         return level.isClientSide ? createTickerHelper(blockEntityType, ModBlockEntities.FIGURE_BLOCK.get(), FigureBlockEntity::tick) : null;
     }
 
+    //? if <1.21.2 {
     @Override
     public RenderShape getRenderShape(BlockState state) {
         return RenderShape.ENTITYBLOCK_ANIMATED;
     }
+    //? }
 
     //? if >=1.21.2 {
     /*@Override
@@ -116,7 +120,11 @@ public class FigureBlock extends BaseEntityBlock {
                     figureBlockEntity.cycleAlternativeSkin();
                 }
             }
+            //? if >=1.21.2 {
+            /*return InteractionResult.SUCCESS;
+            *///? } else {
             return InteractionResult.sidedSuccess(level.isClientSide());
+            //? }
         }
         return InteractionResult.PASS;
     }
@@ -181,12 +189,18 @@ public class FigureBlock extends BaseEntityBlock {
     }
 
     @Override
-    //? if >=1.21 {
+    //? if >=1.21.2 {
+    /*public ItemStack getCloneItemStack(LevelReader level, BlockPos pos, BlockState state, boolean includeData) {
+    *///? } elif >=1.21 {
     /*public ItemStack getCloneItemStack(LevelReader level, BlockPos pos, BlockState state) {
     *///? } else {
     public ItemStack getCloneItemStack(BlockGetter level, BlockPos pos, BlockState state) {
     //? }
+        //? if >=1.21.2 {
+        /*ItemStack stack = super.getCloneItemStack(level, pos, state, includeData);
+        *///? } else {
         ItemStack stack = super.getCloneItemStack(level, pos, state);
+        //? }
         if (level.getBlockEntity(pos) instanceof FigureBlockEntity figureBlockEntity) {
             //? if >=1.21 {
             /*figureBlockEntity.saveToItem(stack, level.registryAccess());

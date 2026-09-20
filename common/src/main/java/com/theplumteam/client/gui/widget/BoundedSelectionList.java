@@ -45,12 +45,22 @@ public abstract class BoundedSelectionList<E extends ObjectSelectionList.Entry<E
         return new ScreenRectangle(x0, y0, x1 - x0, y1 - y0);
     }
 
-    @Override
+    *///? }
+
+    //? if >=1.21.2 {
+    /*@Override
+    public int maxScrollAmount() {
+        return Math.max(0, contentHeight() - (y1 - y0 - 4));
+    }
+    *///? } elif >=1.21 {
+    /*@Override
     public int getMaxScroll() {
         return Math.max(0, getMaxPosition() - (y1 - y0 - 4));
     }
+    *///? }
 
-    public void setRenderBackground(boolean enabled) { renderBackground = enabled; }
+    //? if >=1.21 {
+    /*    public void setRenderBackground(boolean enabled) { renderBackground = enabled; }
     public void setRenderTopAndBottom(boolean enabled) { renderTopAndBottom = enabled; }
 
     protected void renderBackground(GuiGraphics graphics) {

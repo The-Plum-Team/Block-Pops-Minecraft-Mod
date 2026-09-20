@@ -11,6 +11,12 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
+//? if >=1.21.2 {
+/*import com.theplumteam.platform.PlatformHelper;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
+*///? }
 
 import java.nio.file.Path;
 
@@ -75,4 +81,10 @@ public class PlatformHelperImpl {
     public static Item createBoxBlockItemForColor(Block block, Item.Properties properties, PopBlockColor color) {
         return new BoxBlockItem(block, properties, color);
     }
+    //? if >=1.21.2 {
+    /*public static <T extends BlockEntity> BlockEntityType<T> createBlockEntityType(
+            PlatformHelper.BlockEntityFactory<T> factory, Block... validBlocks) {
+        return FabricBlockEntityTypeBuilder.create(factory::create, validBlocks).build();
+    }
+    *///? }
 }

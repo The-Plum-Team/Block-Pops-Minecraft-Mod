@@ -16,6 +16,9 @@ import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.model.GeoModel;
+//? if >=1.21.2 {
+/*import software.bernie.geckolib.renderer.GeoRenderer;
+*///? }
 
 import java.util.Map;
 import java.util.UUID;
@@ -76,13 +79,21 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
     }
 
     @Override
+    //? if >=1.21.2 {
+    /*public ResourceLocation getModelResource(BoxBlockEntity animatable, GeoRenderer<BoxBlockEntity> renderer) {
+    *///? } else {
     public ResourceLocation getModelResource(BoxBlockEntity animatable) {
+    //? }
         FigureDefinition figure = animatable.getFigureDefinition();
         return (figure != null) ? figure.getModelPath() : null;
     }
 
     @Override
+    //? if >=1.21.2 {
+    /*public ResourceLocation getTextureResource(BoxBlockEntity animatable, GeoRenderer<BoxBlockEntity> renderer) {
+    *///? } else {
     public ResourceLocation getTextureResource(BoxBlockEntity animatable) {
+    //? }
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure == null) return FALLBACK_TEXTURE;
 
@@ -196,7 +207,11 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
 
     @Override
     public RenderType getRenderType(BoxBlockEntity animatable, ResourceLocation texture) {
+        //? if >=1.21.2 {
+        /*ResourceLocation textureToUse = getTextureResource(animatable, null);
+        *///? } else {
         ResourceLocation textureToUse = getTextureResource(animatable);
+        //? }
         if (textureToUse == null) textureToUse = FALLBACK_TEXTURE;
         return RenderType.entityCutoutNoCull(textureToUse);
     }

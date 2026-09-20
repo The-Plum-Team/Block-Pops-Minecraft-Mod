@@ -190,7 +190,11 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         var figureRenderer = FigureWidgetRenderer.getRenderer();
 
         try {
+            //? if >=1.21.2 {
+            /*ResourceLocation modelResource = figureModel.getModelResource(renderEntity, null);
+            *///? } else {
             ResourceLocation modelResource = figureModel.getModelResource(renderEntity);
+            //? }
             if (modelResource == null) {
                 RenderSystem.enableDepthTest();
                 graphics.disableScissor();
@@ -199,7 +203,11 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             }
 
             BakedGeoModel bakedModel = figureModel.getBakedModel(modelResource);
+            //? if >=1.21.2 {
+            /*ResourceLocation textureResource = figureModel.getTextureResource(renderEntity, null);
+            *///? } else {
             ResourceLocation textureResource = figureModel.getTextureResource(renderEntity);
+            //? }
             if (textureResource == null) {
                 RenderSystem.enableDepthTest();
                 graphics.disableScissor();

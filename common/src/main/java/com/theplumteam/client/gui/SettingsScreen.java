@@ -260,7 +260,11 @@ public class SettingsScreen extends Screen {
 
         // Re-enable depth test and clear depth buffer to force our modal on top
         RenderSystem.enableDepthTest();
+        //? if >=1.21.2 {
+        /*RenderSystem.clear(256); // Clear depth buffer only
+        *///? } else {
         RenderSystem.clear(256, false); // Clear depth buffer only
+        //? }
 
         // Draw overlay over entire screen
         graphics.fill(0, 0, this.width, this.height, 0x70000000);

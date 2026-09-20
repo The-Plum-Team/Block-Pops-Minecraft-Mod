@@ -52,7 +52,11 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
 
                 // Detect skin model and show/hide appropriate arms
                 if (animatable.hasFigure()) {
+                    //? if >=1.21.2 {
+                    /*ResourceLocation texture = this.getGeoModel().getTextureResource(animatable, this);
+                    *///? } else {
                     ResourceLocation texture = this.getGeoModel().getTextureResource(animatable);
+                    //? }
                     SkinModelDetector.SkinModel skinModel = SkinModelDetector.detectSkinModel(texture);
 
                     // Hide/show arms based on detection
@@ -133,12 +137,20 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         if (figure == null) return;
 
         // Get the player skin texture directly (bypassing figure model)
+        //? if >=1.21.2 {
+        /*ResourceLocation skinTexture = figureRenderer.getGeoModel().getTextureResource(animatable, figureRenderer);
+        *///? } else {
         ResourceLocation skinTexture = figureRenderer.getGeoModel().getTextureResource(animatable);
+        //? }
         if (skinTexture == null) return; // Safety check
 
         // Render both the base skin layer and 3D overlay layer directly from player skin
         // Use entityTranslucentCull for proper alpha blending with face culling (like player rendering)
+        //? if >=1.21.2 {
+        /*RenderType skinRenderType = RenderType.entityTranslucent(skinTexture);
+        *///? } else {
         RenderType skinRenderType = RenderType.entityTranslucentCull(skinTexture);
+        //? }
         VertexConsumer skinBuffer = bufferSource.getBuffer(skinRenderType);
 
         for (GeoBone bone : model.topLevelBones()) {

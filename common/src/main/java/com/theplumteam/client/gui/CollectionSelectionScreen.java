@@ -583,7 +583,9 @@ public class CollectionSelectionScreen extends Screen {
         pose.pushPose();
 
         RenderSystem.setShaderTexture(0, cacheTexture);
+        //? if <1.21.2 {
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
+        //? }
 
         //? if >=1.21 {
         /*int starHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;

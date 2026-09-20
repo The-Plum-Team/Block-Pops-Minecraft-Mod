@@ -4,6 +4,9 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.BlockPopsMod;
 import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
+//? if >=1.21.2 {
+/*import net.minecraft.client.renderer.RenderType;
+*///? }
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
@@ -39,7 +42,9 @@ public class LinkButton extends Button {
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
         // Use the standard button background for the rounded shape.
         // We always use the "normal" (not hovered) state texture. The V-offset for this is 46 + 1 * 20 = 66.
-        //? if >=1.21 {
+        //? if >=1.21.2 {
+        /*graphics.blitSprite(RenderType::guiTextured, NORMAL_BUTTON, this.getX(), this.getY(), this.getWidth(), this.getHeight());
+        *///? } elif >=1.21 {
         /*graphics.blitSprite(NORMAL_BUTTON, this.getX(), this.getY(), this.getWidth(), this.getHeight());
         *///? } else {
         graphics.blitNineSliced(WIDGETS_LOCATION, this.getX(), this.getY(), this.getWidth(), this.getHeight(), 20, 4, 200, 20, 0, 46 + 1 * 20);
@@ -55,6 +60,16 @@ public class LinkButton extends Button {
 
         // Draw the logo texture on top, inset slightly to fit within the rounded border.
         int padding = 2;
+        //? if >=1.21.2 {
+        /*// 1.21.4 takes the RenderType function first and reads UV before the on-screen size.
+        graphics.blit(RenderType::guiTextured, this.texture,
+                this.getX() + padding, this.getY() + padding,
+                0.0F, 0.0F,
+                this.width - (padding * 2), this.height - (padding * 2),
+                this.textureWidth, this.textureHeight,
+                this.textureWidth, this.textureHeight
+        );
+        *///? } else {
         graphics.blit(this.texture,
                 this.getX() + padding, this.getY() + padding,           // Screen position (x, y) with padding
                 this.width - (padding * 2), this.height - (padding * 2), // Size on screen (width, height) reduced by padding
@@ -62,6 +77,7 @@ public class LinkButton extends Button {
                 this.textureWidth, this.textureHeight,                   // Region in texture to draw (the whole image)
                 this.textureWidth, this.textureHeight                    // Total texture size
         );
+        //? }
     }
 
     private static void openLink(String url) {

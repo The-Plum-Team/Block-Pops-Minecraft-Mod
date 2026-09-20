@@ -321,7 +321,9 @@ public class FavoriteColorSelectionScreen extends Screen {
         pose.pushPose();
 
         RenderSystem.setShaderTexture(0, cacheTexture);
+        //? if <1.21.2 {
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
+        //? }
 
         //? if >=1.21 {
         /*BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);

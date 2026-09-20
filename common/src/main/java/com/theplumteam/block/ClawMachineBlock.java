@@ -28,7 +28,9 @@ import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
+//? if <1.21.2 {
 import net.minecraft.world.level.block.RenderShape;
+//? }
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -92,10 +94,12 @@ public class ClawMachineBlock extends BaseEntityBlock {
         return null;
     }
 
+    //? if <1.21.2 {
     @Override
     public RenderShape getRenderShape(BlockState state) {
         return RenderShape.ENTITYBLOCK_ANIMATED;
     }
+    //? }
 
     //? if >=1.21.2 {
     /*@Override
@@ -131,7 +135,11 @@ public class ClawMachineBlock extends BaseEntityBlock {
                     syncTokenDataToClient(serverPlayer);
                 }
             }
+            //? if >=1.21.2 {
+            /*return InteractionResult.SUCCESS;
+            *///? } else {
             return InteractionResult.sidedSuccess(level.isClientSide);
+            //? }
         }
         return InteractionResult.PASS;
     }
@@ -158,7 +166,11 @@ public class ClawMachineBlock extends BaseEntityBlock {
         BlockPos pos = context.getClickedPos();
         Level level = context.getLevel();
 
+        //? if >=1.21.2 {
+        /*if (pos.getY() < level.getMaxY() - 1
+        *///? } else {
         if (pos.getY() < level.getMaxBuildHeight() - 1
+        //? }
                 && level.getBlockState(pos.above()).canBeReplaced(context)) {
 
             Direction playerFacing = context.getHorizontalDirection();

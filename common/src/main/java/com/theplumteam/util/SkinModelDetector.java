@@ -123,6 +123,7 @@ public class SkinModelDetector {
                     return model;
                 }
             }
+            //? if <1.21.2 {
             // Handle HttpTexture (standard downloaded skins)
             else if (abstractTexture instanceof net.minecraft.client.renderer.texture.HttpTexture httpTexture) {
                 // This is a downloaded player skin - try to access the loaded image
@@ -142,6 +143,7 @@ public class SkinModelDetector {
                     LOGGER.debug("Could not access HttpTexture image via reflection: {}", reflectionEx.getMessage());
                 }
             }
+            //? }
 
             // Try resource manager (for static textures in resources)
             try {
@@ -218,7 +220,19 @@ public class SkinModelDetector {
         for (int y = rightArmStartY; y < rightArmEndY && y < height; y++) {
             for (int x = rightArmX; x < rightArmEndX && x < width; x++) {
                 totalPixels++;
+                //? if >=1.21.2 {
+                /*int rgba = image.getPixel(x, y);
+                *///? } else {
+                //? if >=1.21.2 {
+                /*int rgba = image.getPixel(x, y);
+                *///? } else {
+                //? if >=1.21.2 {
+                /*int rgba = image.getPixel(x, y);
+                *///? } else {
                 int rgba = image.getPixelRGBA(x, y);
+                //? }
+                //? }
+                //? }
 
                 // NativeImage uses ABGR format in memory
                 // getPixelRGBA returns in RGBA format
@@ -240,7 +254,11 @@ public class SkinModelDetector {
         for (int y = leftArmStartY; y < leftArmEndY && y < height; y++) {
             for (int x = leftArmX; x < leftArmEndX && x < width; x++) {
                 totalPixels++;
+                //? if >=1.21.2 {
+                /*int rgba = image.getPixel(x, y);
+                *///? } else {
                 int rgba = image.getPixelRGBA(x, y);
+                //? }
 
                 int alpha = (rgba >> 24) & 0xFF;
                 int blue = (rgba >> 16) & 0xFF;

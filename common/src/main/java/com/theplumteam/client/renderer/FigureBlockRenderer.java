@@ -36,7 +36,11 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
 
         // Detect skin model and show/hide appropriate arms
         if (animatable.hasFigure()) {
+            //? if >=1.21.2 {
+            /*ResourceLocation texture = this.getGeoModel().getTextureResource(animatable, this);
+            *///? } else {
             ResourceLocation texture = this.getGeoModel().getTextureResource(animatable);
+            //? }
             SkinModelDetector.SkinModel skinModel = SkinModelDetector.detectSkinModel(texture);
 
             // Hide/show arms based on detection

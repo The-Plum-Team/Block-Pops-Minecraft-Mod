@@ -245,7 +245,7 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     //? if >=1.21 {
-    /*@Override
+    /*// 1.21.2 removed BlockEntity.saveToItem, so this is a local helper there.
     public void saveToItem(net.minecraft.world.item.ItemStack stack, HolderLookup.Provider registries) {
         CompoundTag tag = new CompoundTag();
         saveAdditional(tag, registries);

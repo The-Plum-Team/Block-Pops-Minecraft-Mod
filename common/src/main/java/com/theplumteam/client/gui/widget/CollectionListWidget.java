@@ -89,7 +89,11 @@ public class CollectionListWidget extends BoundedSelectionList<CollectionEntry> 
             int scaledMouseY = (int)(mouseY * scale);
 
             // Scale scroll amount for correct entry positioning
+            //? if >=1.21.2 {
+            /*double origScroll = this.scrollAmount();
+            *///? } else {
             double origScroll = this.getScrollAmount();
+            //? }
             this.setScrollAmount(origScroll * scale);
 
             // Render with scaled values
@@ -123,7 +127,11 @@ public class CollectionListWidget extends BoundedSelectionList<CollectionEntry> 
     }
 
     @Override
+    //? if >=1.21.2 {
+    /*protected int scrollBarX() {
+    *///? } else {
     protected int getScrollbarPosition() {
+    //? }
         return this.x1 - 6;
     }
 
@@ -139,7 +147,11 @@ public class CollectionListWidget extends BoundedSelectionList<CollectionEntry> 
 
             int origX0 = this.x0, origX1 = this.x1, origY0 = this.y0, origY1 = this.y1;
             int origWidth = this.width, origHeight = this.height;
+            //? if >=1.21.2 {
+            /*double origScroll = this.scrollAmount();
+            *///? } else {
             double origScroll = this.getScrollAmount();
+            //? }
 
             this.x0 = (int)(origX0 * scale);
             this.x1 = (int)(origX1 * scale);
@@ -167,7 +179,11 @@ public class CollectionListWidget extends BoundedSelectionList<CollectionEntry> 
     //? }
         // Smooth scrolling: use fixed pixel amount instead of itemHeight-based
         // We use 15 pixels per scroll tick for smooth, consistent control
+        //? if >=1.21.2 {
+        /*this.setScrollAmount(this.scrollAmount() - amount * 15.0);
+        *///? } else {
         this.setScrollAmount(this.getScrollAmount() - amount * 15.0);
+        //? }
         return true;
     }
 
@@ -178,7 +194,11 @@ public class CollectionListWidget extends BoundedSelectionList<CollectionEntry> 
 
             int origX0 = this.x0, origX1 = this.x1, origY0 = this.y0, origY1 = this.y1;
             int origWidth = this.width, origHeight = this.height;
+            //? if >=1.21.2 {
+            /*double origScroll = this.scrollAmount();
+            *///? } else {
             double origScroll = this.getScrollAmount();
+            //? }
 
             this.x0 = (int)(origX0 * scale);
             this.x1 = (int)(origX1 * scale);

@@ -9,6 +9,12 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 
 import java.nio.file.Path;
+//? if >=1.21.2 {
+/*import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockState;
+*///? }
 
 /**
  * Platform abstraction layer for BlockPops
@@ -110,4 +116,18 @@ public class PlatformHelper {
     public static Item createBoxBlockItemForColor(Block block, Item.Properties properties, PopBlockColor color) {
         throw new AssertionError();
     }
+
+    //? if >=1.21.2 {
+    /*// 1.21.2 removed BlockEntityType.Builder, and each loader replaced it differently.
+    @FunctionalInterface
+    public interface BlockEntityFactory<T extends BlockEntity> {
+        T create(BlockPos pos, BlockState state);
+    }
+
+    @ExpectPlatform
+    public static <T extends BlockEntity> BlockEntityType<T> createBlockEntityType(
+            BlockEntityFactory<T> factory, Block... validBlocks) {
+        throw new AssertionError();
+    }
+    *///? }
 }

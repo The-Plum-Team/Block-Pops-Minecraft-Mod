@@ -8,6 +8,9 @@ import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.util.ResourceLocations;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.model.GeoModel;
+//? if >=1.21.2 {
+/*import software.bernie.geckolib.renderer.GeoRenderer;
+*///? }
 
 import java.util.Locale;
 
@@ -20,12 +23,20 @@ public class BoxBlockModel extends GeoModel<BoxBlockEntity> {
     private static final ResourceLocation DEFAULT_TEXTURE = ResourceLocations.of(BlockPopsMod.MOD_ID, "textures/block/box/original.png");
 
     @Override
+    //? if >=1.21.2 {
+    /*public ResourceLocation getModelResource(BoxBlockEntity animatable, GeoRenderer<BoxBlockEntity> renderer) {
+    *///? } else {
     public ResourceLocation getModelResource(BoxBlockEntity animatable) {
+    //? }
         return MODEL;
     }
 
     @Override
+    //? if >=1.21.2 {
+    /*public ResourceLocation getTextureResource(BoxBlockEntity animatable, GeoRenderer<BoxBlockEntity> renderer) {
+    *///? } else {
     public ResourceLocation getTextureResource(BoxBlockEntity animatable) {
+    //? }
         // Check if this box has a specific color (default collection only)
         // Color is now stored in NBT on the block entity
         PopBlockColor color = animatable.getColor();

@@ -53,7 +53,12 @@ public class StarPatternCache {
 
             // Upload to GPU
             cachedTexture = new DynamicTexture(cachedImage);
+            //? if >=1.21.2 {
+            /*cachedTextureLocation = ResourceLocations.of("blockpops", "star_cache");
+            mc.getTextureManager().register(cachedTextureLocation, cachedTexture);
+            *///? } else {
             cachedTextureLocation = mc.getTextureManager().register("blockpops_star_cache", cachedTexture);
+            //? }
 
             // Set linear filtering for smooth scrolling and repeat wrapping for seamless tiling
             GlStateManager._bindTexture(cachedTexture.getId());

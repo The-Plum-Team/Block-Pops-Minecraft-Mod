@@ -1,6 +1,7 @@
 package com.theplumteam.registry;
 
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.platform.PlatformHelper;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
 import com.theplumteam.blockentity.FigureBlockEntity;
@@ -15,26 +16,38 @@ public class ModBlockEntities {
 
     public static final RegistrySupplier<BlockEntityType<BoxBlockEntity>> BOX_BLOCK =
         BLOCK_ENTITIES.register("box_block", () ->
+            //? if >=1.21.2 {
+            /*PlatformHelper.createBlockEntityType(BoxBlockEntity::new, ModBlocks.BOX_BLOCK.get())
+            *///? } else {
             BlockEntityType.Builder.of(
                 BoxBlockEntity::new,
                 ModBlocks.BOX_BLOCK.get()
             ).build(null)
+            //? }
         );
 
     public static final RegistrySupplier<BlockEntityType<ClawMachineBlockEntity>> CLAW_MACHINE_BLOCK =
         BLOCK_ENTITIES.register("claw_machine_block", () ->
+            //? if >=1.21.2 {
+            /*PlatformHelper.createBlockEntityType(ClawMachineBlockEntity::new, ModBlocks.CLAW_MACHINE_BLOCK.get())
+            *///? } else {
             BlockEntityType.Builder.of(
                 ClawMachineBlockEntity::new,
                 ModBlocks.CLAW_MACHINE_BLOCK.get()
             ).build(null)
+            //? }
         );
 
     public static final RegistrySupplier<BlockEntityType<FigureBlockEntity>> FIGURE_BLOCK =
         BLOCK_ENTITIES.register("figure_block", () ->
+            //? if >=1.21.2 {
+            /*PlatformHelper.createBlockEntityType(FigureBlockEntity::new, ModBlocks.FIGURE_BLOCK.get())
+            *///? } else {
             BlockEntityType.Builder.of(
                 FigureBlockEntity::new,
                 ModBlocks.FIGURE_BLOCK.get()
             ).build(null)
+            //? }
         );
 
     public static void register() {

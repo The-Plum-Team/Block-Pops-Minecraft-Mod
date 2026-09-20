@@ -137,7 +137,11 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
             int scaledMouseY = (int)(mouseY * scale);
 
             // Scale scroll amount for correct entry positioning
+            //? if >=1.21.2 {
+            /*double origScroll = this.scrollAmount();
+            *///? } else {
             double origScroll = this.getScrollAmount();
+            //? }
             this.setScrollAmount(origScroll * scale);
 
             // Render with scaled values
@@ -182,19 +186,35 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
     }
 
     @Override
+    //? if >=1.21.2 {
+    /*public int getRowTop(int index) {
+    *///? } else {
     protected int getRowTop(int index) {
+    //? }
         // Use scaled itemHeight for consistent spacing in scaled coordinate space
+        //? if >=1.21.2 {
+        /*return this.y0 + 4 - (int)this.scrollAmount() + index * getScaledItemHeight() + this.headerHeight;
+        *///? } else {
         return this.y0 + 4 - (int)this.getScrollAmount() + index * getScaledItemHeight() + this.headerHeight;
+        //? }
     }
 
     @Override
+    //? if >=1.21.2 {
+    /*protected int contentHeight() {
+    *///? } else {
     protected int getMaxPosition() {
+    //? }
         // Use scaled itemHeight for correct scroll limits
         return this.headerHeight + this.getItemCount() * getScaledItemHeight();
     }
 
     @Override
+    //? if >=1.21.2 {
+    /*protected int scrollBarX() {
+    *///? } else {
     protected int getScrollbarPosition() {
+    //? }
         return this.x1 - 6;
     }
 
@@ -218,7 +238,11 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
     //? }
         // Smooth scrolling: use fixed pixel amount instead of itemHeight-based
         // We use 20 pixels per scroll tick for smooth, precise control
+        //? if >=1.21.2 {
+        /*this.setScrollAmount(this.scrollAmount() - amount * 20.0);
+        *///? } else {
         this.setScrollAmount(this.getScrollAmount() - amount * 20.0);
+        //? }
         return true;
     }
 
