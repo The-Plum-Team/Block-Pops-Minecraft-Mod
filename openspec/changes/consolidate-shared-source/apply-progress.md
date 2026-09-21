@@ -1192,3 +1192,22 @@ The 1.21.10 measurement is worth keeping even though the lane is not configured:
 - A fourth defect came out of running 1.21.6 itself, which measured worse than 1.21.8 at `mean_luma` 52.72. The scrolling background is drawn with smooth filtering so its stars average into the dark backdrop; the render type before 1.21.6, and the render pipeline from 1.21.6, reset a texture's sampler state between frames, leaving the pattern sharp and much brighter than intended. Re-applying it immediately before each draw, which is what the historical branch's own renderer does, brings 1.21.6 to `mean_luma` 36.53 against 1.21.5's 36.43.
 - What is left on 1.21.6 and later is bounded and named: the star background still shows through the panel's translucent fill rather than being hidden by it, and the sixteen colour swatches render as flat squares rather than block models. Both are in the deferred-GUI seam, and the brightness is now within a point and a half of the 1.21.5 lane that renders correctly. Both are in the deferred-GUI seam this change introduced for 1.21.6, both are visible in the screenshots beside the correct 1.21.5 capture, and neither affects any version below 1.21.6.
 - What this means for the ladder. 1.21.5 now has gameplay evidence that its GeckoLib 5 port renders correctly. 1.21.6, 1.21.7 and 1.21.8 build, launch, join a server and open the mod's screens, and their remaining defect is one ordering problem in one deferred-GUI seam rather than anything structural. No lane is qualified: the visual assertions have never passed on this machine for any version, including the two that are visually correct.
+
+## Task 15c — packaged E2E across every configured Forge-family lane
+
+- Every configured lane whose loader can install a runtime on this machine has now been run through the full pipeline here: `build_matrix.py`, `verify_release.py` staging, then the packaged orchestrator driving `ui-regression`.
+
+| Lane | Result | Reading |
+|---|---|---|
+| forge-1.20.1 | fail | screenshot is 3024x1800; the contract wants 1600x900 or an exact integer-density variant |
+| neoforge-1.21.1 | fail | title and description legibility: 387 bright pixels, 400 required |
+| neoforge-1.21.4 | fail | background `mean_luma` 34.00, 32.00 required, no bright pixels |
+| neoforge-1.21.5 | fail | background `mean_luma` 36.43, no bright pixels; screen renders correctly |
+| neoforge-1.21.6 | fail | background `mean_luma` 36.53 after the filtering fix, from 52.72 |
+| neoforge-1.21.7 | fail | background `mean_luma` 47.91 |
+| neoforge-1.21.8 | fail | background `mean_luma` 42.23 after the alpha and stratum fixes, from 45.98 |
+
+- The forge-1.20.1 row explains all of them. 3024x1800 is exactly twice 1512x900, which is this display's full logical width, not the contracted 1600. Every capture on this machine is therefore taken at the wrong size, and every region probe is measured against pixels the contract was not written for. That is why even the two lanes whose screenshots are visually correct, 1.21.4 and 1.21.5, still fail a threshold.
+- No Fabric lane was run. Installing a Fabric runtime needs `meta.fabricmc.net`, which does not answer from this network; `maven.fabricmc.net` is reachable only at the address the diagnostic host file pins, which is what makes the builds work while the runtime installer still cannot.
+- What the runs are good for is everything below the visual gate, and there they earned their keep: four defects were found and fixed that no build could see, and 1.21.6 measurably improved twice under the same probe. The 1.21.7 reading of 47.91 against 1.21.6's 36.53 on identical code is unexplained and is most likely the scroll phase the capture lands on; it is recorded rather than smoothed over.
+- No lane is qualified. Nothing here grants release or publication authority.
