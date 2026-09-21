@@ -72,7 +72,13 @@ public final class VanillaShim {
 
     public static boolean press(Object widget) {
         if (widget instanceof Button button) {
+            //? if >=26 {
+            /*// 26.1 tells a button which input pressed it; the harness presses with a
+            // plain left click and no modifiers.
+            button.onPress(new net.minecraft.client.input.MouseButtonInfo(0, 0));
+            *///? } else {
             button.onPress();
+            //? }
             return true;
         }
         return false;

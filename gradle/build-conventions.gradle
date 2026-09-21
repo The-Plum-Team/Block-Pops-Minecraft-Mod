@@ -209,8 +209,10 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
             'renderFakeItem': 'fakeItem',
             'renderItemDecorations': 'itemDecorations',
         ]
-        if (rewritesIdentifier) {
-            generatedMain.configure {
+        // The same rules serve every generated source set: the E2E harness compiles
+        // against the same era as the mod it drives.
+        def applySourceRewrites = { generateTask ->
+            generateTask.with {
                 // A filter closure is invisible to Gradle's up-to-date check, so the rule
                 // set is declared as an input. Without this, editing a rule leaves the
                 // previously generated sources in place and the change looks like a no-op.
@@ -255,6 +257,12 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
                     }
                 }
             }
+        }
+        if (rewritesIdentifier) {
+            // The E2E generate task is created later, by the harness conventions, so
+            // both are matched by name rather than looked up now.
+            tasks.matching { it.name in ['stonecutterGenerate', 'stonecutterGenerateE2e'] }
+                    .configureEach { applySourceRewrites(it) }
         }
         sourceSets.main.java.setSrcDirs([
             files(generatedMain.map { new File(it.destinationDir, 'java') }).builtBy(generatedMain)
