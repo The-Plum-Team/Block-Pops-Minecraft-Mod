@@ -1,5 +1,6 @@
 package com.theplumteam.command;
 
+import com.theplumteam.util.ServerLevels;
 import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -114,7 +115,7 @@ public class GetBoxCommand {
         if (figure.getPlayerUUID() == null) return null;
         try {
             GameProfile freshProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
-            return AuthlibProfiles.fetch(player.getServer().getSessionService(), freshProfile);
+            return AuthlibProfiles.fetch(ServerLevels.serverOf(player).getSessionService(), freshProfile);
         } catch (Exception e) {
             LOGGER.error("Failed to fetch fresh GameProfile for {}: {}", figure.getName(), e.getMessage());
             return null;
@@ -166,8 +167,8 @@ public class GetBoxCommand {
 
                     if (selectedFigure.getType() == FigureType.PLAYER) {
                         GameProfile freshProfile = getFreshGameProfile(player, selectedFigure);
-                        if (freshProfile != null && !freshProfile.getProperties().get("textures").isEmpty()) {
-                            skinSnapshot = AuthlibProfiles.value(freshProfile.getProperties().get("textures").iterator().next());
+                        if (freshProfile != null && !AuthlibProfiles.properties(freshProfile).get("textures").isEmpty()) {
+                            skinSnapshot = AuthlibProfiles.value(AuthlibProfiles.properties(freshProfile).get("textures").iterator().next());
                             discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
                             BlockPopsMod.logDebug("Saved/updated fresh skin snapshot for {}.", uniqueFigureId);
                         }

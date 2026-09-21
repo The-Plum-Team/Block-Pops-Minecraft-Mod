@@ -1,5 +1,6 @@
 package com.theplumteam.client.model;
 
+import com.theplumteam.util.AuthlibProfiles;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 import com.theplumteam.BlockPopsMod;
@@ -227,7 +228,7 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
         String uniqueCacheKey = snapshotUUID.toString();
         GameProfile profile = snapshotProfileCache.computeIfAbsent(uniqueCacheKey, id -> {
             GameProfile newProfile = new GameProfile(snapshotUUID, figure.getName());
-            newProfile.getProperties().put("textures", new Property("textures", snapshot));
+            AuthlibProfiles.properties(newProfile).put("textures", new Property("textures", snapshot));
             return newProfile;
         });
         snapshotRegistrationCache.computeIfAbsent(uniqueCacheKey, id -> {

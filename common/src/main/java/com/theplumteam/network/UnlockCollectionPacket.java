@@ -1,5 +1,6 @@
 package com.theplumteam.network;
 
+import com.theplumteam.util.ServerLevels;
 import com.mojang.authlib.GameProfile;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
@@ -134,8 +135,8 @@ public class UnlockCollectionPacket {
 
         if (figure.getType() == FigureType.PLAYER) {
             GameProfile freshProfile = getFreshGameProfile(player, figure);
-            if (freshProfile != null && !freshProfile.getProperties().get("textures").isEmpty()) {
-                skinSnapshot = AuthlibProfiles.value(freshProfile.getProperties().get("textures").iterator().next());
+            if (freshProfile != null && !AuthlibProfiles.properties(freshProfile).get("textures").isEmpty()) {
+                skinSnapshot = AuthlibProfiles.value(AuthlibProfiles.properties(freshProfile).get("textures").iterator().next());
                 discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
                 LOGGER.debug("Saved skin snapshot for player figure: {}", uniqueFigureId);
             }
@@ -199,7 +200,7 @@ public class UnlockCollectionPacket {
         if (figure.getPlayerUUID() == null) return null;
         try {
             GameProfile freshProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
-            return AuthlibProfiles.fetch(player.getServer().getSessionService(), freshProfile);
+            return AuthlibProfiles.fetch(ServerLevels.serverOf(player).getSessionService(), freshProfile);
         } catch (Exception e) {
             LOGGER.error("Failed to fetch fresh GameProfile for {}: {}", figure.getName(), e.getMessage());
             return null;

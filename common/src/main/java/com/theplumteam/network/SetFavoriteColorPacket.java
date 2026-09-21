@@ -1,5 +1,6 @@
 package com.theplumteam.network;
 
+import com.theplumteam.util.ServerLevels;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
@@ -70,8 +71,8 @@ public class SetFavoriteColorPacket {
 
                     // Regenerate the World Players collection to reflect the updated color
                     // Uses platform-specific implementation via PlayerCollectionHelper
-                    if (player.getServer() != null) {
-                        PlayerCollectionHelper.regenerateAndSyncPlayerCollection(player.getServer());
+                    if (ServerLevels.serverOf(player) != null) {
+                        PlayerCollectionHelper.regenerateAndSyncPlayerCollection(ServerLevels.serverOf(player));
                         BlockPopsMod.logDebug("Regenerated World Players collection after {} changed their favorite color",
                                 player.getName().getString());
                     }

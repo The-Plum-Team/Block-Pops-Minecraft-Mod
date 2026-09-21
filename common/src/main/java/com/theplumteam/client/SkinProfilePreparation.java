@@ -2,6 +2,7 @@ package com.theplumteam.client;
 
 //? if >=1.21 {
 /*import com.mojang.authlib.GameProfile;
+import com.theplumteam.util.AuthlibProfiles;
 import com.mojang.authlib.minecraft.InsecurePublicKeyException;
 import com.mojang.authlib.minecraft.MinecraftSessionService;
 import com.mojang.authlib.properties.PropertyMap;
@@ -29,15 +30,15 @@ public final class SkinProfilePreparation {
                 populated = false;
             }
             if (!populated) {
-                target.getProperties().clear();
-                if (target.getId().equals(localId)) {
+                AuthlibProfiles.properties(target).clear();
+                if (AuthlibProfiles.id(target).equals(localId)) {
                     if (localProperties.isEmpty()) {
                         copyFetchedProperties(session, localId, localProperties);
                     }
-                    target.getProperties().putAll(localProperties);
+                    AuthlibProfiles.properties(target).putAll(localProperties);
                     hasTextures(session, target);
                 } else {
-                    copyFetchedProperties(session, target.getId(), target.getProperties());
+                    copyFetchedProperties(session, AuthlibProfiles.id(target), AuthlibProfiles.properties(target));
                     try {
                         hasTextures(session, target);
                     } catch (InsecurePublicKeyException exception) {
@@ -57,7 +58,7 @@ public final class SkinProfilePreparation {
     private static void copyFetchedProperties(MinecraftSessionService session, UUID id, PropertyMap destination) {
         var result = session.fetchProfile(id, false);
         if (result != null) {
-            destination.putAll(result.profile().getProperties());
+            destination.putAll(AuthlibProfiles.properties(result.profile()));
         }
     }
     *///? }

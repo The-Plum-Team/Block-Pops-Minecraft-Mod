@@ -45,7 +45,7 @@ public class UpdateGuaranteedResetHourPacket {
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
                 // Check permissions (Level 2 = OP/Cheats)
-                if (player.hasPermissions(2)) {
+                if (ServerLevels.hasCommandLevel(player, 2)) {
                     // Update server configuration
                     ServerConfig.getInstance().setGuaranteedTokenResetHour(packet.resetHour);
                     BlockPopsMod.logDebug("Player {} updated guaranteed token reset hour to {} UTC",

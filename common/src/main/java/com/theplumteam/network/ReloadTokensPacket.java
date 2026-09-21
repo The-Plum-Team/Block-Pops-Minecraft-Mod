@@ -49,7 +49,7 @@ public class ReloadTokensPacket {
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
                 // Check if player has permission (level 2, same as /blockpops getbox)
-                if (!player.hasPermissions(2)) {
+                if (!ServerLevels.hasCommandLevel(player, 2)) {
                     LOGGER.warn("Player {} tried to reload tokens without permission", player.getName().getString());
                     return;
                 }
