@@ -116,8 +116,38 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
 
     if (stonecutterLayout) {
         group = "${rootProject.maven_group}.${module}"
+        // 1.21.9 renamed net.minecraft.resources.ResourceLocation to Identifier. It is a
+        // pure rename with no behaviour attached, so the shared tree keeps writing the
+        // older name and the newer nodes have it rewritten as their sources are
+        // generated. The word boundary leaves this mod's own ResourceLocations helper
+        // alone, and the same Copy hook already re-roots the GeckoLib assets.
+        def era = minecraftVersion.tokenize('.').collect { it.isInteger() ? it.toInteger() : 0 }
+        while (era.size() < 3) era << 0
+        def rewritesIdentifier = era[0] > 1 ||
+                (era[0] == 1 && (era[1] > 21 || (era[1] == 21 && era[2] >= 9)))
+
         // Detached nodes consume only the canonical tree processed by Stonecutter.
         def generatedMain = stonecutter.tasks.generate['stonecutterGenerate']
+        // Pure package moves in the same era, vanilla and GeckoLib alike. Only the import
+        // line changes, so the shared tree keeps naming the type the way it always did.
+        def movedImports = [
+            'net.minecraft.client.renderer.RenderType': 'net.minecraft.client.renderer.rendertype.RenderType',
+            'net.minecraft.Util': 'net.minecraft.util.Util',
+            'software.bernie.geckolib.cache.object.GeoBone': 'software.bernie.geckolib.cache.model.GeoBone',
+            'software.bernie.geckolib.cache.object.BakedGeoModel': 'software.bernie.geckolib.cache.model.BakedGeoModel',
+            'software.bernie.geckolib.animatable.processing.AnimationController': 'software.bernie.geckolib.animation.AnimationController',
+        ]
+        if (rewritesIdentifier) {
+            generatedMain.configure {
+                filesMatching('**/*.java') {
+                    filter { String line ->
+                        String rewritten = line.replaceAll(/\bResourceLocation\b/, 'Identifier')
+                        movedImports.each { from, to -> rewritten = rewritten.replace(from, to) }
+                        return rewritten
+                    }
+                }
+            }
+        }
         sourceSets.main.java.setSrcDirs([
             files(generatedMain.map { new File(it.destinationDir, 'java') }).builtBy(generatedMain)
         ])
