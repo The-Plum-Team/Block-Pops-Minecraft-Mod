@@ -12,6 +12,7 @@ import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import com.theplumteam.util.GeoAssets;
+import com.theplumteam.util.PlayerSkins;
 import com.theplumteam.util.ResourceLocations;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -187,7 +188,9 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
             // 5. Live Mojang Fallback - Check PlayerInfo even for blocks
             if (Minecraft.getInstance().getConnection() != null) {
                 PlayerInfo playerInfo = Minecraft.getInstance().getConnection().getPlayerInfo(figure.getPlayerUUID());
-                //? if >=1.21 {
+                //? if >=1.21.9 {
+                /*if (playerInfo != null) return playerInfo.getSkin().body().texturePath();
+                *///? } elif >=1.21 {
                 /*if (playerInfo != null) return playerInfo.getSkin().texture();
                 *///? } else {
                 if (playerInfo != null) return playerInfo.getSkinLocation();
@@ -205,11 +208,7 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
                 //? }
                 return true;
             });
-            //? if >=1.21 {
-            /*return Minecraft.getInstance().getSkinManager().getInsecureSkin(profile).texture();
-            *///? } else {
-            return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
-            //? }
+            return PlayerSkins.insecureTexture(profile);
         }
 
         return figure.getTexturePath() != null ? figure.getTexturePath() : FALLBACK_TEXTURE;
@@ -231,11 +230,7 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
             //? }
             return true;
         });
-        //? if >=1.21 {
-        /*return Minecraft.getInstance().getSkinManager().getInsecureSkin(profile).texture();
-        *///? } else {
-        return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
-        //? }
+        return PlayerSkins.insecureTexture(profile);
     }
 
     @Override
@@ -244,7 +239,10 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
         return POSE_ANIMATION;
     }
 
-    //? if >=1.21.5 {
+    //? if >=1.21.9 {
+    /*// GeckoLib 5.4 moved getRenderType off GeoModel and onto the renderer,
+    // so the renderer that owns this model names the render type instead.
+    *///? } elif >=1.21.5 {
     /*@Override
     public RenderType getRenderType(GeoRenderState renderState, ResourceLocation texture) {
         return RenderType.entityCutoutNoCull(texture != null ? texture : FALLBACK_TEXTURE);

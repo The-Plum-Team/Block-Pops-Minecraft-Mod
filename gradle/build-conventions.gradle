@@ -163,6 +163,26 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
         // 26.1 moved vanilla's GUI onto the same extract/submit pipeline as entities.
         // These hooks keep their signature, so only the name differs, and the target
         // depends on which vanilla class the file extends.
+        // Renames with one unambiguous target across the whole tree.
+        def eraWideRenames = [
+            ['resizeDisplay(', 'resizeGui('],
+            // Renderable#render and Screen#renderBackground became extract hooks.
+            // Anchoring on the graphics argument keeps other render methods alone.
+            ['.render(graphics,', '.extractRenderState(graphics,'],
+            ['.render(guiGraphics,', '.extractRenderState(guiGraphics,'],
+            ['.renderBackground(graphics,', '.extractBackground(graphics,'],
+            ['renderBackground(graphics)', 'extractBackground(graphics)'],
+            ['.renderBackground(guiGraphics,', '.extractBackground(guiGraphics,'],
+        ]
+        // The same hook declarations. List entries are excluded: their successor
+        // takes a different parameter list, so they are ported by hand.
+        def hookDeclRenames = [
+            ['void render(GuiGraphicsExtractor ', 'void extractRenderState(GuiGraphicsExtractor '],
+            ['void render(@NotNull GuiGraphicsExtractor ', 'void extractRenderState(@NotNull GuiGraphicsExtractor '],
+            ['void renderBackground(GuiGraphicsExtractor ', 'void extractBackground(GuiGraphicsExtractor '],
+            ['void renderBackground(@NotNull GuiGraphicsExtractor ', 'void extractBackground(@NotNull GuiGraphicsExtractor '],
+        ]
+        def hookDeclExcluded = ['FigureEntry.java', 'CollectionEntry.java'] as Set
         def guiHookRenames = [
             'TabButton.java':            [['renderWidget', 'extractContents']],
             'LinkButton.java':           [['renderWidget', 'extractContents']],
@@ -170,8 +190,16 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
             'BoundedSelectionList.java': [['renderWidget', 'extractWidgetRenderState'],
                                           ['renderListBackground', 'extractListBackground'],
                                           ['renderListSeparators', 'extractListSeparators']],
-            'FigureListWidget.java':     [['itemHeight', 'defaultEntryHeight']],
-            'CollectionListWidget.java': [['itemHeight', 'defaultEntryHeight']],
+            // These extend AbstractSelectionList, whose hook took the other name.
+            // headerHeight is gone; this tree never called setRenderHeader, so the
+            // field it read was always vanilla's zero.
+            'FigureListWidget.java':     [['itemHeight', 'defaultEntryHeight'],
+                                          ['renderWidget', 'extractWidgetRenderState'],
+                                          ['this.headerHeight', '0']],
+            'CollectionListWidget.java': [['itemHeight', 'defaultEntryHeight'],
+                                          ['renderWidget', 'extractWidgetRenderState'],
+                                          ['this.headerHeight', '0'],
+                                          ['ensureVisible', 'scrollToEntry']],
         ]
         def guiGraphicsMethods = [
             'drawString': 'text',
@@ -188,10 +216,11 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
                 // previously generated sources in place and the change looks like a no-op.
                 inputs.property('blockPopsSourceRewrites', [
                         movedImports, renderTypeFactories.toString(),
-                        renamesGeckolibRoot, renamesGuiGraphics, guiGraphicsMethods, guiHookRenames,
+                        renamesGeckolibRoot, renamesGuiGraphics, guiGraphicsMethods, guiHookRenames, eraWideRenames, hookDeclRenames, hookDeclExcluded,
                 ].toString())
                 filesMatching('**/*.java') {
                     def hookRenames = renamesGuiGraphics ? (guiHookRenames[it.name] ?: []) : []
+                    def declExcluded = it.name in hookDeclExcluded
                     filter { String line ->
                         String rewritten = line.replaceAll(/\bResourceLocation\b/, 'Identifier')
                         rewritten = rewritten.replaceAll(renderTypeFactories) { match, sep, name ->
@@ -207,8 +236,20 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
                                 rewritten = rewritten.replaceAll(/\b(graphics|guiGraphics)\.${from}\(/, "\$1.${to}(")
                             }
                         }
+                        if (renamesGuiGraphics) {
+                            eraWideRenames.each { pair ->
+                                rewritten = rewritten.replace(pair[0], pair[1])
+                            }
+                            if (!declExcluded) {
+                                hookDeclRenames.each { pair ->
+                                    rewritten = rewritten.replace(pair[0], pair[1])
+                                }
+                            }
+                        }
                         hookRenames.each { pair ->
-                            rewritten = rewritten.replaceAll(/\b${pair[0]}\b/, pair[1])
+                            rewritten = pair[0].startsWith('this.')
+                                    ? rewritten.replace(pair[0], pair[1])
+                                    : rewritten.replaceAll(/\b${pair[0]}\b/, pair[1])
                         }
                         return rewritten
                     }
@@ -343,6 +384,16 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
                 includeGroup('com.eliotlash.mclib')
             }
         }
+    }
+
+    // GeckoLib 5.4 bounds its renderer type parameter on an interface it injects
+    // into vanilla's render states. Loom only reads a dependency's injections when
+    // asked, and without them the bound is unsatisfiable by any nameable type.
+    def injectionEra = minecraftVersion.tokenize('.').collect { it.isInteger() ? it.toInteger() : 0 }
+    while (injectionEra.size() < 3) injectionEra << 0
+    if (injectionEra[0] > 1 || (injectionEra[0] == 1 && (injectionEra[1] > 21
+            || (injectionEra[1] == 21 && injectionEra[2] >= 9)))) {
+        loom.interfaceInjection.enableDependencyInterfaceInjection.set(true)
     }
 
     dependencies {

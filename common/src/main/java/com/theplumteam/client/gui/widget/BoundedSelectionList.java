@@ -89,6 +89,20 @@ public abstract class BoundedSelectionList<E extends ObjectSelectionList.Entry<E
     }
 
     @Override
+    //? if >=26 {
+    /^public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent bpEvent, double dragX, double dragY) {
+        double mouseX = bpEvent.x();
+        double mouseY = bpEvent.y();
+        int button = bpEvent.button();
+        int originalHeight = height;
+        height = y1 - y0;
+        try {
+            return super.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), dragX, dragY);
+        } finally {
+            height = originalHeight;
+        }
+    }
+    ^///? } else {
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         int originalHeight = height;
         height = y1 - y0;
@@ -98,6 +112,7 @@ public abstract class BoundedSelectionList<E extends ObjectSelectionList.Entry<E
             height = originalHeight;
         }
     }
+    //? }
 
     @Override
     protected void centerScrollOn(E entry) {

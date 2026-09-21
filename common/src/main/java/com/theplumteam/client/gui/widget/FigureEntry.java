@@ -60,9 +60,22 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         this.zOffset = zOffset;
     }
 
+    //? if >=26 {
+    /*// 26.1 gives an entry its own bounds and asks it to extract its contents rather
+    // than passing the row geometry in on every draw.
+    @Override
+    public void extractContent(GuiGraphics graphics, int mouseX, int mouseY,
+                               boolean isMouseOver, float partialTick) {
+        render(graphics, 0, getY(), getX(), getWidth(), getHeight(), mouseX, mouseY, isMouseOver, partialTick);
+    }
+
+    public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth,
+                      int entryHeight, int mouseX, int mouseY, boolean isMouseOver, float partialTick) {
+    *///? } else {
     @Override
     public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth,
                       int entryHeight, int mouseX, int mouseY, boolean isMouseOver, float partialTick) {
+    //? }
 
         // Calculate effective figure size - scale when using inverse scale mode
         int effectiveFigureSize = FIGURE_SIZE;
@@ -152,6 +165,17 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         }
     }
 
+    //? if >=26 {
+    /*// 26.1 routes every 3D element in a screen through picture-in-picture, and
+    // its GUI accepts only the state types vanilla declares: an entity, a skin, a
+    // book, a sign, a map. A GeckoLib model is none of those, so drawing one here
+    // needs a PictureInPictureRenderState of this mod's own plus a renderer
+    // registered against GuiRenderer. Until that exists the row shows the figure's
+    // face flat, which the caller already falls back to when no model resolves.
+    private void render3DFigure(GuiGraphicsExtractor graphics, FigureDefinition figure,
+                                int x, int y, int size, float partialTick) {
+    }
+    *///? } else {
     private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick) {
         // From 1.21.6 the GUI's own pose is two-dimensional, so the model is placed in a
         // stack of its own and drawn straight into the buffer source below.
@@ -285,6 +309,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         GuiLighting.items3D();
         poseStack.popPose();
     }
+    //? }
 
     /** Restores the global depth test, which only exists below 1.21.5. */
     private static void restoreDepthTest() {
@@ -294,9 +319,18 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     }
 
     @Override
+    //? if >=26 {
+    /*public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent bpEvent, boolean bpDouble) {
+        double mouseX = bpEvent.x();
+        double mouseY = bpEvent.y();
+        int button = bpEvent.button();
+        return false;
+    }
+    *///? } else {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         return false;
     }
+    //? }
 
     @Override
     public Component getNarration() {

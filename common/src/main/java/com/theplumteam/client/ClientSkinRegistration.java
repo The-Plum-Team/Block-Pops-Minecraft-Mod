@@ -14,10 +14,21 @@ public final class ClientSkinRegistration {
     //? if >=1.21 {
     /*public static void register(GameProfile profile) {
         Minecraft minecraft = Minecraft.getInstance();
-        SkinProfilePreparation.schedule(minecraft.getMinecraftSessionService(), profile,
+        SkinProfilePreparation.schedule(
+            //? if >=26 {
+            /^minecraft.services().sessionService(),
+            ^///? } else {
+            minecraft.getMinecraftSessionService(),
+            //? }
+            profile,
             minecraft.getUser().getProfileId(),
             ((LocalProfileProperties) minecraft).blockpops$getInitialProfileProperties(),
-            Util.backgroundExecutor(), minecraft::execute, minecraft.getSkinManager()::getOrLoad);
+            Util.backgroundExecutor(), minecraft::execute,
+            //? if >=26 {
+            /^minecraft.getSkinManager()::get);
+            ^///? } else {
+            minecraft.getSkinManager()::getOrLoad);
+            //? }
     }
     *///? }
 }

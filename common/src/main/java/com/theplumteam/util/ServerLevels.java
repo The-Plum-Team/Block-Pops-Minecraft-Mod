@@ -5,6 +5,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Player;
 
 /** Names the level a server player is in, which 1.21.6 renamed. */
 public final class ServerLevels {
@@ -32,7 +33,7 @@ public final class ServerLevels {
      * Whether the player holds the given vanilla operator level. 1.21.9 replaced the
      * integer levels with a permission set built from the same command levels.
      */
-    public static boolean hasCommandLevel(ServerPlayer player, int level) {
+    public static boolean hasCommandLevel(Player player, int level) {
         //? if >=1.21.9 {
         /*return player.permissions().hasPermission(new net.minecraft.server.permissions.Permission.HasCommandLevel(
                 net.minecraft.server.permissions.PermissionLevel.byId(level)));

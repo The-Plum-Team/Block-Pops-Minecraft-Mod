@@ -83,7 +83,12 @@ public class TabButton extends Button {
     }
 
     @Override
+    //? if >=26 {
+    /*protected boolean isValidClickButton(net.minecraft.client.input.MouseButtonInfo bpInfo) {
+        int button = bpInfo.button();
+    *///? } else {
     protected boolean isValidClickButton(int button) {
+    //? }
         // Only allow left-click
         return button == 0;
     }

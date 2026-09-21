@@ -53,17 +53,17 @@ public class PlatformHelperImpl {
     }
 
     public static boolean isDevelopmentEnvironment() {
-        return !FMLLoader.isProduction();
+        return !FMLEnvironment.isProduction();
     }
 
     public static void openBoxFigureScreen(BlockPos pos, BoxBlockEntity boxBlockEntity) {
-        if (FMLEnvironment.dist == Dist.CLIENT) {
+        if (FMLEnvironment.getDist() == Dist.CLIENT) {
             com.theplumteam.client.ClientHelpers.openBoxFigureScreen(pos, boxBlockEntity);
         }
     }
 
     public static void openClawMachineScreen(BlockPos pos, ClawMachineBlockEntity clawMachineBlockEntity) {
-        if (FMLEnvironment.dist == Dist.CLIENT) {
+        if (FMLEnvironment.getDist() == Dist.CLIENT) {
             com.theplumteam.client.ClientHelpers.openClawMachineScreen(pos, clawMachineBlockEntity);
         }
     }

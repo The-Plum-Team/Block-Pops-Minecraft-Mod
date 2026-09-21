@@ -17,12 +17,23 @@ public abstract class MinecraftProfilePropertiesMixin implements LocalProfilePro
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void blockpops$captureInitialProfileProperties(GameConfig config, CallbackInfo callback) {
+        //? if >=26 {
+        /*// 26.1 dropped User#profileProperties. The same properties are reachable
+        // from the client's own GameProfile by the time any skin lookup runs, so
+        // nothing is captured at construction any more.
+        *///? } else {
         blockpops$initialProfileProperties = config.user.profileProperties;
+        //? }
     }
 
     @Override
     @Unique
     public PropertyMap blockpops$getInitialProfileProperties() {
+        //? if >=26 {
+        /*return com.theplumteam.util.AuthlibProfiles.properties(
+                net.minecraft.client.Minecraft.getInstance().getGameProfile());
+        *///? } else {
         return blockpops$initialProfileProperties;
+        //? }
     }
 }

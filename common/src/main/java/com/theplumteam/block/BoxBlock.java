@@ -294,7 +294,8 @@ public class BoxBlock extends BaseEntityBlock {
                     level.playSound(null, pos, SoundEvents.SHEEP_SHEAR, SoundSource.BLOCKS, 1.0F, 1.0F);
                     return InteractionResult.SUCCESS;
                 } else {
-                    player.displayClientMessage(Component.literal("Use Shears to open").withStyle(ChatFormatting.GRAY), true);
+                    com.theplumteam.util.PlayerMessages.actionBar(player,
+                            Component.literal("Use Shears to open").withStyle(ChatFormatting.GRAY));
                     return InteractionResult.SUCCESS;
                 }
             }

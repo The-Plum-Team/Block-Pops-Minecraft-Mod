@@ -278,7 +278,11 @@ public class CollectionSelectionScreen extends Screen {
                 Component.literal("Settings")
         ) {
             @Override
+            //? if >=26 {
+            /*public void onPress(net.minecraft.client.input.InputWithModifiers bpInput) {
+            *///? } else {
             public void onPress() {
+            //? }
                 openSettingsScreen();
             }
         });
@@ -875,6 +879,18 @@ public class CollectionSelectionScreen extends Screen {
     }
 
     @Override
+    //? if >=26 {
+    /*public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent bpEvent, boolean bpDouble) {
+        double mouseX = bpEvent.x();
+        double mouseY = bpEvent.y();
+        int button = bpEvent.button();
+        if (GuiScaleManager.isUsingInverseScale()) {
+            mouseX = GuiScaleManager.transformMouseX(mouseX);
+            mouseY = GuiScaleManager.transformMouseY(mouseY);
+        }
+        return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), bpDouble);
+    }
+    *///? } else {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (GuiScaleManager.isUsingInverseScale()) {
             mouseX = GuiScaleManager.transformMouseX(mouseX);
@@ -882,8 +898,21 @@ public class CollectionSelectionScreen extends Screen {
         }
         return super.mouseClicked(mouseX, mouseY, button);
     }
+    //? }
 
     @Override
+    //? if >=26 {
+    /*public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent bpEvent) {
+        double mouseX = bpEvent.x();
+        double mouseY = bpEvent.y();
+        int button = bpEvent.button();
+        if (GuiScaleManager.isUsingInverseScale()) {
+            mouseX = GuiScaleManager.transformMouseX(mouseX);
+            mouseY = GuiScaleManager.transformMouseY(mouseY);
+        }
+        return super.mouseReleased(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()));
+    }
+    *///? } else {
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (GuiScaleManager.isUsingInverseScale()) {
             mouseX = GuiScaleManager.transformMouseX(mouseX);
@@ -891,8 +920,24 @@ public class CollectionSelectionScreen extends Screen {
         }
         return super.mouseReleased(mouseX, mouseY, button);
     }
+    //? }
 
     @Override
+    //? if >=26 {
+    /*public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent bpEvent, double dragX, double dragY) {
+        double mouseX = bpEvent.x();
+        double mouseY = bpEvent.y();
+        int button = bpEvent.button();
+        if (GuiScaleManager.isUsingInverseScale()) {
+            mouseX = GuiScaleManager.transformMouseX(mouseX);
+            mouseY = GuiScaleManager.transformMouseY(mouseY);
+            float scale = GuiScaleManager.getMouseScaleFactor();
+            dragX = dragX * scale;
+            dragY = dragY * scale;
+        }
+        return super.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), dragX, dragY);
+    }
+    *///? } else {
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (GuiScaleManager.isUsingInverseScale()) {
             mouseX = GuiScaleManager.transformMouseX(mouseX);
@@ -903,6 +948,7 @@ public class CollectionSelectionScreen extends Screen {
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
+    //? }
 
     @Override
     //? if >=1.21 {
@@ -936,6 +982,19 @@ public class CollectionSelectionScreen extends Screen {
     }
 
     @Override
+    //? if >=26 {
+    /*public boolean keyPressed(net.minecraft.client.input.KeyEvent bpEvent) {
+        int keyCode = bpEvent.key();
+        int scanCode = bpEvent.scancode();
+        int modifiers = bpEvent.modifiers();
+        // Allow ESC to close
+        if (keyCode == 256) { // ESC key
+            this.onClose();
+            return true;
+        }
+        return super.keyPressed(bpEvent);
+    }
+    *///? } else {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         // Allow ESC to close
         if (keyCode == 256) { // ESC key
@@ -944,4 +1003,5 @@ public class CollectionSelectionScreen extends Screen {
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
+    //? }
 }

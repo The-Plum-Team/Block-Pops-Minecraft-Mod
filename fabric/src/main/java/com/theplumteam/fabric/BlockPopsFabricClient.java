@@ -40,9 +40,27 @@ public class BlockPopsFabricClient implements ClientModInitializer {
         });
 
         // Register block entity renderers
-        BlockEntityRendererRegistry.register(ModBlockEntities.BOX_BLOCK.get(), context -> new BoxBlockRenderer());
-        BlockEntityRendererRegistry.register(ModBlockEntities.CLAW_MACHINE_BLOCK.get(), context -> new ClawMachineBlockRenderer());
-        BlockEntityRendererRegistry.register(ModBlockEntities.FIGURE_BLOCK.get(), context -> new FigureBlockRenderer());
+        BlockEntityRendererRegistry.register(ModBlockEntities.BOX_BLOCK.get(), context ->
+                //? if >=26 {
+                /*new BoxBlockRenderer(context)
+                *///? } else {
+                new BoxBlockRenderer()
+                //? }
+        );
+        BlockEntityRendererRegistry.register(ModBlockEntities.CLAW_MACHINE_BLOCK.get(), context ->
+                //? if >=26 {
+                /*new ClawMachineBlockRenderer(context)
+                *///? } else {
+                new ClawMachineBlockRenderer()
+                //? }
+        );
+        BlockEntityRendererRegistry.register(ModBlockEntities.FIGURE_BLOCK.get(), context ->
+                //? if >=26 {
+                /*new FigureBlockRenderer(context)
+                *///? } else {
+                new FigureBlockRenderer()
+                //? }
+        );
 
         // Register item renderers for GeckoLib blocks
         registerItemRenderers();

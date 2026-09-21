@@ -141,6 +141,40 @@ public class CollectionListWidget extends BoundedSelectionList<CollectionEntry> 
     }
 
     @Override
+    //? if >=26 {
+    /*public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent bpEvent, boolean bpDouble) {
+        double mouseX = bpEvent.x();
+        double mouseY = bpEvent.y();
+        int button = bpEvent.button();
+        if (GuiScaleManager.isUsingInverseScale()) {
+            float scale = GuiScaleManager.getRenderScaleFactor();
+
+            int origX0 = this.x0, origX1 = this.x1, origY0 = this.y0, origY1 = this.y1;
+            int origWidth = this.width, origHeight = this.height;
+            //? if >=1.21.2 {
+            /^double origScroll = this.scrollAmount();
+            ^///? } else {
+            double origScroll = this.getScrollAmount();
+            //? }
+
+            this.x0 = (int)(origX0 * scale);
+            this.x1 = (int)(origX1 * scale);
+            this.y0 = (int)(origY0 * scale);
+            this.y1 = (int)(origY1 * scale);
+            this.width = (int)(origWidth * scale);
+            this.height = (int)(origHeight * scale);
+            this.setScrollAmount(origScroll * scale);
+
+            boolean result = super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), bpDouble);
+
+            this.x0 = origX0; this.x1 = origX1; this.y0 = origY0; this.y1 = origY1;
+            this.width = origWidth; this.height = origHeight;
+            this.setScrollAmount(origScroll);
+            return result;
+        }
+        return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), bpDouble);
+    }
+    *///? } else {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (GuiScaleManager.isUsingInverseScale()) {
             float scale = GuiScaleManager.getRenderScaleFactor();
@@ -170,6 +204,7 @@ public class CollectionListWidget extends BoundedSelectionList<CollectionEntry> 
         }
         return super.mouseClicked(mouseX, mouseY, button);
     }
+    //? }
 
     @Override
     //? if >=1.21 {
@@ -188,6 +223,40 @@ public class CollectionListWidget extends BoundedSelectionList<CollectionEntry> 
     }
 
     @Override
+    //? if >=26 {
+    /*public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent bpEvent, double dragX, double dragY) {
+        double mouseX = bpEvent.x();
+        double mouseY = bpEvent.y();
+        int button = bpEvent.button();
+        if (GuiScaleManager.isUsingInverseScale()) {
+            float scale = GuiScaleManager.getRenderScaleFactor();
+
+            int origX0 = this.x0, origX1 = this.x1, origY0 = this.y0, origY1 = this.y1;
+            int origWidth = this.width, origHeight = this.height;
+            //? if >=1.21.2 {
+            /^double origScroll = this.scrollAmount();
+            ^///? } else {
+            double origScroll = this.getScrollAmount();
+            //? }
+
+            this.x0 = (int)(origX0 * scale);
+            this.x1 = (int)(origX1 * scale);
+            this.y0 = (int)(origY0 * scale);
+            this.y1 = (int)(origY1 * scale);
+            this.width = (int)(origWidth * scale);
+            this.height = (int)(origHeight * scale);
+            this.setScrollAmount(origScroll * scale);
+
+            boolean result = super.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), dragX, dragY);
+
+            this.x0 = origX0; this.x1 = origX1; this.y0 = origY0; this.y1 = origY1;
+            this.width = origWidth; this.height = origHeight;
+            this.setScrollAmount(origScroll);
+            return result;
+        }
+        return super.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), dragX, dragY);
+    }
+    *///? } else {
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (GuiScaleManager.isUsingInverseScale()) {
             float scale = GuiScaleManager.getRenderScaleFactor();
@@ -217,9 +286,14 @@ public class CollectionListWidget extends BoundedSelectionList<CollectionEntry> 
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
+    //? }
 
     @Override
+    //? if >=26 {
+    /*protected void extractSelection(GuiGraphics graphics, CollectionEntry entry, int outerColor) {
+    *///? } else {
     protected void renderSelection(GuiGraphics graphics, int top, int width, int height, int outerColor, int innerColor) {
+    //? }
         // Disable default selection border - we handle selection rendering in CollectionEntry
     }
 }

@@ -38,9 +38,22 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         this.collection = collection;
     }
 
+    //? if >=26 {
+    /*// 26.1 gives an entry its own bounds and asks it to extract its contents rather
+    // than passing the row geometry in on every draw.
+    @Override
+    public void extractContent(GuiGraphics graphics, int mouseX, int mouseY,
+                               boolean isMouseOver, float partialTick) {
+        render(graphics, 0, getY(), getX(), getWidth(), getHeight(), mouseX, mouseY, isMouseOver, partialTick);
+    }
+
+    public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth,
+                      int entryHeight, int mouseX, int mouseY, boolean isMouseOver, float partialTick) {
+    *///? } else {
     @Override
     public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth,
                       int entryHeight, int mouseX, int mouseY, boolean isMouseOver, float partialTick) {
+    //? }
         // Calculate effective sizes - scale when using inverse scale mode
         float scale = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getRenderScaleFactor() : 1.0f;
         int effectivePadding = (int)(PADDING * scale);
@@ -227,6 +240,60 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
     }
 
     @Override
+    //? if >=26 {
+    /*public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent bpEvent, boolean bpDouble) {
+        double mouseX = bpEvent.x();
+        double mouseY = bpEvent.y();
+        int button = bpEvent.button();
+        if (button == 0) {
+            // Check if link button was clicked
+            if (this.isLinkHovered && collection.getAuthorUrl() != null && !collection.getAuthorUrl().isEmpty()) {
+                // Open the URL in the default browser
+                try {
+                    // 1.21.5 made ClickEvent a sealed hierarchy whose open-url case
+                    // carries a URI instead of a string.
+                    //? if >=26 {
+                    /^net.minecraft.client.gui.screens.Screen previous = mc.screen;
+                    java.net.URI target = java.net.URI.create(collection.getAuthorUrl());
+                    mc.setScreen(new net.minecraft.client.gui.screens.ConfirmLinkScreen(confirmed -> {
+                        if (confirmed) {
+                            net.minecraft.Util.getPlatform().openUri(target);
+                        }
+                        mc.setScreen(previous);
+                    }, target.toString(), false));
+                    ^///? } elif >=1.21.5 {
+                    /^mc.screen.handleComponentClicked(
+                        net.minecraft.network.chat.Style.EMPTY.withClickEvent(
+                            new net.minecraft.network.chat.ClickEvent.OpenUrl(
+                                java.net.URI.create(collection.getAuthorUrl())
+                            )
+                        )
+                    );
+                    ^///? } else {
+                    mc.screen.handleComponentClicked(
+                        net.minecraft.network.chat.Style.EMPTY.withClickEvent(
+                            new net.minecraft.network.chat.ClickEvent(
+                                net.minecraft.network.chat.ClickEvent.Action.OPEN_URL,
+                                collection.getAuthorUrl()
+                            )
+                        )
+                    );
+                    //? }
+                } catch (Exception e) {
+                    // Fallback: just log the error
+                    System.err.println("Failed to open URL: " + collection.getAuthorUrl());
+                }
+                return true;
+            }
+
+            // Otherwise select this entry
+            parent.setSelected(this);
+            parent.onCollectionSelected(this);
+            return true;
+        }
+        return false;
+    }
+    *///? } else {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0) {
             // Check if link button was clicked
@@ -267,6 +334,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         }
         return false;
     }
+    //? }
 
     @Override
     public Component getNarration() {

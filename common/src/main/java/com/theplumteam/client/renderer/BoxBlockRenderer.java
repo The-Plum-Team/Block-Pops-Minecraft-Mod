@@ -23,9 +23,17 @@ import software.bernie.geckolib.renderer.GeoBlockRenderer;
 import software.bernie.geckolib.renderer.base.GeoRenderState;
 *///? }
 
+//? if >=26 {
+/*public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity,
+        net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState> {
+    private static final Logger LOGGER = LoggerFactory.getLogger(BoxBlockRenderer.class);
+    private final GeoBlockRenderer<BoxBlockEntity,
+            net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState> figureRenderer;
+*///? } else {
 public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     private static final Logger LOGGER = LoggerFactory.getLogger(BoxBlockRenderer.class);
     private final GeoBlockRenderer<BoxBlockEntity> figureRenderer;
+//? }
 
     //? if >=1.21.5 {
     /*// From 1.21.5 the render methods only see the render state, so the box being
@@ -36,6 +44,30 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     private Vec3 currentCamPos = Vec3.ZERO;
     *///? }
 
+    //? if >=26 {
+    /*public BoxBlockRenderer(net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider.Context context) {
+        super(context, new BoxBlockModel());
+        GeoRendererContext.capture(context);
+        // A separate renderer draws the figure that sits inside the box.
+        this.figureRenderer = new GeoBlockRenderer<>(context, new FigureModel()) {
+            @Override
+            @SuppressWarnings("rawtypes")
+            protected void tryRotateByBlockstate(com.geckolib.renderer.base.RenderPassInfo renderPassInfo,
+                                                 PoseStack poseStack) {
+                // The figure keeps its own facing rather than the block's.
+            }
+
+            @Override
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            public void adjustModelBonesForRender(com.geckolib.renderer.base.RenderPassInfo renderPassInfo,
+                                                  com.geckolib.renderer.base.BoneSnapshots snapshots) {
+                com.geckolib.renderer.base.GeoRenderState state =
+                        (com.geckolib.renderer.base.GeoRenderState) renderPassInfo.renderState();
+                FigureBlockRenderer.applyArmVisibility(snapshots, this.getGeoModel().getTextureResource(state));
+            }
+        };
+    }
+    *///? } else {
     public BoxBlockRenderer() {
         super(new BoxBlockModel());
         // Create a separate renderer instance for the figure (like Lineages does with the book)
@@ -84,8 +116,115 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
             //? }
         };
     }
+    //? }
 
-    //? if >=1.21.5 {
+    //? if >=26 {
+    /*// 26.1 draws nothing inline: a pass collects what to draw and submits it. The
+    // three things this renderer puts on top of the box — the figure inside it, that
+    // figure's face on the lid, and the collection logo — are captured off the block
+    // entity while it is still in hand, then queued per bone.
+    private static final com.geckolib.constant.dataticket.DataTicket<BoxOverlay> BOX_OVERLAY =
+            com.geckolib.constant.dataticket.DataTicket.create("blockpops:box_overlay", BoxOverlay.class);
+
+    private record BoxOverlay(boolean hasFigure, boolean figureExtracted,
+                              float offsetX, float offsetY, float offsetZ, float scale,
+                              net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState figureState,
+                              ResourceLocation skinTexture,
+                              ResourceLocation logoTexture, float[] logoPlacement) {
+    }
+
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public void addRenderData(BoxBlockEntity animatable, Void relatedObject,
+                              net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState renderState,
+                              float partialTick) {
+        super.addRenderData(animatable, relatedObject, renderState, partialTick);
+        // The figure's own pass is extracted here, while the block entity is still in
+        // hand; preRenderPass only submits what this captured.
+        net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState figureState = null;
+        if (animatable.hasFigure() && !animatable.isFigureExtracted()) {
+            figureState = figureRenderer.createRenderState();
+            figureRenderer.extractRenderState(animatable, figureState, partialTick,
+                    net.minecraft.world.phys.Vec3.ZERO, null);
+        }
+        ((com.geckolib.renderer.base.GeoRenderState) renderState).addGeckolibData(BOX_OVERLAY, new BoxOverlay(
+                animatable.hasFigure(), animatable.isFigureExtracted(),
+                (float) animatable.getFigureOffsetX(), (float) animatable.getFigureOffsetY(),
+                (float) animatable.getFigureOffsetZ(), (float) animatable.getFigureScale(),
+                figureState,
+                ((FigureModel) figureRenderer.getGeoModel()).resolveTexture(animatable),
+                logoTexture(animatable), logoPlacement(animatable)));
+    }
+
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public void adjustModelBonesForRender(com.geckolib.renderer.base.RenderPassInfo renderPassInfo,
+                                          com.geckolib.renderer.base.BoneSnapshots snapshots) {
+        // The separately textured bones are drawn by their own submissions below, so
+        // they stay out of the main pass instead of being skipped inside a draw call.
+        for (com.geckolib.cache.model.GeoBone bone : renderPassInfo.model().topLevelBones()) {
+            if (isSeparatelyTexturedBone(bone.name())) {
+                snapshots.ifPresent(bone.name(), snapshot -> snapshot.skipRender(true));
+            }
+        }
+    }
+
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public void preRenderPass(com.geckolib.renderer.base.RenderPassInfo renderPassInfo,
+                              net.minecraft.client.renderer.SubmitNodeCollector renderTasks) {
+        super.preRenderPass(renderPassInfo, renderTasks);
+        BoxOverlay overlay = ((com.geckolib.renderer.base.GeoRenderState) renderPassInfo.renderState())
+                .getGeckolibData(BOX_OVERLAY);
+        if (overlay == null) {
+            return;
+        }
+
+        for (com.geckolib.cache.model.GeoBone bone : renderPassInfo.model().topLevelBones()) {
+            String name = bone.name();
+            if (overlay.hasFigure() && isFaceBone(name) && overlay.skinTexture() != null) {
+                renderPassInfo.addPerBoneRender(bone, (info, posedBone, tasks) -> submitBone(info, posedBone, tasks,
+                        net.minecraft.client.renderer.rendertype.RenderTypes.entityTranslucent(overlay.skinTexture())));
+            } else if (name.equals("logo") && overlay.logoPlacement() != null && overlay.logoTexture() != null) {
+                renderPassInfo.addPerBoneRender(bone, (info, posedBone, tasks) -> {
+                    float[] placement = overlay.logoPlacement();
+                    PoseStack poseStack = info.poseStack();
+                    poseStack.pushPose();
+                    poseStack.translate(placement[0], placement[1], placement[2]);
+                    poseStack.scale(placement[3], placement[4], placement[5]);
+                    submitBone(info, posedBone, tasks,
+                            net.minecraft.client.renderer.rendertype.RenderTypes.entityCutout(overlay.logoTexture()));
+                    poseStack.popPose();
+                });
+            }
+        }
+
+        if (overlay.figureState() != null) {
+            PoseStack poseStack = renderPassInfo.poseStack();
+            poseStack.pushPose();
+            poseStack.translate(overlay.offsetX(), overlay.offsetY(), overlay.offsetZ());
+            poseStack.scale(overlay.scale(), overlay.scale(), overlay.scale());
+            figureRenderer.submit(overlay.figureState(), poseStack, renderTasks,
+                    new net.minecraft.client.renderer.state.level.CameraRenderState());
+            poseStack.popPose();
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void submitBone(com.geckolib.renderer.base.RenderPassInfo info,
+                                   com.geckolib.cache.model.GeoBone bone,
+                                   net.minecraft.client.renderer.SubmitNodeCollector tasks,
+                                   RenderType renderType) {
+        tasks.submitCustomGeometry(info.poseStack(), renderType, (pose, vertexConsumer) -> {
+            PoseStack poseStack = info.poseStack();
+            poseStack.pushPose();
+            poseStack.last().set(pose);
+            bone.positionAndRender(info, vertexConsumer, info.packedLight(), info.packedOverlay(),
+                    info.renderColor());
+            poseStack.popPose();
+        });
+    }
+    *///? } elif >=1.21.5 {
     /*@Override
     public void render(BoxBlockEntity animatable, float partialTick, PoseStack poseStack,
                        MultiBufferSource bufferSource, int packedLight, int packedOverlay, Vec3 camPos) {

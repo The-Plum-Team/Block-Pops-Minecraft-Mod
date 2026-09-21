@@ -188,7 +188,9 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
             // This allows client-side skin mods that update the player's connection info to work.
             if (Minecraft.getInstance().getConnection() != null) {
                 PlayerInfo info = Minecraft.getInstance().getConnection().getPlayerInfo(figure.getPlayerUUID());
-                //? if >=1.21 {
+                //? if >=1.21.9 {
+                /*if (info != null) return info.getSkin().body().texturePath();
+                *///? } elif >=1.21 {
                 /*if (info != null) return info.getSkin().texture();
                 *///? } else {
                 if (info != null) return info.getSkinLocation();
@@ -253,7 +255,10 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
         return POSE_ANIMATION;
     }
 
-    //? if >=1.21.5 {
+    //? if >=1.21.9 {
+    /*// GeckoLib 5.4 moved getRenderType off GeoModel and onto the renderer,
+    // so the renderer that owns this model names the render type instead.
+    *///? } elif >=1.21.5 {
     /*@Override
     public RenderType getRenderType(GeoRenderState renderState, ResourceLocation texture) {
         return RenderType.entityCutoutNoCull(texture != null ? texture : FALLBACK_TEXTURE);

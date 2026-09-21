@@ -25,7 +25,12 @@ public final class FigureWidgetRenderer {
 
     // Lazy-initialized singleton instances
     private static FigureModel figureModel;
+    //? if >=26 {
+    /*private static GeoBlockRenderer<BoxBlockEntity,
+            net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState> figureRenderer;
+    *///? } else {
     private static GeoBlockRenderer<BoxBlockEntity> figureRenderer;
+    //? }
 
     // Persistent cache for dummy entities used in UI rendering
     // Key format: "collectionId:figureId"
@@ -47,7 +52,11 @@ public final class FigureWidgetRenderer {
             synchronized (FigureWidgetRenderer.class) {
                 if (!initialized) {
                     figureModel = new FigureModel();
+                    //? if >=26 {
+                    /*figureRenderer = new GeoBlockRenderer<>(GeoRendererContext.get(), figureModel);
+                    *///? } else {
                     figureRenderer = new GeoBlockRenderer<>(figureModel);
+                    //? }
                     initialized = true;
                 }
             }
@@ -71,7 +80,12 @@ public final class FigureWidgetRenderer {
      *
      * @return The shared renderer
      */
+    //? if >=26 {
+    /*public static GeoBlockRenderer<BoxBlockEntity,
+            net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState> getRenderer() {
+    *///? } else {
     public static GeoBlockRenderer<BoxBlockEntity> getRenderer() {
+    //? }
         ensureInitialized();
         return figureRenderer;
     }

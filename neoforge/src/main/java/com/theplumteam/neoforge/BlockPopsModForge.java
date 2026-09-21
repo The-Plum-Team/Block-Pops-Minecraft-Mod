@@ -76,16 +76,16 @@ public final class BlockPopsModForge {
 
         // Add new players to the collection when they join
         PlayerEvent.PLAYER_JOIN.register(player -> {
-            if (player.getServer() != null) {
+            if (com.theplumteam.util.ServerLevels.serverOf(player) != null) {
                 // FALLBACK: If collections weren't loaded during SERVER_STARTING,
                 // load them now. This check ensures we only load once.
                 if (!CollectionRegistry.isInitialized() || CollectionRegistry.getAllCollections().size() <= 1) {
                     BlockPopsMod.logDebug("Collections not loaded yet, loading now from PLAYER_JOIN...");
-                    CollectionRegistry.loadCollections(player.getServer().getResourceManager());
+                    CollectionRegistry.loadCollections(com.theplumteam.util.ServerLevels.serverOf(player).getResourceManager());
                 }
 
                 // 1. Re-generate World Players collection to include the new player
-                FigureCollection updatedPlayerCollection = PlayerCollectionHelper.generate(player.getServer());
+                FigureCollection updatedPlayerCollection = PlayerCollectionHelper.generate(com.theplumteam.util.ServerLevels.serverOf(player));
                 CollectionRegistry.registerDynamicCollection(updatedPlayerCollection);
                 BlockPopsMod.LOGGER.debug("Updated World Players collection after player join: {}", player.getName().getString());
 
@@ -103,7 +103,7 @@ public final class BlockPopsModForge {
                 java.util.List<FigureCollection> dynamicUpdate = new java.util.ArrayList<>();
                 dynamicUpdate.add(updatedPlayerCollection);
 
-                for (ServerPlayer p : player.getServer().getPlayerList().getPlayers()) {
+                for (ServerPlayer p : com.theplumteam.util.ServerLevels.serverOf(player).getPlayerList().getPlayers()) {
                     if (p != player) { // Skip the joining player (they got it in step 2)
                         SyncDynamicCollectionsPacket.sendToPlayer(p, dynamicUpdate);
                     }

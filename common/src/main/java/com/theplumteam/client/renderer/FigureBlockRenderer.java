@@ -16,13 +16,50 @@ import software.bernie.geckolib.renderer.GeoBlockRenderer;
 import software.bernie.geckolib.renderer.base.GeoRenderState;
 *///? }
 
+//? if >=26 {
+/*public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity,
+        net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState> {
+
+    public FigureBlockRenderer(net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider.Context context) {
+        super(context, new FigureBlockModel());
+        GeoRendererContext.capture(context);
+    }
+*///? } else {
 public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
 
     public FigureBlockRenderer() {
         super(new FigureBlockModel());
     }
+//? }
 
-    //? if >=1.21.5 {
+    //? if >=26 {
+    /*// GeckoLib 5.5 renders through the deferred pipeline: the block entity is only
+    // in hand while vanilla decides whether to render at all, and bone visibility is
+    // per-frame state rather than state on the bone.
+    @Override
+    public boolean shouldRender(FigureBlockEntity blockEntity, net.minecraft.world.phys.Vec3 cameraPos) {
+        return blockEntity.hasFigure() && super.shouldRender(blockEntity, cameraPos);
+    }
+
+    @Override
+    public RenderType getRenderType(net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState renderState,
+                                    ResourceLocation texture) {
+        return net.minecraft.client.renderer.rendertype.RenderTypes.entityCutout(texture);
+    }
+
+    // GeckoLib bounds this hook's render state on an interface it mixes into
+    // vanilla's BlockEntityRenderState at runtime. Loom does not carry that
+    // injection onto the compile classpath here, so the parameter is named by its
+    // erasure and the state is read back through the interface the mixin adds.
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public void adjustModelBonesForRender(com.geckolib.renderer.base.RenderPassInfo renderPassInfo,
+                                          com.geckolib.renderer.base.BoneSnapshots snapshots) {
+        com.geckolib.renderer.base.GeoRenderState renderState =
+                (com.geckolib.renderer.base.GeoRenderState) renderPassInfo.renderState();
+        applyArmVisibility(snapshots, this.getGeoModel().getTextureResource(renderState));
+    }
+    *///? } elif >=1.21.5 {
     /*// From 1.21.5 the render methods only see the render state, so the "is there a
     // figure yet" question is answered once, where the block entity is still in hand.
     @Override
@@ -94,6 +131,17 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
     }
     //? }
 
+    //? if >=26 {
+    /*// Shows the arm pair that matches the skin the figure is wearing.
+    static void applyArmVisibility(com.geckolib.renderer.base.BoneSnapshots snapshots, ResourceLocation texture) {
+        boolean isSlim = SkinModelDetector.detectSkinModel(texture) == SkinModelDetector.SkinModel.SLIM;
+
+        snapshots.ifPresent("RightArmSlim", snapshot -> snapshot.skipRender(!isSlim));
+        snapshots.ifPresent("LeftArmSlim", snapshot -> snapshot.skipRender(!isSlim));
+        snapshots.ifPresent("RightArmClassic", snapshot -> snapshot.skipRender(isSlim));
+        snapshots.ifPresent("LeftArmClassic", snapshot -> snapshot.skipRender(isSlim));
+    }
+    *///? } else {
     /** Shows the arm pair that matches the skin the figure is wearing. */
     static void applyArmVisibility(BakedGeoModel model, ResourceLocation texture) {
         boolean isSlim = SkinModelDetector.detectSkinModel(texture) == SkinModelDetector.SkinModel.SLIM;
@@ -116,4 +164,5 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
             leftArmClassic.setHidden(isSlim);
         }
     }
+    //? }
 }

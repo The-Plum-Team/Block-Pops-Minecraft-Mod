@@ -429,6 +429,22 @@ public class SettingsScreen extends Screen {
     }
 
     @Override
+    //? if >=26 {
+    /*public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent bpEvent, boolean bpDouble) {
+        double mouseX = bpEvent.x();
+        double mouseY = bpEvent.y();
+        int button = bpEvent.button();
+        // Check if click is outside the panel (including tabs)
+        if (mouseX < this.panelX || mouseX > this.panelX + this.panelWidth ||
+                mouseY < this.panelY || mouseY > this.panelY + this.panelHeight) {
+            // Click outside panel - close the modal
+            this.onClose();
+            return true;
+        }
+        // Click inside panel - handle normally
+        return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), bpDouble);
+    }
+    *///? } else {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         // Check if click is outside the panel (including tabs)
         if (mouseX < this.panelX || mouseX > this.panelX + this.panelWidth ||
@@ -440,6 +456,7 @@ public class SettingsScreen extends Screen {
         // Click inside panel - handle normally
         return super.mouseClicked(mouseX, mouseY, button);
     }
+    //? }
 
     @Override
     public void onClose() {
@@ -474,7 +491,7 @@ public class SettingsScreen extends Screen {
         }
         // Check if player has admin permissions (level 2, same as /blockpops getbox command)
         if (this.minecraft != null && this.minecraft.player != null) {
-            return this.minecraft.player.hasPermissions(2);
+            return com.theplumteam.util.ServerLevels.hasCommandLevel(this.minecraft.player, 2);
         }
         return false;
     }

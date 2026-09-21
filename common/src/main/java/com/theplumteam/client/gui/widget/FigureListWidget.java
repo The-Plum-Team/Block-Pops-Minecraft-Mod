@@ -224,11 +224,22 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
     }
 
     @Override
+    //? if >=26 {
+    /*public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent bpEvent, boolean bpDouble) {
+        double mouseX = bpEvent.x();
+        double mouseY = bpEvent.y();
+        int button = bpEvent.button();
+        // Use virtual coordinates directly - screen already transforms mouse coords
+        // Virtual bounds + virtual mouse + virtual itemHeight = correct entry detection
+        return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), bpDouble);
+    }
+    *///? } else {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         // Use virtual coordinates directly - screen already transforms mouse coords
         // Virtual bounds + virtual mouse + virtual itemHeight = correct entry detection
         return super.mouseClicked(mouseX, mouseY, button);
     }
+    //? }
 
     @Override
     //? if >=1.21 {
@@ -247,8 +258,18 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
     }
 
     @Override
+    //? if >=26 {
+    /*public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent bpEvent, double dragX, double dragY) {
+        double mouseX = bpEvent.x();
+        double mouseY = bpEvent.y();
+        int button = bpEvent.button();
+        // Use virtual coordinates directly - screen already transforms mouse coords
+        return super.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), dragX, dragY);
+    }
+    *///? } else {
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         // Use virtual coordinates directly - screen already transforms mouse coords
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
+    //? }
 }

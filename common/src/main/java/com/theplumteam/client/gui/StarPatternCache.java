@@ -61,8 +61,10 @@ public class StarPatternCache {
             /*cachedTextureLocation = ResourceLocations.of("blockpops", "star_cache");
             cachedTexture = new DynamicTexture(cachedTextureLocation::toString, cachedImage);
             mc.getTextureManager().register(cachedTextureLocation, cachedTexture);
+            //? if <26 {
             cachedTexture.setFilter(true, false);
             cachedTexture.setClamp(false);
+            //? }
             *///? } elif >=1.21.2 {
             /*cachedTexture = new DynamicTexture(cachedImage);
             cachedTextureLocation = ResourceLocations.of("blockpops", "star_cache");
@@ -104,7 +106,10 @@ public class StarPatternCache {
         if (cachedTexture == null) {
             return;
         }
-        //? if >=1.21.5 {
+        //? if >=26 {
+        /*// 26.1 moved sampler state off the texture: it is owned by the render
+        // pipeline the draw call names, so there is nothing to set per frame.
+        *///? } elif >=1.21.5 {
         /*cachedTexture.setFilter(true, false);
         cachedTexture.setClamp(false);
         *///? } else {

@@ -51,9 +51,27 @@ public class BlockPopsModForgeClient {
 
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
-        event.registerBlockEntityRenderer(ModBlockEntities.BOX_BLOCK.get(), context -> new BoxBlockRenderer());
-        event.registerBlockEntityRenderer(ModBlockEntities.CLAW_MACHINE_BLOCK.get(), context -> new ClawMachineBlockRenderer());
-        event.registerBlockEntityRenderer(ModBlockEntities.FIGURE_BLOCK.get(), context -> new FigureBlockRenderer());
+        event.registerBlockEntityRenderer(ModBlockEntities.BOX_BLOCK.get(), context ->
+                //? if >=26 {
+                /*new BoxBlockRenderer(context)
+                *///? } else {
+                new BoxBlockRenderer()
+                //? }
+        );
+        event.registerBlockEntityRenderer(ModBlockEntities.CLAW_MACHINE_BLOCK.get(), context ->
+                //? if >=26 {
+                /*new ClawMachineBlockRenderer(context)
+                *///? } else {
+                new ClawMachineBlockRenderer()
+                //? }
+        );
+        event.registerBlockEntityRenderer(ModBlockEntities.FIGURE_BLOCK.get(), context ->
+                //? if >=26 {
+                /*new FigureBlockRenderer(context)
+                *///? } else {
+                new FigureBlockRenderer()
+                //? }
+        );
     }
 
     //? if >=1.21.4 {

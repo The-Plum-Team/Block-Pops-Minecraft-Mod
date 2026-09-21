@@ -38,7 +38,11 @@ public class FigureBlockItemRenderer
         //? if <1.21.4 {
         super(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
         //? }
+        //? if >=26 {
+        /*this.renderer = new FigureBlockRenderer(GeoRendererContext.get());
+        *///? } else {
         this.renderer = new FigureBlockRenderer();
+        //? }
     }
 
     //? if >=1.21.4 {
@@ -48,11 +52,13 @@ public class FigureBlockItemRenderer
         return stack.copy();
     }
 
-    @Override
+    //? if <26 {
+    /^@Override
     public void render(ItemStack stack, ItemDisplayContext displayContext, PoseStack poseStack,
                        MultiBufferSource bufferSource, int packedLight, int packedOverlay, boolean hasGlint) {
         renderByItem(stack, displayContext, poseStack, bufferSource, packedLight, packedOverlay);
     }
+    ^///? }
     *///? } else {
     @Override
     //? }
@@ -123,7 +129,9 @@ public class FigureBlockItemRenderer
             //? }
 
             // Render using FigureBlockRenderer
-            //? if >=1.21.5 {
+            //? if >=26 {
+            /*// 26.1 enters through submit; this draw path is never reached there.
+            *///? } elif >=1.21.5 {
             /*this.renderer.render(renderEntity, partialTick, poseStack, bufferSource, packedLight, packedOverlay,
                     net.minecraft.world.phys.Vec3.ZERO);
             *///? } else {
@@ -138,22 +146,77 @@ public class FigureBlockItemRenderer
             ResourceLocations.of(BlockPopsMod.MOD_ID, "figure_block");
 
     // 1.21.4 binds a special renderer to an item model through this unbaked codec.
+    //? if >=26 {
+    /^public record Unbaked() implements SpecialModelRenderer.Unbaked<ItemStack> {
+    ^///? } else {
     public record Unbaked() implements SpecialModelRenderer.Unbaked {
+    //? }
         public static final MapCodec<Unbaked> MAP_CODEC = MapCodec.unit(Unbaked::new);
 
         @Override
+        //? if >=26 {
+        /^public MapCodec<? extends SpecialModelRenderer.Unbaked<ItemStack>> type() {
+        ^///? } else {
         public MapCodec<? extends SpecialModelRenderer.Unbaked> type() {
+        //? }
             return MAP_CODEC;
         }
 
         @Override
+        //? if >=26 {
+        /^public SpecialModelRenderer<ItemStack> bake(SpecialModelRenderer.BakingContext bakingContext) {
+        ^///? } else {
         public SpecialModelRenderer<?> bake(EntityModelSet modelSet) {
+        //? }
             return new FigureBlockItemRenderer();
         }
     }
     *///? }
 
-    //? if >=1.21.6 {
+    //? if >=26 {
+    /*@Override
+    public void getExtents(java.util.function.Consumer<org.joml.Vector3fc> extents) {
+        // The model occupies the block's own unit cube.
+        extents.accept(new org.joml.Vector3f(0, 0, 0));
+        extents.accept(new org.joml.Vector3f(1, 1, 1));
+    }
+
+    // Builds the block entity the item stack stands for, mirroring what the older
+    // draw path does inline. Returns false when the stack is not one of ours.
+    private boolean prepareRenderEntity(ItemStack stack) {
+        if (!(stack.getItem() instanceof GeoBlockItem geoBlockItem)
+                || !(geoBlockItem.getBlock() instanceof FigureBlock figureBlock)) {
+            return false;
+        }
+        if (renderEntity == null || !renderEntity.getBlockState().is(figureBlock)) {
+            renderEntity = new FigureBlockEntity(BlockPos.ZERO, figureBlock.defaultBlockState());
+        }
+        CompoundTag blockEntityTag = BlockEntityItemData.read(stack);
+        if (blockEntityTag != null) {
+            renderEntity.loadForItemRendering(blockEntityTag);
+        }
+        return true;
+    }
+
+    // 26.1 submits render tasks instead of drawing, and no longer tells a special
+    // renderer which display context it is in; those transforms belong to the item
+    // model's own display block from this version on.
+    @Override
+    public void submit(ItemStack stack, PoseStack poseStack,
+                       net.minecraft.client.renderer.SubmitNodeCollector renderTasks,
+                       int packedLight, int packedOverlay, boolean hasGlint, int outlineColor) {
+        if (!prepareRenderEntity(stack)) {
+            return;
+        }
+        float partialTick = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(true);
+        net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState renderState =
+                this.renderer.createRenderState();
+        this.renderer.extractRenderState(renderEntity, renderState, partialTick,
+                net.minecraft.world.phys.Vec3.ZERO, null);
+        this.renderer.submit(renderState, poseStack, renderTasks,
+                new net.minecraft.client.renderer.state.level.CameraRenderState());
+    }
+    *///? } elif >=1.21.6 {
     /*@Override
     public void getExtents(java.util.Set<org.joml.Vector3f> extents) {
         // The model occupies the block's own unit cube.

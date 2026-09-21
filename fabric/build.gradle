@@ -47,7 +47,13 @@ dependencies {
     add(blockPopsModImplementation, rootProject.runtime_dependency_coordinate.call('fabric', 'geckolib'))
 
     // Common code
-    common(project(path: rootProject.common_project_path, configuration: 'namedElements')) { transitive = false }
+    // Loom only publishes a 'namedElements' variant when it remaps; an
+    // unobfuscated lane consumes the common module's jar directly instead.
+    if (blockPopsNoRemap) {
+        common project.files(rootProject.project(rootProject.common_project_path).tasks.named('jar'))
+    } else {
+        common(project(path: rootProject.common_project_path, configuration: 'namedElements')) { transitive = false }
+    }
     shadowBundle project(path: rootProject.common_project_path, configuration: 'transformProductionFabric')
 }
 
