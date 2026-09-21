@@ -1251,3 +1251,23 @@ The 1.21.10 measurement is worth keeping even though the lane is not configured:
 - Every lane fails the contracted `mean_luma <= 32`, and fabric-1.21.1 misses it by half a point with no bright pixels at all. The forge-1.20.1 row is the explanation for the whole table: its capture is 3024x1800, exactly twice this display's 1512 logical points, where the contract expects 1600x900 or an integer-density variant of it. Every capture here is taken at a size the probes were not written for.
 - One pattern is worth naming rather than averaging away: for the same version, the Fabric client reads consistently brighter than the NeoForge one - 62.00 against 34.00 on 1.21.4, 62.15 against 36.53 on 1.21.6, 55.48 against 42.23 on 1.21.8. That is a loader-level difference in how the background composites, not a per-version regression, and it is unexplained. It is recorded so that whoever fixes the window size does not read it as noise.
 - Thirteen lanes started a client, joined a dedicated server and opened the mod's screens. That is the gameplay-level evidence this change had none of when it began. No lane is qualified: not one visual assertion has passed on this machine, for any version, on either loader.
+
+## Task 10ai — the 1.21.9-era port, measured and mapped
+
+- The frontier for `:common:1.21.11:compileJava` on the new toolchain has been worked down from 820 errors to 334, entirely with mechanisms that leave the five working versions untouched.
+
+| Step | Errors | How |
+|---|---|---|
+| reachable at all | 820 | Gradle 9.7.1 and Loom 1.17.480 |
+| names rewritten at generation | 446 | `ResourceLocation` to `Identifier` |
+| packages moved at generation | 370 | `RenderType`, `Util`, three GeckoLib types |
+| authlib, server and permissions | 334 | narrow adapters at the call sites |
+
+- What remains is mapped rather than guessed, so the next session starts from a plan:
+  - **`PlayerSkin` is a record of client assets.** It moved from `net.minecraft.client.resources` to `net.minecraft.world.entity.player`, its fields are `ClientAsset.Texture` rather than ids, and `model()` returns a `PlayerModelType`. `SkinManager.getInsecureSkin` is gone; `createLookup(profile, boolean)` returns a supplier. This reaches `SkinModelDetector`, both figure models and `FigurePositionScreen`.
+  - **The render type factories moved to a holder.** The type is `rendertype.RenderType`, already handled, but every `RenderType.entityCutoutNoCull(...)` and `RenderType::guiTextured` now lives on `RenderTypes`. Mechanical, but the rewrite has to add an import as well as change a name.
+  - **Texture sampler state is no longer on the texture.** `AbstractTexture` exposes a `GpuSampler`; `setFilter` and `setClamp` are gone. This is the same code the packaged runs just proved matters, so it needs care rather than a guess.
+  - **The selection lists renamed their internals.** `itemHeight` is `defaultEntryHeight` and `headerHeight` has no direct successor.
+  - **GeckoLib 5.4 changed the renderer base again**, which is what the fifteen unresolved `super` references are.
+  - **`playNotifySound` is gone** from the player, and the nearest replacement broadcasts rather than notifying one client, so it is a behaviour decision rather than a rename.
+- The lanes stay declared and unconfigured. Configuring a lane that cannot compile would make the matrix claim something untrue, and the release pipeline reads that matrix.
