@@ -10,9 +10,14 @@ def stonecutterLayout = lanes.every { it.build_layout == 'stonecutter' }
 def buildProjectPaths = gradle.ext.blockPopsBuildProjectPaths as Set
 def minecraftVersions = artifacts.collect { it.minecraft as String }.toSet()
 def javaVersions = artifacts.collect { (it.java as Number).intValue() }.toSet()
-if (minecraftVersions.size() != 1 || javaVersions.size() != 1 || modVersions.size() != 1) {
-    throw new GradleException('One Gradle context must route exactly one Minecraft/Java/mod-version era')
+// From 26.1 Minecraft ships unobfuscated, so there is nothing to remap and no
+// mappings to ask for. Architectury publishes a sibling plugin for exactly that.
+def noRemapPolicies = artifacts.collect { it.no_remap as Boolean }.toSet()
+if (minecraftVersions.size() != 1 || javaVersions.size() != 1 || modVersions.size() != 1
+        || noRemapPolicies.size() != 1) {
+    throw new GradleException('One Gradle context must route exactly one Minecraft/Java/mod-version/remap era')
 }
+def noRemap = noRemapPolicies.first()
 def minecraftVersion = minecraftVersions.first()
 def javaVersion = javaVersions.first()
 def runtimeByLoader = runtimes.collectEntries { [(it.loader as String): it] }
@@ -110,7 +115,12 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
         ext.set('loom.platform', expectedPlatform)
     }
 
-    apply plugin: 'dev.architectury.loom'
+    apply plugin: noRemap ? 'dev.architectury.loom-no-remap' : 'dev.architectury.loom'
+    // An unobfuscated lane has no mod remapping, so mod dependencies enter through
+    // the plain configurations. Modules name the configuration rather than the policy.
+    ext.set('blockPopsModImplementation', noRemap ? 'implementation' : 'modImplementation')
+    ext.set('blockPopsModCompileOnly', noRemap ? 'compileOnly' : 'modCompileOnly')
+    ext.set('blockPopsNoRemap', noRemap)
     apply plugin: 'architectury-plugin'
     apply plugin: 'maven-publish'
 
@@ -136,13 +146,70 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
             'software.bernie.geckolib.cache.object.GeoBone': 'software.bernie.geckolib.cache.model.GeoBone',
             'software.bernie.geckolib.cache.object.BakedGeoModel': 'software.bernie.geckolib.cache.model.BakedGeoModel',
             'software.bernie.geckolib.animatable.processing.AnimationController': 'software.bernie.geckolib.animation.AnimationController',
+            'software.bernie.geckolib.animation.PlayState': 'software.bernie.geckolib.animation.object.PlayState',
+        ]
+        // 1.21.9 split RenderType's static factories onto a RenderTypes holder beside it.
+        // The generated call is fully qualified so no import has to be synthesised.
+        def renderTypeFactories = ~/\bRenderType(\.|::)(entityCutoutNoCull|entityTranslucent)\b/
+        // GeckoLib renamed its root package alongside its Maven group at the 26.1
+        // boundary. Every subpackage below the root is unchanged, so this runs last,
+        // after the moves above have been applied under the older root.
+        def renamesGeckolibRoot = era[0] >= 26
+        // 26.1 renamed GuiGraphics to GuiGraphicsExtractor in place. The word boundary
+        // leaves the new name alone, so the rule is safe to apply to already-new text.
+        def renamesGuiGraphics = era[0] >= 26
+        // 26.1 also dropped the draw*/render* prefixes on that class. The receiver is
+        // matched so the rule cannot rename a same-named method on another type.
+        // 26.1 moved vanilla's GUI onto the same extract/submit pipeline as entities.
+        // These hooks keep their signature, so only the name differs, and the target
+        // depends on which vanilla class the file extends.
+        def guiHookRenames = [
+            'TabButton.java':            [['renderWidget', 'extractContents']],
+            'LinkButton.java':           [['renderWidget', 'extractContents']],
+            'ColorSelectionButton.java': [['renderWidget', 'extractContents']],
+            'BoundedSelectionList.java': [['renderWidget', 'extractWidgetRenderState'],
+                                          ['renderListBackground', 'extractListBackground'],
+                                          ['renderListSeparators', 'extractListSeparators']],
+            'FigureListWidget.java':     [['itemHeight', 'defaultEntryHeight']],
+            'CollectionListWidget.java': [['itemHeight', 'defaultEntryHeight']],
+        ]
+        def guiGraphicsMethods = [
+            'drawString': 'text',
+            'drawCenteredString': 'centeredText',
+            'renderOutline': 'outline',
+            'renderItem': 'item',
+            'renderFakeItem': 'fakeItem',
+            'renderItemDecorations': 'itemDecorations',
         ]
         if (rewritesIdentifier) {
             generatedMain.configure {
+                // A filter closure is invisible to Gradle's up-to-date check, so the rule
+                // set is declared as an input. Without this, editing a rule leaves the
+                // previously generated sources in place and the change looks like a no-op.
+                inputs.property('blockPopsSourceRewrites', [
+                        movedImports, renderTypeFactories.toString(),
+                        renamesGeckolibRoot, renamesGuiGraphics, guiGraphicsMethods, guiHookRenames,
+                ].toString())
                 filesMatching('**/*.java') {
+                    def hookRenames = renamesGuiGraphics ? (guiHookRenames[it.name] ?: []) : []
                     filter { String line ->
                         String rewritten = line.replaceAll(/\bResourceLocation\b/, 'Identifier')
+                        rewritten = rewritten.replaceAll(renderTypeFactories) { match, sep, name ->
+                            "net.minecraft.client.renderer.rendertype.RenderTypes${sep}${name}"
+                        }
                         movedImports.each { from, to -> rewritten = rewritten.replace(from, to) }
+                        if (renamesGeckolibRoot) {
+                            rewritten = rewritten.replace('software.bernie.geckolib', 'com.geckolib')
+                        }
+                        if (renamesGuiGraphics) {
+                            rewritten = rewritten.replaceAll(/\bGuiGraphics\b/, 'GuiGraphicsExtractor')
+                            guiGraphicsMethods.each { from, to ->
+                                rewritten = rewritten.replaceAll(/\b(graphics|guiGraphics)\.${from}\(/, "\$1.${to}(")
+                            }
+                        }
+                        hookRenames.each { pair ->
+                            rewritten = rewritten.replaceAll(/\b${pair[0]}\b/, pair[1])
+                        }
                         return rewritten
                     }
                 }
@@ -280,7 +347,9 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
 
     dependencies {
         minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
-        mappings loom.officialMojangMappings()
+        if (!noRemap) {
+            mappings loom.officialMojangMappings()
+        }
     }
 
     java {
@@ -295,6 +364,12 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
     tasks.withType(JavaCompile).configureEach {
         options.release = javaVersion
         options.encoding = 'UTF-8'
+        // javac stops listing after 100 errors, which hides the size of a port.
+        // -PblockpopsMaxErrs raises the ceiling for a measuring run only.
+        def maxErrs = providers.gradleProperty('blockpopsMaxErrs').orNull
+        if (maxErrs) {
+            options.compilerArgs.addAll(['-Xmaxerrs', maxErrs])
+        }
     }
 
     publishing {

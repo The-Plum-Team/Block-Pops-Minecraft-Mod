@@ -46,10 +46,10 @@ dependencies {
     neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
 
     // The exact full coordinates are owned by this branch's release matrix.
-    modImplementation rootProject.runtime_dependency_coordinate.call('neoforge', 'architectury')
+    add(blockPopsModImplementation, rootProject.runtime_dependency_coordinate.call('neoforge', 'architectury'))
 
     // GeckoLib - NeoForge version
-    modImplementation rootProject.runtime_dependency_coordinate.call('neoforge', 'geckolib')
+    add(blockPopsModImplementation, rootProject.runtime_dependency_coordinate.call('neoforge', 'geckolib'))
 
     common(project(path: rootProject.common_project_path, configuration: 'namedElements')) { transitive = false }
     shadowBundle project(path: rootProject.common_project_path, configuration: 'transformProductionNeoForge')
@@ -79,11 +79,15 @@ processResources {
 
 shadowJar {
     configurations = [project.configurations.shadowBundle]
-    archiveClassifier = 'dev-shadow'
+    // Without remapping the shadow jar is itself the published artifact, so it
+    // takes the release name rather than a development classifier.
+    archiveClassifier = blockPopsNoRemap ? '' : 'dev-shadow'
 }
 
-remapJar {
-    inputFile.set shadowJar.archiveFile
+if (!blockPopsNoRemap) {
+    remapJar {
+        inputFile.set shadowJar.archiveFile
+    }
 }
 
 apply from: rootProject.file('gradle/e2e-harness-conventions.gradle')

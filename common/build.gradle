@@ -5,7 +5,7 @@ architectury {
 // Architectury's transformer and Loom's isolated modCompileOnly resolution
 // must use the same annotation loader as the matrix-owned compile dependency.
 configurations.matching {
-    it.name in ['architecturyTransformerClasspath', 'modCompileOnly']
+    it.name in ['architecturyTransformerClasspath', blockPopsModCompileOnly]
 }.configureEach {
     resolutionStrategy.force(rootProject.common_annotation_coordinate)
 }
@@ -41,13 +41,13 @@ dependencies {
     // We depend on Fabric Loader here to use the Fabric @Environment annotations,
     // which get remapped to the correct annotations on each platform.
     // Do NOT use other classes from Fabric Loader.
-    modImplementation rootProject.common_annotation_coordinate
+    add(blockPopsModImplementation, rootProject.common_annotation_coordinate)
 
     // Architectury API. This is optional, and you can comment it out if you don't need it.
-    modImplementation "dev.architectury:architectury:$rootProject.architectury_api_version"
+    add(blockPopsModImplementation, "dev.architectury:architectury:$rootProject.architectury_api_version")
 
     // Compile against the active Forge-family API when present. The full
     // loader/Minecraft coordinate is owned by the branch-local release matrix.
     def geckoLoader = rootProject.forge_family_loader ?: 'fabric'
-    modCompileOnly rootProject.runtime_dependency_coordinate.call(geckoLoader, 'geckolib')
+    add(blockPopsModCompileOnly, rootProject.runtime_dependency_coordinate.call(geckoLoader, 'geckolib'))
 }

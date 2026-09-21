@@ -108,6 +108,12 @@ EXPECTED_TARGETS = frozenset(
         ("neoforge", "1.21.10"),
         ("fabric", "1.21.11"),
         ("neoforge", "1.21.11"),
+        ("fabric", "26.1"),
+        ("neoforge", "26.1"),
+        ("fabric", "26.2"),
+        ("neoforge", "26.2"),
+        ("fabric", "26.3"),
+        ("neoforge", "26.3"),
     }
 )
 LEGACY_TARGET_NODES = frozenset({"fabric-1.20.1", "forge-1.20.1"})
@@ -397,8 +403,6 @@ def _validate_configuration(
     if root["schema_version"] != (2 if schema2 else 1):
         _fail("release matrix schema_version disagrees with its inventory")
     gradle_java = _integer(root["gradle_java"], "gradle_java", minimum=21)
-    if schema2 and gradle_java != 21:
-        _fail("schema-2 gradle_java must be 21")
     lane_count = _integer(root["lane_count"], "lane_count")
 
     try:
@@ -533,8 +537,11 @@ def _validate_configuration(
     if not schema2 and len(forge_family_loaders) > 1:
         _fail("a release branch cannot activate Forge and NeoForge together")
 
-    if gradle_java < max(artifact_java_versions):
-        _fail("gradle_java cannot be lower than an artifact Java toolchain")
+    # Loom refuses to set up Minecraft when the Gradle runtime is older than the
+    # game's Java release, so one Gradle runtime serves every lane and it is the
+    # highest any of them needs. 26.1 raised that from 21 to 25.
+    if gradle_java != max(artifact_java_versions):
+        _fail("gradle_java must match the highest artifact Java toolchain")
 
     if not schema2 and len(versions) != 1:
         _fail("a release branch must contain exactly one Minecraft version")
@@ -733,10 +740,10 @@ def _validate_schema2_artifact(
         _fail(f"artifact {node}.build_layout disagrees with migration legacy_nodes")
     if legacy and version != root["project"]["mod_version"]:
         _fail(f"artifact {node}.mod_version disagrees with the legacy project version")
-    if artifact["java"] != (17 if minecraft == "1.20.1" else 21):
+    if artifact["java"] != _era_java(minecraft):
         _fail(f"artifact {node}.java disagrees with its Minecraft era")
-    if _integer(artifact["gradle_java"], f"artifact {node}.gradle_java") != 21:
-        _fail(f"artifact {node}.gradle_java must be 21")
+    if _integer(artifact["gradle_java"], f"artifact {node}.gradle_java") != root["gradle_java"]:
+        _fail(f"artifact {node}.gradle_java disagrees with the branch Gradle runtime")
     if artifact["repository_family"] != loader:
         _fail(f"artifact {node}.repository_family must be {loader}")
     if artifact["source_routes"] != ["common", loader]:
@@ -769,7 +776,12 @@ def _validate_schema2_runtime_context(
             prefix = f"{minecraft}-"
             origin = "https://maven.minecraftforge.net/net/minecraftforge/forge"
         else:
-            prefix = ".".join(minecraft.split(".")[1:]) + "."
+            # NeoForge mirrors the game version it targets. Up to 1.21.x it drops the
+            # leading "1."; from 26.1 the game version has no such prefix to drop.
+            if _numeric_version(minecraft)[0] >= 26:
+                prefix = f"{minecraft}."
+            else:
+                prefix = ".".join(minecraft.split(".")[1:]) + "."
             origin = "https://maven.neoforged.net/releases/net/neoforged/neoforge"
         if not version.startswith(prefix):
             _fail(f"runtime {node}.loader_version disagrees with its Minecraft era")
@@ -779,7 +791,9 @@ def _validate_schema2_runtime_context(
 
     dependency_contexts = {
         "architectury": (f"dev.architectury:architectury-{loader}", "https://maven.architectury.dev/"),
-        "geckolib": (f"software.bernie.geckolib:geckolib-{loader}-{minecraft}",
+        # GeckoLib renamed its Maven group at the 26.1 boundary; the same host serves both.
+        "geckolib": (f"{'com.geckolib' if _numeric_version(minecraft)[0] >= 26 else 'software.bernie.geckolib'}"
+                     f":geckolib-{loader}-{minecraft}",
                     "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/"),
         "fabric-api": ("net.fabricmc.fabric-api:fabric-api", "https://maven.fabricmc.net/"),
         "mclib": ("com.eliotlash.mclib:mclib", "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/"),
@@ -935,6 +949,16 @@ def _validate_schema2_source_tree(repository: Path, routing: dict, artifacts: di
                 if selected & files:
                     _fail(f"source routes for {node}/{source_set} contain duplicate files")
                 selected.update(files)
+
+
+def _era_java(minecraft: str) -> int:
+    """The Java release a Minecraft era compiles against.
+
+    1.20.1 is the last Java 17 era; 26.1 moved the game to Java 25.
+    """
+    if minecraft == "1.20.1":
+        return 17
+    return 25 if _numeric_version(minecraft)[0] >= 26 else 21
 
 
 def _numeric_version(value: str) -> tuple[int, ...]:
