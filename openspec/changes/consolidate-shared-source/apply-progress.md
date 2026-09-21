@@ -1211,3 +1211,18 @@ The 1.21.10 measurement is worth keeping even though the lane is not configured:
 - No Fabric lane was run. Installing a Fabric runtime needs `meta.fabricmc.net`, which does not answer from this network; `maven.fabricmc.net` is reachable only at the address the diagnostic host file pins, which is what makes the builds work while the runtime installer still cannot.
 - What the runs are good for is everything below the visual gate, and there they earned their keep: four defects were found and fixed that no build could see, and 1.21.6 measurably improved twice under the same probe. The 1.21.7 reading of 47.91 against 1.21.6's 36.53 on identical code is unexplained and is most likely the scroll phase the capture lands on; it is recorded rather than smoothed over.
 - No lane is qualified. Nothing here grants release or publication authority.
+
+## Task 15d — the first Fabric gameplay evidence, and an upstream republish
+
+- Two network facts recorded earlier are no longer true, and were rechecked rather than assumed. `maven.fabricmc.net` and `meta.fabricmc.net` both answer over ordinary DNS from this machine now. The earlier note that every `*.fabricmc.net` host was unreachable held when it was written and does not hold today.
+- That unblocked the first Fabric packaged run in this change. **fabric-1.21.5** installed a production Fabric runtime, started a dedicated server, joined it and drove the `ui-regression` scenario to the visual gate, reporting `mean_luma` 51.86 with 4.5 per cent bright pixels. Until now no Fabric lane had ever started a client here.
+- **fabric-1.20.1 cannot stage, and the reason is upstream.** A clean release build resolves the Fabric API 1.20.1 submodules and dependency verification rejects about a dozen of them — not as missing checksums but as *mismatched* ones. The bytes on disk from when the lock was written still hash to the recorded value; the bytes the server returns today do not:
+
+  | | `fabric-dimensions-v1-2.1.55+1802ada577.jar` |
+  |---|---|
+  | recorded in `gradle/verification-metadata.xml` | `0cd2f0716ac0b0d92e749c60436f1a8fd26e41c2a490c1627f6ecd51e6827649` |
+  | locally cached copy | `0cd2f0716ac0b0d92e749c60436f1a8fd26e41c2a490c1627f6ecd51e6827649` |
+  | served by `maven.fabricmc.net` today | `9b26bcfe35496d868fcacc039e3e94b5ab5ea6d9e531c2746f0736c075a0863a` |
+
+- This is an artifact republished under an existing version coordinate, which is exactly what the lock exists to catch, and the sibling Quick-Skin repository records the same thing happening to Fabric API for 1.21.1 on 2026-09-02. **The checksums were deliberately not updated.** Accepting them would mean trusting bytes that changed after they were reviewed, on nothing more than the fact that a build wanted to proceed. Whether to re-record them is the owner's call, and it should be made by comparing the two jars, not by a tool that wanted a green build.
+- It also explains a discrepancy that would otherwise look like a defect in this change: fabric-1.20.1 builds green in the isolated frontier, whose Gradle home already holds the original bytes, and fails to stage in the release pipeline, whose Gradle home is fresh. Both behaviours are correct.
