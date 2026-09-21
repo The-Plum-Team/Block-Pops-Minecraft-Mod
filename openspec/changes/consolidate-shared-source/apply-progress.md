@@ -1226,3 +1226,28 @@ The 1.21.10 measurement is worth keeping even though the lane is not configured:
 
 - This is an artifact republished under an existing version coordinate, which is exactly what the lock exists to catch, and the sibling Quick-Skin repository records the same thing happening to Fabric API for 1.21.1 on 2026-09-02. **The checksums were deliberately not updated.** Accepting them would mean trusting bytes that changed after they were reviewed, on nothing more than the fact that a build wanted to proceed. Whether to re-record them is the owner's call, and it should be made by comparing the two jars, not by a tool that wanted a green build.
 - It also explains a discrepancy that would otherwise look like a defect in this change: fabric-1.20.1 builds green in the isolated frontier, whose Gradle home already holds the original bytes, and fails to stage in the release pipeline, whose Gradle home is fresh. Both behaviours are correct.
+
+## Task 15e — packaged E2E across thirteen of the fourteen configured lanes
+
+- With both fabricmc.net hosts answering again, every configured lane except one has now been run through the full pipeline on this machine.
+
+| Lane | background `mean_luma` | bright fraction |
+|---|---|---|
+| fabric-1.20.1 | not run: upstream republish, see Task 15d | |
+| forge-1.20.1 | capture is 3024x1800, so no region was measured | |
+| fabric-1.21.1 | 32.52 | 0.000 |
+| neoforge-1.21.1 | title legibility probe: 387 bright pixels, 400 required | |
+| fabric-1.21.4 | 62.00 | |
+| neoforge-1.21.4 | 34.00 | 0.000 |
+| fabric-1.21.5 | 51.86 | 0.045 |
+| neoforge-1.21.5 | 36.43 | 0.000 |
+| fabric-1.21.6 | 62.15 | |
+| neoforge-1.21.6 | 36.53 | 0.077 |
+| fabric-1.21.7 | 60.22 | |
+| neoforge-1.21.7 | 47.91 | |
+| fabric-1.21.8 | 55.48 | |
+| neoforge-1.21.8 | 42.23 | 0.080 |
+
+- Every lane fails the contracted `mean_luma <= 32`, and fabric-1.21.1 misses it by half a point with no bright pixels at all. The forge-1.20.1 row is the explanation for the whole table: its capture is 3024x1800, exactly twice this display's 1512 logical points, where the contract expects 1600x900 or an integer-density variant of it. Every capture here is taken at a size the probes were not written for.
+- One pattern is worth naming rather than averaging away: for the same version, the Fabric client reads consistently brighter than the NeoForge one - 62.00 against 34.00 on 1.21.4, 62.15 against 36.53 on 1.21.6, 55.48 against 42.23 on 1.21.8. That is a loader-level difference in how the background composites, not a per-version regression, and it is unexplained. It is recorded so that whoever fixes the window size does not read it as noise.
+- Thirteen lanes started a client, joined a dedicated server and opened the mod's screens. That is the gameplay-level evidence this change had none of when it began. No lane is qualified: not one visual assertion has passed on this machine, for any version, on either loader.
