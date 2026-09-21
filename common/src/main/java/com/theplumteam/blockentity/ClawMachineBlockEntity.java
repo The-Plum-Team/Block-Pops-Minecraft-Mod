@@ -170,7 +170,7 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
             *///? } else {
             load(tag);
             //? }
-            if (level != null && level.isClientSide) {
+            if (level != null && level.isClientSide()) {
                 level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
             }
         }
@@ -178,7 +178,7 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
 
     public static <T extends BlockEntity> void tick(Level level, BlockPos pos,
                                                      BlockState state, T blockEntity) {
-        if (level.isClientSide && blockEntity instanceof ClawMachineBlockEntity) {
+        if (level.isClientSide() && blockEntity instanceof ClawMachineBlockEntity) {
             // GeckoLib handles animation ticking automatically
         }
     }

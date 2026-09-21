@@ -102,8 +102,16 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     }
 
     @Override
-    public void addAdditionalStateData(FigureBlockEntity animatable, GeoRenderState renderState) {
-        super.addAdditionalStateData(animatable, renderState);
+    public void addAdditionalStateData(FigureBlockEntity animatable,
+                                       //? if >=1.21.9 {
+                                       /^Object relatedObject,
+                                       ^///? }
+                                       GeoRenderState renderState) {
+        super.addAdditionalStateData(animatable,
+                //? if >=1.21.9 {
+                /^relatedObject,
+                ^///? }
+                renderState);
         ResourceLocation model = resolveModel(animatable);
         renderState.addGeckolibData(FIGURE_MODEL, model != null ? model : FALLBACK_MODEL);
         ResourceLocation texture = resolveTexture(animatable);

@@ -25,7 +25,7 @@ public class ReloadGuaranteedTokenCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("blockpops")
                 .then(Commands.literal("reloadguaranteed")
-                        .requires(source -> source.hasPermission(2))
+                        .requires(source -> ServerLevels.hasCommandLevel(source, 2))
                         .executes(ReloadGuaranteedTokenCommand::executeCommand)
                 )
         );

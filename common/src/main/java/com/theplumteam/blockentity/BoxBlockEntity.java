@@ -185,7 +185,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     public void setFigureId(String figureId) {
         this.figureId = figureId != null ? figureId : "";
         setChanged();
-        if (level != null && !level.isClientSide) {
+        if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
     }
@@ -208,7 +208,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     public void setFigureExtracted(boolean extracted) {
         this.isFigureExtracted = extracted;
         setChanged();
-        if (level != null && !level.isClientSide) {
+        if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
     }
@@ -223,7 +223,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         this.figureOffsetY = y;
         this.figureOffsetZ = z;
         setChanged();
-        if (level != null && !level.isClientSide) {
+        if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
     }
@@ -231,7 +231,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     public void setFigureScale(double scale) {
         this.figureScale = scale;
         setChanged();
-        if (level != null && !level.isClientSide) {
+        if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
     }
@@ -248,7 +248,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         this.hitboxOffsetY = y;
         this.hitboxOffsetZ = z;
         setChanged();
-        if (level != null && !level.isClientSide) {
+        if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
     }
@@ -258,7 +258,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         this.hitboxScaleY = scaleY;
         this.hitboxScaleZ = scaleZ;
         setChanged();
-        if (level != null && !level.isClientSide) {
+        if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
     }
@@ -276,7 +276,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         this.logoPositionY = y;
         this.logoPositionZ = z;
         setChanged();
-        if (level != null && !level.isClientSide) {
+        if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
     }
@@ -286,7 +286,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         this.logoScaleY = scaleY;
         this.logoScaleZ = scaleZ;
         setChanged();
-        if (level != null && !level.isClientSide) {
+        if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
     }
@@ -312,7 +312,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     public void setSkinSnapshot(String skinSnapshot) {
         this.skinSnapshot = skinSnapshot;
         setChanged();
-        if (level != null && !level.isClientSide) {
+        if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
     }
@@ -324,7 +324,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     public void setQuickSkinId(String quickSkinId) {
         this.quickSkinId = quickSkinId;
         setChanged();
-        if (level != null && !level.isClientSide) {
+        if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
     }
@@ -337,7 +337,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         int totalSkins = 1 + def.getAlternatives().size();
         this.alternativeSkinIndex = (this.alternativeSkinIndex + 1) % totalSkins;
         setChanged();
-        if (level != null && !level.isClientSide) {
+        if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
     }
@@ -350,7 +350,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         // Toggles between 0 (Standing) and 1 (Sitting)
         this.poseIndex = (this.poseIndex + 1) % 2;
         setChanged();
-        if (level != null && !level.isClientSide) {
+        if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
     }
@@ -360,7 +360,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     public void toggleOpen() {
-        if (level != null && !level.isClientSide) {
+        if (level != null && !level.isClientSide()) {
             isOpen = !isOpen;
             if (isOpen) {
                 triggerAnim("box_controller", "open");
@@ -374,7 +374,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     @Deprecated
     public void triggerOpenAnimation() {
-        if (level != null && !level.isClientSide) {
+        if (level != null && !level.isClientSide()) {
             if (!isOpen) {
                 toggleOpen();
             }
@@ -528,7 +528,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
             *///? } else {
             load(tag);
             //? }
-            if (level != null && level.isClientSide) {
+            if (level != null && level.isClientSide()) {
                 level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
             }
         }
@@ -553,7 +553,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     public static <T extends BlockEntity> void tick(Level level, BlockPos pos, BlockState state, T blockEntity) {
-        if (level.isClientSide && blockEntity instanceof BoxBlockEntity boxBlockEntity) {
+        if (level.isClientSide() && blockEntity instanceof BoxBlockEntity boxBlockEntity) {
             // Animation ticking handled automatically by GeckoLib
         }
     }

@@ -86,7 +86,7 @@ public class FigureBlock extends BaseEntityBlock {
     @Nullable
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> blockEntityType) {
-        return level.isClientSide ? createTickerHelper(blockEntityType, ModBlockEntities.FIGURE_BLOCK.get(), FigureBlockEntity::tick) : null;
+        return level.isClientSide() ? createTickerHelper(blockEntityType, ModBlockEntities.FIGURE_BLOCK.get(), FigureBlockEntity::tick) : null;
     }
 
     //? if <1.21.2 {
@@ -142,7 +142,7 @@ public class FigureBlock extends BaseEntityBlock {
     public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
         super.setPlacedBy(level, pos, state, placer, stack);
 
-        if (!level.isClientSide) {
+        if (!level.isClientSide()) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof FigureBlockEntity figureBlockEntity) {
                 CompoundTag tag = BlockEntityItemData.read(stack);
@@ -169,7 +169,7 @@ public class FigureBlock extends BaseEntityBlock {
     *///? } else {
     public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
     //? }
-        if (!level.isClientSide) {
+        if (!level.isClientSide()) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof FigureBlockEntity figureBlockEntity) {
                 ItemStack dropStack = new ItemStack(ModItems.FIGURE_BLOCK_ITEM.get());

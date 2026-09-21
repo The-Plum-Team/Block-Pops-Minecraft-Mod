@@ -1,5 +1,7 @@
 package com.theplumteam.util;
 
+import com.mojang.authlib.minecraft.MinecraftSessionService;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -32,9 +34,35 @@ public final class ServerLevels {
      */
     public static boolean hasCommandLevel(ServerPlayer player, int level) {
         //? if >=1.21.9 {
-        /*return player.permissions().hasPermission(new net.minecraft.server.permissions.Permission.HasCommandLevel(level));
+        /*return player.permissions().hasPermission(new net.minecraft.server.permissions.Permission.HasCommandLevel(
+                net.minecraft.server.permissions.PermissionLevel.byId(level)));
         *///? } else {
         return player.hasPermissions(level);
+        //? }
+    }
+
+    /**
+     * Whether a command source holds the given vanilla operator level. The same
+     * 1.21.9 permission change reaches commands through their own source stack.
+     */
+    public static boolean hasCommandLevel(CommandSourceStack source, int level) {
+        //? if >=1.21.9 {
+        /*return source.permissions().hasPermission(new net.minecraft.server.permissions.Permission.HasCommandLevel(
+                net.minecraft.server.permissions.PermissionLevel.byId(level)));
+        *///? } else {
+        return source.hasPermission(level);
+        //? }
+    }
+
+    /**
+     * The authlib session service behind a player's server. 1.21.9 folded the
+     * shortcut on MinecraftServer into its Services record.
+     */
+    public static MinecraftSessionService sessionServiceOf(ServerPlayer player) {
+        //? if >=1.21.9 {
+        /*return serverOf(player).services().sessionService();
+        *///? } else {
+        return serverOf(player).getSessionService();
         //? }
     }
 }

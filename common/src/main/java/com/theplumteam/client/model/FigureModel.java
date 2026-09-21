@@ -12,6 +12,7 @@ import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import com.theplumteam.util.GeoAssets;
+import com.theplumteam.util.PlayerSkins;
 import com.theplumteam.util.ResourceLocations;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -105,8 +106,16 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
     }
 
     @Override
-    public void addAdditionalStateData(BoxBlockEntity animatable, GeoRenderState renderState) {
-        super.addAdditionalStateData(animatable, renderState);
+    public void addAdditionalStateData(BoxBlockEntity animatable,
+                                       //? if >=1.21.9 {
+                                       /^Object relatedObject,
+                                       ^///? }
+                                       GeoRenderState renderState) {
+        super.addAdditionalStateData(animatable,
+                //? if >=1.21.9 {
+                /^relatedObject,
+                ^///? }
+                renderState);
         ResourceLocation model = resolveModel(animatable);
         renderState.addGeckolibData(FIGURE_MODEL, model != null ? model : FALLBACK_MODEL);
         ResourceLocation texture = resolveTexture(animatable);
@@ -213,11 +222,7 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
                 //? }
                 return true;
             });
-            //? if >=1.21 {
-            /*return Minecraft.getInstance().getSkinManager().getInsecureSkin(profile).texture();
-            *///? } else {
-            return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
-            //? }
+            return PlayerSkins.insecureTexture(profile);
         }
 
         return figure.getTexturePath() != null ? figure.getTexturePath() : FALLBACK_TEXTURE;
@@ -239,11 +244,7 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
             //? }
             return true;
         });
-        //? if >=1.21 {
-        /*return Minecraft.getInstance().getSkinManager().getInsecureSkin(profile).texture();
-        *///? } else {
-        return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
-        //? }
+        return PlayerSkins.insecureTexture(profile);
     }
 
     @Override

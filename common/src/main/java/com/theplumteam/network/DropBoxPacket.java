@@ -1,5 +1,6 @@
 package com.theplumteam.network;
 
+import com.theplumteam.util.PlayerSounds;
 import com.theplumteam.util.ServerLevels;
 import com.mojang.authlib.GameProfile;
 import com.theplumteam.BlockPopsMod;
@@ -105,7 +106,7 @@ public class DropBoxPacket {
         if (figure.getPlayerUUID() == null) return null;
         try {
             GameProfile freshProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
-            return AuthlibProfiles.fetch(ServerLevels.serverOf(player).getSessionService(), freshProfile);
+            return AuthlibProfiles.fetch(ServerLevels.sessionServiceOf(player), freshProfile);
         } catch (Exception e) {
             LOGGER.error("Failed to fetch fresh GameProfile for {}: {}", figure.getName(), e.getMessage());
             return null;
@@ -180,9 +181,9 @@ public class DropBoxPacket {
                         // Use cross-platform networking - PASS QUICKSKIN ID TO CLIENT
                         UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, selectedFigure.getName(), skinSnapshot, quickSkinSnapshot);
                         BlockPopsMod.logDebug("Player {} discovered new figure: {} ({})", player.getName().getString(), selectedFigure.getName(), uniqueFigureId);
-                        player.playNotifySound(SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1.0F, 1.0F);
+                        PlayerSounds.notify(player, SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1.0F, 1.0F);
                     } else {
-                        player.playNotifySound(SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 1.0F, 1.0F);
+                        PlayerSounds.notify(player, SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 1.0F, 1.0F);
                     }
 
                     CompoundTag blockEntityTag = new CompoundTag();

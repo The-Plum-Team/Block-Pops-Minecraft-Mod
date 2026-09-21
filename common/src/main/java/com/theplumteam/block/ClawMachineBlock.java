@@ -87,7 +87,7 @@ public class ClawMachineBlock extends BaseEntityBlock {
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state,
                                                                   BlockEntityType<T> blockEntityType) {
         if (state.getValue(HALF) == DoubleBlockHalf.LOWER) {
-            return level.isClientSide
+            return level.isClientSide()
                     ? createTickerHelper(blockEntityType, ModBlockEntities.CLAW_MACHINE_BLOCK.get(),
                     ClawMachineBlockEntity::tick)
                     : null;
@@ -128,7 +128,7 @@ public class ClawMachineBlock extends BaseEntityBlock {
 
         BlockEntity blockEntity = level.getBlockEntity(lowerPos);
         if (blockEntity instanceof ClawMachineBlockEntity clawMachineBlockEntity) {
-            if (level.isClientSide) {
+            if (level.isClientSide()) {
                 PlatformHelper.openClawMachineScreen(lowerPos, clawMachineBlockEntity);
             } else {
                 // Server side: sync token data to ensure client UI shows correct state
@@ -139,7 +139,7 @@ public class ClawMachineBlock extends BaseEntityBlock {
             //? if >=1.21.2 {
             /*return InteractionResult.SUCCESS;
             *///? } else {
-            return InteractionResult.sidedSuccess(level.isClientSide);
+            return InteractionResult.sidedSuccess(level.isClientSide());
             //? }
         }
         return InteractionResult.PASS;
@@ -196,7 +196,7 @@ public class ClawMachineBlock extends BaseEntityBlock {
     *///? } else {
     public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
     //? }
-        if (!level.isClientSide) {
+        if (!level.isClientSide()) {
             if (player.isCreative()) {
                 preventCreativeDropFromBottomPart(level, pos, state, player);
             } else {

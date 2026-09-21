@@ -11,6 +11,7 @@ import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.network.SyncDynamicCollectionsPacket;
 import com.theplumteam.server.config.ServerConfig;
+import com.theplumteam.util.ServerLevels;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -30,7 +31,7 @@ public class SetDefaultColorCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("blockpops")
             .then(Commands.literal("setdefaultcolor")
-                .requires(source -> source.hasPermission(2)) // Admin permission (op level 2)
+                .requires(source -> ServerLevels.hasCommandLevel(source, 2)) // Admin permission (op level 2)
                 .then(Commands.argument("color", StringArgumentType.word())
                     .suggests(COLOR_SUGGESTIONS)
                     .executes(SetDefaultColorCommand::executeCommand)

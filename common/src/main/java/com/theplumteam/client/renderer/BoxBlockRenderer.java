@@ -8,6 +8,7 @@ import com.theplumteam.client.model.FigureModel;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.util.GeoBones;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.Direction;
@@ -154,7 +155,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         VertexConsumer skinBuffer = bufferSource.getBuffer(skinRenderType);
 
         for (GeoBone bone : model.topLevelBones()) {
-            if (isFaceBone(bone.getName())) {
+            if (isFaceBone(GeoBones.name(bone))) {
                 poseStack.pushPose();
                 renderRecursively(renderState, poseStack, bone, skinRenderType, bufferSource, skinBuffer,
                         true, packedLight, packedOverlay, 0xFFFFFFFF);
@@ -173,7 +174,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         VertexConsumer logoBuffer = bufferSource.getBuffer(logoRenderType);
 
         for (GeoBone bone : model.topLevelBones()) {
-            if (bone.getName().equals("logo")) {
+            if (GeoBones.name(bone).equals("logo")) {
                 poseStack.pushPose();
                 poseStack.translate(placement[0], placement[1], placement[2]);
                 poseStack.scale(placement[3], placement[4], placement[5]);
@@ -189,7 +190,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     public void renderRecursively(GeoRenderState renderState, PoseStack poseStack, GeoBone bone,
                                   RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer,
                                   boolean isReRender, int packedLight, int packedOverlay, int colour) {
-        if (isSeparatelyTexturedBone(bone.getName()) && !isReRender) {
+        if (isSeparatelyTexturedBone(GeoBones.name(bone)) && !isReRender) {
             return;
         }
         super.renderRecursively(renderState, poseStack, bone, renderType, bufferSource, buffer, isReRender,
@@ -265,7 +266,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         VertexConsumer skinBuffer = bufferSource.getBuffer(skinRenderType);
 
         for (GeoBone bone : model.topLevelBones()) {
-            if (isFaceBone(bone.getName())) {
+            if (isFaceBone(GeoBones.name(bone))) {
                 // Base skin layer is the head front; the 3D bone is the hat overlay.
                 // Both use the same render type for consistency with player rendering.
                 poseStack.pushPose();
@@ -290,7 +291,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
 
         // Find the generic "logo" bone
         for (GeoBone bone : model.topLevelBones()) {
-            if (bone.getName().equals("logo")) {
+            if (GeoBones.name(bone).equals("logo")) {
                 poseStack.pushPose();
 
                 // Apply translate first, then scale (matrices apply in reverse order!)
@@ -323,7 +324,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                                   //? }
         // Skip the face and logo bones during normal box rendering. They are rendered
         // separately with their own textures, which is what isReRender marks.
-        if (isSeparatelyTexturedBone(bone.getName()) && !isReRender) {
+        if (isSeparatelyTexturedBone(GeoBones.name(bone)) && !isReRender) {
             return;
         }
 

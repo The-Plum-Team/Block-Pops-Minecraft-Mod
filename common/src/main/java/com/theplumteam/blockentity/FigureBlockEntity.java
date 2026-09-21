@@ -96,14 +96,14 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     public void setCollectionId(String collectionId) {
         this.collectionId = collectionId != null ? collectionId : "";
         setChanged();
-        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        if (level != null && !level.isClientSide()) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
     public String getFigureId() { return figureId; }
     public void setFigureId(String figureId) {
         this.figureId = figureId != null ? figureId : "";
         setChanged();
-        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        if (level != null && !level.isClientSide()) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
     public FigureDefinition getFigureDefinition() {
@@ -125,13 +125,13 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         this.figureOffsetY = y;
         this.figureOffsetZ = z;
         setChanged();
-        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        if (level != null && !level.isClientSide()) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
     public void setFigureScale(double scale) {
         this.figureScale = scale;
         setChanged();
-        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        if (level != null && !level.isClientSide()) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
     public int getAlternativeSkinIndex() { return alternativeSkinIndex; }
@@ -140,14 +140,14 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     public void setSkinSnapshot(String skinSnapshot) {
         this.skinSnapshot = skinSnapshot;
         setChanged();
-        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        if (level != null && !level.isClientSide()) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
     public String getQuickSkinId() { return quickSkinId; }
     public void setQuickSkinId(String quickSkinId) {
         this.quickSkinId = quickSkinId;
         setChanged();
-        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        if (level != null && !level.isClientSide()) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
     public void cycleAlternativeSkin() {
@@ -156,7 +156,7 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         int totalSkins = 1 + def.getAlternatives().size();
         this.alternativeSkinIndex = (this.alternativeSkinIndex + 1) % totalSkins;
         setChanged();
-        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        if (level != null && !level.isClientSide()) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
     public int getPoseIndex() {
@@ -167,7 +167,7 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         // Toggles between 0 (Standing) and 1 (Sitting)
         this.poseIndex = (this.poseIndex + 1) % 2;
         setChanged();
-        if (level != null && !level.isClientSide) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        if (level != null && !level.isClientSide()) level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
     }
 
     @Override
@@ -287,7 +287,7 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
             *///? } else {
             load(tag);
             //? }
-            if (level != null && level.isClientSide) {
+            if (level != null && level.isClientSide()) {
                 level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
             }
         }
@@ -311,7 +311,7 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     public static <T extends BlockEntity> void tick(Level level, BlockPos pos, BlockState state, T blockEntity) {
-        if (level.isClientSide && blockEntity instanceof FigureBlockEntity figureBlockEntity) {
+        if (level.isClientSide() && blockEntity instanceof FigureBlockEntity figureBlockEntity) {
             // Animation ticking handled automatically by GeckoLib
         }
     }

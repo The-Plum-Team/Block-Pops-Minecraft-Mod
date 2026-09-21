@@ -200,7 +200,7 @@ public class UnlockCollectionPacket {
         if (figure.getPlayerUUID() == null) return null;
         try {
             GameProfile freshProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
-            return AuthlibProfiles.fetch(ServerLevels.serverOf(player).getSessionService(), freshProfile);
+            return AuthlibProfiles.fetch(ServerLevels.sessionServiceOf(player), freshProfile);
         } catch (Exception e) {
             LOGGER.error("Failed to fetch fresh GameProfile for {}: {}", figure.getName(), e.getMessage());
             return null;

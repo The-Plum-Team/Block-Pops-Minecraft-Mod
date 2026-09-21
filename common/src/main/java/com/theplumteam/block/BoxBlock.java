@@ -168,7 +168,7 @@ public class BoxBlock extends BaseEntityBlock {
     @Nullable
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> blockEntityType) {
-        return level.isClientSide ? createTickerHelper(blockEntityType, ModBlockEntities.BOX_BLOCK.get(), BoxBlockEntity::tick) : null;
+        return level.isClientSide() ? createTickerHelper(blockEntityType, ModBlockEntities.BOX_BLOCK.get(), BoxBlockEntity::tick) : null;
     }
 
     //? if <1.21.2 {
@@ -205,12 +205,12 @@ public class BoxBlock extends BaseEntityBlock {
         // Shift-right-click behavior
         if (player.isShiftKeyDown()) {
             // If box is open, close it (server side)
-            if (boxBlockEntity.isOpen() && !level.isClientSide) {
+            if (boxBlockEntity.isOpen() && !level.isClientSide()) {
                 boxBlockEntity.toggleOpen();
                 return InteractionResult.SUCCESS;
             }
             // If box is closed, open adjustment screen (client side, dev mode only)
-            else if (!boxBlockEntity.isOpen() && level.isClientSide) {
+            else if (!boxBlockEntity.isOpen() && level.isClientSide()) {
                 if (PlatformHelper.isDevelopmentEnvironment()) {
                     PlatformHelper.openBoxFigureScreen(pos, boxBlockEntity);
                     return InteractionResult.SUCCESS;
@@ -219,12 +219,12 @@ public class BoxBlock extends BaseEntityBlock {
             //? if >=1.21.2 {
             /*return InteractionResult.SUCCESS;
             *///? } else {
-            return InteractionResult.sidedSuccess(level.isClientSide);
+            return InteractionResult.sidedSuccess(level.isClientSide());
             //? }
         }
 
         // Regular right-click (no shift) - server side only
-        if (!level.isClientSide) {
+        if (!level.isClientSide()) {
             if (boxBlockEntity.isOpen()) {
                 // Holding a figure block - try to put it back in the box
                 if (heldItem.getItem() == ModItems.FIGURE_BLOCK_ITEM.get() && boxBlockEntity.isFigureExtracted()) {
@@ -303,7 +303,7 @@ public class BoxBlock extends BaseEntityBlock {
         //? if >=1.21.2 {
         /*return InteractionResult.SUCCESS;
         *///? } else {
-        return InteractionResult.sidedSuccess(level.isClientSide);
+        return InteractionResult.sidedSuccess(level.isClientSide());
         //? }
     }
 
@@ -319,7 +319,7 @@ public class BoxBlock extends BaseEntityBlock {
     public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
         super.setPlacedBy(level, pos, state, placer, stack);
 
-        if (!level.isClientSide) {
+        if (!level.isClientSide()) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
                 CompoundTag tag = BlockEntityItemData.read(stack);
@@ -346,7 +346,7 @@ public class BoxBlock extends BaseEntityBlock {
     *///? } else {
     public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
     //? }
-        if (!level.isClientSide) {
+        if (!level.isClientSide()) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
                 String collectionId = boxBlockEntity.getCollectionId();

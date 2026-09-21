@@ -51,8 +51,16 @@ public class BoxBlockModel extends GeoModel<BoxBlockEntity> {
     }
 
     @Override
-    public void addAdditionalStateData(BoxBlockEntity animatable, GeoRenderState renderState) {
-        super.addAdditionalStateData(animatable, renderState);
+    public void addAdditionalStateData(BoxBlockEntity animatable,
+                                       //? if >=1.21.9 {
+                                       /^Object relatedObject,
+                                       ^///? }
+                                       GeoRenderState renderState) {
+        super.addAdditionalStateData(animatable,
+                //? if >=1.21.9 {
+                /^relatedObject,
+                ^///? }
+                renderState);
         renderState.addGeckolibData(BOX_TEXTURE, resolveTexture(animatable));
     }
     *///? } elif >=1.21.2 {

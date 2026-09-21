@@ -8,6 +8,7 @@ import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.FigureBlockEntity;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.network.FigurePositionPacket;
+import com.theplumteam.util.PlayerSkins;
 import com.theplumteam.util.SkinModelDetector;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -377,11 +378,7 @@ public class FigurePositionScreen extends Screen {
                 Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, p) -> {}, false);
                 //? }
             }
-            //? if >=1.21 {
-            /*return Minecraft.getInstance().getSkinManager().getInsecureSkin(profile).texture();
-            *///? } else {
-            return Minecraft.getInstance().getSkinManager().getInsecureSkinLocation(profile);
-            //? }
+            return PlayerSkins.insecureTexture(profile);
         }
 
         return figure.getTexturePath();

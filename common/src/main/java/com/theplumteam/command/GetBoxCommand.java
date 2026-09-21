@@ -47,7 +47,7 @@ public class GetBoxCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("blockpops")
                 .then(Commands.literal("getbox")
-                        .requires(source -> source.hasPermission(2))
+                        .requires(source -> ServerLevels.hasCommandLevel(source, 2))
                         .then(Commands.argument("collection_id", StringArgumentType.string())
                                 .suggests(COLLECTION_SUGGESTIONS)
                                 .executes(context -> executeCommand(context, TokenType.REGULAR))
@@ -115,7 +115,7 @@ public class GetBoxCommand {
         if (figure.getPlayerUUID() == null) return null;
         try {
             GameProfile freshProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
-            return AuthlibProfiles.fetch(ServerLevels.serverOf(player).getSessionService(), freshProfile);
+            return AuthlibProfiles.fetch(ServerLevels.sessionServiceOf(player), freshProfile);
         } catch (Exception e) {
             LOGGER.error("Failed to fetch fresh GameProfile for {}: {}", figure.getName(), e.getMessage());
             return null;

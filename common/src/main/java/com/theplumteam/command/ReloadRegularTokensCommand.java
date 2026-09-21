@@ -25,7 +25,7 @@ public class ReloadRegularTokensCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("blockpops")
                 .then(Commands.literal("reloadregular")
-                        .requires(source -> source.hasPermission(2))
+                        .requires(source -> ServerLevels.hasCommandLevel(source, 2))
                         .executes(ReloadRegularTokensCommand::executeCommand)
                 )
         );
