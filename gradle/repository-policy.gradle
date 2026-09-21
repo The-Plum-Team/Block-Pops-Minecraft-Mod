@@ -125,7 +125,11 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
             break
         case 'dl.cloudsmith.io/public/geckolib3/geckolib/maven':
             repository.content {
+                // GeckoLib renamed its group at the 26.1 boundary: releases up to
+                // 1.21.11 publish under `software.bernie.geckolib`, 26.1 and later
+                // under `com.geckolib`. Both live on this host, so both are allowed.
                 includeGroupByRegex('software\\.bernie(\\..*)?')
+                includeGroupByRegex('com\\.geckolib(\\..*)?')
                 includeGroup('com.eliotlash.mclib')
             }
             break
@@ -139,6 +143,7 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
                 excludeGroupByRegex('org\\.spongepowered(\\..*)?')
                 excludeGroupByRegex('net\\.neoforged(\\..*)?')
                 excludeGroupByRegex('software\\.bernie(\\..*)?')
+                excludeGroupByRegex('com\\.geckolib(\\..*)?')
                 excludeGroup('com.eliotlash.mclib')
                 if (useNeoForgeRepositoryOrigins) {
                     excludeGroupByRegex('org\\.lwjgl(\\..*)?')
