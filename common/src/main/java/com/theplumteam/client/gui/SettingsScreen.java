@@ -309,6 +309,23 @@ public class SettingsScreen extends Screen {
                 this.panelX + this.panelWidth, contentPanelY + contentPanelHeight,
                 PANEL_OUTLINE);
 
+        // Render our modal buttons and widgets
+        super.render(graphics, mouseX, mouseY, partialTicks);
+
+        // The modal's own labels are drawn in the same pass as its widgets: before
+        // 1.21.6 the panel fills that sit under them are composited after anything
+        // drawn earlier in this method, which left the labels at a quarter of their
+        // brightness while widget text beside them stayed readable.
+        drawTabContent(graphics);
+
+        //? if >=1.21.5 {
+        /*GuiPose.pop(graphics);
+        *///? }
+    }
+
+    private void drawTabContent(GuiGraphics graphics) {
+        ClientConfig config = ClientConfig.getInstance();
+
         // Draw column headers (only in Develop tab)
         if (isDevelopmentMode() && activeTab == Tab.DEVELOP) {
             int padding = 20;
@@ -419,13 +436,6 @@ public class SettingsScreen extends Screen {
                     previewY + previewSize + 5,
                     0xFFAAAAAA);
         }
-
-        // Render our modal buttons and widgets
-        super.render(graphics, mouseX, mouseY, partialTicks);
-
-        //? if >=1.21.5 {
-        /*GuiPose.pop(graphics);
-        *///? }
     }
 
     @Override
