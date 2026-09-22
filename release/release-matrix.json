@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "gradle_java": 25,
-  "lane_count": 18,
+  "lane_count": 20,
   "unit_test_lane": "fabric-1.20.1",
   "branch": {
     "role": "integration",
@@ -88,6 +88,10 @@
     "neoforge-26.3.0.8-beta": {
       "url": "https://maven.neoforged.net/releases/net/neoforged/neoforge/26.3.0.8-beta/neoforge-26.3.0.8-beta-installer.jar",
       "sha256": "24e3673dfe1e08bc903c1e36882af98637bbc49ee2ab520a438429d8da226651"
+    },
+    "neoforge-26.1.2.109": {
+      "url": "https://maven.neoforged.net/releases/net/neoforged/neoforge/26.1.2.109/neoforge-26.1.2.109-installer.jar",
+      "sha256": "e7b68f389a7d6855d706c3471f66df4fcf0e403bd483b09f67678016e2d80280"
     }
   },
   "artifacts": [
@@ -445,6 +449,58 @@
         "loader": "[21.8.52,)",
         "architectury": "[17.0.8,)",
         "geckolib": "[5.2.2,)"
+      },
+      "mod_version": "1.1.2",
+      "build_layout": "stonecutter",
+      "gradle_java": 25,
+      "repository_family": "neoforge",
+      "source_routes": [
+        "common",
+        "neoforge"
+      ]
+    },
+    {
+      "artifact_node": "fabric-26.1.2",
+      "minecraft": "26.1.2",
+      "loader": "fabric",
+      "java": 25,
+      "no_remap": true,
+      "gradle_task": ":fabric:26.1.2:shadowJar",
+      "harness_task": ":fabric:26.1.2:e2eHarnessJar",
+      "jar": "fabric/versions/26.1.2/build/libs/BlockPops - Fabric - 26.1.2-{mod_version}.jar",
+      "harness_jar": "fabric/versions/26.1.2/build/libs/BlockPops E2E - Fabric - 26.1.2-0.0.0.jar",
+      "metadata": {
+        "file": "fabric.mod.json",
+        "minecraft": "~26.1.2",
+        "loader": ">=0.19.5",
+        "architectury": ">=20.0.12",
+        "geckolib": ">=5.5.2"
+      },
+      "mod_version": "1.1.2",
+      "build_layout": "stonecutter",
+      "gradle_java": 25,
+      "repository_family": "fabric",
+      "source_routes": [
+        "common",
+        "fabric"
+      ]
+    },
+    {
+      "artifact_node": "neoforge-26.1.2",
+      "minecraft": "26.1.2",
+      "loader": "neoforge",
+      "java": 25,
+      "no_remap": true,
+      "gradle_task": ":neoforge:26.1.2:shadowJar",
+      "harness_task": ":neoforge:26.1.2:e2eHarnessJar",
+      "jar": "neoforge/versions/26.1.2/build/libs/BlockPops - NeoForge - 26.1.2-{mod_version}.jar",
+      "harness_jar": "neoforge/versions/26.1.2/build/libs/BlockPops E2E - NeoForge - 26.1.2-0.0.0.jar",
+      "metadata": {
+        "file": "META-INF/neoforge.mods.toml",
+        "minecraft": "[26.1.2,26.2)",
+        "loader": "[26.1.2.109,)",
+        "architectury": "[20.0.12,)",
+        "geckolib": "[5.5.2,)"
       },
       "mod_version": "1.1.2",
       "build_layout": "stonecutter",
@@ -946,6 +1002,60 @@
       ]
     },
     {
+      "artifact_node": "fabric-26.1.2",
+      "minecraft": "26.1.2",
+      "loader": "fabric",
+      "java": 25,
+      "loader_version": "0.19.5",
+      "installer": "fabric-1.1.0",
+      "pr_anchor": true,
+      "scheduled_anchor": true,
+      "runtime_dependencies": [
+        {
+          "id": "fabric-api",
+          "coordinate": "net.fabricmc.fabric-api:fabric-api:0.155.3+26.1.2",
+          "repository": "https://maven.fabricmc.net/",
+          "side": "both"
+        },
+        {
+          "id": "architectury",
+          "coordinate": "dev.architectury:architectury-fabric:20.0.12",
+          "repository": "https://maven.architectury.dev/",
+          "side": "both"
+        },
+        {
+          "id": "geckolib",
+          "coordinate": "com.geckolib:geckolib-fabric-26.1.2:5.5.2",
+          "repository": "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "artifact_node": "neoforge-26.1.2",
+      "minecraft": "26.1.2",
+      "loader": "neoforge",
+      "java": 25,
+      "loader_version": "26.1.2.109",
+      "installer": "neoforge-26.1.2.109",
+      "pr_anchor": true,
+      "scheduled_anchor": true,
+      "runtime_dependencies": [
+        {
+          "id": "architectury",
+          "coordinate": "dev.architectury:architectury-neoforge:20.0.12",
+          "repository": "https://maven.architectury.dev/",
+          "side": "both"
+        },
+        {
+          "id": "geckolib",
+          "coordinate": "com.geckolib:geckolib-neoforge-26.1.2:5.5.2",
+          "repository": "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/",
+          "side": "both"
+        }
+      ]
+    },
+    {
       "artifact_node": "fabric-26.2",
       "minecraft": "26.2",
       "loader": "fabric",
@@ -1146,13 +1256,13 @@
       "loader": "neoforge"
     },
     {
-      "artifact_node": "fabric-26.1",
-      "minecraft": "26.1",
+      "artifact_node": "fabric-26.1.2",
+      "minecraft": "26.1.2",
       "loader": "fabric"
     },
     {
-      "artifact_node": "neoforge-26.1",
-      "minecraft": "26.1",
+      "artifact_node": "neoforge-26.1.2",
+      "minecraft": "26.1.2",
       "loader": "neoforge"
     },
     {
