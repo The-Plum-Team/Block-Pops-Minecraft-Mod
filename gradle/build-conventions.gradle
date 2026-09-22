@@ -167,7 +167,10 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
         // 26.2 removed the immediate-mode leftovers and renamed a few more seams.
         def renamesFor262 = era[0] > 26 || (era[0] == 26 && era[1] >= 2)
         def rules262 = [
-            ['.setScreen(', '.setScreenAndShow('],
+            // Gui#setScreen is what Minecraft#setScreen used to do. setScreenAndShow
+            // also forces a frame, which re-enters rendering when a screen is opened
+            // from a block interaction inside the client tick.
+            ['.setScreen(', '.gui.setScreen('],
             ['.getLighting()', '.lighting()'],
         ]
         // 26.2 moved the current screen from Minecraft onto its Gui. The lookahead
