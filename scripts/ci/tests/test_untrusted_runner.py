@@ -181,11 +181,33 @@ class BoundaryTests(unittest.TestCase):
                 return b"123\n"
             return b""
 
-        with mock.patch("scripts.ci.untrusted_runner._run", side_effect=fake_run):
+        with mock.patch("scripts.ci.untrusted_runner._run", side_effect=fake_run), \
+                mock.patch("scripts.ci.untrusted_runner.TERMINATION_GRACE_SECONDS", 0.0):
             with self.assertRaises(SandboxError):
                 _terminate_identity(1234, "bounded_candidate")
         self.assertIn(("pgrep", "-u", "1234"), commands)
         self.assertIn(("pgrep", "-U", "1234"), commands)
+        self.assertTrue(
+            any(command[:4] == ("sudo", "-n", "usermod", "--lock") for command in commands)
+        )
+
+    def test_a_process_still_being_torn_down_is_killed_again_not_reported(self) -> None:
+        # SIGKILL is asynchronous: a large JVM can still be listed right after it.
+        commands: list[tuple[str, ...]] = []
+        listings = iter([b"123\n", b""])
+
+        def fake_run(arguments, **_kwargs):
+            command = tuple(arguments)
+            commands.append(command)
+            if command[:2] == ("pgrep", "-u"):
+                return next(listings)
+            return b""
+
+        with mock.patch("scripts.ci.untrusted_runner._run", side_effect=fake_run), \
+                mock.patch("scripts.ci.untrusted_runner.time.sleep"):
+            _terminate_identity(1234, "bounded_candidate")
+        kills = [command for command in commands if command[:4] == ("sudo", "-n", "pkill", "-KILL")]
+        self.assertEqual(8, len(kills))
         self.assertTrue(
             any(command[:4] == ("sudo", "-n", "usermod", "--lock") for command in commands)
         )

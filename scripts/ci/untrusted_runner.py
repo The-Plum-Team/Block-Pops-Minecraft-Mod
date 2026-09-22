@@ -27,12 +27,14 @@ import signal
 import stat
 import subprocess
 import sys
+import time
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
 STATE_NAME = "sandbox-state.json"
 USER_NAME = "blockpops_candidate"
 VALIDATOR_USER_NAME = "blockpops_validator"
+TERMINATION_GRACE_SECONDS = 15.0
 MAX_STATE_BYTES = 16 * 1024
 MAX_ENV_BYTES = 256 * 1024
 MAX_EXPORTS = 16
@@ -657,21 +659,29 @@ def _terminate_identity(uid: int, name: str) -> None:
     try:
         # Check both effective and real identities.  A setuid transition must not let a child
         # survive until the host-side artifact action receives its runtime credential.
-        for _attempt in range(2):
-            _run(
-                ("sudo", "-n", "pkill", "-KILL", "-u", str(uid)),
-                accepted=frozenset({0, 1}),
-            )
-            _run(
-                ("sudo", "-n", "pkill", "-KILL", "-U", str(uid)),
-                accepted=frozenset({0, 1}),
-            )
-        effective = _run(
-            ("pgrep", "-u", str(uid)), accepted=frozenset({0, 1})
-        ).strip()
-        real = _run(
-            ("pgrep", "-U", str(uid)), accepted=frozenset({0, 1})
-        ).strip()
+        # SIGKILL is asynchronous, and a large JVM such as a dedicated server can still be
+        # listed for a moment while the kernel tears it down, so the sweep repeats until
+        # nothing is listed; only a process that outlasts the bounded grace is an escape.
+        deadline = time.monotonic() + TERMINATION_GRACE_SECONDS
+        while True:
+            for _attempt in range(2):
+                _run(
+                    ("sudo", "-n", "pkill", "-KILL", "-u", str(uid)),
+                    accepted=frozenset({0, 1}),
+                )
+                _run(
+                    ("sudo", "-n", "pkill", "-KILL", "-U", str(uid)),
+                    accepted=frozenset({0, 1}),
+                )
+            effective = _run(
+                ("pgrep", "-u", str(uid)), accepted=frozenset({0, 1})
+            ).strip()
+            real = _run(
+                ("pgrep", "-U", str(uid)), accepted=frozenset({0, 1})
+            ).strip()
+            if not (effective or real) or time.monotonic() >= deadline:
+                break
+            time.sleep(0.25)
     finally:
         # Lock even on the adversarial path where a process survived the bounded kill sweep.
         _run(
