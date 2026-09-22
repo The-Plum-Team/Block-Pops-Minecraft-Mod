@@ -20,8 +20,12 @@ public final class ServerLevels {
         //? }
     }
 
-    /** The server a player belongs to. 1.21.9 removed the shortcut on the player. */
-    public static MinecraftServer serverOf(ServerPlayer player) {
+    /**
+     * The server a player belongs to, or null for a client-side player. 1.21.9
+     * removed the shortcut on the player, and the level it reads instead answers
+     * for any player, so this accepts the base type.
+     */
+    public static MinecraftServer serverOf(Player player) {
         //? if >=1.21.9 {
         /*return player.level().getServer();
         *///? } else {

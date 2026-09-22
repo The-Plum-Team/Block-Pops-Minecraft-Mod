@@ -81,7 +81,18 @@ public class StateSaverAndLoader extends SavedData {
      */
     public static StateSaverAndLoader getServerState(MinecraftServer server) {
         var persistentStateManager = server.overworld().getDataStorage();
-        //? if >=1.21.5 {
+        //? if >=26 {
+        /*StateSaverAndLoader state = persistentStateManager.computeIfAbsent(
+                new SavedDataType<>(
+                        // 26.1 keys saved data by an identifier instead of a bare file name.
+                        com.theplumteam.util.ResourceLocations.of(BlockPopsMod.MOD_ID, "player_data"),
+                        StateSaverAndLoader::new,
+                        CODEC,
+                        // A null type makes vanilla's reader throw and silently discard saved data.
+                        DataFixTypes.SAVED_DATA_COMMAND_STORAGE
+                )
+        );
+        *///? } elif >=1.21.5 {
         /*StateSaverAndLoader state = persistentStateManager.computeIfAbsent(
                 new SavedDataType<>(
                         BlockPopsMod.MOD_ID + "_player_data",
@@ -121,7 +132,7 @@ public class StateSaverAndLoader extends SavedData {
             return new CompoundTag();
         }
 
-        MinecraftServer server = player.getServer();
+        MinecraftServer server = com.theplumteam.util.ServerLevels.serverOf(player);
         if (server == null) {
             return new CompoundTag();
         }

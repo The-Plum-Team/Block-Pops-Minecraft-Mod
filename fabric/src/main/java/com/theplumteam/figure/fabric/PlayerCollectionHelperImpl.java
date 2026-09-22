@@ -23,7 +23,11 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+//? if >=26 {
+/*import net.minecraft.server.players.UserNameToIdResolver;
+*///? } else {
 import net.minecraft.server.players.GameProfileCache;
+//? }
 
 import java.io.File;
 import java.nio.file.Path;
@@ -50,7 +54,12 @@ public class PlayerCollectionHelperImpl {
 
             List<FigureDefinition> playerFigures = new ArrayList<>();
             Set<UUID> processedPlayers = new HashSet<>();
+            //? if >=26 {
+            /*// 26.1 replaced the profile cache with a name/id resolver on the services.
+            UserNameToIdResolver profileCache = server.services().nameToIdCache();
+            *///? } else {
             GameProfileCache profileCache = server.getProfileCache();
+            //? }
 
             // Use default model and animation paths
             ResourceLocation defaultModel = GeoAssets.model("blockpops", "figure/box_figure_default");
@@ -71,9 +80,16 @@ public class PlayerCollectionHelperImpl {
                             // Try to get the player's name from the profile cache
                             String playerName = "Unknown Player";
                             if (profileCache != null) {
+                                //? if >=26 {
+                                /*Optional<net.minecraft.server.players.NameAndId> profile =
+                                        profileCache.get(playerUUID);
+                                if (profile.isPresent()) {
+                                    playerName = profile.get().name();
+                                *///? } else {
                                 Optional<GameProfile> profile = profileCache.get(playerUUID);
                                 if (profile.isPresent()) {
                                     playerName = profile.get().getName();
+                                //? }
                                 } else {
                                     // Fallback: use a shortened UUID if name not found
                                     playerName = "Player " + uuidString.substring(0, 8);

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "loaders": {
     "fabric": {
-      "build_sha256": "d947288675e732491aa8a627543b432b02058892b539a01341e08de3dfe0cca4",
+      "build_sha256": "55236de57e3ec7d01cb48e7b1836c04ee92dc901db6a0ecf76aa3d560f692421",
       "files": {
         "fabric/src/e2e/java/com/theplumteam/e2e/fabric/BlockPopsE2EFabric.java": "16b4a48616ae46ae7712948b5c43cc9b1fb13c689c1b4337ada69733aa8f9db8",
         "fabric/src/e2e/resources/fabric.mod.json": "614b14315c1e50f2bee0b3731db3dbd0be3a46829e5dba6f1fb2a893c106a678"

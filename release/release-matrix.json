@@ -470,7 +470,7 @@
         "minecraft": "~26.2",
         "loader": ">=0.19.3",
         "architectury": ">=21.1.10",
-        "geckolib": ">=5.5.6"
+        "geckolib": ">=5.5.5"
       },
       "mod_version": "1.1.2",
       "build_layout": "stonecutter",
@@ -969,7 +969,7 @@
         },
         {
           "id": "geckolib",
-          "coordinate": "com.geckolib:geckolib-fabric-26.2:5.5.6",
+          "coordinate": "com.geckolib:geckolib-fabric-26.2:5.5.5",
           "repository": "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/",
           "side": "both"
         }
