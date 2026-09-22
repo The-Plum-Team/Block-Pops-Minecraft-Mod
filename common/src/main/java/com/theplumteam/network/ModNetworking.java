@@ -29,43 +29,43 @@ public class ModNetworking {
         BlockPopsMod.logDebug("Initializing BlockPops networking...");
 
         // Register server-side packet receivers (C2S)
-        NetworkManager.registerReceiver(
+        PacketNetworking.registerReceiver(
             NetworkManager.c2s(),
             FIGURE_POSITION,
             FigurePositionPacket::handleServer
         );
 
-        NetworkManager.registerReceiver(
+        PacketNetworking.registerReceiver(
             NetworkManager.c2s(),
             CLAW_MACHINE_COLLECTION,
             ClawMachineCollectionPacket::handleServer
         );
 
-        NetworkManager.registerReceiver(
+        PacketNetworking.registerReceiver(
             NetworkManager.c2s(),
             SET_FAVORITE_COLOR,
             SetFavoriteColorPacket::handleServer
         );
 
-        NetworkManager.registerReceiver(
+        PacketNetworking.registerReceiver(
             NetworkManager.c2s(),
             DropBoxPacket.ID,
             DropBoxPacket::handleServer
         );
 
-        NetworkManager.registerReceiver(
+        PacketNetworking.registerReceiver(
             NetworkManager.c2s(),
             ReloadTokensPacket.ID,
             ReloadTokensPacket::handleServer
         );
 
-        NetworkManager.registerReceiver(
+        PacketNetworking.registerReceiver(
             NetworkManager.c2s(),
             UnlockCollectionPacket.ID,
             UnlockCollectionPacket::handleServer
         );
 
-        NetworkManager.registerReceiver(
+        PacketNetworking.registerReceiver(
             NetworkManager.c2s(),
             UpdateGuaranteedResetHourPacket.ID,
             UpdateGuaranteedResetHourPacket::handleServer
@@ -88,31 +88,31 @@ public class ModNetworking {
         BlockPopsMod.logDebug("Initializing BlockPops client networking...");
 
         // Register client-side packet receivers (S2C)
-        NetworkManager.registerReceiver(
+        PacketNetworking.registerReceiver(
             NetworkManager.s2c(),
             SyncTokenDataPacket.ID,
             SyncTokenDataPacket::handleClient
         );
 
-        NetworkManager.registerReceiver(
+        PacketNetworking.registerReceiver(
             NetworkManager.s2c(),
             SyncDiscoveryDataPacket.ID,
             SyncDiscoveryDataPacket::handleClient
         );
 
-        NetworkManager.registerReceiver(
+        PacketNetworking.registerReceiver(
             NetworkManager.s2c(),
             UnlockFigurePacket.ID,
             UnlockFigurePacket::handleClient
         );
 
-        NetworkManager.registerReceiver(
+        PacketNetworking.registerReceiver(
             NetworkManager.s2c(),
             SyncDynamicCollectionsPacket.ID,
             SyncDynamicCollectionsPacket::handleClient
         );
 
-        NetworkManager.registerReceiver(
+        PacketNetworking.registerReceiver(
             NetworkManager.s2c(),
             OpenFavoriteColorScreenPacket.ID,
             OpenFavoriteColorScreenPacket::handleClient

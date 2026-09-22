@@ -9,7 +9,9 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.util.GeoBones;
+//? if <26.2 {
 import net.minecraft.client.renderer.MultiBufferSource;
+//? }
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;

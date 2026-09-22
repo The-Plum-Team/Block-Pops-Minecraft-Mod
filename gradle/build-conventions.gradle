@@ -164,6 +164,15 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
         // These hooks keep their signature, so only the name differs, and the target
         // depends on which vanilla class the file extends.
         // Renames with one unambiguous target across the whole tree.
+        // 26.2 removed the immediate-mode leftovers and renamed a few more seams.
+        def renamesFor262 = era[0] > 26 || (era[0] == 26 && era[1] >= 2)
+        def rules262 = [
+            ['.setScreen(', '.setScreenAndShow('],
+            ['.getLighting()', '.lighting()'],
+        ]
+        // 26.2 moved the current screen from Minecraft onto its Gui. The lookahead
+        // leaves an assignment alone while still matching a comparison.
+        def screenAccess262 = ~/\b(minecraft|mc)\.screen\b(?!\s*=[^=])/
         def eraWideRenames = [
             ['resizeDisplay(', 'resizeGui('],
             // Renderable#render and Screen#renderBackground became extract hooks.
@@ -218,7 +227,7 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
                 // previously generated sources in place and the change looks like a no-op.
                 inputs.property('blockPopsSourceRewrites', [
                         movedImports, renderTypeFactories.toString(),
-                        renamesGeckolibRoot, renamesGuiGraphics, guiGraphicsMethods, guiHookRenames, eraWideRenames, hookDeclRenames, hookDeclExcluded,
+                        renamesGeckolibRoot, renamesGuiGraphics, guiGraphicsMethods, guiHookRenames, eraWideRenames, hookDeclRenames, hookDeclExcluded, renamesFor262, rules262, screenAccess262.toString(),
                 ].toString())
                 filesMatching('**/*.java') {
                     def hookRenames = renamesGuiGraphics ? (guiHookRenames[it.name] ?: []) : []
@@ -237,6 +246,10 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
                             guiGraphicsMethods.each { from, to ->
                                 rewritten = rewritten.replaceAll(/\b(graphics|guiGraphics)\.${from}\(/, "\$1.${to}(")
                             }
+                        }
+                        if (renamesFor262) {
+                            rules262.each { pair -> rewritten = rewritten.replace(pair[0], pair[1]) }
+                            rewritten = rewritten.replaceAll(screenAccess262, '$1.gui.screen()')
                         }
                         if (renamesGuiGraphics) {
                             eraWideRenames.each { pair ->

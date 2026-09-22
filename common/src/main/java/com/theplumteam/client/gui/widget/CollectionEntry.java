@@ -253,7 +253,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
                     // 1.21.5 made ClickEvent a sealed hierarchy whose open-url case
                     // carries a URI instead of a string.
                     //? if >=26 {
-                    /^net.minecraft.client.gui.screens.Screen previous = mc.screen;
+                    /^net.minecraft.client.gui.screens.Screen previous = parent.getParentScreen();
                     java.net.URI target = java.net.URI.create(collection.getAuthorUrl());
                     mc.setScreen(new net.minecraft.client.gui.screens.ConfirmLinkScreen(confirmed -> {
                         if (confirmed) {

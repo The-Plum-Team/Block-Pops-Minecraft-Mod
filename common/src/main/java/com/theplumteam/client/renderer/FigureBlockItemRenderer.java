@@ -18,7 +18,9 @@ import net.minecraft.resources.ResourceLocation;
 *///? } else {
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 //? }
+//? if <26.2 {
 import net.minecraft.client.renderer.MultiBufferSource;
+//? }
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemDisplayContext;
@@ -62,6 +64,9 @@ public class FigureBlockItemRenderer
     *///? } else {
     @Override
     //? }
+    //? if <26.2 {
+    // 26.2 removed MultiBufferSource along with immediate-mode drawing;
+    // from that version the entry point is submit, and this path is unused.
     public void renderByItem(ItemStack stack, ItemDisplayContext displayContext, PoseStack poseStack,
                             MultiBufferSource bufferSource, int packedLight, int packedOverlay) {
         if (stack.getItem() instanceof GeoBlockItem geoBlockItem) {
@@ -141,6 +146,7 @@ public class FigureBlockItemRenderer
             poseStack.popPose();
         }
     }
+    //? }
     //? if >=1.21.4 {
     /*public static final ResourceLocation ID =
             ResourceLocations.of(BlockPopsMod.MOD_ID, "figure_block");

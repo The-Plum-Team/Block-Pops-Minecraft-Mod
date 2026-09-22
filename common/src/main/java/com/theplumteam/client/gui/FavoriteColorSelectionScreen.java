@@ -9,7 +9,9 @@ import com.mojang.blaze3d.vertex.BufferBuilder;
 /*import com.mojang.blaze3d.vertex.BufferUploader;
 *///? }
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+//? if <26.2 {
 import com.mojang.blaze3d.vertex.Tesselator;
+//? }
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
@@ -299,8 +301,13 @@ public class FavoriteColorSelectionScreen extends Screen {
         int tileSize = StarPatternCache.getTileSize();
 
         // Calculate smooth scrolling offset
+        //? if >=26.2 {
+        /*// 26.2 dropped the GUI tick counter; wall time drives the same scroll.
+        double smoothTime = net.minecraft.util.Util.getMillis() / 1000.0;
+        *///? } else {
         int tickCount = this.minecraft != null ? this.minecraft.gui.getGuiTicks() : 0;
         double smoothTime = (tickCount + partialTick) / 20.0;
+        //? }
         double offsetX = (smoothTime * pixelsPerSecond) % tileSize;
 
         // Apply star color tint and opacity from config

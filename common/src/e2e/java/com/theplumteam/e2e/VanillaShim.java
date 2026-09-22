@@ -36,7 +36,12 @@ public final class VanillaShim {
         try {
             Class<?> screenshot = loadNamedClass("net.minecraft.client.Screenshot");
             File gameDirectory = new File(System.getProperty("user.dir"));
+            //? if >=26.2 {
+            /*// 26.2 replaced the main render target with the window's GPU surface.
+            Object target = minecraft.windowSurface();
+            *///? } else {
             Object target = minecraft.getMainRenderTarget();
+            //? }
             Consumer<Object> noMessage = ignored -> {};
             for (Method method : screenshot.getDeclaredMethods()) {
                 Class<?>[] parameters = method.getParameterTypes();

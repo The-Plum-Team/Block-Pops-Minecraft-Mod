@@ -5,7 +5,9 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.theplumteam.blockentity.FigureBlockEntity;
 import com.theplumteam.client.model.FigureBlockModel;
 import com.theplumteam.util.SkinModelDetector;
+//? if <26.2 {
 import net.minecraft.client.renderer.MultiBufferSource;
+//? }
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.cache.object.BakedGeoModel;

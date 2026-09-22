@@ -13,6 +13,11 @@ import net.minecraft.client.gui.components.ObjectSelectionList;
 public class CollectionListWidget extends BoundedSelectionList<CollectionEntry> {
     private final CollectionSelectionScreen parentScreen;
 
+    /** The screen this list belongs to. */
+    public CollectionSelectionScreen getParentScreen() {
+        return parentScreen;
+    }
+
     public CollectionListWidget(CollectionSelectionScreen parentScreen, Minecraft mc,
                                int width, int height, int y, int entryHeight) {
         super(mc, width, height, y, y + height, entryHeight);

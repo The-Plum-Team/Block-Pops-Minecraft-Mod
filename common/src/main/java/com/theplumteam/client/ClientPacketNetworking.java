@@ -31,6 +31,13 @@ public final class ClientPacketNetworking {
         *///? } else {
         FriendlyByteBuf payload = encoder.get();
         //? }
+        //? if >=26 {
+        /*NetworkManager.collectPackets(connection::send, NetworkManager.c2s(),
+                new com.theplumteam.network.PacketNetworking.RawPayload(
+                        id, com.theplumteam.network.PacketNetworking.drain(payload)),
+                registries);
+        *///? } else {
         NetworkManager.collectPackets(connection::send, NetworkManager.c2s(), id, payload);
+        //? }
     }
 }
