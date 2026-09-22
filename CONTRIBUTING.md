@@ -66,7 +66,7 @@ ordinary feature PR. Branch from the exact current `master` as
 `controller-upgrade/<purpose>`, target `master`, add the exact
 `controller-upgrade` label, and keep the change within the protected
 controller/docs/test or matrix-selected loader-bootstrap roots. After reviewing
-the complete exact-head diff, only repository owner `AkaNebur` may post
+the complete exact-head diff, only `AkaNebur`, an administrator of the owning organization, may post
 `/controller-upgrade approve <head-sha>`. Every new head requires a new approval;
 the latest exact-head `approve` or `revoke` command wins. Neither this route nor
 an ordinary PR may change the release matrix, verification metadata, or

@@ -196,10 +196,10 @@ GitHub Actions workload-identity federation rule with:
 
 - issuer `https://token.actions.githubusercontent.com` using discovery JWKS;
 - audience `https://api.anthropic.com`;
-- exact subject `repo:AkaNebur/BlockPops:environment:visual-review`;
-- claims restricted to repository `AkaNebur/BlockPops`, owner `AkaNebur`, ref
+- exact subject `repo:The-Plum-Team/BlockPops:environment:visual-review`;
+- claims restricted to repository `The-Plum-Team/BlockPops`, owner `The-Plum-Team`, ref
   `refs/heads/master`, and workflow ref
-  `AkaNebur/BlockPops/.github/workflows/visual-review-drain.yml@refs/heads/master`;
+  `The-Plum-Team/BlockPops/.github/workflows/visual-review-drain.yml@refs/heads/master`;
 - target service account and dedicated workspace;
 - OAuth scope `workspace:inference`, not `workspace:developer` or `org:admin`;
 - token lifetime approximately 600 seconds;

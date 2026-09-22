@@ -123,7 +123,7 @@ class RestrictedTransitionDeclarationTests(unittest.TestCase):
     def decision(self, transition, **overrides):
         return {
             "schema_version": 1, "purpose": "restricted-transition-owner-authorization",
-            "repository": "AkaNebur/BlockPops", "pull_request": 17, "owner": "AkaNebur",
+            "repository": "The-Plum-Team/BlockPops", "pull_request": 17, "owner": "AkaNebur",
             "decision": "approve", "controller_generation": 1, "controller_sha": BASE,
             "base_sha": BASE, "head_sha": HEAD, "declaration_sha256": transition.digest,
             "comment_id": 91, "comment_updated_at": "2026-09-19T10:00:00Z",
@@ -133,7 +133,7 @@ class RestrictedTransitionDeclarationTests(unittest.TestCase):
 
     def bind(self, transition, decision):
         return bind_restricted_transition_decision(
-            transition, repository="AkaNebur/BlockPops", pull_number=17,
+            transition, repository="The-Plum-Team/BlockPops", pull_number=17,
             authenticated_owner_decision=decision)
 
     def test_exact_static_scopes_and_external_deployment_bind_inert_proposals(self):
@@ -694,13 +694,13 @@ class DispatchSourceTests(unittest.TestCase):
 
 class RestrictedTransitionOwnerTests(unittest.TestCase):
     class MockGitHub(PullIdentityTests.Api, GitHubApi):
-        repository = "AkaNebur/BlockPops"
+        repository = "The-Plum-Team/BlockPops"
         api_url = "https://api.github.test"
 
         def __init__(self, comments):
             PullIdentityTests.Api.__init__(self)
             self.comments, self.calls = copy.deepcopy(comments), []
-            self.owner = {"login": "AkaNebur", "type": "User"}
+            self.owner = {"login": "The-Plum-Team", "type": "Organization"}
 
         def repository_record(self):
             return {**super().repository_record(), "owner": self.owner}
@@ -734,7 +734,7 @@ class RestrictedTransitionOwnerTests(unittest.TestCase):
             "body": f"/restricted-transition approve 1 {HEAD} {self.transition.digest}",
             "created_at": "2026-09-19T10:00:00Z", "updated_at": "2026-09-19T10:00:00Z",
             "issue_url": f"{self.MockGitHub.api_url}/repos/{self.MockGitHub.repository}/issues/17",
-            "author_association": "OWNER", "performed_via_github_app": None, **overrides,
+            "author_association": "MEMBER", "performed_via_github_app": None, **overrides,
         }
 
     def read(self, api, **overrides):
@@ -767,13 +767,16 @@ class RestrictedTransitionOwnerTests(unittest.TestCase):
     def test_only_exact_owner_user_direct_comment_on_this_pull_is_authority(self):
         mutations = ({"user": {"login": "collaborator", "type": "User"}},
                      {"user": {"login": "AkaNebur", "type": "Bot"}},
-                     {"performed_via_github_app": {"id": 1}}, {"author_association": "MEMBER"},
+                     {"performed_via_github_app": {"id": 1}}, {"author_association": "COLLABORATOR"},
+                     {"author_association": "OWNER"},
                      {"issue_url": "https://api.github.test/repos/other/repo/issues/17"},
                      {"issue_url": self.comment()["issue_url"].replace("/17", "/18")})
         for mutation in mutations:
             with self.subTest(mutation=mutation), self.assertRaises(PrGateError):
                 self.read(self.MockGitHub([self.comment(**mutation)]))
-        for owner in ({"login": "other", "type": "User"}, {"login": "AkaNebur", "type": "Organization"}):
+        # AkaNebur owned the repository before it moved to the organization.
+        for owner in ({"login": "other", "type": "Organization"}, {"login": "The-Plum-Team", "type": "User"},
+                      {"login": "AkaNebur", "type": "User"}):
             api = self.MockGitHub([self.comment()])
             api.owner = owner
             with self.assertRaisesRegex(PrGateError, "repository owner"):
@@ -846,7 +849,7 @@ class RestrictedTransitionOwnerTests(unittest.TestCase):
 
 class ControllerUpgradeAuthorizationTests(unittest.TestCase):
     class Api:
-        repository = "AkaNebur/BlockPops"
+        repository = "The-Plum-Team/BlockPops"
 
         def __init__(self, comments: list[dict[str, object]], *, labelled: bool = True) -> None:
             self.comments = comments
@@ -861,7 +864,7 @@ class ControllerUpgradeAuthorizationTests(unittest.TestCase):
         def repository_record(self):
             return {
                 "full_name": self.repository,
-                "owner": {"login": "AkaNebur", "type": "User"},
+                "owner": {"login": "The-Plum-Team", "type": "Organization"},
             }
 
         def issue_comments(self, _number: int):
@@ -874,7 +877,7 @@ class ControllerUpgradeAuthorizationTests(unittest.TestCase):
         *,
         head: str = HEAD,
         actor: str = "AkaNebur",
-        association: str = "OWNER",
+        association: str = "MEMBER",
         updated: str = "2026-08-11T10:00:00Z",
     ) -> dict[str, object]:
         return {
@@ -914,6 +917,7 @@ class ControllerUpgradeAuthorizationTests(unittest.TestCase):
         for comment in (
             self.comment(91, "approve", head="f" * 40),
             self.comment(91, "approve", actor="collaborator", association="MEMBER"),
+            self.comment(91, "approve", association="COLLABORATOR"),
         ):
             with self.subTest(comment=comment), self.assertRaisesRegex(
                 PrGateError, "lacks"
@@ -1748,7 +1752,8 @@ class ResultAndWorkflowContractTests(unittest.TestCase):
         self.assertIn("workflow_run:", workflow)
         self.assertIn("issue_comment:", workflow)
         self.assertIn("- created\n      - edited\n      - deleted", workflow)
-        self.assertIn("github.event.comment.author_association == 'OWNER'", workflow)
+        self.assertIn("github.event.comment.user.login == 'AkaNebur'", workflow)
+        self.assertIn("github.event.comment.author_association == 'MEMBER'", workflow)
         self.assertIn("types:\n      - requested\n      - in_progress\n      - completed", workflow)
         self.assertIn("permissions: {}", workflow)
         self.assertIn("validate", (REPO / "scripts/ci/pr_gate.py").read_text("utf-8"))

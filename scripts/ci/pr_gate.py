@@ -77,6 +77,12 @@ EXACT_BASE_OWNED_PATHS = (
 CONTROLLER_UPGRADE_LABEL = "controller-upgrade"
 CONTROLLER_UPGRADE_BRANCH_PREFIX = "controller-upgrade/"
 CONTROLLER_UPGRADE_OWNER = "AkaNebur"
+# The repository moved from AkaNebur's account to the The-Plum-Team organization.
+# The owner of record is now the organization, while the person whose decisions
+# authorize an upgrade is still AkaNebur, an administrator of it, whom GitHub
+# reports on their comments as a MEMBER of the organization rather than an OWNER.
+REPOSITORY_OWNER = {"login": "The-Plum-Team", "type": "Organization"}
+CONTROLLER_UPGRADE_ASSOCIATION = "MEMBER"
 CONTROLLER_UPGRADE_COMMAND = re.compile(
     r"^/controller-upgrade (?P<decision>approve|revoke) (?P<head>[0-9a-f]{40})$"
 )
@@ -766,8 +772,8 @@ def controller_upgrade_authorization(
     if (
         repository.get("full_name") != api.repository
         or not isinstance(owner, dict)
-        or owner.get("login") != CONTROLLER_UPGRADE_OWNER
-        or owner.get("type") != "User"
+        or owner.get("login") != REPOSITORY_OWNER["login"]
+        or owner.get("type") != REPOSITORY_OWNER["type"]
     ):
         _fail("repository owner does not match protected controller-upgrade policy")
 
@@ -790,7 +796,7 @@ def controller_upgrade_authorization(
         if (
             user.get("login") != CONTROLLER_UPGRADE_OWNER
             or user.get("type") != "User"
-            or comment.get("author_association") != "OWNER"
+            or comment.get("author_association") != CONTROLLER_UPGRADE_ASSOCIATION
         ):
             continue
         if match.group("head") == identity.head_sha:
@@ -842,7 +848,8 @@ def read_restricted_transition_owner_decision(
     repository = api.repository_record()
     owner = repository.get("owner")
     if (repository.get("full_name") != api.repository or not isinstance(owner, dict)
-            or owner.get("login") != CONTROLLER_UPGRADE_OWNER or owner.get("type") != "User"):
+            or owner.get("login") != REPOSITORY_OWNER["login"]
+            or owner.get("type") != REPOSITORY_OWNER["type"]):
         _fail("repository owner does not match restricted transition policy")
     issue_url = f"{api.api_url}/repos/{api.repository}/issues/{identity.number}"
 
@@ -886,7 +893,7 @@ def read_restricted_transition_owner_decision(
         _fail("restricted transition owner comment changed or disappeared")
     if (selected["issue_url"] != issue_url
             or selected["user"] != {"login": CONTROLLER_UPGRADE_OWNER, "type": "User"}
-            or selected["author_association"] != "OWNER"
+            or selected["author_association"] != CONTROLLER_UPGRADE_ASSOCIATION
             or selected["performed_via_github_app"] is not None):
         _fail("restricted transition comment is not a direct repository-owner decision")
     decision = {

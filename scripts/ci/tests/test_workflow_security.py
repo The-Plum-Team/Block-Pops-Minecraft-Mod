@@ -266,7 +266,8 @@ class WorkflowSecurityTests(unittest.TestCase):
         self.assertIn("_NoRedirect()", evaluator)
         self.assertIn("issue_comment:", workflow)
         self.assertIn("- created\n      - edited\n      - deleted", workflow)
-        self.assertIn("github.event.comment.author_association == 'OWNER'", workflow)
+        self.assertIn("github.event.comment.user.login == 'AkaNebur'", workflow)
+        self.assertIn("github.event.comment.author_association == 'MEMBER'", workflow)
         self.assertIn(
             "github.event.workflow_run.event == 'pull_request_target'", workflow
         )
