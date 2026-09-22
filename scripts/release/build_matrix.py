@@ -28,6 +28,11 @@ from scripts.release.matrix import (  # noqa: E402
     MAX_MATRIX_BYTES, MatrixDocument, MatrixError, load_matrix_document, normalize_matrix_inventory,
 )
 
+# 26.1 moved the game to Java 25, and Loom refuses to configure it from an older
+# Gradle, so the launch JVM follows the matrix instead of being pinned here.
+SUPPORTED_JAVA = {17, 21, 25}
+SUPPORTED_GRADLE_JAVA = {21, 25}
+
 
 class BuildProcessError(RuntimeError):
     """The checkout lock or owned process cannot be used safely."""
@@ -347,7 +352,7 @@ def _observation_report(lock, run_id):
 
 def _verify_jdk_files(toolchains):
     if (toolchains["status"] != "probed" or not isinstance(toolchains["homes"], dict)
-            or not set(toolchains["homes"]) <= {"17", "21"}):
+            or not set(toolchains["homes"]) <= {str(major) for major in SUPPORTED_JAVA}):
         raise BuildProcessError("explicit JDK probes are required")
     for major, row in toolchains["homes"].items():
         home = Path(row["home"])
@@ -387,11 +392,12 @@ def prepare_observation(lock: CheckoutLock, run_id: str, toolchains: dict[str, A
         _verify_jdk_files(toolchains)
         homes = {int(major): Path(row["home"]) for major, row in toolchains["homes"].items()}
         major = lane["required_java"]["artifact"]
-        flags = _toolchain_flags(homes)
+        gradle_major = lane["required_java"]["gradle"]
+        flags = _toolchain_flags(homes, gradle_major)
         expected = {"artifact_node": artifact_node, "command": [lane["command"][0], *flags, *lane["command"][1:]],
                     "compile_home": str(homes[major]), "runtime_home": str(homes[lane["required_java"]["runtime"]])}
         selected = [row for row in toolchains["lanes"] if row["artifact_node"] == artifact_node]
-        if canonical_json(selected) != canonical_json([expected]) or toolchains["environment"] != {"JAVA_HOME": str(homes[21])}:
+        if canonical_json(selected) != canonical_json([expected]) or toolchains["environment"] != {"JAVA_HOME": str(homes[gradle_major])}:
             raise BuildProcessError("toolchain command binding differs from the selected plan")
         suffix = f":{lane['minecraft']}" if lane["build_layout"] == "stonecutter" else ""
         projects = [f":common{suffix}", f":{lane['loader']}{suffix}"]
@@ -410,8 +416,8 @@ def prepare_observation(lock: CheckoutLock, run_id: str, toolchains: dict[str, A
             start -= 1
         request = {"schema_version": 1, "run_id": run_id, "artifact_node": artifact_node,
                    "repository": str(lock.repository), "caller_source": {**{key: value for key, value in report["source"].items()
-                    if key != "files"}, "matrix_sha256": plan["matrix"]["sha256"]}, "gradle_home": str(homes[21]),
-                   "compile_home": str(homes[major]), "compile_major": major, "requested_tasks": lane["command"][start:],
+                    if key != "files"}, "matrix_sha256": plan["matrix"]["sha256"]}, "gradle_home": str(homes[gradle_major]),
+                   "gradle_major": gradle_major, "compile_home": str(homes[major]), "compile_major": major, "requested_tasks": lane["command"][start:],
                    "compile_tasks": compile_tasks, "projects": projects}
         payload = canonical_json(request)
         if len(payload) > 65536:
@@ -448,7 +454,8 @@ def validate_observation(lock: CheckoutLock, run_id: str, artifact_node: str):
         receipt, receipt_file = _observation_json(lock.repository, receipt_path.with_name("observation.json"))
         expected = {"schema_version": 1, "run_id": run_id, "artifact_node": artifact_node,
                     "request_sha256": binding["request_file"]["sha256"], "caller_source": request["caller_source"],
-                    "status": "completed", "gradle_jvm": {"home": request["gradle_home"], "major": 21}}
+                    "status": "completed",
+                    "gradle_jvm": {"home": request["gradle_home"], "major": request["gradle_major"]}}
         if canonical_json({key: value for key, value in receipt.items() if key != "compilers"}) != canonical_json(expected):
             raise BuildProcessError("observation receipt identity or JVM differs from the bound request")
         destinations = {**binding["destinations"], **binding["optional_destinations"]}
@@ -507,8 +514,8 @@ def validate_observation(lock: CheckoutLock, run_id: str, artifact_node: str):
         return {"status": "observed", "receipt": receipt_file, "compilers": receipt["compilers"], "classes": classes}
 
 
-def _toolchain_flags(homes):
-    return [f"-Dorg.gradle.java.home={homes[21]}", "-Dorg.gradle.parallel=false", "-Dorg.gradle.workers.max=1",
+def _toolchain_flags(homes, launch_major):
+    return [f"-Dorg.gradle.java.home={homes[launch_major]}", "-Dorg.gradle.parallel=false", "-Dorg.gradle.workers.max=1",
             "-Porg.gradle.java.installations.paths=" + ",".join(str(homes[major]) for major in sorted(homes)),
             "-Porg.gradle.java.installations.fromEnv=", "-Porg.gradle.java.installations.auto-detect=false",
             "-Porg.gradle.java.installations.auto-download=false"]
@@ -551,12 +558,13 @@ def verify_toolchains(plan: dict[str, Any], java_home: Path, java_homes: dict[in
                 raise BuildProcessError("JDK homes must be absolute, comma-free single-line paths")
             return path.resolve(strict=True)
         launch = home_path(java_home)
-        if any(type(major) is not int or major not in {17, 21} for major in java_homes):
-            raise BuildProcessError("explicit JDK keys must be integer 17 or 21")
+        gradle_major = plan["lanes"][0]["required_java"]["gradle"]
+        if any(type(major) is not int or major not in SUPPORTED_JAVA for major in java_homes):
+            raise BuildProcessError("explicit JDK keys must be integer 17, 21 or 25")
         homes = {major: home_path(path) for major, path in java_homes.items()}
-        if 21 in homes and homes[21] != launch:
-            raise BuildProcessError("Java 21 toolchain home conflicts with the Gradle launch home")
-        homes[21] = launch
+        if gradle_major in homes and homes[gradle_major] != launch:
+            raise BuildProcessError(f"Java {gradle_major} toolchain home conflicts with the Gradle launch home")
+        homes[gradle_major] = launch
         required = {major for lane in plan["lanes"] for major in lane["required_java"].values()}
         if required - homes.keys():
             raise BuildProcessError("missing explicit JDK home for a selected compile/runtime major")
@@ -600,7 +608,7 @@ def verify_toolchains(plan: dict[str, Any], java_home: Path, java_homes: dict[in
             raise BuildProcessError("JDK files changed during toolchain probes")
     except (OSError, ValueError, KeyError, IndexError, TypeError, subprocess.SubprocessError) as exc:
         raise BuildProcessError(f"explicit toolchain validation failed: {exc}") from exc
-    flags = _toolchain_flags(homes)
+    flags = _toolchain_flags(homes, gradle_major)
     lanes = [{"artifact_node": lane["artifact_node"], "command": [lane["command"][0], *flags, *lane["command"][1:]],
               "compile_home": str(homes[lane["required_java"]["artifact"]]),
               "runtime_home": str(homes[lane["required_java"]["runtime"]])} for lane in plan["lanes"]]
@@ -626,15 +634,17 @@ def plan_build(
     selected_scope = "lane" if artifact_node is not None else scope
     lanes = sorted(document.select_lanes(scope=selected_scope, artifact_node=artifact_node),
                    key=lambda lane: (numeric_version(lane.identity.minecraft), lane.identity.loader))
-    if any(lane.gradle_java != 21 for lane in lanes):
-        raise MatrixError("the serial runner requires Gradle Java 21")
+    gradle_majors = {lane.gradle_java for lane in lanes}
+    if len(gradle_majors) != 1 or not gradle_majors <= SUPPORTED_GRADLE_JAVA:
+        raise MatrixError("the selected lanes must share one Gradle Java of 21 or 25")
+    gradle_java = gradle_majors.pop()
     wrapper = "gradlew.bat" if (os.name == "nt" if windows is None else windows) else "./gradlew"
     planned = []
     for lane in lanes:
         document.gradle_context(artifact_node=lane.identity.artifact_node)
         artifact, runtime = lane.artifact, lane.runtime
-        if artifact["java"] not in {17, 21} or runtime["java"] not in {17, 21}:
-            raise MatrixError("the serial runner requires artifact/runtime Java 17 or 21")
+        if artifact["java"] not in SUPPORTED_JAVA or runtime["java"] not in SUPPORTED_JAVA:
+            raise MatrixError("the serial runner requires artifact/runtime Java 17, 21 or 25")
         home = repository / "build/gradle-home" / lane.identity.artifact_node
         command = [wrapper, "--no-daemon", "--no-parallel", "--max-workers=1",
                    "--dependency-verification", "strict", "--gradle-user-home", str(home),
@@ -646,7 +656,7 @@ def plan_build(
             "artifact_node": lane.identity.artifact_node,
             "minecraft": lane.identity.minecraft, "loader": lane.identity.loader,
             "build_layout": lane.build_layout, "gradle_user_home": str(home),
-            "required_java": {"gradle": 21, "artifact": artifact["java"], "runtime": runtime["java"]},
+            "required_java": {"gradle": gradle_java, "artifact": artifact["java"], "runtime": runtime["java"]},
             "cwd": str(repository), "command": command,
             "outputs": {"production": str(repository / lane.production_jar),
                         "harness": str(repository / lane.harness_jar)},
@@ -746,16 +756,20 @@ def execute_build(matrix_path: Path, *, java_home: Path, java_homes: dict[int, P
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", action="store_true", help="emit a pure plan without probing JDKs or building")
-    parser.add_argument("--java-home", type=Path, help="explicit Java 21 home for Gradle (required for execution)")
+    parser.add_argument("--java-home", type=Path,
+                        help="explicit Gradle launch JDK home, matching the matrix gradle_java (required for execution)")
     parser.add_argument("--java17-home", type=Path, help="explicit compile/runtime Java 17 home when selected")
-    parser.add_argument("--java21-home", type=Path, help="optional Java 21 toolchain home; must equal --java-home")
+    parser.add_argument("--java21-home", type=Path,
+                        help="explicit Java 21 toolchain home; must equal --java-home when Gradle launches on 21")
+    parser.add_argument("--java25-home", type=Path,
+                        help="explicit Java 25 toolchain home; must equal --java-home when Gradle launches on 25")
     parser.add_argument("--matrix", type=Path, default=REPO / "release/release-matrix.json")
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--scope", choices=("full", "legacy"))
     selection.add_argument("--artifact-node")
     parser.add_argument("--clean", action="store_true")
     args = parser.parse_args(argv)
-    if args.plan and any((args.java_home, args.java17_home, args.java21_home)):
+    if args.plan and any((args.java_home, args.java17_home, args.java21_home, args.java25_home)):
         parser.error("--plan cannot be combined with execution JDK homes")
     if not args.plan and args.java_home is None:
         parser.error("execution requires --java-home; use --plan for planning only")
@@ -764,7 +778,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.plan:
             result = plan_build(args.matrix, **options)
         else:
-            homes = {major: home for major, home in ((17, args.java17_home), (21, args.java21_home)) if home is not None}
+            homes = {major: home for major, home in
+                     ((17, args.java17_home), (21, args.java21_home), (25, args.java25_home)) if home is not None}
             result = execute_build(args.matrix, java_home=args.java_home, java_homes=homes, **options)
     except KeyboardInterrupt:
         print("build matrix interrupted; execution did not complete", file=sys.stderr)

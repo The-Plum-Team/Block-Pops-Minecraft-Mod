@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from scripts.release.build_matrix import plan_build
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT
 from scripts.release.matrix import MatrixError, load_matrix_document
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -75,7 +76,7 @@ class NeoForge1211ConfigurationTests(unittest.TestCase):
         plan = plan_build(MATRIX, artifact_node="neoforge-1.21.1")
         self.assertEqual(["neoforge-1.21.1"], plan["selected_nodes"])
         self.assertTrue(plan["partial_scope"])
-        self.assertEqual(18, len(plan["target_nodes"]))
+        self.assertEqual(TARGET_COUNT, len(plan["target_nodes"]))
         self.assertEqual([":neoforge:1.21.1:remapJar", ":neoforge:1.21.1:remapE2EHarnessJar"],
                          plan["lanes"][0]["command"][-3:-1])
         outputs = plan["lanes"][0]["outputs"]

@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from scripts.ci.tests.matrix_fixtures import schema1_matrix, schema2_configuration
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT, schema1_matrix, schema2_configuration
 from scripts.release import version_branches as discovery
 
 
@@ -48,7 +48,7 @@ class PagesBranchDiscoveryTests(unittest.TestCase):
     def test_schema1_preparing_and_shared_bind_exact_raw_bytes_and_selected_inventory(self):
         for matrix, scope, count in ((schema1_matrix(), "unscoped", 2),
                                      (schema2_configuration(), "legacy", 2),
-                                     (schema2_configuration(shared=True), "full", 18)):
+                                     (schema2_configuration(shared=True), "full", TARGET_COUNT)):
             with self.subTest(scope=scope):
                 raw = (json.dumps(matrix, indent=2) + "\n").replace("\n", "\r\n").encode()
                 commit, raw = self.commit(matrix, raw=raw)
@@ -66,7 +66,7 @@ class PagesBranchDiscoveryTests(unittest.TestCase):
                 self.assertEqual(sorted({row["loader"] for row in rows}), result["loaders"])
                 self.assertEqual(sorted({row["java"] for row in rows}), result["java"])
                 self.assertEqual({row["artifact_node"] for row in matrix["artifacts"]}, set(result["configured_nodes"]))
-                self.assertEqual(2 if scope == "unscoped" else 18, len(result["scope"]["target_nodes"]))
+                self.assertEqual(2 if scope == "unscoped" else TARGET_COUNT, len(result["scope"]["target_nodes"]))
                 self.assertEqual(scope == "legacy", result["scope"]["partial"])
                 self.assertEqual(scope, result["scope"]["kind"])
                 self.assertNotIn("projection", result)

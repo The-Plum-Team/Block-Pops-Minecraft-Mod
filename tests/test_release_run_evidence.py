@@ -12,7 +12,7 @@ from pathlib import Path
 
 from scripts.ci.e2e_job_graph import expected_jobs
 from scripts.ci import e2e_job_graph
-from scripts.ci.tests.matrix_fixtures import schema2_configuration
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT, schema2_configuration
 from scripts.pages.select_artifact import Artifact, SelectionError
 from scripts.release.run_evidence import read_current_evidence
 from tests.test_release_run_selection import Api, CONTROLLER, REPOSITORY, TREE, run
@@ -77,7 +77,7 @@ class CurrentReleaseEvidenceTests(unittest.TestCase):
     def test_exact_jobs_and_two_distinct_artifacts_for_both_producers_and_scopes(self):
         for workflow in ("build-gate.yml", "on-demand-e2e.yml"):
             for scope, node, shared, count in (("legacy", None, False, 2),
-                    ("lane", "neoforge-1.21.1", False, 1), ("full", None, True, 18)):
+                    ("lane", "neoforge-1.21.1", False, 1), ("full", None, True, TARGET_COUNT)):
                 self.matrix.write_text(json.dumps(schema2_configuration(shared=shared)))
                 self.digest = hashlib.sha256(self.matrix.read_bytes()).hexdigest()
                 api = self.api(workflow, scope, node)

@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from scripts.release.build_matrix import plan_build
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT
 from scripts.release.matrix import MatrixError, load_matrix_document
 
 
@@ -27,7 +28,7 @@ class Fabric1211ConfigurationTests(unittest.TestCase):
         plan = plan_build(self.path, artifact_node="fabric-1.21.1")
         self.assertEqual(["fabric-1.21.1"], plan["selected_nodes"])
         self.assertTrue(plan["partial_scope"])
-        self.assertEqual(18, len(plan["target_nodes"]))
+        self.assertEqual(TARGET_COUNT, len(plan["target_nodes"]))
         self.assertEqual(["validateReleaseMatrix", ":fabric:1.21.1:remapJar",
                           ":fabric:1.21.1:remapE2EHarnessJar", "check"], plan["lanes"][0]["command"][-4:])
         self.assertTrue(plan["lanes"][0]["outputs"]["production"].endswith(

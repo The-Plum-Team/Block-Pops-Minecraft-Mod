@@ -19,11 +19,13 @@ if (requestPath != requestPath.toRealPath() ||
 def payload = Files.readAllBytes(requestPath)
 def request = new JsonSlurper().parse(payload)
 def expectedKeys = ['schema_version', 'run_id', 'artifact_node', 'repository', 'caller_source',
-                    'gradle_home', 'compile_home', 'compile_major', 'requested_tasks', 'compile_tasks', 'projects'] as Set
+                    'gradle_home', 'gradle_major', 'compile_home', 'compile_major',
+                    'requested_tasks', 'compile_tasks', 'projects'] as Set
 if (!(request instanceof Map) || request.keySet() != expectedKeys ||
         !(request.schema_version instanceof Integer) || request.schema_version != 1 ||
         !(request.run_id ==~ /[a-f0-9]{32}/) || !(request.artifact_node ==~ /(?:fabric|forge|neoforge)-[0-9.]+/) ||
-        !(request.compile_major instanceof Integer) || !(request.compile_major in [17, 21]) ||
+        !(request.compile_major instanceof Integer) || !(request.compile_major in [17, 21, 25]) ||
+        !(request.gradle_major instanceof Integer) || !(request.gradle_major in [21, 25]) ||
         !(request.caller_source instanceof Map) ||
         !(request.requested_tasks instanceof List) || !request.requested_tasks ||
         !(request.compile_tasks instanceof List) || !request.compile_tasks ||
@@ -53,8 +55,9 @@ def require = { boolean valid, String reason ->
 }
 def actualHome = new File(System.getProperty('java.home')).canonicalPath
 observed.gradle_jvm = [home: actualHome, major: JavaVersion.current().majorVersion as Integer]
-require(actualHome == new File(request.gradle_home as String).canonicalPath && observed.gradle_jvm.major == 21,
-        'Gradle must run on the explicit Java 21 home')
+require(actualHome == new File(request.gradle_home as String).canonicalPath &&
+        observed.gradle_jvm.major == request.gradle_major,
+        "Gradle must run on the explicit Java ${request.gradle_major} home")
 require(!gradle.startParameter.parallelProjectExecutionEnabled && gradle.startParameter.maxWorkerCount == 1,
         'parallel execution or multiple workers')
 require(!gradle.startParameter.configurationCacheRequested, 'configuration cache is unsupported by this observer')

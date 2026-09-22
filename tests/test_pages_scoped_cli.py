@@ -6,7 +6,7 @@ import io
 import json
 import unittest
 
-from scripts.ci.tests.matrix_fixtures import SCHEMA1_MATRIX_PATH
+from scripts.ci.tests.matrix_fixtures import SCHEMA1_MATRIX_PATH, TARGET_COUNT
 from scripts.pages import evidence
 from tests import test_pages_raw_scope as reader
 
@@ -82,7 +82,7 @@ class ScopedPagesCliTests(unittest.TestCase):
                 if not schema1:
                     expected["aggregate_scope"] = f.manifest["aggregate_scope"]
                     self.assertEqual(expected["aggregate_scope"], manifest["aggregate_scope"])
-                    self.assertEqual(18, len(expected["aggregate_scope"]["target_nodes"]))
+                    self.assertEqual(TARGET_COUNT, len(expected["aggregate_scope"]["target_nodes"]))
                 self.assertEqual(json.dumps(expected, sort_keys=True) + "\n", stdout)
         self.assertEqual((compact / "manifest.json").read_bytes(), (copied / "manifest.json").read_bytes())
 

@@ -98,7 +98,7 @@ class BuildMatrixPlanningTests(unittest.TestCase):
         self.write_matrix(matrix)
         plan = plan_build(self.path)
         self.assertEqual(expected, plan["selected_nodes"])
-        self.assertEqual(18, len({row["gradle_user_home"] for row in plan["lanes"]}))
+        self.assertEqual(len(expected), len({row["gradle_user_home"] for row in plan["lanes"]}))
         self.assertFalse(plan["partial_scope"])
         self.assertEqual(["1.20.1", "1.21.7", "1.21.10"],
                          sorted(["1.21.10", "1.21.7", "1.20.1"], key=numeric_version))
@@ -120,11 +120,16 @@ class BuildMatrixPlanningTests(unittest.TestCase):
         self.assertEqual(first["lanes"], second["lanes"])
 
     def test_invalid_configuration_and_wrong_gradle_java_cannot_be_planned(self):
+        # The serial runner launches Gradle on the Java the matrix declares, so a
+        # launch major it has no lane for is what it must refuse, not 25 itself.
         matrix = arbitrary_named_1211_release_matrix()
+        matrix["gradle_java"] = 26
+        self.write_matrix(matrix)
+        with self.assertRaisesRegex(MatrixError, "Gradle Java of 21 or 25"):
+            plan_build(self.path)
         matrix["gradle_java"] = 25
         self.write_matrix(matrix)
-        with self.assertRaisesRegex(MatrixError, "Gradle Java 21"):
-            plan_build(self.path)
+        self.assertEqual(25, plan_build(self.path)["lanes"][0]["required_java"]["gradle"])
         matrix = schema2_configuration()
         matrix["runtimes"].pop()
         self.write_matrix(matrix)
@@ -187,7 +192,7 @@ class BuildMatrixToolchainTests(unittest.TestCase):
         path.parent.mkdir(); path.write_text(json.dumps(matrix))
         self.plan = plan_build(path)
         self.homes = {}
-        for major in (17, 21):
+        for major in (17, 21, 25):
             home = self.root / f"JDK {major}"
             (home / "bin").mkdir(parents=True)
             for name in ("java", "javac", "../release"):
@@ -205,32 +210,36 @@ class BuildMatrixToolchainTests(unittest.TestCase):
         return subprocess.CompletedProcess(command, 0, "", output)
 
     def verify(self, **kwargs):
-        return verify_toolchains(self.plan, self.homes[21], {17: self.homes[17]},
+        # The shared fixture spans the 26.x era, so Gradle launches on 25 and the
+        # older lanes bring their own compile toolchains.
+        return verify_toolchains(self.plan, self.homes[25],
+                                 {17: self.homes[17], 21: self.homes[21]},
                                  environment=self.env, **kwargs)
 
     def test_explicit_jdks_are_probed_once_and_bound_without_claiming_gradle_execution(self):
         before = json.dumps(self.plan, sort_keys=True)
         with patch("subprocess.run", side_effect=self.probe) as run:
             result = self.verify()
-        self.assertEqual(4, run.call_count)
+        self.assertEqual(6, run.call_count)
         for call in run.call_args_list:
             self.assertEqual(15, call.kwargs["timeout"])
             self.assertEqual(str(Path(call.args[0][0]).parents[1]), call.kwargs["env"]["JAVA_HOME"])
         self.assertEqual("probed", result["status"])
         self.assertEqual("unverified", result["gradle_jvm"])
         self.assertEqual("unverified", result["compiler_selection"])
-        self.assertEqual({"JAVA_HOME": str(self.homes[21])}, result["environment"])
-        self.assertEqual({"17", "21"}, set(result["homes"]))
+        self.assertEqual({"JAVA_HOME": str(self.homes[25])}, result["environment"])
+        self.assertEqual({"17", "21", "25"}, set(result["homes"]))
         self.assertEqual(before, json.dumps(self.plan, sort_keys=True))
         for original, bound in zip(self.plan["lanes"], result["lanes"], strict=True):
             self.assertEqual(original["artifact_node"], bound["artifact_node"])
             self.assertEqual(str(self.homes[original["required_java"]["runtime"]]), bound["runtime_home"])
             self.assertEqual(str(self.homes[original["required_java"]["artifact"]]), bound["compile_home"])
-            self.assertIn(f"-Dorg.gradle.java.home={self.homes[21]}", bound["command"])
+            self.assertIn(f"-Dorg.gradle.java.home={self.homes[25]}", bound["command"])
             self.assertIn("-Porg.gradle.java.installations.auto-download=false", bound["command"])
             self.assertIn("-Porg.gradle.java.installations.auto-detect=false", bound["command"])
             self.assertIn("-Porg.gradle.java.installations.fromEnv=", bound["command"])
-            self.assertIn(f"-Porg.gradle.java.installations.paths={self.homes[17]},{self.homes[21]}", bound["command"])
+            self.assertIn("-Porg.gradle.java.installations.paths="
+                          f"{self.homes[17]},{self.homes[21]},{self.homes[25]}", bound["command"])
             self.assertIn("--no-parallel", bound["command"])
             self.assertIn("--max-workers=1", bound["command"])
         self.assertEqual(hashlib.sha256((self.homes[17] / "bin/java").read_bytes()).hexdigest(),
@@ -238,9 +247,9 @@ class BuildMatrixToolchainTests(unittest.TestCase):
 
     def test_missing_conflicting_and_non_jdk_homes_fail_before_any_probe(self):
         with patch("subprocess.run") as run:
-            for homes in ({}, {17: self.homes[17], 21: self.homes[17]}, {"17": self.homes[17]}):
+            for homes in ({}, {17: self.homes[17], 25: self.homes[17]}, {"17": self.homes[17]}):
                 with self.subTest(homes=homes), self.assertRaises(BuildProcessError):
-                    verify_toolchains(self.plan, self.homes[21], homes, environment={})
+                    verify_toolchains(self.plan, self.homes[25], homes, environment={})
             (self.homes[17] / "bin/javac").unlink()
             with self.assertRaises(BuildProcessError):
                 self.verify()
@@ -309,7 +318,11 @@ class BuildMatrixToolchainTests(unittest.TestCase):
                 run.assert_not_called()
 
     def test_modern_lane_reuses_launch_jdk_and_property_overrides_are_explicit(self):
-        self.plan = plan_build(Path(self.plan["matrix"]["path"]), artifact_node="neoforge-1.21.1")
+        # A matrix whose newest era is 1.21.x launches Gradle on 21, so its lane
+        # needs no toolchain home beyond the launch JDK itself.
+        era = self.root / "release/release-matrix-1-21.json"
+        era.write_text(json.dumps(schema2_configuration()))
+        self.plan = plan_build(era, artifact_node="neoforge-1.21.1")
         (self.root / "gradle.properties").write_text(
             "org.gradle.java.home=/old/jdk\norg.gradle.parallel=true\n"
             "org.gradle.java.installations.auto-download=true\n")
@@ -335,14 +348,22 @@ class BuildMatrixObservationTests(unittest.TestCase):
     def prepared(self, node=None):
         node = node or self.plan["selected_nodes"][0]
         with patch("subprocess.run", side_effect=lambda *args, **kw: BuildMatrixToolchainTests.probe(self, *args, **kw)):
-            toolchains = verify_toolchains(self.plan, self.homes[21], {17: self.homes[17]}, environment=self.env)
+            # Gradle launches on the Java the planned lanes declare, so a legacy
+            # plan re-points the launch JDK along with its compile toolchains.
+            launch = self.plan["lanes"][0]["required_java"]["gradle"]
+            toolchains = verify_toolchains(
+                self.plan, self.homes[launch],
+                {major: home for major, home in self.homes.items() if major != launch},
+                environment=self.env)
         with checkout_lock(self.root) as lock:
             run_id = begin_report(lock, self.plan)
             result = prepare_observation(lock, run_id, toolchains, node)
             request = json.loads(Path(result["request"]).read_bytes())
             receipt = {key: request[key] for key in ("schema_version", "run_id", "artifact_node", "caller_source")}
             receipt.update(request_sha256=hashlib.sha256(Path(result["request"]).read_bytes()).hexdigest(),
-                           status="completed", gradle_jvm={"home": request["gradle_home"], "major": 21}, compilers={})
+                           status="completed",
+                           gradle_jvm={"home": request["gradle_home"], "major": request["gradle_major"]},
+                           compilers={})
             for task, destination in lock.observations[(run_id, node)]["destinations"].items():
                 directory = Path(destination); directory.mkdir(parents=True, exist_ok=True)
                 (directory / "Compiled.class").write_bytes(b"synthetic unit fixture")

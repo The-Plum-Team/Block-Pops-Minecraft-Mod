@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT
 from scripts.release.matrix import MatrixError, normalize_matrix_inventory
 from tests.test_release_matrix_schema2 import schema2_matrix
 from tests.test_release_matrix_schema2_configuration import mixed_matrix
@@ -20,7 +21,7 @@ class Schema2RuntimeContextTests(unittest.TestCase):
     def test_legacy_and_mixed_contexts_remain_valid(self):
         for factory in (schema2_matrix, mixed_matrix):
             with self.subTest(factory=factory.__name__):
-                self.assertEqual(18, len(normalize_matrix_inventory(factory()).targets))
+                self.assertEqual(TARGET_COUNT, len(normalize_matrix_inventory(factory()).targets))
         for version_range in ("[1.21.1]", "[1.21.1,1.22)"):
             matrix = mixed_matrix()
             matrix["artifacts"][-1]["metadata"]["minecraft"] = version_range

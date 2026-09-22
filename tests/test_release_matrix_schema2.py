@@ -8,7 +8,9 @@ import unittest
 from pathlib import Path
 
 from scripts.release.matrix import (
+    EXPECTED_TARGETS,
     MatrixError,
+    _numeric_version,
     normalize_matrix_inventory,
     validate_matrix,
 )
@@ -17,25 +19,14 @@ from tests.matrix_fixtures import schema1_matrix
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 BASE_MATRIX = schema1_matrix()
-TARGETS = (
-    ("fabric", "1.20.1"),
-    ("forge", "1.20.1"),
-    ("fabric", "1.21.1"),
-    ("neoforge", "1.21.1"),
-    ("fabric", "1.21.4"),
-    ("neoforge", "1.21.4"),
-    ("fabric", "1.21.5"),
-    ("neoforge", "1.21.5"),
-    ("fabric", "1.21.6"),
-    ("neoforge", "1.21.6"),
-    ("fabric", "1.21.7"),
-    ("neoforge", "1.21.7"),
-    ("fabric", "1.21.8"),
-    ("neoforge", "1.21.8"),
-    ("fabric", "1.21.10"),
-    ("neoforge", "1.21.10"),
-    ("fabric", "1.21.11"),
-    ("neoforge", "1.21.11"),
+# The migration scope is declared once, by the validator. Deriving these targets
+# from it keeps the controller tests honest as the scope grows.
+TARGETS = tuple(
+    (loader, minecraft)
+    for minecraft, loader in sorted(
+        ((minecraft, loader) for loader, minecraft in EXPECTED_TARGETS),
+        key=lambda pair: (_numeric_version(pair[0]), pair[1]),
+    )
 )
 
 
@@ -84,7 +75,7 @@ class ReleaseMatrixSchema2FoundationTests(unittest.TestCase):
         inventory = normalize_matrix_inventory(schema2_matrix())
 
         self.assertEqual(2, inventory.schema_version)
-        self.assertEqual(18, len(inventory.targets))
+        self.assertEqual(len(TARGETS), len(inventory.targets))
         self.assertEqual(
             {f"{loader}-{minecraft}" for loader, minecraft in TARGETS},
             set(inventory.target_nodes),

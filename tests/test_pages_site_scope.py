@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from scripts.ci.tests.matrix_fixtures import schema1_matrix
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT, schema1_matrix
 from scripts.pages import build_site as site, evidence
 from tests import test_pages_compact_selection as bindings
 
@@ -80,7 +80,7 @@ class ScopedSiteTests(unittest.TestCase):
             gallery = json.loads((self.output / "gallery-data.json").read_bytes())
             self.assertEqual(self.templates[shared][1]["aggregate_scope"], gallery["releases"][0]["aggregate_scope"])
             # A shared gallery carries five frames for every lane in the migration scope.
-            self.assertEqual(90 if shared is True else 10, summary["frames"])
+            self.assertEqual(TARGET_COUNT * 5 if shared is True else 10, summary["frames"])
             for frame in gallery["frames"]:
                 self.assertEqual(frame["published_sha256"], evidence.sha256_bytes((self.output / frame["image"]).read_bytes()))
         self.configure()

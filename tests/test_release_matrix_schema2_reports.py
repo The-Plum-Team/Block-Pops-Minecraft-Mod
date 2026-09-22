@@ -12,6 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT
 from scripts.release.matrix import MatrixError, gha_matrix, load_matrix_inventory, main, normalize_matrix_inventory
 from tests.test_release_matrix_schema2 import BASE_MATRIX, REPOSITORY, schema2_matrix
 from tests.test_release_matrix_schema2_configuration import mixed_matrix
@@ -49,7 +50,7 @@ def shared_matrix() -> dict:
             }
         matrix["artifacts"].append(artifact)
         matrix["runtimes"].append(runtime)
-    matrix.update(lane_count=18, migration={"mode": "shared", "legacy_nodes": []})
+    matrix.update(lane_count=TARGET_COUNT, migration={"mode": "shared", "legacy_nodes": []})
     return matrix
 
 
@@ -100,7 +101,7 @@ class Schema2ReportTests(unittest.TestCase):
     def test_preparing_report_retains_every_target_and_its_unresolved_rest(self):
         inventory = normalize_matrix_inventory(schema2_matrix())
         report = inventory.report()
-        self.assertEqual((18, 2), (report["target_count"], report["lane_count"]))
+        self.assertEqual((TARGET_COUNT, 2), (report["target_count"], report["lane_count"]))
         self.assertEqual((2, "preparing"), (report["schema_version"], report["migration_mode"]))
         self.assertFalse(report["configuration_complete"])
         self.assertFalse(report["execution_supported"])
@@ -149,7 +150,7 @@ class Schema2ReportTests(unittest.TestCase):
 
     def test_shared_configuration_requires_all_pairs_without_claiming_execution(self):
         inventory = normalize_matrix_inventory(shared_matrix())
-        self.assertEqual(18, len(inventory.require_complete()))
+        self.assertEqual(TARGET_COUNT, len(inventory.require_complete()))
         self.assertTrue(inventory.report()["configuration_complete"])
         self.assertFalse(inventory.execution_supported)
         for mutation in ("missing pair", "orphan", "metadata", "harness"):

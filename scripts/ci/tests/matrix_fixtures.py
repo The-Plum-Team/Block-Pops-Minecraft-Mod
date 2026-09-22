@@ -12,9 +12,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-from scripts.release.matrix import EXPECTED_TARGETS, _numeric_version
+from scripts.release.matrix import EXPECTED_TARGETS, _era_java, _numeric_version
 
 SCHEMA1_MATRIX_PATH = Path(__file__).resolve().parents[3] / "tests/fixtures/release-matrix-schema1.json"
+
+# The migration scope is declared once, by the validator. Tests that count targets
+# read it from here, so a growing scope never needs a literal updated per file.
+TARGET_COUNT = len(EXPECTED_TARGETS)
 
 
 def schema1_matrix() -> dict[str, Any]:
@@ -119,6 +123,11 @@ def schema2_configuration(*, shared: bool = False) -> dict[str, Any]:
         )
     ]
     legacy = ["fabric-1.20.1", "forge-1.20.1"]
+    # One Gradle runtime serves every generated lane, exactly as the validator
+    # requires, so the era that needs the newest Java decides it.
+    selected = [target["minecraft"] for target in matrix["targets"]
+                if shared or target["minecraft"] in {"1.20.1", "1.21.1"}]
+    matrix["gradle_java"] = max(_era_java(minecraft) for minecraft in selected)
     matrix["migration"] = {"mode": "shared" if shared else "preparing", "legacy_nodes": [] if shared else legacy}
     matrix["artifacts"], matrix["runtimes"], matrix["installers"] = [], [], {}
     matrix["source_routing"] = {
@@ -134,17 +143,25 @@ def schema2_configuration(*, shared: bool = False) -> dict[str, Any]:
         prefix = f":{loader}:" if is_legacy else f":{loader}:{minecraft}:"
         output = loader if is_legacy else f"{loader}/versions/{minecraft}"
         display = {"fabric": "Fabric", "forge": "Forge", "neoforge": "NeoForge"}[loader]
-        artifact.update(target, java=17 if minecraft == "1.20.1" else 21, no_remap=False,
+        # 26.1 ships unobfuscated, so its lanes build a shadow jar instead of remapping.
+        no_remap = _numeric_version(minecraft)[0] >= 26
+        artifact.update(target, java=_era_java(minecraft), no_remap=no_remap,
                         mod_version=matrix["project"]["mod_version"] if is_legacy else "2.3.4",
-                        build_layout="legacy" if is_legacy else "stonecutter", gradle_java=21,
+                        build_layout="legacy" if is_legacy else "stonecutter",
+                        gradle_java=matrix["gradle_java"],
                         repository_family=loader, source_routes=["common", loader],
-                        gradle_task=prefix + "remapJar", harness_task=prefix + "remapE2EHarnessJar",
+                        gradle_task=prefix + ("shadowJar" if no_remap else "remapJar"),
+                        harness_task=prefix + ("e2eHarnessJar" if no_remap else "remapE2EHarnessJar"),
                         jar=f"{output}/build/libs/BlockPops - {display} - {minecraft}-{{mod_version}}.jar",
                         harness_jar=f"{output}/build/libs/BlockPops E2E - {display} - {minecraft}-0.0.0.jar")
         artifact["metadata"]["file"] = {"fabric": "fabric.mod.json", "forge": "META-INF/mods.toml",
                                           "neoforge": "META-INF/neoforge.mods.toml"}[loader]
         artifact["metadata"]["minecraft"] = f"~{minecraft}" if loader == "fabric" else f"[{minecraft}]"
-        version = "0.17.3" if loader == "fabric" else (f"{minecraft}-47.4.9" if loader == "forge" else f"21.{minecraft.split('.')[-1]}.1")
+        # NeoForge mirrors the game version: it drops the leading "1." up to 1.21.x,
+        # and from 26.1 there is no such prefix to drop.
+        neoforge = (f"{minecraft}.1" if _numeric_version(minecraft)[0] >= 26
+                    else f"21.{minecraft.split('.')[-1]}.1")
+        version = "0.17.3" if loader == "fabric" else (f"{minecraft}-47.4.9" if loader == "forge" else neoforge)
         installer = "fabric-1.1.0" if loader == "fabric" else f"{loader}-{version}"
         origin = {"forge": "https://maven.minecraftforge.net/net/minecraftforge/forge",
                   "neoforge": "https://maven.neoforged.net/releases/net/neoforged/neoforge"}
@@ -153,7 +170,9 @@ def schema2_configuration(*, shared: bool = False) -> dict[str, Any]:
         matrix["installers"][installer] = {"url": url, "sha256": "a" * 64}
         dependencies = [
             ("architectury", f"dev.architectury:architectury-{loader}:13.0.8", "https://maven.architectury.dev/"),
-            ("geckolib", f"software.bernie.geckolib:geckolib-{loader}-{minecraft}:4.8", "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/"),
+            ("geckolib", f"{'com.geckolib' if _numeric_version(minecraft)[0] >= 26 else 'software.bernie.geckolib'}"
+                          f":geckolib-{loader}-{minecraft}:4.8",
+             "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/"),
         ]
         if loader == "fabric":
             dependencies.append(("fabric-api", f"net.fabricmc.fabric-api:fabric-api:0.110.0+{minecraft}", "https://maven.fabricmc.net/"))

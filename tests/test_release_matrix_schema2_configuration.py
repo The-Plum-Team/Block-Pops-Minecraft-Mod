@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import unittest
 
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT
 from scripts.release.matrix import MatrixError, normalize_matrix_inventory
 from tests.test_release_matrix_portability import arbitrary_named_1211_release_matrix
 from tests.test_release_matrix_schema2 import schema2_matrix
@@ -36,7 +37,7 @@ class Schema2ConfigurationTests(unittest.TestCase):
         before = copy.deepcopy(matrix)
         inventory = normalize_matrix_inventory(matrix)
         self.assertEqual(before, matrix)
-        self.assertEqual(18, len(inventory.targets))
+        self.assertEqual(TARGET_COUNT, len(inventory.targets))
         self.assertFalse(inventory.execution_supported)
 
     def test_lane_inputs_are_explicit_and_consistent(self):

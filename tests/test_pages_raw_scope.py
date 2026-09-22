@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.ci.tests.matrix_fixtures import schema2_configuration
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT, schema2_configuration
 from scripts.pages import evidence
 from tests import test_visual_capsule as pixels
 
@@ -76,7 +76,7 @@ class ScopedRawPagesTests(unittest.TestCase):
     def test_legacy_modern_lane_and_full_shared_reconstruct_exact_pixels(self):
         cases = (("legacy", None, False, "pr-anchors", 2),
                  ("lane", "neoforge-1.21.1", False, "scheduled-anchors", 1),
-                 ("full", None, True, "pr-anchors", 18))
+                 ("full", None, True, "pr-anchors", TARGET_COUNT))
         for index, (scope, node, shared, projection, count) in enumerate(cases):
             with self.subTest(scope=scope):
                 self.root = Path(self.temporary.name) / str(index)
@@ -85,8 +85,8 @@ class ScopedRawPagesTests(unittest.TestCase):
                 result = self.validate()
                 self.assertEqual(count, len(result["lanes"]))
                 self.assertEqual(count * len(self.contract.capture_ids), len(result["frames"]))
-                self.assertEqual(count != 18, result["aggregate_scope"]["partial"])
-                self.assertEqual(18, len(result["aggregate_scope"]["target_nodes"]))
+                self.assertEqual(count != TARGET_COUNT, result["aggregate_scope"]["partial"])
+                self.assertEqual(TARGET_COUNT, len(result["aggregate_scope"]["target_nodes"]))
 
     def test_external_scope_projection_and_resolved_selection_are_required(self):
         self.prepare()

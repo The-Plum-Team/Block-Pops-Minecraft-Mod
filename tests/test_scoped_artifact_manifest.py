@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.ci.tests.matrix_fixtures import schema2_configuration
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT, schema2_configuration
 from scripts.release.artifact_manifest import (
     ArtifactError, BUILD_IDENTITY_PATH, _file_record, scoped_manifest_context, stage_release, verify_staged,
 )
@@ -224,7 +224,7 @@ class ScopedManifestTests(unittest.TestCase):
     def test_lane_evidence_is_partial_and_legacy_scope_is_independently_derived(self):
         self.assertEqual(self.manifest, self.verify())
         self.assertTrue(self.manifest['scope']['partial'])
-        self.assertEqual(18, len(self.manifest['scope']['target_nodes']))
+        self.assertEqual(TARGET_COUNT, len(self.manifest['scope']['target_nodes']))
         _, legacy, rows = self.context(scope='legacy')
         self.assertEqual(['fabric-1.20.1', 'forge-1.20.1'], legacy['scope']['selected_nodes'])
         self.assertEqual(2, len(rows))
@@ -255,7 +255,7 @@ class ScopedManifestTests(unittest.TestCase):
         self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'shared fixture')
         _, header, rows = self.context(scope='full')
         self.assertFalse(header['scope']['partial'])
-        self.assertEqual(18, len(rows))
+        self.assertEqual(TARGET_COUNT, len(rows))
         self.assertEqual(set(header['scope']['target_nodes']), set(header['scope']['selected_nodes']))
         with self.assertRaises(MatrixError): self.context(scope='legacy')
 

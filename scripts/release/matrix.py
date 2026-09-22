@@ -538,10 +538,10 @@ def _validate_configuration(
         _fail("a release branch cannot activate Forge and NeoForge together")
 
     # Loom refuses to set up Minecraft when the Gradle runtime is older than the
-    # game's Java release, so one Gradle runtime serves every lane and it is the
-    # highest any of them needs. 26.1 raised that from 21 to 25.
-    if gradle_java != max(artifact_java_versions):
-        _fail("gradle_java must match the highest artifact Java toolchain")
+    # game's Java release, so one Gradle runtime serves every lane and it is at
+    # least the highest any of them needs. 26.1 raised that floor from 21 to 25.
+    if gradle_java < max(artifact_java_versions):
+        _fail("gradle_java cannot be lower than an artifact Java toolchain")
 
     if not schema2 and len(versions) != 1:
         _fail("a release branch must contain exactly one Minecraft version")

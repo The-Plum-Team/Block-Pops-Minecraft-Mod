@@ -14,7 +14,7 @@ from unittest.mock import patch
 from zipfile import ZipFile
 
 from e2e.orchestrator import CONTRACT, main, parse_args, select_rows
-from scripts.ci.tests.matrix_fixtures import schema2_configuration
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT, schema2_configuration
 from scripts.release.matrix import MatrixDocument, MatrixError, gha_matrix, normalize_matrix_inventory
 from tests.test_release_matrix_portability import arbitrary_named_1211_release_matrix
 from tests import test_scoped_artifact_manifest as scoped_fixture
@@ -114,7 +114,7 @@ class RuntimeSelectionTests(unittest.TestCase):
             with contextlib.redirect_stdout(output):
                 self.assertEqual(0, main(arguments + ["--list"]))
             report = json.loads(output.getvalue())
-            self.assertEqual(("legacy", "preparing", 18, 4),
+            self.assertEqual(("legacy", "preparing", TARGET_COUNT, 4),
                              tuple(report[key] for key in ("scope", "migration_mode", "target_count", "configured_lane_count")))
             error = io.StringIO()
             with contextlib.redirect_stderr(error):

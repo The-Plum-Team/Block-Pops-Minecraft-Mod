@@ -15,7 +15,7 @@ sys.path.insert(0, str(REPO))
 
 from scripts.lib.secure_json import canonical_json, read, require_object
 from scripts.release.artifact_manifest import lane_build_identity, verify_staged
-from scripts.release.build_matrix import _toolchain_flags, plan_build
+from scripts.release.build_matrix import SUPPORTED_JAVA, _toolchain_flags, plan_build
 from scripts.release.matrix import MAX_MATRIX_BYTES, load_matrix_document
 
 MAX_REPORT_BYTES = 8 * 1024 * 1024
@@ -117,7 +117,8 @@ def read_lane_build_evidence(report_path, *, matrix_path, artifact_node, artifac
         tools = report["toolchains"]
         require_object(tools, label="toolchain probes", required={"status", "gradle_jvm", "compiler_selection",
                        "homes", "environment", "property_overrides", "lanes"})
-        _check(tools["status"] == "probed" and set(tools["homes"]) <= {"17", "21"}, "missing JDK probes")
+        _check(tools["status"] == "probed"
+               and set(tools["homes"]) <= {str(major) for major in SUPPORTED_JAVA}, "missing JDK probes")
         # Probe markers never claim the JVM/compiler observations carried by each lane.
         _check(tools["gradle_jvm"] == "unverified" and tools["compiler_selection"] == "unverified",
                "JDK probes cannot claim observed execution")
@@ -132,8 +133,11 @@ def read_lane_build_evidence(report_path, *, matrix_path, artifact_node, artifac
             _check(set(probe["files"]) == {"java", "javac", "release"}, "incomplete JDK file records")
             for kind, record in probe["files"].items():
                 _check(_record(record)["path"] == ("release" if kind == "release" else "bin/" + kind), "stale JDK file record")
-        flags = _toolchain_flags(homes)
-        _check(tools["property_overrides"] == flags and tools["environment"] == {"JAVA_HOME": str(homes[21])}, "stale JDK binding")
+        # Gradle launches on the Java the planned lanes declare, not a fixed major.
+        launch = plan["lanes"][0]["required_java"]["gradle"]
+        flags = _toolchain_flags(homes, launch)
+        _check(tools["property_overrides"] == flags
+               and tools["environment"] == {"JAVA_HOME": str(homes[launch])}, "stale JDK binding")
         _check([row["artifact_node"] for row in report["lanes"]] == nodes
                == [row["artifact_node"] for row in tools["lanes"]], "incomplete build results")
         for planned, result, bound in zip(plan["lanes"], report["lanes"], tools["lanes"], strict=True):
