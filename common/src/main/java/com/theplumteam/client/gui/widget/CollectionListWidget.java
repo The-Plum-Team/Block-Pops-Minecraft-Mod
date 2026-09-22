@@ -35,7 +35,7 @@ public class CollectionListWidget extends BoundedSelectionList<CollectionEntry> 
      * Clear all entries
      */
     public void clearAllEntries() {
-        this.children().clear();
+        this.clearEntries();
     }
 
     /**

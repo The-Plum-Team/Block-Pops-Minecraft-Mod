@@ -32,7 +32,7 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
 
     public void setCollection(@Nullable FigureCollection collection) {
         this.currentCollection = collection;
-        this.children().clear();
+        this.clearEntries();
 
         if (collection != null) {
             List<FigureDefinition> figures = collection.getFigures();
