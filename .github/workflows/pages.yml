@@ -606,6 +606,12 @@ jobs:
           path: owner-promotion
           digest-mismatch: error
 
+      - name: Keep a lone promoted cache under its artifact name
+        run: >-
+          python3 scripts/pages/nest_lone_download.py
+          --root owner-caches
+          --inventory owner-promotion/pages-inventory.json
+
       - name: Delete only exact authenticated superseded artifact IDs
         env:
           GH_TOKEN: ${{ github.token }}
@@ -709,6 +715,12 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ github.event.client_payload.pages_run_id }}
           digest-mismatch: error
+
+      - name: Keep a lone promoted cache under its artifact name
+        run: >-
+          python3 scripts/pages/nest_lone_download.py
+          --root owner-caches
+          --inventory owner-promotion/pages-inventory.json
 
       - name: Delete only authenticated superseded artifact IDs
         env:
