@@ -1292,6 +1292,8 @@ The 1.21.10 measurement is worth keeping even though the lane is not configured:
 | neoforge-1.21.7 | success | pass | 1600x900 |
 | fabric-1.21.8 | success | pass | 1600x900 |
 | neoforge-1.21.8 | success | pass | 1600x900 |
+| fabric-26.1.2 | success | pass | 1600x900 |
+| neoforge-26.1.2 | success | pass | 1600x900 |
 | fabric-26.2 | success | pass | 800x450 |
 | neoforge-26.2 | success | pass | 800x450 |
 | fabric-26.3 | success | pass | 1600x900 |
@@ -1305,3 +1307,10 @@ The 1.21.10 measurement is worth keeping even though the lane is not configured:
   - The harness treated the world being ready as the client being ready, so on 1.20.1 every capture was taken through the Mojang splash still fading over it.
 - **A warm Gradle home had been hiding real breakage, in both directions.** Building each lane in the runner's own per-lane home surfaced nine missing checksums across the JUnit, Jackson, Guava, log4j and Bouncy Castle platform descriptors; a Fabric API republish that forty artifacts now arrive under, each verified entry by entry against the bytes already trusted and against the `.sha1` and `.sha512` both fabricmc hosts publish; and two compile regressions the 26.x port had left in older lanes, `NetworkManager.NetworkReceiver` becoming generic only at 1.21 and FMLEnvironment's dist and production accessors arriving only at 26.1.
 - **The serial runner could not have built a 26.x lane at all.** It pinned Gradle to Java 21 in seven places, so those lanes had only ever been built by calling Gradle directly, outside the isolated home, the strict verification and the compile observation. The launch major now comes from the matrix and travels through the plan, the probes, the observation request and its receipt.
+
+## Task 15g — 26.1 reached through the patch upstream moved to
+
+- Minecraft 26.1 itself is unreachable, and it is worth writing down why rather than leaving it as a blocked lane. Architectury's NeoForge bootstrap binds `net.neoforged.neoforge.event.level.block.BreakBlockEvent` from `EventHandlerImplCommon`, and no NeoForge build for 26.1 ships that class. `26.1.0.19-beta` is the last of the thirty-three builds published for that version and does not contain it; `26.1.2.76` does. Neither this mod nor Quick Skin subscribes to that event in its own source, so the binding is Architectury's own.
+- Upstream says the same thing in three independent places: every Architectury `20.0.x` from `.6` onward declares `[26.1.2,)` for Minecraft, GeckoLib publishes `5.5` for `26.1` but `5.5.1` and `5.5.2` for `26.1.2`, and NeoForge has a hundred and six builds for `26.1.2` against thirty-three for `26.1`. The declared target moved to the patch the toolchain moved to.
+- Both lanes built on the first attempt. The 26.x conditionals already covered them: `26.1.2` takes every `>=26` arm and none of the `>=26.2` or `>=26.3` ones, so the port needed no new source. Both pass the release runner from a fresh per-lane home and the packaged E2E at the contracted window size.
+- A comparison against the Quick-Skin-Mod repository is what prompted this: it configures a `26.1` lane on the same `26.1.0.19-beta` and Architectury `20.0.4` pair this repository had tried, which looked like evidence the combination worked. Reading the artifacts rather than the configuration showed it is the same latent break, unreached there because that lane's client is not exercised. The comparison was still worth the cost - it also found that this repository's second test root had gone unrun, and a real supply-chain gap behind it.
