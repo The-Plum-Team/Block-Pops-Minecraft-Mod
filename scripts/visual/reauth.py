@@ -25,7 +25,7 @@ from e2e.scenario_contract import ScenarioContractError, load_contract  # noqa: 
 from e2e.visual_capsule import validate_capsule  # noqa: E402
 from e2e.visual_evidence import VisualEvidenceError, canonical_reference_identity  # noqa: E402
 from scripts.lib.secure_json import canonical_json  # noqa: E402
-from scripts.release.matrix import MatrixError, load_matrix  # noqa: E402
+from scripts.release.matrix import MatrixError  # noqa: E402
 from scripts.visual.curate import (  # noqa: E402
     DEFAULT_BRANCH,
     SOURCE_EVENTS,
@@ -44,6 +44,7 @@ from scripts.visual.curate import (  # noqa: E402
     _sha1,
     _source_files,
     authenticate_run,
+    branch_matrix,
     select_reference_run,
 )
 from scripts.visual.handoff import HandoffError, validate_queue  # noqa: E402
@@ -502,10 +503,12 @@ def _recomputed_attestation(
         tested_commit=tested.tested_commit,
         root=work,
     )
-    matrix = load_matrix(matrix_path, validate_sources=False)
+    matrix, scope = branch_matrix(matrix_path)
     contract = load_contract(contract_path)
     _bind_matrix_branch(run, tested, matrix["branch"]["name"])
-    nodes, scenarios = _projected_identity(matrix, contract, _projection(run.event))
+    nodes, scenarios = _projected_identity(
+        matrix, contract, _projection(run.event), scope=scope
+    )
     graph = _job_graph(
         api.jobs(run.run_id), run=run, matrix_path=matrix_path, tested=tested
     )
@@ -633,7 +636,7 @@ def reauthenticate(
             tested_commit=reference_sha,
             root=reference_files,
         )
-        reference_matrix = load_matrix(reference_matrix_path, validate_sources=False)
+        reference_matrix, reference_scope = branch_matrix(reference_matrix_path)
         if canonical_reference_identity(candidate_matrix) != canonical_reference_identity(
             reference_matrix
         ):
@@ -668,6 +671,7 @@ def reauthenticate(
             reference_matrix,
             reference_contract,
             _projection(reference_run.event),
+            scope=reference_scope,
         )
         reference_attestation, _expectation = _attestation(
             run=reference_run,

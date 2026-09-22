@@ -15,6 +15,7 @@ from unittest.mock import patch
 from scripts.ci.tests.matrix_fixtures import TARGET_COUNT, schema2_configuration
 from scripts.release.artifact_manifest import (
     ArtifactError, BUILD_IDENTITY_PATH, _file_record, scoped_manifest_context, stage_release, verify_staged,
+    verify_scoped_staged,
 )
 from scripts.release.matrix import MatrixError
 from tests.test_artifact_and_report_validation import _fabric_harness_entries, _fabric_production_entries, _write_zip
@@ -106,6 +107,80 @@ class ScopedManifestTests(unittest.TestCase):
             self.assertEqual(2, main(['--repository', str(self.repo), '--scope', 'full']))
         self.assertEqual(self.manifest, self.verify())
 
+    def test_downloaded_bundle_verifies_only_against_its_authenticated_source(self):
+        commit = self.git('rev-parse', 'HEAD').decode().strip()
+        tree = self.git('rev-parse', 'HEAD^{tree}').decode().strip()
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        # A consumer holding only the commit's inputs and the downloaded bundle:
+        # no checkout, no source tree, nothing Git can audit.
+        downloaded = Path(temp.name).resolve()
+        for relative in ('release/release-matrix.json', 'e2e/scenario-contract.json'):
+            (downloaded / relative).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(self.repo / relative, downloaded / relative)
+        shutil.copytree(self.stage, downloaded / 'build/release')
+
+        def verify(source):
+            return verify_scoped_staged(
+                repository=downloaded, matrix_path=downloaded / 'release/release-matrix.json',
+                manifest_path=downloaded / 'build/release/artifacts.json', stage=downloaded / 'build/release',
+                scope='lane', artifact_node=self.node, authenticated_source=source)
+
+        self.assertEqual(self.manifest, verify((commit, tree)))
+        for source in (('0' * 40, tree), (commit, '0' * 40), ('HEAD', tree), (commit, None)):
+            with self.subTest(source=source), self.assertRaises(ArtifactError):
+                verify(source)
+        # Without one, the checkout it lacks is what fails.
+        with self.assertRaises((ArtifactError, MatrixError)):
+            verify(None)
+
+    def write_lane_sources(self, document, rows):
+        """Write each selected lane's source JARs with its exact build identity."""
+        for row in rows:
+            lane = document.inventory.lane(row['artifact_node'])
+            metadata, loader = lane.artifact['metadata'], lane.identity.loader
+            for harness, source in ((False, lane.production_jar), (True, lane.harness_jar)):
+                if loader == 'fabric':
+                    entries = _fabric_harness_entries() if harness else _fabric_production_entries()
+                    record = json.loads(entries['fabric.mod.json'])
+                    record['version'] = '0.0.0' if harness else lane.mod_version
+                    for dep, key in (('minecraft', 'minecraft'), ('fabricloader', 'loader'),
+                                     ('architectury', 'architectury'), ('geckolib', 'geckolib')):
+                        if not harness or key in ('minecraft', 'loader'):
+                            record['depends'][dep] = metadata[key]
+                    entries['fabric.mod.json'] = json.dumps(record).encode()
+                else:
+                    mod_id = 'blockpops_e2e' if harness else 'blockpops'
+                    mod_version = '0.0.0' if harness else lane.mod_version
+                    # NeoForge reads the javafml provider version from loaderVersion and
+                    # its own bound from the neoforge dependency; Forge reads its own
+                    # version from loaderVersion.
+                    neoforge = loader == 'neoforge'
+                    toml = (f'loaderVersion = "{"[4,)" if neoforge else metadata["loader"]}"\n'
+                            f'[[mods]]\nmodId = "{mod_id}"\n'
+                            f'version = "{mod_version}"\ndisplayTest = "IGNORE_ALL_VERSION"\n')
+                    deps = {'blockpops': '*', 'minecraft': metadata['minecraft']} if harness else {
+                        key: metadata[key] for key in ('minecraft', 'architectury', 'geckolib')}
+                    if neoforge:
+                        deps['neoforge'] = metadata['loader']
+                    for dep, version in deps.items():
+                        toml += f'[[dependencies.{mod_id}]]\nmodId = "{dep}"\nversionRange = "{version}"\n'
+                    if harness:
+                        label = 'Forge' if loader == 'forge' else 'NeoForge'
+                        entries = {'com/theplumteam/e2e/E2EHarness.class': b'class',
+                                   'com/theplumteam/e2e/generated/ScenarioContract.class': b'class',
+                                   f'com/theplumteam/e2e/{loader}/BlockPopsE2E{label}.class': b'class',
+                                   'pack.mcmeta': b'{}'}
+                    else:
+                        entries = {'com/theplumteam/BlockPopsMod.class': b'class',
+                                   f'com/theplumteam/{loader}/BlockPopsModForge.class': b'class',
+                                   'blockpops.mixins.json': b'{}'}
+                    entries[metadata['file']] = toml.encode()
+                entries[BUILD_IDENTITY_PATH] = json.dumps(row['build_identity']).encode()
+                path = self.repo / source
+                path.parent.mkdir(parents=True, exist_ok=True)
+                _write_zip(path, entries)
+
     def test_legacy_and_full_producers_stage_exactly_their_selected_loader_pairs(self):
         for scope in ('legacy', 'full'):
             if scope == 'full':
@@ -113,50 +188,7 @@ class ScopedManifestTests(unittest.TestCase):
                 self.git('add', 'release/release-matrix.json')
                 self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'full fixture')
             document, header, rows = self.context(scope=scope)
-            for row in rows:
-                lane = document.inventory.lane(row['artifact_node'])
-                metadata, loader = lane.artifact['metadata'], lane.identity.loader
-                for harness, source in ((False, lane.production_jar), (True, lane.harness_jar)):
-                    if loader == 'fabric':
-                        entries = _fabric_harness_entries() if harness else _fabric_production_entries()
-                        record = json.loads(entries['fabric.mod.json'])
-                        record['version'] = '0.0.0' if harness else lane.mod_version
-                        for dep, key in (('minecraft', 'minecraft'), ('fabricloader', 'loader'),
-                                         ('architectury', 'architectury'), ('geckolib', 'geckolib')):
-                            if not harness or key in ('minecraft', 'loader'):
-                                record['depends'][dep] = metadata[key]
-                        entries['fabric.mod.json'] = json.dumps(record).encode()
-                    else:
-                        mod_id = 'blockpops_e2e' if harness else 'blockpops'
-                        mod_version = '0.0.0' if harness else lane.mod_version
-                        # NeoForge reads the javafml provider version from loaderVersion and
-                        # its own bound from the neoforge dependency; Forge reads its own
-                        # version from loaderVersion.
-                        neoforge = loader == 'neoforge'
-                        toml = (f'loaderVersion = "{"[4,)" if neoforge else metadata["loader"]}"\n'
-                                f'[[mods]]\nmodId = "{mod_id}"\n'
-                                f'version = "{mod_version}"\ndisplayTest = "IGNORE_ALL_VERSION"\n')
-                        deps = {'blockpops': '*', 'minecraft': metadata['minecraft']} if harness else {
-                            key: metadata[key] for key in ('minecraft', 'architectury', 'geckolib')}
-                        if neoforge:
-                            deps['neoforge'] = metadata['loader']
-                        for dep, version in deps.items():
-                            toml += f'[[dependencies.{mod_id}]]\nmodId = "{dep}"\nversionRange = "{version}"\n'
-                        if harness:
-                            label = 'Forge' if loader == 'forge' else 'NeoForge'
-                            entries = {'com/theplumteam/e2e/E2EHarness.class': b'class',
-                                       'com/theplumteam/e2e/generated/ScenarioContract.class': b'class',
-                                       f'com/theplumteam/e2e/{loader}/BlockPopsE2E{label}.class': b'class',
-                                       'pack.mcmeta': b'{}'}
-                        else:
-                            entries = {'com/theplumteam/BlockPopsMod.class': b'class',
-                                       f'com/theplumteam/{loader}/BlockPopsModForge.class': b'class',
-                                       'blockpops.mixins.json': b'{}'}
-                        entries[metadata['file']] = toml.encode()
-                    entries[BUILD_IDENTITY_PATH] = json.dumps(row['build_identity']).encode()
-                    path = self.repo / source
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    _write_zip(path, entries)
+            self.write_lane_sources(document, rows)
             report = stage_release(repository=self.repo, matrix_path=self.matrix_path,
                                    manifest_path=self.manifest_path, stage=self.stage, scope=scope)
             self.assertEqual(header['scope'], report['scope'])

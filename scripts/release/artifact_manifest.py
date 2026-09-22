@@ -757,8 +757,15 @@ def _scoped_path(repository: Path, path: Path, *, allow_missing: bool = False) -
 
 
 def scoped_manifest_context(repository: Path, matrix_path: Path, *, scope: str,
-                            artifact_node: str | None = None):
-    """Derive schema3 expectations from caller-selected scope and current inputs."""
+                            artifact_node: str | None = None,
+                            authenticated_source: tuple[str, str] | None = None):
+    """Derive schema3 expectations from caller-selected scope and current inputs.
+
+    By default the inputs are the local checkout, audited against its own clean
+    commit. A consumer holding only a downloaded bundle passes the commit and tree
+    it authenticated elsewhere; the matrix and contract under repository must then
+    be that commit's exact bytes, whose source paths cannot be inspected here.
+    """
     repo = repository.resolve()
     records, values = {}, {}
     for label, path, maximum in (("matrix", matrix_path, MAX_MATRIX_BYTES),
@@ -767,27 +774,34 @@ def scoped_manifest_context(repository: Path, matrix_path: Path, *, scope: str,
         value, payload = read_secure_json(path, label=label, max_bytes=maximum)
         values[label] = value
         records[label] = {"path": path.relative_to(repo).as_posix(), "sha256": hashlib.sha256(payload).hexdigest()}
-    document = MatrixDocument(normalize_matrix_inventory(values["matrix"], repository=repo),
-                              json.dumps(values["matrix"]))
+    document = MatrixDocument(normalize_matrix_inventory(
+        values["matrix"], repository=repo if authenticated_source is None else None),
+        json.dumps(values["matrix"]))
     if document.inventory.schema_version != 2:
         raise ArtifactError("schema3 artifact manifests require a schema2 matrix")
     if scope not in {"legacy", "lane", "full"}:
         raise ArtifactError("schema3 verification requires an explicit trusted scope")
     lanes = sorted(document.select_lanes(scope=scope, artifact_node=artifact_node),
                    key=lambda lane: (tuple(map(int, lane.identity.minecraft.split("."))), lane.identity.loader))
-    commit = git_commit(repo)
-    tree = git_tree(repo, commit)
-    # Reuse the runner's raw tracked/untracked input audit; Git index flags and
-    # clean filters cannot hide changed compilation bytes from schema3 provenance.
-    from scripts.release.build_matrix import BuildProcessError, source_snapshot
-    try:
-        snapshot = source_snapshot(repo)
-    except (OSError, subprocess.SubprocessError, BuildProcessError) as exc:
-        raise ArtifactError(f"cannot authenticate scoped source bytes: {exc}") from exc
-    files = {row["path"]: row for row in snapshot["files"]}
-    if (snapshot["dirty"] or snapshot["commit"] != commit or snapshot["tree"] != tree
-            or any(files.get(row["path"], {}).get("sha256") != row["sha256"] for row in records.values())):
-        raise ArtifactError("scoped source/input bytes differ from the exact committed tree")
+    if authenticated_source is not None:
+        commit, tree = authenticated_source
+        if any(not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{40}", value) is None
+               for value in (commit, tree)):
+            raise ArtifactError("authenticated scoped source must be an exact commit and tree")
+    else:
+        commit = git_commit(repo)
+        tree = git_tree(repo, commit)
+        # Reuse the runner's raw tracked/untracked input audit; Git index flags and
+        # clean filters cannot hide changed compilation bytes from schema3 provenance.
+        from scripts.release.build_matrix import BuildProcessError, source_snapshot
+        try:
+            snapshot = source_snapshot(repo)
+        except (OSError, subprocess.SubprocessError, BuildProcessError) as exc:
+            raise ArtifactError(f"cannot authenticate scoped source bytes: {exc}") from exc
+        files = {row["path"]: row for row in snapshot["files"]}
+        if (snapshot["dirty"] or snapshot["commit"] != commit or snapshot["tree"] != tree
+                or any(files.get(row["path"], {}).get("sha256") != row["sha256"] for row in records.values())):
+            raise ArtifactError("scoped source/input bytes differ from the exact committed tree")
     nodes = [lane.identity.artifact_node for lane in lanes]
     header = {"schema_version": 3, **records, "git_commit": commit, "git_tree": tree,
               "release_branch": document.branch_name,
@@ -823,8 +837,13 @@ def _scoped_inventory(repo: Path, stage_root: Path, manifest_file: Path) -> set[
 
 
 def verify_scoped_staged(*, repository: Path, matrix_path: Path, manifest_path: Path,
-                         stage: Path, scope: str, artifact_node: str | None = None) -> dict[str, Any]:
-    """Verify a schema3 bundle against an external scope, never its own claim."""
+                         stage: Path, scope: str, artifact_node: str | None = None,
+                         authenticated_source: tuple[str, str] | None = None) -> dict[str, Any]:
+    """Verify a schema3 bundle against an external scope, never its own claim.
+
+    authenticated_source is scoped_manifest_context's externally authenticated
+    commit and tree, for a bundle downloaded beside that commit's exact inputs.
+    """
     repo = repository.resolve()
     try:
         stage_root = _scoped_path(repo, stage)
@@ -832,7 +851,8 @@ def verify_scoped_staged(*, repository: Path, matrix_path: Path, manifest_path: 
         if stage_root.parent != repo / "build" or manifest_file.parent != stage_root:
             raise ArtifactError("scoped stage must be one build child with a direct manifest")
         manifest, manifest_payload = read_secure_json(manifest_file, label="artifact manifest", max_bytes=MAX_MANIFEST_BYTES)
-        document, header, expected_rows = scoped_manifest_context(repo, matrix_path, scope=scope, artifact_node=artifact_node)
+        document, header, expected_rows = scoped_manifest_context(repo, matrix_path, scope=scope,
+            artifact_node=artifact_node, authenticated_source=authenticated_source)
         require_object(manifest, label="scoped artifact manifest", required=set(header) | {"artifacts"})
         canonical = lambda value: json.dumps(value, sort_keys=True, allow_nan=False)
         if canonical({key: manifest[key] for key in header}) != canonical(header):
@@ -862,7 +882,8 @@ def verify_scoped_staged(*, repository: Path, matrix_path: Path, manifest_path: 
         actual_paths = _scoped_inventory(repo, stage_root, manifest_file)
         if actual_paths != expected_paths:
             raise ArtifactError("scoped stage file inventory differs from the manifest")
-        _, final_header, final_rows = scoped_manifest_context(repo, matrix_path, scope=scope, artifact_node=artifact_node)
+        _, final_header, final_rows = scoped_manifest_context(repo, matrix_path, scope=scope,
+            artifact_node=artifact_node, authenticated_source=authenticated_source)
         if canonical((header, expected_rows)) != canonical((final_header, final_rows)):
             raise ArtifactError("scoped inputs changed during artifact verification")
         for row in rows:

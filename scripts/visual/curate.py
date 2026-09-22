@@ -48,17 +48,27 @@ from scripts.ci.e2e_fanin import (  # noqa: E402
     validate_aggregate,
 )
 from scripts.ci.e2e_job_graph import JobGraphError, expected_jobs, validate_jobs  # noqa: E402
-from scripts.lib.secure_json import canonical_json  # noqa: E402
+from scripts.ci.matrix_scope import default_dispatch_scope  # noqa: E402
+from scripts.lib.secure_json import SecureJsonError, canonical_json  # noqa: E402
+from scripts.lib.secure_json import read as read_secure_json  # noqa: E402
 from scripts.pages.visual_anchor import (  # noqa: E402
     VisualAnchorError,
     validate_anchor,
     visual_anchor_artifact_name,
 )
+from scripts.release.artifact_manifest import (  # noqa: E402
+    MAX_MANIFEST_BYTES,
+    ArtifactError,
+    verify_scoped_staged,
+)
 from scripts.release.matrix import (  # noqa: E402
+    MatrixDocument,
     MatrixError,
     gha_matrix,
     load_matrix,
+    load_matrix_document,
     matrix_sha256,
+    normalize_matrix_inventory,
     valid_branch_name,
 )
 from scripts.visual.handoff import HandoffError, build_queue  # noqa: E402
@@ -74,6 +84,7 @@ REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 MAX_API_JSON = 32 * 1024 * 1024
 MAX_FILE_BYTES = 4 * 1024 * 1024
 MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
+INPUT_BUNDLE_PREFIX = "e2e-input-bundle-"
 MAX_RUNS = 500
 MAX_JOBS = 1000
 MAX_ARTIFACTS = 1000
@@ -670,6 +681,26 @@ def exact_aggregate_artifact(
         _sha1(tested_commit, "tested artifact commit"),
         _positive(run_attempt, "artifact run attempt"),
     )
+    return _exact_named_artifact(values, run_id=run_id, expected_name=expected_name, label="aggregate")
+
+
+def exact_input_bundle_artifact(
+    values: Iterable[Any], *, run_id: int, tested_commit: str, run_attempt: int
+) -> ArtifactIdentity | None:
+    """Select the runtime input bundle that this exact attempt's lanes executed."""
+
+    expected_name = (
+        f"{INPUT_BUNDLE_PREFIX}{_sha1(tested_commit, 'tested bundle commit')}-"
+        f"{_positive(run_attempt, 'bundle run attempt')}"
+    )
+    return _exact_named_artifact(
+        values, run_id=run_id, expected_name=expected_name, label="runtime input bundle"
+    )
+
+
+def _exact_named_artifact(
+    values: Iterable[Any], *, run_id: int, expected_name: str, label: str
+) -> ArtifactIdentity | None:
     matches: list[ArtifactIdentity] = []
     ids: set[int] = set()
     names: set[str] = set()
@@ -694,7 +725,7 @@ def exact_aggregate_artifact(
             or match is None
             or size > MAX_ARTIFACT_BYTES
         ):
-            _fail("aggregate artifact metadata is stale or unsafe")
+            _fail(f"{label} artifact metadata is stale or unsafe")
         matches.append(
             ArtifactIdentity(
                 artifact_id=artifact_id,
@@ -704,7 +735,7 @@ def exact_aggregate_artifact(
             )
         )
     if len(matches) > 1:
-        _fail("source run publishes more than one aggregate artifact")
+        _fail(f"source run publishes more than one {label} artifact")
     return matches[0] if matches else None
 
 
@@ -832,10 +863,38 @@ def _projection(event: str) -> str:
     return "scheduled-anchors" if event == "schedule" else "pr-anchors"
 
 
+def branch_matrix(matrix_path: Path) -> tuple[dict[str, Any], str | None]:
+    """Load one tested commit's matrix and the scope its packaged gate executed.
+
+    Schema 1 keeps its complete reader and has no scope. Schema 2 takes the gate's
+    default dispatch scope from that same matrix, exactly as on-demand-e2e.yml
+    chooses it; neither the artifacts nor the queue can widen or narrow it.
+    """
+    scope = default_dispatch_scope(matrix_path, validate_sources=False)
+    if scope == "unscoped":
+        return load_matrix(matrix_path, validate_sources=False), None
+    if scope not in {"legacy", "full"}:
+        _fail(f"branch matrix selects an unsupported packaged scope {scope!r}")
+    return load_matrix_document(matrix_path, validate_sources=False).data, scope
+
+
 def _projected_identity(
-    matrix: dict[str, Any], contract: ScenarioContract, projection: str
+    matrix: dict[str, Any],
+    contract: ScenarioContract,
+    projection: str,
+    *,
+    scope: str | None = None,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    rows = gha_matrix(matrix, projection, contract=contract)["include"]
+    if scope is None:
+        # Projecting a schema2 matrix unscoped would select every declared target.
+        if matrix.get("schema_version") != 1:
+            _fail("a schema2 visual projection requires the gate's explicit scope")
+        rows = gha_matrix(matrix, projection, contract=contract)["include"]
+    else:
+        document = MatrixDocument(normalize_matrix_inventory(matrix), json.dumps(matrix))
+        if document.inventory.schema_version != 2:
+            _fail("a scoped visual projection requires a schema2 matrix")
+        rows = document.projection(projection, scope=scope, contract=contract)["include"]
     if not rows:
         _fail("branch matrix projects no packaged runtime lanes")
     nodes = tuple(sorted(row["artifact_node"] for row in rows))
@@ -1238,6 +1297,54 @@ def _bind_matrix_branch(
         _fail("scheduled baseline run is not on its matrix-owned branch")
 
 
+def _verified_input_bundle(
+    *,
+    api: GitHubApi,
+    tested: TestedIdentity,
+    bundle: ArtifactIdentity,
+    matrix_path: Path,
+    contract_path: Path,
+    scope: str,
+    work: Path,
+) -> tuple[dict[str, Any], str]:
+    """Reverify the exact runtime input bundle a scoped aggregate is bound to.
+
+    The run's aggregate job verified this bundle against a checkout of the tested
+    commit. Curation has only that commit's matrix and contract, fetched by exact
+    commit from the API, so it lays them out beside the downloaded bundle and
+    verifies every JAR against the commit and tree it authenticated itself.
+    """
+    repository = (work / "input-bundle-repository").resolve()
+    _write_exact(repository / "release" / "release-matrix.json", matrix_path.read_bytes())
+    _write_exact(repository / "e2e" / "scenario-contract.json", contract_path.read_bytes())
+    (repository / "build").mkdir()
+    archive = work / f"bundle-{bundle.artifact_id}.zip"
+    api.download_artifact(bundle.artifact_id, archive, bundle.size)
+    if hashlib.sha256(archive.read_bytes()).hexdigest() != bundle.digest:
+        _fail("downloaded runtime input bundle digest disagrees with authenticated metadata")
+    stage = extract_authenticated_artifact(
+        archive, repository / "build" / "release", expected_sha256=bundle.digest
+    ).resolve()
+    manifest_path = stage / "artifacts.json"
+    try:
+        manifest = verify_scoped_staged(
+            repository=repository,
+            matrix_path=repository / "release" / "release-matrix.json",
+            manifest_path=manifest_path,
+            stage=stage,
+            scope=scope,
+            authenticated_source=(tested.tested_commit, tested.tested_tree),
+        )
+        reread, raw = read_secure_json(
+            manifest_path, label="verified runtime input manifest", max_bytes=MAX_MANIFEST_BYTES
+        )
+    except (ArtifactError, MatrixError, SecureJsonError, OSError) as exc:
+        raise CurationError(str(exc)) from exc
+    if canonical_json(reread) != canonical_json(manifest):
+        _fail("verified runtime input manifest changed after verification")
+    return manifest, hashlib.sha256(raw).hexdigest()
+
+
 def _bundle(
     *,
     api: GitHubApi,
@@ -1248,12 +1355,15 @@ def _bundle(
     contract_path: Path,
     workflow: bytes,
     work: Path,
+    input_bundle: ArtifactIdentity | None = None,
 ) -> EvidenceBundle:
     work.mkdir(parents=True, exist_ok=False)
-    matrix = load_matrix(matrix_path, validate_sources=False)
+    matrix, scope = branch_matrix(matrix_path)
+    if (scope is None) != (input_bundle is None):
+        _fail("a runtime input bundle is required exactly for a scoped branch matrix")
     contract = load_contract(contract_path)
     projection = _projection(run.event)
-    nodes, scenarios = _projected_identity(matrix, contract, projection)
+    nodes, scenarios = _projected_identity(matrix, contract, projection, scope=scope)
     graph = _job_graph(
         api.jobs(run.run_id), run=run, matrix_path=matrix_path, tested=tested
     )
@@ -1278,6 +1388,19 @@ def _bundle(
         work / f"artifact-{artifact.artifact_id}",
         expected_sha256=artifact.digest,
     )
+    selection: dict[str, Any] = {}
+    artifact_manifest = artifact_manifest_sha256 = None
+    if scope is not None:
+        artifact_manifest, artifact_manifest_sha256 = _verified_input_bundle(
+            api=api,
+            tested=tested,
+            bundle=input_bundle,
+            matrix_path=matrix_path,
+            contract_path=contract_path,
+            scope=scope,
+            work=work,
+        )
+        selection = {"scope": scope}
     try:
         validate_aggregate(
             root=extracted,
@@ -1290,12 +1413,17 @@ def _bundle(
             expected_tree=tested.tested_tree,
             expected_run_id=run.run_id,
             expected_run_attempt=run.run_attempt,
+            artifact_manifest=artifact_manifest,
+            artifact_manifest_sha256=artifact_manifest_sha256,
+            **selection,
         )
     except FanInError as exc:
         raise CurationError(str(exc)) from exc
+    if scope is not None:
+        selection.update(artifact_scope=artifact_manifest["scope"], projection=projection)
     try:
         frames = collect_evidence(
-            extracted, matrix=matrix, contract=contract, provenance=provenance
+            extracted, matrix=matrix, contract=contract, provenance=provenance, **selection
         )
     except VisualEvidenceError as exc:
         raise CurationError(str(exc)) from exc
@@ -1322,10 +1450,10 @@ def _anchor_bundle(
     """Import only the authenticated eligible lossless anchor as reference frames."""
 
     work.mkdir(parents=True, exist_ok=False)
-    matrix = load_matrix(matrix_path, validate_sources=False)
+    matrix, scope = branch_matrix(matrix_path)
     contract = load_contract(contract_path)
     projection = _projection(run.event)
-    nodes, scenarios = _projected_identity(matrix, contract, projection)
+    nodes, scenarios = _projected_identity(matrix, contract, projection, scope=scope)
     reference = canonical_reference_identity(matrix)
     if nodes != tuple(sorted(set(nodes))) or reference["artifact_node"] not in nodes:
         _fail("canonical anchor lane is absent from the protected matrix projection")
@@ -1518,7 +1646,7 @@ def curate(
             tested_commit=candidate_tested.tested_commit,
             root=candidate_files,
         )
-        candidate_matrix = load_matrix(candidate_matrix_path, validate_sources=False)
+        candidate_matrix, candidate_scope = branch_matrix(candidate_matrix_path)
         _bind_matrix_branch(
             source_run, candidate_tested, candidate_matrix["branch"]["name"]
         )
@@ -1530,6 +1658,16 @@ def curate(
         )
         if candidate_artifact is None:
             _fail("source run has no aggregate for its exact tested commit and attempt")
+        candidate_input_bundle = None
+        if candidate_scope is not None:
+            candidate_input_bundle = exact_input_bundle_artifact(
+                source_artifacts,
+                run_id=source_run.run_id,
+                tested_commit=candidate_tested.tested_commit,
+                run_attempt=source_run.run_attempt,
+            )
+            if candidate_input_bundle is None:
+                _fail("source run has no runtime input bundle for its scoped aggregate")
 
         anchor = canonical_reference_identity(candidate_matrix)
         if anchor["release_branch"] != DEFAULT_BRANCH:
@@ -1545,7 +1683,7 @@ def curate(
             tested_commit=reference_sha,
             root=reference_files,
         )
-        reference_matrix = load_matrix(reference_matrix_path, validate_sources=False)
+        reference_matrix, _reference_scope = branch_matrix(reference_matrix_path)
         if canonical_reference_identity(reference_matrix) != anchor:
             _fail("authenticated reference disagrees on the canonical visual anchor")
 
@@ -1574,6 +1712,7 @@ def curate(
             contract_path=candidate_contract_path,
             workflow=candidate_workflow,
             work=work / "candidate",
+            input_bundle=candidate_input_bundle,
         )
         reference_bundle = _anchor_bundle(
             api=api,

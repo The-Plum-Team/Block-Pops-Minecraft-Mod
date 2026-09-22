@@ -43,7 +43,12 @@ from scripts.lib.secure_json import (
     read as read_secure_json,
     require_object,
 )
-from scripts.release.matrix import valid_branch_name
+from scripts.release.matrix import (
+    MatrixDocument,
+    MatrixError,
+    normalize_matrix_inventory,
+    valid_branch_name,
+)
 
 
 CAPSULE_MANIFEST = "visual-capsule.json"
@@ -241,6 +246,21 @@ def _validate_bundle_identity(bundle: EvidenceBundle, label: str) -> None:
         _fail(f"{label} base branch disagrees with its release matrix")
 
 
+def _gated_nodes(matrix: dict[str, Any]) -> set[str]:
+    """Lanes the branch's packaged gate runs, which the candidate must cover.
+
+    Schema 1 gates every runtime. Schema 2 gates its default scope, the matrix's
+    own choice while other declared targets are still being migrated.
+    """
+    if matrix.get("schema_version") == 1:
+        return {row["artifact_node"] for row in matrix["runtimes"]}
+    try:
+        document = MatrixDocument(normalize_matrix_inventory(matrix), json.dumps(matrix))
+        return {lane.identity.artifact_node for lane in document.select_lanes()}
+    except MatrixError as exc:
+        raise VisualEvidenceError(str(exc)) from exc
+
+
 def _protected_scenarios(contract: ScenarioContract) -> set[str]:
     release = set(contract.scenarios_for_profile("release"))
     pull_request = set(contract.scenarios_for_profile("pr"))
@@ -276,7 +296,7 @@ def build_capsule_manifest(
     protected_scenarios = _protected_scenarios(candidate.contract)
     if _protected_scenarios(reference.contract) != protected_scenarios:
         _fail("candidate/reference protected scenario coverage differs")
-    candidate_nodes = {row["artifact_node"] for row in candidate.matrix["runtimes"]}
+    candidate_nodes = _gated_nodes(candidate.matrix)
     if set(candidate.provenance["artifact_nodes"]) != candidate_nodes:
         _fail("candidate visual evidence does not cover every branch-matrix runtime lane")
     if set(candidate.provenance["scenarios"]) != protected_scenarios:
