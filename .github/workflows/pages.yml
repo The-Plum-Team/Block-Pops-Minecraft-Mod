@@ -118,7 +118,10 @@ jobs:
           done
           git -c 'credential.helper=!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f' \
             fetch --no-tags --prune origin "${refspecs[@]}"
-          inventory="$(python3 scripts/release/version_branches.py --include-integration --objects)"
+          # The default branch carries a schema-2 matrix, which only the Pages discovery
+          # mode reads; it also chooses each enrolled branch's own scope.
+          inventory="$(python3 scripts/release/version_branches.py --pages --include-integration --objects \
+            --canonical-branch "$CANONICAL_BRANCH")"
           [[ "$(jq 'length' <<< "$inventory")" -gt 0 ]]
           printf 'inventory=%s\n' "$inventory" >> "$GITHUB_OUTPUT"
 

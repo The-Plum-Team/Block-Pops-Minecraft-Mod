@@ -154,8 +154,8 @@ class PagesCollectWorkflowTests(unittest.TestCase):
         self.assertRegex(step, r"uses: actions/upload-artifact@[0-9a-f]{40}")
         self.assertNotIn("actions: write", self.collect)
         workflow = WORKFLOW.read_text()
-        self.assertIn("version_branches.py --include-integration --objects", workflow)
-        self.assertNotIn("version_branches.py --pages", workflow)
+        self.assertIn("version_branches.py --pages --include-integration --objects", workflow)
+        self.assertIn('--canonical-branch "$CANONICAL_BRANCH"', workflow)
 
     def test_attempt_names_do_not_reuse_companions_and_existing_output_is_preserved(self):
         first = self.run_collect(GITHUB_RUN_ATTEMPT="3")

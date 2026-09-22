@@ -118,8 +118,8 @@ class PagesRefreshWorkflowTests(unittest.TestCase):
         upload = self.job.split("      - name: Upload the sole candidate for this branch's rolling cache\n", 1)[1]
         self.assertIn("name: ${{ steps.names.outputs.cache }}", upload); self.assertIn("path: promoted-cache/", upload)
         self.assertNotIn("always()", self.job); self.assertNotIn("actions: write", self.job); self.assertNotIn("pages: write", self.job)
-        self.assertIn("version_branches.py --include-integration --objects", self.workflow)
-        self.assertNotIn("version_branches.py --pages", self.workflow)
+        self.assertIn("version_branches.py --pages --include-integration --objects", self.workflow)
+        self.assertIn('--canonical-branch "$CANONICAL_BRANCH"', self.workflow)
 
 
 if __name__ == "__main__":

@@ -124,8 +124,8 @@ class PagesBuildWorkflowTests(unittest.TestCase):
         self.assertIn("if-no-files-found: error", promotion)
         self.assertNotIn("always()", self.build)
         self.assertNotIn("actions: write", self.build); self.assertNotIn("pages: write", self.build)
-        self.assertIn("version_branches.py --include-integration --objects", self.workflow)
-        self.assertNotIn("version_branches.py --pages", self.workflow)
+        self.assertIn("version_branches.py --pages --include-integration --objects", self.workflow)
+        self.assertIn('--canonical-branch "$CANONICAL_BRANCH"', self.workflow)
 
 
 if __name__ == "__main__":
