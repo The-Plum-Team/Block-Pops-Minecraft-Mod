@@ -1236,26 +1236,6 @@
       "loader": "neoforge"
     },
     {
-      "artifact_node": "fabric-1.21.10",
-      "minecraft": "1.21.10",
-      "loader": "fabric"
-    },
-    {
-      "artifact_node": "neoforge-1.21.10",
-      "minecraft": "1.21.10",
-      "loader": "neoforge"
-    },
-    {
-      "artifact_node": "fabric-1.21.11",
-      "minecraft": "1.21.11",
-      "loader": "fabric"
-    },
-    {
-      "artifact_node": "neoforge-1.21.11",
-      "minecraft": "1.21.11",
-      "loader": "neoforge"
-    },
-    {
       "artifact_node": "fabric-26.1.2",
       "minecraft": "26.1.2",
       "loader": "fabric"

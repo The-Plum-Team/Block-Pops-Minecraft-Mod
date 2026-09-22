@@ -8,7 +8,7 @@ from pathlib import Path
 
 from scripts.release.build_matrix import plan_build
 from scripts.ci.tests.matrix_fixtures import TARGET_COUNT
-from scripts.release.matrix import MatrixError, load_matrix_document
+from scripts.release.matrix import LaneIdentity, MatrixError, load_matrix_document
 
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / "release/release-matrix.json"
@@ -32,11 +32,15 @@ class ConfiguredLaneScopeTests(unittest.TestCase):
         self.assertTrue(configured <= set(self.inventory.target_nodes))
 
     def test_configured_scope_excludes_unresolved_targets_and_never_implies_completion(self):
-        unresolved = set(self.inventory.target_nodes) - set(self.inventory.configured_nodes)
-        self.assertTrue(unresolved, "this test is only meaningful while targets remain unresolved")
-        self.assertFalse(unresolved & set(self.nodes(scope="configured")))
+        # Every declared target may be configured by now, so an unresolved one is
+        # planted to keep the rule exercised rather than depending on the live gap.
+        planted = LaneIdentity("fabric-99.9", "99.9", "fabric")
+        inventory = dataclasses.replace(self.inventory, targets=self.inventory.targets + (planted,))
+        unresolved = set(inventory.target_nodes) - set(inventory.configured_nodes)
+        self.assertEqual({"fabric-99.9"}, unresolved)
+        self.assertFalse(unresolved & {lane.identity.artifact_node for lane in inventory.require_configured()})
         with self.assertRaisesRegex(MatrixError, "unresolved targets"):
-            self.document.select_lanes(scope="full")
+            inventory.require_complete()
 
     def test_preparing_keeps_its_legacy_default_and_rejects_unknown_scopes(self):
         if self.inventory.migration_mode == "preparing":
