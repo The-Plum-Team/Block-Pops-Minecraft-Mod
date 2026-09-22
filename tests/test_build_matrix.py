@@ -905,7 +905,12 @@ class BuildMatrixEvidenceTests(unittest.TestCase):
                      "lanes": [{"artifact_node": "fabric-1.20.1", "outputs": self.outputs}]}
 
     def git(self, *arguments):
-        return subprocess.run(["git", "-C", str(self.root), *arguments], check=True, capture_output=True).stdout
+        # The fixture's git must honour replace refs the way a developer's does,
+        # or the replace-ref test cannot plant one; the CI sandbox disables them
+        # for everything it runs. The code under test sets its own git environment.
+        environment = {key: value for key, value in os.environ.items() if key != "GIT_NO_REPLACE_OBJECTS"}
+        return subprocess.run(["git", "-C", str(self.root), *arguments], check=True, capture_output=True,
+                              env=environment).stdout
 
     def results(self):
         for path in self.outputs.values():
