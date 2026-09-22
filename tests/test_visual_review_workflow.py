@@ -566,6 +566,13 @@ class VisualReviewWorkflowContractTests(unittest.TestCase):
         self.assertNotIn("api.openai.com", client)
         self.assertIn("_NoRedirect()", client)
 
+    def test_the_queue_item_is_downloaded_from_the_run_that_enqueued_it(self) -> None:
+        drain = DRAIN_WORKFLOW.read_text(encoding="utf-8")
+        step = drain.split("      - name: Download the exact selected data-only queue artifact\n", 1)[1]
+        step = step.split("      - name:", 1)[0]
+        self.assertIn("artifact-ids: ${{ needs.select.outputs.artifact_id }}", step)
+        self.assertIn("run-id: ${{ needs.select.outputs.producer_run_id }}", step)
+
     def test_queue_retry_retention_and_temporary_git_auth_are_bounded(self) -> None:
         queue = WORKFLOW.read_text(encoding="utf-8")
         drain = DRAIN_WORKFLOW.read_text(encoding="utf-8")

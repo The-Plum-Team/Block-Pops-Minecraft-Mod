@@ -256,6 +256,9 @@ jobs:
           merge-multiple: true
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
+          # The queue item belongs to the run that enqueued it; without its run the
+          # action looks the id up among this drain run's own artifacts.
+          run-id: ${{ needs.select.outputs.producer_run_id }}
           digest-mismatch: error
 
       - name: Reauthenticate source, tested tree, job graph, and current anchor
