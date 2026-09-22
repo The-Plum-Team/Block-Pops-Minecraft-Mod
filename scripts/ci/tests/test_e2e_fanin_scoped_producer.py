@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from scripts.ci import e2e_fanin as fanin
 from scripts.ci.tests import test_e2e_fanin_scope as scoped_fixture
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT
 from scripts.ci.tests.test_e2e_fanin import CONTRACT_PATH, _json
 
 
@@ -59,7 +60,7 @@ class ScopedAggregateProducerTests(unittest.TestCase):
                             "scenarios": list(self.inputs.fixture.lanes[0].scenarios)}
                 self.assertEqual(coverage, receipt["aggregate_scope"])
                 self.assertEqual(not shared, coverage["partial"])
-                self.assertEqual({"legacy": 2, "lane": 1, "full": 12}[scope], len(receipt["lanes"]))
+                self.assertEqual({"legacy": 2, "lane": 1, "full": TARGET_COUNT}[scope], len(receipt["lanes"]))
                 for filename in ("summary.json", "resolved-matrix.json"):
                     payload = json.loads((self.output / filename).read_bytes())
                     self.assertEqual(coverage, payload["aggregate_scope"])

@@ -11,6 +11,7 @@ from unittest.mock import patch
 from scripts.ci import e2e_fanin as fanin
 from scripts.ci.tests.test_e2e_fanin import CONTRACT_PATH, _json
 from scripts.ci.tests import test_e2e_fanin_scope as scoped_fixture
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT
 
 
 class ScopedAggregateReaderTests(unittest.TestCase):
@@ -81,7 +82,7 @@ class ScopedAggregateReaderTests(unittest.TestCase):
         result = self.validate()
         self.assertEqual(self.receipt, result)
         self.assertEqual(["fabric-1.20.1", "forge-1.20.1"], result["aggregate_scope"]["selected_nodes"])
-        self.assertEqual(18, len(result["aggregate_scope"]["target_nodes"]))
+        self.assertEqual(TARGET_COUNT, len(result["aggregate_scope"]["target_nodes"]))
         self.assertTrue(result["aggregate_scope"]["partial"])
         self.assertNotIn("execution_scope", result)
         no_source = {"expected_" + key: None for key in
@@ -99,7 +100,7 @@ class ScopedAggregateReaderTests(unittest.TestCase):
     def test_shared_full_aggregate_requires_every_lane(self):
         self.prepare("full", shared=True)
         result = self.validate()
-        self.assertEqual(18, len(result["lanes"]))
+        self.assertEqual(TARGET_COUNT, len(result["lanes"]))
         self.assertFalse(result["aggregate_scope"]["partial"])
         omitted = self.lanes[-1]
         for path in (self.output / "profiles").iterdir():

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from scripts.release.matrix import MatrixError, load_matrix_document
-from scripts.ci.tests.matrix_fixtures import schema2_configuration
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT, schema2_configuration
 
 from scripts.ci.e2e_job_graph import (
     E2E_AGGREGATE,
@@ -191,7 +191,7 @@ class NormalizedGraphTests(unittest.TestCase):
     def test_preparing_preserves_legacy_graph_and_shared_covers_every_target(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "matrix.json"
-            for matrix, count in ((schema2_configuration(), 2), (schema2_configuration(shared=True), 18)):
+            for matrix, count in ((schema2_configuration(), 2), (schema2_configuration(shared=True), TARGET_COUNT)):
                 path.write_text(json.dumps(matrix))
                 for event in ("schedule", "pull_request_target"):
                     names = expected_names(path, "on-demand-e2e.yml", event=event)

@@ -19,6 +19,8 @@ from it.
 ```bash
 python3 scripts/release/matrix.py
 python3 -m unittest discover -s tests -v
+python3 -m unittest discover -s scripts/ci/tests -t . -v
+python3 scripts/ci/dependency_policy.py --metadata gradle/verification-metadata.xml
 ./gradlew --no-daemon --no-parallel clean buildAllLanes buildAllE2EHarnesses
 python3 scripts/release/verify_release.py \
   --matrix release/release-matrix.json \

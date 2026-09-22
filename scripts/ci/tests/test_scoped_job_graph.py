@@ -11,6 +11,7 @@ from scripts.ci import e2e_job_graph as jobs
 from scripts.ci.tests.matrix_fixtures import schema1_matrix, schema2_configuration
 from scripts.ci.tests.test_e2e_job_graph import graph
 from scripts.release.matrix import MatrixError
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT
 
 
 class ScopedJobGraphTests(unittest.TestCase):
@@ -29,7 +30,7 @@ class ScopedJobGraphTests(unittest.TestCase):
 
     def test_legacy_lane_and_full_keep_exact_control_jobs(self):
         for scope, node, shared, count in (("legacy", None, False, 2),
-                ("lane", "neoforge-1.21.1", False, 1), ("full", None, True, 18)):
+                ("lane", "neoforge-1.21.1", False, 1), ("full", None, True, TARGET_COUNT)):
             with self.subTest(scope=scope):
                 self.write(schema2_configuration(shared=shared))
                 selected = self.expected(scope=scope, artifact_node=node)

@@ -20,6 +20,7 @@ from scripts.ci.loader_bootstrap import (
 )
 from scripts.release.matrix import load_matrix
 from scripts.ci.tests.matrix_fixtures import SCHEMA1_MATRIX_PATH, schema2_configuration
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -417,7 +418,7 @@ class LoaderBootstrapMatrixTests(unittest.TestCase):
         self.assertEqual(original["verified"], report["verified"])
         self.assertEqual(["fabric", "forge"], report["active_loaders"])
         self.assertEqual(1, report["schema_version"])
-        self.assertEqual(18, len(matrix["targets"]))
+        self.assertEqual(TARGET_COUNT, len(matrix["targets"]))
         self.assertFalse((self.repository / "neoforge").exists())
         matrix_path = self.repository / "release/release-matrix.json"
         self.assertEqual(hashlib.sha256(matrix_path.read_bytes()).hexdigest(), report["matrix_sha256"])
@@ -449,7 +450,7 @@ class LoaderBootstrapMatrixTests(unittest.TestCase):
         matrix = schema2_configuration(shared=True)
         candidate = self.write_matrix(matrix)
         report = validate_commit(self.repository, head_sha=candidate)
-        self.assertEqual(18, matrix["lane_count"])
+        self.assertEqual(TARGET_COUNT, matrix["lane_count"])
         self.assertEqual(["fabric", "forge", "neoforge"], report["active_loaders"])
         self.assertEqual(3, len(report["verified"]))
         base, next_contract, changes = self.prepare_transition()

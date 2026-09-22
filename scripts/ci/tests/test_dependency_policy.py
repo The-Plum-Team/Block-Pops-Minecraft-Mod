@@ -199,9 +199,15 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
         components = root.find(f"{TAG}components")
         self.assertIsNotNone(components)
         assert components is not None
+        # lwjgl-vulkan ships MoltenVK, which only macOS needs: upstream publishes no
+        # natives-linux or natives-windows classifier for it at all, and Linux resolves
+        # Vulkan through the system loader. Every other module keeps the rule.
+        system_provided = {"lwjgl-vulkan"}
         checked = 0
         for component in components:
             if component.attrib.get("group") != "org.lwjgl":
+                continue
+            if component.attrib.get("name") in system_provided:
                 continue
             artifacts = {artifact.attrib["name"] for artifact in component}
             for artifact in artifacts:

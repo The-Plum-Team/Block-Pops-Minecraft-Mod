@@ -13,6 +13,7 @@ from scripts.ci.tests.matrix_fixtures import schema2_configuration
 from scripts.ci.tests.test_e2e_fanin import Fixture, CONTRACT_PATH, COMMIT, TREE
 from scripts.release.artifact_manifest import lane_build_identity
 from scripts.release.matrix import MatrixDocument, normalize_matrix_inventory
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT
 
 
 class ScopedLaneFanInTests(unittest.TestCase):
@@ -86,7 +87,7 @@ class ScopedLaneFanInTests(unittest.TestCase):
         self.populate_lane(lane)
         self.assertEqual("neoforge-1.21.1", self.validate()["artifact_node"])
         self.configure("full", shared=True)
-        self.assertEqual(18, len(self.fixture.lanes))
+        self.assertEqual(TARGET_COUNT, len(self.fixture.lanes))
         lane = self.fixture.lanes[-1]
         self.populate_lane(lane)
         result = self.validate(lane)
