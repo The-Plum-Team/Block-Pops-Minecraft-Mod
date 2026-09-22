@@ -802,7 +802,9 @@ jobs:
           name: >-
             e2e-input-bundle-${{ inputs.attest_sha || github.sha }}-${{
             inputs.attest_run_attempt || github.run_attempt }}
-          path: ${{ runner.temp }}/blockpops-public-bundle
+          # The artifact validator only accepts a release stage directly under the
+          # repository's build/ directory, as the build that produced it laid it out.
+          path: ${{ github.workspace }}/build/release
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
           run-id: ${{ steps.identity.outputs.source_run_id }}
@@ -813,7 +815,7 @@ jobs:
         env:
           PACKAGED_TREE: ${{ steps.identity.outputs.tree }}
           PUBLIC_AGGREGATE: ${{ runner.temp }}/blockpops-public-aggregate
-          PUBLIC_BUNDLE: ${{ runner.temp }}/blockpops-public-bundle
+          PUBLIC_BUNDLE: ${{ github.workspace }}/build/release
         run: |
           set -euo pipefail
           unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
