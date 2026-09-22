@@ -52,13 +52,21 @@ def _exclusive_directory_rename():
 
 def _directory_fd(path: Path, *, root_fd=None, create=False):
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-    descriptor = os.dup(root_fd) if root_fd is not None else os.open(path.anchor, flags)
+    # An ancestor only has to be passed through, and the CI sandbox makes its
+    # boundary search-only (0711) on purpose, so opening it for reading is
+    # refused. Linux can hold a directory by path alone, still refusing a
+    # symlink at every step; every component but the last is opened that way,
+    # and the descriptor handed back stays a readable one.
+    through = os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW if hasattr(os, "O_PATH") else flags
+    parts = path.parts if root_fd is not None else path.parts[1:]
+    descriptor = (os.dup(root_fd) if root_fd is not None
+                  else os.open(path.anchor, through if parts else flags))
     try:
-        for part in path.parts if root_fd is not None else path.parts[1:]:
+        for index, part in enumerate(parts):
             if create:
                 try: os.mkdir(part, 0o700, dir_fd=descriptor)
                 except FileExistsError: pass
-            child = os.open(part, flags, dir_fd=descriptor)
+            child = os.open(part, flags if index == len(parts) - 1 else through, dir_fd=descriptor)
             os.close(descriptor)
             descriptor = child
         return descriptor
