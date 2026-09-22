@@ -1038,6 +1038,32 @@ def write_server_files(server: Path, port: int, template_root: Path, minecraft: 
                 function.write_text(renamed, encoding="utf-8")
 
 
+def requested_window_size() -> tuple[int, int]:
+    """The window to ask the launcher for, in screen coordinates.
+
+    The contract governs the framebuffer, not the window. On a HiDPI display the
+    framebuffer is an integer multiple of the window, and a window wider than the
+    screen is clamped, which lands the capture on a geometry no density divides.
+    Asking for the matching fraction of the contracted size there produces exactly
+    the contracted framebuffer, so the evidence is unchanged; every screenshot is
+    still measured against the contract after it is taken.
+    """
+    requested = os.environ.get("BLOCKPOPS_E2E_WINDOW", "").strip()
+    if not requested:
+        return GUI_TEXT_REFERENCE_SIZE
+    parts = requested.lower().split("x")
+    if len(parts) != 2 or not all(part.isdigit() and part[0] != "0" for part in parts):
+        raise RuntimeFailure(f"BLOCKPOPS_E2E_WINDOW must read WIDTHxHEIGHT: {requested!r}")
+    width, height = (int(part) for part in parts)
+    reference_width, reference_height = GUI_TEXT_REFERENCE_SIZE
+    if width * reference_height != height * reference_width:
+        raise RuntimeFailure(
+            f"BLOCKPOPS_E2E_WINDOW must keep the contracted "
+            f"{reference_width}x{reference_height} aspect: {requested!r}"
+        )
+    return width, height
+
+
 def client_command(
     install_dir: Path,
     version_id: str,
@@ -1053,6 +1079,7 @@ def client_command(
     import minecraft_launcher_lib.utils  # type: ignore[import-not-found]
 
     options = minecraft_launcher_lib.utils.generate_test_options()
+    window_size = requested_window_size()
     options.update(
         {
             "username": username,
@@ -1068,8 +1095,8 @@ def client_command(
             # Pixel comparisons are unaffected by this number: the regions are fractional, so
             # the same transition measured 0.0723 at 2560x1440 locally and 0.0725 at 1280x720
             # in CI. It only governs how legible the captured evidence is.
-            "resolutionWidth": "1600",
-            "resolutionHeight": "900",
+            "resolutionWidth": str(window_size[0]),
+            "resolutionHeight": str(window_size[1]),
             "quickPlayMultiplayer": f"127.0.0.1:{port}",
             "jvmArguments": [
                 "-Xms512M",
