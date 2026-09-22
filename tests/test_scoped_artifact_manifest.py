@@ -129,10 +129,17 @@ class ScopedManifestTests(unittest.TestCase):
                     else:
                         mod_id = 'blockpops_e2e' if harness else 'blockpops'
                         mod_version = '0.0.0' if harness else lane.mod_version
-                        toml = (f'loaderVersion = "{metadata["loader"]}"\n[[mods]]\nmodId = "{mod_id}"\n'
+                        # NeoForge reads the javafml provider version from loaderVersion and
+                        # its own bound from the neoforge dependency; Forge reads its own
+                        # version from loaderVersion.
+                        neoforge = loader == 'neoforge'
+                        toml = (f'loaderVersion = "{"[4,)" if neoforge else metadata["loader"]}"\n'
+                                f'[[mods]]\nmodId = "{mod_id}"\n'
                                 f'version = "{mod_version}"\ndisplayTest = "IGNORE_ALL_VERSION"\n')
                         deps = {'blockpops': '*', 'minecraft': metadata['minecraft']} if harness else {
                             key: metadata[key] for key in ('minecraft', 'architectury', 'geckolib')}
+                        if neoforge:
+                            deps['neoforge'] = metadata['loader']
                         for dep, version in deps.items():
                             toml += f'[[dependencies.{mod_id}]]\nmodId = "{dep}"\nversionRange = "{version}"\n'
                         if harness:
@@ -153,7 +160,7 @@ class ScopedManifestTests(unittest.TestCase):
             report = stage_release(repository=self.repo, matrix_path=self.matrix_path,
                                    manifest_path=self.manifest_path, stage=self.stage, scope=scope)
             self.assertEqual(header['scope'], report['scope'])
-            self.assertEqual(2 if scope == 'legacy' else 12, len(report['artifacts']))
+            self.assertEqual(2 if scope == 'legacy' else TARGET_COUNT, len(report['artifacts']))
             self.assertEqual(report, self.verify(scope=scope))
 
     def test_invalid_source_invalidates_prior_manifest_without_leaving_success(self):

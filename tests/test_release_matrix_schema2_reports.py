@@ -13,7 +13,15 @@ import unittest
 from pathlib import Path
 
 from scripts.ci.tests.matrix_fixtures import TARGET_COUNT
-from scripts.release.matrix import MatrixError, gha_matrix, load_matrix_inventory, main, normalize_matrix_inventory
+from scripts.release.matrix import (
+    MatrixError,
+    _era_java,
+    _numeric_version,
+    gha_matrix,
+    load_matrix_inventory,
+    main,
+    normalize_matrix_inventory,
+)
 from tests.test_release_matrix_schema2 import BASE_MATRIX, REPOSITORY, schema2_matrix
 from tests.test_release_matrix_schema2_configuration import mixed_matrix
 
@@ -21,6 +29,8 @@ from tests.test_release_matrix_schema2_configuration import mixed_matrix
 def shared_matrix() -> dict:
     """Synthetic parser inputs demonstrate coverage, never lane qualification."""
     matrix = mixed_matrix()
+    # One Gradle runtime serves every lane and it is the newest any of them needs.
+    matrix["gradle_java"] = max(_era_java(target["minecraft"]) for target in matrix["targets"])
     artifacts = {row["artifact_node"]: row for row in matrix["artifacts"]}
     runtimes = {row["artifact_node"]: row for row in matrix["runtimes"]}
     matrix["artifacts"], matrix["runtimes"] = [], []
@@ -29,10 +39,16 @@ def shared_matrix() -> dict:
         node, loader, minecraft = (target[key] for key in ("artifact_node", "loader", "minecraft"))
         template = node if minecraft == "1.20.1" else f"{loader}-1.21.1"
         artifact, runtime = copy.deepcopy(artifacts[template]), copy.deepcopy(runtimes[template])
-        artifact.update(target, build_layout="stonecutter")
-        runtime.update(target)
-        artifact["gradle_task"] = f":{loader}:{minecraft}:remapJar"
-        artifact["harness_task"] = f":{loader}:{minecraft}:remapE2EHarnessJar"
+        # 26.1 ships unobfuscated and moved the game to Java 25, so those lanes
+        # build a shadow jar and compile against a newer toolchain.
+        modern = _numeric_version(minecraft)[0] >= 26
+        artifact.update(target, build_layout="stonecutter", no_remap=modern,
+                        java=_era_java(minecraft), gradle_java=matrix["gradle_java"])
+        runtime.update(target, java=artifact["java"])
+        artifact["gradle_task"] = (
+            f":{loader}:{minecraft}:" + ("shadowJar" if modern else "remapJar"))
+        artifact["harness_task"] = (
+            f":{loader}:{minecraft}:" + ("e2eHarnessJar" if modern else "remapE2EHarnessJar"))
         display = {"fabric": "Fabric", "forge": "Forge", "neoforge": "NeoForge"}[loader]
         prefix = f"{loader}/versions/{minecraft}/build/libs/"
         artifact["jar"] = prefix + f"BlockPops - {display} - {minecraft}-{{mod_version}}.jar"
@@ -41,8 +57,13 @@ def shared_matrix() -> dict:
         for dependency in runtime["runtime_dependencies"]:
             if minecraft != "1.20.1":
                 dependency["coordinate"] = dependency["coordinate"].replace("1.21.1", minecraft)
+            # GeckoLib renamed its Maven group at the 26.1 boundary.
+            if dependency["id"] == "geckolib" and modern:
+                dependency["coordinate"] = dependency["coordinate"].replace(
+                    "software.bernie.geckolib:", "com.geckolib:")
         if loader == "neoforge":
-            version = f"21.{minecraft.split('.')[-1]}.1"
+            # NeoForge mirrors the game version, which from 26.1 has no "1." to drop.
+            version = (f"{minecraft}.1" if modern else f"21.{minecraft.split('.')[-1]}.1")
             runtime.update(loader_version=version, installer=f"neoforge-{version}")
             matrix["installers"][runtime["installer"]] = {
                 "url": f"https://maven.neoforged.net/releases/net/neoforged/neoforge/{version}/neoforge-{version}-installer.jar",
@@ -108,7 +129,7 @@ class Schema2ReportTests(unittest.TestCase):
         self.assertFalse(report["sources_checked"])
         self.assertEqual(("fabric-1.20.1", "forge-1.20.1"), inventory.configured_nodes)
         unresolved = [row for row in report["targets"] if row["configuration"] == "unresolved"]
-        self.assertEqual(16, len(unresolved))
+        self.assertEqual(TARGET_COUNT - 2, len(unresolved))
         self.assertTrue(all(row["missing_inputs"] == ["artifact", "runtime"] for row in unresolved))
         self.assertTrue(all(row["missing_inputs"] == [] for row in report["targets"]
                             if row["configuration"] == "configured"))

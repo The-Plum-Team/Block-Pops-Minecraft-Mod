@@ -1,5 +1,6 @@
 """The first modern lane is explicitly selected and never replaces legacy dispatch."""
 
+import json
 import unittest
 from pathlib import Path
 
@@ -18,7 +19,10 @@ class Fabric1211ConfigurationTests(unittest.TestCase):
         self.assertEqual("lane", context["scope"])
         self.assertEqual(1, len(context["lanes"]))
         lane = context["lanes"][0]
-        self.assertEqual(("stonecutter", "fabric", 21, 21),
+        # One Gradle runtime serves the whole branch, so the lane reports the
+        # branch's own value rather than a snapshot of it.
+        branch_java = json.loads(self.path.read_bytes())["gradle_java"]
+        self.assertEqual(("stonecutter", "fabric", branch_java, 21),
                          (lane["build_layout"], lane["repository_family"],
                           lane["gradle_java"], lane["artifact"]["java"]))
         self.assertEqual("1.1.2", lane["mod_version"])

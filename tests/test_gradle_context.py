@@ -111,7 +111,7 @@ class GradleContextTests(unittest.TestCase):
                 self.assertEqual(expected.mod_version, lane["mod_version"])
                 self.assertEqual(expected.repository_family, lane["repository_family"])
                 self.assertEqual(["common", expected.identity.loader], lane["source_routes"])
-                self.assertEqual(21, lane["gradle_java"])
+                self.assertEqual(expected.gradle_java, lane["gradle_java"])
 
     def test_missing_unknown_unresolved_and_incompatible_aggregate_fail(self):
         with self.assertRaisesRegex(MatrixError, "explicit"):

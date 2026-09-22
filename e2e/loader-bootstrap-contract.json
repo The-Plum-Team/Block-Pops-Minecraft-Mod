@@ -9,14 +9,14 @@
       }
     },
     "forge": {
-      "build_sha256": "03f91ac3ab04fa24853338fa9ce2ba3e52b22a949d5d10e7e97317a37f76f102",
+      "build_sha256": "65dd8025d68203ced18c79944f55cbfee5fb7a0971471d2c272b28754ffb9e27",
       "files": {
         "forge/src/e2e/java/com/theplumteam/e2e/forge/BlockPopsE2EForge.java": "7ace8782eba783bfcc727228682adec1458ed56b88f5740189d6f0c3abc47c34",
         "forge/src/e2e/resources/META-INF/mods.toml": "d8732428dff29b70b546ebd19cc22a41ea8544ecfe6ab6ac322bec1d6634e635"
       }
     },
     "neoforge": {
-      "build_sha256": "edf6a066c9df73fc563419d21232c742c927991e7842fda164180991d036a77a",
+      "build_sha256": "ad79e65c7cb21dec656bf15bb978f93d8ff7385add550ffe80e12a9c3a5af543",
       "files": {
         "neoforge/src/e2e/java/com/theplumteam/e2e/neoforge/BlockPopsE2ENeoForge.java": "d1bdc682e8e74cd4af3e39cb417a51a0f9c441262e028265d73b5784de666332",
         "neoforge/src/e2e/resources/META-INF/neoforge.mods.toml": "c078e7b4d632504626f0311394b5a98e7c765007a056af56b4d2d8489e81e13f"

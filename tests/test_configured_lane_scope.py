@@ -67,7 +67,10 @@ class NeoForge1211ConfigurationTests(unittest.TestCase):
         self.assertEqual("lane", context["scope"])
         self.assertEqual(1, len(context["lanes"]))
         lane = context["lanes"][0]
-        self.assertEqual(("stonecutter", "neoforge", 21, 21),
+        # One Gradle runtime serves the whole branch, so the lane reports the
+        # branch's own value rather than a snapshot of it.
+        branch_java = json.loads(MATRIX.read_bytes())["gradle_java"]
+        self.assertEqual(("stonecutter", "neoforge", branch_java, 21),
                          (lane["build_layout"], lane["repository_family"],
                           lane["gradle_java"], lane["artifact"]["java"]))
         self.assertEqual(["common", "neoforge"], lane["source_routes"])
