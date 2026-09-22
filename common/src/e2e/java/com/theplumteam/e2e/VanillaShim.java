@@ -101,7 +101,9 @@ public final class VanillaShim {
                     minecraft.player, InteractionHand.MAIN_HAND, hit);
             return true;
         } catch (Throwable failure) {
-            E2ELog.warn("real block interaction failed: " + failure);
+            java.io.StringWriter trace = new java.io.StringWriter();
+            failure.printStackTrace(new java.io.PrintWriter(trace));
+            E2ELog.warn("real block interaction failed: " + trace);
             return false;
         }
     }
