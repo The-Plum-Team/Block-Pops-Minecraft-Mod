@@ -44,6 +44,19 @@ runs:
       with:
         python-version: "3.13"
 
+    # The fresh validator identity runs this interpreter, not the candidate's
+    # user site, so it needs the PNG decoder installed here to check pixels.
+    - name: Install the hash-locked PNG decoder
+      shell: bash
+      env:
+        CONTROLLER_ROOT: ${{ inputs.controller-root }}
+      run: |
+        set -euo pipefail
+        unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
+        python3 -m pip install --disable-pip-version-check \
+          --only-binary=:all: --require-hashes \
+          --requirement "$CONTROLLER_ROOT/scripts/pages/requirements.txt"
+
     - name: Install software-rendering libraries
       shell: bash
       run: |
