@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from e2e import visual_evidence as visual
 from e2e.scenario_contract import load_contract
-from scripts.ci.tests.matrix_fixtures import schema2_configuration
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT, schema2_configuration
 from scripts.release.matrix import MatrixDocument, normalize_matrix_inventory
 from tests import test_visual_capsule as fixture
 from tests.matrix_fixtures import SCHEMA1_MATRIX_PATH
@@ -150,7 +150,7 @@ class ScopedVisualEvidenceTests(unittest.TestCase):
                       "scenarios": sorted(self.contract.scenarios_for_profile("release"))}
         rows, coverage = visual._visual_selection(matrix, provenance, self.contract, scope="full",
             artifact_node=None, artifact_scope=bundle, projection="pr-anchors")
-        self.assertEqual(18, len(rows))
+        self.assertEqual(TARGET_COUNT, len(rows))
         self.assertIs(False, coverage["aggregate_scope"]["partial"])
         with self.assertRaises(visual.VisualEvidenceError):
             visual._visual_selection(self.matrix, provenance, self.contract, scope="full",

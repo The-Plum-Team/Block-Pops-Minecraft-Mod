@@ -3,7 +3,7 @@
 import unittest
 from pathlib import Path
 
-from scripts.release.matrix import MatrixError, load_matrix, load_matrix_document
+from scripts.release.matrix import EXPECTED_TARGETS, MatrixError, load_matrix, load_matrix_document
 from tests.matrix_fixtures import SCHEMA1_MATRIX_PATH, schema1_matrix, schema1_source_matrix
 
 
@@ -22,11 +22,9 @@ class MatrixFixtureBaselineTests(unittest.TestCase):
         path = Path(__file__).resolve().parents[1] / "release/release-matrix.json"
         document = load_matrix_document(path)
         self.assertTrue(document.inventory.sources_checked)
-        expected = {"fabric-1.20.1", "forge-1.20.1"} | {
-            f"{loader}-{version}" for loader in ("fabric", "neoforge")
-            for version in ("1.21.1", "1.21.4", "1.21.5", "1.21.6", "1.21.7",
-                            "1.21.8", "1.21.10", "1.21.11")
-        }
+        # The declared scope is owned by the validator; the live matrix is checked
+        # against it rather than against a copy that has to be edited alongside.
+        expected = {f"{loader}-{version}" for loader, version in EXPECTED_TARGETS}
         inventory = document.inventory
         self.assertEqual(2, inventory.schema_version)
         self.assertEqual(expected, set(inventory.target_nodes))
