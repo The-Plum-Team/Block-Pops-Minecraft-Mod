@@ -38,6 +38,7 @@ from e2e.scenario_contract import (  # noqa: E402
 from scripts.lib import atomic_directory  # noqa: E402
 from scripts.lib.secure_json import (  # noqa: E402
     SecureJsonError,
+    canonical_json,
     loads as secure_loads,
     read as read_secure_json,
 )
@@ -441,6 +442,26 @@ def _profile_name(lane: ExpectedLane, scenario: str) -> str:
     return value
 
 
+# The orchestrator leaves its workspace ownership marker at the root of every
+# evidence directory it promotes. It is not evidence and is never copied into the
+# aggregate, but a real run produces it, so it is accepted the way the visual
+# evidence reader accepts it: optional, and only in its exact form.
+WORKSPACE_MARKER = ".blockpops-run-workspace.json"
+
+
+def _validate_workspace_marker(root: Path) -> None:
+    raw = _read_file(root, WORKSPACE_MARKER)
+    try:
+        marker = secure_loads(raw, label="packaged workspace ownership marker", max_bytes=4096)
+    except SecureJsonError as exc:
+        raise FanInError(str(exc)) from exc
+    generation = marker.get("generation") if isinstance(marker, dict) else None
+    expected = {"schema": 1, "kind": "blockpops-run-workspace-snapshot", "generation": generation}
+    if (not isinstance(generation, str) or re.fullmatch(r"[0-9a-f]{32}", generation) is None
+            or raw != canonical_json(expected) + b"\n"):
+        raise FanInError("packaged workspace ownership marker is invalid")
+
+
 def _profile_layout(
     lane: ExpectedLane, contract: ScenarioContract
 ) -> tuple[set[str], set[str]]:
@@ -840,11 +861,15 @@ def _validate_lane_payload(
 ) -> tuple[list[dict[str, Any]], dict[str, int], dict[str, bytes]]:
     expected_directories, expected_files = _profile_layout(lane, contract)
     before = _inventory(root)
-    if before[0] != expected_directories or set(before[1]) != expected_files:
+    observed_files = set(before[1])
+    if WORKSPACE_MARKER in observed_files:
+        _validate_workspace_marker(root)
+        observed_files.discard(WORKSPACE_MARKER)
+    if before[0] != expected_directories or observed_files != expected_files:
         raise FanInError(
             f"lane {lane.artifact_name} inventory mismatch: "
-            f"missing files={sorted(expected_files - set(before[1]))}, "
-            f"unknown files={sorted(set(before[1]) - expected_files)}, "
+            f"missing files={sorted(expected_files - observed_files)}, "
+            f"unknown files={sorted(observed_files - expected_files)}, "
             f"missing directories={sorted(expected_directories - before[0])}, "
             f"unknown directories={sorted(before[0] - expected_directories)}"
         )

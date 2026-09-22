@@ -532,6 +532,41 @@ class E2EFanInTests(unittest.TestCase):
             with self.assertRaisesRegex(FanInError, "unsafe file"):
                 self.fixture.create(self.output)
 
+    def test_workspace_marker_is_accepted_only_in_its_exact_form(self) -> None:
+        # A real orchestrator run leaves its ownership marker at every lane root;
+        # the fan-in must accept that and nothing looser.
+        lane_root = self.fixture.root / self.fixture.lanes[0].artifact_name
+        marker = lane_root / ".blockpops-run-workspace.json"
+        generation = "0123456789abcdef0123456789abcdef"
+        exact = (
+            json.dumps(
+                {"generation": generation, "kind": "blockpops-run-workspace-snapshot", "schema": 1},
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode()
+            + b"\n"
+        )
+        for invalid in (
+            b"{}\n",
+            exact.replace(generation.encode(), b"not-a-generation"),
+            exact.replace(b"snapshot", b"snapshots"),
+            exact[:-1],
+        ):
+            with self.subTest(invalid=invalid):
+                marker.write_bytes(invalid)
+                with self.assertRaisesRegex(FanInError, "workspace ownership marker|JSON|json"):
+                    self.fixture.create(self.output)
+                self.assertFalse(self.output.exists())
+        marker.write_bytes(exact)
+        self.fixture.create(self.output)
+        self.assertFalse((self.output / ".blockpops-run-workspace.json").exists())
+
+    def test_other_hidden_files_at_the_lane_root_stay_unknown(self) -> None:
+        lane_root = self.fixture.root / self.fixture.lanes[0].artifact_name
+        (lane_root / ".blockpops-run-workspace.json.bak").write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(FanInError, "unknown files"):
+            self.fixture.create(self.output)
+
     def test_hardlinked_evidence_cannot_alias_two_expected_paths(self) -> None:
         lane = self.fixture.lanes[0]
         scenario = lane.scenarios[0]
