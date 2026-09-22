@@ -365,6 +365,25 @@ jobs:
           merge-multiple: false
           digest-mismatch: error
 
+      - name: Keep a lone fan-in bundle in a directory of its own
+        shell: bash
+        run: |
+          set -euo pipefail
+          # download-artifact extracts a pattern that matches exactly one artifact
+          # straight into its path rather than into a directory named after it, which
+          # is every run while only one branch is enrolled. The renderer expects one
+          # directory per bundle, so give the lone bundle the one it would have had.
+          # Every bundle carries its manifest at its top, and several bundles never
+          # leave one at the root; anything else is left for the renderer to judge.
+          shopt -s dotglob nullglob
+          entries=(collected-caches/*)
+          if [[ -f collected-caches/manifest.json && ! -L collected-caches/manifest.json ]]; then
+            lone="$RUNNER_TEMP/collected-pages-lone"
+            mkdir "$lone"
+            mv -- "${entries[@]}" "$lone/"
+            mv -- "$lone" collected-caches/collected-pages-lone
+          fi
+
       - name: Render all enrolled heads as one immutable site
         shell: bash
         env:

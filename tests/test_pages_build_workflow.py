@@ -128,5 +128,34 @@ class PagesBuildWorkflowTests(unittest.TestCase):
         self.assertIn('--canonical-branch "$CANONICAL_BRANCH"', self.workflow)
 
 
+    def arrange(self, layout):
+        root = self.root / f"arrange {len(list(self.root.iterdir()))}"; root.mkdir()
+        checkout = root / "checkout"; (checkout / "collected-caches").mkdir(parents=True)
+        temporary = root / "runner temp"; temporary.mkdir()
+        for relative in layout:
+            path = checkout / "collected-caches" / relative
+            path.parent.mkdir(parents=True, exist_ok=True); path.write_text(relative)
+        step = self.build.split("      - name: Keep a lone fan-in bundle in a directory of its own\n", 1)[1]
+        script = textwrap.dedent(step.split("      - name:", 1)[0].split("        run: |\n", 1)[1])
+        result = subprocess.run(["bash", "-c", script], cwd=checkout, capture_output=True, text=True,
+            env={**os.environ, "RUNNER_TEMP": str(temporary)})
+        self.assertEqual(0, result.returncode, result.stderr)
+        base = checkout / "collected-caches"
+        return sorted(str(path.relative_to(base)) for path in base.rglob("*") if path.is_file())
+
+    def test_a_lone_flattened_bundle_gets_a_directory_and_several_bundles_are_untouched(self):
+        self.assertEqual(["collected-pages-lone/.hidden", "collected-pages-lone/manifest.json",
+                          "collected-pages-lone/nested/image.png"],
+                         self.arrange(["manifest.json", ".hidden", "nested/image.png"]))
+        several = ["collected-pages-a/manifest.json", "collected-pages-b/manifest.json"]
+        self.assertEqual(several, self.arrange(several))
+        mixed = ["collected-pages-a/manifest.json", "stray.json"]
+        self.assertEqual(mixed, self.arrange(mixed))
+        self.assertEqual([], self.arrange([]))
+        order = self.build.index("name: Keep a lone fan-in bundle")
+        self.assertLess(self.build.index("name: Download only this run's validated fan-in bundles"), order)
+        self.assertLess(order, self.build.index("name: Render all enrolled heads as one immutable site"))
+
+
 if __name__ == "__main__":
     unittest.main()
