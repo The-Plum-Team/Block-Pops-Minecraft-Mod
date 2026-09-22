@@ -1271,3 +1271,37 @@ The 1.21.10 measurement is worth keeping even though the lane is not configured:
   - **GeckoLib 5.4 changed the renderer base again**, which is what the fifteen unresolved `super` references are.
   - **`playNotifySound` is gone** from the player, and the nearest replacement broadcasts rather than notifying one client, so it is a behaviour decision rather than a rename.
 - The lanes stay declared and unconfigured. Configuring a lane that cannot compile would make the matrix claim something untrue, and the release pipeline reads that matrix.
+
+## Task 15f — every configured lane builds through the release runner and passes the packaged E2E
+
+- The 26.2 and 26.3 lanes are configured for both loaders, and all eighteen now go through `scripts/release/build_matrix.py` and through the packaged E2E on this machine, visual assertions included. Task 15e recorded that not one visual assertion had ever passed here; that is no longer true of any lane.
+
+| Lane | release runner | packaged E2E | window asked for |
+|---|---|---|---|
+| fabric-1.20.1 | success | pass | 1600x900 |
+| forge-1.20.1 | success | pass | 800x450 |
+| fabric-1.21.1 | success | pass | 1600x900 |
+| neoforge-1.21.1 | success | pass | 1600x900 |
+| fabric-1.21.4 | success | pass | 1600x900 |
+| neoforge-1.21.4 | success | pass | 1600x900 |
+| fabric-1.21.5 | success | pass | 1600x900 |
+| neoforge-1.21.5 | success | pass | 1600x900 |
+| fabric-1.21.6 | success | pass | 1600x900 |
+| neoforge-1.21.6 | success | pass | 1600x900 |
+| fabric-1.21.7 | success | pass | 1600x900 |
+| neoforge-1.21.7 | success | pass | 1600x900 |
+| fabric-1.21.8 | success | pass | 1600x900 |
+| neoforge-1.21.8 | success | pass | 1600x900 |
+| fabric-26.2 | success | pass | 800x450 |
+| neoforge-26.2 | success | pass | 800x450 |
+| fabric-26.3 | success | pass | 1600x900 |
+| neoforge-26.3 | success | pass | 1600x900 |
+
+- **The window size was the whole of Task 15e's table.** The contract governs the framebuffer a probe measures, not the window the launcher asks for. Where the client takes a HiDPI framebuffer, a 1600-point window is captured at 3024x1800 - this display's 1512 points doubled - which no density divides, so the run stopped before measuring anything. `BLOCKPOPS_E2E_WINDOW` names the window in screen coordinates, keeping the contracted aspect, and asking for half of it there produces exactly the contracted framebuffer. Unset, it is the contracted size, which is what CI starts its virtual display for.
+- **Which lanes need it is a property of the client, not the version.** forge-1.20.1 needs it and fabric-1.20.1 does not; both 26.2 lanes need it and both 26.3 lanes do not. That also explains 15e's unexplained loader asymmetry: the two clients were being measured at different framebuffer sizes, not compositing differently.
+- **Three mod defects were behind the probes that survived the window fix**, each of which had never been seen because no capture had ever reached a probe here:
+  - Text colours written as `0xRRGGBB` ask for alpha 0. The font renderer used to patch a fully transparent colour up to opaque; without that fixup the collection headers, the settings headers and the tab labels drew into nothing.
+  - The settings modal drew its own labels before its widgets, and before 1.21.6 the panel fills underneath are composited after anything drawn earlier in the same method, leaving each label with its glyph shadow and little else. On 1.21.1 the server title measured a peak luma of 69 where 160 was required; drawn with the widgets it measures 251.
+  - The harness treated the world being ready as the client being ready, so on 1.20.1 every capture was taken through the Mojang splash still fading over it.
+- **A warm Gradle home had been hiding real breakage, in both directions.** Building each lane in the runner's own per-lane home surfaced nine missing checksums across the JUnit, Jackson, Guava, log4j and Bouncy Castle platform descriptors; a Fabric API republish that forty artifacts now arrive under, each verified entry by entry against the bytes already trusted and against the `.sha1` and `.sha512` both fabricmc hosts publish; and two compile regressions the 26.x port had left in older lanes, `NetworkManager.NetworkReceiver` becoming generic only at 1.21 and FMLEnvironment's dist and production accessors arriving only at 26.1.
+- **The serial runner could not have built a 26.x lane at all.** It pinned Gradle to Java 21 in seven places, so those lanes had only ever been built by calling Gradle directly, outside the isolated home, the strict verification and the compile observation. The launch major now comes from the matrix and travels through the plan, the probes, the observation request and its receipt.
