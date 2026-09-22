@@ -94,7 +94,8 @@ public final class E2EHarness {
             finish(minecraftClient);
             return;
         }
-        if (minecraftClient.player != null && minecraftClient.level != null) {
+        if (minecraftClient.player != null && minecraftClient.level != null
+                && !VanillaShim.overlayPresent(minecraftClient)) {
             Scenario scenario = resolveScenario();
             steps = scenario.build(minecraftClient);
             E2EContractValidator.validate(scenario, role, steps);

@@ -22,6 +22,22 @@ public final class VanillaShim {
         return minecraft.screen;
     }
 
+    /**
+     * Whether a loading overlay is still drawn over everything else.
+     *
+     * The vanilla overlay keeps fading for a moment after the world is ready and
+     * composites over the whole frame, so a capture taken then measures the splash
+     * instead of the screen. 26.1 removed the accessor along with the overlay it
+     * reported, and there is nothing left to wait for.
+     */
+    public static boolean overlayPresent(Minecraft minecraft) {
+        //? if >=26 {
+        /*return false;
+        *///? } else {
+        return minecraft.getOverlay() != null;
+        //? }
+    }
+
     public static boolean isWarningOrErrorScreen(Screen screen) {
         if (screen == null) {
             return false;
