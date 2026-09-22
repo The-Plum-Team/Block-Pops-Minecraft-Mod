@@ -1018,7 +1018,7 @@ def prepare_server(
     return ["bash", str(script), "nogui"]
 
 
-def write_server_files(server: Path, port: int, template_root: Path) -> None:
+def write_server_files(server: Path, port: int, template_root: Path, minecraft: str) -> None:
     properties = (template_root / "server.properties").read_text(encoding="utf-8")
     properties = re.sub(r"(?m)^server-port=.*$", f"server-port={port}", properties)
     (server / "server.properties").write_text(properties, encoding="utf-8")
@@ -1026,6 +1026,16 @@ def write_server_files(server: Path, port: int, template_root: Path) -> None:
     datapack = server / "world" / "datapacks" / "blockpops_e2e_time"
     datapack.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(template_root / "datapack", datapack, dirs_exist_ok=True)
+    # 26.1 renamed the daylight-cycle rule to advance_time. A function that names a
+    # rule the server does not know fails to parse as a whole, taking the world
+    # setup with it, so the rename is applied to the copy rather than guessed at.
+    era = tuple(int(part) for part in minecraft.split(".") if part.isdigit())
+    if era and era[0] >= 26:
+        for function in datapack.rglob("*.mcfunction"):
+            text = function.read_text(encoding="utf-8")
+            renamed = text.replace("gamerule doDaylightCycle ", "gamerule advance_time ")
+            if renamed != text:
+                function.write_text(renamed, encoding="utf-8")
 
 
 def client_command(
@@ -2101,7 +2111,9 @@ def run_packaged_row(
                 java,
                 server_install_log,
             )
-            write_server_files(server, port, repo / "e2e" / "server-template")
+            write_server_files(
+                server, port, repo / "e2e" / "server-template", str(row["minecraft"])
+            )
             install_dir, version_id = prepare_client_install(
                 matrix, row, runtime_session, java
             )
