@@ -7,7 +7,8 @@ The repository has two release lines. Each branch owns its exact Minecraft,
 loader, Java, dependency, artifact, and packaged-runtime inventory through
 `release/release-matrix.json`:
 
-- `master`: Minecraft 1.20.1, Fabric and Forge, Java 17.
+- `master`: Minecraft 1.20.1 to 26.3 across 20 lanes - Forge and Fabric on
+  1.20.1, NeoForge and Fabric from 1.21.1 - on Java 17, 21 and 25 by era.
 - `1.21.1-neoforge-fabric`: Minecraft 1.21.1, Fabric and NeoForge, Java 21.
 
 Do not add version or loader lists to workflows or helper scripts. Add or
@@ -39,3 +40,21 @@ See [CONTRIBUTING.md](CONTRIBUTING.md),
 or release-controller code. The advisory Claude routing, durable queue, cost
 limits, workload identity, and recovery procedures are documented in
 [the visual-review architecture](docs/visual-review.md).
+
+## License
+
+**All rights reserved** — the source is public, but this is not open source.
+
+You are welcome to read the code, build it for your own use, and fork it to
+send pull requests back here. You may not reupload, mirror or redistribute the
+mod, publish modified versions of it, or reuse the code in another project.
+
+The only official downloads are [Modrinth](https://modrinth.com/mod/block-pops),
+[CurseForge](https://www.curseforge.com/minecraft/mc-mods/block-pops) and this
+repository. Anything else is a reupload.
+
+The characters, names and logos in the bundled figure collections belong to
+their respective owners and are not covered by this license.
+
+Need permission for something not covered here? Ask — reasonable requests are
+usually granted. Full terms in [LICENSE](LICENSE).
