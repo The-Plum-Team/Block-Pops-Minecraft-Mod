@@ -53,17 +53,31 @@ public class PlatformHelperImpl {
     }
 
     public static boolean isDevelopmentEnvironment() {
-        return !FMLEnvironment.isProduction();
+        // 26.1 moved the production flag and the dist off FMLLoader and the
+        // FMLEnvironment field onto accessors of their own.
+        //? if >=26 {
+        /*return !FMLEnvironment.isProduction();
+        *///? } else {
+        return !FMLLoader.isProduction();
+        //? }
     }
 
     public static void openBoxFigureScreen(BlockPos pos, BoxBlockEntity boxBlockEntity) {
-        if (FMLEnvironment.getDist() == Dist.CLIENT) {
+        //? if >=26 {
+        /*if (FMLEnvironment.getDist() == Dist.CLIENT) {
+        *///? } else {
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+        //? }
             com.theplumteam.client.ClientHelpers.openBoxFigureScreen(pos, boxBlockEntity);
         }
     }
 
     public static void openClawMachineScreen(BlockPos pos, ClawMachineBlockEntity clawMachineBlockEntity) {
-        if (FMLEnvironment.getDist() == Dist.CLIENT) {
+        //? if >=26 {
+        /*if (FMLEnvironment.getDist() == Dist.CLIENT) {
+        *///? } else {
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+        //? }
             com.theplumteam.client.ClientHelpers.openClawMachineScreen(pos, clawMachineBlockEntity);
         }
     }
