@@ -50,14 +50,15 @@ public final class PacketNetworking {
     *///? }
 
     /** Registers a receiver for one packet id on the given side. */
+    // Architectury made NetworkReceiver generic over the buffer at 1.21; before
+    // that the interface is raw and always reads a plain FriendlyByteBuf.
+    //? if >=1.21 {
+    /*public static void registerReceiver(NetworkManager.Side side, ResourceLocation id,
+                                        NetworkManager.NetworkReceiver<RegistryFriendlyByteBuf> receiver) {
+    *///? } else {
     public static void registerReceiver(NetworkManager.Side side, ResourceLocation id,
-                                        NetworkManager.NetworkReceiver<
-                                                //? if >=1.21 {
-                                                /*RegistryFriendlyByteBuf
-                                                *///? } else {
-                                                FriendlyByteBuf
-                                                //? }
-                                                > receiver) {
+                                        NetworkManager.NetworkReceiver receiver) {
+    //? }
         //? if >=26 {
         /*NetworkManager.registerReceiver(side,
                 new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload>(id),
