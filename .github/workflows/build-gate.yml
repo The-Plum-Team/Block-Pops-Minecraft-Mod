@@ -269,7 +269,7 @@ jobs:
           set -euo pipefail
           unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
           (cd candidate/gradle/wrapper && sha256sum --check --strict gradle-wrapper.jar.sha256)
-          distribution_hash="$(tr -d '\r\n' < candidate/gradle/wrapper/gradle-8.14-bin.zip.sha256)"
+          distribution_hash="$(tr -d '\r\n' < candidate/gradle/wrapper/gradle-9.7.1-bin.zip.sha256)"
           grep --fixed-strings --line-regexp "distributionSha256Sum=$distribution_hash" \
             candidate/gradle/wrapper/gradle-wrapper.properties
 
