@@ -50,7 +50,10 @@ import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
 
 public class ClawMachineBlock extends BaseEntityBlock {
-    //? if >=1.21 {
+    //? if >=26.3 {
+    /*// 26.3 dropped the block codec contract, so neither the codec nor the
+    // accessor below exists any more.
+    *///? } elif >=1.21 {
     /*public static final MapCodec<ClawMachineBlock> CODEC = simpleCodec(ClawMachineBlock::new);
     *///? }
     //? if >=1.21.2 {
@@ -67,8 +70,10 @@ public class ClawMachineBlock extends BaseEntityBlock {
                 .setValue(HALF, DoubleBlockHalf.LOWER));
     }
 
-    //? if >=1.21 {
-    /*@Override
+    //? if >=26.3 {
+    /*
+    *///? } elif >=1.21 {
+/*@Override
     protected MapCodec<? extends BaseEntityBlock> codec() {
         return CODEC;
     }

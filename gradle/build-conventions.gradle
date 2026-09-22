@@ -166,6 +166,16 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
         // Renames with one unambiguous target across the whole tree.
         // 26.2 removed the immediate-mode leftovers and renamed a few more seams.
         def renamesFor262 = era[0] > 26 || (era[0] == 26 && era[1] >= 2)
+        // 26.3 moved to authlib 10, which renamed the session service, and renamed
+        // a key event's scancode.
+        def renamesFor263 = era[0] > 26 || (era[0] == 26 && era[1] >= 3)
+        def rules263 = [
+            ['com.mojang.authlib.minecraft.MinecraftSessionService', 'com.mojang.authlib.minecraft.SessionService'],
+            ['MinecraftSessionService', 'SessionService'],
+            ['.scancode()', '.keycode()'],
+            // 26.3 moved the GPU abstraction to a new backend package.
+            ['com.mojang.blaze3d.textures.', 'com.mojang.renderpearl.api.textures.'],
+        ]
         def rules262 = [
             // Gui#setScreen is what Minecraft#setScreen used to do. setScreenAndShow
             // also forces a frame, which re-enters rendering when a screen is opened
@@ -230,7 +240,7 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
                 // previously generated sources in place and the change looks like a no-op.
                 inputs.property('blockPopsSourceRewrites', [
                         movedImports, renderTypeFactories.toString(),
-                        renamesGeckolibRoot, renamesGuiGraphics, guiGraphicsMethods, guiHookRenames, eraWideRenames, hookDeclRenames, hookDeclExcluded, renamesFor262, rules262, screenAccess262.toString(),
+                        renamesGeckolibRoot, renamesGuiGraphics, guiGraphicsMethods, guiHookRenames, eraWideRenames, hookDeclRenames, hookDeclExcluded, renamesFor262, rules262, screenAccess262.toString(), renamesFor263, rules263,
                 ].toString())
                 filesMatching('**/*.java') {
                     def hookRenames = renamesGuiGraphics ? (guiHookRenames[it.name] ?: []) : []
@@ -249,6 +259,9 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
                             guiGraphicsMethods.each { from, to ->
                                 rewritten = rewritten.replaceAll(/\b(graphics|guiGraphics)\.${from}\(/, "\$1.${to}(")
                             }
+                        }
+                        if (renamesFor263) {
+                            rules263.each { pair -> rewritten = rewritten.replace(pair[0], pair[1]) }
                         }
                         if (renamesFor262) {
                             rules262.each { pair -> rewritten = rewritten.replace(pair[0], pair[1]) }

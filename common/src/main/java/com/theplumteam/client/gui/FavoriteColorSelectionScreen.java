@@ -12,7 +12,9 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 //? if <26.2 {
 import com.mojang.blaze3d.vertex.Tesselator;
 //? }
+//? if <26.3 {
 import com.mojang.blaze3d.vertex.VertexFormat;
+//? }
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.client.config.ClientConfig;

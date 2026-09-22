@@ -98,7 +98,16 @@ public class LinkButton extends Button {
 
     private static void openLink(String url) {
         // Open the link in the default browser
+        //? if >=26.3 {
+        /*// 26.3 moved opening a link onto Blaze3D, and it takes a parsed URI.
+        try {
+            com.mojang.blaze3d.Blaze3D.openUri(new java.net.URI(url));
+        } catch (java.net.URISyntaxException malformed) {
+            return;
+        }
+        *///? } else {
         Util.getPlatform().openUri(url);
+        //? }
 
         // Log the action
         BlockPopsMod.logDebug("Opening link: {}", url);

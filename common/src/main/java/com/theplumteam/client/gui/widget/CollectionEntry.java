@@ -255,12 +255,12 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
                     //? if >=26 {
                     /^net.minecraft.client.gui.screens.Screen previous = parent.getParentScreen();
                     java.net.URI target = java.net.URI.create(collection.getAuthorUrl());
-                    mc.setScreen(new net.minecraft.client.gui.screens.ConfirmLinkScreen(confirmed -> {
+                    mc.setScreen(com.theplumteam.client.gui.util.LinkOpening.confirm(target, confirmed -> {
                         if (confirmed) {
-                            net.minecraft.Util.getPlatform().openUri(target);
+                            com.theplumteam.client.gui.util.LinkOpening.open(target);
                         }
                         mc.setScreen(previous);
-                    }, target.toString(), false));
+                    }));
                     ^///? } elif >=1.21.5 {
                     /^mc.screen.handleComponentClicked(
                         net.minecraft.network.chat.Style.EMPTY.withClickEvent(
