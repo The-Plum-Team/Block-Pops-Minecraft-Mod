@@ -35,7 +35,7 @@ public class SettingsScreen extends Screen {
     // Panel styling
     private static final int PANEL_BG = 0xB0000000;           // Darker semi-transparent background
     private static final int PANEL_OUTLINE = 0x60FFFFFF;      // Subtle white outline
-    private static final int TITLE_COLOR = 0xFFFFFF;          // White title
+    private static final int TITLE_COLOR = 0xFFFFFFFF;          // White title
 
     // Tab dimensions
     private static final int TAB_HEIGHT = 30;
@@ -324,17 +324,17 @@ public class SettingsScreen extends Screen {
             graphics.drawString(this.font, "Star Color",
                     col1X,
                     headerY,
-                    0xFFFFFF);
+                    0xFFFFFFFF);
 
             graphics.drawString(this.font, "Background Color",
                     col2X,
                     headerY,
-                    0xFFFFFF);
+                    0xFFFFFFFF);
 
             graphics.drawString(this.font, "Panel & Animation",
                     col3X,
                     headerY,
-                    0xFFFFFF);
+                    0xFFFFFFFF);
         }
 
         // Draw server tab content
@@ -343,7 +343,7 @@ public class SettingsScreen extends Screen {
             graphics.drawCenteredString(this.font, "Token Reset Settings",
                     this.panelX + this.panelWidth / 2,
                     headerY,
-                    0xFFFFFF);
+                    0xFFFFFFFF);
 
             // Draw explanation text
             int explanationY = this.panelY + TAB_HEIGHT + 80;
@@ -358,7 +358,7 @@ public class SettingsScreen extends Screen {
                 graphics.drawString(this.font, explanationLines[i],
                         this.panelX + (this.panelWidth - lineWidth) / 2,
                         explanationY + (i * 12),
-                        0xAAAAAA);
+                        0xFFAAAAAA);
             }
         }
 
@@ -368,7 +368,7 @@ public class SettingsScreen extends Screen {
             graphics.drawCenteredString(this.font, "Collection Cheats",
                     this.panelX + this.panelWidth / 2,
                     headerY,
-                    0xFFFFFF);
+                    0xFFFFFFFF);
 
             // Draw explanation text
             int explanationY = this.panelY + TAB_HEIGHT + 30;
@@ -381,7 +381,7 @@ public class SettingsScreen extends Screen {
                 graphics.drawString(this.font, explanationLines[i],
                         this.panelX + (this.panelWidth - lineWidth) / 2,
                         explanationY + (i * 12),
-                        0xAAAAAA);
+                        0xFFAAAAAA);
             }
         }
 
@@ -403,7 +403,7 @@ public class SettingsScreen extends Screen {
             graphics.drawCenteredString(this.font, "Stars",
                     previewStartX + previewSize / 2,
                     previewY + previewSize + 5,
-                    0xAAAAAA);
+                    0xFFAAAAAA);
 
             // Background color preview
             int bgPreviewX = previewStartX + previewSize + previewSpacing;
@@ -417,7 +417,7 @@ public class SettingsScreen extends Screen {
             graphics.drawCenteredString(this.font, "Background",
                     bgPreviewX + previewSize / 2,
                     previewY + previewSize + 5,
-                    0xAAAAAA);
+                    0xFFAAAAAA);
         }
 
         // Render our modal buttons and widgets

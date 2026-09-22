@@ -16,8 +16,8 @@ public class TabButton extends Button {
     private static final int UNSELECTED_BG = 0x60000000;    // Lighter semi-transparent background
     private static final int SELECTED_OUTLINE = 0xFFFFFFFF; // White outline for selected
     private static final int UNSELECTED_OUTLINE = 0x40FFFFFF; // Faint outline for unselected
-    private static final int SELECTED_TEXT = 0xFFFFFF;      // White text
-    private static final int UNSELECTED_TEXT = 0x999999;    // Gray text
+    private static final int SELECTED_TEXT = 0xFFFFFFFF;      // White text
+    private static final int UNSELECTED_TEXT = 0xFF999999;    // Gray text
 
     public TabButton(int x, int y, int width, int height, Component label, boolean selected, OnPress onPress) {
         super(x, y, width, height, label, onPress, DEFAULT_NARRATION);
