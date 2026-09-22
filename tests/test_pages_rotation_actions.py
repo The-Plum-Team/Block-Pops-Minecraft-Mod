@@ -216,5 +216,52 @@ class RotationActionTests(unittest.TestCase):
         self.assertEqual(1, len(self.api.deleted))
 
 
+
+class RotationEntryPointTests(unittest.TestCase):
+    """The current-attempt command reaches the lease-held rotation for a scoped implementation."""
+
+    ARGS = ["--repository", REPOSITORY, "--pages-run-id", str(PAGES_RUN), "--pages-run-sha", PAGES_SHA,
+            "--canonical-branch", BRANCH, "--inventory", "inventory.json", "--caches-root", "caches"]
+
+    def run_main(self, *extra, scoped=True):
+        calls, deleted = [], []
+        @contextmanager
+        def actions(api, **kwargs):
+            calls.append(kwargs)
+            def delete_next():
+                deleted.append(len(deleted) + 11); return deleted[-1]
+            yield (11, 12), delete_next
+        legacy = patch.object(rotate_artifacts, "_inventory", side_effect=rotate_artifacts.SiteError("legacy inventory read"))
+        with patch.dict("os.environ", {"GH_TOKEN": "fixture-token"}), \
+                patch.object(rotate_artifacts, "validate_current_invocation"), \
+                patch.object(rotate_artifacts, "_implementation_is_scoped", return_value=scoped), \
+                patch.object(rotate_artifacts, "current_rotation_actions", actions), legacy as inventory, \
+                patch("builtins.print"), patch("sys.stderr"):
+            code = rotate_artifacts.main(self.ARGS + list(extra))
+        self.legacy_reads = inventory.call_count
+        return code, calls, deleted
+
+    def test_scoped_current_attempt_deletes_every_planned_id_through_the_lease(self):
+        code, calls, deleted = self.run_main("--current-run-attempt", "3")
+        self.assertEqual(0, code)
+        self.assertEqual([11, 12], deleted)
+        self.assertEqual([dict(repository=REPOSITORY, pages_run_id=PAGES_RUN, pages_run_attempt=3,
+            implementation_sha=PAGES_SHA, canonical_branch=BRANCH, inventory_path=Path("inventory.json"),
+            caches_root=Path("caches"))], calls)
+
+    def test_dry_run_plans_without_deleting(self):
+        code, calls, deleted = self.run_main("--current-run-attempt", "3", "--dry-run")
+        self.assertEqual((0, 1, [], 0), (code, len(calls), deleted, self.legacy_reads))
+
+    def test_unscoped_or_historical_rotation_keeps_the_legacy_inventory(self):
+        for extra, scoped in ((("--current-run-attempt", "3"), False), ((), True)):
+            with self.subTest(extra=extra, scoped=scoped):
+                code, calls, _ = self.run_main(*extra, scoped=scoped)
+                self.assertEqual((2, [], 1), (code, calls, self.legacy_reads))
+
+    def test_the_live_implementation_matrix_is_scoped(self):
+        self.assertTrue(rotate_artifacts._implementation_is_scoped())
+
+
 if __name__ == "__main__":
     unittest.main()

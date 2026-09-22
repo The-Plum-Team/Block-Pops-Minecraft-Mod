@@ -539,6 +539,16 @@ def current_rotation_actions(api, *, repository, pages_run_id, pages_run_attempt
             live = False
 
 
+def _implementation_is_scoped() -> bool:
+    """Route by the protected implementation's own matrix, as the site render does."""
+    try:
+        matrix, _ = site.read_secure_json(REPO / "release/release-matrix.json",
+                                          label="implementation matrix", max_bytes=site.MAX_MATRIX_BYTES)
+        return site.normalize_matrix_inventory(matrix).schema_version == 2
+    except (site.SecureJsonError, site.MatrixError) as exc:
+        raise RotationError(f"cannot read the implementation matrix: {exc}") from exc
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", required=True)
@@ -568,6 +578,18 @@ def main(argv: list[str] | None = None) -> int:
                 pages_run_attempt=args.current_run_attempt,
                 pages_run_sha=args.pages_run_sha,
             )
+            if _implementation_is_scoped():
+                # Scoped discovery rows carry each branch's own scope, which only the
+                # lease-held current-attempt rotation reads.
+                with current_rotation_actions(
+                    api, repository=args.repository, pages_run_id=args.pages_run_id,
+                    pages_run_attempt=args.current_run_attempt, implementation_sha=args.pages_run_sha,
+                    canonical_branch=args.canonical_branch, inventory_path=args.inventory,
+                    caches_root=args.caches_root,
+                ) as (planned, delete_next):
+                    deleted = [] if args.dry_run else [delete_next() for _ in planned]
+                print(json.dumps({"deleted": deleted, "planned": list(planned)}, sort_keys=True))
+                return 0
         inventory = _inventory(args.inventory)
         deletions = plan_rotation(
             api=api,
