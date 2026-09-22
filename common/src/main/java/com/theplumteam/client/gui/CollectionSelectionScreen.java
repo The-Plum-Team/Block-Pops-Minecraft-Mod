@@ -456,13 +456,13 @@ public class CollectionSelectionScreen extends Screen {
 
         // Collection list title
         graphics.drawString(this.font, "Collections",
-                componentX + 8, currentY, 0xFFFFFF, false);
+                componentX + 8, currentY, 0xFFFFFFFF, false);
         currentY += font.lineHeight + 4;
 
         // Collection count
         String collectionCount = collections.size() + " collections available";
         graphics.drawString(this.font, collectionCount,
-                componentX + 8, currentY, 0xAAAAAA, false);
+                componentX + 8, currentY, 0xFFAAAAAA, false);
 
         // Separator line (below the collection count)
         currentY += font.lineHeight + 4;
@@ -494,13 +494,13 @@ public class CollectionSelectionScreen extends Screen {
 
         // Collection name
         graphics.drawString(this.font, collection.getName(),
-                previewX + 8, currentY, 0xFFFFFF, false);
+                previewX + 8, currentY, 0xFFFFFFFF, false);
         currentY += font.lineHeight + 4;
 
         // Figure count
         String figureCount = collection.getFigures().size() + " figures in this collection";
         graphics.drawString(this.font, figureCount,
-                previewX + 8, currentY, 0xAAAAAA, false);
+                previewX + 8, currentY, 0xFFAAAAAA, false);
 
         // Separator line (full width - will render on top of buttons)
         currentY += font.lineHeight + 4;
