@@ -27,11 +27,22 @@ public class StarPatternCache {
     private static final int TILE_SIZE = 55; // Match the original tile size
     private static final int CACHE_TILES_WIDTH = 64; // Pre-generated texture has 64 tiles width
     private static final int CACHE_TILES_HEIGHT = 32; // Pre-generated texture has 32 tiles height
+    // Only the packaged E2E sets this property. Its captures pin the scroll so the same screen
+    // renders the same pixels on every run and loader, as Quick Skin pins its panorama clock.
+    private static final boolean FROZEN_FOR_E2E = Boolean.getBoolean("blockpops.e2e.enabled");
 
     private static DynamicTexture cachedTexture = null;
     private static ResourceLocation cachedTextureLocation = null;
     private static int cachedTextureWidth = 0;
     private static int cachedTextureHeight = 0;
+
+    /**
+     * The scroll clock, in seconds, a screen's star background uses: the live one, or zero in
+     * the packaged E2E.
+     */
+    public static double scrollSeconds(double liveSeconds) {
+        return FROZEN_FOR_E2E ? 0.0 : liveSeconds;
+    }
 
     /**
      * Initialize by loading the pre-generated cached texture
