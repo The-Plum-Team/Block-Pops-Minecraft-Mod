@@ -849,7 +849,7 @@ class VisualReviewHandoffTests(unittest.TestCase):
         )
 
     def test_prompts_are_chunked_and_expose_only_the_chunk_images(self) -> None:
-        self.assertEqual(10, MAX_CAPSULE_PAIRS)
+        self.assertEqual(48, MAX_CAPSULE_PAIRS)
         self.assertEqual(MAX_CAPSULE_PAIRS, MAX_HANDOFF_PAIRS)
         self.assertEqual(MAX_CAPSULE_PAIRS, review_client.MAX_PAIRS)
         self.assertEqual(MAX_CAPSULE_PAIRS, MAX_OUTPUT_PAIRS)
@@ -957,17 +957,20 @@ class VisualReviewHandoffTests(unittest.TestCase):
         with self.assertRaisesRegex(ReviewClientError, "outside 1..5"):
             build_prompt(self.handoff, list(pairs[:6]), stage="sonnet", prompt="bounded")
 
-    def test_cost_envelope_rejects_an_eleventh_pair_before_transport(self) -> None:
+    def test_cost_envelope_rejects_a_pair_past_the_budget_before_transport(self) -> None:
         _manifest, pairs = validate_handoff(
             self.handoff, self.identity["manifest_sha256"]
         )
         over_budget = [copy.deepcopy(pair) for pair in pairs]
-        extra = copy.deepcopy(over_budget[0])
-        extra["label"] = "extra-lane/visual-regression/client_a/favorite_color_prompt"
-        extra["capture_id"] = "visual-regression.client_a.favorite_color_prompt"
-        extra["triage"]["byte_identical"] = False
-        over_budget.append(extra)
-        with self.assertRaisesRegex(ReviewClientError, "1..10"):
+        index = 0
+        while len(over_budget) <= review_client.MAX_PAIRS:
+            extra = copy.deepcopy(over_budget[0])
+            extra["label"] = f"extra-lane-{index}/visual-regression/client_a/favorite_color_prompt"
+            extra["capture_id"] = "visual-regression.client_a.favorite_color_prompt"
+            extra["triage"]["byte_identical"] = False
+            over_budget.append(extra)
+            index += 1
+        with self.assertRaisesRegex(ReviewClientError, f"1..{review_client.MAX_PAIRS}"):
             validate_review_cost_envelope(over_budget)
 
     def test_worst_case_prompts_are_preflighted_before_any_call(self) -> None:
@@ -989,7 +992,7 @@ class VisualReviewHandoffTests(unittest.TestCase):
                 }
             )
         changed = ordered_changed_pairs(all_changed)
-        self.assertEqual(10, len(changed))
+        self.assertEqual(len(pairs), len(changed))
         # Worst-case bounded Sonnet text makes the verification prompt the larger one; a budget
         # that fits every Sonnet chunk but not it must stop the review before the first call.
         sonnet_prompt = SONNET_PROMPT.read_text(encoding="utf-8").strip()
@@ -1053,7 +1056,7 @@ class VisualReviewHandoffTests(unittest.TestCase):
             )
         runner.assert_not_called()
         telemetry = report["telemetry"]
-        self.assertEqual(10, telemetry["identical_pairs"])
+        self.assertEqual(len(pairs), telemetry["identical_pairs"])
         for field in (
             "triaged_pairs",
             "escalated_pairs",
@@ -1168,7 +1171,7 @@ class VisualReviewHandoffTests(unittest.TestCase):
             self.assertLessEqual(
                 report["telemetry"]["sonnet_calls"]
                 + report["telemetry"]["fable_calls"],
-                5,
+                review_client.MAX_MODEL_CALLS,
             )
             telemetry = report["telemetry"]
             self.assertEqual("claude-code-oauth", telemetry["auth_mode"])
@@ -1218,7 +1221,7 @@ class VisualReviewHandoffTests(unittest.TestCase):
                 provenance["candidate_source"]["tested_tree"],
             )
             self.assertEqual("b" * 40, provenance["reference_source"]["tested_commit"])
-            self.assertEqual(10, len(provenance["pairs"]))
+            self.assertEqual(len(pairs), len(provenance["pairs"]))
             self.assertEqual(
                 hashlib.sha256((Path(temporary) / "normalized.json").read_bytes()).hexdigest(),
                 provenance["normalized_review_sha256"],

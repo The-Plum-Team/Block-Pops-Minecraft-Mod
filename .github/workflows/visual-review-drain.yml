@@ -543,7 +543,7 @@ jobs:
       needs.admit.outputs.status == 'authenticated' &&
       needs.admit.outputs.artifact_id != ''
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 110
     environment: visual-review
     permissions:
       actions: read
@@ -1285,9 +1285,9 @@ jobs:
               or publication["tested_sha"] != expected_tested
               or publication["reference_sha"] != expected_reference
               or type(publication["verdicts"]) is not int
-              or not 1 <= publication["verdicts"] <= 10
+              or not 1 <= publication["verdicts"] <= 48
               or type(publication["semantic_regressions"]) is not int
-              or not 0 <= publication["semantic_regressions"] <= 10
+              or not 0 <= publication["semantic_regressions"] <= 48
               or not isinstance(publication["provenance_sha256"], str)
               or SHA256.fullmatch(publication["provenance_sha256"]) is None
               or hashlib.sha256(provenance_raw).hexdigest() != publication["provenance_sha256"]
@@ -1335,7 +1335,7 @@ jobs:
               fail("durable provenance is bound to another review identity")
 
           pairs = provenance["pairs"]
-          if not isinstance(pairs, list) or not 1 <= len(pairs) <= 10:
+          if not isinstance(pairs, list) or not 1 <= len(pairs) <= 48:
               fail("provenance pair inventory is empty or excessive")
           pair_identities = []
           for index, pair in enumerate(pairs):
@@ -1450,11 +1450,11 @@ jobs:
               if not isinstance(telemetry[field], str) or SHA256.fullmatch(telemetry[field]) is None:
                   fail(f"telemetry {field} is invalid")
           for field, maximum in (
-              ("pair_count", 10), ("identical_pairs", 10), ("triaged_pairs", 10),
-              ("escalated_pairs", 10), ("sonnet_calls", 5), ("fable_calls", 5),
-              ("provider_attempts", 10), ("retries", 5),
+              ("pair_count", 48), ("identical_pairs", 48), ("triaged_pairs", 48),
+              ("escalated_pairs", 48), ("sonnet_calls", 22), ("fable_calls", 22),
+              ("provider_attempts", 44), ("retries", 22),
               ("estimated_cost_micro_usd", 1000 * 1_000_000),
-              ("duration_ms", 35 * 60 * 1000),
+              ("duration_ms", 90 * 60 * 1000),
           ):
               integer(telemetry[field], f"telemetry.{field}", maximum)
           if (

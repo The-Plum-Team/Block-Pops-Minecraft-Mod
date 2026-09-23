@@ -29,10 +29,11 @@ MAX_REVIEW_OUTPUT_BYTES = 1024 * 1024
 MAX_VISIBLE_CHARS = 2048
 MAX_FINDINGS = 16
 MAX_FINDING_CHARS = 1024
-MAX_PAIRS = 10
-MAX_MODEL_CALLS = 5
-MAX_MODEL_ATTEMPTS = 10
-MAX_DURATION_MS = 35 * 60 * 1000
+MAX_PAIRS = 48
+# Worst case for MAX_PAIRS changed pairs: ceil(48 / 5) triage + ceil(48 / 4) verification.
+MAX_MODEL_CALLS = 22
+MAX_MODEL_ATTEMPTS = 44
+MAX_DURATION_MS = 90 * 60 * 1000
 MAX_USAGE_TOKENS = 100_000_000
 
 # Both routes run on Opus 5.5 through Claude Code; the routes keep their historical
@@ -254,7 +255,7 @@ def _validate_telemetry(
         _fail("strong-tier call count cannot cover the escalated pairs within chunk bounds")
     calls = sonnet_calls + fable_calls
     if calls > MAX_MODEL_CALLS:
-        _fail("visual review telemetry exceeds the five-call budget")
+        _fail("visual review telemetry exceeds the model-call budget")
     attempts = _integer(
         telemetry["provider_attempts"],
         "visual review telemetry provider_attempts",

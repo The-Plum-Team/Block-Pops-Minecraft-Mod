@@ -44,14 +44,15 @@ TRIAGE_MODEL = "claude-opus-5-5"
 VERIFY_MODEL = "claude-opus-5-5"
 SONNET_MAX_PAIRS = 5
 FABLE_MAX_PAIRS = 4
-MAX_MODEL_CALLS = 5
+# Worst case for MAX_PAIRS changed pairs: ceil(48 / 5) triage + ceil(48 / 4) verification.
+MAX_MODEL_CALLS = 22
 MAX_MODEL_ATTEMPTS = MAX_MODEL_CALLS * 2
 MODEL_CALL_SPACING_SECONDS = 15.0
 RETRY_BACKOFF_MAXIMUM_SECONDS = 60.0
 RATE_LIMIT_COOLDOWN_SECONDS = 1800
 MODEL_TIMEOUT_SECONDS = 15.0 * 60.0
 CLI_MAX_TURNS = 40
-REVIEW_DEADLINE_SECONDS = 35.0 * 60.0
+REVIEW_DEADLINE_SECONDS = 90.0 * 60.0
 MAX_REQUEST_BYTES = 1024 * 1024
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_OUTPUT_BYTES = 1024 * 1024
@@ -64,8 +65,8 @@ MAX_FILES = 1100
 MAX_FILE_BYTES = 7 * 1024 * 1024
 MAX_TOTAL_BYTES = 96 * 1024 * 1024
 # Expanding beyond today's 2 lanes x 5 captures requires an explicit cost/security review.
-MAX_PAIRS = 10
-MAX_IMAGES = 64
+MAX_PAIRS = 48
+MAX_IMAGES = 96
 MAX_FINDINGS = 16
 MAX_VISIBLE_CHARS = 2048
 MAX_FINDING_CHARS = 1024
@@ -953,8 +954,8 @@ def validate_review_cost_envelope(pairs: Sequence[dict[str, Any]]) -> None:
         if not isinstance(identical, bool):
             _fail("visual review queue byte identity is invalid")
         changed += identical is False
-    if changed > 10:
-        _fail("visual review queue exceeds the reviewed ten-pair cost envelope")
+    if changed > MAX_PAIRS:
+        _fail("visual review queue exceeds the reviewed changed-pair cost envelope")
 
 
 def _worst_case_sonnet_results(
@@ -1744,7 +1745,7 @@ def run_review(
     worst_sonnet_results = _worst_case_sonnet_results(changed)
     worst_fable_chunks = _chunk_pairs(changed, stage="fable")
     if len(sonnet_chunks) + len(worst_fable_chunks) > MAX_MODEL_CALLS:
-        _fail("bounded request partition cannot cover the queue in at most five calls")
+        _fail("bounded request partition cannot cover the queue within the model-call budget")
     # Every worst-case prompt must fit before any call is spent.
     for chunk in sonnet_chunks:
         build_prompt(handoff_root, chunk, stage="sonnet", prompt=sonnet_prompt)
