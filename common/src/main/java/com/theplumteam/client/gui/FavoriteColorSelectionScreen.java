@@ -117,19 +117,24 @@ public class FavoriteColorSelectionScreen extends Screen {
         // Title and description
         int titleY = panelY + scaledPadding;
 
-        // Color grid setup - scale button size with container scale
-        int buttonSize = (int)(60 * containerScale); // Size of each color button
-        int gridCols = 4; // 4x4 grid
-        int gridRows = 4;
-        int gridWidth = (gridCols * buttonSize) + ((gridCols - 1) * scaledSpacing);
-        int gridHeight = (gridRows * buttonSize) + ((gridRows - 1) * scaledSpacing);
-
-        // Center the grid horizontally
-        int gridStartX = panelX + (panelWidth - gridWidth) / 2;
-
         // Position grid below title and description
         int descriptionHeight = font.lineHeight * 3; // Title + description (2 lines)
         int gridStartY = titleY + descriptionHeight + scaledPadding;
+        int doneButtonY = panelY + panelHeight - scaledPadding - scaledComponentHeight;
+
+        // Color grid setup - scale button size with container scale, but never past the space
+        // between the description and the Figure/Done row. On a short window (800x450 at GUI
+        // scale 2, for one) the preferred size ran the last row over those buttons.
+        int gridCols = 4; // 4x4 grid
+        int gridRows = 4;
+        int preferredSize = (int)(60 * containerScale);
+        int fittingHeight = (doneButtonY - scaledSpacing - gridStartY - (gridRows - 1) * scaledSpacing) / gridRows;
+        int fittingWidth = (panelWidth - 2 * scaledPadding - (gridCols - 1) * scaledSpacing) / gridCols;
+        int buttonSize = Math.max(16, Math.min(preferredSize, Math.min(fittingHeight, fittingWidth)));
+        int gridWidth = (gridCols * buttonSize) + ((gridCols - 1) * scaledSpacing);
+
+        // Center the grid horizontally
+        int gridStartX = panelX + (panelWidth - gridWidth) / 2;
 
         // Create 4x4 grid of color buttons
         PopBlockColor[] colors = PopBlockColor.values();
@@ -151,7 +156,6 @@ public class FavoriteColorSelectionScreen extends Screen {
         int buttonSpacing = 10;
         int totalButtonWidth = buttonWidth + toggleButtonWidth + buttonSpacing;
         int buttonsStartX = panelX + (panelWidth - totalButtonWidth) / 2;
-        int doneButtonY = panelY + panelHeight - scaledPadding - scaledComponentHeight;
 
         // Toggle Figure button (left of Done)
         toggleFigureButton = Button.builder(Component.literal(showFigureInBox ? "Figure: ON" : "Figure: OFF"), button -> {
