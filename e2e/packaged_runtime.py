@@ -494,7 +494,7 @@ def download(url: str, destination: Path, expected_sha256: str) -> Path:
 
     request = urllib.request.Request(
         url,
-        headers={"User-Agent": "The-Plum-Team/BlockPops packaged-e2e"},
+        headers={"User-Agent": "The-Plum-Team/Block-Pops-Minecraft-Mod packaged-e2e"},
     )
     try:
         digest = hashlib.sha256()

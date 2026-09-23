@@ -123,7 +123,7 @@ class RestrictedTransitionDeclarationTests(unittest.TestCase):
     def decision(self, transition, **overrides):
         return {
             "schema_version": 1, "purpose": "restricted-transition-owner-authorization",
-            "repository": "The-Plum-Team/BlockPops", "pull_request": 17, "owner": "AkaNebur",
+            "repository": "The-Plum-Team/Block-Pops-Minecraft-Mod", "pull_request": 17, "owner": "AkaNebur",
             "decision": "approve", "controller_generation": 1, "controller_sha": BASE,
             "base_sha": BASE, "head_sha": HEAD, "declaration_sha256": transition.digest,
             "comment_id": 91, "comment_updated_at": "2026-09-19T10:00:00Z",
@@ -133,7 +133,7 @@ class RestrictedTransitionDeclarationTests(unittest.TestCase):
 
     def bind(self, transition, decision):
         return bind_restricted_transition_decision(
-            transition, repository="The-Plum-Team/BlockPops", pull_number=17,
+            transition, repository="The-Plum-Team/Block-Pops-Minecraft-Mod", pull_number=17,
             authenticated_owner_decision=decision)
 
     def test_exact_static_scopes_and_external_deployment_bind_inert_proposals(self):
@@ -694,7 +694,7 @@ class DispatchSourceTests(unittest.TestCase):
 
 class RestrictedTransitionOwnerTests(unittest.TestCase):
     class MockGitHub(PullIdentityTests.Api, GitHubApi):
-        repository = "The-Plum-Team/BlockPops"
+        repository = "The-Plum-Team/Block-Pops-Minecraft-Mod"
         api_url = "https://api.github.test"
 
         def __init__(self, comments):
@@ -849,7 +849,7 @@ class RestrictedTransitionOwnerTests(unittest.TestCase):
 
 class ControllerUpgradeAuthorizationTests(unittest.TestCase):
     class Api:
-        repository = "The-Plum-Team/BlockPops"
+        repository = "The-Plum-Team/Block-Pops-Minecraft-Mod"
 
         def __init__(self, comments: list[dict[str, object]], *, labelled: bool = True) -> None:
             self.comments = comments

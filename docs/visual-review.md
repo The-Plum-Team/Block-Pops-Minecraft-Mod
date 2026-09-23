@@ -189,7 +189,7 @@ Claude Code:
 2. Store it as the secret `CLAUDE_CODE_OAUTH_TOKEN` of the GitHub environment
    `visual-review`, not as a repository secret, so only jobs admitted to that
    environment can read it:
-   `gh secret set CLAUDE_CODE_OAUTH_TOKEN --env visual-review --repo The-Plum-Team/BlockPops`
+   `gh secret set CLAUDE_CODE_OAUTH_TOKEN --env visual-review --repo The-Plum-Team/Block-Pops-Minecraft-Mod`
 3. Restrict the `visual-review` environment's deployment branches to protected
    `master`.
 

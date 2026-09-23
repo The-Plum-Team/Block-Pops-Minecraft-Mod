@@ -125,7 +125,7 @@ variables, and `GH_TOKEN` with read access to the repository and Actions evidenc
 It refuses an undeployed foundation candidate. After those prerequisites hold:
 
 ```sh
-python3 scripts/release/plan_release.py --repository The-Plum-Team/BlockPops \
+python3 scripts/release/plan_release.py --repository The-Plum-Team/Block-Pops-Minecraft-Mod \
   --artifact-node fabric-1.20.1 --build-scope legacy --e2e-scope lane
 ```
 

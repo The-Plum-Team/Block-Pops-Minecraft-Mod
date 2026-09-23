@@ -76,7 +76,7 @@ For a protected manual refresh, send a repository dispatch rather than running a
 workflow from a selectable ref:
 
 ```sh
-gh api --method POST repos/The-Plum-Team/BlockPops/dispatches \
+gh api --method POST repos/The-Plum-Team/Block-Pops-Minecraft-Mod/dispatches \
   -f event_type=pages-deploy
 ```
 
