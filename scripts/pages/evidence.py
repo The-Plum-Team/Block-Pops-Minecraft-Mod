@@ -875,7 +875,26 @@ def validate_raw(root: Path, *, matrix_path: Path, expected: dict[str, Any] | No
     return value
 
 
+# The derivative is a pure function of the source bytes, and method 6 is WebP's slowest effort.
+# A gallery encodes each frame once; rebuilding one from the same evidence (retries, the test
+# fixtures) reuses the result instead of spending that effort again. Keys are content hashes.
+_WEBP_CACHE: dict[str, bytes] = {}
+_WEBP_CACHE_ENTRIES = 256
+
+
 def _encode_webp(raw: bytes) -> bytes:
+    key = hashlib.sha256(raw).hexdigest()
+    cached = _WEBP_CACHE.get(key)
+    if cached is not None:
+        return cached
+    encoded = _encode_webp_uncached(raw)
+    if len(_WEBP_CACHE) >= _WEBP_CACHE_ENTRIES:
+        _WEBP_CACHE.pop(next(iter(_WEBP_CACHE)))
+    _WEBP_CACHE[key] = encoded
+    return encoded
+
+
+def _encode_webp_uncached(raw: bytes) -> bytes:
     try:
         from PIL import Image
         Image.MAX_IMAGE_PIXELS = MAX_PIXELS
