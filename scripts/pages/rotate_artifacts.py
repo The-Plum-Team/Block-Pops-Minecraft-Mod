@@ -32,6 +32,7 @@ from scripts.pages.evidence import (  # noqa: E402
     validate_compact,
 )
 from scripts.pages.visual_anchor import (  # noqa: E402
+    ANCHOR_PREFIX,
     visual_anchor_artifact_name,
     visual_anchor_artifact_prefix,
 )
@@ -456,6 +457,11 @@ class _RotationReads:
     # record carries the first attempt's, so a rerun would never match on it.
     attempt_fields = tuple(field for field in run_fields if field != "created_at")
 
+    # The only repository-wide families a rotation plan reads. Other workflows keep
+    # uploading and deleting their own artifacts while Pages rotates - the visual
+    # review queue wakes on the same packaged run - and those must not read as drift.
+    repository_families = ("pages-cache-", ANCHOR_PREFIX + "-")
+
     def __init__(self, api):
         self.api, self.records, self.artifacts = api, {}, {}
 
@@ -470,6 +476,8 @@ class _RotationReads:
                 if item.id in self.artifacts and self.artifacts[item.id] != raw:
                     raise RotationError("rotation artifact metadata changed")
                 self.artifacts.setdefault(item.id, raw)
+            if name == "all_artifacts":
+                value = [item for item in value if item.name.startswith(self.repository_families)]
             return [asdict(item) for item in sorted(value, key=lambda item: item.id) if item.id not in deleted]
         if name == "branch_head": return value
         fields = ("id", "path", "state") if name == "workflow" else self.run_fields

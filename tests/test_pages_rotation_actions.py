@@ -133,6 +133,22 @@ class RotationReadsTests(unittest.TestCase):
         with self.assertRaisesRegex(RotationError, "metadata changed"):
             self.reads.all_artifacts()
 
+    def test_recheck_ignores_other_workflows_artifacts_but_not_new_caches_or_anchors(self):
+        listing = self.api.all_artifacts
+        self.reads.all_artifacts()
+        queue = _raw(90, "visual-review-input-1-1-" + COMMIT + "-1", 95, COMMIT, created=NOW)
+        self.api.raw[90] = queue
+        with patch.object(self.api, "all_artifacts", lambda: listing() + self.api._owned(90)):
+            self.reads.recheck(set())
+        for identifier, name in ((91, evidence.cache_artifact_name(BRANCH, "3" * 40)),
+                                 (92, visual_anchor_artifact_name(BRANCH, "3" * 40, 96, 1))):
+            with self.subTest(name=name):
+                self.api.raw[identifier] = _raw(identifier, name, 96, COMMIT, created=NOW)
+                with patch.object(self.api, "all_artifacts",
+                                  lambda identifier=identifier: listing() + self.api._owned(identifier)):
+                    with self.assertRaisesRegex(RotationError, "inventory or owner changed"):
+                        self.reads.recheck(set())
+
     def test_recheck_tolerates_only_this_invocation_completed_deletions(self):
         self.reads.all_artifacts()
         self.api.delete_artifact(STALE_ID)
