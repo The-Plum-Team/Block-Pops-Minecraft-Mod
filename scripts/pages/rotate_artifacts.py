@@ -410,10 +410,15 @@ def _plan_rotation(
                     branch=canonical_branch,
                     sha=candidate.head_sha,
                     events=PAGES_EVENTS,
-                    require_success=True,
+                    require_success=False,
                 )
             except SelectionError as exc:
                 raise RotationError(str(exc)) from exc
+            # A finished owner never reads its cache again, whatever its conclusion. A
+            # run that failed after promoting its cache must not wedge every later
+            # rotation; an owner still running keeps its cache.
+            if candidate_owner.get("status") != "completed":
+                raise RotationError(f"cache artifact {candidate.id} owner is still running")
             if candidate.order >= replacement.order:
                 raise RotationError(f"a concurrent cache is not older than replacement {replacement.id}")
             deletions.add(candidate.id)

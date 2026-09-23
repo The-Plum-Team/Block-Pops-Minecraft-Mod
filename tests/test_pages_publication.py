@@ -503,6 +503,27 @@ class RotationPlanTests(unittest.TestCase):
             )
         self.assertEqual(planned, [5, 10, 19, 21, 22])
 
+        # A Pages run that failed after promoting its cache must not wedge rotation;
+        # a cache whose owner is still running is never taken.
+        for status, conclusion, deletable in (("completed", "failure", True), ("completed", "cancelled", True),
+                                              ("in_progress", None, False), ("queued", None, False)):
+            with self.subTest(status=status, conclusion=conclusion):
+                owner_state = FakeApi()
+                finished_run = owner_state.run
+                def old_owner(run_id, finished_run=finished_run, status=status, conclusion=conclusion):
+                    value = finished_run(run_id)
+                    return {**value, "status": status, "conclusion": conclusion} if run_id == 100 else value
+                owner_state.run = old_owner
+                with mock.patch("scripts.pages.rotate_artifacts.validate_compact", return_value=compact_manifest):
+                    arguments = dict(api=owner_state, repository=REPO_NAME, pages_run_id=200,
+                                     pages_run_sha="a" * 40, inventory=_inventory("master"),
+                                     caches_root=Path("unused"), canonical_branch="master", now=now)
+                    if deletable:
+                        self.assertEqual([5, 10, 19, 21, 22], plan_rotation(**arguments))
+                    else:
+                        with self.assertRaisesRegex(RotationError, "owner is still running"):
+                            plan_rotation(**arguments)
+
         active = FakeApi()
         completed_run = active.run
 
