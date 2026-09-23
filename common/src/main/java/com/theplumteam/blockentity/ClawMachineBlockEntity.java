@@ -1,5 +1,6 @@
 package com.theplumteam.blockentity;
 
+import com.theplumteam.util.E2EDeterminism;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.util.TagReads;
 import net.minecraft.core.BlockPos;
@@ -62,6 +63,12 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
         //? }
             state.setAndContinue(IDLE_ANIMATION)
         ));
+    }
+
+    // The packaged E2E photographs the idle animation at one fixed frame.
+    @Override
+    public double getTick(Object blockEntity) {
+        return E2EDeterminism.animationTick(GeoBlockEntity.super.getTick(blockEntity));
     }
 
     @Override

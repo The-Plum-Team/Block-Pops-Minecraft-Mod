@@ -255,7 +255,7 @@ public class DropBoxPacket {
 
     private static FigureDefinition selectFigure(List<FigureDefinition> figures, TokenType tokenType,
                                                  IPlayerDiscovery discovery, String collectionId) {
-        Random random = new Random();
+        Random random = com.theplumteam.util.E2EDeterminism.random();
 
         if (tokenType == TokenType.GUARANTEED) {
             Set<String> discoveredSet = discovery.getDiscoveredSet();

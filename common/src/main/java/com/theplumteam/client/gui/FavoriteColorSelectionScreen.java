@@ -320,7 +320,7 @@ public class FavoriteColorSelectionScreen extends Screen {
         int tickCount = this.minecraft != null ? this.minecraft.gui.getGuiTicks() : 0;
         double smoothTime = (tickCount + partialTick) / 20.0;
         //? }
-        double offsetX = (StarPatternCache.scrollSeconds(smoothTime) * pixelsPerSecond) % tileSize;
+        double offsetX = (com.theplumteam.util.E2EDeterminism.scrollSeconds(smoothTime) * pixelsPerSecond) % tileSize;
 
         // Apply star color tint and opacity from config
         ClientConfig config = ClientConfig.getInstance();

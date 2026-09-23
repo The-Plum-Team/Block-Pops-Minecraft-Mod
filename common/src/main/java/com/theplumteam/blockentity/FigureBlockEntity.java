@@ -1,5 +1,6 @@
 package com.theplumteam.blockentity;
 
+import com.theplumteam.util.E2EDeterminism;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.registry.ModBlockEntities;
@@ -85,6 +86,12 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
             // Default pose (standing) - play the static standing pose
             return state.setAndContinue(RawAnimation.begin().thenLoop("Pose_Stand"));
         }));
+    }
+
+    // The packaged E2E photographs the idle animation at one fixed frame.
+    @Override
+    public double getTick(Object blockEntity) {
+        return E2EDeterminism.animationTick(GeoBlockEntity.super.getTick(blockEntity));
     }
 
     @Override
