@@ -1,11 +1,14 @@
 package com.theplumteam.e2e;
 
+import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -141,6 +144,62 @@ public final class VanillaShim {
             E2ELog.warn("real block interaction failed: " + trace);
             return false;
         }
+    }
+
+    /**
+     * Put a stack into a hotbar slot the way the creative inventory does. The server accepts
+     * the packet because the test world forces creative mode.
+     */
+    public static void creativeSetHotbar(Minecraft minecraft, int slot, ItemStack stack) {
+        minecraft.player.getInventory().setItem(slot, stack.copy());
+        // Slots 36-44 of the player's inventory menu are the hotbar.
+        minecraft.gameMode.handleCreativeModeItemAdd(stack.copy(), 36 + slot);
+    }
+
+    /** Place the held block on top of {@code floor}, through the packet a right click sends. */
+    public static boolean placeOnTop(Minecraft minecraft, BlockPos floor) {
+        if (minecraft.player == null || minecraft.gameMode == null) {
+            return false;
+        }
+        BlockHitResult hit = new BlockHitResult(
+                new Vec3(floor.getX() + 0.5, floor.getY() + 1.0, floor.getZ() + 0.5),
+                Direction.UP, floor, false);
+        return minecraft.gameMode.useItemOn(
+                minecraft.player, InteractionHand.MAIN_HAND, hit).consumesAction();
+    }
+
+    /**
+     * Hold the player at an exact position and view. Flying keeps gravity from moving it
+     * between the pose and the capture; the server sees ordinary movement packets.
+     */
+    public static void pose(Minecraft minecraft, double x, double y, double z, float yaw, float pitch) {
+        LocalPlayer player = minecraft.player;
+        if (!player.getAbilities().flying) {
+            player.getAbilities().flying = true;
+            player.onUpdateAbilities();
+        }
+        player.setDeltaMovement(Vec3.ZERO);
+        player.setPos(x, y, z);
+        player.setYRot(yaw);
+        player.setXRot(pitch);
+        player.setYHeadRot(yaw);
+        player.setYBodyRot(yaw);
+    }
+
+    public static void cameraType(Minecraft minecraft, CameraType type) {
+        minecraft.options.setCameraType(type);
+    }
+
+    /** Hide or show the HUD and the held item, as F1 does. */
+    public static void hideGui(Minecraft minecraft, boolean hidden) {
+        //? if >=26.2 {
+        /*// 26.2 moved the F1 toggle from the options onto the HUD.
+        if (minecraft.gui.hud.isHidden() != hidden) {
+            minecraft.gui.hud.toggle();
+        }
+        *///? } else {
+        minecraft.options.hideGui = hidden;
+        //? }
     }
 
     private static Class<?> loadNamedClass(String named) throws ClassNotFoundException {

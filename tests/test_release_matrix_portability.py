@@ -191,7 +191,7 @@ class ReleaseMatrixPortabilityTests(unittest.TestCase):
         runtime = gha_matrix(matrix, "pr-anchors")["include"]
         self.assertEqual({"fabric", "neoforge"}, {row["loader"] for row in runtime})
         self.assertTrue(all(row["minecraft"] == "1.21.1" for row in runtime))
-        self.assertTrue(all(row["scenarios"] == "ui-regression" for row in runtime))
+        self.assertTrue(all(row["scenarios"] == "ui-regression,in-world" for row in runtime))
 
     def test_discovery_enrolls_self_identified_arbitrary_release_and_excludes_copied_feature(self) -> None:
         release = arbitrary_named_1211_release_matrix()

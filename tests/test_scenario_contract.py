@@ -43,10 +43,12 @@ class ScenarioContractTests(ContractFixture):
             set(contract.scenarios_for_profile("release")),
         )
         self.assertEqual(("client_a",), contract.expected_roles("ui-regression"))
+        self.assertEqual(("client_a",), contract.expected_roles("in-world"))
         self.assertEqual(
             tuple(
-                capture_id("ui-regression", "client_a", step)
-                for step in contract.expected_capture_steps("ui-regression", "client_a")
+                capture_id(scenario, "client_a", step)
+                for scenario in ("ui-regression", "in-world")
+                for step in contract.expected_capture_steps(scenario, "client_a")
             ),
             contract.capture_ids,
         )
@@ -106,7 +108,8 @@ class ScenarioContractTests(ContractFixture):
             del value["scenarios"][0]["roles"][0]["steps"][0]["capture"]
 
         def profile_uncovered(value: dict[str, object]) -> None:
-            value["scenarios"][0]["execution_profiles"].remove("release")
+            for scenario in value["scenarios"]:
+                scenario["execution_profiles"].remove("release")
 
         def unknown_field(value: dict[str, object]) -> None:
             value["security_bypass"] = True

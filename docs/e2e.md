@@ -2,8 +2,8 @@
 
 ## Contracted behavior
 
-`e2e/scenario-contract.json` is the only scenario/capture authority. The
-`ui-regression` flow runs in every matrix lane:
+`e2e/scenario-contract.json` is the only scenario/capture authority. Two
+scenarios run in every matrix lane. The `ui-regression` flow:
 
 1. A fresh player joins the real dedicated server and receives the production
    first-join favorite-color prompt.
@@ -13,6 +13,24 @@
    claw machine and validates the production collection screen.
 4. It opens the real Settings link and asserts packaged server settings are
    present while the development-only Develop tab is absent.
+
+The `in-world` flow shows the mod as a player meets it in the world:
+
+1. After dismissing the first-join prompt, the player opens the claw machine and
+   presses the real Use Regular Token control; the server's `DropBoxPacket`
+   delivers a box with a drawn One Piece figure, captured in hand.
+2. The held box is placed through the real block-placement packet and captured
+   from the front, the side and above.
+3. A claw machine is put in hand through the creative-inventory packet and
+   captured in first and third person.
+4. The test data pack builds one wall of real box blocks per collection (every
+   figure, rows of nine; see `showcase_function` in `e2e/packaged_runtime.py`)
+   and the harness photographs each wall, asserting every box's figure.
+
+Only the packaged E2E sets `blockpops.e2e.enabled` on the client and server. With
+it the star background and the GeckoLib idle animations hold one frame, the
+claw-machine draw is seeded, and toasts are cleared before each capture, so an
+unchanged view is byte-identical from run to run.
 
 Each step asserts production class/container identity and records a semantic
 capture. Screenshots are exactly 1600×900 at GUI scale 2. Generic image checks,

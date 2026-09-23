@@ -426,7 +426,7 @@ class VisualCapsuleTests(unittest.TestCase):
         self.assertEqual(
             {REFERENCE_NODE}, {pair["reference"]["artifact_node"] for pair in pairs}
         )
-        self.assertEqual(5, len({pair["capture_id"] for pair in pairs}))
+        self.assertEqual(len(captures), len({pair["capture_id"] for pair in pairs}))
         self.assertTrue(manifest["advisory"])
         records = read_only_review_records(capsule)
         self.assertEqual(len(pairs), len(records))
@@ -446,7 +446,7 @@ class VisualCapsuleTests(unittest.TestCase):
             for pair in manifest["pairs"]
             if pair["candidate"]["loader"] == REFERENCE_ROW["loader"]
         ]
-        self.assertEqual(5, len(same_loader_pairs))
+        self.assertEqual(len(load_contract(CONTRACT_PATH).capture_ids), len(same_loader_pairs))
         for pair in same_loader_pairs:
             self.assertNotEqual(
                 pair["candidate"]["source_file_sha256"],

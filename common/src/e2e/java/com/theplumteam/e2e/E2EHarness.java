@@ -1,6 +1,7 @@
 package com.theplumteam.e2e;
 
 import com.theplumteam.e2e.generated.ScenarioContract.ScenarioId;
+import com.theplumteam.e2e.scenario.InWorldScenario;
 import com.theplumteam.e2e.scenario.UiRegressionScenario;
 import dev.architectury.event.events.client.ClientTickEvent;
 import net.minecraft.client.Minecraft;
@@ -56,6 +57,7 @@ public final class E2EHarness {
         ScenarioId selected = ScenarioId.fromExternal(scenarioId);
         Scenario scenario = switch (selected) {
             case UI_REGRESSION -> new UiRegressionScenario();
+            case IN_WORLD -> new InWorldScenario();
         };
         if (scenario.id() != selected) {
             throw new IllegalStateException("scenario implementation identity drift");
