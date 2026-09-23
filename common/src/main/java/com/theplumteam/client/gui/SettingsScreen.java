@@ -35,6 +35,7 @@ public class SettingsScreen extends Screen {
     // Panel styling
     private static final int PANEL_BG = 0xB0000000;           // Darker semi-transparent background
     private static final int PANEL_OUTLINE = 0x60FFFFFF;      // Subtle white outline
+    private static final int MODAL_BASE = 0xFF000000;         // Opaque base under the themed panel
     private static final int TITLE_COLOR = 0xFFFFFFFF;          // White title
 
     // Tab dimensions
@@ -280,6 +281,22 @@ public class SettingsScreen extends Screen {
         // Calculate content panel area (below tabs)
         int contentPanelY = this.panelY + TAB_HEIGHT;
         int contentPanelHeight = this.panelHeight - TAB_HEIGHT;
+
+        // A modal has to hide the screen it opens over. Through the themed translucent panel
+        // the claw-machine screen's labels stayed readable, and the tab row had no backing at
+        // all, so the Server tab sat on top of its collection header. An opaque base goes
+        // under both; the themed fills below still draw on top of it.
+        int tabsRight = this.panelX;
+        for (TabButton tab : new TabButton[] {serverTabButton, developTabButton, cheatsTabButton}) {
+            if (tab != null && tab.visible) {
+                tabsRight = Math.max(tabsRight, tab.getX() + tab.getWidth());
+            }
+        }
+        graphics.fill(this.panelX, this.panelY, tabsRight, contentPanelY, MODAL_BASE);
+        graphics.fill(this.panelX, contentPanelY,
+                this.panelX + this.panelWidth,
+                contentPanelY + contentPanelHeight,
+                MODAL_BASE);
 
         // Draw main content panel background with configurable opacity
         ClientConfig config = ClientConfig.getInstance();
