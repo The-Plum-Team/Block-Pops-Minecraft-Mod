@@ -38,6 +38,25 @@ public final class VanillaShim {
         //? }
     }
 
+    /**
+     * Drop every visible and queued toast before a capture settles.
+     *
+     * Joining the offline test server raises vanilla's insecure-chat and social
+     * interactions toasts at timing-dependent moments, so they would otherwise land
+     * in a different place in every run and keep captures from ever being
+     * byte-identical to their reference. 1.21.2 renamed the toast component and
+     * 26.2 moved it under the in-game GUI, as Quick Skin's harness also found.
+     */
+    public static void clearToasts(Minecraft minecraft) {
+        //? if >=26.2 {
+        /*minecraft.gui.toastManager().clear();
+        *///? } elif >=1.21.2 {
+        /*minecraft.getToastManager().clear();
+        *///? } else {
+        minecraft.getToasts().clear();
+        //? }
+    }
+
     public static boolean isWarningOrErrorScreen(Screen screen) {
         if (screen == null) {
             return false;

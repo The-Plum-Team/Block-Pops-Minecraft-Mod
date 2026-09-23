@@ -141,6 +141,10 @@ public final class E2EHarness {
         }
         if (readyTick < 0) {
             readyTick = tick;
+            if (step.screenshot != null) {
+                // Every frame rendered while the step settles is then free of toasts.
+                VanillaShim.clearToasts(minecraftClient);
+            }
         }
         if (tick - readyTick < step.settleTicks) {
             return;
