@@ -1249,6 +1249,9 @@ def _visual_selection(matrix, provenance, contract, *, scope, artifact_node, art
         if canonical_json(artifact_scope) != canonical_json(expected_bundle) or not set(nodes) <= set(bundle_nodes):
             _fail("external artifact bundle scope disagrees with selected matrix lanes")
         scenarios = provenance["scenarios"]
+        # Provenance lists scenarios sorted; the packaged run records them in contract order,
+        # which is how several scenarios per lane appear in its coverage.
+        scenarios_in_run_order = [scenario for scenario in contract.scenario_ids if scenario in set(scenarios)]
         if projection is not None:
             if projection not in {"pr-anchors", "scheduled-anchors"}:
                 _fail("visual aggregate projection is unsupported")
@@ -1256,10 +1259,11 @@ def _visual_selection(matrix, provenance, contract, *, scope, artifact_node, art
             if (scope != artifact_scope["kind"] or set(nodes) != set(bundle_nodes)
                     or scenarios != sorted({scenario for row in projected["include"] for scenario in row["scenarios"].split(",")})):
                 _fail("visual aggregate must cover the external bundle and projected scenarios")
-            coverage = {"aggregate_scope": {**expected_bundle, "projection": projection, "scenarios": scenarios}}
+            coverage = {"aggregate_scope": {**expected_bundle, "projection": projection,
+                                            "scenarios": scenarios_in_run_order}}
         else:
             coverage = {"execution_scope": {"kind": scope, "selected_nodes": [lane.identity.artifact_node for lane in lanes],
-                "scenarios": scenarios, "target_nodes": list(document.inventory.target_nodes),
+                "scenarios": scenarios_in_run_order, "target_nodes": list(document.inventory.target_nodes),
                 "partial": len(lanes) != len(document.inventory.targets), "artifact_scope": expected_bundle}}
         return {lane.identity.artifact_node: lane.runtime for lane in lanes}, coverage
     except MatrixError as exc:

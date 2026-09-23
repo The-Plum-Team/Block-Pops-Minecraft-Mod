@@ -58,9 +58,11 @@ class ScopedVisualEvidenceTests(unittest.TestCase):
                       artifact_scope=artifact_scope or self.bundle(scope, nodes[0] if scope == "lane" else None),
                       projection=projection)
         bundle = kwargs["artifact_scope"]
-        coverage = ({"aggregate_scope": {**bundle, "projection": projection, "scenarios": provenance["scenarios"]}}
+        # The packaged run records its scenarios in contract order; provenance sorts them.
+        run_scenarios = list(self.contract.scenarios_for_profile("release"))
+        coverage = ({"aggregate_scope": {**bundle, "projection": projection, "scenarios": run_scenarios}}
                     if projection else {"execution_scope": {"kind": scope, "selected_nodes": nodes,
-                        "scenarios": provenance["scenarios"], "target_nodes": bundle["target_nodes"],
+                        "scenarios": run_scenarios, "target_nodes": bundle["target_nodes"],
                         "partial": True, "artifact_scope": bundle}})
         for filename, key in (("summary.json", "results"), ("resolved-matrix.json", "rows")):
             path = root / filename
