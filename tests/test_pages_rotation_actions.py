@@ -149,6 +149,19 @@ class RotationReadsTests(unittest.TestCase):
             superseded.pin_current_attempts()
 
 
+    def test_a_rerun_attempt_is_current_although_its_record_was_created_later(self):
+        rerun = {**self.api.run(SOURCE_RUN), "created_at": (NOW + timedelta(minutes=30)).isoformat().replace("+00:00", "Z")}
+        with patch.object(self.api, "run_attempt", return_value=rerun):
+            self.reads.run_attempt(SOURCE_RUN, 2)
+        self.reads.pin_current_attempts()
+        for field, value in (("run_attempt", 3), ("conclusion", "failure"), ("head_sha", STALE_SHA)):
+            with self.subTest(field=field):
+                reads = _RotationReads(self.api)
+                with patch.object(self.api, "run_attempt", return_value={**rerun, field: value}):
+                    reads.run_attempt(SOURCE_RUN, 2)
+                with self.assertRaisesRegex(RotationError, "no longer the current attempt"):
+                    reads.pin_current_attempts()
+
 class RotationActionTests(unittest.TestCase):
     def setUp(self):
         self.api = FakeApi()

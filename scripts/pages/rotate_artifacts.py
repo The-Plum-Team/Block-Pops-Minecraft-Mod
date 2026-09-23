@@ -452,6 +452,9 @@ class _RotationReads:
                          "artifacts_for_run", "all_artifacts", "artifacts_named"})
     run_fields = ("id", "run_attempt", "workflow_id", "path", "head_branch", "head_sha", "event",
                   "display_title", "created_at", "status", "conclusion", "head_repository")
+    # An attempt's own record carries that attempt's creation time while the run's
+    # record carries the first attempt's, so a rerun would never match on it.
+    attempt_fields = tuple(field for field in run_fields if field != "created_at")
 
     def __init__(self, api):
         self.api, self.records, self.artifacts = api, {}, {}
@@ -489,7 +492,7 @@ class _RotationReads:
         for (name, args), (historical, _) in list(self.records.items()):
             if name == "run_attempt":
                 current = self.run(args[0])
-                if site.canonical_json(self.stable("run", current)) != site.canonical_json(self.stable("run", historical)):
+                if any(current.get(field) != historical.get(field) for field in self.attempt_fields):
                     raise RotationError("rotation historical owner is no longer the current attempt")
 
     def recheck(self, deleted):
