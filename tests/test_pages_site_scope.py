@@ -79,8 +79,10 @@ class ScopedSiteTests(unittest.TestCase):
             summary = self.build()
             gallery = json.loads((self.output / "gallery-data.json").read_bytes())
             self.assertEqual(self.templates[shared][1]["aggregate_scope"], gallery["releases"][0]["aggregate_scope"])
-            # A shared gallery carries five frames for every lane in the migration scope.
-            self.assertEqual(TARGET_COUNT * 5 if shared is True else 10, summary["frames"])
+            # A gallery carries every contract capture for every lane in its scope: all of the
+            # migration's targets when shared, otherwise the two legacy lanes.
+            captures = len(evidence.default_contract().capture_ids)
+            self.assertEqual((TARGET_COUNT if shared is True else 2) * captures, summary["frames"])
             for frame in gallery["frames"]:
                 self.assertEqual(frame["published_sha256"], evidence.sha256_bytes((self.output / frame["image"]).read_bytes()))
         self.configure()

@@ -1012,12 +1012,13 @@ def validate_compact(root: Path, *, matrix_path: Path, expected: dict[str, Any] 
     seen: set[tuple[str, str]] = set()
     used_derivatives: set[str] = set()
     expected_frames = {(lane["artifact_node"], capture.capture_id) for lane in lanes for role in contract.scenario(lane["scenario"]).roles for step in role.steps if step.capture is not None for capture in [step.capture]}
-    lanes_by_node = {lane["artifact_node"]: lane for lane in lanes}
+    # A lane runs one profile per scenario, so a frame's lane is its node and scenario.
+    lanes_by_profile = {(lane["artifact_node"], lane["scenario"]): lane for lane in lanes}
     for index, raw_frame in enumerate(value["frames"]):
         frame = _object(raw_frame, f"frames[{index}]", {"artifact_node", "minecraft", "loader", "scenario", "role", "step", "capture_id", "title", "expectation", "review_tier", "source", "derivative"})
         capture = contract.capture(frame["scenario"], frame["role"], frame["step"])
         identity = (frame["artifact_node"], frame["capture_id"])
-        lane = lanes_by_node.get(frame["artifact_node"])
+        lane = lanes_by_profile.get((frame["artifact_node"], frame["scenario"]))
         if (
             frame["capture_id"] != capture.capture_id
             or frame["title"] != capture.title

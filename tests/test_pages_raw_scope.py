@@ -83,7 +83,9 @@ class ScopedRawPagesTests(unittest.TestCase):
                 self.root.mkdir()
                 self.prepare(scope, node, shared=shared, projection=projection)
                 result = self.validate()
-                self.assertEqual(count, len(result["lanes"]))
+                # A lane runs one profile per release scenario.
+                scenarios = len(self.contract.scenarios_for_profile("release"))
+                self.assertEqual(count * scenarios, len(result["lanes"]))
                 self.assertEqual(count * len(self.contract.capture_ids), len(result["frames"]))
                 self.assertEqual(count != TARGET_COUNT, result["aggregate_scope"]["partial"])
                 self.assertEqual(TARGET_COUNT, len(result["aggregate_scope"]["target_nodes"]))
