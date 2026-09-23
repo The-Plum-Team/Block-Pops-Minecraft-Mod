@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import base64
 import copy
 import hashlib
 import io
 import json
+import math
 import re
 import shutil
+import subprocess
 import tempfile
 import unittest
 import urllib.request
@@ -51,16 +52,12 @@ from scripts.visual.normalize import (
     validate_review_provenance,
 )
 from scripts.visual.review_client import (
-    FEDERATION_BETAS,
-    MESSAGES_ENDPOINT,
-    FABLE_MODEL,
     SONNET_MODEL,
-    TOKEN_ENDPOINT,
-    HttpResponse,
+    VERIFY_MODEL,
     ReviewClientError,
     ReviewFailure,
-    build_request,
-    extract_response,
+    build_prompt,
+    extract_cli_result,
     failure_marker,
     ordered_changed_pairs,
     run_review,
@@ -161,13 +158,13 @@ def _job(run_id: int, name: str, *, attempt: int = 1) -> dict[str, object]:
     return {"id": 2000 + run_id, "name": name, "run_attempt": attempt}
 
 
-def _response(
+def _structured(
     pairs: list[dict[str, object]],
     *,
     model: str,
     classification: str = "clean",
     defect: bool = False,
-) -> bytes:
+) -> dict[str, object]:
     verdicts: list[dict[str, object]] = []
     for pair in pairs:
         findings = (
@@ -202,59 +199,89 @@ def _response(
                     "findings": findings,
                 }
             )
-    result = {"schema_version": 1, "advisory": True, "verdicts": verdicts}
-    envelope = {
-        "id": "msg_test_response",
-        "type": "message",
-        "role": "assistant",
-        "model": model,
-        "content": [{"type": "text", "text": json.dumps(result)}],
-        "stop_reason": "end_turn",
-        "stop_sequence": None,
-        "stop_details": None,
+    return {"schema_version": 1, "advisory": True, "verdicts": verdicts}
+
+
+def _envelope(
+    structured: dict[str, object] | None,
+    *,
+    session: int = 1,
+    cost: float = 0.0125,
+    **overrides: object,
+) -> dict[str, object]:
+    """Shape one `claude --print --output-format json` result as the pinned CLI emits it."""
+
+    envelope: dict[str, object] = {
+        "type": "result",
+        "subtype": "success",
+        "is_error": False,
+        "duration_ms": 1000,
+        "num_turns": 3,
+        "result": "",
+        "session_id": f"00000000-0000-4000-8000-{session:012x}",
+        "total_cost_usd": cost,
         "usage": {
             "input_tokens": 100,
             "output_tokens": 20,
             "cache_creation_input_tokens": 0,
             "cache_read_input_tokens": 0,
-            "cache_creation": None,
-            "output_tokens_details": {
-                "thinking_tokens": 12 if model == FABLE_MODEL else 0
-            },
-            "server_tool_use": None,
+            "server_tool_use": {"web_search_requests": 0, "web_fetch_requests": 0},
             "service_tier": "standard",
-            "inference_geo": "global",
         },
+        "modelUsage": {},
+        "permission_denials": [],
     }
-    return json.dumps(envelope).encode("utf-8")
+    if structured is not None:
+        envelope["structured_output"] = structured
+    envelope.update(overrides)
+    return envelope
 
 
-def _jwt(
-    repository: str, *, now: int, overrides: dict[str, object] | None = None
-) -> str:
-    def encode(value: dict[str, object]) -> str:
-        payload = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
-        return base64.urlsafe_b64encode(payload).decode().rstrip("=")
+def _failure(result: str, *, status: int | None = None) -> dict[str, object]:
+    return _envelope(
+        None, is_error=True, result=result, api_error_status=status, total_cost_usd=0
+    )
 
-    header = encode({"alg": "RS256", "kid": "test-key", "typ": "JWT"})
-    claim_record: dict[str, object] = {
-        "iss": "https://token.actions.githubusercontent.com",
-        "aud": "https://api.anthropic.com",
-        "sub": f"repo:{repository}:environment:visual-review",
-        "repository": repository,
-        "ref": "refs/heads/master",
-        "workflow_ref": (
-            f"{repository}/.github/workflows/visual-review-drain.yml@refs/heads/master"
-        ),
-        "workflow_sha": "c" * 40,
-        "event_name": "workflow_dispatch",
-        "iat": now,
-        "nbf": now,
-        "exp": now + 300,
-    }
-    claim_record.update(overrides or {})
-    claims = encode(claim_record)
-    return f"{header}.{claims}.test-signature"
+
+class _FakeCli:
+    """Record Claude Code invocations and answer each like the pinned CLI would."""
+
+    def __init__(self, respond) -> None:
+        self.respond = respond
+        self.calls: list[dict[str, object]] = []
+
+    def __call__(self, command, *, cwd, env, input, stdout, stderr, timeout, check):
+        model = command[command.index("--model") + 1]
+        schema = json.loads(command[command.index("--json-schema") + 1])
+        properties = schema["properties"]["verdicts"]["items"]["properties"]
+        pairs = [
+            {"label": label, "capture_id": capture}
+            for label, capture in zip(
+                properties["label"]["enum"], properties["capture_id"]["enum"]
+            )
+        ]
+        self.calls.append(
+            {
+                "model": model,
+                "pairs": pairs,
+                "command": list(command),
+                "cwd": Path(cwd),
+                "env": dict(env),
+                "prompt": input.decode("utf-8"),
+                "timeout": timeout,
+            }
+        )
+        outcome = self.respond(model, pairs, len(self.calls))
+        if isinstance(outcome, BaseException):
+            raise outcome
+        returncode, payload = outcome if isinstance(outcome, tuple) else (0, outcome)
+        if not isinstance(payload, bytes):
+            payload = json.dumps(payload).encode("utf-8")
+        return subprocess.CompletedProcess(command, returncode, stdout=payload, stderr=None)
+
+
+TOKEN = "sk-ant-oat01-" + "x" * 32
+CLAUDE = Path("/opt/claude-cli/package/claude")
 
 
 class _Clock:
@@ -471,100 +498,104 @@ class VisualReviewWorkflowContractTests(unittest.TestCase):
         for action in uses:
             self.assertRegex(action, r"^[^@\s]+@[0-9a-f]{40}$")
 
-    def test_credential_job_has_only_oidc_wif_and_the_exact_bounded_handoff(self) -> None:
+    def test_credential_job_has_only_the_pinned_cli_the_token_and_the_exact_handoff(self) -> None:
         drain = DRAIN_WORKFLOW.read_text(encoding="utf-8")
         admit = _job_block(drain, "admit")
         review = _job_block(drain, "review")
         self.assertIn("actions: read", review)
         self.assertIn("contents: read", review)
-        self.assertIn("id-token: write", review)
         self.assertIn("pull-requests: read", review)
+        self.assertNotIn("id-token: write", drain)
         self.assertIn("environment: visual-review", review)
-        self.assertNotIn("actions/checkout", review)
-        self.assertNotIn("actions/setup-python", review)
-        self.assertNotIn("pip install", review)
-        self.assertNotIn("scripts/visual/reauth.py", review)
+        for forbidden in (
+            "actions/checkout",
+            "actions/setup-python",
+            "actions/setup-node",
+            "pip install",
+            "npm ",
+            "scripts/visual/reauth.py",
+        ):
+            self.assertNotIn(forbidden, review)
         self.assertIn("artifact-ids: ${{ needs.admit.outputs.artifact_id }}", review)
         self.assertIn("digest-mismatch: error", review)
-        self.assertNotIn("id-token: write", admit)
         self.assertIn("environment: visual-review", admit)
         self.assertIn("python3 scripts/visual/reauth.py", admit)
         self.assertIn("artifact-ids: ${{ needs.prepare.outputs.artifact_id }}", admit)
         self.assertIn("name: Post-approval reauthenticate on a non-credential runner", admit)
+        self.assertNotIn("secrets.", admit)
         self.assertIn('GH_TOKEN: ""', review)
         self.assertIn('GITHUB_TOKEN: ""', review)
-        for variable in (
-            "ANTHROPIC_FEDERATION_RULE_ID",
-            "ANTHROPIC_ORGANIZATION_ID",
-            "ANTHROPIC_SERVICE_ACCOUNT_ID",
-            "ANTHROPIC_WORKSPACE_ID",
-        ):
-            self.assertIn(f"{variable}: ${{{{ vars.{variable} }}}}", review)
         for static_credential in (
             "ANTHROPIC_API_KEY",
             "ANTHROPIC_AUTH_TOKEN",
             "ANTHROPIC_OAUTH_ACCESS_TOKEN",
-            "CLAUDE_CODE_OAUTH_TOKEN",
             "OPENAI_API_KEY",
-            "secrets.",
+            "vars.",
         ):
             self.assertNotIn(static_credential, review)
-        self.assertIn("$RUNNER_TEMP/visual-review-handoff", review)
-        self.assertIn("$RUNNER_TEMP/visual-review-result/review.json", review)
-        self.assertIn("$RUNNER_TEMP/visual-review-result/failure.json", review)
-        self.assertIn("credential_preflight.py", review)
-        self.assertIn("PREFLIGHT_GITHUB_TOKEN: ${{ github.token }}", review)
-        self.assertIn("preflight_sha256", review)
-        self.assertIn("--identity-token-file \"$identity_file\"", review)
-        model_step = review.split(
-            "- name: Mint renewable GitHub OIDC and invoke only the stdlib client", 1
-        )[1].split("- name: Upload only the bounded normalized result", 1)[0]
-        self.assertEqual(1, model_step.count("${{ github.token }}"))
-        self.assertIn("unset PREFLIGHT_GITHUB_TOKEN GH_TOKEN GITHUB_TOKEN", model_step)
-        self.assertLess(
-            model_step.index("unset PREFLIGHT_GITHUB_TOKEN GH_TOKEN GITHUB_TOKEN"),
-            model_step.index("refresh_oidc || oidc_status=$?"),
+
+        install = review.split("- name: Install the hash-pinned Claude Code binary", 1)[1].split(
+            "- name: Invoke only the stdlib client with the pinned Claude Code CLI", 1
+        )[0]
+        self.assertIn(
+            "https://registry.npmjs.org/@anthropic-ai/claude-code-linux-x64/-/"
+            "claude-code-linux-x64-2.1.220.tgz",
+            install,
         )
+        self.assertIn(
+            "CLAUDE_CODE_INTEGRITY: sha512-3CGFCnI0gpgsqNeJruFALBDGJaKXOuok3alQEg56ty2yOPpIrOx/"
+            "r2Y0+T4uhJl7kP5Hzw4IFkxo4DZKWvzQ7Q==",
+            install,
+        )
+        self.assertLess(install.index("openssl dgst -sha512"), install.index("tar -xzf"))
+        self.assertIn("--proto '=https'", install)
+        self.assertIn('== "2.1.220 (Claude Code)" ]]', install)
+        self.assertNotIn("CLAUDE_CODE_OAUTH_TOKEN", install)
+
+        model_step = review.split(
+            "- name: Invoke only the stdlib client with the pinned Claude Code CLI", 1
+        )[1].split("- name: Upload only the bounded normalized result", 1)[0]
+        self.assertEqual(
+            1, model_step.count("CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}")
+        )
+        self.assertEqual(1, review.count("secrets."))
+        self.assertEqual(1, model_step.count("${{ github.token }}"))
+        self.assertIn('--claude "$RUNNER_TEMP/claude-cli/package/claude"', model_step)
         self.assertIn("-u GITHUB_REPOSITORY", model_step)
         self.assertNotRegex(
             model_step,
             r"(?m)^\s*GITHUB_TOKEN:\s*\$\{\{ github\.token \}\}\s*$",
         )
-        self.assertIn("[[ ! -e \"$GITHUB_WORKSPACE/.git\" ]]", review)
-        self.assertIn("env -u ACTIONS_ID_TOKEN_REQUEST_URL", review)
-        self.assertIn("payload = response.read(17 * 1024 + 1)", review)
-        self.assertIn("len(token_bytes) > 16 * 1024", review)
-        self.assertIn("urllib.request.ProxyHandler({})", review)
-        self.assertIn("ssl.create_default_context()", review)
-        self.assertIn("if error.code == 429:", review)
-        self.assertIn("error.code in (408, 425) or 500 <= error.code <= 599", review)
-        self.assertIn("raise SystemExit(41) from None", review)
-        self.assertIn("raise SystemExit(42) from None", review)
-        self.assertIn("raise SystemExit(43) from None", review)
-        self.assertIn("category=invalid_configuration", review)
-        self.assertIn("category=authentication", review)
-        self.assertIn("category=rate_limited", review)
-        self.assertIn("category=transport", review)
-        self.assertIn('write_oidc_failure "$oidc_status"', review)
+        # The preflight is the last check before the token reaches the client and never
+        # sees the token itself.
+        preflight = model_step.index("credential_preflight.py")
+        self.assertIn("env -u CLAUDE_CODE_OAUTH_TOKEN \\", model_step[:preflight])
+        self.assertLess(
+            model_step.index("unset PREFLIGHT_GITHUB_TOKEN GH_TOKEN GITHUB_TOKEN"),
+            model_step.index("            invoke_client\n"),
+        )
+        identical = model_step.split('elif [[ "$all_identical" == true ]]; then', 1)[1].split(
+            "          elif", 1
+        )[0]
+        self.assertIn("(unset CLAUDE_CODE_OAUTH_TOKEN; invoke_client)", identical)
+        missing = model_step.split('elif [[ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]]; then', 1)[1].split(
+            "          else", 1
+        )[0]
+        self.assertIn('category:"invalid_configuration",stage:"authentication"', missing)
+        self.assertNotIn("invoke_client", missing)
         self.assertIn('[[ "${#result_inventory[@]}" == 1 ]]', review)
         self.assertIn('[[ -f "$result_path" && ! -L "$result_path" ]]', review)
         self.assertIn('"$result_size" -le 1048576', review)
-
-        identical = review.split('if [[ "$all_identical" == true ]]; then', 1)[1].split(
-            "\n          else\n", 1
-        )[0]
-        self.assertIn(': > "$identity_file"', identical)
-        self.assertIn("invoke_client", identical)
-        self.assertNotIn("refresh_oidc", identical)
+        self.assertIn("[[ ! -e \"$GITHUB_WORKSPACE/.git\" ]]", review)
+        self.assertIn("preflight_sha256", review)
 
         client = CLIENT.read_text(encoding="utf-8")
-        self.assertIn('TOKEN_ENDPOINT = "https://api.anthropic.com/v1/oauth/token"', client)
-        self.assertIn('MESSAGES_ENDPOINT = "https://api.anthropic.com/v1/messages"', client)
         self.assertIn('SONNET_MODEL = "claude-sonnet-5"', client)
-        self.assertIn('FABLE_MODEL = "claude-fable-5"', client)
+        self.assertIn('VERIFY_MODEL = "claude-opus-5"', client)
         self.assertIn('"schema_version": 2', client)
+        self.assertNotIn("api.anthropic.com", client)
         self.assertNotIn("api.openai.com", client)
-        self.assertIn("_NoRedirect()", client)
+        self.assertNotIn("urllib", client)
 
     def test_the_queue_item_is_downloaded_from_the_run_that_enqueued_it(self) -> None:
         drain = DRAIN_WORKFLOW.read_text(encoding="utf-8")
@@ -814,7 +845,7 @@ class VisualReviewHandoffTests(unittest.TestCase):
             {path.name for path in self.handoff.iterdir()},
         )
 
-    def test_requests_are_chunked_tool_free_structured_and_bounded(self) -> None:
+    def test_prompts_are_chunked_and_expose_only_the_chunk_images(self) -> None:
         self.assertEqual(10, MAX_CAPSULE_PAIRS)
         self.assertEqual(MAX_CAPSULE_PAIRS, MAX_HANDOFF_PAIRS)
         self.assertEqual(MAX_CAPSULE_PAIRS, review_client.MAX_PAIRS)
@@ -824,35 +855,65 @@ class VisualReviewHandoffTests(unittest.TestCase):
         )
         changed = ordered_changed_pairs(pairs)
         chunk = changed[:5]
-        payload = build_request(
+        text, images = build_prompt(
             self.handoff,
             chunk,
             stage="sonnet",
             prompt=SONNET_PROMPT.read_text(encoding="utf-8").strip(),
         )
-        request = json.loads(payload)
-        self.assertEqual(SONNET_MODEL, request["model"])
-        self.assertEqual({"type": "disabled"}, request["thinking"])
-        self.assertEqual("standard_only", request["service_tier"])
-        self.assertEqual("global", request["inference_geo"])
-        self.assertEqual("high", request["output_config"]["effort"])
-        self.assertNotIn("tools", request)
-        self.assertNotIn("tool_choice", request)
-        output_format = request["output_config"]["format"]
-        self.assertEqual("json_schema", output_format["type"])
-        self.assertIs(output_format["schema"]["additionalProperties"], False)
-        content = request["messages"][0]["content"]
-        images = [item for item in content if item["type"] == "image"]
-        self.assertEqual(len(chunk) * 2, len(images))
-        self.assertLessEqual(len(images), 10)
-        self.assertTrue(
-            all(item["source"]["media_type"] == "image/png" for item in images)
+        expected_images = tuple(
+            dict.fromkeys(
+                path
+                for pair in chunk
+                for path in (pair["candidate"]["path"], pair["reference"]["path"])
+            )
         )
-        self.assertLessEqual(len(payload), 28 * 1024 * 1024)
-        decoded = payload.decode("utf-8")
-        self.assertIn(chunk[0]["expectation"], decoded)
-        self.assertNotIn(REPOSITORY, decoded)
-        self.assertNotIn("ANTHROPIC_API_KEY", decoded)
+        self.assertEqual(expected_images, images)
+        self.assertLessEqual(len(images), 10)
+        for path in images:
+            self.assertRegex(path, r"^images/[0-9a-f]{64}\.png$")
+            self.assertIn(f"./{path}", text)
+        self.assertIn(chunk[0]["expectation"], text)
+        self.assertNotIn(REPOSITORY, text)
+        self.assertNotIn("ANTHROPIC_API_KEY", text)
+
+        session = review_client.ClaudeCodeSession(
+            claude=CLAUDE,
+            token=TOKEN,
+            handoff_root=self.handoff,
+            runner=mock.Mock(),
+            sleep=lambda _seconds: None,
+            jitter=lambda lower, _upper: lower,
+            monotonic=lambda: 0.0,
+            started_at=0.0,
+        )
+        command = session._command("sonnet", chunk, images)
+        self.assertEqual(str(CLAUDE), command[0])
+        self.assertEqual(SONNET_MODEL, command[command.index("--model") + 1])
+        self.assertEqual("json", command[command.index("--output-format") + 1])
+        self.assertEqual("Read", command[command.index("--tools") + 1])
+        self.assertEqual("dontAsk", command[command.index("--permission-mode") + 1])
+        for flag in ("--print", "--safe-mode", "--no-session-persistence"):
+            self.assertIn(flag, command)
+        allowed = command[command.index("--allowedTools") + 1 : command.index("--permission-mode")]
+        self.assertEqual([f"Read(./{path})" for path in images], allowed)
+        schema = json.loads(command[command.index("--json-schema") + 1])
+        self.assertIs(schema["additionalProperties"], False)
+        self.assertNotIn(TOKEN, " ".join(command))
+        self.assertNotIn(text, command)
+        environment = session._environment()
+        self.assertEqual(TOKEN, environment["CLAUDE_CODE_OAUTH_TOKEN"])
+        self.assertTrue(
+            set(environment)
+            <= {
+                "CLAUDE_CODE_OAUTH_TOKEN",
+                "CLAUDE_CODE_SKIP_PROMPT_HISTORY",
+                "DISABLE_AUTOUPDATER",
+                "LANG",
+                "PATH",
+                "HOME",
+            }
+        )
 
         escalated = chunk[:4]
         sonnet = {
@@ -865,30 +926,33 @@ class VisualReviewHandoffTests(unittest.TestCase):
             }
             for pair in escalated
         }
-        fable_payload = build_request(
+        fable_text, fable_images = build_prompt(
             self.handoff,
             escalated,
             stage="fable",
             prompt=FABLE_PROMPT.read_text(encoding="utf-8").strip(),
             sonnet_results=sonnet,
         )
-        fable = json.loads(fable_payload)
-        self.assertEqual(FABLE_MODEL, fable["model"])
-        self.assertEqual({"type": "adaptive"}, fable["thinking"])
-        self.assertEqual("standard_only", fable["service_tier"])
-        self.assertEqual("global", fable["inference_geo"])
-        self.assertEqual("high", fable["output_config"]["effort"])
-        self.assertEqual(8, sum(item["type"] == "image" for item in fable["messages"][0]["content"]))
+        self.assertIn('"sonnet_triage"', fable_text)
+        self.assertLessEqual(len(fable_images), 8)
+        self.assertEqual(
+            VERIFY_MODEL,
+            session._command("fable", escalated, fable_images)[
+                session._command("fable", escalated, fable_images).index("--model") + 1
+            ],
+        )
         with self.assertRaisesRegex(ReviewClientError, "only anomaly or uncertain"):
             bad = copy.deepcopy(sonnet)
             bad[escalated[0]["label"]]["classification"] = "clean"
-            build_request(
+            build_prompt(
                 self.handoff,
                 escalated,
                 stage="fable",
                 prompt="bounded",
                 sonnet_results=bad,
             )
+        with self.assertRaisesRegex(ReviewClientError, "outside 1..5"):
+            build_prompt(self.handoff, list(pairs[:6]), stage="sonnet", prompt="bounded")
 
     def test_cost_envelope_rejects_an_eleventh_pair_before_transport(self) -> None:
         _manifest, pairs = validate_handoff(
@@ -903,7 +967,7 @@ class VisualReviewHandoffTests(unittest.TestCase):
         with self.assertRaisesRegex(ReviewClientError, "1..10"):
             validate_review_cost_envelope(over_budget)
 
-    def test_fable_byte_partition_is_preflighted_before_any_provider_call(self) -> None:
+    def test_worst_case_prompts_are_preflighted_before_any_call(self) -> None:
         manifest, pairs = validate_handoff(
             self.handoff, self.identity["manifest_sha256"]
         )
@@ -923,58 +987,41 @@ class VisualReviewHandoffTests(unittest.TestCase):
             )
         changed = ordered_changed_pairs(all_changed)
         self.assertEqual(10, len(changed))
-        # Deterministic high-entropy bytes make base64 request sizing realistic without decoding
-        # or running Minecraft. Worst-case bounded Sonnet text makes Fable the larger request.
-        image_fixture = bytes(range(256)) * 256
+        # Worst-case bounded Sonnet text makes the verification prompt the larger one; a budget
+        # that fits every Sonnet chunk but not it must stop the review before the first call.
         sonnet_prompt = SONNET_PROMPT.read_text(encoding="utf-8").strip()
         fable_prompt = FABLE_PROMPT.read_text(encoding="utf-8").strip()
         worst = review_client._worst_case_sonnet_results(changed)
+        sonnet_bytes = max(
+            len(build_prompt(self.handoff, chunk, stage="sonnet", prompt=sonnet_prompt)[0].encode())
+            for chunk in review_client._chunk_pairs(changed, stage="sonnet")
+        )
+        fable_bytes = max(
+            len(
+                build_prompt(
+                    self.handoff, chunk, stage="fable", prompt=fable_prompt, sonnet_results=worst
+                )[0].encode()
+            )
+            for chunk in review_client._chunk_pairs(changed, stage="fable")
+        )
+        self.assertGreater(fable_bytes, sonnet_bytes)
+        runner = mock.Mock(side_effect=AssertionError("must fail before Claude Code"))
         with mock.patch(
-            "scripts.visual.review_client._read_bound_image",
-            return_value=image_fixture,
-        ):
-            sonnet_five = build_request(
-                self.handoff,
-                changed[:5],
-                stage="sonnet",
-                prompt=sonnet_prompt,
-            )
-            fable_three = build_request(
-                self.handoff,
-                changed[:3],
-                stage="fable",
-                prompt=fable_prompt,
-                sonnet_results=worst,
-            )
-            fable_four = build_request(
-                self.handoff,
-                changed[:4],
-                stage="fable",
-                prompt=fable_prompt,
-                sonnet_results=worst,
-            )
-            byte_budget = max(len(sonnet_five), len(fable_three))
-            self.assertGreater(len(fable_four), byte_budget)
-            transport = mock.Mock(side_effect=AssertionError("must fail before Anthropic"))
-            with mock.patch("scripts.visual.review_client.validate_handoff", return_value=(manifest, all_changed)), mock.patch(
-                "scripts.visual.review_client.MAX_REQUEST_BYTES", byte_budget
-            ):
-                with tempfile.TemporaryDirectory() as temporary:
-                    with self.assertRaisesRegex(ReviewClientError, "at most five calls"):
-                        run_review(
-                            self.handoff,
-                            expected_manifest_sha256=self.identity["manifest_sha256"],
-                            identity_token_file=Path(temporary) / "unused.jwt",
-                            federation_rule_id="fdrl_test_rule",
-                            organization_id="12345678-1234-1234-1234-123456789abc",
-                            service_account_id="svac_visual_review",
-                            workspace_id="wrkspc_visual_review",
-                            output=Path(temporary) / "never.json",
-                            transport=transport,
-                        )
-            transport.assert_not_called()
+            "scripts.visual.review_client.validate_handoff", return_value=(manifest, all_changed)
+        ), mock.patch("scripts.visual.review_client.MAX_REQUEST_BYTES", sonnet_bytes):
+            with tempfile.TemporaryDirectory() as temporary:
+                with self.assertRaisesRegex(ReviewClientError, "fable prompt exceeds"):
+                    run_review(
+                        self.handoff,
+                        expected_manifest_sha256=self.identity["manifest_sha256"],
+                        claude=CLAUDE,
+                        token=TOKEN,
+                        output=Path(temporary) / "never.json",
+                        runner=runner,
+                    )
+        runner.assert_not_called()
 
-    def test_all_identical_review_needs_no_identity_or_provider_configuration(self) -> None:
+    def test_all_identical_review_needs_no_token_or_cli(self) -> None:
         manifest, pairs = validate_handoff(
             self.handoff, self.identity["manifest_sha256"]
         )
@@ -988,7 +1035,7 @@ class VisualReviewHandoffTests(unittest.TestCase):
                     "sum_squared_delta": 0,
                 }
             )
-        transport = mock.Mock(side_effect=AssertionError("provider must not be called"))
+        runner = mock.Mock(side_effect=AssertionError("Claude Code must not be called"))
         with tempfile.TemporaryDirectory() as temporary, mock.patch(
             "scripts.visual.review_client.validate_handoff",
             return_value=(manifest, all_identical),
@@ -996,15 +1043,12 @@ class VisualReviewHandoffTests(unittest.TestCase):
             report = run_review(
                 self.handoff,
                 expected_manifest_sha256=self.identity["manifest_sha256"],
-                identity_token_file=Path(temporary) / "missing.jwt",
-                federation_rule_id="",
-                organization_id="",
-                service_account_id="",
-                workspace_id="",
+                claude=None,
+                token="",
                 output=Path(temporary) / "identical.json",
-                transport=transport,
+                runner=runner,
             )
-        transport.assert_not_called()
+        runner.assert_not_called()
         telemetry = report["telemetry"]
         self.assertEqual(10, telemetry["identical_pairs"])
         for field in (
@@ -1014,10 +1058,10 @@ class VisualReviewHandoffTests(unittest.TestCase):
             "fable_calls",
             "provider_attempts",
             "retries",
-            "reported_cost_upper_bound_micro_usd",
+            "estimated_cost_micro_usd",
         ):
             self.assertEqual(0, telemetry[field])
-        self.assertEqual([], telemetry["request_ids"])
+        self.assertEqual([], telemetry["session_ids"])
         self.assertTrue(
             all(value == 0 for usage in (telemetry["sonnet_usage"], telemetry["fable_usage"]) for value in usage.values())
         )
@@ -1061,117 +1105,59 @@ class VisualReviewHandoffTests(unittest.TestCase):
         ordered = ordered_changed_pairs([low_all, high_all, low_key])
         self.assertEqual(["key", "all-high", "all-low"], [item["label"] for item in ordered])
 
-    def test_wif_sonnet_then_fable_produces_complete_schema_two_output(self) -> None:
+    def test_sonnet_then_opus_produces_complete_schema_two_output(self) -> None:
         capsule, pairs = validate_handoff(self.handoff, self.identity["manifest_sha256"])
         clock = _Clock()
-        calls: list[dict[str, object]] = []
         sonnet_anomaly_emitted = False
+        costs: list[float] = []
 
-        def transport(request: object, timeout: float) -> HttpResponse:
+        def respond(model: str, request_pairs: list[dict[str, object]], call: int) -> object:
             nonlocal sonnet_anomaly_emitted
-            self.assertLessEqual(timeout, 180)
-            url = request.full_url
-            headers = {key.lower(): value for key, value in request.header_items()}
-            body = json.loads(request.data)
-            if url == TOKEN_ENDPOINT:
-                self.assertEqual(FEDERATION_BETAS, headers["anthropic-beta"])
-                self.assertNotIn("authorization", headers)
-                self.assertEqual(
-                    {
-                        "grant_type",
-                        "assertion",
-                        "federation_rule_id",
-                        "organization_id",
-                        "service_account_id",
-                        "workspace_id",
-                    },
-                    set(body),
-                )
-                calls.append({"stage": "authentication"})
-                return HttpResponse(
-                    200,
-                    {"request-id": "req_token_exchange"},
-                    json.dumps(
-                        {
-                            "access_token": "sk-ant-oat01-" + "x" * 32,
-                            "token_type": "Bearer",
-                            "expires_in": 600,
-                            "scope": "workspace:inference",
-                        }
-                    ).encode(),
-                )
-            self.assertEqual(MESSAGES_ENDPOINT, url)
-            self.assertEqual("oauth-2025-04-20", headers["anthropic-beta"])
-            self.assertEqual("2023-06-01", headers["anthropic-version"])
-            self.assertEqual("Bearer sk-ant-oat01-" + "x" * 32, headers["authorization"])
-            self.assertNotIn("tools", body)
-            properties = body["output_config"]["format"]["schema"]["properties"][
-                "verdicts"
-            ]["items"]["properties"]
-            request_pairs = [
-                {"label": label, "capture_id": capture}
-                for label, capture in zip(
-                    properties["label"]["enum"], properties["capture_id"]["enum"]
-                )
-            ]
-            model = body["model"]
-            calls.append({"stage": model, "pairs": request_pairs})
+            cost = 0.01 * call
+            costs.append(cost)
             if model == SONNET_MODEL:
-                verdicts = []
-                for pair in request_pairs:
-                    anomaly = not sonnet_anomaly_emitted
-                    if anomaly:
+                structured = _structured(request_pairs, model=model)
+                for verdict in structured["verdicts"]:
+                    if not sonnet_anomaly_emitted:
                         sonnet_anomaly_emitted = True
-                    verdicts.append(
-                        {
-                            "label": pair["label"],
-                            "capture_id": pair["capture_id"],
-                            "classification": "anomaly" if anomaly else "clean",
-                            "visible": "A label may be clipped." if anomaly else "The expected UI is visible.",
-                            "findings": (
-                                [
-                                    {
-                                        "category": "clipping",
-                                        "severity": "defect",
-                                        "detail": "A label may be clipped.",
-                                    }
-                                ]
-                                if anomaly
-                                else []
-                            ),
-                        }
-                    )
-                response = _response(request_pairs, model=model)
-                envelope = json.loads(response)
-                envelope["content"][0]["text"] = json.dumps(
-                    {"schema_version": 1, "advisory": True, "verdicts": verdicts}
-                )
-                response = json.dumps(envelope).encode()
-            else:
-                response = _response(request_pairs, model=model, defect=True)
-            return HttpResponse(
-                200,
-                {"request-id": f"req_message_{len(calls)}"},
-                response,
+                        verdict.update(
+                            classification="anomaly",
+                            visible="A label may be clipped.",
+                            findings=[
+                                {
+                                    "category": "clipping",
+                                    "severity": "defect",
+                                    "detail": "A label may be clipped.",
+                                }
+                            ],
+                        )
+                return _envelope(structured, session=call, cost=cost)
+            return _envelope(
+                _structured(request_pairs, model=model, defect=True), session=call, cost=cost
             )
 
+        cli = _FakeCli(respond)
         with tempfile.TemporaryDirectory(prefix="blockpops-review-result-") as temporary:
-            identity = Path(temporary) / "github.jwt"
-            identity.write_text(_jwt(REPOSITORY, now=int(clock.wall())), encoding="ascii")
             output = Path(temporary) / "raw.json"
             report = run_review(
                 self.handoff,
                 expected_manifest_sha256=self.identity["manifest_sha256"],
-                identity_token_file=identity,
-                federation_rule_id="fdrl_test_rule",
-                organization_id="12345678-1234-1234-1234-123456789abc",
-                service_account_id="svac_visual_review",
-                workspace_id="wrkspc_visual_review",
+                claude=CLAUDE,
+                token=TOKEN,
                 output=output,
-                transport=transport,
+                runner=cli,
                 sleep=clock.sleep,
                 monotonic=clock.monotonic,
-                wall_clock=clock.wall,
+            )
+            for call in cli.calls:
+                self.assertEqual(self.handoff / "queue" / "capsule", call["cwd"])
+                self.assertEqual(TOKEN, call["env"]["CLAUDE_CODE_OAUTH_TOKEN"])
+                self.assertNotIn("GITHUB_TOKEN", call["env"])
+                self.assertLessEqual(call["timeout"], 15 * 60)
+            sonnet_calls = math.ceil(len(ordered_changed_pairs(pairs)) / 5)
+            self.assertEqual(
+                [SONNET_MODEL] * sonnet_calls + [VERIFY_MODEL],
+                [call["model"] for call in cli.calls],
             )
             self.assertEqual(len(pairs), len(report["verdicts"]))
             self.assertEqual(2, report["schema_version"])
@@ -1182,19 +1168,18 @@ class VisualReviewHandoffTests(unittest.TestCase):
                 5,
             )
             telemetry = report["telemetry"]
-            sonnet_usage = telemetry["sonnet_usage"]
-            fable_usage = telemetry["fable_usage"]
+            self.assertEqual("claude-code-oauth", telemetry["auth_mode"])
+            self.assertEqual(VERIFY_MODEL, telemetry["verification_model"])
             self.assertEqual(
-                sonnet_usage["input_tokens"] * 3
-                + sonnet_usage["cache_creation_input_tokens"] * 6
-                + sonnet_usage["cache_read_input_tokens"] * 3
-                + sonnet_usage["output_tokens"] * 15
-                + fable_usage["input_tokens"] * 10
-                + fable_usage["cache_creation_input_tokens"] * 20
-                + fable_usage["cache_read_input_tokens"] * 10
-                + fable_usage["output_tokens"] * 50,
-                telemetry["reported_cost_upper_bound_micro_usd"],
+                sum(math.ceil(cost * 1_000_000) for cost in costs),
+                telemetry["estimated_cost_micro_usd"],
             )
+            self.assertEqual(
+                [f"00000000-0000-4000-8000-{call:012x}" for call in range(1, len(cli.calls) + 1)],
+                telemetry["session_ids"],
+            )
+            self.assertEqual(100 * sonnet_calls, telemetry["sonnet_usage"]["input_tokens"])
+            self.assertEqual(100, telemetry["fable_usage"]["input_tokens"])
             self.assertEqual(1, sum(item["semantic_regression"] for item in report["verdicts"]))
             self.assertEqual(
                 {"identical", "sonnet", "fable"},
@@ -1316,453 +1301,244 @@ class VisualReviewHandoffTests(unittest.TestCase):
                     normalized_output=Path(temporary) / "normalized.json",
                     provenance_output=provenance_path,
                 )
-        model_calls = [call for call in calls if call["stage"] != "authentication"]
-        self.assertLessEqual(len(model_calls), 5)
-        self.assertGreaterEqual(clock.now, 1_800_000_000 + 15 * (len(model_calls) - 1))
+        self.assertGreaterEqual(clock.now, 1_800_000_000 + 15 * (len(cli.calls) - 1))
 
-    def test_malformed_or_refused_model_output_fails_closed(self) -> None:
+    def test_cli_results_are_classified_without_keeping_provider_text(self) -> None:
         _manifest, pairs = validate_handoff(
             self.handoff, self.identity["manifest_sha256"]
         )
         pair = {"label": pairs[0]["label"], "capture_id": pairs[0]["capture_id"]}
-        wrong = json.loads(_response([pair], model=SONNET_MODEL))
-        result = json.loads(wrong["content"][0]["text"])
-        result["verdicts"][0]["label"] = "mixed/source"
-        wrong["content"][0]["text"] = json.dumps(result)
-        with self.assertRaisesRegex(ReviewClientError, "identity"):
-            extract_response(json.dumps(wrong).encode(), [pair], stage="sonnet")
-        unexpected_tool = json.loads(_response([pair], model=SONNET_MODEL))
-        unexpected_tool["content"] = [
-            {"type": "tool_use", "id": "tool_1", "name": "read_repository", "input": {}}
-        ]
-        with self.assertRaisesRegex(ReviewClientError, "structured text block"):
-            extract_response(json.dumps(unexpected_tool).encode(), [pair], stage="sonnet")
-        fable = json.loads(_response([pair], model=FABLE_MODEL, defect=True))
-        fable["content"].insert(
-            0,
-            {"type": "thinking", "thinking": "", "signature": "sig_test_123"},
-        )
-        self.assertEqual(
-            1,
-            len(extract_response(json.dumps(fable).encode(), [pair], stage="fable").verdicts),
-        )
-        self.assertEqual(12, fable["usage"]["output_tokens_details"]["thinking_tokens"])
-        excessive_thinking = copy.deepcopy(fable)
-        excessive_thinking["usage"]["output_tokens_details"]["thinking_tokens"] = 21
-        with self.assertRaisesRegex(ReviewClientError, "thinking-token"):
-            extract_response(
-                json.dumps(excessive_thinking).encode(), [pair], stage="fable"
-            )
-        priority = copy.deepcopy(fable)
-        priority["usage"]["service_tier"] = "priority"
-        with self.assertRaises(review_client.ProviderPayloadError) as captured:
-            extract_response(json.dumps(priority).encode(), [pair], stage="fable")
-        self.assertIs(captured.exception.retryable, False)
-        us_only = copy.deepcopy(fable)
-        us_only["usage"]["inference_geo"] = "us"
-        with self.assertRaises(review_client.ProviderPayloadError) as captured:
-            extract_response(json.dumps(us_only).encode(), [pair], stage="fable")
-        self.assertIs(captured.exception.retryable, False)
-        refusal_details = copy.deepcopy(fable)
-        refusal_details["stop_details"] = {
-            "type": "refusal",
-            "category": "general_harms",
-            "explanation": "untrusted provider text",
-        }
-        with self.assertRaises(review_client.ProviderPayloadError) as captured:
-            extract_response(
-                json.dumps(refusal_details).encode(), [pair], stage="fable"
-            )
-        self.assertIs(captured.exception.retryable, False)
-        malformed_stop_details = copy.deepcopy(refusal_details)
-        malformed_stop_details["stop_details"]["unknown"] = "schema drift"
-        with self.assertRaisesRegex(ReviewClientError, "stop details"):
-            extract_response(
-                json.dumps(malformed_stop_details).encode(), [pair], stage="fable"
-            )
-        redacted = json.loads(_response([pair], model=FABLE_MODEL, defect=True))
-        redacted["content"].insert(0, {"type": "redacted_thinking", "data": "redacted_123"})
-        self.assertEqual(
-            1,
-            len(
-                extract_response(
-                    json.dumps(redacted).encode(), [pair], stage="fable"
-                ).verdicts
+        valid = _envelope(_structured([pair], model=SONNET_MODEL))
+        result = extract_cli_result(json.dumps(valid).encode(), [pair], stage="sonnet")
+        self.assertEqual(1, len(result.verdicts))
+        self.assertEqual(12_500, result.cost_micro_usd)
+        cases = {
+            "mixed identity": (
+                lambda envelope: envelope["structured_output"]["verdicts"][0].update(
+                    label="mixed/source"
+                ),
+                "provider_response",
+                True,
             ),
-        )
-        unknown_fable = copy.deepcopy(fable)
-        unknown_fable["content"][0] = {"type": "server_tool_use", "name": "search"}
-        with self.assertRaisesRegex(ReviewClientError, "structured text block"):
-            extract_response(json.dumps(unknown_fable).encode(), [pair], stage="fable")
-        sonnet_thinking = json.loads(_response([pair], model=SONNET_MODEL))
-        sonnet_thinking["content"].insert(
-            0,
-            {"type": "thinking", "thinking": "", "signature": "sig_test_123"},
-        )
-        with self.assertRaisesRegex(ReviewClientError, "structured text block"):
-            extract_response(json.dumps(sonnet_thinking).encode(), [pair], stage="sonnet")
-        stale = json.loads(_response([pair], model=SONNET_MODEL))
-        result = json.loads(stale["content"][0]["text"])
-        result["schema_version"] = 2
-        stale["content"][0]["text"] = json.dumps(result)
-        with self.assertRaisesRegex(ReviewClientError, "root schema"):
-            extract_response(json.dumps(stale).encode(), [pair], stage="sonnet")
-        bidi = json.loads(_response([pair], model=SONNET_MODEL))
-        bidi_result = json.loads(bidi["content"][0]["text"])
-        bidi_result["verdicts"][0]["visible"] = "safe\u202espoof"
-        bidi["content"][0]["text"] = json.dumps(bidi_result)
-        with self.assertRaisesRegex(ReviewClientError, "invalid Unicode"):
-            extract_response(json.dumps(bidi).encode(), [pair], stage="sonnet")
+            "missing structured output": (
+                lambda envelope: envelope.pop("structured_output"),
+                "provider_response",
+                True,
+            ),
+            "stale schema": (
+                lambda envelope: envelope["structured_output"].update(schema_version=2),
+                "provider_response",
+                True,
+            ),
+            "bidi text": (
+                lambda envelope: envelope["structured_output"]["verdicts"][0].update(
+                    visible="safe‮spoof"
+                ),
+                "provider_response",
+                True,
+            ),
+            "unknown session": (
+                lambda envelope: envelope.update(session_id="req_not_a_session"),
+                "provider_response",
+                True,
+            ),
+            "negative cost": (
+                lambda envelope: envelope.update(total_cost_usd=-1),
+                "provider_response",
+                True,
+            ),
+            "not logged in": (
+                lambda envelope: envelope.update(
+                    is_error=True, result="Not logged in · Please run /login"
+                ),
+                "authentication",
+                False,
+            ),
+            "forbidden": (
+                lambda envelope: envelope.update(is_error=True, api_error_status=403),
+                "authentication",
+                False,
+            ),
+            "rate limited": (
+                lambda envelope: envelope.update(is_error=True, api_error_status=429),
+                "rate_limited",
+                True,
+            ),
+            "usage limit": (
+                lambda envelope: envelope.update(
+                    is_error=True, result="Claude usage limit reached; do not persist this"
+                ),
+                "rate_limited",
+                True,
+            ),
+            "overloaded": (
+                lambda envelope: envelope.update(is_error=True, api_error_status=529),
+                "provider_unavailable",
+                True,
+            ),
+            "structured retries": (
+                lambda envelope: envelope.update(subtype="error_max_structured_output_retries"),
+                "provider_response",
+                True,
+            ),
+        }
+        for name, (mutate, category, transient) in cases.items():
+            with self.subTest(name=name):
+                envelope = copy.deepcopy(valid)
+                mutate(envelope)
+                with self.assertRaises(review_client.CliOutcome) as captured:
+                    extract_cli_result(json.dumps(envelope).encode(), [pair], stage="sonnet")
+                self.assertEqual(category, captured.exception.category)
+                self.assertIs(transient, captured.exception.transient)
+                self.assertNotIn("persist", str(captured.exception))
+        for payload in (b"", b"not json", b"[]", b"x" * (review_client.MAX_RESPONSE_BYTES + 1)):
+            with self.subTest(payload=payload[:10]):
+                with self.assertRaises(review_client.CliOutcome):
+                    extract_cli_result(payload, [pair], stage="sonnet")
 
     def test_rate_limit_retries_once_and_emits_only_a_sanitized_marker(self) -> None:
         clock = _Clock()
-        calls = 0
-
-        def transport(request: object, timeout: float) -> HttpResponse:
-            nonlocal calls
-            calls += 1
-            if request.full_url == TOKEN_ENDPOINT:
-                return HttpResponse(
-                    200,
-                    {},
-                    json.dumps(
-                        {
-                            "access_token": "sk-ant-oat01-" + "x" * 32,
-                            "token_type": "Bearer",
-                            "expires_in": 600,
-                            "scope": "workspace:inference",
-                        }
-                    ).encode(),
-                )
-            return HttpResponse(
-                429,
-                {"retry-after": "30", "request-id": "req_secret_provider_text"},
-                b'{"error":{"message":"do not persist this provider text"}}',
+        cli = _FakeCli(
+            lambda model, pairs, call: _failure(
+                "Rate limit reached: do not persist this provider text", status=429
             )
-
+        )
         with tempfile.TemporaryDirectory() as temporary:
-            identity = Path(temporary) / "github.jwt"
-            identity.write_text(_jwt(REPOSITORY, now=int(clock.wall())), encoding="ascii")
             with self.assertRaises(ReviewFailure) as captured:
                 run_review(
                     self.handoff,
                     expected_manifest_sha256=self.identity["manifest_sha256"],
-                    identity_token_file=identity,
-                    federation_rule_id="fdrl_test_rule",
-                    organization_id="12345678-1234-1234-1234-123456789abc",
-                    service_account_id="svac_visual_review",
-                    workspace_id="wrkspc_visual_review",
+                    claude=CLAUDE,
+                    token=TOKEN,
                     output=Path(temporary) / "never.json",
-                    transport=transport,
+                    runner=cli,
                     sleep=clock.sleep,
+                    jitter=lambda lower, upper: upper,
                     monotonic=clock.monotonic,
-                    wall_clock=clock.wall,
                 )
             marker = failure_marker(captured.exception)
             serialized = json.dumps(marker)
             self.assertEqual("rate_limited", marker["category"])
             self.assertEqual("sonnet", marker["stage"])
-            self.assertEqual(30, marker["cooldown_seconds"])
+            self.assertIs(True, marker["transient"])
+            self.assertEqual(1800, marker["cooldown_seconds"])
+            self.assertEqual(2, marker["attempts"])
             self.assertNotIn("provider text", serialized)
-            self.assertNotIn("req_secret", serialized)
-            self.assertEqual(3, calls)
-            self.assertEqual([30], clock.sleeps)
+            self.assertEqual(2, len(cli.calls))
+            self.assertEqual([30.0], clock.sleeps)
 
-    def test_refusal_is_terminal_without_a_second_paid_call(self) -> None:
+    def test_authentication_failure_is_terminal_without_a_second_call(self) -> None:
         clock = _Clock()
-        message_calls = 0
-
-        def transport(request: object, timeout: float) -> HttpResponse:
-            nonlocal message_calls
-            if request.full_url == TOKEN_ENDPOINT:
-                return HttpResponse(
-                    200,
-                    {},
-                    json.dumps(
-                        {
-                            "access_token": "sk-ant-oat01-" + "x" * 32,
-                            "token_type": "Bearer",
-                            "expires_in": 600,
-                            "scope": "workspace:inference",
-                        }
-                    ).encode(),
-                )
-            message_calls += 1
-            body = json.loads(request.data)
-            envelope = json.loads(
-                _response(
-                    [
-                        {"label": label, "capture_id": capture}
-                        for label, capture in zip(
-                            body["output_config"]["format"]["schema"]["properties"][
-                                "verdicts"
-                            ]["items"]["properties"]["label"]["enum"],
-                            body["output_config"]["format"]["schema"]["properties"][
-                                "verdicts"
-                            ]["items"]["properties"]["capture_id"]["enum"],
-                        )
-                    ],
-                    model=body["model"],
-                )
-            )
-            # Current Messages may expose a refusal through stop_details while retaining
-            # end_turn as the stop reason; this must not spend the one schema retry.
-            envelope["stop_reason"] = "end_turn"
-            envelope["stop_details"] = {
-                "type": "refusal",
-                "category": "general_harms",
-                "explanation": "untrusted provider policy text",
-            }
-            return HttpResponse(
-                200,
-                {"request-id": "req_refusal"},
-                json.dumps(envelope).encode(),
-            )
-
+        cli = _FakeCli(lambda model, pairs, call: _failure("Not logged in · Please run /login"))
         with tempfile.TemporaryDirectory() as temporary:
-            identity = Path(temporary) / "github.jwt"
-            identity.write_text(_jwt(REPOSITORY, now=int(clock.wall())), encoding="ascii")
             with self.assertRaises(ReviewFailure) as captured:
                 run_review(
                     self.handoff,
                     expected_manifest_sha256=self.identity["manifest_sha256"],
-                    identity_token_file=identity,
-                    federation_rule_id="fdrl_test_rule",
-                    organization_id="12345678-1234-1234-1234-123456789abc",
-                    service_account_id="svac_visual_review",
-                    workspace_id="wrkspc_visual_review",
+                    claude=CLAUDE,
+                    token=TOKEN,
                     output=Path(temporary) / "never.json",
-                    transport=transport,
+                    runner=cli,
                     sleep=clock.sleep,
                     monotonic=clock.monotonic,
-                    wall_clock=clock.wall,
                 )
-            self.assertEqual("provider_response", captured.exception.category)
-            self.assertEqual(1, message_calls)
+        self.assertEqual("authentication", captured.exception.category)
+        self.assertIs(False, captured.exception.transient)
+        self.assertEqual(1, len(cli.calls))
 
-    def test_truncation_and_http_policy_errors_are_terminal_without_retry(self) -> None:
+    def test_cli_process_failures_are_bounded_and_classified(self) -> None:
         cases = (
-            ("max_tokens", 200, "provider_response"),
-            ("bad_request", 400, "provider_response"),
-            ("unauthorized", 401, "authentication"),
-            ("payment_required", 402, "provider_response"),
-            ("forbidden", 403, "authentication"),
+            ("timeout", subprocess.TimeoutExpired("claude", 1), "transport", True, 2),
+            ("missing binary", FileNotFoundError("claude"), "invalid_configuration", False, 1),
+            ("nonzero exit", (1, b""), "provider_response", False, 2),
         )
-        for kind, status, expected_category in cases:
-            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
+        for name, outcome, category, transient, calls in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
                 clock = _Clock()
-                message_calls = 0
-
-                def transport(request: object, timeout: float) -> HttpResponse:
-                    nonlocal message_calls
-                    if request.full_url == TOKEN_ENDPOINT:
-                        return HttpResponse(
-                            200,
-                            {},
-                            json.dumps(
-                                {
-                                    "access_token": "sk-ant-oat01-" + "x" * 32,
-                                    "token_type": "Bearer",
-                                    "expires_in": 600,
-                                    "scope": "workspace:inference",
-                                }
-                            ).encode(),
-                        )
-                    message_calls += 1
-                    if status != 200:
-                        return HttpResponse(
-                            status,
-                            {},
-                            b'{"error":{"message":"sanitized by the client"}}',
-                        )
-                    body = json.loads(request.data)
-                    properties = body["output_config"]["format"]["schema"]["properties"][
-                        "verdicts"
-                    ]["items"]["properties"]
-                    request_pairs = [
-                        {"label": label, "capture_id": capture}
-                        for label, capture in zip(
-                            properties["label"]["enum"],
-                            properties["capture_id"]["enum"],
-                        )
-                    ]
-                    envelope = json.loads(
-                        _response(request_pairs, model=body["model"])
-                    )
-                    envelope["stop_reason"] = "max_tokens"
-                    return HttpResponse(
-                        200,
-                        {"request-id": "req_truncated"},
-                        json.dumps(envelope).encode(),
-                    )
-
-                identity = Path(temporary) / "github.jwt"
-                identity.write_text(
-                    _jwt(REPOSITORY, now=int(clock.wall())), encoding="ascii"
-                )
+                cli = _FakeCli(lambda model, pairs, call, outcome=outcome: outcome)
                 with self.assertRaises(ReviewFailure) as captured:
                     run_review(
                         self.handoff,
                         expected_manifest_sha256=self.identity["manifest_sha256"],
-                        identity_token_file=identity,
-                        federation_rule_id="fdrl_test_rule",
-                        organization_id="12345678-1234-1234-1234-123456789abc",
-                        service_account_id="svac_visual_review",
-                        workspace_id="wrkspc_visual_review",
+                        claude=CLAUDE,
+                        token=TOKEN,
                         output=Path(temporary) / "never.json",
-                        transport=transport,
+                        runner=cli,
                         sleep=clock.sleep,
                         monotonic=clock.monotonic,
-                        wall_clock=clock.wall,
                     )
-                self.assertEqual(expected_category, captured.exception.category)
-                self.assertEqual(1, message_calls)
+                self.assertEqual(category, captured.exception.category)
+                self.assertIs(transient, captured.exception.transient)
+                self.assertEqual(calls, len(cli.calls))
 
-    def test_malformed_provider_envelope_gets_only_one_bounded_retry(self) -> None:
+    def test_malformed_cli_result_gets_only_one_bounded_retry(self) -> None:
         clock = _Clock()
         malformed_sent = False
-        message_calls = 0
 
-        def transport(request: object, timeout: float) -> HttpResponse:
-            nonlocal malformed_sent, message_calls
-            if request.full_url == TOKEN_ENDPOINT:
-                return HttpResponse(
-                    200,
-                    {},
-                    json.dumps(
-                        {
-                            "access_token": "sk-ant-oat01-" + "x" * 32,
-                            "token_type": "Bearer",
-                            "expires_in": 600,
-                            "scope": "workspace:inference",
-                        }
-                    ).encode(),
-                )
-            message_calls += 1
-            body = json.loads(request.data)
-            properties = body["output_config"]["format"]["schema"]["properties"][
-                "verdicts"
-            ]["items"]["properties"]
-            request_pairs = [
-                {"label": label, "capture_id": capture}
-                for label, capture in zip(
-                    properties["label"]["enum"],
-                    properties["capture_id"]["enum"],
-                )
-            ]
+        def respond(model: str, request_pairs: list[dict[str, object]], call: int) -> object:
+            nonlocal malformed_sent
             if not malformed_sent:
                 malformed_sent = True
-                malformed = json.loads(
-                    _response(request_pairs, model=body["model"])
-                )
-                malformed["usage"]["output_tokens_details"]["thinking_tokens"] = 21
-                return HttpResponse(
-                    200,
-                    {"request-id": "req_ignored_malformed"},
-                    json.dumps(malformed).encode(),
-                )
-            return HttpResponse(
-                200,
-                {"request-id": f"req_valid_{message_calls}"},
-                _response(request_pairs, model=body["model"]),
-            )
+                return b'{"type": "result", "truncated'
+            return _envelope(_structured(request_pairs, model=model), session=call)
 
+        cli = _FakeCli(respond)
         with tempfile.TemporaryDirectory() as temporary:
-            identity = Path(temporary) / "github.jwt"
-            identity.write_text(
-                _jwt(REPOSITORY, now=int(clock.wall())), encoding="ascii"
-            )
             report = run_review(
                 self.handoff,
                 expected_manifest_sha256=self.identity["manifest_sha256"],
-                identity_token_file=identity,
-                federation_rule_id="fdrl_test_rule",
-                organization_id="12345678-1234-1234-1234-123456789abc",
-                service_account_id="svac_visual_review",
-                workspace_id="wrkspc_visual_review",
+                claude=CLAUDE,
+                token=TOKEN,
                 output=Path(temporary) / "raw.json",
-                transport=transport,
+                runner=cli,
                 sleep=clock.sleep,
                 jitter=lambda lower, upper: upper,
                 monotonic=clock.monotonic,
-                wall_clock=clock.wall,
             )
         self.assertEqual(1, report["telemetry"]["retries"])
         self.assertEqual(
             report["telemetry"]["sonnet_calls"] + 1,
             report["telemetry"]["provider_attempts"],
         )
-        self.assertEqual(report["telemetry"]["provider_attempts"], message_calls)
-        self.assertEqual(200, report["telemetry"]["sonnet_usage"]["input_tokens"])
-        self.assertEqual(40, report["telemetry"]["sonnet_usage"]["output_tokens"])
+        self.assertEqual(report["telemetry"]["provider_attempts"], len(cli.calls))
+        # The malformed attempt reported no usage; only the answered calls count.
+        sonnet_calls = report["telemetry"]["sonnet_calls"]
+        self.assertEqual(100 * sonnet_calls, report["telemetry"]["sonnet_usage"]["input_tokens"])
+        self.assertEqual(20 * sonnet_calls, report["telemetry"]["sonnet_usage"]["output_tokens"])
         self.assertIn(30.0, clock.sleeps)
 
-    def test_oidc_claims_must_bind_the_protected_drain_environment(self) -> None:
-        for claim, value in (
-            ("sub", f"repo:{REPOSITORY}:pull_request"),
-            ("ref", "refs/heads/feature"),
-            (
-                "workflow_ref",
-                f"{REPOSITORY}/.github/workflows/untrusted.yml@refs/heads/master",
-            ),
-            ("workflow_sha", "d" * 40),
-            ("event_name", "pull_request"),
+    def test_only_a_claude_code_token_and_the_cli_may_start_a_review(self) -> None:
+        for name, claude, token in (
+            ("missing token", CLAUDE, ""),
+            ("api key", CLAUDE, "sk-ant-api03-" + "x" * 32),
+            ("missing cli", None, TOKEN),
         ):
-            with self.subTest(claim=claim), tempfile.TemporaryDirectory() as temporary:
-                clock = _Clock()
-                identity = Path(temporary) / "github.jwt"
-                identity.write_text(
-                    _jwt(
-                        REPOSITORY,
-                        now=int(clock.wall()),
-                        overrides={claim: value},
-                    ),
-                    encoding="ascii",
-                )
-                transport = mock.Mock(side_effect=AssertionError("must not call Anthropic"))
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                runner = mock.Mock(side_effect=AssertionError("must not call Claude Code"))
                 with self.assertRaises(ReviewFailure) as captured:
                     run_review(
                         self.handoff,
                         expected_manifest_sha256=self.identity["manifest_sha256"],
-                        identity_token_file=identity,
-                        federation_rule_id="fdrl_test_rule",
-                        organization_id="12345678-1234-1234-1234-123456789abc",
-                        service_account_id="svac_visual_review",
-                        workspace_id="wrkspc_visual_review",
+                        claude=claude,
+                        token=token,
                         output=Path(temporary) / "never.json",
-                        transport=transport,
-                        sleep=clock.sleep,
-                        monotonic=clock.monotonic,
-                        wall_clock=clock.wall,
+                        runner=runner,
                     )
-                self.assertEqual("authentication", captured.exception.category)
-                transport.assert_not_called()
-
-    def test_malformed_wif_owner_configuration_is_not_misclassified_as_queue_input(self) -> None:
-        clock = _Clock()
-        with tempfile.TemporaryDirectory() as temporary:
-            identity = Path(temporary) / "github.jwt"
-            identity.write_text(_jwt(REPOSITORY, now=int(clock.wall())), encoding="ascii")
-            transport = mock.Mock(side_effect=AssertionError("must not call Anthropic"))
-            with self.assertRaises(ReviewFailure) as captured:
-                run_review(
-                    self.handoff,
-                    expected_manifest_sha256=self.identity["manifest_sha256"],
-                    identity_token_file=identity,
-                    federation_rule_id="not-a-federation-rule",
-                    organization_id="12345678-1234-1234-1234-123456789abc",
-                    service_account_id="svac_visual_review",
-                    workspace_id="wrkspc_visual_review",
-                    output=Path(temporary) / "never.json",
-                    transport=transport,
-                    sleep=clock.sleep,
-                    monotonic=clock.monotonic,
-                    wall_clock=clock.wall,
-                )
-            self.assertEqual("invalid_configuration", captured.exception.category)
-            self.assertEqual("authentication", captured.exception.stage)
-            self.assertIs(captured.exception.transient, False)
-            transport.assert_not_called()
+                self.assertEqual("invalid_configuration", captured.exception.category)
+                self.assertEqual("authentication", captured.exception.stage)
+                self.assertIs(captured.exception.transient, False)
+                runner.assert_not_called()
+        for variable in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_OAUTH_ACCESS_TOKEN"):
+            with self.subTest(variable=variable), mock.patch.dict(
+                "os.environ", {variable: "x", "CLAUDE_CODE_OAUTH_TOKEN": TOKEN}
+            ):
+                with self.assertRaises(ReviewFailure) as captured:
+                    review_client._oauth_token()
+                self.assertEqual("invalid_configuration", captured.exception.category)
+        with mock.patch.dict("os.environ", {"CLAUDE_CODE_OAUTH_TOKEN": TOKEN}):
+            self.assertEqual(TOKEN, review_client._oauth_token())
+            # Read once, then gone: nothing else in the process inherits it.
+            self.assertNotIn("CLAUDE_CODE_OAUTH_TOKEN", review_client.os.environ)
 
     def test_unexpected_runner_errors_emit_unknown_retained_failure_markers(self) -> None:
         for injected in (
@@ -1853,19 +1629,18 @@ class VisualReviewHandoffTests(unittest.TestCase):
                 with self.assertRaises(ReviewClientError):
                     validate_handoff(handoff, digest)
 
-    def test_encoded_request_limit_is_enforced_before_transport(self) -> None:
+    def test_prompt_limit_is_enforced_before_any_call(self) -> None:
         _manifest, pairs = validate_handoff(
             self.handoff, self.identity["manifest_sha256"]
         )
         with mock.patch("scripts.visual.review_client.MAX_REQUEST_BYTES", 1):
-            with self.assertRaisesRegex(ReviewClientError, "encoded sonnet request"):
-                build_request(
+            with self.assertRaisesRegex(ReviewClientError, "sonnet prompt exceeds"):
+                build_prompt(
                     self.handoff,
                     [pairs[0]],
                     stage="sonnet",
                     prompt="bounded prompt",
                 )
-
 
 class VisualSourceAuthenticationTests(unittest.TestCase):
     def test_source_run_authenticates_exact_repo_path_event_status_and_attempt(self) -> None:

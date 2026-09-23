@@ -473,20 +473,19 @@ class WorkflowSecurityTests(unittest.TestCase):
         self.assertIn("permissions: {}", drain.split("jobs:", 1)[0])
         self.assertIn("group: blockpops-visual-review-global-drain", drain)
         self.assertIn("environment: visual-review", review)
-        self.assertIn("id-token: write", review)
-        self.assertEqual(1, drain.count("id-token: write"))
+        # The owner's Claude Code token is the one credential; no job mints an OIDC identity.
+        self.assertNotIn("id-token: write", drain)
+        self.assertEqual(1, drain.count("secrets."))
+        self.assertEqual(
+            1, review.count("CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}")
+        )
         self.assertNotIn("actions/checkout@", review)
         self.assertIn('GH_TOKEN: ""', review)
         self.assertIn('GITHUB_TOKEN: ""', review)
-        self.assertIn(
-            "env -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_ID_TOKEN_REQUEST_TOKEN",
-            review,
-        )
         for credential in (
             "ANTHROPIC_API_KEY",
             "ANTHROPIC_AUTH_TOKEN",
             "ANTHROPIC_OAUTH_ACCESS_TOKEN",
-            "CLAUDE_CODE_OAUTH_TOKEN",
             "OPENAI_API_KEY",
         ):
             self.assertNotIn(credential, drain)
@@ -515,9 +514,10 @@ class WorkflowSecurityTests(unittest.TestCase):
             comment,
         )
         self.assertIn('SONNET_MODEL = "claude-sonnet-5"', client)
-        self.assertIn('FABLE_MODEL = "claude-fable-5"', client)
-        self.assertNotIn('"tools":', client)
-        self.assertNotIn("Claude Code", review)
+        self.assertIn('VERIFY_MODEL = "claude-opus-5"', client)
+        # The model may only read the chunk's own images.
+        self.assertIn('"--tools",\n            "Read",', client)
+        self.assertIn('*(f"Read(./{path})" for path in images)', client)
         self.assertIn("retention-days: 7", enqueue)
         self.assertGreaterEqual(drain.count("retention-days: 1"), 2)
         self.assertGreaterEqual(drain.count("retention-days: 7"), 2)

@@ -64,15 +64,12 @@ governance/publication writers still require owner configuration:
 - Set Pages source to GitHub Actions. Create the `github-pages` environment and
   limit deployment to protected `master`.
 - Create a protected `visual-review` environment if advisory AI review is
-  desired and restrict it to protected `master`. Configure the four Anthropic
-  resource identifiers listed in [the visual-review runbook](visual-review.md),
-  not a static secret. The federation rule must match the exact environment,
-  repository, owner, master ref and drain workflow, target a dedicated service
-  account/workspace, grant only `workspace:inference`, and mint approximately
-  600-second tokens. Explicitly accept and enable Fable 5's required 30-day
-  provider retention on that isolated workspace. Do not add an Anthropic API
-  key or Claude Code subscription token. The provider job has no checkout,
-  package installer, image decoder, GitHub write scope, or tools; its read-only
+  desired and restrict it to protected `master`. Store the owner's
+  `claude setup-token` token as that environment's `CLAUDE_CODE_OAUTH_TOKEN`
+  secret, as listed in [the visual-review runbook](visual-review.md), never as
+  a repository secret. Do not add an Anthropic API key. The model job has no
+  checkout, package manager, image decoder, or GitHub write scope; the model
+  gets only the Read tool for the images it reviews, and the job's read-only
   GitHub token exists only for the final stdlib identity preflight.
 - Keep repository Actions artifact retention at **90 days or greater**; the
   canonical lossless anchor cannot meet its propagation window under a lower
@@ -291,8 +288,9 @@ conflict allowlist to force this bootstrap.
   GitHub's quota recalculation and rerun the exact failed head. Never disable
   uploads, evidence fan-in, the lossless anchor, or retention checks to get a
   green status.
-- **AI identity exposure is suspected:** disable the Anthropic federation rule,
-  delete the single-use handoff by authenticated ID, audit the environment job
-  and OIDC claims, then replace the rule/service account before waking the
-  queue. There is no long-lived repository credential to rotate. Deterministic
-  gates remain valid because they never receive WIF or model access.
+- **The Claude Code token may be exposed:** delete the `CLAUDE_CODE_OAUTH_TOKEN`
+  secret of the `visual-review` environment, revoke the token from the owner's
+  Claude account, delete the single-use handoff by authenticated ID and audit
+  the environment job, then store a fresh `claude setup-token` token before
+  waking the queue. Deterministic gates remain valid because they never receive
+  the token or model access.

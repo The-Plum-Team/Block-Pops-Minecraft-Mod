@@ -66,13 +66,13 @@ exact manifest and content-addressed paired images.
 Exact canonical PNG equality is the only automatic visual acceptance. Integer
 pixel metrics prioritize changed pairs but never make a semantic decision.
 Changed pairs are grouped under a strict request/call budget: Claude Sonnet 5
-triages first and only anomalous or uncertain pairs reach Claude Fable 5.
+triages first and only anomalous or uncertain pairs reach Claude Opus 5.
 
-The provider receives no tool surface, repository checkout, GitHub permission,
-or static credential. Protected code rejects missing, duplicate, extra,
-incoherent, or unbounded structured verdicts and publishes only normalized
-output. Raw provider responses are never artifacts. The fixed `visual-review`
-environment exchanges a narrowly claimed GitHub OIDC JWT for a short-lived
-Anthropic `workspace:inference` token. This result remains advisory regardless
-of severity. See [the visual-review architecture](visual-review.md) for queue,
-cost, retention, WIF and recovery details.
+The model receives only the Read tool, allowed for exactly the images it is
+reviewing, and no repository checkout or GitHub permission. Protected code
+rejects missing, duplicate, extra, incoherent, or unbounded structured verdicts
+and publishes only normalized output. Raw CLI output is never an artifact. The
+fixed `visual-review` environment runs a hash-pinned Claude Code CLI with the
+owner's subscription token, like Quick Skin. This result remains advisory
+regardless of severity. See [the visual-review architecture](visual-review.md)
+for queue, cost, retention, token and recovery details.

@@ -75,8 +75,8 @@ their protected App contexts remain mandatory.
 
 AI visual review and the public evidence gallery are advisory. Do not weaken a
 deterministic assertion or skip a lane to accommodate visual-review noise.
-The protected review path uses short-lived Anthropic workload identity, never a
-static API key or a Claude Code subscription token. Changes to captures,
+The protected review path uses the owner's Claude Code subscription token from
+the `visual-review` environment, like Quick Skin, and never an API key. Changes to captures,
 prompts, routing, retry limits, image bounds, or model-visible expectations
 must also update the security and cost tests described in
 [`docs/visual-review.md`](docs/visual-review.md).

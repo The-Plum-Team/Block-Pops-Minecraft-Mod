@@ -33,12 +33,15 @@ packet propagated state, or whether a contracted assertion passed.
    tested tree, job graph and baseline, then re-emits one exact handoff.
 5. A fresh `visual-review` environment job downloads only that bounded handoff.
    It has read-only GitHub scopes solely for a hash-bound stdlib identity
-   preflight, plus `id-token: write`; it has no checkout, package installation,
-   image decoder, GitHub write permission, static Anthropic key, Claude Code
-   subscription token, or tools. Only after the current controller, source,
-   tested tree, admitted artifact and newest eligible current-or-historical
-   baseline are rebound does it
-   exchange a GitHub OIDC JWT for a short-lived Anthropic token.
+   preflight; it has no checkout, package manager, image decoder, GitHub write
+   permission or OIDC identity. It installs one pinned Claude Code binary, the
+   Linux x64 build of `@anthropic-ai/claude-code` 2.1.220, only after its
+   registry sha512 integrity matches the value pinned in the workflow. Only
+   after the current controller, source, tested tree, admitted artifact and
+   newest eligible current-or-historical baseline are rebound does the owner's
+   `CLAUDE_CODE_OAUTH_TOKEN` reach the client, which passes it solely to that
+   CLI's environment. The model gets the Read tool and nothing else, allowed
+   for exactly the images of the chunk it is reviewing.
 6. A new credentialless, GitHub-read-only publication job reauthenticates every
    mutable identity again, independently validates schema, coverage, routes,
    usage, cost and exact
@@ -46,8 +49,8 @@ packet propagated state, or whether a contracted assertion passed.
    a bounded data-only `provenance.json`. The provenance projection retains the
    exact source/tested tree, contract/matrix and capsule/handoff/review digests,
    per-pair identities, dimensions, image/pixel hashes and integer triage for
-   30 days after the images and queue are deleted. Provider envelopes, raw
-   transcripts, JWTs and bearer tokens are never artifacts. Exact protected,
+   30 days after the images and queue are deleted. CLI results, raw
+   transcripts and the token are never artifacts. Exact protected,
    secret-free prompts exist only inside the authenticated one-day handoff and
    are deleted by numeric artifact ID.
 7. A separate fresh comment job has no checkout, package installation, Pillow,
@@ -61,8 +64,8 @@ packet propagated state, or whether a contracted assertion passed.
    identity, so reviews that finish just after merge remain visible on the PR.
 
 Missing, stale, mixed, duplicate, traversal-bearing, symlinked, oversized,
-dimension-incompatible or contract-skewed evidence is rejected before WIF can
-be used. Images and all model-visible text are untrusted data, never
+dimension-incompatible or contract-skewed evidence is rejected before the token
+can be used. Images and all model-visible text are untrusted data, never
 instructions.
 
 ## Deterministic triage and model routing
@@ -71,55 +74,46 @@ Canonical RGB PNG bytes are compared first. A byte-identical pair is accepted
 deterministically and never sent to Anthropic. Integer pixel metrics rank
 changed pairs only; no similarity threshold can declare a semantic pass.
 
-Changed pairs are ordered with key captures first. Requests are kept below a
-28 MiB application limit, beneath the Claude Messages 32 MiB limit. Sonnet
-chunks contain at most five pairs because each 1600x900 pair contributes two
-lossless images; Fable chunks contain at most four. The current matrix produces
-ten pairs (two loaders by five semantic captures), so even full escalation is
-bounded to five logical calls. A capsule with more than ten pairs, or whose
-byte-driven worst-case partition exceeds five calls, fails before any provider
-call and requires an explicit cost-envelope review.
+Changed pairs are ordered with key captures first. Sonnet chunks contain at
+most five pairs and verification chunks at most four, so the model opens at
+most ten images per call. The current matrix produces ten pairs (two loaders by
+five semantic captures), so even full escalation is bounded to five logical
+calls. A capsule with more than ten pairs, or whose worst-case prompt exceeds
+its byte budget, fails before any model call and requires an explicit
+cost-envelope review.
 
 - `claude-sonnet-5` classifies each changed pair as clean, anomalous, or
-  uncertain. Its request explicitly uses the supported `high` effort with
-  thinking disabled; lowering effort requires a remote calibration sweep so a
-  cost optimization cannot silently increase false negatives.
-- Only anomalous or uncertain pairs reach `claude-fable-5` for an independent
-  semantic verdict. Fable uses its required adaptive thinking mode at `high`
-  effort.
-- Structured output is constrained by JSON Schema and then validated again by
-  protected code. A refusal, truncation, missing pair, extra pair, duplicate,
-  unknown enum, incoherent verdict or unbounded text cannot become a report.
+  uncertain.
+- Only anomalous or uncertain pairs reach `claude-opus-5` for an independent
+  semantic verdict. The report keeps this verification route's historical
+  name, `fable`.
+- Claude Code constrains the result with JSON Schema (`--json-schema`), and
+  protected code validates it again. A failed result, missing pair, extra
+  pair, duplicate, unknown enum, incoherent verdict or unbounded text cannot
+  become a report.
 - Harmless antialiasing, particles, lighting, font rasterization, animation or
   world-background variation is not a regression by itself. Blur, clipping,
   missing/unexpected widgets, bad layout, incorrect text/state, unintended
   transparency and material rendering corruption are review targets.
 
-The client spaces calls by at least 15 seconds, allows at most one retry for a
-retryable transport/HTTP failure or malformed provider envelope/schema, honors
-bounded `Retry-After`, refreshes short-lived identity material during long runs,
-and stops after 35 minutes. Authentication, billing, configuration, policy and
-explicit refusal/truncation failures are not retried as provider requests. No
-provider request is retried indefinitely. A structured `stop_details` refusal is
-terminal even if Messages pairs it with `stop_reason: end_turn`. Queue processing
-allows at most two drain attempts for an exact source run/attempt/tested SHA.
+Each call runs `claude --print` in the read-only capsule with `--safe-mode`,
+`--no-session-persistence`, `--tools Read`, one `--allowedTools Read(./images/…)`
+entry per chunk image, and `--permission-mode dontAsk`. The prompt arrives on
+standard input, and the CLI environment carries only the token, `PATH`, `HOME`
+and fixed locale/updater settings.
 
-Cost telemetry contains only model IDs, exact protected-code/prompt digests,
-route counts, bounded token counts, request IDs, duration, retries, and a
-conservative standard-price upper bound. Every request pins
-`service_tier: standard_only` and `inference_geo: global`; the response must
-confirm standard/global routing before its usage can become telemetry. Fable's
-`output_tokens` already includes billed adaptive-thinking tokens, while
-`output_tokens_details.thinking_tokens` is independently bounded and never
-added a second time. If a retryable provider sub-schema is invalid but its
-authoritative token totals are valid, both the rejected attempt and its single
-retry are included in telemetry. As of 2026-08-11 the standard prices used by
-validation are $3/$15 per million Sonnet input/output tokens and $10/$50 per
-million Fable
-input/output tokens. Anthropic's temporary promotional pricing is intentionally
-not used for the upper bound. A normal clean review is expected to remain
-roughly $0.09-$0.15; full escalation is expected to remain roughly $0.45-$1.00.
-Workspace spend/rate limits remain the owner's hard external ceiling.
+The client spaces calls by at least 15 seconds, allows at most one retry for a
+rate-limited, overloaded, timed-out or malformed call, and stops after 35
+minutes. Authentication and configuration failures are not retried. No call is
+retried indefinitely. Queue processing allows at most two drain attempts for an
+exact source run/attempt/tested SHA.
+
+Telemetry contains only model IDs, exact protected-code/prompt digests, route
+counts, bounded token counts, Claude Code session IDs, duration, retries, and
+Claude Code's own API-equivalent cost estimate. A subscription is not billed per
+call; the estimate only shows what the same review would cost on the API. Usage
+counts against the subscription's limits, and a rate or usage limit becomes a
+retained queue item with a cooldown.
 
 ## Durable queue and retention
 
@@ -144,14 +138,10 @@ identity remain an ambiguity and fail closed.
   first authenticated successor (the seven-day queue window plus one day);
 - ordinary raw runtime evidence: 1 day; compact Pages derivatives: 90 days.
 
-The Anthropic workspace is a separate retention boundary. Fable 5 is a Covered
-Model and requires Anthropic's 30-day provider-side retention; it is not
-eligible for zero data retention. The owner must explicitly accept and enable
-that policy on the dedicated visual-review workspace before activating Fable.
-If private screenshots require ZDR, leave the AI environment unconfigured and
-change the reviewed model/routing contract in a separate security and cost
-review; do not silently fall back. Sonnet/structured Messages are ZDR-eligible
-when the organization's agreement and selected model permit it.
+Screenshots sent through Claude Code follow the data-retention terms of the
+owner's Claude subscription, not an API workspace policy. If private
+screenshots must not leave under those terms, leave the token unset: changed
+pairs then produce an owner-action report and no model call.
 
 A globally fixed concurrency group serializes selection, provider use,
 publication and cleanup. Duplicate dispatches are harmless. Retryable network,
@@ -172,10 +162,10 @@ outage from turning one retained item into an unbounded dispatch loop.
 
 Every selector and both pre-provider reauthentication layers also require the
 mutable GitHub run to remain on the queued `source_run_attempt`. A later re-run
-invalidates the older queue before OIDC is minted, preventing duplicate paid
+invalidates the older queue before the token is used, preventing duplicate
 review of superseded attempt evidence. The selector emits an authenticated
 terminal `stale_source` state so exact-ID cleanup can remove that queue item
-without creating an attempt marker, handoff, OIDC token, or provider request. A
+without creating an attempt marker, handoff, or model call. A
 packaged workflow controller may be an older commit only when GitHub proves it
 is an exact ancestor of both the queue producer and the current protected
 `master` controller. Immediately before an advisory issue comment is created or
@@ -191,63 +181,40 @@ impacting. Packaged E2E is never skipped by this classifier.
 
 ## Owner configuration
 
-Create a dedicated Anthropic workspace and a developer service account, then a
-GitHub Actions workload-identity federation rule with:
+Like Quick Skin, the review runs on the owner's Claude subscription through
+Claude Code:
 
-- issuer `https://token.actions.githubusercontent.com` using discovery JWKS;
-- audience `https://api.anthropic.com`;
-- exact subject `repo:The-Plum-Team/BlockPops:environment:visual-review`;
-- claims restricted to repository `The-Plum-Team/BlockPops`, owner `The-Plum-Team`, ref
-  `refs/heads/master`, and workflow ref
-  `The-Plum-Team/BlockPops/.github/workflows/visual-review-drain.yml@refs/heads/master`;
-- target service account and dedicated workspace;
-- OAuth scope `workspace:inference`, not `workspace:developer` or `org:admin`;
-- token lifetime approximately 600 seconds;
-- conservative workspace spend and rate limits;
-- `global` in the workspace's allowed inference geographies, because every
-  request explicitly pins `inference_geo: global` and fails closed otherwise;
-- explicit 30-day retention on this dedicated workspace for Fable 5.
+1. On a machine logged in to that subscription, run `claude setup-token` and
+   copy the `sk-ant-oat01-…` token it prints.
+2. Store it as the secret `CLAUDE_CODE_OAUTH_TOKEN` of the GitHub environment
+   `visual-review`, not as a repository secret, so only jobs admitted to that
+   environment can read it:
+   `gh secret set CLAUDE_CODE_OAUTH_TOKEN --env visual-review --repo The-Plum-Team/BlockPops`
+3. Restrict the `visual-review` environment's deployment branches to protected
+   `master`.
 
-Create the GitHub environment `visual-review`, restrict it to protected
-`master`, and set these environment variables (they are resource identifiers,
-not provider credentials):
+Do not add `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` or
+`ANTHROPIC_OAUTH_ACCESS_TOKEN`; Claude Code would prefer them over the
+subscription token, so the client fails closed if one is present. With all
+byte-identical pairs, review needs no token. Changed pairs without a valid
+token retain the queue and publish a 30-day owner-action report without
+weakening deterministic gates or making a model call.
 
-- `ANTHROPIC_FEDERATION_RULE_ID`
-- `ANTHROPIC_ORGANIZATION_ID`
-- `ANTHROPIC_SERVICE_ACCOUNT_ID`
-- `ANTHROPIC_WORKSPACE_ID`
+The token expires about a year after it is created; renew it the same way.
 
-Do not add `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
-`ANTHROPIC_OAUTH_ACCESS_TOKEN`, or `CLAUDE_CODE_OAUTH_TOKEN`; the client fails
-closed if one is present. Claude Pro/Max/Team subscription usage and Claude Code
-OAuth are not used by this system. With all byte-identical pairs, review remains
-fully secretless. Changed pairs without valid WIF configuration retain the
-queue and publish a 30-day owner-action report without weakening deterministic
-gates or making a provider call.
+References:
 
-Official implementation references:
-
+- [Claude Code headless mode and `--print` output](https://code.claude.com/docs/en/headless)
+- [Claude Code CLI flags](https://code.claude.com/docs/en/cli-reference)
+- [Claude Code authentication](https://code.claude.com/docs/en/iam)
 - [Anthropic model IDs and versioning](https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions)
-- [Claude Fable 5 capabilities, pricing, refusal behavior, and retention](https://platform.claude.com/docs/en/about-claude/models/introducing-claude-fable-5-and-claude-mythos-5)
-- [Claude API and model-specific data retention](https://platform.claude.com/docs/en/manage-claude/api-and-data-retention)
-- [Claude Sonnet 5 behavior and pricing](https://platform.claude.com/docs/en/about-claude/models/whats-new-sonnet-5)
-- [Claude vision limits](https://platform.claude.com/docs/en/build-with-claude/vision)
-- [Structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)
-- [Effort and thinking compatibility](https://platform.claude.com/docs/en/build-with-claude/effort)
-- [Messages response, usage, and refusal fields](https://platform.claude.com/docs/en/api/messages)
-- [Service tiers](https://platform.claude.com/docs/en/api/service-tiers)
-- [Inference geography and data residency](https://platform.claude.com/docs/en/manage-claude/data-residency)
-- [Claude API errors and retries](https://platform.claude.com/docs/en/api/errors)
-- [Claude rate limits](https://platform.claude.com/docs/en/api/rate-limits)
-- [GitHub Actions WIF for Claude](https://platform.claude.com/docs/en/manage-claude/wif-providers/github-actions)
-- [WIF scopes](https://platform.claude.com/docs/en/manage-claude/wif-reference)
-- [GitHub Actions OIDC security](https://docs.github.com/en/actions/concepts/security/openid-connect)
+- [GitHub Actions environment secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)
 - [GitHub Actions concurrency](https://docs.github.com/en/actions/concepts/workflows-and-actions/concurrency)
 
 ## Recovery and extension
 
 An owner-action report deliberately blocks automatic reselection while retaining
-the queue. Correct the WIF/workspace/provider problem, delete only the exact
+the queue. Correct the token or subscription problem, delete only the exact
 authenticated report ID, and dispatch `visual-review-queue-wake`. For a
 rate-limit marker, wait for its authenticated cooldown; do not delete it to
 force an early paid retry. For stale candidate or baseline evidence, let the

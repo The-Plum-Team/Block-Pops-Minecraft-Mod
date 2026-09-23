@@ -805,20 +805,15 @@ class VisualReviewOutputTests(unittest.TestCase):
             "cache_creation_input_tokens": 0,
             "cache_read_input_tokens": 0,
         }
-        cost = (
-            sonnet_usage["input_tokens"] * 3
-            + sonnet_usage["output_tokens"] * 15
-            + fable_usage["input_tokens"] * 10
-            + fable_usage["output_tokens"] * 50
-        )
+        cost = 12_500 * calls
         return {
             "schema_version": 2,
             "advisory": True,
             "telemetry": {
                 "provider": "anthropic",
-                "auth_mode": "github-oidc-wif",
+                "auth_mode": "claude-code-oauth",
                 "triage_model": "claude-sonnet-5",
-                "verification_model": "claude-fable-5",
+                "verification_model": "claude-opus-5",
                 "client_sha256": "a" * 64,
                 "sonnet_prompt_sha256": "b" * 64,
                 "fable_prompt_sha256": "c" * 64,
@@ -832,9 +827,11 @@ class VisualReviewOutputTests(unittest.TestCase):
                 "retries": 0,
                 "sonnet_usage": sonnet_usage,
                 "fable_usage": fable_usage,
-                "reported_cost_upper_bound_micro_usd": cost,
+                "estimated_cost_micro_usd": cost,
                 "duration_ms": 1234,
-                "request_ids": [f"req_test_{index}" for index in range(calls)],
+                "session_ids": [
+                    f"00000000-0000-4000-8000-{index:012x}" for index in range(calls)
+                ],
             },
             "verdicts": verdicts,
         }
@@ -868,6 +865,7 @@ class VisualReviewOutputTests(unittest.TestCase):
             "note-marked-defect",
             "unknown-category",
             "cost",
+            "session",
             "control",
             "surrogate",
         ):
@@ -900,7 +898,9 @@ class VisualReviewOutputTests(unittest.TestCase):
                 elif mutation == "unknown-category":
                     defect["findings"][0]["category"] = "pixels-differ"
                 elif mutation == "cost":
-                    report["telemetry"]["reported_cost_upper_bound_micro_usd"] += 1
+                    report["telemetry"]["estimated_cost_micro_usd"] = -1
+                elif mutation == "session":
+                    report["telemetry"]["session_ids"][0] = "req_not_a_claude_code_session"
                 elif mutation == "control":
                     verdicts[0]["visible"] = "bad\x00text"
                 else:

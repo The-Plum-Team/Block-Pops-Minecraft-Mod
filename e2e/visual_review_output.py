@@ -36,15 +36,14 @@ MAX_DURATION_MS = 35 * 60 * 1000
 MAX_USAGE_TOKENS = 100_000_000
 
 SONNET_MODEL = "claude-sonnet-5"
-FABLE_MODEL = "claude-fable-5"
+# The verification route keeps its historical "fable" name; it runs on Opus through Claude Code.
+VERIFY_MODEL = "claude-opus-5"
+AUTH_MODE = "claude-code-oauth"
 IDENTICAL_VISIBLE = "Candidate and canonical reference are byte-identical."
-SONNET_INPUT_MICRO_USD = 3
-SONNET_OUTPUT_MICRO_USD = 15
-FABLE_INPUT_MICRO_USD = 10
-FABLE_OUTPUT_MICRO_USD = 50
+MAX_COST_MICRO_USD = 1000 * 1_000_000
 
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
-REQUEST_ID = re.compile(r"^req_[A-Za-z0-9_-]{1,160}$")
+SESSION_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 OUTPUT_KEYS = frozenset({"schema_version", "advisory", "telemetry", "verdicts"})
 VERDICT_KEYS = frozenset(
     {
@@ -76,9 +75,9 @@ TELEMETRY_KEYS = frozenset(
         "retries",
         "sonnet_usage",
         "fable_usage",
-        "reported_cost_upper_bound_micro_usd",
+        "estimated_cost_micro_usd",
         "duration_ms",
-        "request_ids",
+        "session_ids",
     }
 )
 USAGE_KEYS = frozenset(
@@ -192,19 +191,6 @@ def _usage_total(usage: dict[str, int]) -> int:
     return sum(usage.values())
 
 
-def _reported_cost(sonnet: dict[str, int], fable: dict[str, int]) -> int:
-    return (
-        sonnet["input_tokens"] * SONNET_INPUT_MICRO_USD
-        + sonnet["cache_creation_input_tokens"] * SONNET_INPUT_MICRO_USD * 2
-        + sonnet["cache_read_input_tokens"] * SONNET_INPUT_MICRO_USD
-        + sonnet["output_tokens"] * SONNET_OUTPUT_MICRO_USD
-        + fable["input_tokens"] * FABLE_INPUT_MICRO_USD
-        + fable["cache_creation_input_tokens"] * FABLE_INPUT_MICRO_USD * 2
-        + fable["cache_read_input_tokens"] * FABLE_INPUT_MICRO_USD
-        + fable["output_tokens"] * FABLE_OUTPUT_MICRO_USD
-    )
-
-
 def _validate_telemetry(
     value: Any,
     *,
@@ -219,9 +205,9 @@ def _validate_telemetry(
         raise VisualReviewOutputError(str(exc)) from exc
     if (
         telemetry["provider"] != "anthropic"
-        or telemetry["auth_mode"] != "github-oidc-wif"
+        or telemetry["auth_mode"] != AUTH_MODE
         or telemetry["triage_model"] != SONNET_MODEL
-        or telemetry["verification_model"] != FABLE_MODEL
+        or telemetry["verification_model"] != VERIFY_MODEL
     ):
         _fail("visual review telemetry provider/model identity is invalid")
     for field in ("client_sha256", "sonnet_prompt_sha256", "fable_prompt_sha256"):
@@ -288,36 +274,36 @@ def _validate_telemetry(
     if sonnet_calls == 0 and _usage_total(sonnet_usage) != 0:
         _fail("visual review reports Sonnet usage without a Sonnet call")
     if fable_calls == 0 and _usage_total(fable_usage) != 0:
-        _fail("visual review reports Fable usage without a Fable call")
-    expected_cost = _reported_cost(sonnet_usage, fable_usage)
+        _fail("visual review reports verification usage without a verification call")
+    # Claude Code's own API-equivalent estimate; a subscription is not billed per call.
     cost = _integer(
-        telemetry["reported_cost_upper_bound_micro_usd"],
-        "visual review telemetry reported_cost_upper_bound_micro_usd",
-        maximum=2**63 - 1,
+        telemetry["estimated_cost_micro_usd"],
+        "visual review telemetry estimated_cost_micro_usd",
+        maximum=MAX_COST_MICRO_USD,
     )
-    if cost != expected_cost:
-        _fail("visual review reported cost does not match normalized usage")
+    if calls == 0 and cost != 0:
+        _fail("visual review reports a cost without a model call")
     duration = _integer(
         telemetry["duration_ms"],
         "visual review telemetry duration_ms",
         maximum=MAX_DURATION_MS,
     )
-    request_ids = telemetry["request_ids"]
+    session_ids = telemetry["session_ids"]
     if (
-        not isinstance(request_ids, list)
-        or len(request_ids) != calls
-        or request_ids != list(dict.fromkeys(request_ids))
+        not isinstance(session_ids, list)
+        or len(session_ids) != calls
+        or session_ids != list(dict.fromkeys(session_ids))
         or any(
-            not isinstance(item, str) or REQUEST_ID.fullmatch(item) is None
-            for item in request_ids
+            not isinstance(item, str) or SESSION_ID.fullmatch(item) is None
+            for item in session_ids
         )
     ):
-        _fail("visual review request-id telemetry is invalid")
+        _fail("visual review session-id telemetry is invalid")
     return {
         "provider": "anthropic",
-        "auth_mode": "github-oidc-wif",
+        "auth_mode": AUTH_MODE,
         "triage_model": SONNET_MODEL,
-        "verification_model": FABLE_MODEL,
+        "verification_model": VERIFY_MODEL,
         "client_sha256": telemetry["client_sha256"],
         "sonnet_prompt_sha256": telemetry["sonnet_prompt_sha256"],
         "fable_prompt_sha256": telemetry["fable_prompt_sha256"],
@@ -328,9 +314,9 @@ def _validate_telemetry(
         "retries": retries,
         "sonnet_usage": sonnet_usage,
         "fable_usage": fable_usage,
-        "reported_cost_upper_bound_micro_usd": cost,
+        "estimated_cost_micro_usd": cost,
         "duration_ms": duration,
-        "request_ids": list(request_ids),
+        "session_ids": list(session_ids),
     }
 
 
@@ -516,16 +502,17 @@ def advisory_markdown(report: dict[str, Any]) -> str:
         (
             "Routes: "
             f"{routes['identical']} byte-identical, {routes['sonnet']} Sonnet, "
-            f"{routes['fable']} Fable."
+            f"{routes['fable']} Opus."
         ),
     ]
     if isinstance(telemetry, dict):
         calls = telemetry.get("sonnet_calls", 0) + telemetry.get("fable_calls", 0)
-        cost = telemetry.get("reported_cost_upper_bound_micro_usd", 0)
+        cost = telemetry.get("estimated_cost_micro_usd", 0)
         if isinstance(calls, int) and isinstance(cost, int):
             lines.append(
-                "Provider calls: "
-                f"{calls}; reported-usage cost upper bound: ${cost / 1_000_000:.6f}."
+                "Claude Code calls: "
+                f"{calls}; API-equivalent estimate (not billed to a subscription): "
+                f"${cost / 1_000_000:.6f}."
             )
     for verdict in defects:
         lines.extend(

@@ -17,10 +17,11 @@
    admission, a no-OIDC runner fully reauthenticates/decodes the queue and
    re-emits a handoff containing only that data plus exact protected
    client/preflight/prompts.
-5. A separate fresh runner with no checkout, package installer, or image decoder
-   gets a read token only for a final stdlib identity check and GitHub OIDC only
-   for WIF. Only normalized advisory JSON or a sanitized failure marker leaves
-   it; provider responses and bearer material do not.
+5. A separate fresh runner with no checkout, package manager, or image decoder
+   gets a read token only for a final stdlib identity check, a hash-pinned
+   Claude Code binary, and the owner's Claude Code token from the
+   `visual-review` environment. Only normalized advisory JSON or a sanitized
+   failure marker leaves it; CLI output and the token do not.
 6. Dedicated writer jobs publish statuses, merge an exact head, delete an exact
    single-use artifact ID, or deploy an already-built Pages artifact. They do
    not execute candidate code.
@@ -150,11 +151,11 @@ manifest bind the queue producer's exact run attempt, making re-runs distinct
 and allowing only attempts from one authenticated producer to coalesce.
 Exact-identical pairs
 consume no model calls; bounded changed chunks go to Claude Sonnet 5, and only
-anomalous/uncertain pairs escalate to Claude Fable 5. Protected code verifies
+anomalous/uncertain pairs escalate to Claude Opus 5. Protected code verifies
 structured output, usage/cost telemetry and the exact client/prompt digests.
-Short-lived Anthropic access comes from an environment-scoped GitHub OIDC WIF
-rule with `workspace:inference`; no static provider or subscription token is a
-repository secret. Retryable failures retain the queue behind authenticated
+Like Quick Skin, the review runs on the owner's Claude subscription through a
+hash-pinned Claude Code CLI; its token is a secret of the `visual-review`
+environment, never a repository secret, and no API key is accepted. Retryable failures retain the queue behind authenticated
 cooldown state, while ambiguous nonretryable failures require owner action.
 See [Advisory visual review](visual-review.md).
 
