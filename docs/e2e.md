@@ -65,8 +65,9 @@ exact manifest and content-addressed paired images.
 
 Exact canonical PNG equality is the only automatic visual acceptance. Integer
 pixel metrics prioritize changed pairs but never make a semantic decision.
-Changed pairs are grouped under a strict request/call budget: Claude Sonnet 5
-triages first and only anomalous or uncertain pairs reach Claude Opus 5.
+Changed pairs are grouped under a strict request/call budget: Claude Opus 5.5
+triages first and only anomalous or uncertain pairs reach an independent Opus 5.5
+verification.
 
 The model receives only the Read tool, allowed for exactly the images it is
 reviewing, and no repository checkout or GitHub permission. Protected code

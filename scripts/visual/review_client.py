@@ -38,10 +38,10 @@ CAPSULE_MANIFEST = "visual-capsule.json"
 CAPSULE_DIGEST = "visual-capsule.sha256"
 CAPSULE_PURPOSE = "advisory-semantic-ui-review"
 
-SONNET_MODEL = "claude-sonnet-5"
-# The verification stage keeps its historical "fable" name in the report schema; like Quick
-# Skin's reviewer it runs on Opus, which a Claude subscription serves through Claude Code.
-VERIFY_MODEL = "claude-opus-5"
+# Both stages run on Opus 5.5 through Claude Code. The report schema keeps the stages'
+# historical "sonnet" (triage) and "fable" (verification) names.
+TRIAGE_MODEL = "claude-opus-5-5"
+VERIFY_MODEL = "claude-opus-5-5"
 SONNET_MAX_PAIRS = 5
 FABLE_MAX_PAIRS = 4
 MAX_MODEL_CALLS = 5
@@ -1511,7 +1511,7 @@ class ClaudeCodeSession:
             str(self.claude),
             "--print",
             "--model",
-            SONNET_MODEL if stage == "sonnet" else VERIFY_MODEL,
+            TRIAGE_MODEL if stage == "sonnet" else VERIFY_MODEL,
             "--output-format",
             "json",
             "--json-schema",
@@ -1838,7 +1838,7 @@ def run_review(
         "telemetry": {
             "provider": "anthropic",
             "auth_mode": "claude-code-oauth",
-            "triage_model": SONNET_MODEL,
+            "triage_model": TRIAGE_MODEL,
             "verification_model": VERIFY_MODEL,
             "client_sha256": handoff["client_sha256"],
             "sonnet_prompt_sha256": handoff["sonnet_prompt_sha256"],

@@ -513,8 +513,8 @@ class WorkflowSecurityTests(unittest.TestCase):
             '[[ "$current_source_identity" == "$historical_source_identity" ]]',
             comment,
         )
-        self.assertIn('SONNET_MODEL = "claude-sonnet-5"', client)
-        self.assertIn('VERIFY_MODEL = "claude-opus-5"', client)
+        self.assertIn('TRIAGE_MODEL = "claude-opus-5-5"', client)
+        self.assertIn('VERIFY_MODEL = "claude-opus-5-5"', client)
         # The model may only read the chunk's own images.
         self.assertIn('"--tools",\n            "Read",', client)
         self.assertIn('*(f"Read(./{path})" for path in images)', client)

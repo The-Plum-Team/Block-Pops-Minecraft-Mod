@@ -52,7 +52,7 @@ from scripts.visual.normalize import (
     validate_review_provenance,
 )
 from scripts.visual.review_client import (
-    SONNET_MODEL,
+    TRIAGE_MODEL,
     VERIFY_MODEL,
     ReviewClientError,
     ReviewFailure,
@@ -161,7 +161,7 @@ def _job(run_id: int, name: str, *, attempt: int = 1) -> dict[str, object]:
 def _structured(
     pairs: list[dict[str, object]],
     *,
-    model: str,
+    stage: str,
     classification: str = "clean",
     defect: bool = False,
 ) -> dict[str, object]:
@@ -178,7 +178,7 @@ def _structured(
             if defect
             else []
         )
-        if model == SONNET_MODEL:
+        if stage == "sonnet":
             verdicts.append(
                 {
                     "label": pair["label"],
@@ -254,6 +254,8 @@ class _FakeCli:
         model = command[command.index("--model") + 1]
         schema = json.loads(command[command.index("--json-schema") + 1])
         properties = schema["properties"]["verdicts"]["items"]["properties"]
+        # Both stages run on one model; the requested schema tells triage from verification.
+        stage = "sonnet" if "classification" in properties else "fable"
         pairs = [
             {"label": label, "capture_id": capture}
             for label, capture in zip(
@@ -263,6 +265,7 @@ class _FakeCli:
         self.calls.append(
             {
                 "model": model,
+                "stage": stage,
                 "pairs": pairs,
                 "command": list(command),
                 "cwd": Path(cwd),
@@ -271,7 +274,7 @@ class _FakeCli:
                 "timeout": timeout,
             }
         )
-        outcome = self.respond(model, pairs, len(self.calls))
+        outcome = self.respond(stage, pairs, len(self.calls))
         if isinstance(outcome, BaseException):
             raise outcome
         returncode, payload = outcome if isinstance(outcome, tuple) else (0, outcome)
@@ -539,17 +542,17 @@ class VisualReviewWorkflowContractTests(unittest.TestCase):
         )[0]
         self.assertIn(
             "https://registry.npmjs.org/@anthropic-ai/claude-code-linux-x64/-/"
-            "claude-code-linux-x64-2.1.220.tgz",
+            "claude-code-linux-x64-2.1.280.tgz",
             install,
         )
         self.assertIn(
-            "CLAUDE_CODE_INTEGRITY: sha512-3CGFCnI0gpgsqNeJruFALBDGJaKXOuok3alQEg56ty2yOPpIrOx/"
-            "r2Y0+T4uhJl7kP5Hzw4IFkxo4DZKWvzQ7Q==",
+            "CLAUDE_CODE_INTEGRITY: sha512-dJHWFrDSIZ26hdLucnK3ehLmzdzYl3MsPC1RzUctAUaYnZlH5kfAZxnK8"
+            "qYRAQ89GX3OPrLsnFdt/QnP+0Ck6Q==",
             install,
         )
         self.assertLess(install.index("openssl dgst -sha512"), install.index("tar -xzf"))
         self.assertIn("--proto '=https'", install)
-        self.assertIn('== "2.1.220 (Claude Code)" ]]', install)
+        self.assertIn('== "2.1.280 (Claude Code)" ]]', install)
         self.assertNotIn("CLAUDE_CODE_OAUTH_TOKEN", install)
 
         model_step = review.split(
@@ -590,8 +593,8 @@ class VisualReviewWorkflowContractTests(unittest.TestCase):
         self.assertIn("preflight_sha256", review)
 
         client = CLIENT.read_text(encoding="utf-8")
-        self.assertIn('SONNET_MODEL = "claude-sonnet-5"', client)
-        self.assertIn('VERIFY_MODEL = "claude-opus-5"', client)
+        self.assertIn('TRIAGE_MODEL = "claude-opus-5-5"', client)
+        self.assertIn('VERIFY_MODEL = "claude-opus-5-5"', client)
         self.assertIn('"schema_version": 2', client)
         self.assertNotIn("api.anthropic.com", client)
         self.assertNotIn("api.openai.com", client)
@@ -889,7 +892,7 @@ class VisualReviewHandoffTests(unittest.TestCase):
         )
         command = session._command("sonnet", chunk, images)
         self.assertEqual(str(CLAUDE), command[0])
-        self.assertEqual(SONNET_MODEL, command[command.index("--model") + 1])
+        self.assertEqual(TRIAGE_MODEL, command[command.index("--model") + 1])
         self.assertEqual("json", command[command.index("--output-format") + 1])
         self.assertEqual("Read", command[command.index("--tools") + 1])
         self.assertEqual("dontAsk", command[command.index("--permission-mode") + 1])
@@ -1111,12 +1114,12 @@ class VisualReviewHandoffTests(unittest.TestCase):
         sonnet_anomaly_emitted = False
         costs: list[float] = []
 
-        def respond(model: str, request_pairs: list[dict[str, object]], call: int) -> object:
+        def respond(stage: str, request_pairs: list[dict[str, object]], call: int) -> object:
             nonlocal sonnet_anomaly_emitted
             cost = 0.01 * call
             costs.append(cost)
-            if model == SONNET_MODEL:
-                structured = _structured(request_pairs, model=model)
+            if stage == "sonnet":
+                structured = _structured(request_pairs, stage=stage)
                 for verdict in structured["verdicts"]:
                     if not sonnet_anomaly_emitted:
                         sonnet_anomaly_emitted = True
@@ -1133,7 +1136,7 @@ class VisualReviewHandoffTests(unittest.TestCase):
                         )
                 return _envelope(structured, session=call, cost=cost)
             return _envelope(
-                _structured(request_pairs, model=model, defect=True), session=call, cost=cost
+                _structured(request_pairs, stage=stage, defect=True), session=call, cost=cost
             )
 
         cli = _FakeCli(respond)
@@ -1156,8 +1159,8 @@ class VisualReviewHandoffTests(unittest.TestCase):
                 self.assertLessEqual(call["timeout"], 15 * 60)
             sonnet_calls = math.ceil(len(ordered_changed_pairs(pairs)) / 5)
             self.assertEqual(
-                [SONNET_MODEL] * sonnet_calls + [VERIFY_MODEL],
-                [call["model"] for call in cli.calls],
+                [("sonnet", TRIAGE_MODEL)] * sonnet_calls + [("fable", VERIFY_MODEL)],
+                [(call["stage"], call["model"]) for call in cli.calls],
             )
             self.assertEqual(len(pairs), len(report["verdicts"]))
             self.assertEqual(2, report["schema_version"])
@@ -1308,7 +1311,7 @@ class VisualReviewHandoffTests(unittest.TestCase):
             self.handoff, self.identity["manifest_sha256"]
         )
         pair = {"label": pairs[0]["label"], "capture_id": pairs[0]["capture_id"]}
-        valid = _envelope(_structured([pair], model=SONNET_MODEL))
+        valid = _envelope(_structured([pair], stage="sonnet"))
         result = extract_cli_result(json.dumps(valid).encode(), [pair], stage="sonnet")
         self.assertEqual(1, len(result.verdicts))
         self.assertEqual(12_500, result.cost_micro_usd)
@@ -1475,12 +1478,12 @@ class VisualReviewHandoffTests(unittest.TestCase):
         clock = _Clock()
         malformed_sent = False
 
-        def respond(model: str, request_pairs: list[dict[str, object]], call: int) -> object:
+        def respond(stage: str, request_pairs: list[dict[str, object]], call: int) -> object:
             nonlocal malformed_sent
             if not malformed_sent:
                 malformed_sent = True
                 return b'{"type": "result", "truncated'
-            return _envelope(_structured(request_pairs, model=model), session=call)
+            return _envelope(_structured(request_pairs, stage=stage), session=call)
 
         cli = _FakeCli(respond)
         with tempfile.TemporaryDirectory() as temporary:

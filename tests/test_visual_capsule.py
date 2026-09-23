@@ -812,8 +812,8 @@ class VisualReviewOutputTests(unittest.TestCase):
             "telemetry": {
                 "provider": "anthropic",
                 "auth_mode": "claude-code-oauth",
-                "triage_model": "claude-sonnet-5",
-                "verification_model": "claude-opus-5",
+                "triage_model": "claude-opus-5-5",
+                "verification_model": "claude-opus-5-5",
                 "client_sha256": "a" * 64,
                 "sonnet_prompt_sha256": "b" * 64,
                 "fable_prompt_sha256": "c" * 64,

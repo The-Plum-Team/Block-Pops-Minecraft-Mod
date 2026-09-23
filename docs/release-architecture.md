@@ -150,8 +150,8 @@ Visual review uses a globally serialized artifact queue. Every input name and
 manifest bind the queue producer's exact run attempt, making re-runs distinct
 and allowing only attempts from one authenticated producer to coalesce.
 Exact-identical pairs
-consume no model calls; bounded changed chunks go to Claude Sonnet 5, and only
-anomalous/uncertain pairs escalate to Claude Opus 5. Protected code verifies
+consume no model calls; bounded changed chunks go to Claude Opus 5.5 for triage, and only
+anomalous/uncertain pairs escalate to an independent Opus 5.5 verification. Protected code verifies
 structured output, usage/cost telemetry and the exact client/prompt digests.
 Like Quick Skin, the review runs on the owner's Claude subscription through a
 hash-pinned Claude Code CLI; its token is a secret of the `visual-review`

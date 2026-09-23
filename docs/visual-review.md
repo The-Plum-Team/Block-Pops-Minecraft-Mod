@@ -35,7 +35,7 @@ packet propagated state, or whether a contracted assertion passed.
    It has read-only GitHub scopes solely for a hash-bound stdlib identity
    preflight; it has no checkout, package manager, image decoder, GitHub write
    permission or OIDC identity. It installs one pinned Claude Code binary, the
-   Linux x64 build of `@anthropic-ai/claude-code` 2.1.220, only after its
+   Linux x64 build of `@anthropic-ai/claude-code` 2.1.280, only after its
    registry sha512 integrity matches the value pinned in the workflow. Only
    after the current controller, source, tested tree, admitted artifact and
    newest eligible current-or-historical baseline are rebound does the owner's
@@ -74,7 +74,7 @@ Canonical RGB PNG bytes are compared first. A byte-identical pair is accepted
 deterministically and never sent to Anthropic. Integer pixel metrics rank
 changed pairs only; no similarity threshold can declare a semantic pass.
 
-Changed pairs are ordered with key captures first. Sonnet chunks contain at
+Changed pairs are ordered with key captures first. Triage chunks contain at
 most five pairs and verification chunks at most four, so the model opens at
 most ten images per call. The current matrix produces ten pairs (two loaders by
 five semantic captures), so even full escalation is bounded to five logical
@@ -82,11 +82,12 @@ calls. A capsule with more than ten pairs, or whose worst-case prompt exceeds
 its byte budget, fails before any model call and requires an explicit
 cost-envelope review.
 
-- `claude-sonnet-5` classifies each changed pair as clean, anomalous, or
+- `claude-opus-5-5` triages each changed pair as clean, anomalous, or
   uncertain.
-- Only anomalous or uncertain pairs reach `claude-opus-5` for an independent
-  semantic verdict. The report keeps this verification route's historical
-  name, `fable`.
+- Only anomalous or uncertain pairs reach a second, independent
+  `claude-opus-5-5` call for a semantic verdict. The report keeps the two
+  routes' historical names, `sonnet` and `fable`.
+- Opus 5.5 needs Claude Code 2.1.280 or newer; older releases reject it.
 - Claude Code constrains the result with JSON Schema (`--json-schema`), and
   protected code validates it again. A failed result, missing pair, extra
   pair, duplicate, unknown enum, incoherent verdict or unbounded text cannot

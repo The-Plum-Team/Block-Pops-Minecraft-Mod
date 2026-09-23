@@ -35,9 +35,10 @@ MAX_MODEL_ATTEMPTS = 10
 MAX_DURATION_MS = 35 * 60 * 1000
 MAX_USAGE_TOKENS = 100_000_000
 
-SONNET_MODEL = "claude-sonnet-5"
-# The verification route keeps its historical "fable" name; it runs on Opus through Claude Code.
-VERIFY_MODEL = "claude-opus-5"
+# Both routes run on Opus 5.5 through Claude Code; the routes keep their historical
+# "sonnet" (triage) and "fable" (verification) names.
+TRIAGE_MODEL = "claude-opus-5-5"
+VERIFY_MODEL = "claude-opus-5-5"
 AUTH_MODE = "claude-code-oauth"
 IDENTICAL_VISIBLE = "Candidate and canonical reference are byte-identical."
 MAX_COST_MICRO_USD = 1000 * 1_000_000
@@ -206,7 +207,7 @@ def _validate_telemetry(
     if (
         telemetry["provider"] != "anthropic"
         or telemetry["auth_mode"] != AUTH_MODE
-        or telemetry["triage_model"] != SONNET_MODEL
+        or telemetry["triage_model"] != TRIAGE_MODEL
         or telemetry["verification_model"] != VERIFY_MODEL
     ):
         _fail("visual review telemetry provider/model identity is invalid")
@@ -243,9 +244,9 @@ def _validate_telemetry(
     )
     if triaged_expected == 0:
         if sonnet_calls != 0:
-            _fail("identical-only review must not call Sonnet")
+            _fail("identical-only review must not call the triage model")
     elif not (triaged_expected + 4) // 5 <= sonnet_calls <= triaged_expected:
-        _fail("Sonnet call count cannot cover the triaged pairs within chunk bounds")
+        _fail("triage call count cannot cover the triaged pairs within chunk bounds")
     if escalated_expected == 0:
         if fable_calls != 0:
             _fail("review without escalation must not call the strongest tier")
@@ -272,7 +273,7 @@ def _validate_telemetry(
         telemetry["fable_usage"], "visual review telemetry fable_usage"
     )
     if sonnet_calls == 0 and _usage_total(sonnet_usage) != 0:
-        _fail("visual review reports Sonnet usage without a Sonnet call")
+        _fail("visual review reports triage usage without a triage call")
     if fable_calls == 0 and _usage_total(fable_usage) != 0:
         _fail("visual review reports verification usage without a verification call")
     # Claude Code's own API-equivalent estimate; a subscription is not billed per call.
@@ -302,7 +303,7 @@ def _validate_telemetry(
     return {
         "provider": "anthropic",
         "auth_mode": AUTH_MODE,
-        "triage_model": SONNET_MODEL,
+        "triage_model": TRIAGE_MODEL,
         "verification_model": VERIFY_MODEL,
         "client_sha256": telemetry["client_sha256"],
         "sonnet_prompt_sha256": telemetry["sonnet_prompt_sha256"],
@@ -390,7 +391,7 @@ def validate_review_output(
         elif route == "identical":
             _fail(f"verdicts[{index}] changed pair cannot use the identical route")
         elif route == "sonnet" and (regression or has_defect):
-            _fail(f"verdicts[{index}] Sonnet anomalies must reach the strongest tier")
+            _fail(f"verdicts[{index}] triage anomalies must reach verification")
         normalized_by_label[label] = {
             "label": label,
             "capture_id": capture_id,
@@ -501,8 +502,8 @@ def advisory_markdown(report: dict[str, Any]) -> str:
         f"Reviewed {len(verdicts)} semantic frame pairs; {len(defects)} advisory regression(s).",
         (
             "Routes: "
-            f"{routes['identical']} byte-identical, {routes['sonnet']} Sonnet, "
-            f"{routes['fable']} Opus."
+            f"{routes['identical']} byte-identical, {routes['sonnet']} triaged, "
+            f"{routes['fable']} verified."
         ),
     ]
     if isinstance(telemetry, dict):
