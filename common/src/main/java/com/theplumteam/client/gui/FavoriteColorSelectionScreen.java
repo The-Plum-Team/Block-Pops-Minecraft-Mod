@@ -73,6 +73,9 @@ public class FavoriteColorSelectionScreen extends Screen {
 
     // Box container scale (scales the grid area only, not the entire panel)
     private float containerScale = 1.2f;
+    // How far the fitted preview shrank from the preferred one. The preview offsets were tuned
+    // at the preferred cell size and must shrink with it to keep each box inside its tile.
+    private float previewFit = 1.0f;
 
     // Track if we forced GUI scale change
     private boolean guiScaleForced = false;
@@ -131,6 +134,8 @@ public class FavoriteColorSelectionScreen extends Screen {
         int fittingHeight = (doneButtonY - scaledSpacing - gridStartY - (gridRows - 1) * scaledSpacing) / gridRows;
         int fittingWidth = (panelWidth - 2 * scaledPadding - (gridCols - 1) * scaledSpacing) / gridCols;
         int buttonSize = Math.max(16, Math.min(preferredSize, Math.min(fittingHeight, fittingWidth)));
+        // Each cell draws its preview at 60% of its size; the offsets scale by the same ratio.
+        previewFit = (int) (buttonSize * 0.6f) / (float) (int) (preferredSize * 0.6f);
         int gridWidth = (gridCols * buttonSize) + ((gridCols - 1) * scaledSpacing);
 
         // Center the grid horizontally
@@ -189,7 +194,8 @@ public class FavoriteColorSelectionScreen extends Screen {
      */
     private void updateButtonTransforms() {
         for (ColorSelectionButton button : colorButtons) {
-            button.setTransforms(rotationX, rotationY, rotationZ, scale, offsetX, offsetY, offsetZ);
+            button.setTransforms(rotationX, rotationY, rotationZ, scale,
+                    offsetX * previewFit, offsetY * previewFit, offsetZ * previewFit);
         }
     }
 
