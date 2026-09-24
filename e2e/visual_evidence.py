@@ -32,6 +32,7 @@ from e2e.scenario_contract import (
     ScenarioContractError,
     load_contract,
 )
+from scripts.lib.content_cache import ContentCache
 from scripts.lib.secure_json import (
     SecureJsonError,
     canonical_json,
@@ -574,6 +575,11 @@ def extract_authenticated_artifact(
         raise
 
 
+# Canonicalization is a pure function of the file bytes and the expected size: a capsule, a
+# curation and the Pages anchor each canonicalize the same frames. Only successes are kept.
+_CANONICAL = ContentCache(entries=256, max_bytes=128 * 1024 * 1024)
+
+
 def canonicalize_png(
     path: Path,
     *,
@@ -582,6 +588,20 @@ def canonicalize_png(
     """Read once, fully decode, and encode a deterministic metadata-free RGB PNG."""
 
     payload = _read_regular_bytes(path, label="visual screenshot", maximum=MAX_SCREENSHOT_BYTES)
+    return _CANONICAL.get_or_compute(
+        payload,
+        (tuple(expected_size), MAX_IMAGE_PIXELS, MAX_SCREENSHOT_BYTES),
+        lambda: _canonicalize_png_bytes(payload, path, expected_size=expected_size),
+        size=lambda result: len(result[5]),
+    )
+
+
+def _canonicalize_png_bytes(
+    payload: bytes,
+    path: Path,
+    *,
+    expected_size: tuple[int, int],
+) -> tuple[int, int, str, str, str, bytes, dict[str, Any]]:
     try:
         Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
         with Image.open(io.BytesIO(payload)) as image:

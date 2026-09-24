@@ -36,6 +36,7 @@ from e2e.scenario_contract import (  # noqa: E402
     load_contract,
 )
 from scripts.lib import atomic_directory  # noqa: E402
+from scripts.lib.content_cache import ContentCache  # noqa: E402
 from scripts.lib.secure_json import (  # noqa: E402
     SecureJsonError,
     canonical_json,
@@ -544,9 +545,31 @@ def _decode_screenshot_metrics(
     if dimensions != contract.gui_text_reference_size:
         raise FanInError(f"{label} dimensions disagree with the scenario contract")
     try:
-        from PIL import Image, ImageStat, UnidentifiedImageError
+        from PIL import Image
     except ImportError as exc:  # pragma: no cover - locked CI requirements install Pillow
         raise FanInError("Pillow is required for packaged evidence validation") from exc
+    metrics, pixels = _DECODED_SCREENSHOTS.get_or_compute(
+        screenshot,
+        (dimensions, 20_000_000),
+        lambda: _decode_screenshot_pixels(screenshot, label=label, dimensions=dimensions),
+        size=lambda value: len(value[1]),
+    )
+    return metrics, Image.frombytes("RGB", dimensions, pixels)
+
+
+# The decode and its metrics are a pure function of the PNG bytes and the contracted size;
+# a frame validated once (the same lane re-read, or the same bytes in another lane) is reused.
+# The RGB pixels are kept as bytes so every caller gets its own image. Failures are not kept.
+_DECODED_SCREENSHOTS = ContentCache(entries=256, max_bytes=128 * 1024 * 1024)
+
+
+def _decode_screenshot_pixels(
+    screenshot: bytes,
+    *,
+    label: str,
+    dimensions: tuple[int, int],
+) -> tuple[dict[str, Any], bytes]:
+    from PIL import Image, ImageStat, UnidentifiedImageError
 
     try:
         Image.MAX_IMAGE_PIXELS = 20_000_000
@@ -582,18 +605,19 @@ def _decode_screenshot_metrics(
         or light_fraction > 0.995
     ):
         raise FanInError(f"{label} is effectively blank")
+    pixels = rgb.tobytes()
     return (
         {
             "width": dimensions[0],
             "height": dimensions[1],
             "file_sha256": _sha256(screenshot),
-            "pixel_sha256": hashlib.sha256(rgb.tobytes()).hexdigest(),
+            "pixel_sha256": hashlib.sha256(pixels).hexdigest(),
             "luma_entropy": round(entropy, 3),
             "meaningful_colors": meaningful_colors,
             "dark_fraction": round(dark_fraction, 4),
             "light_fraction": round(light_fraction, 4),
         },
-        rgb,
+        pixels,
     )
 
 

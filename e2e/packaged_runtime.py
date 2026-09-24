@@ -40,6 +40,7 @@ from e2e.runtime_store import (
     StoreCorruptionError,
 )
 from e2e.scenario_contract import OpaqueStarsProbe, RequiredGuiTextProbe, default_contract
+from scripts.lib.content_cache import ContentCache
 from scripts.lib.secure_json import SecureJsonError, read as read_secure_json, require_object
 from scripts.release.matrix import MatrixError, normalize_matrix_inventory
 
@@ -1277,6 +1278,13 @@ def failed_marker_summary(game_dir: Path, role: str) -> str:
     return f"{role}: " + ("; ".join(failures) if failures else "marker failed without a failed step")
 
 
+# Pixel metrics and probe verdicts are pure functions of the decoded bytes and the probe
+# parameters. Pages validation reinspects every frame several times (collection, frame
+# validation, compaction), so a success is kept by content hash; see scripts/lib/content_cache.
+_SCREENSHOT_METRICS = ContentCache(entries=1024)
+_SCREENSHOT_PROBES = ContentCache(entries=1024)
+
+
 def inspect_screenshot(
     path: Path, *, expected_format: str = "PNG"
 ) -> dict[str, Any]:
@@ -1285,6 +1293,14 @@ def inspect_screenshot(
     Packaged-runtime callers retain the PNG-only default.  Protected Pages code may use the
     same pixel inspection for the WebP derivative that it creates from an already validated PNG.
     """
+
+    return _inspect_screenshot(path, expected_format=expected_format)[0]
+
+
+def _inspect_screenshot(
+    path: Path, *, expected_format: str
+) -> tuple[dict[str, Any], bytes]:
+    """Return the metrics and the exact bytes they describe (after any normalization)."""
 
     if expected_format not in {"PNG", "WEBP"}:
         raise RuntimeFailure(f"unsupported screenshot format contract: {expected_format!r}")
@@ -1328,6 +1344,7 @@ def inspect_screenshot(
             finally:
                 if descriptor >= 0:
                     os.close(descriptor)
+            payload = source_bytes
 
             with Image.open(io.BytesIO(source_bytes)) as source_image:
                 if source_image.format != "PNG" or getattr(source_image, "n_frames", 1) != 1:
@@ -1389,8 +1406,28 @@ def inspect_screenshot(
                         os.replace(temporary_path, path)
                     finally:
                         temporary_path.unlink(missing_ok=True)
+                    payload = normalized_bytes
+        else:
+            payload = path.read_bytes()
 
-        with Image.open(path) as image:
+        # Everything above depends on the file; everything below only on these exact bytes.
+        metrics = _SCREENSHOT_METRICS.get_or_compute(
+            payload,
+            (expected_format, GUI_TEXT_REFERENCE_SIZE, Image.MAX_IMAGE_PIXELS),
+            lambda: _screenshot_metrics(payload, expected_format, path),
+        )
+    except RuntimeFailure:
+        raise
+    except (OSError, UnidentifiedImageError, ValueError) as exc:
+        raise RuntimeFailure(f"screenshot cannot be decoded: {path}: {exc}") from exc
+    return metrics, payload
+
+
+def _screenshot_metrics(payload: bytes, expected_format: str, path: Path) -> dict[str, Any]:
+    from PIL import Image, ImageStat, UnidentifiedImageError
+
+    try:
+        with Image.open(io.BytesIO(payload)) as image:
             if image.format != expected_format:
                 raise RuntimeFailure(
                     f"screenshot is not a {expected_format} image: {path}"
@@ -1437,7 +1474,7 @@ def inspect_screenshot(
     return {
         "width": width,
         "height": height,
-        "file_sha256": sha256(path),
+        "file_sha256": hashlib.sha256(payload).hexdigest(),
         "pixel_sha256": pixel_sha256,
         "luma_entropy": round(entropy, 3),
         "meaningful_colors": meaningful_colors,
@@ -1449,6 +1486,8 @@ def inspect_screenshot(
 def validate_opaque_stars_background(
     path: Path,
     probe: OpaqueStarsProbe | tuple[float, float, float, float],
+    *,
+    data: bytes | None = None,
 ) -> None:
     """Reject a bright or washed-out OPAQUE_STARS backdrop in a normalized UI-free region."""
 
@@ -1477,7 +1516,7 @@ def validate_opaque_stars_background(
             or region[1] >= region[3]
         ):
             raise RuntimeFailure(f"invalid OPAQUE_STARS background region {region!r}")
-        with Image.open(path) as image:
+        with Image.open(path if data is None else io.BytesIO(data)) as image:
             width, height = image.size
             box = (
                 int(region[0] * width),
@@ -1515,7 +1554,7 @@ def validate_opaque_stars_background(
 
 
 def validate_required_gui_text(
-    path: Path, scenario: str, role: str, step: str
+    path: Path, scenario: str, role: str, step: str, *, data: bytes | None = None
 ) -> None:
     """Require stable bright glyph pixels in GUI regions whose copy must remain readable."""
 
@@ -1529,7 +1568,7 @@ def validate_required_gui_text(
         raise RuntimeFailure("Pillow is required for screenshot pixel validation") from exc
 
     try:
-        with Image.open(path) as image:
+        with Image.open(path if data is None else io.BytesIO(data)) as image:
             rgb = image.convert("RGB")
             if rgb.size != GUI_TEXT_REFERENCE_SIZE:
                 rgb = rgb.resize(GUI_TEXT_REFERENCE_SIZE, Image.Resampling.LANCZOS)
@@ -1563,11 +1602,21 @@ def inspect_screenshot_for_step(
 ) -> dict[str, Any]:
     """Apply generic image checks plus any semantic pixel contract owned by this report step."""
 
-    metrics = inspect_screenshot(path)
+    metrics, payload = _inspect_screenshot(path, expected_format="PNG")
     opaque_stars_probe = OPAQUE_STARS_PROBES.get((scenario, role, step))
-    if opaque_stars_probe is not None:
-        validate_opaque_stars_background(path, opaque_stars_probe)
-    validate_required_gui_text(path, scenario, role, step)
+    text_probes = REQUIRED_GUI_TEXT_PROBES.get((scenario, role, step))
+
+    def probe() -> bool:
+        if opaque_stars_probe is not None:
+            validate_opaque_stars_background(path, opaque_stars_probe, data=payload)
+        validate_required_gui_text(path, scenario, role, step, data=payload)
+        return True
+
+    # Keyed by the probe values themselves, not the step name, so a different threshold or
+    # region can never reuse an earlier verdict.
+    _SCREENSHOT_PROBES.get_or_compute(
+        payload, (opaque_stars_probe, text_probes, GUI_TEXT_REFERENCE_SIZE), probe
+    )
     return metrics
 
 

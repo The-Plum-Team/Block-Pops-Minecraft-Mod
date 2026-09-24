@@ -33,6 +33,7 @@ from e2e.packaged_runtime import (  # noqa: E402
 )
 from e2e.scenario_contract import ScenarioContract, default_contract  # noqa: E402
 from scripts.lib import atomic_directory  # noqa: E402
+from scripts.lib.content_cache import ContentCache  # noqa: E402
 from scripts.lib.secure_json import (  # noqa: E402
     SecureJsonError,
     canonical_json,
@@ -222,7 +223,20 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+# A frame is decoded at collection, frame validation, compaction and binding; the verdict is a
+# pure function of its bytes and the format and decode bound. Failures are never stored.
+_DECODED = ContentCache(entries=1024)
+
+
 def _image(data: bytes, *, expected_format: str, label: str) -> dict[str, Any]:
+    return _DECODED.get_or_compute(
+        data,
+        (expected_format, MAX_PIXELS),
+        lambda: _image_uncached(data, expected_format=expected_format, label=label),
+    )
+
+
+def _image_uncached(data: bytes, *, expected_format: str, label: str) -> dict[str, Any]:
     try:
         from PIL import Image
     except ImportError as exc:  # pragma: no cover - workflow installs the locked wheel
@@ -878,20 +892,13 @@ def validate_raw(root: Path, *, matrix_path: Path, expected: dict[str, Any] | No
 # The derivative is a pure function of the source bytes, and method 6 is WebP's slowest effort.
 # A gallery encodes each frame once; rebuilding one from the same evidence (retries, the test
 # fixtures) reuses the result instead of spending that effort again. Keys are content hashes.
-_WEBP_CACHE: dict[str, bytes] = {}
-_WEBP_CACHE_ENTRIES = 256
+_WEBP = ContentCache(entries=256, max_bytes=64 * 1024 * 1024)
 
 
 def _encode_webp(raw: bytes) -> bytes:
-    key = hashlib.sha256(raw).hexdigest()
-    cached = _WEBP_CACHE.get(key)
-    if cached is not None:
-        return cached
-    encoded = _encode_webp_uncached(raw)
-    if len(_WEBP_CACHE) >= _WEBP_CACHE_ENTRIES:
-        _WEBP_CACHE.pop(next(iter(_WEBP_CACHE)))
-    _WEBP_CACHE[key] = encoded
-    return encoded
+    return _WEBP.get_or_compute(
+        raw, (MAX_PIXELS, MAX_DERIVATIVE_BYTES), lambda: _encode_webp_uncached(raw), size=len
+    )
 
 
 def _encode_webp_uncached(raw: bytes) -> bytes:

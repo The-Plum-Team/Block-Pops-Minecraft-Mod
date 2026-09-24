@@ -721,5 +721,27 @@ class E2EFanInTests(unittest.TestCase):
             )
 
 
+
+class ScreenshotDecodeCacheTests(unittest.TestCase):
+    def test_cached_decodes_stay_independent_and_rejections_are_rechecked(self) -> None:
+        from scripts.ci import e2e_fanin
+
+        contract = load_contract(CONTRACT_PATH)
+        width, height = contract.gui_text_reference_size
+        png = _png(width, height, 3)
+        first_metrics, first = e2e_fanin._decode_screenshot_metrics(png, label="a", contract=contract)
+        first.putpixel((0, 0), (255, 255, 255))
+        second_metrics, second = e2e_fanin._decode_screenshot_metrics(png, label="b", contract=contract)
+        self.assertEqual(first_metrics, second_metrics)
+        self.assertNotEqual((255, 255, 255), second.getpixel((0, 0)))
+        self.assertEqual(second_metrics["pixel_sha256"], hashlib.sha256(second.tobytes()).hexdigest())
+
+        output = io.BytesIO()
+        Image.new("RGB", (width, height), (0, 0, 0)).save(output, format="PNG")
+        for _ in range(2):
+            with self.assertRaisesRegex(FanInError, "effectively blank"):
+                e2e_fanin._decode_screenshot_metrics(output.getvalue(), label="blank", contract=contract)
+
+
 if __name__ == "__main__":
     unittest.main()
