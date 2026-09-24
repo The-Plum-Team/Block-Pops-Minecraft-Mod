@@ -189,9 +189,11 @@ def _pair_metrics(candidate: bytes, reference: bytes, *, width: int, height: int
                 candidate_image.convert("RGB"), reference_image.convert("RGB")
             )
             histograms = difference.histogram()
-            changed_pixels = sum(
-                1 for red, green, blue in difference.getdata() if red or green or blue
-            )
+            # A pixel changed when any channel differs, i.e. when the per-pixel maximum of the
+            # three absolute differences is non-zero: the same exact count, without a Python loop.
+            red, green, blue = difference.split()
+            largest = ImageChops.lighter(ImageChops.lighter(red, green), blue)
+            changed_pixels = difference.width * difference.height - largest.histogram()[0]
             sum_absolute_delta = sum(
                 value * count
                 for channel in range(3)

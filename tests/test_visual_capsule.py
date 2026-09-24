@@ -924,5 +924,31 @@ class VisualReviewOutputTests(unittest.TestCase):
                 read_and_validate_review(self.capsule, link)
 
 
+class PairTriageTests(unittest.TestCase):
+    def test_changed_pixel_count_matches_every_channel_exactly(self) -> None:
+        from e2e.visual_capsule import _pair_metrics
+
+        def png(image: Image.Image) -> bytes:
+            output = __import__("io").BytesIO()
+            image.save(output, format="PNG")
+            return output.getvalue()
+
+        reference = Image.new("RGB", (64, 36), (10, 20, 30))
+        candidate = reference.copy()
+        # One-level changes in a single channel, in each direction, must all count.
+        changes = {(0, 0): (11, 20, 30), (1, 0): (10, 19, 30), (2, 0): (10, 20, 31),
+                   (3, 0): (9, 21, 29), (63, 35): (255, 255, 255), (5, 5): (10, 20, 30)}
+        for position, color in changes.items():
+            candidate.putpixel(position, color)
+        naive = sum(
+            1 for left, right in zip(candidate.getdata(), reference.getdata()) if left != right
+        )
+        metrics = _pair_metrics(png(candidate), png(reference), width=64, height=36)
+        self.assertEqual(5, naive)
+        self.assertEqual(naive, metrics["changed_pixels"])
+        self.assertEqual(64 * 36, metrics["pixel_count"])
+        self.assertEqual(1 + 1 + 1 + 3 + (245 + 235 + 225), metrics["sum_absolute_delta"])
+
+
 if __name__ == "__main__":
     unittest.main()
