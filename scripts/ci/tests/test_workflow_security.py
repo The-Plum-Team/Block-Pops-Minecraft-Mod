@@ -77,7 +77,8 @@ class WorkflowSecurityTests(unittest.TestCase):
         targets = {
             WORKFLOWS / "build-gate.yml": (
                 "scripts/release/matrix.py",
-                "python3 -m unittest",
+                # Imports and runs every candidate test module, so it is candidate execution.
+                "scripts/ci/parallel_unittest.py",
                 "./gradlew",
                 "scripts/release/verify_release.py",
             ),

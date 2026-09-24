@@ -23,6 +23,7 @@ class MatrixBuildWorkflowTests(unittest.TestCase):
     workflow = WORKFLOW
     build_step = "Validate and build entirely inside the credentialless account"
     validate_step = "Reverify inert outputs under a fresh credentialless validator identity"
+    test_runner = ["python3", "scripts/ci/parallel_unittest.py", "-v", "-t", ".", "scripts/ci/tests", "tests"]
 
     def test_java17_path_is_a_positional_argument_and_gradle_jdk_remains_default(self):
         workflow = self.workflow.read_text()
@@ -48,6 +49,8 @@ if args and args[0] == "scripts/ci/matrix_scope.py":
     sys.exit(int(os.environ.get("SCOPE_EXIT", "0")))
 if args and args[0] == "scripts/release/build_matrix.py":
     sys.exit(int(os.environ.get("BUILD_EXIT", "0")))
+if args and args[0] == "scripts/ci/parallel_unittest.py":
+    sys.exit(int(os.environ.get("TESTS_EXIT", "0")))
 if args and args[0] == "scripts/release/build_evidence.py":
     sys.exit(int(os.environ.get("EVIDENCE_EXIT", "0")))
 if args[:2] == ["controller/scripts/ci/untrusted_runner.py", "validate"]:
@@ -101,6 +104,23 @@ if args[:2] == ["controller/scripts/ci/untrusted_runner.py", "validate"]:
                     "--matrix", repository + "/release/release-matrix.json", "--stage", repository + "/build/release",
                     "--manifest", repository + "/build/release/artifacts.json", "--verify-staged", *scope_args], rows[1])
 
+    def test_both_candidate_suites_run_once_and_gate_the_build(self):
+        result, rows = self.run_step(self.build_step, "legacy", "/jdk17")
+        self.assertEqual(0, result.returncode, result.stderr)
+        runs = [index for index, row in enumerate(rows)
+                if row[1:2] == ["scripts/ci/parallel_unittest.py"] or row[1:3] == ["-m", "unittest"]]
+        if self.test_runner is None:
+            self.assertEqual([], runs)
+            return
+        self.assertEqual([self.test_runner], [rows[index] for index in runs])
+        installs = [index for index, row in enumerate(rows) if row[1:4] == ["-m", "pip", "install"]]
+        builds = [index for index, row in enumerate(rows) if row[1:2] == ["scripts/release/build_matrix.py"]]
+        self.assertLess(installs[0], runs[0])
+        self.assertLess(runs[0], builds[0])
+        result, rows = self.run_step(self.build_step, "legacy", "/jdk17", TESTS_EXIT="1")
+        self.assertNotEqual(0, result.returncode)
+        self.assertFalse(any(row[1:2] == ["scripts/release/build_matrix.py"] for row in rows))
+
     def test_invalid_selection_and_failed_build_never_stage(self):
         for scope, env in (("lane", {}), ("legacy", {"SCOPE_EXIT": "2"}),
                            ("legacy", {"BUILD_EXIT": "1"})):
@@ -114,6 +134,7 @@ class E2EInputBuildWorkflowTests(MatrixBuildWorkflowTests):
     workflow = REPO / ".github/workflows/on-demand-e2e.yml"
     build_step = "Build and stage inside the credentialless account"
     validate_step = "Reverify inert runtime inputs under a fresh credentialless validator"
+    test_runner = None
 
 
 if __name__ == "__main__":

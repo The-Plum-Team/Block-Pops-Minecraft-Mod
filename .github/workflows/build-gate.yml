@@ -332,8 +332,9 @@ jobs:
               python3 scripts/ci/dependency_policy.py \
                 --metadata gradle/verification-metadata.xml >/dev/null
               python3 -m compileall -q e2e scripts tests
-              python3 -m unittest discover -s scripts/ci/tests -p "test_*.py" -v
-              python3 -m unittest discover -s tests -p "test_*.py" -v
+              # Both suites, one worker per runner core. Each test class runs whole in one
+              # worker, and the runner fails unless every discovered test ran and passed.
+              python3 scripts/ci/parallel_unittest.py -v -t . scripts/ci/tests tests
               scope="$(python3 scripts/ci/matrix_scope.py --matrix release/release-matrix.json)"
               verify_command=(python3 scripts/release/verify_release.py)
               build_command=(./gradlew --no-daemon --no-parallel --max-workers=1 \

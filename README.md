@@ -21,6 +21,8 @@ from it.
 python3 scripts/release/matrix.py
 python3 -m unittest discover -s tests -v
 python3 -m unittest discover -s scripts/ci/tests -t . -v
+# or both suites across every core, as the Build gate runs them:
+python3 scripts/ci/parallel_unittest.py -t . scripts/ci/tests tests
 python3 scripts/ci/dependency_policy.py --metadata gradle/verification-metadata.xml
 ./gradlew --no-daemon --no-parallel clean buildAllLanes buildAllE2EHarnesses
 python3 scripts/release/verify_release.py \
