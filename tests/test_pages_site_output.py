@@ -8,11 +8,14 @@ from unittest.mock import patch
 from scripts.pages import build_site as site
 from tests import test_pages_site_atomic as legacy, test_pages_site_scope as scoped
 from tests import test_pages_compact_selection as bindings
+from tests.contract_fixtures import representative_contract
 
 
 class SiteOutputTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # The scoped fixture runs on the representative contract; build the legacy one on it too.
+        cls.enterClassContext(representative_contract())
         legacy.AtomicSiteTests.setUpClass()
         cls.addClassCleanup(legacy.AtomicSiteTests.doClassCleanups)
         bindings.CompactSelectionTests.setUpClass()

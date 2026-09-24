@@ -44,6 +44,7 @@ from e2e.visual_review_output import (
     write_normalized_review,
 )
 from scripts.release.matrix import load_matrix, matrix_sha256
+from tests.contract_fixtures import bound_contract_path, representative_contract
 from tests.matrix_fixtures import schema1_source_matrix
 from scripts.ci.tests.matrix_fixtures import (
     canonical_integration_matrix,
@@ -148,9 +149,10 @@ def _build_evidence(
     *,
     metadata: str,
     matrix_path: Path = MATRIX_PATH,
+    contract_path: Path | None = None,
 ) -> list[dict[str, object]]:
     matrix = load_matrix(matrix_path)
-    contract = load_contract(CONTRACT_PATH)
+    contract = load_contract(contract_path or bound_contract_path())
     rows = {row["artifact_node"]: row for row in matrix["runtimes"]}
     results: list[dict[str, object]] = []
     for node in sorted(nodes):
@@ -310,12 +312,16 @@ def _source(
     event: str,
     metadata: str,
     matrix_path: Path = MATRIX_PATH,
+    contract_path: Path | None = None,
 ) -> tuple[Path, Path, SourceExpectation]:
+    contract_path = contract_path or bound_contract_path()
     evidence = root / f"{name}-evidence"
-    _build_evidence(evidence, nodes, metadata=metadata, matrix_path=matrix_path)
+    _build_evidence(
+        evidence, nodes, metadata=metadata, matrix_path=matrix_path, contract_path=contract_path
+    )
     archive = root / f"{name}.zip"
     archive_sha = _zip_tree(evidence, archive)
-    contract = load_contract(CONTRACT_PATH)
+    contract = load_contract(contract_path)
     fields = {
         "repository": "AkaNebur/BlockPops",
         "source_head_repository": "AkaNebur/BlockPops",
@@ -354,6 +360,8 @@ def _source(
 class VisualCapsuleTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        # Pairing, normalization and capsule validation do not depend on the capture count.
+        cls.enterClassContext(representative_contract())
         cls.shared = tempfile.TemporaryDirectory(prefix="blockpops-visual-tests-")
         root = Path(cls.shared.name)
         cls.reference_matrix_path = write_matrix_fixture(
@@ -385,7 +393,7 @@ class VisualCapsuleTests(unittest.TestCase):
             attestation_path=candidate[1],
             expectation=candidate[2],
             matrix_path=MATRIX_PATH,
-            contract_path=CONTRACT_PATH,
+            contract_path=bound_contract_path(),
             extraction_destination=root / "candidate-extracted",
         )
         cls.reference = load_archived_evidence(
@@ -393,7 +401,7 @@ class VisualCapsuleTests(unittest.TestCase):
             attestation_path=reference[1],
             expectation=reference[2],
             matrix_path=cls.reference_matrix_path,
-            contract_path=CONTRACT_PATH,
+            contract_path=bound_contract_path(),
             extraction_destination=root / "reference-extracted",
         )
 
@@ -417,7 +425,7 @@ class VisualCapsuleTests(unittest.TestCase):
     def test_pairs_every_lane_by_semantic_capture_against_fabric_baseline(self) -> None:
         capsule = self._capsule()
         manifest, pairs = validate_capsule(capsule)
-        captures = load_contract(CONTRACT_PATH).capture_ids
+        captures = load_contract(bound_contract_path()).capture_ids
         self.assertEqual(len(ACTIVE_NODES) * len(captures), len(pairs))
         self.assertEqual(
             set(ACTIVE_NODES),
@@ -446,7 +454,7 @@ class VisualCapsuleTests(unittest.TestCase):
             for pair in manifest["pairs"]
             if pair["candidate"]["loader"] == REFERENCE_ROW["loader"]
         ]
-        self.assertEqual(len(load_contract(CONTRACT_PATH).capture_ids), len(same_loader_pairs))
+        self.assertEqual(len(load_contract(bound_contract_path()).capture_ids), len(same_loader_pairs))
         for pair in same_loader_pairs:
             self.assertNotEqual(
                 pair["candidate"]["source_file_sha256"],
@@ -693,6 +701,7 @@ class VisualBoundaryMutationTests(unittest.TestCase):
 class VisualReviewOutputTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        cls.enterClassContext(representative_contract())
         shared = tempfile.TemporaryDirectory(prefix="blockpops-review-output-")
         cls.shared = shared
         root = Path(shared.name)
@@ -725,7 +734,7 @@ class VisualReviewOutputTests(unittest.TestCase):
             attestation_path=candidate_input[1],
             expectation=candidate_input[2],
             matrix_path=MATRIX_PATH,
-            contract_path=CONTRACT_PATH,
+            contract_path=bound_contract_path(),
             extraction_destination=root / "candidate-extracted",
         )
         reference = load_archived_evidence(
@@ -733,7 +742,7 @@ class VisualReviewOutputTests(unittest.TestCase):
             attestation_path=reference_input[1],
             expectation=reference_input[2],
             matrix_path=cls.reference_matrix_path,
-            contract_path=CONTRACT_PATH,
+            contract_path=bound_contract_path(),
             extraction_destination=root / "reference-extracted",
         )
         cls.capsule = root / "capsule"
@@ -922,6 +931,7 @@ class VisualReviewOutputTests(unittest.TestCase):
             link.symlink_to(duplicate)
             with self.assertRaises(VisualReviewOutputError):
                 read_and_validate_review(self.capsule, link)
+
 
 
 class PairTriageTests(unittest.TestCase):

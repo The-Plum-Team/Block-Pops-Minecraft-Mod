@@ -12,6 +12,7 @@ from unittest.mock import patch
 from scripts.ci.tests.matrix_fixtures import TARGET_COUNT, schema1_matrix
 from scripts.pages import build_site as site, evidence
 from tests import test_pages_compact_selection as bindings
+from tests.contract_fixtures import REAL_CONTRACT_SHA256, full_contract
 
 
 def discovery_row(matrix, raw):
@@ -29,6 +30,30 @@ def discovery_row(matrix, raw):
         configured_nodes=configured, scope=dict(kind="unscoped" if not migration else "legacy" if migration["mode"] == "preparing" else "full",
             selected_nodes=nodes, target_nodes=targets, migration_mode=migration["mode"] if migration else None,
             partial=set(nodes) != set(targets)))
+
+
+class RealContractSiteTests(unittest.TestCase):
+    """The one gallery built from real pixels on the real contract: every scenario and capture.
+
+    Every other Pages fixture uses the representative contract (tests/contract_fixtures.py).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.contract = cls.enterClassContext(full_contract())
+        ScopedSiteTests.setUpClass()
+        cls.addClassCleanup(ScopedSiteTests.doClassCleanups)
+
+    def test_real_contract_gallery_publishes_every_capture_of_every_scenario(self):
+        self.assertEqual(REAL_CONTRACT_SHA256, evidence.default_contract().sha256)
+        scoped = ScopedSiteTests("test_preparing_shared_and_mixed_schema_gallery_keep_exact_scope_and_pixels")
+        scoped.setUp(); self.addCleanup(scoped.doCleanups)
+        scoped.test_preparing_shared_and_mixed_schema_gallery_keep_exact_scope_and_pixels()
+        scoped.configure(shared=True)
+        scoped.build()
+        gallery = json.loads((scoped.output / "gallery-data.json").read_bytes())
+        self.assertEqual(set(self.contract.capture_ids), {frame["capture_id"] for frame in gallery["frames"]})
+        self.assertEqual(set(self.contract.scenario_ids), {frame["scenario"] for frame in gallery["frames"]})
 
 
 class ScopedSiteTests(unittest.TestCase):

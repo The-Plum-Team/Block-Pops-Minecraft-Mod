@@ -11,11 +11,15 @@ from unittest.mock import patch
 from scripts.ci.tests.matrix_fixtures import TARGET_COUNT, schema2_configuration
 from scripts.pages import evidence
 from tests import test_visual_capsule as pixels
+from tests.contract_fixtures import representative_contract
 
 
 class ScopedRawPagesTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # Reconstruction, compaction and publication do not depend on how many captures a lane
+        # has, so these pixels and every class built on them use the representative contract.
+        cls.enterClassContext(representative_contract())
         cls.shared = tempfile.TemporaryDirectory()
         cls.addClassCleanup(cls.shared.cleanup)
         cls.base = Path(cls.shared.name)

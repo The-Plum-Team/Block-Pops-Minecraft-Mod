@@ -9,6 +9,7 @@ import struct
 import tempfile
 import unittest
 import zlib
+from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageStat
@@ -55,7 +56,9 @@ def _chunk(kind: bytes, payload: bytes) -> bytes:
     )
 
 
+@lru_cache(maxsize=None)
 def _png(width: int, height: int, variant: int = 0) -> bytes:
+    # Pure and deterministic: every lane shares these frames, so encode each variant once.
     ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
     palette = (
         (14, 26, 48),

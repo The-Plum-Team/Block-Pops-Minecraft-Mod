@@ -15,17 +15,20 @@ from e2e.scenario_contract import load_contract
 from scripts.ci.tests.matrix_fixtures import TARGET_COUNT, schema2_configuration
 from scripts.release.matrix import MatrixDocument, normalize_matrix_inventory
 from tests import test_visual_capsule as fixture
+from tests.contract_fixtures import bound_contract_path, representative_contract
 from tests.matrix_fixtures import SCHEMA1_MATRIX_PATH
 
 
 class ScopedVisualEvidenceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # Scope selection does not depend on the capture count.
+        cls.enterClassContext(representative_contract())
         cls.temporary = tempfile.TemporaryDirectory()
         cls.addClassCleanup(cls.temporary.cleanup)
         cls.root = Path(cls.temporary.name)
         cls.matrix = schema2_configuration()
-        cls.contract = load_contract(fixture.CONTRACT_PATH)
+        cls.contract = load_contract(bound_contract_path())
         cls.nodes = sorted(row["artifact_node"] for row in cls.matrix["runtimes"])
         cls.base = cls.root / "pixels"
         with patch.object(fixture, "load_matrix", return_value=cls.matrix):
@@ -174,7 +177,7 @@ class ScopedVisualEvidenceTests(unittest.TestCase):
         attestation.update(artifact_sha256=digest, matrix_sha256=hashlib.sha256(matrix_path.read_bytes()).hexdigest())
         fixture._write_json(source[1], attestation)
         arguments = dict(archive=source[0], attestation_path=source[1], expectation=expectation,
-            matrix_path=matrix_path, contract_path=fixture.CONTRACT_PATH, **kwargs)
+            matrix_path=matrix_path, contract_path=bound_contract_path(), **kwargs)
         bundle = visual.load_archived_evidence(**arguments, extraction_destination=self.case / "extracted")
         self.assertEqual(2, bundle.matrix["schema_version"])
         self.assertEqual(attestation["matrix_sha256"], bundle.matrix_sha256)
