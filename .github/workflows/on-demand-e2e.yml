@@ -779,8 +779,8 @@ jobs:
           [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$encoded_branch" --jq .object.sha)" == \
             "$BLOCKPOPS_TESTED_SHA" ]]
           token="$(python3 scripts/ci/gate_controller.py branch-token --branch "$PUBLISHED_BRANCH")"
-          printf 'artifact=pages-e2e-%s-%s\n' "$token" "$GITHUB_RUN_ATTEMPT" \
-            >> "$GITHUB_OUTPUT"
+          [[ "$token" =~ ^[0-9a-f]{24}$ ]]
+          printf 'token=%s\n' "$token" >> "$GITHUB_OUTPUT"
           printf 'source_run_id=%s\n' "$SOURCE_RUN_ID" >> "$GITHUB_OUTPUT"
           printf 'tree=%s\n' "$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
 
@@ -845,113 +845,18 @@ jobs:
           esac
           "${fanin_command[@]}"
 
-      - name: Curate strict SHA-bound public evidence
-        shell: bash
-        env:
-          PUBLIC_AGGREGATE: ${{ runner.temp }}/blockpops-public-aggregate
-          PUBLIC_ATTEST_RUN_ID: ${{ inputs.attest_run_id }}
-        run: |
-          set -euo pipefail
-          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
-          projection=pr-anchors
-          if [[ -z "$PUBLIC_ATTEST_RUN_ID" && "$GITHUB_EVENT_NAME" == schedule ]]; then
-            projection=scheduled-anchors
-          fi
-          scope="$(python3 scripts/ci/matrix_scope.py --matrix release/release-matrix.json)"
-          curate_command=(python3 scripts/pages/evidence.py curate \
-            --input "$PUBLIC_AGGREGATE" \
-            --output public-evidence \
-            --repository "$GITHUB_REPOSITORY" \
-            --branch "$PUBLISHED_BRANCH" \
-            --commit "$BLOCKPOPS_TESTED_SHA" \
-            --tree "${{ steps.identity.outputs.tree }}" \
-            --run-id "$GITHUB_RUN_ID" \
-            --run-attempt "$GITHUB_RUN_ATTEMPT" \
-            --controller-branch "$HANDOFF_CONTROLLER_BRANCH" \
-            --controller-sha "$HANDOFF_CONTROLLER_SHA" \
-            --packaged-run-id "${{ steps.identity.outputs.source_run_id }}" \
-            --packaged-run-attempt "${{ inputs.attest_run_attempt || github.run_attempt }}" \
-            --packaged-branch "${{ inputs.attest_branch || github.ref_name }}" \
-            --packaged-commit "${{ inputs.attest_sha || github.sha }}" \
-            --packaged-tree "${{ steps.identity.outputs.tree }}" \
-            --packaged-controller-branch "$PACKAGED_CONTROLLER_BRANCH" \
-            --packaged-controller-sha "$PACKAGED_CONTROLLER_SHA")
-          case "$scope" in
-            unscoped) ;;
-            legacy|full) curate_command+=(--scope "$scope" --projection "$projection") ;;
-            *) exit 2 ;;
-          esac
-          "${curate_command[@]}"
-
-      - name: Upload a single-use current-head Pages handoff
-        id: raw_evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - name: Prepare and hand off current-head public evidence
+        uses: The-Plum-Team/mod-base/actions/prepare-evidence@fb575eba9bc819b18fede944f368ef2c99eb3aab # v1.0.0
         with:
-          name: ${{ steps.identity.outputs.artifact }}
-          path: public-evidence/
-          if-no-files-found: error
-          compression-level: 6
-          retention-days: 1
-
-      - name: Create the exact canonical lossless visual anchor
-        id: anchor
-        if: inputs.attest_run_id == ''
-        shell: bash
-        env:
-          RAW_ARTIFACT_ID: ${{ steps.raw_evidence.outputs.artifact-id }}
-          RAW_ARTIFACT_DIGEST: ${{ steps.raw_evidence.outputs.artifact-digest }}
-        run: |
-          set -euo pipefail
-          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
-          printf 'eligible=false\n' >> "$GITHUB_OUTPUT"
-          identity="$(python3 scripts/pages/visual_anchor.py identity \
-            --matrix release/release-matrix.json \
-            --branch "$PUBLISHED_BRANCH" \
-            --commit "$BLOCKPOPS_TESTED_SHA" \
-            --run-id "$GITHUB_RUN_ID" \
-            --run-attempt "$GITHUB_RUN_ATTEMPT")"
-          if [[ "$(jq -r .eligible <<< "$identity")" != true ]]; then
-            exit 0
-          fi
-          [[ "$RAW_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]] || exit 2
-          [[ "$RAW_ARTIFACT_DIGEST" =~ ^(sha256:)?[0-9a-f]{64}$ ]] || exit 2
-          artifact="$(jq -er .artifact <<< "$identity")"
-          scope="$(python3 scripts/ci/matrix_scope.py --matrix release/release-matrix.json)"
-          projection=pr-anchors
-          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
-            projection=scheduled-anchors
-          fi
-          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
-          anchor_command=(python3 scripts/pages/visual_anchor.py create \
-            --input public-evidence \
-            --output visual-anchor \
-            --matrix release/release-matrix.json \
-            --repository "$GITHUB_REPOSITORY" \
-            --branch "$PUBLISHED_BRANCH" \
-            --commit "$BLOCKPOPS_TESTED_SHA" \
-            --tree "${{ steps.identity.outputs.tree }}" \
-            --source-run-id "$GITHUB_RUN_ID" \
-            --source-run-attempt "$GITHUB_RUN_ATTEMPT" \
-            --source-controller-branch "$HANDOFF_CONTROLLER_BRANCH" \
-            --source-controller-sha "$HANDOFF_CONTROLLER_SHA" \
-            --raw-artifact-id "$RAW_ARTIFACT_ID" \
-            --raw-artifact-name "${{ steps.identity.outputs.artifact }}" \
-            --raw-artifact-digest "$RAW_ARTIFACT_DIGEST")
-          case "$scope" in
-            unscoped) ;;
-            legacy|full) anchor_command+=(--scope "$scope" --projection "$projection") ;;
-            *) exit 2 ;;
-          esac
-          "${anchor_command[@]}"
-          printf 'artifact=%s\n' "$artifact" >> "$GITHUB_OUTPUT"
-          printf 'eligible=true\n' >> "$GITHUB_OUTPUT"
-
-      - name: Upload the durable lossless canonical visual anchor
-        if: steps.anchor.outputs.eligible == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ${{ steps.anchor.outputs.artifact }}
-          path: visual-anchor/
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 90
+          e2e-root: ${{ runner.temp }}/blockpops-public-aggregate
+          key: ${{ steps.identity.outputs.token }}
+          subject-branch: ${{ env.PUBLISHED_BRANCH }}
+          subject-commit: ${{ env.BLOCKPOPS_TESTED_SHA }}
+          subject-tree: ${{ steps.identity.outputs.tree }}
+          tested-run-id: ${{ env.PACKAGED_RUN_ID }}
+          tested-run-attempt: ${{ env.PACKAGED_RUN_ATTEMPT }}
+          tested-branch: ${{ env.PACKAGED_BRANCH }}
+          tested-commit: ${{ env.PACKAGED_SHA }}
+          tested-controller-branch: ${{ env.PACKAGED_CONTROLLER_BRANCH }}
+          tested-controller-sha: ${{ env.PACKAGED_CONTROLLER_SHA }}
+          anchor: ${{ inputs.attest_run_id == '' && 'auto' || 'off' }}

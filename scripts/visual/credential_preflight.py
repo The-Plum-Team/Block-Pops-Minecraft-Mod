@@ -493,8 +493,10 @@ def _reference_identity(
             or source["run_attempt"] != attempt
             or artifact_name
             != (
-                f"visual-anchor-v1-{MASTER_BRANCH_TOKEN}--"
-                f"{reference}-{run_id}-{attempt}"
+                # The pinned mod-base kit's anchor grammar, as curate.py records it; spelled out
+                # because this stdlib-only check runs alone from the handoff.
+                f"mb-anchor--{MASTER_BRANCH_TOKEN}--"
+                f"{reference}--{run_id}--a{attempt}"
             )
         ):
             raise StaleError("reference capsule identity changed")

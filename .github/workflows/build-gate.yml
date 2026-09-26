@@ -167,6 +167,30 @@ jobs:
           set -euo pipefail
           [[ "$SOURCE_ELIGIBLE" == true ]]
 
+      - name: Verify the candidate's mod-base pin (controller-side)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN
+          # The protected stdlib bootstrap reads the candidate's workflow files only as bounded bytes:
+          # its single mod-base pin must be a commit reachable from mod-base main whose release tag
+          # peels to it, so no impostor commit from the fork network can become a pin.
+          PYTHONDONTWRITEBYTECODE=1 python3 -P controller/scripts/ci/mod_base_kit.py \
+            verify --network --repo candidate
+
+      - name: Refuse importable entries at the candidate root (controller-side)
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
+          # The kit's adapter host and every protected controller put the repository root on the
+          # Python path, but the root is not a protected path: a root module, package or
+          # sitecustomize would run in the privileged Pages and evidence jobs before protected code.
+          PYTHONDONTWRITEBYTECODE=1 python3 -P controller/scripts/ci/mod_base_boundary.py \
+            import-root --repo candidate
+
       - name: Authenticate explicit release-sync inputs
         shell: bash
         env:
@@ -296,6 +320,52 @@ jobs:
         with:
           cache-read-only: true
 
+      - name: Verify the controller-pinned mod-base kit
+        uses: The-Plum-Team/mod-base/actions/setup@fb575eba9bc819b18fede944f368ef2c99eb3aab # v1.0.0
+        with:
+          mod-root: controller
+          install-imaging: "false"
+
+      - name: Stage the controller-verified kit for the candidate sandbox
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN
+          # Controller code chooses and verifies the staged bytes; it reads the candidate's workflow
+          # files only as bounded data. An equal pin copies the kit setup just verified; a different
+          # pin, which only a controller upgrade can carry, must first be a released mod-base commit
+          # reachable from main, and is then fetched anonymously. The read-only token only raises the
+          # API rate limit of those release checks. The overlay must hold plain 0644 files in 0755
+          # directories and no bytecode: kit-digest-v1 refuses executable bits, and Python would load
+          # a planted __pycache__ file in place of the verified source.
+          umask 022
+          PYTHONDONTWRITEBYTECODE=1 python3 -P controller/scripts/ci/mod_base_kit.py stage \
+            --controller-repo controller --candidate-repo candidate \
+            --output "$RUNNER_TEMP/mod-base-kit" >/dev/null
+          irregular="$(find "$RUNNER_TEMP/mod-base-kit" \
+            \( -type f ! -perm 0644 \) -o \( -type d ! -perm 0755 \) -o \
+            \( ! -type f ! -type d \) -o -name __pycache__ -o -name '*.py[cod]')"
+          if [[ -n "$irregular" ]]; then
+            printf 'staged mod-base kit entries are not plain 0644 files without bytecode:\n%s\n' \
+              "${irregular:0:4000}" >&2
+            exit 1
+          fi
+
+      - name: Check the staged kit's evidence composite (controller-side)
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
+          # From mod-base v0.9.2 the staged kit carries the candidate-pinned composites in actions/,
+          # bound by src/mod_base/template/staged_actions.sha256 inside its digested src/. Re-verify
+          # the staged bytes the sandbox receives, require that lock-bound actions/ (a kit or a
+          # controller bootstrap older than v0.9.2 stages none, and fails here), and require every
+          # Python step of its prepare-evidence composite to unset every credential first.
+          PYTHONDONTWRITEBYTECODE=1 python3 -P controller/scripts/ci/mod_base_boundary.py \
+            composite --kit "$RUNNER_TEMP/mod-base-kit" --candidate-repo candidate
+
       - name: Prepare the isolated candidate filesystem and OS identity
         shell: bash
         env:
@@ -310,6 +380,7 @@ jobs:
             --root "$SANDBOX_ROOT" \
             --source "$GITHUB_WORKSPACE/candidate" \
             --controller-source "$GITHUB_WORKSPACE/controller" \
+            --overlay "$RUNNER_TEMP/mod-base-kit" out/mod-base-kit \
             "${seed[@]}"
 
       - name: Validate and build entirely inside the credentialless account
@@ -323,6 +394,9 @@ jobs:
           python3 controller/scripts/ci/untrusted_runner.py run \
             --root "$SANDBOX_ROOT" --pass-env BLOCKPOPS_TESTED_SHA -- \
             bash -euo pipefail -c '
+              # Tests reach the staged kit in out/mod-base-kit, whose verification refuses bytecode:
+              # no process started here may write any into it.
+              export PYTHONDONTWRITEBYTECODE=1
               python3 -m pip install --user --disable-pip-version-check \
                 --only-binary=:all: --require-hashes \
                 --requirement scripts/pages/requirements.txt

@@ -18,7 +18,7 @@ from scripts.ci.e2e_fanin import SourceIdentity
 from scripts.ci.loader_bootstrap import validate_commit as validate_loader_bootstrap
 from scripts.lib import atomic_directory as atomic
 from scripts.lib.secure_json import canonical_json, read
-from scripts.pages.select_artifact import GitHubApi
+from scripts.release.github_api import GitHubApi
 from scripts.release.artifact_manifest import scoped_manifest_context
 from scripts.release.build_matrix import source_snapshot
 from scripts.release.content_evidence import read_lane_content_evidence

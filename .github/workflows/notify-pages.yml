@@ -1,0 +1,67 @@
+name: Wake project site
+on:
+  workflow_run:
+    workflows: [Packaged E2E]
+    types: [completed]
+permissions: {}
+jobs:
+  notify:
+    name: Wake the protected project site (advisory)
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      (github.event.workflow_run.event == 'schedule' || github.event.workflow_run.event == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - name: Authenticate the completed packaged run
+        id: source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          default_branch="$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)"
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
+          jq -e --arg r "$GITHUB_REPOSITORY" --argjson id "$RUN_ID" '
+            .id == $id and (.status | type == "string") and
+            (.conclusion == null or (.conclusion | type == "string")) and
+            .path == ".github/workflows/on-demand-e2e.yml" and
+            (.event == "schedule" or .event == "workflow_dispatch") and
+            (.head_branch | type == "string") and .head_repository.full_name == $r and
+            (.run_attempt | type == "number" and . >= 1 and . == floor) and
+            (.head_sha | test("^[0-9a-f]{40}$"))' <<< "$run" > /dev/null
+          # A run on another branch, one whose latest attempt is not a completed success (a re-run
+          # started before this signal executed, say), or one whose advisory public-evidence job handed
+          # nothing off in its latest attempt is not a wake: the previous site stays as it is and
+          # nothing turns red. A later attempt's own completion wakes Pages again.
+          if [[ "$(jq -r .head_branch <<< "$run")" != "$default_branch" ]]; then
+            printf 'Packaged E2E run %s is not on %s; leaving the previous site unchanged.\n' "$RUN_ID" "$default_branch"
+            exit 0
+          fi
+          if ! jq -e '.status == "completed" and .conclusion == "success"' <<< "$run" > /dev/null; then
+            printf 'Packaged E2E run %s is %s/%s in its latest attempt; leaving the previous site unchanged.\n' \
+              "$RUN_ID" "$(jq -r .status <<< "$run")" "$(jq -r '.conclusion // "none"' <<< "$run")"
+            exit 0
+          fi
+          attempt="$(jq -r .run_attempt <<< "$run")"
+          handoffs="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" |
+            jq -s --arg suffix "--a$attempt" '[.[].artifacts[] | select(.expired == false and
+              (.name | startswith("mb-handoff--")) and (.name | endswith($suffix)))] | length')"
+          [[ "$handoffs" =~ ^[0-9]+$ ]]
+          if (( handoffs == 0 )); then
+            printf 'Packaged E2E run %s handed off no evidence in attempt %s; leaving the previous site unchanged.\n' \
+              "$RUN_ID" "$attempt"
+            exit 0
+          fi
+          printf 'sha=%s\n' "$(jq -r .head_sha <<< "$run")" >> "$GITHUB_OUTPUT"
+      - name: Dispatch the separately locked Pages publication
+        if: steps.source.outputs.sha != ''
+        uses: The-Plum-Team/mod-base/actions/notify-pages@fb575eba9bc819b18fede944f368ef2c99eb3aab # v1.0.0
+        with:
+          operation: deploy
+          run-id: ${{ github.event.workflow_run.id }}
+          sha: ${{ steps.source.outputs.sha }}

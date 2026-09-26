@@ -62,7 +62,19 @@ governance/publication writers still require owner configuration:
   before `upload-artifact` runs. If Ubuntu runner/user-management semantics
   change, freeze the gates and repair this boundary before accepting evidence.
 - Set Pages source to GitHub Actions. Create the `github-pages` environment and
-  limit deployment to protected `master`.
+  limit deployment to protected `master`. Pages runs the pinned
+  [mod-base](https://github.com/The-Plum-Team/mod-base) kit: its managed caller
+  `.github/workflows/pages.yml` keeps the only `pages: write`/`id-token: write`
+  job, and `site/mod-base.json`, `scripts/pages/mod_base_adapter.py` and every
+  kit pin are trusted roots of those privileged jobs. The `master` protection
+  above is therefore a precondition of the mod-base adoption and of every kit
+  bump; the kit's
+  [operations guide](https://github.com/The-Plum-Team/mod-base/blob/main/docs/OPERATIONS.md#p1-ruleset-block-pops-master)
+  holds the exact ruleset payload. Require the contexts only after a current PR
+  has passed both: while the `master` matrix is schema 2, controller parity
+  refuses it and every PR reports both contexts as failures, so the ruleset
+  would block every merge
+  ([ADR 0001](architecture/decisions/0001-adopt-mod-base-public-evidence.md)).
 - Create a protected `visual-review` environment if advisory AI review is
   desired and restrict it to protected `master`. Store the owner's
   `claude setup-token` token as that environment's `CLAUDE_CODE_OAUTH_TOKEN`
@@ -72,8 +84,10 @@ governance/publication writers still require owner configuration:
   gets only the Read tool for the images it reviews, and the job's read-only
   GitHub token exists only for the final stdlib identity preflight.
 - Keep repository Actions artifact retention at **90 days or greater**; the
-  canonical lossless anchor cannot meet its propagation window under a lower
-  repository cap.
+  canonical lossless anchor `mb-anchor--<branch-token>--<commit>--<run>--a<attempt>`
+  and the `mb-cache--<branch-token>--<commit>` Pages caches cannot meet their
+  windows under a lower repository cap. Ordinary `mb-handoff--<branch-token>--a<attempt>`
+  handoffs live one day.
 
 At the 2026-08-11 API snapshot the repository was private and both long-lived
 matrix lines (`master` and `1.21.1-neoforge-fabric`) reported unprotected; the
@@ -198,6 +212,47 @@ The current schema is single-digest, so such a future migration must implement
 and test the bounded transitional schema in PR A; the runbook is not permission
 to pre-authorize unmatched bytes with the current parser.
 
+### mod-base kit bumps
+
+Every mod-base reference (`pages.yml`, `notify-pages.yml`, `on-demand-e2e.yml`,
+`build-gate.yml`, `visual-review.yml`, `visual-review-drain.yml`) carries one
+`@<40-hex> # vX.Y.Z` pin under protected roots, so a kit bump is always a
+controller upgrade:
+
+```sh
+git switch --create controller-upgrade/mod-base-vX.Y.Z origin/master
+python3 scripts/ci/mod_base_kit.py bump --to vX.Y.Z
+python3 scripts/ci/mod_base_kit.py verify --network
+python3 scripts/ci/mod_base_kit.py run template check --repo .
+```
+
+`bump` refuses a tag that does not peel to a commit reachable from mod-base
+`main`, then rewrites every pin and resynchronizes the managed files
+(`pages.yml`'s managed region, `scripts/ci/mod_base_kit.py` and
+`docs/ai/shared/*.md`); never edit those by hand. Open the pull request with the
+`controller-upgrade` label and approve its exact head as above. The protected
+Build gate's identity job runs the same `verify --network` against the
+candidate's pin, and its build job stages the new kit for the candidate sandbox
+only after those release checks pass.
+
+The adoption itself is gated by the previous `build-gate.yml`, which stages no
+kit: its tests fetch the pin anonymously inside the sandbox, and the owner runs
+`python3 scripts/ci/mod_base_kit.py verify --network` locally on its exact head
+and records the output in the pull request before approving it. The root files a
+controller upgrade cannot change (`AGENTS.md`, `.gitattributes`, `.gitignore`,
+`.github/dependabot.yml`, `.github/pull_request_template.md`) stay in
+`site/mod-base.json` `template.deferred` until an ordinary follow-up pull request
+adds them; a later controller upgrade (or the next kit bump) empties the list.
+
+Until that follow-up adds the managed `.gitattributes` (`text eol=lf` for every
+managed path), a clone with `core.autocrlf=true` checks the managed files out
+with CRLF line endings, and `template check` reports them ("has CRLF line
+endings"). Run `git config core.autocrlf input` in that clone and check the
+managed files out again, or run
+`python3 scripts/ci/mod_base_kit.py run template sync --write --repo .`, which
+rewrites them with LF. Once `.gitattributes` has landed, delete and check out
+those paths once more.
+
 ## Bootstrap a release branch
 
 Matrix discovery cannot safely infer a legacy release from its name. Bootstrap
@@ -273,21 +328,58 @@ conflict allowlist to force this bootstrap.
   is idempotent success. Never rotate by a name wildcard. The failed run does
   not self-dispatch without a durable marker/report or successful cleanup; use
   the scheduled recovery after the underlying Actions API condition clears.
-- **Pages promotion failed:** retain the prior rolling cache/site. Rotation is
-  allowed only after a successful atomic deployment and cache publication for
-  all current heads. The final same-run job may accept only its exact protected
-  workflow run/attempt while it remains `in_progress` with no conclusion and
-  every upstream job is successful; a `pages-rotate` recovery accepts only an
-  exact historical owner that is already `completed/success`. Both paths keep
-  the fixed lifecycle lock through exact-ID deletion.
+- **Pages promotion failed:** the prior site and `mb-cache--` caches remain;
+  no partial generation is deployed. Read the `Publish / Admit publication`
+  reason in the run summary (the kit's
+  [admission reasons](https://github.com/The-Plum-Team/mod-base/blob/main/docs/OPERATIONS.md#publication-admission)).
+  After fixing the cause, publish from the default branch with
+  `gh workflow run pages.yml --ref master -f operation=manual`; if no current
+  evidence exists, first dispatch `gh workflow run on-demand-e2e.yml --ref master`.
+  Rotation is always a separate, separately locked run that accepts only a
+  `completed/success` Pages owner and deletes superseded `mb-*` artifacts by
+  exact ID; retry it with
+  `gh workflow run pages.yml --ref master -f operation=rotate -f run_id=<pages-run-id> -f sha=<its-head-sha>`.
+  `gh workflow disable pages.yml` stops publication while keeping the deployed
+  site online.
+- **mod-base kit unavailable:** the Build gate fails closed at one of three
+  points. An unreleased, impostor or inconsistent candidate pin fails the
+  `Resolve authoritative build matrix` job at "Verify the candidate's mod-base
+  pin (controller-side)" with `mod_base_kit: error: pin <sha> is not reachable
+  from The-Plum-Team/mod-base main …`, `… is not a commit of …`,
+  `tag vX.Y.Z does not exist …` or `tag vX.Y.Z peels to …, not the pin …`, and
+  the build job never starts. A controller whose own kit tree differs from its
+  pin fails "Verify the controller-pinned mod-base kit" with exit status 78
+  (controller skew). The same `setup` check guards the advisory visual-review
+  curator and the drain's `prepare`, `admit` and `publish` jobs, whose
+  reauthentication reads the kit's anchor grammar; a skew there fails only that
+  advisory run. A released pin that cannot be fetched, copied or matched to
+  its staged-file lock fails "Stage the controller-verified kit for the
+  candidate sandbox" with `mod-base kit unavailable for candidate pin <sha>`.
+  Never edit the staged kit, add an unpinned override, or skip the tests that
+  need it: pin a released kit through a controller upgrade, and rerun a fetch
+  failure once GitHub recovers. A local cache entry that fails verification can
+  be deleted
+  (`rm -rf ~/Library/Caches/mod-base/<sha>` on macOS,
+  `${XDG_CACHE_HOME:-~/.cache}/mod-base/<sha>` elsewhere) and is fetched again.
+- **A mod-base boundary check fails:** "Refuse importable entries at the
+  candidate root (controller-side)" prints each root entry Python could import
+  ahead of protected code (`mod_base_boundary: repository root candidate:
+  json.py: a root file with an importable suffix`); move that code under a
+  protected package instead of the root. "Check the staged kit's evidence
+  composite (controller-side)" names each `prepare-evidence` step that runs
+  Python before unsetting a credential; never pin a kit release that fails it.
+  It exits 2 when the staged kit does not verify or carries no `actions/`
+  bound by `staged_actions.sha256`: a kit older than mod-base v0.9.2 has none,
+  so pin back only to v0.9.2 or later.
 - **Actions artifact quota is exhausted:** Build/E2E may finish compilation and
   staging but cannot cross the immutable-artifact boundary, so the gate must
   remain failed and packaged scenarios must not be represented as tested. In
   repository/account billing, remove only obsolete artifacts whose IDs and
   owners are understood or raise the Actions storage budget, then wait for
-  GitHub's quota recalculation and rerun the exact failed head. Never disable
-  uploads, evidence fan-in, the lossless anchor, or retention checks to get a
-  green status.
+  GitHub's quota recalculation and rerun the exact failed head. The retired
+  `pages-*` and `visual-anchor-v1-*` artifacts are never read again and expire
+  on their own. Never disable uploads, evidence fan-in, the lossless anchor, or
+  retention checks to get a green status.
 - **The Claude Code token may be exposed:** delete the `CLAUDE_CODE_OAUTH_TOKEN`
   secret of the `visual-review` environment, revoke the token from the owner's
   Claude account, delete the single-use handoff by authenticated ID and audit

@@ -1,4 +1,8 @@
-"""Content-hash memoization never replaces a file check or a changed parameter."""
+"""Content-hash memoization never replaces a file check or a changed parameter.
+
+The Pages decoder's format-bound verdict moved with public evidence to the pinned mod-base kit,
+whose own tests cover its content cache; these tests keep the Block Pops runtime and visual paths.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +17,6 @@ from PIL import Image, ImageDraw
 
 from e2e import packaged_runtime, visual_evidence
 from scripts.lib.content_cache import ContentCache
-from scripts.pages import evidence
 
 
 def _frame(size: tuple[int, int] = (1600, 900), shift: int = 0) -> bytes:
@@ -118,14 +121,6 @@ class ScreenshotCacheBoundaryTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(packaged_runtime.RuntimeFailure, "impossible text"):
                 packaged_runtime.inspect_screenshot_for_step(self.path, *key)
-
-    def test_pages_decode_verdict_is_bound_to_the_expected_format(self) -> None:
-        data = self.path.read_bytes()
-        self.assertEqual(1600, evidence._image(data, expected_format="PNG", label="frame")["width"])
-        with self.assertRaisesRegex(evidence.EvidenceError, "must decode as WEBP"):
-            evidence._image(data, expected_format="WEBP", label="frame")
-        with self.assertRaisesRegex(evidence.EvidenceError, "cannot decode"):
-            evidence._image(data[:100], expected_format="PNG", label="frame")
 
     def test_canonical_png_is_bound_to_the_expected_size(self) -> None:
         first = visual_evidence.canonicalize_png(self.path, expected_size=(1600, 900))

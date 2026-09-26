@@ -6,9 +6,9 @@ import sys
 import types
 import unittest
 
-from e2e import packaged_runtime
+import e2e.scenario_contract as scenario_contract
+from e2e import orchestrator, packaged_runtime
 from e2e.scenario_contract import OpaqueStarsProbe, RequiredGuiTextProbe, load_contract
-from scripts.pages import authenticate_source, evidence
 from tests.contract_fixtures import (
     REAL_CONTRACT_PATH,
     REAL_CONTRACT_SHA256,
@@ -20,10 +20,11 @@ from tests.contract_fixtures import (
 
 def _bound_contract_hashes() -> dict[str, str]:
     return {
-        "pages default_contract": evidence.default_contract().sha256,
-        "matrix default_contract": authenticate_source.default_contract().sha256,
-        "authenticated contract bytes": load_contract(authenticate_source.DEFAULT_CONTRACT).sha256,
+        "e2e default_contract": scenario_contract.default_contract().sha256,
+        "matrix default_contract": sys.modules["scenario_contract"].default_contract().sha256,
+        "contract path bytes": load_contract(scenario_contract.DEFAULT_CONTRACT).sha256,
         "packaged runtime": packaged_runtime.SCENARIO_CONTRACT.sha256,
+        "orchestrator": orchestrator.CONTRACT.sha256,
     }
 
 
@@ -57,8 +58,8 @@ class RepresentativeContractTests(unittest.TestCase):
         real = _bound_contract_hashes()
         self.assertEqual({self.real.sha256}, set(real.values()))
         bindings = contract_bindings(REAL_CONTRACT_SHA256, REAL_CONTRACT_PATH)
-        # At least both loaders, the two by-name path imports and packaged_runtime's contract.
-        self.assertGreaterEqual(len(bindings), 5)
+        # At least both loaders' paths, packaged_runtime's contract and the orchestrator's.
+        self.assertGreaterEqual(len(bindings), 4)
         with representative_contract() as contract:
             self.assertEqual({contract.sha256}, set(_bound_contract_hashes().values()))
             self.assertEqual([], contract_bindings(REAL_CONTRACT_SHA256, REAL_CONTRACT_PATH))
@@ -93,8 +94,8 @@ class RepresentativeContractTests(unittest.TestCase):
         sys.modules[module.__name__] = module
         self.addCleanup(sys.modules.pop, module.__name__)
         with representative_contract():
-            module.CONTRACT = evidence.default_contract()
-            module.PATH = authenticate_source.DEFAULT_CONTRACT
+            module.CONTRACT = scenario_contract.default_contract()
+            module.PATH = scenario_contract.DEFAULT_CONTRACT
         self.assertEqual(REAL_CONTRACT_SHA256, module.CONTRACT.sha256)
         self.assertEqual(REAL_CONTRACT_PATH, module.PATH)
 

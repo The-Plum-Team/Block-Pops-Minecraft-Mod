@@ -225,6 +225,13 @@ jobs:
           ref: master
           persist-credentials: false
 
+      # reauth.py reaches the kit's mb-anchor grammar through curate.py; this verifies the kit this
+      # checkout pins instead of leaving the bootstrap to fetch it anonymously.
+      - name: Verify the pinned mod-base kit
+        uses: The-Plum-Team/mod-base/actions/setup@fb575eba9bc819b18fede944f368ef2c99eb3aab # v1.0.0
+        with:
+          install-imaging: "false"
+
       - name: Install Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -425,6 +432,13 @@ jobs:
         with:
           ref: master
           persist-credentials: false
+
+      # reauth.py reaches the kit's mb-anchor grammar through curate.py; this verifies the kit this
+      # checkout pins instead of leaving the bootstrap to fetch it anonymously.
+      - name: Verify the pinned mod-base kit
+        uses: The-Plum-Team/mod-base/actions/setup@fb575eba9bc819b18fede944f368ef2c99eb3aab # v1.0.0
+        with:
+          install-imaging: "false"
 
       - name: Install Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -771,6 +785,13 @@ jobs:
         with:
           ref: master
           persist-credentials: false
+
+      # reauth.py reaches the kit's mb-anchor grammar through curate.py; this verifies the kit this
+      # checkout pins instead of leaving the bootstrap to fetch it anonymously.
+      - name: Verify the pinned mod-base kit
+        uses: The-Plum-Team/mod-base/actions/setup@fb575eba9bc819b18fede944f368ef2c99eb3aab # v1.0.0
+        with:
+          install-imaging: "false"
 
       - name: Install Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0

@@ -516,6 +516,13 @@ jobs:
           ref: ${{ needs.authenticate.outputs.implementation_sha }}
           persist-credentials: false
 
+      # The curator validates the durable mb-anchor with the kit pinned by this exact checkout; a
+      # kit that is not that pin's verified tree stops the (advisory) curation here.
+      - name: Verify the pinned mod-base kit
+        uses: The-Plum-Team/mod-base/actions/setup@fb575eba9bc819b18fede944f368ef2c99eb3aab # v1.0.0
+        with:
+          install-imaging: "false"
+
       - name: Install Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:

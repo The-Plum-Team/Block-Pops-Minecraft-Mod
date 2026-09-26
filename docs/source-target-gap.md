@@ -7,6 +7,10 @@ lossless-anchor, and workload-identity architecture was re-verified from an
 immutable read-only snapshot at `4c34229017cb27ad982b0320d66473419e6d2013`.
 The reference checkout was never switched or modified.
 
+The "Public evidence" row records the original port. BlockPops has since delegated public evidence
+to the shared mod-base kit; see
+[ADR 0001](architecture/decisions/0001-adopt-mod-base-public-evidence.md).
+
 | Concern | Reference evidence | BlockPops decision and target |
 |---|---|---|
 | Release authority | `release/release-matrix.json`, `scripts/release/matrix.py` | Reuse the single-authority concept. Adapt schema to exact opaque `branch` identity and BlockPops' two branch-local Architectury layouts in `release/release-matrix.json` and `scripts/release/matrix.py`. |

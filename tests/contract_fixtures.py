@@ -1,7 +1,7 @@
 """A representative scenario contract for fixtures whose behaviour does not depend on its size.
 
-Pages and visual fixtures synthesise, validate, canonicalize and compact one 1600x900 frame per
-contract capture per lane, so they grew with every capture a scenario added. This contract keeps
+Visual fixtures synthesise, validate and canonicalize one 1600x900 frame per contract capture per
+lane, so they grew with every capture a scenario added. This contract keeps
 every scenario, execution profile, orchestration, role and step of the real one, but keeps a
 capture only where it carries distinct behaviour: per role, the two steps of its first screenshot
 comparison (with their probes and that comparison), otherwise its first capture. Tests that use
@@ -10,7 +10,9 @@ contract end to end keep using ``REAL_CONTRACT_PATH``.
 
 The automation binds the contract in several places: ``default_contract()`` in two module
 copies (``e2e.scenario_contract`` and the ``scenario_contract`` alias that the matrix code
-imports), ``DEFAULT_CONTRACT`` paths imported by name, and contract objects built at import time.
+imports), ``DEFAULT_CONTRACT`` paths, and contract objects built at import time
+(``packaged_runtime.SCENARIO_CONTRACT``, ``orchestrator.CONTRACT``). Public evidence itself is
+validated by the pinned mod-base kit, which reads the contract only through the adapter.
 ``representative_contract()`` swaps every such binding in every loaded ``e2e``/``scripts``
 module, so production code and fixtures agree on one contract, and restores them all on exit.
 """
@@ -35,7 +37,6 @@ import e2e.scenario_contract as scenario_contract
 # Load every module that binds the contract at import time before any swap, so none of them can
 # first be imported while the representative contract is in place.
 from e2e import orchestrator, packaged_runtime  # noqa: F401
-from scripts.pages import authenticate_source, build_site, evidence, visual_anchor  # noqa: F401
 import scripts.release.matrix  # noqa: F401 - loads the top-level scenario_contract alias
 
 REAL_CONTRACT_PATH = scenario_contract.DEFAULT_CONTRACT

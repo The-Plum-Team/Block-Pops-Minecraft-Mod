@@ -1,739 +1,263 @@
-name: Public E2E evidence
+# >>> mod-base managed: pages caller v1 — edit only in The-Plum-Team/mod-base template/managed/.github/workflows/pages.yml
+name: Project site
 
-# workflow_run executes this controller from the protected default branch. The
-# completed Packaged E2E run is only a wake-up signal; every enrolled branch head,
-# source run, artifact, matrix blob, result, and image is authenticated again.
+# Privileged publication always executes the protected default-branch head (github.sha) together
+# with the mod-base commit pinned below. Producers only wake it; every artifact is reselected and
+# revalidated as hostile data. verify-kit, deploy and request-rotation stay in this caller: kit
+# YAML never holds pages or id-token permission, and only caller-owned code binds the kit commit.
 on:
-  workflow_run:
-    workflows: ["Packaged E2E"]
-    types: [completed]
   schedule:
-    - cron: "41 4 1 * *"
-  repository_dispatch:
-    types: [pages-deploy, pages-rotate]
+    - cron: "43 * * * *"
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: manual (operator recovery) or internal deploy / family / rotate
+        required: true
+        default: manual
+        type: choice
+        options: [manual, deploy, family, rotate]
+      run_id: {description: Internal exact producer or Pages owner run, required: false, type: string}
+      sha: {description: Internal exact commit of that run, required: false, type: string}
+      family: {description: Internal family id, required: false, type: string}
+      bundle_key: {description: Internal family bundle key, required: false, type: string}
+      artifact_id: {description: Internal family handoff artifact id, required: false, type: string}
+      artifact_digest: {description: Internal family handoff digest, required: false, type: string}
+      coverage_sha: {description: Internal family coverage commit, required: false, type: string}
 
 permissions: {}
 
 concurrency:
-  # Selection, promotion, deployment, and exact-ID cleanup share one lifecycle
-  # lock so a new gallery cannot consume artifacts while an older rotation is
-  # deleting them.
-  group: blockpops-pages-lifecycle
+  group: >-
+    ${{ github.event_name == 'workflow_dispatch' && inputs.operation == 'rotate' &&
+    'mod-base-pages-rotation' || 'mod-base-pages-publication' }}
   cancel-in-progress: false
 
 jobs:
-  authenticate:
-    name: Authenticate Pages wake
-    if: ${{ github.event_name != 'repository_dispatch' || github.event.action != 'pages-rotate' }}
+  verify-kit:
+    name: Verify pinned mod-base
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     permissions:
       actions: read
       contents: read
     outputs:
-      eligible: ${{ steps.wake.outputs.eligible }}
-      implementation_sha: ${{ steps.wake.outputs.implementation_sha }}
-      canonical_branch: ${{ steps.wake.outputs.canonical_branch }}
-
+      kit_sha: ${{ steps.kit.outputs.kit_sha }}
     steps:
-      - name: Authenticate wake without candidate checkout
-        id: wake
+      - name: Bind the executing callee to the protected pin
+        id: kit
         shell: bash
         env:
-          EVENT_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          GH_TOKEN: ${{ github.token }}
-          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
-        run: |
-          set -euo pipefail
-          printf 'eligible=false\n' >> "$GITHUB_OUTPUT"
-          canonical_branch="$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)"
-          [[ -n "$canonical_branch" ]]
-          [[ -z "$EVENT_DEFAULT_BRANCH" || "$EVENT_DEFAULT_BRANCH" == "$canonical_branch" ]]
-          encoded_branch="$(jq -rn --arg value "$canonical_branch" '$value|@uri')"
-          implementation_sha="$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded_branch" --jq .commit.sha)"
-          [[ "$implementation_sha" =~ ^[0-9a-f]{40}$ ]]
-          printf 'implementation_sha=%s\n' "$implementation_sha" >> "$GITHUB_OUTPUT"
-          printf 'canonical_branch=%s\n' "$canonical_branch" >> "$GITHUB_OUTPUT"
-          if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
-            [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
-            source_run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID")"
-            workflow_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/on-demand-e2e.yml" --jq .id)"
-            if ! jq -e \
-              --arg repository "$GITHUB_REPOSITORY" \
-              --arg canonical "$canonical_branch" \
-              --argjson run_id "$SOURCE_RUN_ID" \
-              --argjson workflow_id "$workflow_id" \
-              '.id == $run_id and .workflow_id == $workflow_id and
-               .status == "completed" and .conclusion == "success" and
-               (.event == "workflow_dispatch" or
-                (.event == "schedule" and .head_branch == $canonical)) and
-               .path == ".github/workflows/on-demand-e2e.yml" and
-               .head_branch == $canonical and
-               .head_repository.full_name == $repository and
-               (.head_sha | test("^[0-9a-f]{40}$"))' <<< "$source_run" > /dev/null; then
-              printf 'Wake run is not an authenticated successful Packaged E2E owner; leaving the previous site unchanged.\n'
-              exit 0
-            fi
-          fi
-          printf 'eligible=true\n' >> "$GITHUB_OUTPUT"
-
-  discover:
-    name: Discover exact enrolled branch heads
-    needs: authenticate
-    if: needs.authenticate.outputs.eligible == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    outputs:
-      inventory: ${{ steps.branches.outputs.inventory }}
-      implementation_sha: ${{ needs.authenticate.outputs.implementation_sha }}
-      canonical_branch: ${{ needs.authenticate.outputs.canonical_branch }}
-
-    steps:
-      - name: Check out the exact protected controller
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.authenticate.outputs.implementation_sha }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Discover matrix-enrolled heads without a branch-name inventory
-        id: branches
-        shell: bash
-        env:
-          CANONICAL_BRANCH: ${{ needs.authenticate.outputs.canonical_branch }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          [[ "$(git rev-parse HEAD)" == "${{ needs.authenticate.outputs.implementation_sha }}" ]]
-          [[ "$(jq -r .branch.canonical release/release-matrix.json)" == "$CANONICAL_BRANCH" ]]
-          mapfile -t advertised < <(gh api --paginate \
-            "repos/$GITHUB_REPOSITORY/branches?per_page=100" --jq '.[].name')
-          [[ "${#advertised[@]}" -gt 0 ]]
-          refspecs=()
-          for branch in "${advertised[@]}"; do
-            git check-ref-format "refs/heads/$branch" > /dev/null
-            refspecs+=("+refs/heads/$branch:refs/remotes/origin/$branch")
-          done
-          git -c 'credential.helper=!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f' \
-            fetch --no-tags --prune origin "${refspecs[@]}"
-          # The default branch carries a schema-2 matrix, which only the Pages discovery
-          # mode reads; it also chooses each enrolled branch's own scope.
-          inventory="$(python3 scripts/release/version_branches.py --pages --include-integration --objects \
-            --canonical-branch "$CANONICAL_BRANCH")"
-          [[ "$(jq 'length' <<< "$inventory")" -gt 0 ]]
-          printf 'inventory=%s\n' "$inventory" >> "$GITHUB_OUTPUT"
+          protected_gh_api_retry() {  # 4 attempts, 5 s doubling to a 20 s cap; rate-limit, 408/429/5xx, transport only
+            local attempt=1 delay=5 output status
+            while true; do
+              if output="$(gh api "$@" 2>&1)"; then
+                printf '%s\n' "$output"
+                return 0
+              else
+                status=$?
+              fi
+              if (( attempt >= 4 )) || ! grep -Eqi \
+                  'HTTP (408|429|5[0-9][0-9])|rate limit|timed out|timeout|connection (reset|refused)|temporary failure|TLS handshake|unexpected EOF' \
+                  <<< "$output"; then
+                printf '%s\n' "$output" >&2
+                return "$status"
+              fi
+              sleep "$delay"
+              attempt=$(( attempt + 1 ))
+              delay=$(( delay * 2 > 20 ? 20 : delay * 2 ))
+            done
+          }
+          fail() { printf 'Pinned mod-base: %s\n' "$1" >&2; exit 1; }
+          [[ "$GITHUB_EVENT_NAME" == workflow_dispatch || "$GITHUB_EVENT_NAME" == schedule ]] ||
+            fail "Pages runs only on workflow_dispatch or schedule"
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ && "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]] || fail "malformed run identity"
+          default_branch="$(protected_gh_api_retry "repos/$GITHUB_REPOSITORY" --jq .default_branch)"
+          [[ "$GITHUB_REF" == "refs/heads/$default_branch" ]] || fail "Pages runs only on the default branch"
+          run="$(protected_gh_api_retry "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")"
+          jq -e --argjson id "$GITHUB_RUN_ID" --arg sha "$GITHUB_SHA" --arg branch "$default_branch" \
+              --arg event "$GITHUB_EVENT_NAME" --arg repository "$GITHUB_REPOSITORY" '
+                .id == $id and .path == ".github/workflows/pages.yml" and .head_sha == $sha and
+                .head_branch == $branch and .event == $event and .head_repository.full_name == $repository' \
+              <<< "$run" > /dev/null || fail "this run is not the default branch's pages.yml at github.sha"
+          mapfile -t referenced < <(jq -r '.referenced_workflows // [] | .[]
+            | select(.path | ascii_downcase | startswith("the-plum-team/mod-base/.github/workflows/"))
+            | if (.path | sub("^.*@"; "")) == .sha then .sha else "path-sha-mismatch" end' <<< "$run" | sort -u)
+          [[ "${#referenced[@]}" == 1 && "${referenced[0]}" =~ ^[0-9a-f]{40}$ ]] ||
+            fail "the run did not resolve exactly one mod-base commit"
+          kit_sha="${referenced[0]}"
+          declared="$(protected_gh_api_retry "repos/$GITHUB_REPOSITORY/contents/.github/workflows/pages.yml?ref=$GITHUB_SHA" \
+            --jq .content | base64 -d | grep -oiE 'The-Plum-Team/mod-base/[^@[:space:]]+@[0-9a-f]{40}' \
+            | sed 's/.*@//' | sort -u)" || fail "pages.yml at github.sha declares no mod-base pin"
+          [[ "$declared" == "$kit_sha" ]] || fail "the executing mod-base commit is not the pin in pages.yml"
+          reach="$(protected_gh_api_retry "repos/The-Plum-Team/mod-base/compare/$kit_sha...main" \
+            --jq '[.status, (.behind_by | tostring)] | join(" ")')"
+          [[ "$reach" == "ahead 0" || "$reach" == "identical 0" ]] ||
+            fail "the pinned commit $kit_sha is not reachable from mod-base main"
+          printf 'kit_sha=%s\n' "$kit_sha" >> "$GITHUB_OUTPUT"
 
-  collect:
-    name: Validate and compact ${{ matrix.branch.name }}
-    needs: discover
-    strategy:
-      fail-fast: false
-      max-parallel: 3
-      matrix:
-        branch: ${{ fromJSON(needs.discover.outputs.inventory) }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+  publish:
+    name: Publish
+    needs: verify-kit
+    if: inputs.operation != 'rotate'
     permissions:
       actions: read
       contents: read
-
-    steps:
-      - name: Check out the exact protected validator
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.discover.outputs.implementation_sha }}
-          persist-credentials: false
-
-      - name: Install Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-
-      - name: Install hash-locked image decoder and encoder
-        run: >-
-          python -m pip install
-          --only-binary=:all:
-          --require-hashes
-          --requirement scripts/pages/requirements.txt
-
-      - name: Select authenticated current-head evidence and matrix blob
-        id: source
-        shell: bash
-        env:
-          BRANCH: ${{ matrix.branch.name }}
-          CANONICAL_BRANCH: ${{ needs.discover.outputs.canonical_branch }}
-          COMMIT_SHA: ${{ matrix.branch.commit }}
-          GH_TOKEN: ${{ github.token }}
-          MATRIX_BLOB: ${{ matrix.branch.matrix_blob }}
-          MATRIX_SHA: ${{ matrix.branch.matrix_sha256 }}
-          TREE_SHA: ${{ matrix.branch.tree }}
-        run: |
-          set -euo pipefail
-          python3 scripts/pages/select_artifact.py \
-            --repository "$GITHUB_REPOSITORY" \
-            --branch "$BRANCH" \
-            --canonical-branch "$CANONICAL_BRANCH" \
-            --commit "$COMMIT_SHA" \
-            --tree "$TREE_SHA" \
-            --matrix-blob "$MATRIX_BLOB" \
-            --matrix-sha256 "$MATRIX_SHA" \
-            --matrix-output "$RUNNER_TEMP/release-matrix.json" \
-            --github-output "$GITHUB_OUTPUT"
-
-      - name: Download and bounded-extract the exact artifact ID
-        env:
-          ARTIFACT_DIGEST: ${{ steps.source.outputs.artifact_digest }}
-          ARTIFACT_ID: ${{ steps.source.outputs.artifact_id }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          python3 scripts/pages/download_artifact.py \
-            --repository "$GITHUB_REPOSITORY" \
-            --artifact-id "$ARTIFACT_ID" \
-            --digest "$ARTIFACT_DIGEST" \
-            --output selected-evidence
-
-      - name: Authenticate and compact the exact selected source
-        id: compact
-        shell: bash
-        env:
-          BRANCH: ${{ matrix.branch.name }}
-          CANONICAL_BRANCH: ${{ needs.discover.outputs.canonical_branch }}
-          COMMIT_SHA: ${{ matrix.branch.commit }}
-          GH_TOKEN: ${{ github.token }}
-          MATRIX_SHA: ${{ matrix.branch.matrix_sha256 }}
-          TREE_SHA: ${{ matrix.branch.tree }}
-          EXPECTED_HANDOFF_RUN_ATTEMPT: ${{ steps.source.outputs.expected_handoff_run_attempt }}
-          EXPECTED_HANDOFF_RUN_ID: ${{ steps.source.outputs.expected_handoff_run_id }}
-          SELECTED_ARTIFACT_DIGEST: ${{ steps.source.outputs.artifact_digest }}
-          SELECTED_ARTIFACT_ID: ${{ steps.source.outputs.artifact_id }}
-          SELECTED_ARTIFACT_NAME: ${{ steps.source.outputs.artifact_name }}
-          SELECTED_KIND: ${{ steps.source.outputs.kind }}
-          SELECTED_RUN_ATTEMPT: ${{ steps.source.outputs.run_attempt }}
-          SELECTED_RUN_ID: ${{ steps.source.outputs.run_id }}
-          SOURCE_CONTROLLER_BRANCH: ${{ steps.source.outputs.expected_handoff_controller_branch }}
-          SOURCE_CONTROLLER_SHA: ${{ steps.source.outputs.expected_handoff_controller_sha }}
-        run: |
-          set -euo pipefail
-          source_token="$GH_TOKEN"
-          unset GH_TOKEN
-          scope="$(python3 scripts/ci/matrix_scope.py --matrix "$RUNNER_TEMP/release-matrix.json" --no-source-check)"
-          scoped=()
-          case "$scope" in
-            unscoped) ;;
-            legacy|full)
-              scoped=(--scope "$scope" --expected-branch "$BRANCH" --expected-commit "$COMMIT_SHA"
-                --expected-tree "$TREE_SHA" --expected-matrix-sha256 "$MATRIX_SHA") ;;
-            *) printf 'Unsupported matrix scope: %s\n' "$scope" >&2; exit 2 ;;
-          esac
-          authenticate=(
-            python3 scripts/pages/authenticate_source.py
-            --repository "$GITHUB_REPOSITORY"
-            --canonical-branch "$CANONICAL_BRANCH"
-            --matrix "$RUNNER_TEMP/release-matrix.json"
-            --evidence selected-evidence
-            --selected-kind "$SELECTED_KIND"
-            --selected-artifact-id "$SELECTED_ARTIFACT_ID"
-            --selected-artifact-name "$SELECTED_ARTIFACT_NAME"
-            --selected-artifact-digest "$SELECTED_ARTIFACT_DIGEST"
-            --selected-run-id "$SELECTED_RUN_ID"
-            --selected-run-attempt "$SELECTED_RUN_ATTEMPT"
-            --expected-handoff-run-id "$EXPECTED_HANDOFF_RUN_ID"
-            --expected-handoff-run-attempt "$EXPECTED_HANDOFF_RUN_ATTEMPT"
-          )
-          if [[ "$scope" != unscoped ]]; then authenticate+=("${scoped[@]}"); fi
-          GH_TOKEN="$source_token" "${authenticate[@]}" > "$RUNNER_TEMP/pages-source-authentication.json"
-          common=(
-            --input selected-evidence
-            --output candidate-cache
-            --matrix "$RUNNER_TEMP/release-matrix.json"
-            --repository "$GITHUB_REPOSITORY"
-            --branch "$BRANCH"
-            --commit "$COMMIT_SHA"
-            --tree "$TREE_SHA"
-            --matrix-sha256 "$MATRIX_SHA"
-          )
-          if [[ "$scope" != unscoped ]]; then
-            projection="$(jq -er --arg scope "$scope" '.aggregate_scope | select(.kind == $scope) |
-              .projection | select(. == "pr-anchors" or . == "scheduled-anchors")' "$RUNNER_TEMP/pages-source-authentication.json")"
-            common+=(--scope "$scope" --projection "$projection")
-          fi
-          if [[ "$SELECTED_KIND" == raw ]]; then
-            python3 scripts/pages/evidence.py compact "${common[@]}" \
-              --run-id "$SELECTED_RUN_ID" \
-              --run-attempt "$SELECTED_RUN_ATTEMPT" \
-              --controller-branch "$SOURCE_CONTROLLER_BRANCH" \
-              --controller-sha "$SOURCE_CONTROLLER_SHA" \
-              --source-artifact-id "$SELECTED_ARTIFACT_ID" \
-              --source-artifact-name "$SELECTED_ARTIFACT_NAME" \
-              --source-artifact-digest "$SELECTED_ARTIFACT_DIGEST"
-          elif [[ "$SELECTED_KIND" == compact ]]; then
-            python3 scripts/pages/evidence.py copy-compact "${common[@]}"
-          else
-            printf 'Unsupported selected source kind: %s\n' "$SELECTED_KIND" >&2
-            exit 2
-          fi
-          if [[ "$scope" != unscoped ]]; then
-            GH_TOKEN="$source_token" "${authenticate[@]}" --bind-compact candidate-cache > "$RUNNER_TEMP/pages-bound-selection.json"
-          fi
-          unset source_token
-          # The companion is transported separately; its JSON supplies no authority.
-          python3 - "$scope" <<'PY'
-          import hashlib, os, re, sys
-          from pathlib import Path
-          from scripts.lib.atomic_directory import atomic_directory, write_new
-          from scripts.lib.secure_json import canonical_json, read
-          from scripts.pages.evidence import branch_token
-          from scripts.release.matrix import MAX_MATRIX_BYTES
-          temporary = Path(os.environ["RUNNER_TEMP"])
-          _, matrix_raw = read(temporary / "release-matrix.json", label="external matrix", max_bytes=MAX_MATRIX_BYTES)
-          if hashlib.sha256(matrix_raw).hexdigest() != os.environ["MATRIX_SHA"]:
-              raise ValueError("external matrix changed before companion transport")
-          files = {"release-matrix.json": matrix_raw}
-          if sys.argv[1] != "unscoped":
-              before, _ = read(temporary / "pages-source-authentication.json", label="source authentication", max_bytes=2*1024*1024)
-              selection, raw = read(temporary / "pages-bound-selection.json", label="compact binding", max_bytes=2*1024*1024)
-              if canonical_json(before) != canonical_json({key: selection.get(key) for key in before}):
-                  raise ValueError("authenticated source changed during compact binding")
-              files["selection.json"] = raw
-          commit, run, attempt = (os.environ[key] for key in ("COMMIT_SHA", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT"))
-          if not re.fullmatch("[0-9a-f]{40}", commit) or any(not re.fullmatch("[1-9][0-9]*", value) for value in (run, attempt)):
-              raise ValueError("companion requires exact commit and Pages run/attempt")
-          name = f"pages-selection-{branch_token(os.environ['BRANCH'])}--{commit}-{run}-{attempt}"
-          def writer(stage, descriptor):
-              for filename, raw in files.items():
-                  write_new(descriptor, filename, raw)
-          atomic_directory(Path("candidate-selection"), writer)
-          with Path(os.environ["GITHUB_OUTPUT"]).open("a") as stream:
-              stream.write(f"name={name}\nready=true\n")
-          PY
-
-      - name: Upload one short-lived validated fan-in bundle
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ${{ steps.source.outputs.collection_name }}
-          path: candidate-cache/
-          if-no-files-found: error
-          compression-level: 6
-          retention-days: 1
-
-      - name: Upload the exact external branch selection companion
-        if: steps.compact.outputs.ready == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ${{ steps.compact.outputs.name }}
-          path: candidate-selection/
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 1
-
-  build:
-    name: Assemble one atomic current-head gallery
-    needs: [discover, collect]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      actions: read
-      contents: read
-
-    steps:
-      - name: Check out the exact protected renderer
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.discover.outputs.implementation_sha }}
-          persist-credentials: false
-
-      - name: Install Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-
-      - name: Install hash-locked image validator
-        run: >-
-          python -m pip install
-          --only-binary=:all:
-          --require-hashes
-          --requirement scripts/pages/requirements.txt
-
-      - name: Download only this run's validated fan-in bundles
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: collected-pages-*
-          path: collected-caches
-          merge-multiple: false
-          digest-mismatch: error
-
-      - name: Keep a lone fan-in bundle in a directory of its own
-        shell: bash
-        run: |
-          set -euo pipefail
-          # download-artifact extracts a pattern that matches exactly one artifact
-          # straight into its path rather than into a directory named after it, which
-          # is every run while only one branch is enrolled. The renderer expects one
-          # directory per bundle, so give the lone bundle the one it would have had.
-          # Every bundle carries its manifest at its top, and several bundles never
-          # leave one at the root; anything else is left for the renderer to judge.
-          shopt -s dotglob nullglob
-          entries=(collected-caches/*)
-          if [[ -f collected-caches/manifest.json && ! -L collected-caches/manifest.json ]]; then
-            lone="$RUNNER_TEMP/collected-pages-lone"
-            mkdir "$lone"
-            mv -- "${entries[@]}" "$lone/"
-            mv -- "$lone" collected-caches/collected-pages-lone
-          fi
-
-      - name: Render all enrolled heads as one immutable site
-        shell: bash
-        env:
-          CANONICAL_BRANCH: ${{ needs.discover.outputs.canonical_branch }}
-          GH_TOKEN: ${{ github.token }}
-          IMPLEMENTATION_SHA: ${{ needs.discover.outputs.implementation_sha }}
-          INVENTORY: ${{ needs.discover.outputs.inventory }}
-        run: |
-          set -euo pipefail
-          source_token="$GH_TOKEN"
-          unset GH_TOKEN
-          scope="$(python3 scripts/ci/matrix_scope.py --matrix release/release-matrix.json)"
-          inventory_path="$RUNNER_TEMP/pages-inventory.json"
-          render=(python3 scripts/pages/build_site.py --evidence-root collected-caches
-            --inventory "$inventory_path" --output _site --repository "$GITHUB_REPOSITORY")
-          case "$scope" in
-            unscoped) ;;
-            legacy|full)
-              [[ "$GITHUB_API_URL" == https://api.github.com && "$GITHUB_SERVER_URL" == https://github.com ]] || exit 2
-              [[ "$IMPLEMENTATION_SHA" =~ ^[0-9a-f]{40}$ && "$GITHUB_SHA" == "$IMPLEMENTATION_SHA" ]] || exit 2
-              [[ "$(git rev-parse HEAD)" == "$IMPLEMENTATION_SHA" ]] || exit 2
-              [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || exit 2
-              [[ -n "$CANONICAL_BRANCH" && "$GITHUB_REF" == "refs/heads/$CANONICAL_BRANCH" ]] || exit 2
-              [[ "$GITHUB_WORKFLOW_REF" == "$GITHUB_REPOSITORY/.github/workflows/pages.yml@refs/heads/$CANONICAL_BRANCH" ]] || exit 2
-              render+=(--pages-run-id "$GITHUB_RUN_ID" --pages-run-attempt "$GITHUB_RUN_ATTEMPT"
-                --implementation-sha "$IMPLEMENTATION_SHA" --canonical-branch "$CANONICAL_BRANCH") ;;
-            *) printf 'Unsupported matrix scope: %s\n' "$scope" >&2; exit 2 ;;
-          esac
-          # Keep discovery outside the exact clean implementation checkout.
-          printf '%s\n' "$INVENTORY" > "$inventory_path"
-          if [[ "$scope" == unscoped ]]; then
-            "${render[@]}"
-          else
-            GH_TOKEN="$source_token" "${render[@]}"
-          fi
-          unset source_token
-
-      - name: Upload exact promotion inventory
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: pages-promotion
-          path: ${{ runner.temp }}/pages-inventory.json
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 1
-
-      - name: Upload the complete Pages artifact
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: _site
-          include-hidden-files: true
-          retention-days: 1
+    uses: The-Plum-Team/mod-base/.github/workflows/publish.yml@fb575eba9bc819b18fede944f368ef2c99eb3aab # v1.0.0
+    with:
+      kit-sha: ${{ needs.verify-kit.outputs.kit_sha }}
+      operation: ${{ github.event_name == 'schedule' && 'recovery' || inputs.operation }}
+      run-id: ${{ inputs.run_id }}
+      sha: ${{ inputs.sha }}
+      family: ${{ inputs.family }}
+      bundle-key: ${{ inputs.bundle_key }}
+      artifact-id: ${{ inputs.artifact_id }}
+      artifact-digest: ${{ inputs.artifact_digest }}
+      coverage-sha: ${{ inputs.coverage_sha }}
 
   deploy:
-    name: Deploy current-head evidence
-    needs: build
+    name: Deploy GitHub Pages
+    needs: publish
+    if: needs.publish.outputs.eligible == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.pages.outputs.page_url }}
-
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Recheck every published source head immediately before deployment
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEADS: ${{ needs.publish.outputs.heads }}
+        run: |
+          set -euo pipefail
+          protected_gh_api_retry() {  # 4 attempts, 5 s doubling to a 20 s cap; rate-limit, 408/429/5xx, transport only
+            local attempt=1 delay=5 output status
+            while true; do
+              if output="$(gh api "$@" 2>&1)"; then
+                printf '%s\n' "$output"
+                return 0
+              else
+                status=$?
+              fi
+              if (( attempt >= 4 )) || ! grep -Eqi \
+                  'HTTP (408|429|5[0-9][0-9])|rate limit|timed out|timeout|connection (reset|refused)|temporary failure|TLS handshake|unexpected EOF' \
+                  <<< "$output"; then
+                printf '%s\n' "$output" >&2
+                return "$status"
+              fi
+              sleep "$delay"
+              attempt=$(( attempt + 1 ))
+              delay=$(( delay * 2 > 20 ? 20 : delay * 2 ))
+            done
+          }
+          fail() { printf 'Deployment recheck: %s\n' "$1" >&2; exit 1; }
+          jq -e 'type == "object" and length >= 1 and length <= 64 and all(to_entries[];
+            (.key | test("^(?!/)(?!.*(?:\\.\\.|//))[A-Za-z0-9._/-]{1,200}$")) and
+            (.value | type == "string" and test("^[0-9a-f]{40}$")))' <<< "$HEADS" > /dev/null 2>&1 ||
+            fail "the published heads are malformed"
+          default_branch="$(protected_gh_api_retry "repos/$GITHUB_REPOSITORY" --jq .default_branch)"
+          [[ "$GITHUB_REF" == "refs/heads/$default_branch" ]] || fail "Pages deploys only from the default branch"
+          [[ "$(jq -r --arg branch "$default_branch" '.[$branch] // ""' <<< "$HEADS")" == "$GITHUB_SHA" ]] ||
+            fail "the published default-branch head is not github.sha"
+          while IFS=$'\t' read -r branch sha; do
+            encoded="$(jq -rn --arg value "$branch" '$value | @uri')"
+            current="$(protected_gh_api_retry "repos/$GITHUB_REPOSITORY/branches/$encoded" --jq .commit.sha)"
+            if [[ "$current" != "$sha" ]]; then
+              printf 'Source %s advanced before deployment; retaining the deployed site.\n' "$branch" >&2
+              exit 1
+            fi
+          done < <(jq -r 'to_entries[] | [.key, .value] | @tsv' <<< "$HEADS")
       - name: Deploy the immutable site artifact
-        id: pages
+        id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
 
-  refresh-cache:
-    name: Promote rolling cache for ${{ matrix.branch.name }}
-    needs: [discover, collect, deploy]
-    if: ${{ needs.collect.result == 'success' && needs.deploy.result == 'success' }}
-    strategy:
-      fail-fast: false
-      max-parallel: 3
-      matrix:
-        branch: ${{ fromJSON(needs.discover.outputs.inventory) }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+  finalize:
+    name: Finalize
+    needs: [verify-kit, publish, deploy]
+    if: needs.deploy.result == 'success'
     permissions:
       actions: read
       contents: read
+    uses: The-Plum-Team/mod-base/.github/workflows/finalize.yml@fb575eba9bc819b18fede944f368ef2c99eb3aab # v1.0.0
+    with:
+      kit-sha: ${{ needs.verify-kit.outputs.kit_sha }}
+      bundle-keys: ${{ needs.publish.outputs.bundle_keys }}
+      families: ${{ needs.publish.outputs.families }}
+      heads: ${{ needs.publish.outputs.heads }}
 
-    steps:
-      - name: Check out the exact protected cache validator
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.discover.outputs.implementation_sha }}
-          persist-credentials: false
-
-      - name: Install Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-
-      - name: Install hash-locked image validator
-        run: >-
-          python -m pip install
-          --only-binary=:all:
-          --require-hashes
-          --requirement scripts/pages/requirements.txt
-
-      - name: Derive collision-resistant artifact identities
-        id: names
-        env:
-          BRANCH: ${{ matrix.branch.name }}
-          COMMIT_SHA: ${{ matrix.branch.commit }}
-        run: |
-          set -euo pipefail
-          python3 - "$BRANCH" "$COMMIT_SHA" "$GITHUB_OUTPUT" <<'PY'
-          import sys
-          from pathlib import Path
-          from scripts.pages.evidence import cache_artifact_name, collection_artifact_name
-          branch, commit, output = sys.argv[1:]
-          with Path(output).open("a", encoding="utf-8") as stream:
-              stream.write(f"cache={cache_artifact_name(branch, commit)}\n")
-              stream.write(f"collection={collection_artifact_name(branch, commit)}\n")
-          PY
-
-      - name: Download this run's deployed branch bundle
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: ${{ steps.names.outputs.collection }}
-          path: promoted-cache
-          digest-mismatch: error
-
-      - name: Revalidate the promoted compact bundle
-        shell: bash
-        env:
-          BRANCH: ${{ matrix.branch.name }}
-          CANONICAL_BRANCH: ${{ needs.discover.outputs.canonical_branch }}
-          COMMIT_SHA: ${{ matrix.branch.commit }}
-          GH_TOKEN: ${{ github.token }}
-          IMPLEMENTATION_SHA: ${{ needs.discover.outputs.implementation_sha }}
-          INVENTORY: ${{ needs.discover.outputs.inventory }}
-          MATRIX_SHA: ${{ matrix.branch.matrix_sha256 }}
-          TREE_SHA: ${{ matrix.branch.tree }}
-        run: |
-          set -euo pipefail
-          source_token="$GH_TOKEN"
-          unset GH_TOKEN
-          scope="$(python3 scripts/ci/matrix_scope.py --matrix release/release-matrix.json)"
-          case "$scope" in
-            unscoped)
-              python3 scripts/pages/evidence.py validate-compact \
-                --input promoted-cache --matrix promoted-cache/release-matrix.json \
-                --repository "$GITHUB_REPOSITORY" --branch "$BRANCH" \
-                --commit "$COMMIT_SHA" --tree "$TREE_SHA" --matrix-sha256 "$MATRIX_SHA" ;;
-            legacy|full)
-              [[ "$GITHUB_API_URL" == https://api.github.com && "$GITHUB_SERVER_URL" == https://github.com ]] || exit 2
-              [[ "$IMPLEMENTATION_SHA" =~ ^[0-9a-f]{40}$ && "$GITHUB_SHA" == "$IMPLEMENTATION_SHA" ]] || exit 2
-              [[ "$(git rev-parse HEAD)" == "$IMPLEMENTATION_SHA" ]] || exit 2
-              [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || exit 2
-              [[ -n "$CANONICAL_BRANCH" && "$GITHUB_REF" == "refs/heads/$CANONICAL_BRANCH" ]] || exit 2
-              [[ "$GITHUB_WORKFLOW_REF" == "$GITHUB_REPOSITORY/.github/workflows/pages.yml@refs/heads/$CANONICAL_BRANCH" ]] || exit 2
-              inventory_path="$RUNNER_TEMP/pages-inventory.json"
-              printf '%s\n' "$INVENTORY" > "$inventory_path"
-              # Download is current-run; the companion binds this exact attempt and manifest.
-              refresh=(python3 scripts/pages/refresh_cache.py --input promoted-cache --branch "$BRANCH"
-                --inventory "$inventory_path" --repository "$GITHUB_REPOSITORY"
-                --pages-run-id "$GITHUB_RUN_ID" --pages-run-attempt "$GITHUB_RUN_ATTEMPT"
-                --implementation-sha "$IMPLEMENTATION_SHA" --canonical-branch "$CANONICAL_BRANCH")
-              GH_TOKEN="$source_token" "${refresh[@]}" ;;
-            *) printf 'Unsupported matrix scope: %s\n' "$scope" >&2; exit 2 ;;
-          esac
-          unset source_token
-
-      - name: Upload the sole candidate for this branch's rolling cache
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ${{ steps.names.outputs.cache }}
-          path: promoted-cache/
-          if-no-files-found: error
-          compression-level: 6
-          retention-days: 90
-
-  rotate-current:
-    name: Rotate this exact successful evidence generation
-    needs: [discover, collect, build, deploy, refresh-cache]
-    if: ${{ always() && needs.collect.result == 'success' && needs.build.result == 'success' && needs.deploy.result == 'success' && needs.refresh-cache.result == 'success' }}
+  request-rotation:
+    name: Request post-success evidence rotation
+    needs: [publish, finalize]
+    if: always() && needs.publish.outputs.eligible == 'true' && needs.finalize.result == 'success'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 5
     permissions:
       actions: write
-      contents: read
-
     steps:
-      - name: Check out the exact protected same-run rotation implementation
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.discover.outputs.implementation_sha }}
-          persist-credentials: false
-
-      - name: Install Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-
-      - name: Install hash-locked image validator
-        run: >-
-          python -m pip install
-          --only-binary=:all:
-          --require-hashes
-          --requirement scripts/pages/requirements.txt
-
-      - name: Download this attempt's exact promoted caches
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: pages-cache-*
-          path: owner-caches
-          merge-multiple: false
-          digest-mismatch: error
-
-      - name: Download this attempt's exact promotion inventory
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: pages-promotion
-          path: owner-promotion
-          digest-mismatch: error
-
-      - name: Keep a lone promoted cache under its artifact name
-        run: >-
-          python3 scripts/pages/nest_lone_download.py
-          --root owner-caches
-          --inventory owner-promotion/pages-inventory.json
-
-      - name: Delete only exact authenticated superseded artifact IDs
+      # The separately locked rotate run authenticates this owner only after it has reached
+      # completed/success. GH_REPO gives gh the repository because this job has no checkout. The
+      # dispatch takes the same bounded retry as every other call: a failure here would fail a run
+      # whose site is already deployed, and a retry of an accepted but unacknowledged dispatch only
+      # starts a duplicate rotation, which re-plans the same generation or finds its promotion
+      # already retired (a reported no-op).
+      - name: Dispatch the separately locked exact-ID rotation
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          CANONICAL_BRANCH: ${{ needs.discover.outputs.canonical_branch }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          python3 scripts/pages/rotate_artifacts.py \
-            --repository "$GITHUB_REPOSITORY" \
-            --pages-run-id "$GITHUB_RUN_ID" \
-            --current-run-attempt "$GITHUB_RUN_ATTEMPT" \
-            --pages-run-sha "$GITHUB_SHA" \
-            --canonical-branch "$CANONICAL_BRANCH" \
-            --inventory owner-promotion/pages-inventory.json \
-            --caches-root owner-caches
+          protected_gh_api_retry() {  # 4 attempts, 5 s doubling to a 20 s cap; rate-limit, 408/429/5xx, transport only
+            local attempt=1 delay=5 output status
+            while true; do
+              if output="$(gh api "$@" 2>&1)"; then
+                printf '%s\n' "$output"
+                return 0
+              else
+                status=$?
+              fi
+              if (( attempt >= 4 )) || ! grep -Eqi \
+                  'HTTP (408|429|5[0-9][0-9])|rate limit|timed out|timeout|connection (reset|refused)|temporary failure|TLS handshake|unexpected EOF' \
+                  <<< "$output"; then
+                printf '%s\n' "$output" >&2
+                return "$status"
+              fi
+              sleep "$delay"
+              attempt=$(( attempt + 1 ))
+              delay=$(( delay * 2 > 20 ? 20 : delay * 2 ))
+            done
+          }
+          fail() { printf 'Rotation request: %s\n' "$1" >&2; exit 1; }
+          [[ "$GH_REPO" == "$GITHUB_REPOSITORY" ]] || fail "GH_REPO is not this repository"
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ && "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "malformed run identity"
+          default_branch="$(protected_gh_api_retry "repos/$GH_REPO" --jq .default_branch)"
+          [[ "$GITHUB_REF" == "refs/heads/$default_branch" ]] || fail "rotation is requested only from the default branch"
+          payload="$(mktemp "$RUNNER_TEMP/mod-base-rotation-request.XXXXXX")"
+          jq -n --arg ref "$default_branch" --arg run_id "$GITHUB_RUN_ID" --arg sha "$GITHUB_SHA" \
+            '{ref: $ref, inputs: {operation: "rotate", run_id: $run_id, sha: $sha}}' > "$payload"
+          protected_gh_api_retry --method POST "repos/$GH_REPO/actions/workflows/pages.yml/dispatches" \
+            --input "$payload" > /dev/null
 
   rotate:
-    name: Rotate successful evidence generation
-    if: ${{ github.event_name == 'repository_dispatch' && github.event.action == 'pages-rotate' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    name: Rotate
+    needs: verify-kit
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'rotate'
     permissions:
       actions: write
       contents: read
-
-    steps:
-      - name: Authenticate completed successful Pages owner
-        id: owner
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          OWNER_RUN_ID: ${{ github.event.client_payload.pages_run_id }}
-          OWNER_RUN_SHA: ${{ github.event.client_payload.pages_run_sha }}
-          EVENT_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          set -euo pipefail
-          canonical_branch="$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)"
-          [[ "$EVENT_DEFAULT_BRANCH" == "$canonical_branch" ]]
-          [[ "$GITHUB_REF" == "refs/heads/$canonical_branch" ]]
-          [[ "$OWNER_RUN_ID" =~ ^[1-9][0-9]*$ ]]
-          [[ "$OWNER_RUN_SHA" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$OWNER_RUN_ID" != "$GITHUB_RUN_ID" ]]
-          owner=''
-          for attempt in {1..30}; do
-            owner="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$OWNER_RUN_ID")"
-            [[ "$(jq -r .status <<< "$owner")" == completed ]] && break
-            sleep 2
-          done
-          workflow_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/pages.yml" --jq .id)"
-          jq -e \
-            --arg repository "$GITHUB_REPOSITORY" \
-            --arg sha "$OWNER_RUN_SHA" \
-            --arg canonical "$canonical_branch" \
-            --argjson run_id "$OWNER_RUN_ID" \
-            --argjson workflow_id "$workflow_id" \
-            '.id == $run_id and .workflow_id == $workflow_id and
-             .status == "completed" and .conclusion == "success" and
-             (.event == "schedule" or .event == "repository_dispatch" or .event == "workflow_run") and
-             .head_branch == $canonical and .head_sha == $sha and
-             .path == ".github/workflows/pages.yml" and
-             .head_repository.full_name == $repository' <<< "$owner" > /dev/null
-          encoded_branch="$(jq -rn --arg value "$canonical_branch" '$value|@uri')"
-          implementation_sha="$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded_branch" --jq .commit.sha)"
-          printf 'implementation_sha=%s\n' "$implementation_sha" >> "$GITHUB_OUTPUT"
-          printf 'canonical_branch=%s\n' "$canonical_branch" >> "$GITHUB_OUTPUT"
-
-      - name: Check out the current protected rotation implementation
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ steps.owner.outputs.implementation_sha }}
-          persist-credentials: false
-
-      - name: Install Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-
-      - name: Install hash-locked image validator
-        run: >-
-          python -m pip install
-          --only-binary=:all:
-          --require-hashes
-          --requirement scripts/pages/requirements.txt
-
-      - name: Download exact successful-owner caches
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: pages-cache-*
-          path: owner-caches
-          merge-multiple: false
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ github.event.client_payload.pages_run_id }}
-          digest-mismatch: error
-
-      - name: Download exact promotion inventory
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: pages-promotion
-          path: owner-promotion
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ github.event.client_payload.pages_run_id }}
-          digest-mismatch: error
-
-      - name: Keep a lone promoted cache under its artifact name
-        run: >-
-          python3 scripts/pages/nest_lone_download.py
-          --root owner-caches
-          --inventory owner-promotion/pages-inventory.json
-
-      - name: Delete only authenticated superseded artifact IDs
-        env:
-          GH_TOKEN: ${{ github.token }}
-          OWNER_RUN_ID: ${{ github.event.client_payload.pages_run_id }}
-          OWNER_RUN_SHA: ${{ github.event.client_payload.pages_run_sha }}
-          CANONICAL_BRANCH: ${{ steps.owner.outputs.canonical_branch }}
-        run: |
-          set -euo pipefail
-          python3 scripts/pages/rotate_artifacts.py \
-            --repository "$GITHUB_REPOSITORY" \
-            --pages-run-id "$OWNER_RUN_ID" \
-            --pages-run-sha "$OWNER_RUN_SHA" \
-            --canonical-branch "$CANONICAL_BRANCH" \
-            --inventory owner-promotion/pages-inventory.json \
-            --caches-root owner-caches
+    uses: The-Plum-Team/mod-base/.github/workflows/rotate.yml@fb575eba9bc819b18fede944f368ef2c99eb3aab # v1.0.0
+    with:
+      kit-sha: ${{ needs.verify-kit.outputs.kit_sha }}
+      pages-run-id: ${{ inputs.run_id }}
+      pages-run-sha: ${{ inputs.sha }}
+# <<< mod-base managed
+# >>> mod-local extensions: only jobs whose id starts with "ext-"; no mod-base uses, no pages/id-token/actions:write
+# <<< mod-local extensions

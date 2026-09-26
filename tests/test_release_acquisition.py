@@ -11,8 +11,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from scripts.ci.e2e_job_graph import expected_jobs
-from scripts.pages import download_artifact as transport
-from scripts.pages.select_artifact import Artifact
+from scripts.release import artifact_transport as transport
+from scripts.release.github_api import Artifact
 from scripts.release import plan_release as planning
 from tests import test_release_content_evidence as fixtures
 from tests.test_release_run_evidence import raw_artifact
