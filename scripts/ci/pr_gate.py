@@ -55,6 +55,7 @@ from scripts.ci.loader_bootstrap import (  # noqa: E402
 from scripts.release.matrix import (  # noqa: E402
     MatrixError,
     load_matrix_bytes,
+    load_trusted_gate_matrix_bytes,
     valid_branch_name,
 )
 
@@ -1092,7 +1093,7 @@ def _matrix_for_identity(repository: Path, identity: PullIdentity) -> tuple[byte
     matrix_bytes = _blob(
         repository, identity.merge_sha, MATRIX_PATH, maximum=256 * 1024
     )
-    matrix = load_matrix_bytes(matrix_bytes)
+    matrix = load_trusted_gate_matrix_bytes(matrix_bytes)
     branch = matrix["branch"]
     if branch["name"] != identity.base_branch or branch["canonical"] != identity.default_branch:
         _fail("base branch release matrix does not authenticate this PR topology")
@@ -1475,6 +1476,8 @@ def evaluate_restricted_transition(
     else:
         validate_restricted_transition_tree(repository, identity, **arguments)
     base_matrix = _blob(repository, identity.base_sha, MATRIX_PATH, maximum=256 * 1024)
+    # Restricted evidence graphs stay schema-1 only; the gate's preparing projection is not one.
+    load_matrix_bytes(base_matrix)
     matrix_bytes, _ = _matrix_for_identity(repository, identity)
     if matrix_bytes != base_matrix:
         _fail("restricted transition cannot select candidate-owned evidence policy")
