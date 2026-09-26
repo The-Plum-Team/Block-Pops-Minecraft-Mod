@@ -71,9 +71,12 @@ governance/publication writers still require owner configuration:
   bump; the kit's
   [operations guide](https://github.com/The-Plum-Team/mod-base/blob/main/docs/OPERATIONS.md#p1-ruleset-block-pops-master)
   holds the exact ruleset payload. Require the contexts only after a current PR
-  has passed both: while the `master` matrix is schema 2, controller parity
-  refuses it and every PR reports both contexts as failures, so the ruleset
-  would block every merge
+  has passed both. From the schema-2 `preparing` enrollment (`466426b`) until
+  the trusted-gate projection landed (#12, merge `53ed97d`), controller parity
+  refused every PR, so the ruleset would have blocked every merge. The
+  remaining order is: post `/controller-upgrade approve <head sha>` on the
+  mod-base adoption's exact head, confirm that both `Trusted PR` contexts turn
+  green on it, and only then apply the ruleset
   ([ADR 0001](architecture/decisions/0001-adopt-mod-base-public-evidence.md)).
 - Create a protected `visual-review` environment if advisory AI review is
   desired and restrict it to protected `master`. Store the owner's
@@ -128,6 +131,12 @@ Immediately after installation, dispatch Build and Packaged E2E against the exac
 current default-branch HEAD, then exercise both protected PRT gates and the App
 bridge on a fresh same-repository PR before selecting the stable contexts in
 branch protection. Any repair uses the now-installed controller-upgrade process.
+The one exception is repairing the evaluator while it refuses every PR, as it
+did from the schema-2 `preparing` enrollment (`466426b`) until its trusted-gate
+projection landed. No controller upgrade can be admitted then, so that repair
+lands as one exact, completely reviewed commit through the same governance
+process and limits as the first installation, followed by the same fresh-PR
+exercise of both protected gates before any stable context is relied on.
 
 PR #7 owns the canonical foundation on which this implementation was prepared;
 PR #8 is an independent release-line port. Its existing release-base PR shape is
@@ -155,6 +164,17 @@ upgrade:
    `scripts/ci/pr_gate.py`: protected workflows/actions and CODEOWNERS, shared
    build/controller/E2E/evidence/visual/site/test code, Markdown documentation,
    and only the matrix-selected loaders' `build.gradle` or `src/e2e` trees.
+   While the `master` matrix is schema 2 in `preparing` mode, ordinary and
+   controller-upgrade evaluation take the PR's branch identity, the selected
+   loaders and the parity-protected loader paths from its trusted-gate
+   projection: the branch policy plus the two legacy lanes `fabric-1.20.1` and
+   `forge-1.20.1`. The expected job graphs come from the full document's
+   default `legacy` scope, the same two lanes. Both therefore equal the
+   schema-1 gate's; `shared` mode (until its activation task), any other mode
+   and a malformed matrix fail closed. The loader-bootstrap contract still
+   binds every configured loader, NeoForge included, so an ordinary change to
+   NeoForge's `build.gradle` or `src/e2e` must match that contract, which the
+   schema-1 gate did not require.
    Product `src/main` code, unknown paths, submodules, symlinks,
    executable-mode additions, forbidden `.gradle`/`buildSrc` trees, the release
    matrix, dependency-verification metadata, and version shims are rejected.

@@ -274,7 +274,7 @@ class ParityTests(unittest.TestCase):
                 git("commit", "-qm", relative)
                 head = git("rev-parse", "HEAD")
                 with self.subTest(relative=relative), mock.patch(
-                    "scripts.ci.gate_controller.load_matrix_bytes", return_value={"artifacts": []}
+                    "scripts.ci.gate_controller.load_trusted_gate_matrix_bytes", return_value={"artifacts": []}
                 ), mock.patch("scripts.ci.gate_controller.validate_loader_bootstrap_commit"), self.assertRaisesRegex(
                     GateControllerError, relative
                 ):
@@ -324,7 +324,7 @@ class ParityTests(unittest.TestCase):
             with mock.patch(
                 "scripts.ci.gate_controller.PROTECTED_PATHS", ("controller",)
             ), mock.patch(
-                "scripts.ci.gate_controller.load_matrix_bytes",
+                "scripts.ci.gate_controller.load_trusted_gate_matrix_bytes",
                 return_value={"artifacts": []},
             ):
                 with self.assertRaisesRegex(GateControllerError, "forbidden Gradle path"):
@@ -350,7 +350,7 @@ class ParityTests(unittest.TestCase):
             subprocess.run(["git", "-C", raw, "commit", "-qam", "change"], check=True)
             candidate = subprocess.check_output(["git", "-C", raw, "rev-parse", "HEAD"], text=True).strip()
             with mock.patch("scripts.ci.gate_controller.PROTECTED_PATHS", ("controller",)), mock.patch(
-                "scripts.ci.gate_controller.load_matrix_bytes",
+                "scripts.ci.gate_controller.load_trusted_gate_matrix_bytes",
                 return_value={"artifacts": []},
             ):
                 with self.assertRaisesRegex(GateControllerError, "controller"):
@@ -387,7 +387,7 @@ class ParityTests(unittest.TestCase):
             with mock.patch(
                 "scripts.ci.gate_controller.PROTECTED_PATHS", ("controller",)
             ), mock.patch(
-                "scripts.ci.gate_controller.load_matrix_bytes", return_value=matrix
+                "scripts.ci.gate_controller.load_trusted_gate_matrix_bytes", return_value=matrix
             ), mock.patch(
                 "scripts.ci.gate_controller.validate_loader_bootstrap_commit"
             ) as bootstrap:

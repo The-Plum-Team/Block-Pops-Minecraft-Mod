@@ -124,13 +124,14 @@ Retired, with the reasons that make each safe:
 - The `master` ruleset (required App contexts, no bypass actors; see the kit's
   [operations guide](https://github.com/The-Plum-Team/mod-base/blob/main/docs/OPERATIONS.md#owner-activation))
   is what makes the pin, the adapter and the configuration trusted roots. It presupposes an
-  evaluator that can pass a current pull request. While the `master` matrix is schema 2
-  (`preparing`), `pr_gate.py` cannot: controller parity reads both matrices with
-  `load_matrix_bytes`, which refuses schema 2 as "inventory only", so every pull request, the
-  adoption included, reports both contexts as failures, and a ruleset applied then would block
-  every merge. Apply the ruleset only after a separately authorized controller change lets the
-  evaluator read the schema-2 matrix and one current pull request passes both contexts; whether the
-  adoption merges before or after that change is the owner's decision.
+  evaluator that can pass a current pull request. From the schema-2 `preparing` enrollment
+  (`466426b`) until #12 (merge `53ed97d`), `pr_gate.py` could not: controller parity read both
+  matrices with `load_matrix_bytes`, which refuses schema 2 as "inventory only", so every pull
+  request reported both contexts as failures, and a ruleset applied then would have blocked every
+  merge. #12 repaired the evaluator: parity and PR identity now read the schema-2 matrix through
+  its trusted-gate projection. The remaining owner steps are to post
+  `/controller-upgrade approve <head sha>` on the adoption's exact head, confirm that both
+  `Trusted PR` contexts turn green on it, and only then apply the ruleset (P1).
 - Until the first Packaged E2E after the merge, the site keeps its previous deployment
   (`awaiting-complete-v1-evidence`) and visual review finds no `mb-anchor--`. Dispatch
   `on-demand-e2e.yml` on `master` right after merging. That run gives every later capsule its
