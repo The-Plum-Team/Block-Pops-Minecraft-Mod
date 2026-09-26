@@ -2,6 +2,11 @@
 .gradle/
 build/
 e2e-out/
+/.architectury-transformer/
+
+# Locally built public evidence and Pages sites (never committed)
+public-evidence/
+_site/
 
 # Python
 __pycache__/
