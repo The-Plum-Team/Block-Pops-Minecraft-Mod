@@ -71,9 +71,12 @@ governance/publication writers still require owner configuration:
   bump; the kit's
   [operations guide](https://github.com/The-Plum-Team/mod-base/blob/main/docs/OPERATIONS.md#p1-ruleset-block-pops-master)
   holds the exact ruleset payload. Require the contexts only after a current PR
-  has passed both: while the `master` matrix is schema 2, controller parity
-  refuses it and every PR reports both contexts as failures, so the ruleset
-  would block every merge
+  has passed both. From the schema-2 `preparing` enrollment (`466426b`) until
+  the trusted-gate projection landed (#12, merge `53ed97d`), controller parity
+  refused every PR, so the ruleset would have blocked every merge. The
+  remaining order is: post `/controller-upgrade approve <head sha>` on the
+  mod-base adoption's exact head, confirm that both `Trusted PR` contexts turn
+  green on it, and only then apply the ruleset
   ([ADR 0001](architecture/decisions/0001-adopt-mod-base-public-evidence.md)).
 - Create a protected `visual-review` environment if advisory AI review is
   desired and restrict it to protected `master`. Store the owner's
