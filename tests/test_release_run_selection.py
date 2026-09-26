@@ -3,7 +3,7 @@
 import copy
 import unittest
 
-from scripts.pages.select_artifact import SelectionError
+from scripts.release.github_api import SelectionError
 from scripts.release.run_selection import select_current_run
 
 REPOSITORY = "owner/repository"

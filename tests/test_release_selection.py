@@ -12,7 +12,7 @@ import unittest
 from unittest.mock import patch
 
 from scripts.ci.tests import test_loader_bootstrap as bootstrap
-from scripts.pages import download_artifact as transport
+from scripts.release import artifact_transport as transport
 from scripts.release import plan_release
 from tests import test_build_matrix as runner, test_release_acquisition as acquisition
 

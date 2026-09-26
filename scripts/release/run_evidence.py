@@ -9,7 +9,7 @@ from pathlib import Path
 
 from scripts.ci.e2e_job_graph import expected_jobs, validate_jobs
 from scripts.lib.secure_json import canonical_json, read
-from scripts.pages.select_artifact import Artifact, GitHubApi, SelectionError
+from scripts.release.github_api import Artifact, GitHubApi, SelectionError
 from scripts.release.matrix import MAX_MATRIX_BYTES, MatrixDocument, normalize_matrix_inventory
 from scripts.release.run_selection import _check, select_current_run
 
