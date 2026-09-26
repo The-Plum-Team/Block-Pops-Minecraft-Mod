@@ -390,7 +390,10 @@ conflict allowlist to force this bootstrap.
   Python before unsetting a credential; never pin a kit release that fails it.
   It exits 2 when the staged kit does not verify or carries no `actions/`
   bound by `staged_actions.sha256`: a kit older than mod-base v0.9.2 has none,
-  so pin back only to v0.9.2 or later.
+  so pin back only to v0.9.2 or later. A candidate test that fails with
+  `ModuleNotFoundError: No module named 'PIL'` inside an adapter hook or the
+  conformance run means a kit older than v1.0.2, which hides the sandbox's
+  user-site Pillow from its isolated children; pin v1.0.2 or later.
 - **Actions artifact quota is exhausted:** Build/E2E may finish compilation and
   staging but cannot cross the immutable-artifact boundary, so the gate must
   remain failed and packaged scenarios must not be represented as tested. In

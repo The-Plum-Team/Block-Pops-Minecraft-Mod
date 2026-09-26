@@ -60,7 +60,7 @@ jobs:
           printf 'sha=%s\n' "$(jq -r .head_sha <<< "$run")" >> "$GITHUB_OUTPUT"
       - name: Dispatch the separately locked Pages publication
         if: steps.source.outputs.sha != ''
-        uses: The-Plum-Team/mod-base/actions/notify-pages@c6b5e1687ef831d9c5f0ff0903a17016d3be5f96 # v1.0.1
+        uses: The-Plum-Team/mod-base/actions/notify-pages@1401a34dd19be17b2c42b4f494c0b43380919eac # v1.0.2
         with:
           operation: deploy
           run-id: ${{ github.event.workflow_run.id }}

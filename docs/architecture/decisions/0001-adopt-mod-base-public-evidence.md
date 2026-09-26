@@ -105,6 +105,11 @@ Retired, with the reasons that make each safe:
   check against whichever kit root it resolves and never skips. A kit or a controller bootstrap
   older than v0.9.2 stages no `actions/`, so neither can pass the Build gate: pin back only to
   v0.9.2 or later.
+- The candidate sandbox installs the hash-locked Pillow with `pip install --user`, into the sandbox
+  account's user site. The adoption pins mod-base v1.0.2, whose bootstrap and isolated children
+  (the adapter hook and the `conformance` simulation) keep exactly that user site visible; with
+  v1.0.1 the Build gate's candidate tests failed with `ModuleNotFoundError: No module named 'PIL'`.
+  Pin back only to v1.0.2 or later.
 - `adapter.python_path` is `["."]`: the adapter imports the protected `scripts.*` and `e2e.*`
   packages, so the kit's host puts the repository root on the adapter child's `PYTHONPATH`, as every
   BlockPops controller already puts its checkout root on `sys.path`. The root itself is not a
