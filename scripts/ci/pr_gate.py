@@ -68,6 +68,11 @@ CONTEXTS = {
     "build": "Trusted PR / Build and verify",
     "e2e": "Trusted PR / Packaged E2E gate",
 }
+# GitHub records a ``pull_request_target`` run under the pull request's head branch and head
+# commit, never the controller that ran it. Both gates call this reusable workflow with a
+# repository-local ``uses:``, which GitHub resolves from the base branch, and it records that exact
+# commit in the run's ``referenced_workflows``. That entry is how a gate run names its controller.
+CONTROLLER_ANCHOR_WORKFLOW = ".github/workflows/verify-gate-attestation.yml"
 MATRIX_PATH = "release/release-matrix.json"
 VERIFICATION_PATH = "gradle/verification-metadata.xml"
 EXACT_BASE_OWNED_PATHS = (
@@ -603,6 +608,29 @@ def _authenticate_trigger(api: GitHubApi, trigger_run_id: int) -> tuple[dict[str
     return run, _run_pull_number(run, "trigger run")
 
 
+def runs_default_controller(
+    run: dict[str, Any], *, repository: str, default_branch: str, default_sha: str
+) -> bool:
+    """Whether GitHub records ``run`` as executing the exact default-branch controller."""
+
+    references = run.get("referenced_workflows")
+    if not isinstance(references, list):
+        return False
+    path = f"{repository}/{CONTROLLER_ANCHOR_WORKFLOW}@"
+    anchors = [
+        value for value in references
+        if isinstance(value, dict)
+        and isinstance(value.get("path"), str)
+        and value["path"].startswith(path)
+    ]
+    return (
+        len(anchors) == 1
+        and anchors[0].get("path") == path + default_sha
+        and anchors[0].get("ref") == f"refs/heads/{default_branch}"
+        and anchors[0].get("sha") == default_sha
+    )
+
+
 def resolve_pull_identity(
     api: GitHubApi,
     *,
@@ -627,8 +655,8 @@ def resolve_pull_identity(
     default_sha = api.branch_sha(default_branch)
     if default_sha != implementation_sha:
         raise NotEligible("protected default branch advanced during PR evaluation")
-    if trigger is not None and (
-        trigger["head_branch"] != default_branch or trigger["head_sha"] != default_sha
+    if trigger is not None and not runs_default_controller(
+        trigger, repository=api.repository, default_branch=default_branch, default_sha=default_sha
     ):
         raise NotEligible("trigger run is not from the exact current default controller")
 
@@ -654,6 +682,10 @@ def resolve_pull_identity(
         _fail("pull request branch identity is unsafe")
     if head_branch.startswith("automation/release-sync/"):
         raise NotEligible("release synchronization head is not an ordinary PR")
+    # A wake from an older head of this pull request still re-evaluates its current head, whose
+    # newest exact runs are selected below; a run of another branch is not this PR's evidence.
+    if trigger is not None and trigger["head_branch"] != head_branch:
+        raise NotEligible("trigger run is not from this pull request's head branch")
     if api.branch_sha(head_branch) != head_sha or api.branch_sha(base_branch) != base_sha:
         raise NotEligible("pull request branch heads changed during evaluation")
     merge_tree, parents = api.commit_identity(merge_sha)
@@ -1279,8 +1311,14 @@ def select_newest_pull_run(
         if (
             value.get("event") != "pull_request_target"
             or value.get("path") != path
-            or value.get("head_branch") != identity.default_branch
-            or value.get("head_sha") != identity.default_sha
+            or value.get("head_branch") != identity.head_branch
+            or value.get("head_sha") != identity.head_sha
+            or not runs_default_controller(
+                value,
+                repository=repository,
+                default_branch=identity.default_branch,
+                default_sha=identity.default_sha,
+            )
             or not isinstance(run_repository, dict)
             or run_repository.get("full_name") != repository
             or not isinstance(head_repository, dict)
