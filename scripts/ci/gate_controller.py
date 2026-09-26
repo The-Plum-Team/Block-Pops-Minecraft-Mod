@@ -22,6 +22,7 @@ from scripts.release.matrix import (  # noqa: E402
     MAX_MATRIX_BYTES,
     MatrixError,
     load_matrix_bytes,
+    load_trusted_gate_matrix_bytes,
     valid_branch_name,
 )
 from scripts.ci.loader_bootstrap import (  # noqa: E402
@@ -263,8 +264,10 @@ def validate_controller_parity(
     _, protected_matrix_bytes = _blob(repository, protected_sha)
     _, candidate_matrix_bytes = _blob(repository, candidate_sha)
     try:
-        protected_matrix = load_matrix_bytes(protected_matrix_bytes)
-        candidate_matrix = load_matrix_bytes(candidate_matrix_bytes)
+        # The trusted gate's own projection: a preparing schema-2 matrix yields exactly its
+        # legacy lanes, so parity derives the loader controllers the schema-1 gate protected.
+        protected_matrix = load_trusted_gate_matrix_bytes(protected_matrix_bytes)
+        candidate_matrix = load_trusted_gate_matrix_bytes(candidate_matrix_bytes)
     except MatrixError as exc:
         raise GateControllerError(f"cannot derive loader controller parity: {exc}") from exc
     protected_loaders = {row["loader"] for row in protected_matrix["artifacts"]}
