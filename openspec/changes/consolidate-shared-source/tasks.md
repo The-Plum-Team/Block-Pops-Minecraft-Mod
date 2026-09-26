@@ -29,6 +29,8 @@
 
 - Through `3c92a67`, a new clean legacy production/harness/check and staging run passes both Fabric/Forge1.20.1, with remapped mixin packaging independently inspected and756 source inputs unchanged. Gifting, color-widget, renderer, star-quad and local-profile capture units have separate native17/21 evidence; complete modern compilation and client gameplay remain open. Pages build/refresh now consume authenticated attempt companions, while rotation/discovery adapters remain pending. All local commits stay within400 authored lines, user files remain preserved, and no publication authority is inferred.
 
+- Task-4/8 follow-up, trusted PR gate: task8's preparing enrollment (`466426b`) left the gate's controller parity and PR identity on the schema-1-only execution reader, so the deployed evaluator refused every pull request. The gate now reads an explicit trusted-gate projection: a preparing schema-2 matrix yields only its branch policy and the two legacy 1.20.1 lanes, so selected loaders, parity paths and job graphs equal the schema-1 gate's; `shared`, other modes and malformed matrices fail closed, and restricted transitions and release sync stay schema-1 only. The loader-bootstrap contract still binds NeoForge, which is stricter than the schema-1 gate. It is a controller upgrade (six paths) that the deployed gate cannot admit, so the owner lands it directly as a documented out-of-procedure repair; this record is not a controller-upgrade path and lands separately. Details in [apply-progress.md](apply-progress.md#task-8-follow-up--the-trusted-pr-gate-reads-the-preparing-matrix).
+
 ## Review Workload Forecast
 
 | Field | Value |
@@ -71,7 +73,7 @@ Status against that scope:
 | 12 | Reader complete (`configured` scope). CI/E2E consumers still dispatch `legacy` only. |
 | 14 | No change needed: the bootstrap contract already binds all three loaders and validates. |
 | 15 | Not started: requires real packaged gameplay runs in an authorized clean CI/checkout. |
-| 16 | Build graph activated; the `preparing` to `shared` switch stays bound to all twelve. |
+| 16 | Build graph activated; the `preparing` to `shared` switch stays bound to all twelve, and must also extend the trusted PR gate projection, which refuses `shared` until then. |
 | 1, 17 | Blocked on governance/authorization outside this session. |
 
 ## Tasks
