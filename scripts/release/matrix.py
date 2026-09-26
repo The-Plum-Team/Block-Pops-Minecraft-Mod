@@ -280,6 +280,33 @@ class MatrixDocument:
             "gradle_java": self.data["gradle_java"],
         }, kind, contract=contract)
 
+    def trusted_gate_projection(self) -> dict[str, Any]:
+        """Branch policy and lanes the trusted PR gate evaluates; never an execution plan.
+
+        Schema 1 keeps every executable row. Schema 2 is accepted only while `preparing` on
+        the integration branch, as exactly its legacy nodes: the two-lane gate the schema-1
+        matrix defined before enrollment. `shared` waits for its own activation task, and
+        `execution_supported` stays false, so this view enables no other consumer.
+        """
+        data = self.data
+        if self.inventory.schema_version == 1:
+            lanes = self.inventory.require_complete()
+        else:
+            if self.inventory.migration_mode != "preparing":
+                _fail(f"the trusted PR gate does not evaluate schema-2 "
+                      f"{self.inventory.migration_mode!r} mode yet")
+            if data["branch"]["role"] != "integration":
+                _fail("the trusted PR gate evaluates schema 2 only on the integration branch")
+            lanes = self.select_lanes(scope="legacy")
+            if {lane.identity.artifact_node for lane in lanes} != LEGACY_TARGET_NODES:
+                _fail("the trusted PR gate requires exactly the configured legacy lanes")
+        return {
+            "schema_version": self.inventory.schema_version,
+            "branch": data["branch"],
+            "artifacts": [lane.artifact for lane in lanes],
+            "runtimes": [lane.runtime for lane in lanes],
+        }
+
     def gradle_context(self, *, artifact_node: str | None = None) -> dict[str, Any]:
         """Describe one isolated build context, or the unchanged legacy aggregate."""
         if artifact_node is None and self.inventory.migration_mode == "shared":
@@ -1164,6 +1191,18 @@ def load_matrix_bytes(data: bytes) -> dict[str, Any]:
         )
     except SecureJsonError as exc:
         raise MatrixError(str(exc)) from exc
+
+
+def load_trusted_gate_matrix_bytes(data: bytes) -> dict[str, Any]:
+    """Read one Git matrix snapshot as the trusted PR gate's projection only."""
+    from scripts.lib.secure_json import loads
+
+    try:
+        matrix = loads(data, label="release matrix snapshot", max_bytes=MAX_MATRIX_BYTES)
+        inventory = normalize_matrix_inventory(matrix)
+    except SecureJsonError as exc:
+        raise MatrixError(str(exc)) from exc
+    return MatrixDocument(inventory, json.dumps(matrix)).trusted_gate_projection()
 
 
 def load_matrix_inventory(path: Path, *, validate_sources: bool = True) -> MatrixInventory:
