@@ -73,10 +73,13 @@ governance/publication writers still require owner configuration:
   holds the exact ruleset payload. Require the contexts only after a current PR
   has passed both. From the schema-2 `preparing` enrollment (`466426b`) until
   the trusted-gate projection landed (#12, merge `53ed97d`), controller parity
-  refused every PR, so the ruleset would have blocked every merge. The
-  remaining order is: post `/controller-upgrade approve <head sha>` on the
-  mod-base adoption's exact head, confirm that both `Trusted PR` contexts turn
-  green on it, and only then apply the ruleset
+  refused every PR. Until gate runs were matched by their PR head and controller
+  reference (#15, merge `7ed7975`), no real gate run was evidence at all. Either
+  way the ruleset would have blocked every merge. The remaining order is:
+  configure the PR gate App in the `pr-gate` environment, post
+  `/controller-upgrade approve <head sha>` on the mod-base adoption's exact
+  head, confirm that both `Trusted PR` contexts turn green on it, and only then
+  apply the ruleset
   ([ADR 0001](architecture/decisions/0001-adopt-mod-base-public-evidence.md)).
 - Create a protected `visual-review` environment if advisory AI review is
   desired and restrict it to protected `master`. Store the owner's
@@ -133,7 +136,9 @@ bridge on a fresh same-repository PR before selecting the stable contexts in
 branch protection. Any repair uses the now-installed controller-upgrade process.
 The one exception is repairing the evaluator while it refuses every PR, as it
 did from the schema-2 `preparing` enrollment (`466426b`) until its trusted-gate
-projection landed. No controller upgrade can be admitted then, so that repair
+projection landed, and, because it never matched a real gate run, until gate
+runs were matched by their PR head and controller reference. No controller
+upgrade can be admitted then, so that repair
 lands as one exact, completely reviewed commit through the same governance
 process and limits as the first installation, followed by the same fresh-PR
 exercise of both protected gates before any stable context is relied on.

@@ -134,9 +134,13 @@ Retired, with the reasons that make each safe:
   matrices with `load_matrix_bytes`, which refuses schema 2 as "inventory only", so every pull
   request reported both contexts as failures, and a ruleset applied then would have blocked every
   merge. #12 repaired the evaluator: parity and PR identity now read the schema-2 matrix through
-  its trusted-gate projection. The remaining owner steps are to post
-  `/controller-upgrade approve <head sha>` on the adoption's exact head, confirm that both
-  `Trusted PR` contexts turn green on it, and only then apply the ruleset (P1).
+  its trusted-gate projection. The evaluator still matched no real gate run, because it expected a
+  `pull_request_target` run under the default branch while GitHub records it under the PR's head.
+  #15 (merge `7ed7975`) matches runs by PR head and names their controller through
+  `referenced_workflows`. The remaining owner steps are to configure the PR gate App in the
+  `pr-gate` environment, post `/controller-upgrade approve <head sha>` on the adoption's exact
+  head, confirm that both `Trusted PR` contexts turn green on it, and only then apply the ruleset
+  (P1).
 - Until the first Packaged E2E after the merge, the site keeps its previous deployment
   (`awaiting-complete-v1-evidence`) and visual review finds no `mb-anchor--`. Dispatch
   `on-demand-e2e.yml` on `master` right after merging. That run gives every later capsule its
