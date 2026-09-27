@@ -3,7 +3,7 @@
 import re
 
 from scripts.lib.secure_json import canonical_json
-from scripts.pages.select_artifact import GitHubApi, SelectionError, _run_order, _validate_run
+from scripts.release.github_api import GitHubApi, SelectionError, _run_order, _validate_run
 from scripts.release.matrix import valid_branch_name
 
 WORKFLOWS = {"build-gate.yml": "Build gate", "on-demand-e2e.yml": "Packaged E2E"}

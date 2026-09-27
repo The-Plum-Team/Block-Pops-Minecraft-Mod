@@ -227,6 +227,31 @@ class VisualReviewImpactTests(unittest.TestCase):
                     "review",
                 )
 
+    def test_mod_base_shared_guidance_is_nonvisual_but_its_control_paths_are_reviewed(self) -> None:
+        files = [
+            changed("docs/ai/shared/REPOSITORY.md", status="added"),
+            changed("docs/ai/shared/PUBLIC-EVIDENCE.md", status="added"),
+            changed("docs/ai/PROJECT.md", status="added"),
+            changed("scripts/ci/tests/test_mod_base_caller.py", status="added"),
+        ]
+        self.assertEqual("skip", classify(files, changed_files=len(files)).visual_review)
+        for path in (
+            ".github/workflows/pages.yml",
+            ".github/workflows/notify-pages.yml",
+            ".github/workflows/on-demand-e2e.yml",
+            ".github/CODEOWNERS",
+            "scripts/ci/mod_base_kit.py",
+            "scripts/pages/mod_base_adapter.py",
+            "site/mod-base.json",
+            "AGENTS.md",
+            "docs/ai/shared/logo.png",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    "review",
+                    classify([*files, changed(path)], changed_files=len(files) + 1).visual_review,
+                )
+
     def test_inventory_is_complete_bounded_canonical_and_rename_safe(self) -> None:
         cases = (
             (None, 1),

@@ -10,15 +10,17 @@ packet propagated state, or whether a contracted assertion passed.
 1. `on-demand-e2e.yml` runs every matrix lane with the remapped production JAR
    and the physically separate harness. The protected fan-in validates the
    complete report and screenshot inventory.
-2. A successful current-head run on the matrix-owned canonical lane publishes
-   `visual-anchor-v1-<branch-token>--<commit>-<run-id>-<run-attempt>` for 90
+2. A successful direct current-head run on the matrix-owned canonical lane
+   publishes, through the pinned mod-base `prepare-evidence` step, the lossless
+   anchor `mb-anchor--<branch-token>--<commit>--<run-id>--a<run-attempt>` for 90
    days. The producer attempt is part of both the immutable name and manifest,
    so a GitHub “re-run all jobs” creates a distinct anchor instead of silently
-   reusing evidence from an older attempt. The anchor contains
-   the original lossless PNG bytes, addressed by SHA-256, plus exact
-   repository/branch/commit/tree, matrix, contract, run, attempt, dimensions,
-   pixel hashes, semantic capture identities, and source-artifact provenance.
-   Ordinary raw evidence remains available for one day.
+   reusing evidence from an older attempt. The anchor (a `mod-base.evidence.anchor`
+   document) contains the original lossless PNG bytes, addressed by SHA-256,
+   plus exact repository/branch/commit/tree, matrix, contract, run, attempt,
+   dimensions, pixel hashes, semantic capture identities, and the provenance of
+   the `mb-handoff--` artifact it was cut from. Release attestations never cut an
+   anchor. Ordinary raw evidence remains available for one day.
 3. `visual-review.yml` runs without an AI credential. Protected code
    authenticates the candidate run, attempt, tested commit/tree, complete job
    graph, aggregate artifact, matrix, contract, and exact `master` anchor. An
@@ -138,10 +140,13 @@ identity remain an ambiguity and fail closed.
 - attempt and retry-cooldown markers: 7 days;
 - normalized advisory (`review.json`, escaped Markdown, and data-only
   `provenance.json`) or owner-action report: 30 days;
-- original lossless current canonical anchor: 90 days; each authenticated
-  superseded anchor remains available for an eight-day grace period after its
-  first authenticated successor (the seven-day queue window plus one day);
-- ordinary raw runtime evidence: 1 day; compact Pages derivatives: 90 days.
+- original lossless current canonical anchor (`mb-anchor--`): 90 days; each
+  authenticated superseded anchor remains available for an eight-day grace
+  period after its first authenticated successor (the seven-day queue window
+  plus one day; `anchor.successor_grace_days` in `site/mod-base.json`), after
+  which the separately locked Pages rotation deletes it by exact ID;
+- ordinary raw runtime evidence (`mb-handoff--`): 1 day; compact Pages
+  derivatives (`mb-cache--`): 90 days.
 
 Screenshots sent through Claude Code follow the data-retention terms of the
 owner's Claude subscription, not an API workspace policy. If private
@@ -224,6 +229,15 @@ authenticated report ID, and dispatch `visual-review-queue-wake`. For a
 rate-limit marker, wait for its authenticated cooldown; do not delete it to
 force an early paid retry. For stale candidate or baseline evidence, let the
 protected cleanup delete the queue and rerun Packaged E2E at the current head.
+
+The mod-base adoption renamed the anchor. Its own pull-request capsule, queued
+before the merge, is delivered as the new `master` head and therefore keeps
+parent zero of its tested merge as its reference; runs of that pre-adoption
+commit carry only the retired `visual-anchor-v1-*` name, so no new Packaged E2E
+can supply its anchor. It fails reauthentication once with an owner-action
+report and is never reselected; leave the report in place and let the seven-day
+queue input expire
+([ADR 0001](architecture/decisions/0001-adopt-mod-base-public-evidence.md)).
 
 When adding a Minecraft lane or capture, update only the branch matrix or
 scenario contract as appropriate, preserve semantic `capture_id` stability,

@@ -31,24 +31,8 @@ if args and args[0] == "scripts/ci/matrix_scope.py":
     sys.exit(int(os.environ.get("SCOPE_EXIT", "0")))
 if args[:2] == ["scripts/ci/e2e_fanin.py", "validate"]:
     sys.exit(int(os.environ.get("FANIN_EXIT", "0")))
-if args[:2] == ["scripts/pages/evidence.py", "curate"]:
-    if any(key in os.environ for key in ("ACTIONS_RUNTIME_TOKEN", "ACTIONS_CACHE_URL", "ACTIONS_RESULTS_URL",
-                                         "GITHUB_TOKEN", "GH_TOKEN")): sys.exit(95)
-    sys.exit(int(os.environ.get("CURATE_EXIT", "0")))
-if args[:2] == ["scripts/pages/visual_anchor.py", "identity"]:
-    print(os.environ["ANCHOR_IDENTITY"])
-    sys.exit(int(os.environ.get("IDENTITY_EXIT", "0")))
-if args[:2] == ["scripts/pages/visual_anchor.py", "create"]:
-    if "GH_TOKEN" in os.environ: sys.exit(95)
-    sys.exit(int(os.environ.get("CREATE_EXIT", "0")))
 if name == "sha256sum": print("a" * 64 + "  artifacts.json")
-if name == "jq":
-    if "ANCHOR_IDENTITY" in os.environ:
-        try: value = json.load(sys.stdin).get(args[-1][1:])
-        except (ValueError, AttributeError): sys.exit(4)
-        if "-er" in args and (value is None or value is False): sys.exit(1)
-        print(value if isinstance(value, str) else json.dumps(value))
-    else: print(os.environ.get("RECEIPT_HASH", "a" * 64))
+if name == "jq": print(os.environ.get("RECEIPT_HASH", "a" * 64))
 '''
         for name in ("python3", "sha256sum", "jq"):
             path = self.root / name
@@ -111,183 +95,150 @@ if name == "jq":
                         "inputs.attest_run_attempt || github.run_attempt }}",
                         "run-id: ${{ steps.identity.outputs.source_run_id }}", "digest-mismatch: error"):
             self.assertIn(binding, download)
-        body = text.split("      - name: Revalidate the exact aggregate inventory", 1)[1].split("      - name:", 1)[0]
-        script = textwrap.dedent(body.split("        run: |\n", 1)[1]).replace("${{ inputs.attest_run_id }}", "")
-        for scope in ("unscoped", "legacy", "full", "lane"):
-            with self.subTest(scope=scope):
-                env = {**self.env, "MATRIX_SCOPE": scope, "GITHUB_EVENT_NAME": "schedule",
-                    "GITHUB_WORKSPACE": "/published checkout", "GITHUB_REPOSITORY": "owner/repo",
-                    "PUBLIC_AGGREGATE": "/downloaded aggregate", "PUBLIC_BUNDLE": "/downloaded bundle",
-                    "PACKAGED_BRANCH": "master", "PACKAGED_SHA": "1" * 40, "PACKAGED_TREE": "2" * 40,
-                    "PACKAGED_RUN_ID": "123", "PACKAGED_RUN_ATTEMPT": "2"}
-                result = subprocess.run(["bash", "-euo", "pipefail", "-c", script], cwd=self.root,
-                                        env=env, capture_output=True, text=True)
-                rows = [json.loads(line) for line in self.log.read_text().splitlines()]
-                self.log.unlink()
-                if scope == "lane":
-                    self.assertNotEqual(0, result.returncode)
-                    self.assertEqual(1, len(rows))
-                    continue
-                self.assertEqual(0, result.returncode, result.stderr)
-                command = rows[-1]
-                self.assertEqual("scheduled-anchors", command[command.index("--projection") + 1])
-                if scope == "unscoped": self.assertNotIn("--artifact-repository", command)
-                else:
-                    self.assertEqual(["--scope", scope, "--artifact-repository", "/published checkout",
-                        "--stage", "/downloaded bundle", "--artifact-manifest", "/downloaded bundle/artifacts.json"], command[-8:])
+        # Every projection branch of the retained step: a direct dispatch and an attested schedule
+        # select the PR anchors, and only a direct schedule selects the scheduled anchors.
+        for event, attestation, projection in (("workflow_dispatch", "", "pr-anchors"),
+                                               ("schedule", "", "scheduled-anchors"),
+                                               ("schedule", "123", "pr-anchors")):
+            for scope in ("unscoped", "legacy", "full", "lane"):
+                with self.subTest(event=event, attestation=attestation, scope=scope):
+                    result, rows = self.run_public_revalidation(scope, event=event, attestation=attestation)
+                    if scope == "lane":
+                        self.assertNotEqual(0, result.returncode)
+                        self.assertEqual(1, len(rows))
+                        continue
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    self.assertEqual(["python3", "scripts/ci/matrix_scope.py", "--matrix",
+                                      "release/release-matrix.json"], rows[0])
+                    command = rows[-1]
+                    self.assertEqual(["python3", "scripts/ci/e2e_fanin.py", "validate"], command[:3])
+                    self.assertEqual(projection, command[command.index("--projection") + 1])
+                    for option, value in (("--input", "/downloaded aggregate/$(touch forbidden)"),
+                                          ("--source-branch", "master"), ("--commit", "1" * 40),
+                                          ("--tree", "2" * 40), ("--run-id", "123"), ("--run-attempt", "2")):
+                        self.assertEqual(value, command[command.index(option) + 1])
+                    if scope == "unscoped": self.assertNotIn("--artifact-repository", command)
+                    else:
+                        self.assertEqual(["--scope", scope, "--artifact-repository", "/published checkout",
+                            "--stage", "/downloaded bundle", "--artifact-manifest", "/downloaded bundle/artifacts.json"], command[-8:])
+        # A failed scope query or fan-in revalidation fails the step, so the pinned composite
+        # (the next step, which carries no if:) never hands off unauthenticated evidence.
+        for overrides in ({"SCOPE_EXIT": "2"}, {"FANIN_EXIT": "2"}):
+            with self.subTest(overrides=overrides):
+                result, rows = self.run_public_revalidation("legacy", **overrides)
+                self.assertNotEqual(0, result.returncode)
+                self.assertEqual(1 if "SCOPE_EXIT" in overrides else 2, len(rows))
 
-    def run_public_handoff(self, scope, *, event="workflow_dispatch", attestation="", curate_only=False, **overrides):
+    def run_public_revalidation(self, scope, *, event="schedule", attestation="", **overrides):
         text = WORKFLOW.read_text().split("  public-evidence:", 1)[1]
-        steps = ("Revalidate the exact aggregate inventory", "Curate strict SHA-bound public evidence")
-        self.assertLess(text.index("name: " + steps[0]), text.index("name: " + steps[1]))
-        scripts = []
-        values = {"inputs.attest_run_id": attestation, "steps.identity.outputs.tree": "2" * 40,
-                  "steps.identity.outputs.source_run_id": "123",
-                  "inputs.attest_run_attempt || github.run_attempt": "2",
-                  "inputs.attest_branch || github.ref_name": "source/branch",
-                  "inputs.attest_sha || github.sha": "1" * 40}
-        for step in steps:
-            body = text.split("      - name: " + step, 1)[1].split("      - name:", 1)[0]
-            self.assertNotIn("\n        if:", body)
-            if step == steps[1]:
-                self.assertIn("PUBLIC_ATTEST_RUN_ID: ${{ inputs.attest_run_id }}", body)
-            script = textwrap.dedent(body.split("        run: |\n", 1)[1])
-            for key, value in values.items(): script = script.replace("${{ " + key + " }}", value)
-            self.assertNotIn("${{", script)
-            scripts.append(script)
+        body = text.split("      - name: Revalidate the exact aggregate inventory", 1)[1].split("      - name:", 1)[0]
+        self.assertNotIn("\n        if:", body)
+        script = textwrap.dedent(body.split("        run: |\n", 1)[1]).replace("${{ inputs.attest_run_id }}", attestation)
+        self.assertNotIn("${{", script)
         env = {**self.env, "MATRIX_SCOPE": scope, "GITHUB_EVENT_NAME": event,
             "GITHUB_WORKSPACE": "/published checkout", "GITHUB_REPOSITORY": "owner/repo",
             "PUBLIC_AGGREGATE": "/downloaded aggregate/$(touch forbidden)", "PUBLIC_BUNDLE": "/downloaded bundle",
-            "PACKAGED_BRANCH": "source/branch", "PACKAGED_SHA": "1" * 40, "PACKAGED_TREE": "2" * 40,
-            "PACKAGED_RUN_ID": "123", "PACKAGED_RUN_ATTEMPT": "2", "GITHUB_RUN_ID": "456",
-            "GITHUB_RUN_ATTEMPT": "3", "BLOCKPOPS_TESTED_SHA": "3" * 40, "PUBLISHED_BRANCH": "release/branch",
-            "HANDOFF_CONTROLLER_BRANCH": "master", "HANDOFF_CONTROLLER_SHA": "4" * 40,
-            "PACKAGED_CONTROLLER_BRANCH": "master", "PACKAGED_CONTROLLER_SHA": "5" * 40,
-            "ACTIONS_RUNTIME_TOKEN": "fixture-token", "ACTIONS_CACHE_URL": "fixture-url",
-            "ACTIONS_RESULTS_URL": "fixture-url", "GITHUB_TOKEN": "fixture-token", "GH_TOKEN": "fixture-token",
-            "PUBLIC_ATTEST_RUN_ID": attestation, **overrides}
-        result = subprocess.run(["bash", "-euo", "pipefail", "-c", "\n".join(scripts[1:] if curate_only else scripts)],
-            cwd=self.root, env=env, capture_output=True, text=True)
+            "PACKAGED_BRANCH": "master", "PACKAGED_SHA": "1" * 40, "PACKAGED_TREE": "2" * 40,
+            "PACKAGED_RUN_ID": "123", "PACKAGED_RUN_ATTEMPT": "2", **overrides}
+        result = subprocess.run(["bash", "-euo", "pipefail", "-c", script], cwd=self.root,
+                                env=env, capture_output=True, text=True)
         rows = [json.loads(line) for line in self.log.read_text().splitlines()]
         self.log.unlink()
         self.assertFalse((self.root / "forbidden").exists())
         return result, rows
 
-    def test_public_curate_matches_authenticated_fanin_selection_and_quoted_identity(self):
-        for scope in ("unscoped", "legacy", "full"):
-            for event, attestation, projection in (("workflow_dispatch", "", "pr-anchors"),
-                    ("schedule", "", "scheduled-anchors"), ("schedule", "123", "pr-anchors")):
-                with self.subTest(scope=scope, event=event, attestation=attestation):
-                    result, rows = self.run_public_handoff(scope, event=event, attestation=attestation)
-                    self.assertEqual(0, result.returncode, result.stderr)
-                    query = ["python3", "scripts/ci/matrix_scope.py", "--matrix", "release/release-matrix.json"]
-                    self.assertEqual(query, rows[0])
-                    self.assertEqual(query, rows[2])
-                    fanin, curate = rows[1], rows[3]
-                    self.assertEqual(["python3", "scripts/ci/e2e_fanin.py", "validate"], fanin[:3])
-                    self.assertEqual(["python3", "scripts/pages/evidence.py", "curate"], curate[:3])
-                    self.assertEqual(projection, fanin[fanin.index("--projection") + 1])
-                    expected = {"input": "/downloaded aggregate/$(touch forbidden)", "output": "public-evidence",
-                        "repository": "owner/repo", "branch": "release/branch", "commit": "3" * 40,
-                        "tree": "2" * 40, "run-id": "456", "run-attempt": "3", "controller-branch": "master",
-                        "controller-sha": "4" * 40, "packaged-run-id": "123", "packaged-run-attempt": "2",
-                        "packaged-branch": "source/branch", "packaged-commit": "1" * 40,
-                        "packaged-tree": "2" * 40, "packaged-controller-branch": "master",
-                        "packaged-controller-sha": "5" * 40}
-                    if scope != "unscoped": expected.update(scope=scope, projection=projection)
-                    self.assertEqual(expected, dict(zip((arg[2:] for arg in curate[3::2]), curate[4::2])))
-                    self.assertEqual(len(expected) * 2 + 3, len(curate))
+    def public_steps(self):
+        text = WORKFLOW.read_text().split("  public-evidence:", 1)[1]
+        names = re.findall(r"(?m)^      - name: (.+)$", text)
+        bodies = {name: text.split("      - name: " + name + "\n", 1)[1].split("\n      - name:", 1)[0]
+                  for name in names}
+        return text, names, bodies
 
-    def test_public_curate_is_not_invoked_after_unknown_scope_or_failed_authentication(self):
-        for scope, overrides in (("lane", {}), ("legacy", {"SCOPE_EXIT": "2"}),
-                                 ("legacy", {"FANIN_EXIT": "2"})):
-            with self.subTest(scope=scope, overrides=overrides):
-                result, rows = self.run_public_handoff(scope, **overrides)
-                self.assertNotEqual(0, result.returncode)
-                self.assertFalse(any(row[1:2] == ["scripts/pages/evidence.py"] for row in rows))
-        result, rows = self.run_public_handoff("legacy", CURATE_EXIT="2")
-        self.assertEqual(2, result.returncode)
-        self.assertEqual(["scripts/pages/evidence.py", "curate"], rows[-1][1:3])
-        for scope, overrides in (("lane", {}), ("legacy", {"SCOPE_EXIT": "2"})):
-            with self.subTest(curate_only=True, scope=scope, overrides=overrides):
-                result, rows = self.run_public_handoff(scope, curate_only=True, **overrides)
-                self.assertNotEqual(0, result.returncode)
-                self.assertEqual(1, len(rows))
-                self.assertEqual("scripts/ci/matrix_scope.py", rows[0][1])
+    def test_public_handoff_is_the_pinned_composite_after_exact_revalidation(self):
+        text, names, bodies = self.public_steps()
+        self.assertEqual(["Check out the exact published head", "Install Python",
+            "Install the hash-locked evidence decoder", "Authenticate current branch and derive opaque artifact identity",
+            "Download the exact validated aggregate", "Download the matching aggregate artifact bundle",
+            "Revalidate the exact aggregate inventory", "Prepare and hand off current-head public evidence"], names)
+        handoff = bodies["Prepare and hand off current-head public evidence"]
+        lines = handoff.rstrip("\n").split("\n")
+        self.assertRegex(lines[0], r"^        uses: The-Plum-Team/mod-base/actions/prepare-evidence@[0-9a-f]{40} # v\d+\.\d+\.\d+$")
+        self.assertEqual("        with:", lines[1])
+        # No if:, env: or token: the composite takes its only token for its own tree check.
+        inputs = dict(line.strip().split(": ", 1) for line in lines[2:])
+        self.assertTrue(all(line.startswith("          ") for line in lines[2:]))
+        self.assertEqual({
+            "e2e-root": "${{ runner.temp }}/blockpops-public-aggregate",
+            "key": "${{ steps.identity.outputs.token }}",
+            "subject-branch": "${{ env.PUBLISHED_BRANCH }}",
+            "subject-commit": "${{ env.BLOCKPOPS_TESTED_SHA }}",
+            "subject-tree": "${{ steps.identity.outputs.tree }}",
+            "tested-run-id": "${{ env.PACKAGED_RUN_ID }}",
+            "tested-run-attempt": "${{ env.PACKAGED_RUN_ATTEMPT }}",
+            "tested-branch": "${{ env.PACKAGED_BRANCH }}",
+            "tested-commit": "${{ env.PACKAGED_SHA }}",
+            "tested-controller-branch": "${{ env.PACKAGED_CONTROLLER_BRANCH }}",
+            "tested-controller-sha": "${{ env.PACKAGED_CONTROLLER_SHA }}",
+            # Only a direct canonical run may cut the durable lossless anchor, never an attestation.
+            "anchor": "${{ inputs.attest_run_id == '' && 'auto' || 'off' }}",
+        }, inputs)
+        # The composite reads exactly the aggregate that was downloaded and just revalidated.
+        download = bodies["Download the exact validated aggregate"]
+        self.assertIn("path: ${{ runner.temp }}/blockpops-public-aggregate\n", download)
+        revalidate = bodies["Revalidate the exact aggregate inventory"]
+        self.assertIn("PUBLIC_AGGREGATE: ${{ runner.temp }}/blockpops-public-aggregate\n", revalidate)
+        self.assertNotIn("\n        if:", revalidate)
+        # The kit owns every upload name and retention; the retired producers are gone.
+        for retired in ("actions/upload-artifact@", "scripts/pages/evidence.py", "scripts/pages/visual_anchor.py",
+                        "pages-e2e-", "visual-anchor", "public-evidence/", "steps.identity.outputs.artifact"):
+            self.assertNotIn(retired, text)
 
-    def run_anchor(self, scope="legacy", *, event="workflow_dispatch", identity=None, **overrides):
-        text = WORKFLOW.read_text()
-        body = text.split("      - name: Create the exact canonical lossless visual anchor", 1)[1].split("      - name:", 1)[0]
-        for binding in ("if: inputs.attest_run_id == ''", "RAW_ARTIFACT_ID: ${{ steps.raw_evidence.outputs.artifact-id }}",
-                        "RAW_ARTIFACT_DIGEST: ${{ steps.raw_evidence.outputs.artifact-digest }}"):
-            self.assertIn(binding, body)
-        token = hashlib.sha256(b"master").hexdigest()[:24]
-        self.anchor_artifact = "visual-anchor-v1-" + token + "--" + "1" * 40 + "-456-3"
-        self.raw_artifact = "pages-e2e-" + token + "-3"
-        script = textwrap.dedent(body.split("        run: |\n", 1)[1])
-        script = script.replace("${{ steps.identity.outputs.tree }}", "2" * 40)
-        script = script.replace("${{ steps.identity.outputs.artifact }}", self.raw_artifact)
+    def run_identity(self, token, **env):
+        text, _names, bodies = self.public_steps()
+        script = textwrap.dedent(bodies["Authenticate current branch and derive opaque artifact identity"]
+                                 .split("        run: |\n", 1)[1])
         self.assertNotIn("${{", script)
-        output = self.root / "anchor output $(touch forbidden)"
-        env = {**self.env, "MATRIX_SCOPE": scope, "GITHUB_EVENT_NAME": event, "GITHUB_OUTPUT": str(output),
-               "ANCHOR_IDENTITY": identity if identity is not None else json.dumps({"eligible": True, "artifact": self.anchor_artifact}),
-               "RAW_ARTIFACT_ID": "789", "RAW_ARTIFACT_DIGEST": "sha256:" + "a" * 64,
-               "GITHUB_REPOSITORY": "owner/repo", "PUBLISHED_BRANCH": "master", "BLOCKPOPS_TESTED_SHA": "1" * 40,
-               "GITHUB_RUN_ID": "456", "GITHUB_RUN_ATTEMPT": "3", "HANDOFF_CONTROLLER_SHA": "1" * 40,
-               "HANDOFF_CONTROLLER_BRANCH": "branch with spaces/$(touch forbidden)", "GH_TOKEN": "fixture-token", **overrides}
-        result = subprocess.run(["bash", "-euo", "pipefail", "-c", script], cwd=self.root,
-                                env=env, capture_output=True, text=True)
-        rows = [json.loads(line) for line in self.log.read_text().splitlines()]
-        self.log.unlink()
-        markers = output.read_text().splitlines()
-        output.unlink()
-        self.assertFalse((self.root / "forbidden").exists())
-        return result, rows, markers
+        stub = f"#!{sys.executable}\n" + '''import json, os, sys
+from pathlib import Path
+name, args = Path(sys.argv[0]).name, sys.argv[1:]
+with open(os.environ["COMMAND_LOG"], "a") as stream:
+    stream.write(json.dumps([name, *args]) + "\\n")
+if name == "git": print("2" * 40 if args[-1] == "HEAD^{tree}" else "1" * 40)
+elif name == "jq": print("master")
+elif name == "gh": print("1" * 40)
+elif args[:1] == ["-c"]: print(args[-1])
+elif args[:2] == ["scripts/ci/gate_controller.py", "branch-token"]: print(os.environ["TOKEN"])
+else: sys.exit(97)
+'''
+        for name in ("git", "jq", "gh", "python3"):
+            path = self.root / name
+            path.write_text(stub)
+            path.chmod(0o755)
+        output = self.root / "identity output"
+        # Startup files could define a gh function that shadows the PATH stub.
+        hermetic = {key: value for key, value in self.env.items() if key not in ("BASH_ENV", "ENV")}
+        result = subprocess.run(["bash", "-euo", "pipefail", "-c", script], cwd=self.root, capture_output=True,
+            text=True, env={**hermetic, "GITHUB_OUTPUT": str(output), "GITHUB_REPOSITORY": "owner/repo",
+                            "BLOCKPOPS_TESTED_SHA": "1" * 40, "PUBLISHED_BRANCH": "master", "SOURCE_RUN_ID": "123",
+                            "TOKEN": token, "GH_TOKEN": "fixture-token", **env})
+        self.log.unlink(missing_ok=True)
+        markers = output.read_text().splitlines() if output.exists() else []
+        output.unlink(missing_ok=True)
+        return result, markers
 
-    def test_anchor_create_preserves_raw_identity_and_marks_only_successful_canonical_output(self):
-        for scope in ("unscoped", "legacy", "full"):
-            for event, projection in (("workflow_dispatch", "pr-anchors"), ("schedule", "scheduled-anchors")):
-                for digest in ("a" * 64, "sha256:" + "a" * 64):
-                    with self.subTest(scope=scope, event=event, digest=digest):
-                        result, rows, markers = self.run_anchor(scope, event=event, RAW_ARTIFACT_DIGEST=digest)
-                        self.assertEqual(0, result.returncode, result.stderr)
-                        self.assertEqual(["python3", "scripts/pages/visual_anchor.py", "identity"], rows[0][:3])
-                        self.assertEqual(["jq", "-r", ".eligible"], rows[1])
-                        self.assertEqual(["jq", "-er", ".artifact"], rows[2])
-                        self.assertEqual(["python3", "scripts/ci/matrix_scope.py", "--matrix", "release/release-matrix.json"], rows[3])
-                        create = rows[4]
-                        self.assertEqual(["python3", "scripts/pages/visual_anchor.py", "create"], create[:3])
-                        expected = {"input": "public-evidence", "output": "visual-anchor", "matrix": "release/release-matrix.json",
-                            "repository": "owner/repo", "branch": "master", "commit": "1" * 40, "tree": "2" * 40,
-                            "source-run-id": "456", "source-run-attempt": "3", "source-controller-sha": "1" * 40,
-                            "source-controller-branch": "branch with spaces/$(touch forbidden)", "raw-artifact-id": "789",
-                            "raw-artifact-name": self.raw_artifact, "raw-artifact-digest": digest}
-                        if scope != "unscoped": expected.update(scope=scope, projection=projection)
-                        self.assertEqual(expected, dict(zip((arg[2:] for arg in create[3::2]), create[4::2])))
-                        self.assertEqual(len(expected) * 2 + 3, len(create))
-                        self.assertEqual(["eligible=false", "artifact=" + self.anchor_artifact, "eligible=true"], markers)
-
-    def test_anchor_ineligible_malformed_or_bad_raw_identity_never_reads_scope_or_creates(self):
-        cases = [{"identity": json.dumps({"eligible": False})}, {"identity": "not JSON"}, {"identity": "{}"},
-                 {"identity": '{"eligible":true}'}, {"IDENTITY_EXIT": "2"}]
-        cases += [{"RAW_ARTIFACT_ID": value} for value in ("", "0", "01", "-1", "1; touch forbidden")]
-        cases += [{"RAW_ARTIFACT_DIGEST": value} for value in ("", "a" * 63, "A" * 64, "sha512:" + "a" * 64)]
-        for overrides in cases:
-            with self.subTest(overrides=overrides):
-                _, rows, markers = self.run_anchor(**overrides)
-                self.assertEqual(["eligible=false"], markers)
-                self.assertFalse(any(row[1:2] == ["scripts/ci/matrix_scope.py"] for row in rows))
-                self.assertFalse(any(row[1:3] == ["scripts/pages/visual_anchor.py", "create"] for row in rows))
-
-    def test_anchor_scope_and_create_failures_never_mark_eligible_or_name_an_upload(self):
-        for scope, overrides in (("lane", {}), ("legacy", {"SCOPE_EXIT": "2"}), ("legacy", {"CREATE_EXIT": "2"})):
-            with self.subTest(scope=scope, overrides=overrides):
-                result, rows, markers = self.run_anchor(scope, **overrides)
+    def test_public_identity_emits_only_an_opaque_branch_token_as_the_bundle_key(self):
+        token = hashlib.sha256(b"master").hexdigest()[:24]
+        result, markers = self.run_identity(token)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(["token=" + token, "source_run_id=123", "tree=" + "2" * 40], markers)
+        for bad in ("", token.upper(), token[:-1], token + "0", "../" + token[3:], token[:-1] + "\n0"):
+            with self.subTest(token=bad):
+                result, markers = self.run_identity(bad)
                 self.assertNotEqual(0, result.returncode)
-                self.assertEqual(["eligible=false"], markers)
-                creates = [row for row in rows if row[1:3] == ["scripts/pages/visual_anchor.py", "create"]]
-                self.assertEqual(1 if "CREATE_EXIT" in overrides else 0, len(creates))
-
+                self.assertEqual([], markers)
+        result, markers = self.run_identity(token, BLOCKPOPS_TESTED_SHA="3" * 40)
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual([], markers)
 
 if __name__ == "__main__":
     unittest.main()

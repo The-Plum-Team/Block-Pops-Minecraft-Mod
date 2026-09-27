@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 
 from scripts.lib import atomic_directory
-from scripts.pages.download_artifact import ArtifactDownloadError, _download_archive, _entry_type, _safe_name
+from scripts.release.artifact_transport import ArtifactDownloadError, _download_archive, _entry_type, _safe_name
 from scripts.release.run_evidence import ARTIFACT_LIMITS
 
 # Independent of Pages' smaller image-cache limits. Content readers subsequently

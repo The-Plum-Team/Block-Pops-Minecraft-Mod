@@ -24,6 +24,8 @@ python3 -m unittest discover -s scripts/ci/tests -t . -v
 # or both suites across every core, as the Build gate runs them:
 python3 scripts/ci/parallel_unittest.py -t . scripts/ci/tests tests
 python3 scripts/ci/dependency_policy.py --metadata gradle/verification-metadata.xml
+python3 scripts/ci/mod_base_kit.py verify --network
+python3 scripts/ci/mod_base_kit.py run template check --repo .
 ./gradlew --no-daemon --no-parallel clean buildAllLanes buildAllE2EHarnesses
 python3 scripts/release/verify_release.py \
   --matrix release/release-matrix.json \
@@ -42,6 +44,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md),
 or release-controller code. The advisory Claude routing, durable queue, cost
 limits, Claude Code token, and recovery procedures are documented in
 [the visual-review architecture](docs/visual-review.md).
+
+The advisory public gallery of packaged screenshots is published to GitHub
+Pages by the pinned [mod-base](https://github.com/The-Plum-Team/mod-base) kit;
+see [the public-evidence notes](scripts/pages/README.md).
 
 ## License
 
