@@ -114,13 +114,7 @@
     "agents_local": [
       "docs/ai/PROJECT.md"
     ],
-    "deferred": [
-      ".gitattributes",
-      ".gitignore",
-      ".github/dependabot.yml",
-      ".github/pull_request_template.md",
-      "AGENTS.md"
-    ]
+    "deferred": []
   },
   "theme": {
     "dark": {

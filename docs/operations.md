@@ -265,9 +265,10 @@ kit: its tests fetch the pin anonymously inside the sandbox, and the owner runs
 `python3 scripts/ci/mod_base_kit.py verify --network` locally on its exact head
 and records the output in the pull request before approving it. The root files a
 controller upgrade cannot change (`AGENTS.md`, `.gitattributes`, `.gitignore`,
-`.github/dependabot.yml`, `.github/pull_request_template.md`) stay in
-`site/mod-base.json` `template.deferred` until an ordinary follow-up pull request
-adds them; a later controller upgrade (or the next kit bump) empties the list.
+`.github/dependabot.yml`, `.github/pull_request_template.md`) stayed in
+`site/mod-base.json` `template.deferred` until the ordinary follow-up pull
+request (#11) added them; a later controller upgrade emptied the list, so
+`template check` now requires all of them strictly.
 
 Until that follow-up adds the managed `.gitattributes` (`text eol=lf` for every
 managed path), a clone with `core.autocrlf=true` checks the managed files out

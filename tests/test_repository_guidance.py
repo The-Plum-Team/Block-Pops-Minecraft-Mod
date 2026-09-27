@@ -2,7 +2,8 @@
 
 ``AGENTS.md`` and the other root files a controller upgrade cannot change arrive in an ordinary
 follow-up pull request, so they may be absent while ``site/mod-base.json`` lists them in
-``template.deferred``. Every present file, and every file that is not deferred, is checked strictly:
+``template.deferred`` (none is deferred since #11). Every present file, and every file that is not
+deferred, is checked strictly:
 by the kit's own ``template check`` through the managed bootstrap, and by the rules below.
 """
 
