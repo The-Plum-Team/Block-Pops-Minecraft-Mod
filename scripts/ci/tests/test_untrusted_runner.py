@@ -226,6 +226,10 @@ class BoundaryTests(unittest.TestCase):
             subprocess.run(
                 ["git", "-C", str(source), "config", "user.name", "Sandbox Test"], check=True
             )
+            # A commit may start Git's detached auto-maintenance, whose transient
+            # objects/maintenance.lock would race the copy below.
+            for key, value in (("maintenance.auto", "false"), ("gc.auto", "0")):
+                subprocess.run(["git", "-C", str(source), "config", key, value], check=True)
             (source / "release").mkdir()
             tracked = source / "release/release-matrix.json"
             tracked.write_text('{"trusted":true}\n', "utf-8")
