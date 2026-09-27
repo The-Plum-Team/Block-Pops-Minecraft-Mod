@@ -294,9 +294,13 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual("Branch", labels["release_prefix"])
         self.assertEqual({"dark": DARK, "light": LIGHT}, CONFIG.theme)
 
-    def test_template_defers_exactly_the_pr_b_root_files(self) -> None:
-        self.assertEqual(PR_B_PATHS, CONFIG.template["deferred"])
-        self.assertEqual(DEFERRABLE, frozenset(CONFIG.template["deferred"]))
+    def test_template_defers_nothing_once_the_root_files_landed(self) -> None:
+        # PR #11 added the five root files a controller upgrade cannot change; none stays deferred.
+        self.assertEqual([], CONFIG.template["deferred"])
+        self.assertEqual(DEFERRABLE, frozenset(PR_B_PATHS))
+        for path in PR_B_PATHS:
+            with self.subTest(path=path):
+                self.assertTrue((REPO / path).is_file(), path)
         self.assertEqual(["docs/ai/PROJECT.md"], CONFIG.template["agents_local"])
 
     def test_kit_path_helper_resolves_the_verified_kit_without_bytecode(self) -> None:

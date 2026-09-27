@@ -6,9 +6,8 @@ repository root. The two shared documents imported first (`docs/ai/shared/REPOSI
 `docs/ai/shared/PUBLIC-EVIDENCE.md`) are managed by mod-base and hold the rules every mod shares;
 this file and the other local imports hold only what is specific to BlockPops.
 
-`AGENTS.md` itself is a root file that a controller upgrade cannot add, so it lands in an ordinary
-follow-up pull request. Until then `site/mod-base.json` lists it in `template.deferred`; read this
-file and the two shared documents directly.
+`AGENTS.md` itself is a root file that a controller upgrade cannot add, so it landed in an ordinary
+follow-up pull request (#11). `site/mod-base.json` no longer defers it or any other template file.
 
 ## Documentation map
 
@@ -88,8 +87,8 @@ The Pages pipeline is the pinned mod-base kit; the shared rules are in
   composite`). Keep Python code out of the repository root and `scripts/__init__.py` absent.
 - **Staged adoption.** The root files `AGENTS.md`, `.gitattributes`, `.gitignore`,
   `.github/dependabot.yml` and `.github/pull_request_template.md` are outside the controller-upgrade
-  roots. They stay in `template.deferred` until the ordinary follow-up pull request adds them and a
-  later controller upgrade empties the list.
+  roots. They were in `template.deferred` until the ordinary follow-up pull request (#11) added them;
+  the list is now empty, so `template check` requires them strictly.
 
 ## Task routing
 

@@ -66,8 +66,8 @@ Public evidence is delegated to mod-base.
   schema versions N and N-1; every frame's `runtime_evidence` is mandatory.
 - **Staged adoption.** The root files outside the controller-upgrade roots (`AGENTS.md`,
   `.gitattributes`, `.gitignore`, `.github/dependabot.yml`, `.github/pull_request_template.md`) are
-  listed in `template.deferred` and arrive in an ordinary follow-up pull request; a later controller
-  upgrade empties the list. `.github/CODEOWNERS` cannot be deferred and gains `/AGENTS.md` and
+  listed in `template.deferred` and arrive in an ordinary follow-up pull request (#11); a later
+  controller upgrade empties the list, after which `template check` requires them strictly. `.github/CODEOWNERS` cannot be deferred and gains `/AGENTS.md` and
   `/docs/ai/` in the adoption itself.
 
 Retired, with the reasons that make each safe:
