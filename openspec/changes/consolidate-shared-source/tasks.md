@@ -31,6 +31,8 @@
 
 - Task-4/8 follow-up, trusted PR gate: task8's preparing enrollment (`466426b`) left the gate's controller parity and PR identity on the schema-1-only execution reader, so the deployed evaluator refused every pull request. The gate now reads an explicit trusted-gate projection: a preparing schema-2 matrix yields only its branch policy and the two legacy 1.20.1 lanes, so selected loaders, parity paths and job graphs equal the schema-1 gate's; `shared`, other modes and malformed matrices fail closed, and restricted transitions and release sync stay schema-1 only. The loader-bootstrap contract still binds NeoForge, which is stricter than the schema-1 gate. It is a controller upgrade (six paths) that the deployed gate cannot admit, so the owner lands it directly as a documented out-of-procedure repair; this record is not a controller-upgrade path and lands separately. Details in [apply-progress.md](apply-progress.md#task-8-follow-up--the-trusted-pr-gate-reads-the-preparing-matrix).
 
+- Trusted PR gate follow-up: the gate also never matched a real run, because GitHub records a `pull_request_target` run under the PR's head, not the default branch. PR #15 matches gate runs by PR head and names their controller through `referenced_workflows`, and a cancelled concurrency sibling no longer shadows a run that ran. PR-sourced visual review keeps the same assumption and needs its own controller change. Details in [apply-progress.md](apply-progress.md#trusted-pr-gate-follow-up--gate-runs-are-matched-by-pr-head-and-controller-reference).
+
 ## Review Workload Forecast
 
 | Field | Value |
