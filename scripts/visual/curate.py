@@ -5,12 +5,18 @@ Only protected default-branch code executes here. Candidate commits are fetched 
 bytes through the GitHub API; neither candidate nor reference repository code is checked out or
 executed. Every run, attempt, tree, workflow, job graph, aggregate artifact, matrix, and scenario
 contract is rebound immediately before semantic pairing.
+
+The reference frames come from the durable lossless ``mb-anchor`` of the pinned mod-base kit. Its
+name and structural validation come from ``mod_base.evidence.anchor``, reached only through the
+managed bootstrap ``scripts/ci/mod_base_kit.py``; this module then binds the anchor to the
+authenticated direct reference run, commit, matrix, contract and canonical lane.
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
+import functools
 import hashlib
 import json
 import os
@@ -24,7 +30,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterable
+from typing import Any, Iterable, NamedTuple
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
@@ -48,14 +54,10 @@ from scripts.ci.e2e_fanin import (  # noqa: E402
     validate_aggregate,
 )
 from scripts.ci.e2e_job_graph import JobGraphError, expected_jobs, validate_jobs  # noqa: E402
+from scripts.ci.gate_controller import GateControllerError, branch_token  # noqa: E402
 from scripts.ci.matrix_scope import default_dispatch_scope  # noqa: E402
 from scripts.lib.secure_json import SecureJsonError, canonical_json  # noqa: E402
 from scripts.lib.secure_json import read as read_secure_json  # noqa: E402
-from scripts.pages.visual_anchor import (  # noqa: E402
-    VisualAnchorError,
-    validate_anchor,
-    visual_anchor_artifact_name,
-)
 from scripts.release.artifact_manifest import (  # noqa: E402
     MAX_MANIFEST_BYTES,
     ArtifactError,
@@ -82,6 +84,7 @@ SHA1 = re.compile(r"^[0-9a-f]{40}$")
 SHA256_PREFIX = re.compile(r"^sha256:([0-9a-f]{64})$")
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 MAX_API_JSON = 32 * 1024 * 1024
+MAX_ANCHOR_EXPECTATION_BYTES = 16 * 1024 * 1024
 MAX_FILE_BYTES = 4 * 1024 * 1024
 MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
 INPUT_BUNDLE_PREFIX = "e2e-input-bundle-"
@@ -781,6 +784,67 @@ def aggregate_tested_commit(
     return matches[0]
 
 
+class _KitAnchor(NamedTuple):
+    """The parts of the pinned mod-base kit that anchor consumption uses."""
+
+    anchor: Any
+    error: type[Exception]
+
+
+@functools.lru_cache(maxsize=1)
+def _kit() -> _KitAnchor:
+    """Import ``mod_base.evidence.anchor`` from the pinned kit, resolved by the managed bootstrap.
+
+    Only anchor consumption needs the kit, so it is loaded on first use. ``kit_path`` verifies the
+    kit (the ``setup`` composite's path, the sandbox overlay or the user cache) and turns bytecode
+    writing off before anything from it is imported; a ``mod_base`` found anywhere else is refused.
+    """
+
+    try:
+        from scripts.ci.mod_base_kit import KitError, kit_path
+    except ImportError as exc:
+        raise CurationError(f"the managed mod-base bootstrap is unavailable: {exc}") from exc
+    try:
+        source = Path(kit_path(REPO)) / "src"
+    except (KitError, OSError) as exc:
+        raise CurationError(f"the pinned mod-base kit is unavailable: {exc}") from exc
+    if str(source) not in sys.path:
+        sys.path.insert(0, str(source))
+    import mod_base
+    from mod_base.errors import MbError
+    from mod_base.evidence import anchor
+
+    root = source.resolve()
+    for module in (mod_base, anchor):
+        origin = getattr(module, "__file__", None)
+        if origin is None or not Path(origin).resolve().is_relative_to(root):
+            _fail("mod_base was imported from outside the pinned mod-base kit")
+    return _KitAnchor(anchor=anchor, error=MbError)
+
+
+def _branch_key(branch: str) -> str:
+    try:
+        return branch_token(branch)
+    except GateControllerError as exc:
+        raise CurationError(str(exc)) from exc
+
+
+def anchor_artifact_name(branch: str, commit: str, run_id: int, run_attempt: int) -> str:
+    """The kit's ``mb-anchor--<branch token>--<commit>--<run>--a<attempt>`` name of one anchor."""
+
+    key = _branch_key(branch)
+    kit = _kit()
+    try:
+        return kit.anchor.artifact_name(
+            key,
+            _sha1(commit, "visual anchor commit"),
+            _positive(run_id, "visual anchor owner run id"),
+            _positive(run_attempt, "visual anchor owner run attempt"),
+        )
+    except kit.error as exc:
+        raise CurationError(str(exc)) from exc
+
+
 def exact_visual_anchor_artifact(
     values: Iterable[Any],
     *,
@@ -791,12 +855,7 @@ def exact_visual_anchor_artifact(
 ) -> ArtifactIdentity | None:
     """Authenticate one lossless anchor by its branch token and exact commit."""
 
-    expected_name = visual_anchor_artifact_name(
-        branch,
-        _sha1(tested_commit, "visual anchor commit"),
-        _positive(run_id, "visual anchor owner run id"),
-        _positive(run_attempt, "visual anchor owner run attempt"),
-    )
+    expected_name = anchor_artifact_name(branch, tested_commit, run_id, run_attempt)
     matches: list[ArtifactIdentity] = []
     ids: set[int] = set()
     names: set[str] = set()
@@ -1436,6 +1495,201 @@ def _bundle(
     )
 
 
+def require_direct_anchor(
+    manifest: dict[str, Any], *, run: RunIdentity, tested: TestedIdentity
+) -> None:
+    """Bind a kit-validated ``mb-anchor`` to the authenticated direct reference run.
+
+    An anchor records the run that handed its pixels off and the run that tested them, but not how
+    the tested run was reused, so kit validation alone cannot tell a direct run from an attested
+    one. The kit never cuts an anchor from attested reuse; this check defends in depth. Block Pops
+    reference frames come only from a direct canonical run, where the tested run is the handoff run
+    itself, so both claims must be exactly this reference run on its own head.
+    """
+
+    claim = {
+        "run_id": run.run_id,
+        "run_attempt": run.run_attempt,
+        "workflow_path": WORKFLOW_PATH,
+        "branch": run.head_branch,
+        "commit": run.head_sha,
+        "controller_branch": run.head_branch,
+        "controller_sha": run.head_sha,
+    }
+    provenance = manifest.get("provenance")
+    if (
+        manifest.get("repository") != run.repository
+        or manifest.get("subject")
+        != {
+            "branch": run.head_branch,
+            "commit": tested.tested_commit,
+            "tree": tested.tested_tree,
+        }
+        or not isinstance(provenance, dict)
+        or provenance.get("handoff") != claim
+    ):
+        _fail("lossless visual anchor does not belong to the authenticated reference run")
+    if provenance.get("tested") != provenance["handoff"]:
+        _fail("lossless visual anchor was not cut from a direct run: its tested run is not its handoff run")
+
+
+def validated_anchor(
+    root: Path, *, run: RunIdentity, tested: TestedIdentity
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Validate one extracted ``mb-anchor`` with the pinned kit, then bind it to this run.
+
+    Returns the manifest and its embedded expectation, re-read and bound to the manifest's record.
+    """
+
+    kit = _kit()
+    try:
+        manifest = kit.anchor.validate_anchor_dir(
+            root,
+            key=_branch_key(run.head_branch),
+            expected_subject_commit=tested.tested_commit,
+        )
+    except kit.error as exc:
+        raise CurationError(f"lossless visual anchor is invalid: {exc}") from exc
+    require_direct_anchor(manifest, run=run, tested=tested)
+    record = manifest["expectation"]
+    try:
+        expectation, raw = read_secure_json(
+            root / record["path"],
+            label="lossless visual anchor expectation",
+            max_bytes=MAX_ANCHOR_EXPECTATION_BYTES,
+        )
+    except (SecureJsonError, OSError) as exc:
+        raise CurationError(str(exc)) from exc
+    if (
+        len(raw) != record["size"]
+        or hashlib.sha256(raw).hexdigest() != record["sha256"]
+        or not isinstance(expectation, dict)
+    ):
+        _fail("lossless visual anchor expectation changed after validation")
+    return manifest, expectation
+
+
+def anchor_reference_frames(
+    root: Path,
+    *,
+    run: RunIdentity,
+    tested: TestedIdentity,
+    artifact_id: int,
+    matrix: dict[str, Any],
+    matrix_path: Path,
+    contract: ScenarioContract,
+    scenarios: tuple[str, ...],
+) -> tuple[VisualFrame, ...]:
+    """Validate one extracted ``mb-anchor`` and return its frames as reference evidence.
+
+    The kit checks the bundle's structure, inventory and canonical pixels; this binds it to the
+    authenticated direct reference run, the exact commit's matrix and contract, the canonical
+    lane, and every semantic capture the reference run projected.
+    """
+
+    anchor, expectation = validated_anchor(root, run=run, tested=tested)
+    reference = canonical_reference_identity(matrix)
+    if (
+        expectation.get("matrix_sha256") != matrix_sha256(matrix_path)
+        or expectation.get("contract_sha256") != contract.sha256
+        or expectation.get("contract_path") != reference["scenario_contract"]
+        or expectation.get("profile") != _projection(run.event)
+    ):
+        _fail("lossless visual anchor matrix/contract identity is stale")
+    runtimes = [
+        row for row in matrix["runtimes"] if row["artifact_node"] == reference["artifact_node"]
+    ]
+    if len(runtimes) != 1:
+        _fail("canonical anchor lane is absent from the protected matrix")
+    lane = {
+        "artifact_node": runtimes[0]["artifact_node"],
+        "minecraft": runtimes[0]["minecraft"],
+        "loader": runtimes[0]["loader"],
+    }
+    if anchor["reference"] != {
+        "artifact_nodes": [lane["artifact_node"]],
+        "minecraft": [lane["minecraft"]],
+        "loaders": [lane["loader"]],
+    } or {record["scenario"] for record in anchor["lanes"]} != set(scenarios):
+        _fail("lossless visual anchor reference lane is stale")
+    captures = {
+        capture.capture_id: capture
+        for scenario in scenarios
+        for role in contract.scenario(scenario).roles
+        for step in role.steps
+        if step.capture is not None
+        for capture in (step.capture,)
+    }
+    frames: list[VisualFrame] = []
+    for record in anchor["frames"]:
+        capture = captures.get(record["capture_id"])
+        if (
+            capture is None
+            or any(record[field] != value for field, value in lane.items())
+            or (
+                record["scenario"],
+                record["role"],
+                record["step"],
+                record["title"],
+                record["expectation"],
+                record["review_tier"],
+            )
+            != (
+                capture.scenario,
+                capture.role,
+                capture.step,
+                capture.title,
+                capture.expectation,
+                capture.review_tier,
+            )
+        ):
+            _fail("lossless visual anchor frame identity is stale")
+        source = record["source"]
+        try:
+            (
+                width,
+                height,
+                source_file_sha256,
+                pixel_sha256,
+                canonical_file_sha256,
+                canonical_png,
+                _metrics,
+            ) = canonicalize_png(
+                root / PurePosixPath(source["path"]),
+                expected_size=contract.gui_text_reference_size,
+            )
+        except VisualEvidenceError as exc:
+            raise CurationError(str(exc)) from exc
+        if source_file_sha256 != source["sha256"] or pixel_sha256 != source["pixel_sha256"]:
+            _fail("lossless visual anchor frame identity is stale")
+        frames.append(
+            VisualFrame(
+                artifact_node=record["artifact_node"],
+                minecraft=record["minecraft"],
+                loader=record["loader"],
+                scenario=record["scenario"],
+                role=record["role"],
+                step=record["step"],
+                capture_id=record["capture_id"],
+                title=record["title"],
+                expectation=record["expectation"],
+                review_tier=record["review_tier"],
+                width=width,
+                height=height,
+                source_file_sha256=source_file_sha256,
+                pixel_sha256=pixel_sha256,
+                canonical_file_sha256=canonical_file_sha256,
+                canonical_png=canonical_png,
+                source_artifact_id=artifact_id,
+            )
+        )
+    identities = [frame.capture_id for frame in frames]
+    if len(identities) != len(set(identities)) or set(identities) != set(captures):
+        _fail("lossless visual anchor does not cover the projected semantic captures")
+    frames.sort(key=lambda frame: frame.label)
+    return tuple(frames)
+
+
 def _anchor_bundle(
     *,
     api: GitHubApi,
@@ -1481,91 +1735,22 @@ def _anchor_bundle(
         work / f"anchor-{artifact.artifact_id}",
         expected_sha256=artifact.digest,
     )
-    try:
-        anchor = validate_anchor(
-            extracted,
-            matrix_path=matrix_path,
-            expected={
-                "repository": run.repository,
-                "branch": run.head_branch,
-                "commit": tested.tested_commit,
-                "tree": tested.tested_tree,
-                "matrix_sha256": matrix_sha256(matrix_path),
-                "contract_sha256": contract.sha256,
-                "handoff": {
-                    "path": WORKFLOW_PATH,
-                    "run_id": run.run_id,
-                    "run_attempt": run.run_attempt,
-                    "controller_branch": run.head_branch,
-                    "controller_sha": run.head_sha,
-                },
-            },
-        )
-    except VisualAnchorError as exc:
-        raise CurationError(str(exc)) from exc
-    frames: list[VisualFrame] = []
-    for record in anchor["frames"]:
-        source = record["source"]
-        image_path = extracted / PurePosixPath(source["path"])
-        try:
-            (
-                width,
-                height,
-                source_file_sha256,
-                pixel_sha256,
-                canonical_file_sha256,
-                canonical_png,
-                _metrics,
-            ) = canonicalize_png(
-                image_path,
-                expected_size=contract.gui_text_reference_size,
-            )
-        except VisualEvidenceError as exc:
-            raise CurationError(str(exc)) from exc
-        if (
-            source_file_sha256 != source["sha256"]
-            or pixel_sha256 != source["pixel_sha256"]
-            or record["scenario"] not in scenarios
-        ):
-            _fail("lossless visual anchor frame identity is stale")
-        frames.append(
-            VisualFrame(
-                artifact_node=record["artifact_node"],
-                minecraft=record["minecraft"],
-                loader=record["loader"],
-                scenario=record["scenario"],
-                role=record["role"],
-                step=record["step"],
-                capture_id=record["capture_id"],
-                title=record["title"],
-                expectation=record["expectation"],
-                review_tier=record["review_tier"],
-                width=width,
-                height=height,
-                source_file_sha256=source_file_sha256,
-                pixel_sha256=pixel_sha256,
-                canonical_file_sha256=canonical_file_sha256,
-                canonical_png=canonical_png,
-                source_artifact_id=artifact.artifact_id,
-            )
-        )
-    expected_captures = {
-        capture.capture_id
-        for scenario in scenarios
-        for role in contract.scenario(scenario).roles
-        for step in role.steps
-        if step.capture is not None
-        for capture in (step.capture,)
-    }
-    if {frame.capture_id for frame in frames} != expected_captures:
-        _fail("lossless visual anchor does not cover the projected semantic captures")
-    frames.sort(key=lambda frame: frame.label)
+    frames = anchor_reference_frames(
+        extracted,
+        run=run,
+        tested=tested,
+        artifact_id=artifact.artifact_id,
+        matrix=matrix,
+        matrix_path=matrix_path,
+        contract=contract,
+        scenarios=scenarios,
+    )
     return EvidenceBundle(
         provenance=provenance,
         matrix=matrix,
         matrix_sha256=matrix_sha256(matrix_path),
         contract=contract,
-        frames=tuple(frames),
+        frames=frames,
     )
 
 
@@ -1609,7 +1794,7 @@ def curate(
         merge_base = comparison["merge_base_commit"]["sha"]
         comparison_status = comparison["status"]
     except (KeyError, TypeError) as exc:
-        raise VisualReviewError("source controller comparison is malformed") from exc
+        raise CurationError("source controller comparison is malformed") from exc
     if (
         source_base != source_run.head_sha
         or merge_base != source_run.head_sha

@@ -15,7 +15,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
-from e2e.visual_capsule import MAX_CAPSULE_PAIRS, validate_capsule, write_capsule
+from tests import mod_base_path
+
+KIT = mod_base_path.kit_root()
+
+from mod_base.evidence.anchor import artifact_name as kit_anchor_name  # noqa: E402
+from mod_base.model.canonical import canonical_json  # noqa: E402
+
+from e2e.scenario_contract import load_contract  # noqa: E402
+from e2e.visual_capsule import MAX_CAPSULE_PAIRS, validate_capsule, write_capsule  # noqa: E402
 from e2e.visual_evidence import load_archived_evidence
 from e2e.visual_review_output import (
     MAX_PAIRS as MAX_OUTPUT_PAIRS,
@@ -24,22 +32,27 @@ from e2e.visual_review_output import (
     read_and_validate_review,
 )
 from scripts.ci.e2e_fanin import aggregate_artifact_name
+from scripts.ci.gate_controller import branch_token
+from scripts.ci.mod_base_kit import parse_pin
 from scripts.release.matrix import load_matrix
 from scripts.visual.curate import (
     ArtifactIdentity,
     CurationError,
     GitHubApi as CuratorGitHubApi,
     RunIdentity,
+    TestedIdentity,
     _SafeRedirect,
     _candidate_reference_binding,
     _resolve_tested_identity,
     aggregate_tested_commit,
+    anchor_artifact_name,
+    anchor_reference_frames,
     authenticate_run,
+    curate as curate_queue,
     exact_aggregate_artifact,
     reference_candidates,
     select_reference_run,
 )
-from scripts.pages.visual_anchor import visual_anchor_artifact_name
 from scripts.visual import review_client
 from scripts.visual.handoff import (
     MAX_PAIRS as MAX_HANDOFF_PAIRS,
@@ -67,6 +80,15 @@ from scripts.visual.review_client import (
 from scripts.ci.tests.matrix_fixtures import (
     canonical_integration_matrix,
     write_matrix_fixture,
+)
+from tests.contract_fixtures import representative_contract, representative_contract_path
+from tests.test_mod_base_adapter import (
+    REAL_MATRIX,
+    MATRIX_PATH as REAL_MATRIX_PATH,
+    REPOSITORY as KIT_REPOSITORY,
+    SubjectRepository,
+    master_files,
+    produce_evidence,
 )
 from tests.test_visual_capsule import (
     ACTIVE_BRANCH,
@@ -147,9 +169,7 @@ def _anchor_artifact(
     run_id: int, *, commit: str = MASTER_SHA, attempt: int = 1
 ) -> dict[str, object]:
     artifact = _artifact(run_id, commit=commit)
-    artifact["name"] = visual_anchor_artifact_name(
-        "master", commit, run_id, attempt
-    )
+    artifact["name"] = kit_anchor_name(branch_token("master"), commit, run_id, attempt)
     artifact["workflow_run"] = {"id": run_id, "head_sha": commit}
     return artifact
 
@@ -480,10 +500,12 @@ class VisualReviewWorkflowContractTests(unittest.TestCase):
         self.assertIn("api.compare(controller_head, queue_implementation)", preflight)
         self.assertIn("api.compare(queue_implementation, implementation)", preflight)
         packaged = PACKAGED_E2E_WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn('--run-id "$GITHUB_RUN_ID"', packaged)
-        self.assertIn('--run-attempt "$GITHUB_RUN_ATTEMPT"', packaged)
-        self.assertIn('--source-run-id "$GITHUB_RUN_ID"', packaged)
-        self.assertIn('--source-run-attempt "$GITHUB_RUN_ATTEMPT"', packaged)
+        # The kit binds the handoff and the anchor to this exact run from GITHUB_RUN_ID/ATTEMPT;
+        # the producer names only the tested run, and never cuts an anchor for an attestation.
+        self.assertIn("uses: The-Plum-Team/mod-base/actions/prepare-evidence@", packaged)
+        self.assertIn("tested-run-id: ${{ env.PACKAGED_RUN_ID }}", packaged)
+        self.assertIn("tested-run-attempt: ${{ env.PACKAGED_RUN_ATTEMPT }}", packaged)
+        self.assertIn("anchor: ${{ inputs.attest_run_id == '' && 'auto' || 'off' }}", packaged)
         self.assertIn("- visual-review-queue-wake", drain)
         self.assertIn('cron: "17,47 * * * *"', drain)
         self.assertIn("group: blockpops-visual-review-global-drain", drain)
@@ -653,7 +675,10 @@ class VisualReviewWorkflowContractTests(unittest.TestCase):
         self.assertIn("retention-days: 1", _job_block(drain, "review"))
         self.assertIn("retention-days: 7", _job_block(drain, "publish"))
         self.assertIn("retention-days: 30", _job_block(drain, "publish"))
-        self.assertIn("retention-days: 90", packaged)
+        # The durable anchor is uploaded by the kit's prepare-evidence composite, which takes its
+        # retention (and the successor grace that rotation honours) from the protected config.
+        self.assertEqual({"enabled": True, "retention_days": 90, "successor_grace_days": 8},
+                         json.loads((REPO / "site" / "mod-base.json").read_text(encoding="utf-8"))["anchor"])
 
         self.assertIn(
             'Attest exact tested packaged tree / Verify exact tested tree', queue
@@ -1916,6 +1941,207 @@ class VisualSourceAuthenticationTests(unittest.TestCase):
         api.current = "5" * 40
         with self.assertRaisesRegex(CurationError, "exact current head"):
             _resolve_tested_identity(api, None, run)
+
+    def test_a_malformed_controller_comparison_is_a_curation_error(self) -> None:
+        # A malformed compare response must end as the curator's own fail-closed error (exit 2),
+        # never as an uncaught exception that bypasses its error mapping.
+        class Api:
+            repository = REPOSITORY
+
+            def run_attempt(self, run_id: int, attempt: int) -> dict[str, object]:
+                return _run_record(run_id)
+
+            def repository_record(self) -> dict[str, object]:
+                return {"full_name": REPOSITORY, "default_branch": "master"}
+
+            def branch_head(self, repository: str, branch: str) -> str:
+                return MASTER_SHA
+
+            def compare(self, repository: str, base: str, head: str) -> dict[str, object]:
+                return {"status": "identical"}
+
+        with tempfile.TemporaryDirectory(prefix="blockpops-curate-") as directory:
+            with self.assertRaisesRegex(CurationError, "source controller comparison is malformed"):
+                curate_queue(api=Api(), source_run_id=60, source_run_attempt=1, source_sha=MASTER_SHA,
+                             source_branch="master", implementation_sha=MASTER_SHA, producer_run_id=61,
+                             producer_run_attempt=1, output=Path(directory) / "queue")
+
+
+class CuratorKitTests(unittest.TestCase):
+    """The curator reaches the kit only through the verified pin of its own checkout."""
+
+    def test_curator_verifies_the_pinned_kit_before_curation(self) -> None:
+        curate = _job_block(WORKFLOW.read_text(encoding="utf-8"), "curate")
+        pin = parse_pin(REPO)
+        step = (
+            "      - name: Verify the pinned mod-base kit\n"
+            f"        uses: The-Plum-Team/mod-base/actions/setup@{pin.sha} # {pin.version}\n"
+            "        with:\n"
+            '          install-imaging: "false"\n'
+        )
+        self.assertIn(step, curate)
+        checkout = curate.index("- name: Check out only the exact protected curator")
+        setup = curate.index(step)
+        curation = curate.index("- name: Authenticate candidate/baseline and build a data-only queue entry")
+        self.assertLess(checkout, setup)
+        self.assertLess(setup, curation)
+        block = curate[setup:curate.index("\n\n", setup)]
+        for credential in ("GH_TOKEN", "GITHUB_TOKEN", "github.token", "secrets."):
+            self.assertNotIn(credential, block)
+        for job in ("authenticate", "classify", "wake"):
+            self.assertNotIn("The-Plum-Team/mod-base", _job_block(WORKFLOW.read_text(encoding="utf-8"), job))
+
+    def test_drain_reauthentication_verifies_the_pinned_kit_before_reauth(self) -> None:
+        drain = DRAIN_WORKFLOW.read_text(encoding="utf-8")
+        pin = parse_pin(REPO)
+        step = (
+            "      - name: Verify the pinned mod-base kit\n"
+            f"        uses: The-Plum-Team/mod-base/actions/setup@{pin.sha} # {pin.version}\n"
+            "        with:\n"
+            '          install-imaging: "false"\n'
+        )
+        for job in ("prepare", "admit", "publish"):
+            with self.subTest(job):
+                block = _job_block(drain, job)
+                self.assertEqual(1, block.count(step))
+                checkout = block.index("uses: actions/checkout@")
+                setup = block.index(step)
+                reauth = block.index("python3 scripts/visual/reauth.py")
+                self.assertLess(checkout, setup)
+                self.assertLess(setup, reauth)
+                setup_block = block[setup:block.index("\n\n", setup)]
+                for credential in ("GH_TOKEN", "GITHUB_TOKEN", "github.token", "secrets."):
+                    self.assertNotIn(credential, setup_block)
+        for job in ("select", "exhausted", "attempt", "review", "comment", "cleanup", "continue"):
+            self.assertNotIn("The-Plum-Team/mod-base", _job_block(drain, job))
+
+    def test_anchor_names_come_from_the_kit_grammar(self) -> None:
+        name = anchor_artifact_name("master", MASTER_SHA, 12, 3)
+        self.assertEqual(f"mb-anchor--{branch_token('master')}--{MASTER_SHA}--12--a3", name)
+        self.assertEqual(kit_anchor_name(branch_token("master"), MASTER_SHA, 12, 3), name)
+        with self.assertRaises(CurationError):
+            anchor_artifact_name("master", "not-a-sha", 12, 3)
+        with self.assertRaises(CurationError):
+            anchor_artifact_name("../escape", MASTER_SHA, 12, 3)
+
+
+class KitAnchorCurationTests(unittest.TestCase):
+    """A real kit ``mb-anchor``, produced by the kit's own prepare and anchor create from Block
+    Pops' packaged output, becomes reference evidence only when it is a direct run of the exact
+    authenticated reference head."""
+
+    RUN_ID = 77
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.enterClassContext(representative_contract())
+        temporary = tempfile.TemporaryDirectory(prefix="blockpops-kit-anchor-")
+        cls.addClassCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        contract = representative_contract_path().read_bytes()
+        repository = SubjectRepository(root / "objects.git")
+        cls.head = repository.head("master", master_files(contract=contract))
+        work = root / "work"
+        work.mkdir()
+        cls.produced = produce_evidence(work, repository.root, cls.head, run_id=cls.RUN_ID)
+        cls.anchor = cls.produced["anchor"]
+        cls.contract = load_contract(representative_contract_path())
+        cls.matrix = json.loads(REAL_MATRIX)
+
+    def run_identity(self, **changes) -> RunIdentity:
+        values = dict(repository=KIT_REPOSITORY, head_repository=KIT_REPOSITORY, head_branch="master",
+                      head_sha=self.head["commit"], run_id=self.RUN_ID, run_attempt=1, event="workflow_dispatch",
+                      created_at=datetime(2026, 9, 1, tzinfo=timezone.utc))
+        values.update(changes)
+        return RunIdentity(**values)
+
+    def identity_of_tested(self, **changes) -> TestedIdentity:
+        values = dict(repository=KIT_REPOSITORY, source_head_repository=KIT_REPOSITORY, source_head_branch="master",
+                      source_head_commit=self.head["commit"], tested_commit=self.head["commit"],
+                      tested_tree=self.head["tree"], base_branch_hint=None)
+        values.update(changes)
+        return TestedIdentity(**values)
+
+    def frames(self, root: Path | None = None, *, run: RunIdentity | None = None,
+               tested: TestedIdentity | None = None):
+        return anchor_reference_frames(
+            root or self.anchor, run=run or self.run_identity(), tested=tested or self.identity_of_tested(),
+            artifact_id=901, matrix=self.matrix, matrix_path=REAL_MATRIX_PATH, contract=self.contract,
+            scenarios=tuple(sorted(self.contract.scenarios_for_profile("pr"))),
+        )
+
+    def copy_anchor(self, name: str) -> Path:
+        destination = Path(tempfile.mkdtemp(prefix=f"{name}-"))
+        self.addCleanup(shutil.rmtree, destination, True)
+        target = destination / "anchor"
+        shutil.copytree(self.anchor, target)
+        return target
+
+    def rewrite_manifest(self, root: Path, change) -> None:
+        manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+        change(manifest)
+        (root / "manifest.json").write_bytes(canonical_json(manifest))
+
+    def test_a_direct_kit_anchor_becomes_the_canonical_reference_frames(self) -> None:
+        self.assertIsNotNone(self.anchor)
+        frames = self.frames()
+        expected = {
+            step.capture.capture_id
+            for scenario in self.contract.scenarios_for_profile("pr")
+            for role in self.contract.scenario(scenario).roles
+            for step in role.steps
+            if step.capture is not None
+        }
+        self.assertEqual(expected, {frame.capture_id for frame in frames})
+        self.assertEqual({"fabric-1.20.1"}, {frame.artifact_node for frame in frames})
+        self.assertEqual({901}, {frame.source_artifact_id for frame in frames})
+        self.assertEqual(sorted(frame.label for frame in frames), [frame.label for frame in frames])
+        manifest = json.loads((self.anchor / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["provenance"]["tested"], manifest["provenance"]["handoff"])
+        self.assertEqual({record["source"]["pixel_sha256"] for record in manifest["frames"]},
+                         {frame.pixel_sha256 for frame in frames})
+
+    def test_an_anchor_whose_tested_run_is_not_its_handoff_run_is_refused(self) -> None:
+        root = self.copy_anchor("reused")
+
+        def reuse(manifest):
+            manifest["provenance"]["tested"] = {**manifest["provenance"]["tested"], "run_id": self.RUN_ID - 1}
+
+        self.rewrite_manifest(root, reuse)
+        # The kit accepts this shape (a reused tested run keeps an anchor eligible), so only the
+        # curator's own direct-run rule can refuse it.
+        self.assertEqual(self.RUN_ID - 1, _kit_validated(root, self.head["commit"])["provenance"]["tested"]["run_id"])
+        with self.assertRaisesRegex(CurationError, "not cut from a direct run"):
+            self.frames(root)
+
+    def test_an_anchor_of_another_run_head_or_subject_is_refused(self) -> None:
+        with self.assertRaisesRegex(CurationError, "does not belong to the authenticated reference run"):
+            self.frames(run=self.run_identity(run_id=self.RUN_ID + 1))
+        with self.assertRaisesRegex(CurationError, "does not belong to the authenticated reference run"):
+            self.frames(tested=self.identity_of_tested(tested_tree="6" * 40))
+        with self.assertRaisesRegex(CurationError, "lossless visual anchor is invalid"):
+            self.frames(tested=self.identity_of_tested(tested_commit="6" * 40))
+        with self.assertRaisesRegex(CurationError, "matrix/contract identity is stale"):
+            self.frames(run=self.run_identity(event="schedule"))
+
+    def test_a_changed_anchor_image_or_stale_contract_is_refused(self) -> None:
+        root = self.copy_anchor("image")
+        image = next((root / "images").iterdir())
+        image.write_bytes(image.read_bytes()[:-8] + bytes(8))
+        with self.assertRaisesRegex(CurationError, "lossless visual anchor is invalid"):
+            self.frames(root)
+        with self.assertRaisesRegex(CurationError, "matrix/contract identity is stale"):
+            anchor_reference_frames(
+                self.anchor, run=self.run_identity(), tested=self.identity_of_tested(), artifact_id=901,
+                matrix=self.matrix, matrix_path=REAL_MATRIX_PATH, contract=load_contract(CONTRACT_PATH),
+                scenarios=tuple(sorted(self.contract.scenarios_for_profile("pr"))),
+            )
+
+
+def _kit_validated(root: Path, commit: str) -> dict:
+    from mod_base.evidence.anchor import validate_anchor_dir
+
+    return validate_anchor_dir(root, key=branch_token("master"), expected_subject_commit=commit)
 
 
 if __name__ == "__main__":

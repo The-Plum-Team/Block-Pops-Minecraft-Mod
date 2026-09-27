@@ -19,6 +19,7 @@ from typing import Iterable
 POLICY_VERSION = 1
 ROOT_DOCUMENTS = frozenset(
     {
+        "AGENTS.md",
         "README.md",
         "CONTRIBUTING.md",
         "RELEASING.md",
@@ -26,19 +27,28 @@ ROOT_DOCUMENTS = frozenset(
         "VERSION-BRANCHES.md",
     }
 )
+# The Pages wake only dispatches the protected publisher after a successful packaged run; it
+# never builds, tests or launches Minecraft.
 EXACT_NON_RUNTIME_WORKFLOWS = frozenset(
     {
         ".github/workflows/handle-release-sync-result.yml",
+        ".github/workflows/notify-pages.yml",
         ".github/workflows/reconcile-release-sync.yml",
         ".github/workflows/sync-release-branches.yml",
     }
 )
+# Repository metadata that the mod-base template manages or seeds: none of it reaches a build,
+# a packaged JAR or a Minecraft runtime.
 EXACT_NON_RUNTIME_PATHS = frozenset(
     {
+        ".gitattributes",
+        ".github/dependabot.yml",
         ".github/pull_request_template.md",
         "scripts/release/version_branches.py",
     }
 )
+# Agent guidance, including the mod-base managed shared documents, is documentation of any type.
+NON_RUNTIME_PREFIXES = ("docs/ai/",)
 
 
 class ImpactError(ValueError):
@@ -80,6 +90,8 @@ def is_non_runtime_path(path: str) -> bool:
     if path in ROOT_DOCUMENTS or path in EXACT_NON_RUNTIME_PATHS:
         return True
     if path in EXACT_NON_RUNTIME_WORKFLOWS:
+        return True
+    if path.startswith(NON_RUNTIME_PREFIXES):
         return True
     if path.startswith("docs/"):
         return path.endswith(".md") or path.startswith("docs/assets/")

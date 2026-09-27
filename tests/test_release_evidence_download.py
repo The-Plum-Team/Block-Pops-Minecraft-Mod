@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.pages import download_artifact as pages
+from scripts.release import artifact_transport as transport
 from scripts.release import evidence_archive as evidence
 
 
@@ -33,7 +33,7 @@ class EvidenceDownloadTests(unittest.TestCase):
         class Opener:
             pass
         opener = Opener(); opener.open = self.open
-        with patch.object(pages.urllib.request, "build_opener", return_value=opener):
+        with patch.object(transport.urllib.request, "build_opener", return_value=opener):
             return evidence.download_evidence_archive(**{**self.arguments, **changes})
 
     def assert_clean(self):
@@ -84,13 +84,13 @@ class EvidenceDownloadTests(unittest.TestCase):
             self.download(expected_size=len(self.raw), expected_digest="sha256:" + hashlib.sha256(self.raw).hexdigest())
         self.assert_clean(); self.assertFalse((self.root.parent / "escape").exists())
 
-    def test_existing_pages_download_keeps_its_original_extractor_and_result(self):
+    def test_standalone_transport_download_keeps_its_original_extractor_and_result(self):
         class Opener:
             pass
         opener = Opener(); opener.open = self.open
-        with patch.object(pages.urllib.request, "build_opener", return_value=opener), \
-             patch.object(pages, "extract_archive", wraps=pages.extract_archive) as extract:
-            result = pages.download(repository="owner/repository", artifact_id=123,
+        with patch.object(transport.urllib.request, "build_opener", return_value=opener), \
+             patch.object(transport, "extract_archive", wraps=transport.extract_archive) as extract:
+            result = transport.download(repository="owner/repository", artifact_id=123,
                 digest=self.arguments["expected_digest"], output=self.output, token="fixture-token", api_url="https://api.github.com")
         self.assertEqual({"files": 1, "bytes": 2, "archive_bytes": len(self.raw)}, result)
         self.assertEqual(1, extract.call_count)

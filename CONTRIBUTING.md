@@ -33,6 +33,14 @@ production/harness build, and artifact staging commands in the README. Changes
 to the scenario contract must regenerate both harnesses and pass contract
 mutation tests.
 
+Tests that need the pinned mod-base kit resolve it only through
+`scripts/ci/mod_base_kit.py`: from the Build gate's staged `out/mod-base-kit`
+overlay, from `MOD_BASE_KIT_PATH`/`MOD_BASE_KIT_SHA`, or from a verified user
+cache outside the repository that the first run fetches anonymously. An
+unavailable kit fails the suite; it never skips. To iterate against a local kit
+clone, set `MOD_BASE_KIT_PATH=../mod-base MOD_BASE_ALLOW_UNPINNED=1` (refused
+whenever `CI` is set).
+
 Loader build scripts and `src/e2e` entrypoints are also bound by
 `e2e/loader-bootstrap-contract.json`. Do not update its hashes as a mechanical
 response to a failure: review the executable change and preserve the single
@@ -75,6 +83,17 @@ their protected App contexts remain mandatory.
 
 AI visual review and the public evidence gallery are advisory. Do not weaken a
 deterministic assertion or skip a lane to accommodate visual-review noise.
+The gallery is published by the pinned
+[mod-base](https://github.com/The-Plum-Team/mod-base) kit through
+`scripts/pages/mod_base_adapter.py` and `site/mod-base.json`
+([ADR 0001](docs/architecture/decisions/0001-adopt-mod-base-public-evidence.md)).
+Its managed files (`pages.yml`'s managed region, `scripts/ci/mod_base_kit.py`
+and `docs/ai/shared/*.md`) come only from the kit: never edit them by hand, and
+check them with `python3 scripts/ci/mod_base_kit.py run template check --repo .`.
+A kit bump is a controller upgrade made with
+`python3 scripts/ci/mod_base_kit.py bump --to vX.Y.Z` on a
+`controller-upgrade/mod-base-vX.Y.Z` branch; see
+[`docs/operations.md`](docs/operations.md#mod-base-kit-bumps).
 The protected review path uses the owner's Claude Code subscription token from
 the `visual-review` environment, like Quick Skin, and never an API key. Changes to captures,
 prompts, routing, retry limits, image bounds, or model-visible expectations

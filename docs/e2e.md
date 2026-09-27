@@ -68,9 +68,10 @@ display or the required JDK is unavailable.
 ## Visual comparison
 
 Protected `master` / `fabric-1.20.1` is the canonical baseline. Its current-head
-anchor retains the original lossless PNG bytes for 90 days with the producer
-run and attempt in both its immutable artifact name and manifest, plus exact
-commit/tree, matrix/contract, semantic frame, dimensions, file hash
+anchor, `mb-anchor--<branch-token>--<commit>--<run-id>--a<run-attempt>` from the
+pinned mod-base kit, retains the original lossless PNG bytes for 90 days with
+the producer run and attempt in both its immutable artifact name and manifest,
+plus exact commit/tree, matrix/contract, semantic frame, dimensions, file hash
 and pixel hash provenance. Current-head baseline evidence must have the same
 contract SHA and exactly one frame for every candidate `capture_id`. Pairing
 rejects missing, duplicate, stale, mixed, or incompatible evidence before any
@@ -95,3 +96,14 @@ fixed `visual-review` environment runs a hash-pinned Claude Code CLI with the
 owner's subscription token, like Quick Skin. This result remains advisory
 regardless of severity. See [the visual-review architecture](visual-review.md)
 for queue, cost, retention, token and recovery details.
+
+## Public gallery
+
+After a successful scheduled or dispatched run on `master`, the `public-evidence`
+job revalidates the exact aggregate and hands it to the pinned mod-base kit as
+`mb-handoff--<branch-token>--a<run-attempt>`; `notify-pages.yml` then wakes the
+`Project site` workflow, which publishes the gallery under `/e2e/`. Every
+published frame keeps its passed assertion message, source and derivative pixel
+metrics, lane, production JAR digest and run provenance. The gallery is
+advisory; see [the public-evidence notes](../scripts/pages/README.md) and
+[ADR 0001](architecture/decisions/0001-adopt-mod-base-public-evidence.md).

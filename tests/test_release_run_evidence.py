@@ -13,7 +13,7 @@ from pathlib import Path
 from scripts.ci.e2e_job_graph import expected_jobs
 from scripts.ci import e2e_job_graph
 from scripts.ci.tests.matrix_fixtures import TARGET_COUNT, schema2_configuration
-from scripts.pages.select_artifact import Artifact, SelectionError
+from scripts.release.github_api import Artifact, SelectionError
 from scripts.release.run_evidence import read_current_evidence
 from tests.test_release_run_selection import Api, CONTROLLER, REPOSITORY, TREE, run
 

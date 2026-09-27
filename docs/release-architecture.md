@@ -24,7 +24,10 @@
    failure marker leaves it; CLI output and the token do not.
 6. Dedicated writer jobs publish statuses, merge an exact head, delete an exact
    single-use artifact ID, or deploy an already-built Pages artifact. They do
-   not execute candidate code.
+   not execute candidate code. Pages runs the pinned mod-base kit
+   ([ADR 0001](architecture/decisions/0001-adopt-mod-base-public-evidence.md)):
+   only the caller-owned `deploy` job holds `pages: write`/`id-token: write`,
+   and the kit runs only at the commit that protected `master` pins.
 
 ## Branch lifecycle
 
@@ -111,7 +114,7 @@ probe, and full inventory validation. An extra file is evidence corruption, not
 harmless diagnostics.
 
 The canonical `master` / `fabric-1.20.1` baseline is a separate 90-day
-lossless anchor, not the lossy public gallery cache. Its original PNG bytes are
+lossless anchor (`mb-anchor--`), not the lossy public gallery cache. Its original PNG bytes are
 content-addressed and bound to the exact current branch head/tree, with the
 packaged producer run/attempt in both its artifact name and manifest, plus the
 matrix and contract. Candidate evidence is paired 1:1 by semantic

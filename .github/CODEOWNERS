@@ -1,4 +1,4 @@
-# Release control-plane and evidence boundaries require explicit owner review.
+# Release control-plane, evidence and agent-guidance boundaries require explicit owner review.
 /.github/ @AkaNebur
 /build.gradle @AkaNebur
 /settings.gradle @AkaNebur
@@ -28,3 +28,5 @@
 /scripts/visual/ @AkaNebur
 /site/ @AkaNebur
 /tests/ @AkaNebur
+/AGENTS.md @AkaNebur
+/docs/ai/ @AkaNebur

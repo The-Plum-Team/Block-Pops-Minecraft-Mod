@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+import json
+import os
 import re
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
+
+from scripts.ci import mod_base_boundary, mod_base_kit
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -12,6 +21,19 @@ CREDENTIAL_SCRUB = (
     "unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL "
     "GITHUB_TOKEN GH_TOKEN"
 )
+SCRUBBED_CREDENTIALS = frozenset(CREDENTIAL_SCRUB.split()[1:])
+PREPARE_EVIDENCE = "The-Plum-Team/mod-base/actions/prepare-evidence@"
+KIT_PIN_LINE = re.compile(
+    r"^\s*(?:-\s+)?uses: The-Plum-Team/mod-base/(\S+)@([0-9a-f]{40}) # (v\d+\.\d+\.\d+)$"
+)
+VERIFY_STEP = "Verify the candidate's mod-base pin (controller-side)"
+SETUP_STEP = "Verify the controller-pinned mod-base kit"
+STAGE_STEP = "Stage the controller-verified kit for the candidate sandbox"
+PREPARE_STEP = "Prepare the isolated candidate filesystem and OS identity"
+SANDBOX_STEP = "Validate and build entirely inside the credentialless account"
+IMPORT_ROOT_STEP = "Refuse importable entries at the candidate root (controller-side)"
+COMPOSITE_STEP = "Check the staged kit's evidence composite (controller-side)"
+KIT_OVERLAY = '--overlay "$RUNNER_TEMP/mod-base-kit" out/mod-base-kit'
 RUNNER_COMMAND = re.compile(
     r'(?m)^[ \t]*python3[ \t]+(?:controller/scripts/ci/untrusted_runner\.py|'
     r'"\$CONTROLLER_ROOT/scripts/ci/untrusted_runner\.py")[ \t]+'
@@ -31,6 +53,186 @@ def _has_credentialless_candidate_boundary(text: str, position: int) -> bool:
     if re.search(r"(?m)^\s+- name:", invocation):
         return False
     return re.search(r"(?m)(?:^|[ \t])--(?:[ \t]*\\)?[ \t]*$", invocation) is not None
+
+
+def _kit_root() -> Path:
+    """The verified pinned kit root, found only through the managed bootstrap.
+
+    Protected controller Python never imports the candidate-owned ``tests`` package; an unavailable
+    kit raises here and fails the test, never skips it.
+    """
+
+    return Path(mod_base_kit.kit_path(REPO))
+
+
+def _enclosing_step(text: str, position: int) -> str:
+    """The complete ``- name:`` step of a workflow or action that contains ``position``."""
+
+    starts = list(re.finditer(r"(?m)^( *)- name: ", text[:position]))
+    if not starts:
+        raise AssertionError("the position lies outside every step")
+    start = starts[-1]
+    indent = len(start.group(1))
+    lines = text[start.start() :].splitlines(keepends=True)
+    step = [lines[0]]
+    for line in lines[1:]:
+        stripped = line.lstrip(" ")
+        depth = len(line) - len(stripped)
+        if stripped.strip() and (depth < indent or (depth == indent and stripped.startswith("- "))):
+            break
+        step.append(line)
+    return "".join(step)
+
+
+def _composite_step_is_credentialless(text: str, position: int) -> bool:
+    """Whether the step using the kit composite at ``position`` hands it no credential.
+
+    The composite scrubs every credential before it runs Python; the calling step must not pass one
+    in through ``env:`` or ``with:``. Its only token is the one it takes for its own tree check.
+    """
+
+    step = _enclosing_step(text, position)
+    indent = len(step) - len(step.lstrip(" "))
+    if KIT_PIN_LINE.match(step[step.index("\n") + 1 :].split("\n", 1)[0]) is None:
+        return False
+    keys = re.findall(rf"(?m)^ {{{indent + 2}}}([A-Za-z_-]+):", step)
+    if "env" in keys:
+        return False
+    return not re.search(r"GH_TOKEN|GITHUB_TOKEN|github\.token|secrets\.", step)
+
+
+def _unset_names(script: str) -> tuple[int, frozenset[str]]:
+    """The position and names of the first ``unset`` command of a shell script."""
+
+    match = re.search(r"(?m)^[ \t]*unset ([A-Z_ ]+)$", script)
+    if match is None:
+        return len(script), frozenset()
+    return match.start(), frozenset(match.group(1).split())
+
+
+def _build_job() -> str:
+    text = (WORKFLOWS / "build-gate.yml").read_text("utf-8")
+    return text.split("\n  build:\n", 1)[1].split("\n  required:\n", 1)[0]
+
+
+def _identity_job() -> str:
+    text = (WORKFLOWS / "build-gate.yml").read_text("utf-8")
+    return text.split("\n  identity:\n", 1)[1].split("\n  build:\n", 1)[0]
+
+
+def _step(job: str, name: str) -> str:
+    marker = f"      - name: {name}\n"
+    if job.count(marker) != 1:
+        raise AssertionError(f"expected exactly one step {name!r}")
+    return job.split(marker, 1)[1].split("\n      - name: ", 1)[0]
+
+
+def _run_block(step: str) -> str:
+    """The shell text of a step's ``run: |`` block, without its YAML indentation."""
+
+    lines = []
+    for line in step.split("        run: |\n", 1)[1].splitlines():
+        if line and not line.startswith("          "):
+            break
+        lines.append(line[10:])
+    return "\n".join(lines).rstrip("\n") + "\n"
+
+
+def _sandbox_script(step: str) -> str:
+    """The candidate-side script that the sandbox step passes to ``bash -c``."""
+
+    match = re.search(r"bash -euo pipefail -c '\n(.*?)\n            ' _", step, re.S)
+    if match is None:
+        raise AssertionError("the sandbox step has no bash -c script")
+    return match.group(1)
+
+
+def _hermetic_environment() -> dict[str, str]:
+    """The test process environment without startup files or an inherited bytecode setting.
+
+    ``BASH_ENV``/``ENV`` could define shell functions that shadow the PATH stubs (a developer's
+    ``gh`` wrapper, for example), and the steps under test must set the bytecode policy themselves.
+    """
+
+    dropped = {"BASH_ENV", "ENV", "PYTHONDONTWRITEBYTECODE"}
+    return {name: value for name, value in os.environ.items() if name not in dropped}
+
+
+# Records its argv and bytecode/credential environment, then writes a staged-kit tree whose
+# entries the scenario makes irregular, as the real bootstrap would under the step's umask.
+FAKE_STAGE = """import json, os, sys
+from pathlib import Path
+arguments = sys.argv[1:]
+with open(os.environ["COMMAND_LOG"], "w", encoding="utf-8") as stream:
+    json.dump({"argv": arguments, "bytecode": os.environ.get("PYTHONDONTWRITEBYTECODE"),
+               "credentials": sorted(name for name in ("ACTIONS_RUNTIME_TOKEN", "ACTIONS_CACHE_URL",
+                                                       "ACTIONS_RESULTS_URL", "GH_TOKEN",
+                                                       "GITHUB_TOKEN") if name in os.environ)},
+              stream)
+scenario = os.environ["STAGE_SCENARIO"]
+if scenario == "unavailable":
+    sys.exit(2)
+if scenario == "missing":
+    sys.exit(0)
+output = Path(arguments[arguments.index("--output") + 1])
+package = output / "src" / "mod_base"
+package.mkdir(parents=True)
+(package / "__init__.py").write_text("")
+(output / "tools").mkdir()
+(output / "tools" / "kit_digest.sh").write_text("#!/bin/sh\\n")
+(output / "MOD_BASE_KIT.json").write_text("{}\\n")
+if scenario == "executable":
+    os.chmod(output / "tools" / "kit_digest.sh", 0o755)
+elif scenario == "group-writable":
+    os.chmod(package / "__init__.py", 0o664)
+elif scenario == "open-directory":
+    os.chmod(output / "tools", 0o775)
+elif scenario == "bytecode-directory":
+    (package / "__pycache__").mkdir()
+elif scenario == "bytecode-file":
+    (package / "__init__.cpython-313.pyc").write_bytes(b"")
+elif scenario == "symlink":
+    (output / "site").symlink_to(package)
+elif scenario != "plain":
+    raise SystemExit("unknown scenario")
+"""
+
+# Records the argv and credential/bytecode environment of the controller-side pin verification.
+FAKE_VERIFY = """import json, os, sys
+with open(os.environ["COMMAND_LOG"], "w", encoding="utf-8") as stream:
+    json.dump({"argv": sys.argv[1:], "bytecode": os.environ.get("PYTHONDONTWRITEBYTECODE"),
+               "credentials": sorted(name for name in ("ACTIONS_RUNTIME_TOKEN", "ACTIONS_CACHE_URL",
+                                                       "ACTIONS_RESULTS_URL", "GH_TOKEN",
+                                                       "GITHUB_TOKEN") if name in os.environ)},
+              stream)
+sys.exit(int(os.environ.get("VERIFY_EXIT", "0")))
+"""
+
+# Logs every sandbox Python/Gradle process with the bytecode setting it inherited.
+FAKE_SANDBOX_TOOL = """import json, os, sys
+with open(os.environ["COMMAND_LOG"], "a", encoding="utf-8") as stream:
+    stream.write(json.dumps([os.path.basename(sys.argv[0]), os.environ.get("PYTHONDONTWRITEBYTECODE"),
+                             *sys.argv[1:]]) + "\\n")
+if sys.argv[1:2] == ["scripts/ci/matrix_scope.py"]:
+    print(os.environ["MATRIX_SCOPE"])
+"""
+
+# A stub gh for the notifier's inline run authentication: it serves one run record and the
+# run's artifact listing as consecutive pages, the way ``gh api --paginate`` prints them.
+FAKE_GH = """import json, os, sys
+arguments = sys.argv[1:]
+repository = os.environ["GITHUB_REPOSITORY"]
+run = f"repos/{repository}/actions/runs/{os.environ['RUN_ID']}"
+if arguments == ["api", f"repos/{repository}", "--jq", ".default_branch"]:
+    print("master")
+elif arguments == ["api", run]:
+    print(os.environ["RUN_RECORD"])
+elif arguments == ["api", "--paginate", f"{run}/artifacts?per_page=100"]:
+    for page in json.loads(os.environ["ARTIFACT_PAGES"]):
+        print(json.dumps(page))
+else:
+    sys.exit(f"unexpected gh call {arguments}")
+"""
 
 
 class WorkflowSecurityTests(unittest.TestCase):
@@ -87,8 +289,6 @@ class WorkflowSecurityTests(unittest.TestCase):
                 "./gradlew",
                 "scripts/release/verify_release.py",
                 "scripts/ci/e2e_fanin.py",
-                "scripts/pages/evidence.py",
-                "scripts/pages/visual_anchor.py",
             ),
             REPO / ".github/actions/run-packaged-e2e/action.yml": (
                 "python3 -m pip install",
@@ -107,6 +307,75 @@ class WorkflowSecurityTests(unittest.TestCase):
                             _has_credentialless_candidate_boundary(text, position),
                             f"{path.name}: {marker} lacks an associated credentialless boundary",
                         )
+        # Public evidence is now curated by the pinned kit composite, which scrubs every credential
+        # itself; the calling step must not hand it one.
+        e2e = (WORKFLOWS / "on-demand-e2e.yml").read_text("utf-8")
+        positions = [match.start() for match in re.finditer(re.escape(PREPARE_EVIDENCE), e2e)]
+        self.assertEqual(1, len(positions))
+        self.assertTrue(_composite_step_is_credentialless(e2e, positions[0]))
+
+    def test_every_mod_base_use_is_the_single_released_pin(self) -> None:
+        pin = mod_base_kit.parse_pin(REPO)
+        files = [*sorted(WORKFLOWS.glob("*.yml")), *sorted((REPO / ".github" / "actions").rglob("action.yml"))]
+        pins = set()
+        for path in files:
+            for number, line in enumerate(path.read_text("utf-8").splitlines(), start=1):
+                if "uses:" not in line or "the-plum-team/mod-base" not in line.lower():
+                    continue
+                with self.subTest(path=path.name, line=number):
+                    match = KIT_PIN_LINE.match(line)
+                    self.assertIsNotNone(match, line)
+                    pins.add((match.group(2), match.group(3)))
+        self.assertEqual({(pin.sha, pin.version)}, pins)
+
+    def test_composite_credential_boundary_rejects_a_handed_in_token(self) -> None:
+        pin = f"{PREPARE_EVIDENCE}{'a' * 40} # v1.2.3"
+        clean = f"""    steps:
+      - name: Prepare
+        uses: {pin}
+        with:
+          key: abc
+      - name: Next
+        run: echo
+"""
+        self.assertTrue(_composite_step_is_credentialless(clean, clean.index(PREPARE_EVIDENCE)))
+        for injected in (
+            "        env:\n          GH_TOKEN: ${{ github.token }}\n",
+            "          token: ${{ github.token }}\n",
+            "          token: ${{ secrets.PAT }}\n",
+            "          github-token: $GITHUB_TOKEN\n",
+        ):
+            with self.subTest(injected=injected):
+                unsafe = clean.replace("          key: abc\n", "          key: abc\n" + injected)
+                self.assertFalse(
+                    _composite_step_is_credentialless(unsafe, unsafe.index(PREPARE_EVIDENCE))
+                )
+        tagged = clean.replace(f"{'a' * 40} # v1.2.3", "main")
+        self.assertFalse(_composite_step_is_credentialless(tagged, tagged.index(PREPARE_EVIDENCE)))
+
+    def test_pinned_prepare_evidence_composite_scrubs_credentials_before_python(self) -> None:
+        """The pinned ``prepare-evidence`` composite scrubs every credential before Python.
+
+        This runs against whichever kit root the bootstrap resolves, and none lacks the composites:
+        the Build gate's staged overlay ``out/mod-base-kit`` (a controller bootstrap from mod-base
+        v0.9.2 stages ``actions/`` bound by its lock, and the Build gate refuses an overlay without
+        it), ``MOD_BASE_KIT_PATH``, or the verified user cache that the anonymous fetch fills. The
+        adoption's own pull request runs under the previous ``build-gate.yml``, which stages no kit,
+        so its tests take the fetch. The Build gate runs the same check controller-side on the staged
+        bytes before the sandbox starts (``test_build_checks_the_staged_kit_composite_after_staging``).
+        """
+
+        root = _kit_root()
+        # Every released kit root binds its actions/ by the lock inside its digested src/ (the
+        # overlay resolution has just checked it; a clean checkout of the pin holds it too).
+        lock = root.joinpath(*mod_base_kit.ACTIONS_LOCK.split("/"))
+        self.assertTrue(lock.is_file() and not lock.is_symlink(), lock)
+        self.assertEqual(lock.read_bytes(), mod_base_kit.actions_listing(root))
+        action = mod_base_boundary.read_composite(root)
+        self.assertEqual([], mod_base_boundary.composite_problems(action))
+        # The check is not vacuous on the pinned text: it sees the tree check and the kit steps.
+        self.assertIn(mod_base_boundary.TREE_CHECK, action)
+        self.assertGreaterEqual(action.count("-m mod_base"), mod_base_boundary.MIN_PYTHON_STEPS - 1)
 
     def test_direct_host_candidate_marker_without_a_scrub_is_rejected(self) -> None:
         workflow = """jobs:
@@ -390,6 +659,249 @@ class WorkflowSecurityTests(unittest.TestCase):
         self.assertRegex(action, r'untrusted_runner\.py" validate\b')
         self.assertIn("steps.validate-runtime.outcome == 'success'", action)
 
+    def test_identity_verifies_the_candidate_pin_with_protected_controller_code(self) -> None:
+        identity = _identity_job()
+        order = [
+            identity.index(f"      - name: {name}\n")
+            for name in (
+                "Check out the authenticated merge only as candidate data",
+                "Require an authenticated eligible source",
+                VERIFY_STEP,
+                "Resolve matrix-owned Java toolchains",
+            )
+        ]
+        self.assertEqual(sorted(order), order)
+        step = _step(identity, VERIFY_STEP)
+        self.assertNotIn("        if:", step)
+        self.assertIn("        env:\n          GH_TOKEN: ${{ github.token }}\n        run: |\n", step)
+        script = _run_block(step)
+        self.assertNotIn("${{", script)
+        self.assertIn(
+            "PYTHONDONTWRITEBYTECODE=1 python3 -P controller/scripts/ci/mod_base_kit.py \\\n"
+            "  verify --network --repo candidate\n",
+            script,
+        )
+        self.assertEqual(1, len(re.findall(r"python3\b", script)))
+        position, names = _unset_names(script)
+        self.assertLess(position, script.index("python3"))
+        self.assertEqual(SCRUBBED_CREDENTIALS - {"GH_TOKEN"}, names)
+        # No other identity step receives a token for the kit, and the build job never verifies
+        # the candidate's pin with candidate code.
+        self.assertEqual(1, identity.count("mod_base_kit.py"))
+        self.assertNotIn("candidate/scripts/ci/mod_base_kit.py", _build_job())
+
+    def run_verify_step(self, **env: str) -> tuple[subprocess.CompletedProcess[str], dict]:
+        return self.run_controller_step(_identity_job(), VERIFY_STEP, **env)
+
+    def run_controller_step(
+        self, job: str, name: str, **env: str
+    ) -> tuple[subprocess.CompletedProcess[str], dict]:
+        """Run one controller step's shell with a recording ``python3`` and every credential set."""
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            tools = root / "bin"
+            tools.mkdir()
+            fake = tools / "python3"
+            fake.write_text(f"#!{sys.executable}\n{FAKE_VERIFY}", encoding="utf-8")
+            fake.chmod(0o755)
+            log = root / "verify.json"
+            environment = _hermetic_environment()
+            environment.update(
+                {
+                    "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}",
+                    "COMMAND_LOG": str(log),
+                    "ACTIONS_RUNTIME_TOKEN": "runtime-secret",
+                    "ACTIONS_CACHE_URL": "cache-url",
+                    "ACTIONS_RESULTS_URL": "results-url",
+                    "GITHUB_TOKEN": "github-secret",
+                    "GH_TOKEN": "read-only-token",
+                    **env,
+                }
+            )
+            result = subprocess.run(
+                ["bash", "-euo", "pipefail", "-c", _run_block(_step(job, name))],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            return result, json.loads(log.read_text("utf-8"))
+
+    def test_identity_pin_verification_is_read_only_and_fails_closed(self) -> None:
+        result, record = self.run_verify_step()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            ["-P", "controller/scripts/ci/mod_base_kit.py", "verify", "--network", "--repo", "candidate"],
+            record["argv"],
+        )
+        self.assertEqual("1", record["bytecode"])
+        self.assertEqual(["GH_TOKEN"], record["credentials"])
+        result, _record = self.run_verify_step(VERIFY_EXIT="2")
+        self.assertEqual(2, result.returncode)
+
+    def assert_credentialless_controller_check(
+        self, job: str, name: str, command: str, argv: list[str] | None = None, **env: str
+    ) -> None:
+        """Check one credential-free boundary step; ``argv`` is ``command`` as the shell expands it."""
+
+        step = _step(job, name)
+        self.assertNotIn("        if:", step)
+        self.assertNotIn("        env:", step)
+        self.assertIn("        shell: bash\n        run: |\n", step)
+        script = _run_block(step)
+        self.assertNotIn("${{", script)
+        self.assertIn(
+            "PYTHONDONTWRITEBYTECODE=1 python3 -P controller/scripts/ci/mod_base_boundary.py \\\n"
+            f"  {command}\n",
+            script,
+        )
+        self.assertEqual(1, len(re.findall(r"python3\b", script)))
+        position, names = _unset_names(script)
+        self.assertLess(position, script.index("python3"))
+        self.assertEqual(SCRUBBED_CREDENTIALS, names)
+        result, record = self.run_controller_step(job, name, **env)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            ["-P", "controller/scripts/ci/mod_base_boundary.py", *(argv or command.split())], record["argv"]
+        )
+        self.assertEqual("1", record["bytecode"])
+        self.assertEqual([], record["credentials"])
+        for status in ("1", "2"):
+            with self.subTest(name=name, status=status):
+                result, _record = self.run_controller_step(job, name, VERIFY_EXIT=status, **env)
+                self.assertEqual(int(status), result.returncode)
+
+    def test_identity_refuses_importable_candidate_root_entries_controller_side(self) -> None:
+        identity = _identity_job()
+        order = [
+            identity.index(f"      - name: {name}\n")
+            for name in (VERIFY_STEP, IMPORT_ROOT_STEP, "Resolve matrix-owned Java toolchains")
+        ]
+        self.assertEqual(sorted(order), order)
+        self.assert_credentialless_controller_check(
+            identity, IMPORT_ROOT_STEP, "import-root --repo candidate"
+        )
+        self.assertEqual(1, identity.count("mod_base_boundary.py"))
+        self.assertNotIn("candidate/scripts/ci/mod_base_boundary.py", _build_job())
+
+    def test_build_checks_the_staged_kit_composite_after_staging(self) -> None:
+        build = _build_job()
+        order = [
+            build.index(f"      - name: {name}\n")
+            for name in (SETUP_STEP, STAGE_STEP, COMPOSITE_STEP, PREPARE_STEP, SANDBOX_STEP)
+        ]
+        self.assertEqual(sorted(order), order)
+        # The check reads the stage output, the exact bytes prepare then copies into the sandbox,
+        # and never re-resolves or fetches a kit of its own.
+        runner_temp = "/runner/temp"
+        self.assert_credentialless_controller_check(
+            build,
+            COMPOSITE_STEP,
+            'composite --kit "$RUNNER_TEMP/mod-base-kit" --candidate-repo candidate',
+            ["composite", "--kit", f"{runner_temp}/mod-base-kit", "--candidate-repo", "candidate"],
+            RUNNER_TEMP=runner_temp,
+        )
+        self.assertEqual(1, build.count("mod_base_boundary.py"))
+        self.assertNotIn("--controller-repo", _step(build, COMPOSITE_STEP))
+
+    def test_build_stages_the_controller_verified_kit_before_the_sandbox(self) -> None:
+        build = _build_job()
+        order = [
+            build.index(f"      - name: {name}\n")
+            for name in ("Install Python", SETUP_STEP, STAGE_STEP, PREPARE_STEP, SANDBOX_STEP)
+        ]
+        self.assertEqual(sorted(order), order)
+        pin = mod_base_kit.parse_pin(REPO)
+        setup = _step(build, SETUP_STEP)
+        self.assertEqual(
+            f"        uses: The-Plum-Team/mod-base/actions/setup@{pin.sha} # {pin.version}\n"
+            "        with:\n"
+            "          mod-root: controller\n"
+            '          install-imaging: "false"\n',
+            setup.rstrip("\n") + "\n",
+        )
+        stage_step = _step(build, STAGE_STEP)
+        stage = _run_block(stage_step)
+        # Protected controller code only; the read-only token raises the API rate limit of the
+        # release checks of a changed pin, and every other credential is gone before Python.
+        self.assertIn("        env:\n          GH_TOKEN: ${{ github.token }}\n        run: |\n", stage_step)
+        self.assertNotIn("${{", stage)
+        position, names = _unset_names(stage)
+        self.assertEqual(SCRUBBED_CREDENTIALS - {"GH_TOKEN"}, names)
+        self.assertLess(position, stage.index("python3"))
+        self.assertEqual(
+            ["python3 -P controller/scripts/ci/mod_base_kit.py stage \\"],
+            re.findall(r"python3\b[^\n]*", stage),
+        )
+        self.assertIn(
+            "--controller-repo controller --candidate-repo candidate \\\n"
+            '  --output "$RUNNER_TEMP/mod-base-kit"',
+            stage,
+        )
+        self.assertIn("umask 022\n", stage)
+        self.assertLess(stage.index("umask 022\n"), stage.index("python3"))
+        self.assertIn("PYTHONDONTWRITEBYTECODE=1 python3 -P", stage)
+        prepare = _step(build, PREPARE_STEP)
+        self.assertEqual(1, prepare.count(KIT_OVERLAY))
+        self.assertLess(
+            prepare.index('--controller-source "$GITHUB_WORKSPACE/controller"'),
+            prepare.index(KIT_OVERLAY),
+        )
+        # Only the stage writes the overlay source, only prepare copies it into the sandbox, and
+        # between them only the protected composite check reads it.
+        for name in re.findall(r"(?m)^      - name: (.+)$", build):
+            if name not in {STAGE_STEP, PREPARE_STEP, COMPOSITE_STEP}:
+                with self.subTest(step=name):
+                    self.assertNotIn("$RUNNER_TEMP/mod-base-kit", _step(build, name))
+        self.assertEqual(
+            ['--kit "$RUNNER_TEMP/mod-base-kit"'],
+            re.findall(r'\S*\s*"\$RUNNER_TEMP/mod-base-kit"', _step(build, COMPOSITE_STEP)),
+        )
+
+    def test_candidate_kit_imports_run_without_bytecode(self) -> None:
+        script = _sandbox_script(_step(_build_job(), SANDBOX_STEP))
+        export = script.index("export PYTHONDONTWRITEBYTECODE=1\n")
+        self.assertLess(export, script.index("python3"))
+        self.assertLess(export, script.index("scripts/ci/parallel_unittest.py"))
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            log = root / "commands.jsonl"
+            for name in ("python3", "gradlew"):
+                tool = root / name
+                tool.write_text(f"#!{sys.executable}\n{FAKE_SANDBOX_TOOL}", encoding="utf-8")
+                tool.chmod(0o755)
+            for scope in ("unscoped", "legacy"):
+                with self.subTest(scope=scope):
+                    environment = _hermetic_environment()
+                    environment.update(
+                        {
+                            "PATH": f"{root}{os.pathsep}{os.environ['PATH']}",
+                            "COMMAND_LOG": str(log),
+                            "MATRIX_SCOPE": scope,
+                            "JAVA_HOME": str(root),
+                            "GRADLE_USER_HOME": str(root),
+                            "BLOCKPOPS_TESTED_SHA": "a" * 40,
+                        }
+                    )
+                    result = subprocess.run(
+                        ["bash", "-euo", "pipefail", "-c", script, "_", str(root)],
+                        cwd=root,
+                        env=environment,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    rows = [json.loads(row) for row in log.read_text("utf-8").splitlines()]
+                    log.unlink()
+                    self.assertIn(
+                        ["python3", "1", "scripts/ci/parallel_unittest.py"],
+                        [row[:3] for row in rows],
+                    )
+                    self.assertEqual([], [row for row in rows if row[1] != "1"])
+
     def test_release_attestation_runs_from_default_and_reauthenticates_controller_attempt(self) -> None:
         attestation = (WORKFLOWS / "verify-gate-attestation.yml").read_text("utf-8")
         handler = (WORKFLOWS / "handle-release-sync-result.yml").read_text("utf-8")
@@ -411,10 +923,177 @@ class WorkflowSecurityTests(unittest.TestCase):
         self.assertNotIn("contents: write", workflow)
         self.assertNotIn("actions: write", workflow)
         self.assertNotIn("pull-requests: write", workflow)
-        self.assertIn("workflow_run:", (WORKFLOWS / "pages.yml").read_text("utf-8"))
+        # Pages is woken only by workflow_dispatch; workflow_run is a signal in notify-pages.yml.
+        self.assertNotIn("workflow_run:", (WORKFLOWS / "pages.yml").read_text("utf-8"))
+        self.assertIn("workflow_run:", (WORKFLOWS / "notify-pages.yml").read_text("utf-8"))
         self.assertIn(
             "workflow_run:", (WORKFLOWS / "visual-review.yml").read_text("utf-8")
         )
+
+    def test_pages_notifier_is_a_checkout_free_actions_write_signal(self) -> None:
+        text = (WORKFLOWS / "notify-pages.yml").read_text("utf-8")
+        head, jobs = text.split("\njobs:\n", 1)
+        self.assertEqual(
+            "  workflow_run:\n    workflows: [Packaged E2E]\n    types: [completed]\n",
+            head.split("\non:\n", 1)[1].split("permissions:", 1)[0],
+        )
+        self.assertIn("\npermissions: {}", head)
+        # One job, which only dispatches: no checkout, no candidate code, no other write.
+        self.assertEqual(["notify"], re.findall(r"(?m)^  ([a-z0-9-]+):$", jobs))
+        self.assertIn("    permissions:\n      actions: write\n    steps:\n", jobs)
+        self.assertEqual(1, len(re.findall(r":\s*write\b", jobs)))
+        self.assertNotIn("actions/checkout@", text)
+        self.assertNotIn("pull_request", text)
+        self.assertNotIn("secrets.", text)
+        self.assertIn("github.event.workflow_run.conclusion == 'success'", jobs)
+        self.assertIn(
+            "(github.event.workflow_run.event == 'schedule' || "
+            "github.event.workflow_run.event == 'workflow_dispatch')",
+            jobs,
+        )
+        # Event data reaches shell only through env; nothing interpolates it into run: text.
+        for script in re.findall(r"(?ms)^        run: \|\n(.*?)(?=^      - |\Z)", jobs):
+            self.assertNotIn("${{", script)
+        uses = [line.strip() for line in jobs.splitlines() if line.strip().startswith("uses:")]
+        pin = mod_base_kit.parse_pin(REPO)
+        self.assertEqual(
+            [f"uses: The-Plum-Team/mod-base/actions/notify-pages@{pin.sha} # {pin.version}"], uses
+        )
+        wake = jobs.split("      - name: Dispatch the separately locked Pages publication\n", 1)[1]
+        # Only an authenticated wake (the step printed sha=) reaches the dispatch.
+        self.assertEqual(
+            "        if: steps.source.outputs.sha != ''\n"
+            f"        uses: The-Plum-Team/mod-base/actions/notify-pages@{pin.sha} # {pin.version}\n"
+            "        with:\n          operation: deploy\n"
+            "          run-id: ${{ github.event.workflow_run.id }}\n"
+            "          sha: ${{ steps.source.outputs.sha }}\n",
+            wake,
+        )
+
+    def run_notifier_authentication(
+        self, run_id: str = "42", artifact_pages=None, **record_overrides
+    ) -> subprocess.CompletedProcess[str]:
+        text = (WORKFLOWS / "notify-pages.yml").read_text("utf-8")
+        step = text.split("      - name: Authenticate the completed packaged run\n", 1)[1]
+        script = _run_block(step.split("\n      - name: ", 1)[0])
+        run = {
+            "id": 42,
+            "status": "completed",
+            "conclusion": "success",
+            "path": ".github/workflows/on-demand-e2e.yml",
+            "event": "schedule",
+            "head_branch": "master",
+            "head_repository": {"full_name": "owner/repo"},
+            "head_sha": "a" * 40,
+            "run_attempt": 1,
+        }
+        run.update(record_overrides)
+        if artifact_pages is None:
+            artifact_pages = [
+                {"artifacts": [{"name": "mb-cache-unrelated", "expired": False}]},
+                {"artifacts": [{"name": f"mb-handoff--{'b' * 24}--a1", "expired": False}]},
+            ]
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            gh = root / "gh"
+            gh.write_text(f"#!{sys.executable}\n{FAKE_GH}", encoding="utf-8")
+            gh.chmod(0o755)
+            output = root / "output"
+            environment = {
+                **_hermetic_environment(),
+                "PATH": f"{root}{os.pathsep}{os.environ['PATH']}",
+                "GITHUB_REPOSITORY": "owner/repo",
+                "GITHUB_OUTPUT": str(output),
+                "RUN_ID": run_id,
+                "RUN_RECORD": json.dumps(run),
+                "ARTIFACT_PAGES": json.dumps(artifact_pages),
+            }
+            result = subprocess.run(
+                ["bash", "-euo", "pipefail", "-c", script],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            result.log = result.stdout
+            result.stdout = output.read_text("utf-8") if output.exists() else ""
+        return result
+
+    @unittest.skipUnless(shutil.which("jq"), "the notifier's inline authentication needs jq")
+    def test_pages_notifier_wakes_only_for_an_exact_successful_default_branch_run(self) -> None:
+        for event in ("schedule", "workflow_dispatch"):
+            with self.subTest(event=event):
+                result = self.run_notifier_authentication(event=event)
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(f"sha={'a' * 40}\n", result.stdout)
+        rejected = (
+            {"status": None},
+            {"status": 1},
+            {"conclusion": 0},
+            {"conclusion": ["success"]},
+            {"event": "pull_request_target"},
+            {"path": ".github/workflows/build-gate.yml"},
+            {"head_branch": None},
+            {"head_repository": {"full_name": "attacker/repo"}},
+            {"head_sha": "A" * 40},
+            {"id": 43},
+            {"run_attempt": 0},
+            {"run_attempt": "1"},
+            {"run_id": "42 --jq ."},
+            {"run_id": "042"},
+        )
+        for overrides in rejected:
+            with self.subTest(overrides=overrides):
+                result = self.run_notifier_authentication(**overrides)
+                self.assertNotEqual(0, result.returncode)
+                self.assertEqual("", result.stdout)
+        # The latest attempt's handoff is what the publisher admits, across paginated listings.
+        result = self.run_notifier_authentication(
+            run_attempt=2,
+            artifact_pages=[
+                {"artifacts": [{"name": f"mb-handoff--{'b' * 24}--a1", "expired": False}]},
+                {"artifacts": [{"name": f"mb-handoff--{'b' * 24}--a2", "expired": False}]},
+            ],
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(f"sha={'a' * 40}\n", result.stdout)
+
+    @unittest.skipUnless(shutil.which("jq"), "the notifier's inline authentication needs jq")
+    def test_pages_notifier_leaves_the_site_alone_for_a_run_that_is_not_a_wake(self) -> None:
+        # The retired workflow_run publisher answered these runs with "leaving the previous site
+        # unchanged" and success; the notifier keeps that instead of a red publication run.
+        handoff = f"mb-handoff--{'b' * 24}--a1"
+        quiet = (
+            ({"head_branch": "1.21.1-neoforge-fabric"}, None, "is not on master"),
+            # A re-run started before this signal executed: the record now describes that attempt.
+            ({"status": "in_progress", "conclusion": None, "run_attempt": 2}, None,
+             "is in_progress/none in its latest attempt"),
+            ({"status": "queued", "conclusion": None}, None, "is queued/none"),
+            # Only both fields together make a completed success, whatever the other one says.
+            ({"status": "in_progress"}, None, "is in_progress/success"),
+            ({"conclusion": "failure", "run_attempt": 2}, None, "is completed/failure"),
+            ({"conclusion": "cancelled"}, None, "is completed/cancelled"),
+            ({}, [], "handed off no evidence in attempt 1"),
+            ({}, [{"artifacts": []}], "handed off no evidence in attempt 1"),
+            ({}, [{"artifacts": [{"name": handoff, "expired": True}]}], "handed off no evidence"),
+            ({"run_attempt": 2}, [{"artifacts": [{"name": handoff, "expired": False}]}],
+             "handed off no evidence in attempt 2"),
+            ({}, [{"artifacts": [{"name": f"mb-anchor--{'b' * 24}--{'a' * 40}--42--a1",
+                                  "expired": False}]}], "handed off no evidence"),
+            ({}, [{"artifacts": [{"name": f"x-{handoff}", "expired": False}]}], "handed off no evidence"),
+        )
+        for overrides, pages, message in quiet:
+            with self.subTest(overrides=overrides, pages=pages):
+                result = self.run_notifier_authentication(artifact_pages=pages, **overrides)
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual("", result.stdout)
+                self.assertIn(message, result.log)
+                self.assertIn("leaving the previous site unchanged", result.log)
+        # A listing the notifier cannot read is a failure, never a silent skip.
+        result = self.run_notifier_authentication(artifact_pages=[{"artifacts": "none"}])
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual("", result.stdout)
 
     def test_release_handler_authenticates_default_dispatch_and_exact_candidate_evidence(self) -> None:
         workflow = (WORKFLOWS / "handle-release-sync-result.yml").read_text("utf-8")
@@ -523,6 +1202,200 @@ class WorkflowSecurityTests(unittest.TestCase):
         self.assertGreaterEqual(drain.count("retention-days: 1"), 2)
         self.assertGreaterEqual(drain.count("retention-days: 7"), 2)
         self.assertGreaterEqual(drain.count("retention-days: 30"), 2)
+
+
+class ModBaseKitOverlayTests(unittest.TestCase):
+    """The ``out/mod-base-kit`` sandbox overlay holds plain 0644 files and never bytecode."""
+
+    SHA = "3" * 40
+    VERSION = "v1.2.3"
+
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+
+    def run_stage_step(self, scenario: str) -> tuple[subprocess.CompletedProcess[str], dict, Path]:
+        workspace = self.root / scenario / "workspace"
+        runner_temp = self.root / scenario / "runner-temp"
+        tools = self.root / scenario / "bin"
+        for directory in (workspace, runner_temp, tools):
+            directory.mkdir(parents=True)
+        fake = tools / "python3"
+        fake.write_text(f"#!{sys.executable}\n{FAKE_STAGE}", encoding="utf-8")
+        fake.chmod(0o755)
+        log = self.root / scenario / "stage.json"
+        environment = _hermetic_environment()
+        environment.update(
+            {
+                "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}",
+                "RUNNER_TEMP": str(runner_temp),
+                "COMMAND_LOG": str(log),
+                "STAGE_SCENARIO": scenario,
+                "ACTIONS_RUNTIME_TOKEN": "runtime-secret",
+                "ACTIONS_CACHE_URL": "cache-url",
+                "ACTIONS_RESULTS_URL": "results-url",
+                "GH_TOKEN": "read-only-token",
+                "GITHUB_TOKEN": "github-secret",
+            }
+        )
+        script = _run_block(_step(_build_job(), STAGE_STEP))
+        # A restrictive inherited umask proves that the step itself fixes the staged modes.
+        result = subprocess.run(
+            ["bash", "-c", 'umask 077 && exec bash -euo pipefail -c "$0"', script],
+            cwd=workspace,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        record = json.loads(log.read_text("utf-8")) if log.exists() else {}
+        return result, record, runner_temp / "mod-base-kit"
+
+    def test_stage_step_writes_plain_modes_without_bytecode_or_other_credentials(self) -> None:
+        result, record, staged = self.run_stage_step("plain")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            [
+                "-P",
+                "controller/scripts/ci/mod_base_kit.py",
+                "stage",
+                "--controller-repo",
+                "controller",
+                "--candidate-repo",
+                "candidate",
+                "--output",
+                str(staged),
+            ],
+            record["argv"],
+        )
+        self.assertEqual("1", record["bytecode"])
+        self.assertEqual(["GH_TOKEN"], record["credentials"])
+        modes = {
+            path.relative_to(staged).as_posix(): stat.S_IMODE(path.lstat().st_mode)
+            for path in (staged, *staged.rglob("*"))
+        }
+        self.assertEqual(
+            {
+                ".": 0o755,
+                "MOD_BASE_KIT.json": 0o644,
+                "src": 0o755,
+                "src/mod_base": 0o755,
+                "src/mod_base/__init__.py": 0o644,
+                "tools": 0o755,
+                "tools/kit_digest.sh": 0o644,
+            },
+            modes,
+        )
+
+    def test_stage_step_rejects_irregular_or_bytecode_entries(self) -> None:
+        for scenario in (
+            "executable",
+            "group-writable",
+            "open-directory",
+            "bytecode-directory",
+            "bytecode-file",
+            "symlink",
+        ):
+            with self.subTest(scenario=scenario):
+                result, _record, _staged = self.run_stage_step(scenario)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("are not plain 0644 files without bytecode", result.stderr)
+
+    def test_stage_step_fails_closed_without_a_staged_kit(self) -> None:
+        for scenario in ("unavailable", "missing"):
+            with self.subTest(scenario=scenario):
+                result, record, staged = self.run_stage_step(scenario)
+                self.assertNotEqual(0, result.returncode)
+                self.assertEqual("1", record["bytecode"])
+                self.assertFalse(staged.exists())
+
+    def make_kit(self) -> Path:
+        kit = self.root / "kit"
+        files = {
+            "src/mod_base/__init__.py": b"",
+            "src/mod_base/template/__init__.py": b"",
+            "site/assets/site.css": b"body{}\n",
+            "requirements/pillow.txt": b"pillow==12.3.0\n",
+            "template/manifest.json": b"{}\n",
+            "tools/kit_digest.sh": b"#!/bin/sh\n",
+        }
+        for relative, data in files.items():
+            path = kit / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        # Neither an executable source file nor source bytecode may reach the overlay.
+        (kit / "tools" / "kit_digest.sh").chmod(0o755)
+        (kit / "src" / "mod_base" / "__pycache__").mkdir()
+        (kit / "src" / "mod_base" / "__pycache__" / "__init__.cpython-313.pyc").write_bytes(b"planted")
+        (kit / mod_base_kit.STAGED_LOCK).write_bytes(mod_base_kit.staged_listing(kit))
+        return kit
+
+    def make_repository(self, name: str) -> Path:
+        repository = self.root / name
+        workflows = repository / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        (workflows / "build-gate.yml").write_text(
+            "jobs:\n  build:\n    steps:\n"
+            f"      - uses: The-Plum-Team/mod-base/actions/setup@{self.SHA} # {self.VERSION}\n",
+            encoding="utf-8",
+        )
+        return repository
+
+    def stage(self, kit: Path, controller: Path, candidate: Path, output: Path) -> Path:
+        def offline(path: str) -> None:
+            raise AssertionError(f"an equal pin must stage without the API: {path}")
+
+        environment = {
+            "CI": "true",
+            "MOD_BASE_KIT_PATH": str(kit),
+            "MOD_BASE_KIT_SHA": self.SHA,
+            "MOD_BASE_CACHE_DIR": str(self.root / "cache"),
+        }
+        output.parent.mkdir(parents=True, exist_ok=True)
+        previous = os.umask(0o022)  # the stage step's umask
+        try:
+            return mod_base_kit.stage(controller, candidate, output, environment, get_json=offline)
+        finally:
+            os.umask(previous)
+
+    def test_staged_overlay_is_plain_locked_and_resolved_inside_the_sandbox(self) -> None:
+        kit = self.make_kit()
+        controller = self.make_repository("controller")
+        candidate = self.make_repository("candidate")
+        staged = self.stage(kit, controller, candidate, self.root / "runner-temp" / "mod-base-kit")
+        for path in (staged, *staged.rglob("*")):
+            with self.subTest(path=path.relative_to(staged).as_posix()):
+                self.assertNotEqual("__pycache__", path.name)
+                self.assertFalse(path.is_symlink())
+                expected = 0o755 if path.is_dir() else 0o644
+                self.assertEqual(expected, stat.S_IMODE(path.lstat().st_mode))
+        stamp = mod_base_kit.read_stamp(staged)
+        self.assertEqual((self.SHA, self.VERSION[1:]), (stamp["sha"], stamp["version"]))
+        self.assertEqual(mod_base_kit.tree_digest(staged), stamp["tree_digest"])
+
+        # untrusted_runner copies the overlay with ``cp -a``, which keeps these modes, to the
+        # generated top-level ``out/`` path that its seal accepts.
+        overlay = candidate.joinpath(*mod_base_kit.OVERLAY_PATH)
+        self.assertEqual("out/mod-base-kit", KIT_OVERLAY.rsplit(" ", 1)[1])
+        self.assertEqual(("out", "mod-base-kit"), mod_base_kit.OVERLAY_PATH)
+        overlay.parent.mkdir()
+        shutil.copytree(staged, overlay, symlinks=True, copy_function=shutil.copy2)
+        resolution = mod_base_kit.resolve(candidate, {"CI": "true"})
+        self.assertEqual(("overlay", overlay), (resolution.source, resolution.root))
+
+        source = overlay / "src" / "mod_base" / "__init__.py"
+        source.chmod(0o755)
+        with self.assertRaisesRegex(mod_base_kit.KitError, "is executable"):
+            mod_base_kit.resolve(candidate, {"CI": "true"})
+        source.chmod(0o644)
+        (overlay / "src" / "mod_base" / "__pycache__").mkdir()
+        with self.assertRaisesRegex(mod_base_kit.KitError, "holds bytecode"):
+            mod_base_kit.resolve(candidate, {"CI": "true"})
+        (overlay / "src" / "mod_base" / "__pycache__").rmdir()
+        (overlay / "tools" / "kit_digest.sh").write_bytes(b"#!/bin/sh\nexit 0\n")
+        with self.assertRaisesRegex(mod_base_kit.KitError, "staged_files.sha256"):
+            mod_base_kit.resolve(candidate, {"CI": "true"})
 
 
 if __name__ == "__main__":

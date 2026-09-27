@@ -32,6 +32,8 @@ BASE_SHA = "d" * 40
 TESTED_SHA = "e" * 40
 TREE_SHA = "f" * 40
 MASTER_TOKEN = hashlib.sha256(b"master").hexdigest()[:24]
+# The kit ``mb-anchor`` name curate.py records for the reference run 20, attempt 1.
+ANCHOR_NAME = f"mb-anchor--{MASTER_TOKEN}--{BASE_SHA}--20--a1"
 
 
 class _Api:
@@ -201,7 +203,7 @@ class _ReferenceApi:
         if route == "/actions/artifacts/55":
             return {
                 "id": 55,
-                "name": f"visual-anchor-v1-{MASTER_TOKEN}--{BASE_SHA}-20-1",
+                "name": ANCHOR_NAME,
                 "expired": self.expired,
                 "digest": "sha256:" + "6" * 64,
                 "size_in_bytes": 4096,
@@ -262,7 +264,7 @@ def _reference_source() -> dict[str, object]:
         "run_id": 20,
         "run_attempt": 1,
         "artifact_id": 55,
-        "artifact_name": f"visual-anchor-v1-{MASTER_TOKEN}--{BASE_SHA}-20-1",
+        "artifact_name": ANCHOR_NAME,
         "artifact_sha256": "6" * 64,
     }
 
@@ -463,6 +465,30 @@ class CredentialPreflightTests(unittest.TestCase):
                 api,
                 _reference_queue(),
                 _reference_source(),
+                historical_binding=(BASE_SHA, REVIEWER_SHA),
+            )
+
+    def test_reference_anchor_name_is_the_one_the_curator_records(self) -> None:
+        # The preflight spells the kit grammar out; the curator takes it from the pinned kit.
+        from tests import mod_base_path
+
+        mod_base_path.kit_root()
+        from scripts.visual.curate import anchor_artifact_name
+
+        self.assertEqual(anchor_artifact_name("master", BASE_SHA, 20, 1), ANCHOR_NAME)
+        _reference_identity(
+            _ReferenceApi(),
+            _reference_queue(),
+            _reference_source(),
+            historical_binding=(BASE_SHA, REVIEWER_SHA),
+        )
+        source = _reference_source()
+        source["artifact_name"] = f"visual-anchor-v1-{MASTER_TOKEN}--{BASE_SHA}-20-1"
+        with self.assertRaisesRegex(StaleError, "reference capsule identity changed"):
+            _reference_identity(
+                _ReferenceApi(),
+                _reference_queue(),
+                source,
                 historical_binding=(BASE_SHA, REVIEWER_SHA),
             )
 
