@@ -15,6 +15,11 @@ Do not add version or loader lists to workflows or helper scripts. Add or
 change a lane in that release branch's matrix, then make every consumer derive
 from it.
 
+## Datapack loot
+
+The `blockpops:world_players_box` loot table entry rolls a complete World
+Players box. See [World Players boxes in loot tables](docs/world-players-loot.md).
+
 ## Local verification
 
 ```bash
