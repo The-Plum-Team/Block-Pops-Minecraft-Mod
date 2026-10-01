@@ -35,11 +35,15 @@ public class CapabilityEvents {
     }
 
     /**
-     * Clone the capability data when a player respawns or returns from the End.
+     * Carry the player's data over when a player respawns or returns from the End.
      * This ensures discovered figures persist through death and dimension changes.
      */
     @SubscribeEvent
     public static void onPlayerClone(PlayerEvent.Clone event) {
+        // Forge carries only its PlayerPersisted child over to the new player entity, so the
+        // discovery record at the root of the persistent data has to be copied here
+        PlayerDataManager.copyData(event.getOriginal(), event.getEntity());
+
         if (event.isWasDeath()) {
             // Copy the capability data from the old player to the new player
             event.getOriginal().getCapability(PlayerDiscoveryProvider.PLAYER_DISCOVERY).ifPresent(oldDiscovery -> {
