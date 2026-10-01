@@ -98,7 +98,8 @@ public class ServerConfig {
             try {
                 String json = Files.readString(configPath);
                 ServerConfig config = GSON.fromJson(json, ServerConfig.class);
-                BlockPopsMod.logDebug("Loaded server configuration");
+                // Use LOGGER.debug directly to avoid circular dependency with BlockPopsMod.logDebug()
+                BlockPopsMod.LOGGER.debug("Loaded server configuration");
                 return config;
             } catch (Exception e) {
                 BlockPopsMod.LOGGER.error("Failed to load server configuration, using defaults", e);
