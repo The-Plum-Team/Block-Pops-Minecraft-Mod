@@ -5,6 +5,7 @@ import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModBlocks;
 import com.theplumteam.registry.ModCreativeTabs;
 import com.theplumteam.registry.ModItems;
+import com.theplumteam.registry.ModLoot;
 import com.theplumteam.server.ServerTickHandler;
 import com.theplumteam.server.config.ServerConfig;
 import org.slf4j.Logger;
@@ -49,6 +50,9 @@ public final class BlockPopsMod {
 
     public static void init() {
         LOGGER.info("Initializing BlockPops mod");
+
+        // Register the datapack loot entry type
+        ModLoot.register();
 
         // Initialize cross-platform networking
         ModNetworking.init();
