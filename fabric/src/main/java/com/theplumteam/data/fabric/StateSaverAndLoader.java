@@ -124,6 +124,14 @@ public class StateSaverAndLoader extends SavedData {
     }
 
     /**
+     * Get the stored data of a player who may be offline, or null when the world has no record for them.
+     * Unlike {@link #getPlayerState(Player)} this never creates a record; treat the returned tag as read-only.
+     */
+    public static CompoundTag findPlayerState(MinecraftServer server, UUID playerId) {
+        return getServerState(server).players.get(playerId);
+    }
+
+    /**
      * Get the persistent data CompoundTag for a specific player.
      */
     public static CompoundTag getPlayerState(Player player) {
