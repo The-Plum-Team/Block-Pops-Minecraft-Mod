@@ -666,6 +666,14 @@ public class SettingsScreen extends Screen {
         );
         serverSettingWidgets.add(this.resetHourSlider);
         refreshServerSettings();
+
+        // World Players roster (admins only, like the Cheats tab; the server checks again)
+        if (canAccessCheats()) {
+            serverSettingWidgets.add(Button.builder(Component.literal("Manage World Players"),
+                            button -> this.minecraft.setScreen(new WorldPlayerRosterScreen(this)))
+                    .bounds(this.panelX + (this.panelWidth - 160) / 2, this.panelY + TAB_HEIGHT + 200, 160, 20)
+                    .build());
+        }
     }
 
     /**

@@ -3,6 +3,7 @@ package com.theplumteam.client.gui.widget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.util.GuiScaleManager;
+import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.client.Minecraft;
@@ -179,9 +180,10 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         graphics.drawString(mc.font, collection.getName(), textX, textY, textColor, false);
 
         // Draw figure count below the name (discovered/total)
-        int totalFigures = collection.getFigures().size();
+        java.util.List<FigureDefinition> figures = getCollection().getEnabledFigures();
+        int totalFigures = figures.size();
         int discoveredCount = 0;
-        for (FigureDefinition figure : collection.getFigures()) {
+        for (FigureDefinition figure : figures) {
             String figureId = collection.getId() + ":" + figure.getId();
             if (ClientDiscoveryManager.isDiscovered(figureId)) {
                 discoveredCount++;
@@ -338,9 +340,10 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
 
     @Override
     public Component getNarration() {
-        int totalFigures = collection.getFigures().size();
+        java.util.List<FigureDefinition> figures = getCollection().getEnabledFigures();
+        int totalFigures = figures.size();
         int discoveredCount = 0;
-        for (FigureDefinition figure : collection.getFigures()) {
+        for (FigureDefinition figure : figures) {
             String figureId = collection.getId() + ":" + figure.getId();
             if (ClientDiscoveryManager.isDiscovered(figureId)) {
                 discoveredCount++;
@@ -351,6 +354,8 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
     }
 
     public FigureCollection getCollection() {
-        return collection;
+        // The screen keeps the collections it opened with, and World Players is re-synced
+        // while it is open, so the registry holds the current figures.
+        return CollectionRegistry.getCollection(collection.getId()).orElse(collection);
     }
 }

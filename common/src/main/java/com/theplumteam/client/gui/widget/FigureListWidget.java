@@ -35,7 +35,7 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
         this.clearEntries();
 
         if (collection != null) {
-            List<FigureDefinition> figures = collection.getFigures();
+            List<FigureDefinition> figures = collection.getEnabledFigures();
 
             // Group figures into rows of 4
             List<FigureDefinition> currentRow = new java.util.ArrayList<>();

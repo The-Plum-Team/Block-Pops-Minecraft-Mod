@@ -38,6 +38,7 @@ public class FigureDefinition {
     private final UUID playerUUID;
     private final List<AlternativeSkin> alternatives;
     private final PopBlockColor favoriteColor; // For player figures, stores their chosen color
+    private final boolean enabled; // False once an operator disables a World Players figure
 
     public FigureDefinition(String id, String name, ResourceLocation modelPath,
                            ResourceLocation texturePath, ResourceLocation animationPath) {
@@ -56,6 +57,7 @@ public class FigureDefinition {
         this.playerUUID = null;
         this.alternatives = new ArrayList<>(alternatives);
         this.favoriteColor = null; // Static figures don't have favorite colors
+        this.enabled = true;
     }
 
     /**
@@ -63,6 +65,15 @@ public class FigureDefinition {
      */
     public FigureDefinition(String id, String name, ResourceLocation modelPath,
                            ResourceLocation animationPath, UUID playerUUID, PopBlockColor favoriteColor) {
+        this(id, name, modelPath, animationPath, playerUUID, favoriteColor, true);
+    }
+
+    /**
+     * Constructor for player figures that an operator may have disabled
+     */
+    public FigureDefinition(String id, String name, ResourceLocation modelPath,
+                           ResourceLocation animationPath, UUID playerUUID, PopBlockColor favoriteColor,
+                           boolean enabled) {
         this.id = id;
         this.name = name;
         this.modelPath = modelPath;
@@ -72,6 +83,7 @@ public class FigureDefinition {
         this.playerUUID = playerUUID;
         this.alternatives = Collections.emptyList();
         this.favoriteColor = favoriteColor;
+        this.enabled = enabled;
     }
 
     /**
@@ -97,7 +109,9 @@ public class FigureDefinition {
                     favoriteColor = PopBlockColor.ORIGINAL; // Default if invalid
                 }
             }
-            return new FigureDefinition(id, name, modelPath, animationPath, playerUUID, favoriteColor);
+            // Peers that predate the flag never send it, so a missing flag means enabled
+            boolean enabled = !json.has("enabled") || json.get("enabled").getAsBoolean();
+            return new FigureDefinition(id, name, modelPath, animationPath, playerUUID, favoriteColor, enabled);
         } else {
             // Parse static figure
             ResourceLocation texturePath = ResourceLocation.tryParse(json.get("texture").getAsString());
@@ -158,6 +172,14 @@ public class FigureDefinition {
     }
 
     /**
+     * Whether this figure can still be granted and listed. Only World Players figures
+     * can be disabled; a disabled one stays defined so existing boxes and figures resolve.
+     */
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    /**
      * Serializes this FigureDefinition to a JSON object
      */
     public JsonObject toJson() {
@@ -175,6 +197,9 @@ public class FigureDefinition {
             }
             if (favoriteColor != null) {
                 json.addProperty("favorite_color", favoriteColor.getSerializedName());
+            }
+            if (!enabled) {
+                json.addProperty("enabled", false);
             }
         } else {
             // For static figures, include texture and alternatives

@@ -5,6 +5,7 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
+import com.theplumteam.server.WorldPlayerRoster;
 import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.util.GeoAssets;
 import net.minecraft.nbt.CompoundTag;
@@ -177,6 +178,9 @@ public class PlayerCollectionGenerator {
                 processedPlayers.add(playerUUID);
                 BlockPopsMod.LOGGER.debug("Added online player figure (no .dat file yet): {} ({})", playerName, playerUUID);
             }
+
+            // Flag the players an operator disabled in the roster menu
+            WorldPlayerRoster.get(server).mark(playerFigures);
 
             BlockPopsMod.logDebug("Generated World Players collection with {} figures", playerFigures.size());
 
