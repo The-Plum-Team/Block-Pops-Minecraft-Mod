@@ -87,6 +87,14 @@ public class DropBoxPacket {
                     return;
                 }
 
+                // Every World Players figure can be disabled, and an empty pool must not cost a token
+                if (CollectionRegistry.getCollection(packet.collectionId)
+                        .map(collection -> collection.getEnabledFigures().isEmpty()).orElse(true)) {
+                    player.sendSystemMessage(Component.literal("\u00A7cThis collection has no figures available."));
+                    BlockPopsMod.logDebug("Collection {} has no available figures, token not consumed", packet.collectionId);
+                    return;
+                }
+
                 IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(player);
                 if (!verifyAndConsumeToken(player, discovery, packet.tokenType)) {
                     LOGGER.warn("Player {} tried to use unavailable {} token",
@@ -136,7 +144,7 @@ public class DropBoxPacket {
 
     private static void processBoxDrop(ServerPlayer player, DropBoxPacket packet, IPlayerDiscovery discovery) {
         CollectionRegistry.getCollection(packet.collectionId).ifPresent(collection -> {
-            List<FigureDefinition> figures = collection.getFigures();
+            List<FigureDefinition> figures = collection.getEnabledFigures();
             if (!figures.isEmpty()) {
                 FigureDefinition selectedFigure = selectFigure(figures, packet.tokenType,
                         discovery, packet.collectionId);
