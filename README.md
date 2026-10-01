@@ -13,6 +13,11 @@ The integration matrix's `migration.mode` controls mandatory gate coverage:
 `preparing` retains the legacy projection; `shared` verifies every configured
 target. The matrix validator and build plan show the selected inventory.
 
+## Datapack loot
+
+The `blockpops:world_players_box` loot table entry rolls a complete World
+Players box. See [World Players boxes in loot tables](docs/world-players-loot.md).
+
 ## Local verification
 
 Set `BUILD_SCOPE` to `legacy` for a `preparing` matrix or `full` for a `shared`
