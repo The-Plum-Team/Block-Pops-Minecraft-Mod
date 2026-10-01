@@ -30,7 +30,6 @@ import net.minecraft.server.players.GameProfileCache;
 //? }
 
 import java.io.File;
-import java.nio.file.Path;
 import java.util.*;
 
 /**
@@ -48,9 +47,8 @@ public class PlayerCollectionHelperImpl {
      */
     public static FigureCollection generate(MinecraftServer server) {
         try {
-            // Get the playerdata directory from the world save
-            Path worldPath = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT);
-            File playerdataDir = worldPath.resolve("playerdata").toFile();
+            // Get the player data directory from the world save ("playerdata" up to 1.21.x, "players/data" from 26.1)
+            File playerdataDir = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.PLAYER_DATA_DIR).toFile();
 
             List<FigureDefinition> playerFigures = new ArrayList<>();
             Set<UUID> processedPlayers = new HashSet<>();
