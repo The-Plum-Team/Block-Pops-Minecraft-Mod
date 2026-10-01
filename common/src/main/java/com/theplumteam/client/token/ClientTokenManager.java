@@ -35,7 +35,7 @@ public class ClientTokenManager {
         millisUntilNextSpecialReset = packet.getMillisUntilNextSpecialReset();
         lastUpdateTime = System.currentTimeMillis();
 
-        LOGGER.debug("Token data updated: {} regular, special: {}, next regular in {} ticks",
+        LOGGER.trace("Token data updated: {} regular, special: {}, next regular in {} ticks",
                 regularTokens, hasSpecialToken ? "available" : "used", ticksUntilNextRegular);
     }
 
