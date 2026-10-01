@@ -265,6 +265,9 @@ public class SettingsScreen extends Screen {
             this.panelOpacitySlider.setValue(0.90);
             // Reset color transition toggle
             this.colorTransitionToggle.setMessage(Component.literal("Transition: ON"));
+        } else if (activeTab == Tab.CHEATS) {
+            // "Progression" opens the per-player collection editor
+            this.minecraft.setScreen(new AdminProgressionScreen(this));
         }
     }
 
@@ -282,8 +285,10 @@ public class SettingsScreen extends Screen {
             this.actionButton.active = true;
             this.actionButton.visible = true;
         } else {
-            // Cheats tab doesn't use the main action button
-            this.actionButton.visible = false;
+            // Cheats tab: open the per-player progression editor
+            this.actionButton.setMessage(Component.literal("Progression"));
+            this.actionButton.active = true;
+            this.actionButton.visible = true;
         }
     }
 
