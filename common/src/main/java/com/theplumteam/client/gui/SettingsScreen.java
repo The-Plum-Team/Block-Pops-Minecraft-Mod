@@ -2,6 +2,7 @@ package com.theplumteam.client.gui;
 
 import com.theplumteam.client.gui.util.GuiPose;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.theplumteam.client.ClientHiddenCollections;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.gui.util.ButtonFactory;
 import com.theplumteam.client.gui.widget.TabButton;
@@ -9,6 +10,7 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.network.UnlockCollectionPacket;
 import com.theplumteam.network.ReloadTokensPacket;
+import com.theplumteam.network.SetCollectionHiddenPacket;
 import com.theplumteam.network.UpdateGuaranteedResetHourPacket;
 import com.theplumteam.server.config.ServerConfig;
 import dev.architectury.platform.Platform;
@@ -23,8 +25,10 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Settings screen displayed as a modal overlay with tabbed interface
@@ -53,7 +57,8 @@ public class SettingsScreen extends Screen {
     private enum Tab {
         SERVER("Server"),
         DEVELOP("Develop"),
-        CHEATS("Cheats");
+        CHEATS("Cheats"),
+        COLLECTIONS("Collections");
 
         private final String displayName;
 
@@ -70,9 +75,12 @@ public class SettingsScreen extends Screen {
     private TabButton serverTabButton;
     private TabButton developTabButton;
     private TabButton cheatsTabButton;
+    private TabButton collectionsTabButton;
     private final List<AbstractWidget> serverSettingWidgets = new ArrayList<>();
     private final List<AbstractWidget> developSettingWidgets = new ArrayList<>();
     private final List<AbstractWidget> cheatsSettingWidgets = new ArrayList<>();
+    // Hide/Show toggle of each collection (Collections tab)
+    private final Map<FigureCollection, Button> collectionToggleButtons = new LinkedHashMap<>();
 
     // Buttons and sliders
     private Button closeButton;
@@ -111,6 +119,12 @@ public class SettingsScreen extends Screen {
         serverSettingWidgets.clear();
         developSettingWidgets.clear();
         cheatsSettingWidgets.clear();
+        collectionToggleButtons.clear();
+        // The Collections tab goes away when the player may no longer manage collections
+        collectionsTabButton = null;
+        if (activeTab == Tab.COLLECTIONS && !canManageCollections()) {
+            activeTab = Tab.SERVER;
+        }
 
         // Calculate centered panel position
         this.panelX = (this.width - this.panelWidth) / 2;
@@ -154,6 +168,19 @@ public class SettingsScreen extends Screen {
                     btn -> switchTab(Tab.CHEATS)
             );
             this.addRenderableWidget(cheatsTabButton);
+            nextTabX += TAB_WIDTH + TAB_SPACING;
+        }
+
+        // Collections tab (for admins, on a server that syncs its hidden collections)
+        if (canManageCollections()) {
+            collectionsTabButton = (TabButton) ButtonFactory.createTab(
+                    nextTabX, tabY,
+                    TAB_WIDTH, TAB_HEIGHT,
+                    Component.literal(Tab.COLLECTIONS.getDisplayName()),
+                    activeTab == Tab.COLLECTIONS,
+                    btn -> switchTab(Tab.COLLECTIONS)
+            );
+            this.addRenderableWidget(collectionsTabButton);
         }
 
         // Create button instances
@@ -185,6 +212,10 @@ public class SettingsScreen extends Screen {
 
         if (canAccessCheats()) {
             createCheatsSettings();
+        }
+
+        if (canManageCollections()) {
+            createCollectionsSettings();
         }
 
         // Show initial tab and update action button state
@@ -287,7 +318,7 @@ public class SettingsScreen extends Screen {
         // all, so the Server tab sat on top of its collection header. An opaque base goes
         // under both; the themed fills below still draw on top of it.
         int tabsRight = this.panelX;
-        for (TabButton tab : new TabButton[] {serverTabButton, developTabButton, cheatsTabButton}) {
+        for (TabButton tab : new TabButton[] {serverTabButton, developTabButton, cheatsTabButton, collectionsTabButton}) {
             if (tab != null && tab.visible) {
                 tabsRight = Math.max(tabsRight, tab.getX() + tab.getWidth());
             }
@@ -419,6 +450,25 @@ public class SettingsScreen extends Screen {
             }
         }
 
+        // Draw collections tab content (for admins)
+        if (activeTab == Tab.COLLECTIONS) {
+            // A toggle is answered with the server's new list, so the labels follow that list
+            collectionToggleButtons.forEach((collection, button) -> button.setMessage(collectionToggleLabel(collection)));
+
+            int headerY = this.panelY + TAB_HEIGHT + 10;
+            graphics.drawCenteredString(this.font, "Collection Visibility",
+                    this.panelX + this.panelWidth / 2,
+                    headerY,
+                    0xFFFFFFFF);
+
+            // Draw explanation text
+            String explanation = "A hidden collection is removed from every player's collection list on this server.";
+            graphics.drawString(this.font, explanation,
+                    this.panelX + (this.panelWidth - this.font.width(explanation)) / 2,
+                    this.panelY + TAB_HEIGHT + 30,
+                    0xFFAAAAAA);
+        }
+
         // Draw color preview boxes (only in Develop tab)
         if (isDevelopmentMode() && activeTab == Tab.DEVELOP) {
             int previewSize = 35;
@@ -521,6 +571,14 @@ public class SettingsScreen extends Screen {
             return com.theplumteam.util.ServerLevels.hasCommandLevel(this.minecraft.player, 2);
         }
         return false;
+    }
+
+    /**
+     * Check if the current player can hide collections for the whole server.
+     * Same access as cheats, and the server has to be one that syncs its hidden collections.
+     */
+    private boolean canManageCollections() {
+        return canAccessCheats() && ClientHiddenCollections.isSynced();
     }
 
     /**
@@ -856,6 +914,59 @@ public class SettingsScreen extends Screen {
     }
 
     /**
+     * Create collections settings widgets (one hide/show toggle per collection)
+     */
+    private void createCollectionsSettings() {
+        int padding = 20;
+        int buttonWidth = 180;
+        int buttonHeight = 24;
+        int verticalSpacing = 30;
+        int horizontalSpacing = 15;
+        int buttonsPerRow = 3;
+
+        int startY = this.panelY + TAB_HEIGHT + 50;
+        int startX = this.panelX + padding;
+
+        int row = 0;
+        int col = 0;
+
+        for (FigureCollection collection : CollectionRegistry.getAllCollections()) {
+            // The default collection is never listed, so there is nothing to hide
+            if (collection.getId().equals("default")) {
+                continue;
+            }
+
+            int buttonX = startX + (col * (buttonWidth + horizontalSpacing));
+            int buttonY = startY + (row * verticalSpacing);
+
+            Button toggleButton = Button.builder(
+                            collectionToggleLabel(collection),
+                            // Send packet to server to hide or show this collection for every player
+                            button -> new SetCollectionHiddenPacket(collection.getId(),
+                                    !ClientHiddenCollections.isHidden(collection.getId())).sendToServer()
+                    )
+                    .bounds(buttonX, buttonY, buttonWidth, buttonHeight)
+                    .build();
+
+            collectionToggleButtons.put(collection, toggleButton);
+
+            col++;
+            if (col >= buttonsPerRow) {
+                col = 0;
+                row++;
+            }
+        }
+    }
+
+    /**
+     * Label of a collection toggle: the action a click asks the server for
+     */
+    private static Component collectionToggleLabel(FigureCollection collection) {
+        return Component.literal(
+                (ClientHiddenCollections.isHidden(collection.getId()) ? "Show " : "Hide ") + collection.getName());
+    }
+
+    /**
      * Switch to a different tab
      */
     private void switchTab(Tab tab) {
@@ -871,6 +982,9 @@ public class SettingsScreen extends Screen {
         for (AbstractWidget widget : cheatsSettingWidgets) {
             this.removeWidget(widget);
         }
+        for (AbstractWidget widget : collectionToggleButtons.values()) {
+            this.removeWidget(widget);
+        }
 
         // Add widgets for active tab
         List<AbstractWidget> activeWidgets;
@@ -880,6 +994,8 @@ public class SettingsScreen extends Screen {
             activeWidgets = developSettingWidgets;
         } else if (tab == Tab.CHEATS) {
             activeWidgets = cheatsSettingWidgets;
+        } else if (tab == Tab.COLLECTIONS) {
+            activeWidgets = new ArrayList<>(collectionToggleButtons.values());
         } else {
             activeWidgets = new ArrayList<>();
         }
@@ -895,6 +1011,9 @@ public class SettingsScreen extends Screen {
         }
         if (cheatsTabButton != null) {
             cheatsTabButton.setSelected(tab == Tab.CHEATS);
+        }
+        if (collectionsTabButton != null) {
+            collectionsTabButton.setSelected(tab == Tab.COLLECTIONS);
         }
 
         // Update action button text/state/visibility based on new tab
