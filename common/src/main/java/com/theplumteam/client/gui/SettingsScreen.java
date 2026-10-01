@@ -2,6 +2,7 @@ package com.theplumteam.client.gui;
 
 import com.theplumteam.client.gui.util.GuiPose;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.theplumteam.client.ClientServerSettings;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.gui.util.ButtonFactory;
 import com.theplumteam.client.gui.widget.TabButton;
@@ -10,7 +11,6 @@ import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.network.UnlockCollectionPacket;
 import com.theplumteam.network.ReloadTokensPacket;
 import com.theplumteam.network.UpdateGuaranteedResetHourPacket;
-import com.theplumteam.server.config.ServerConfig;
 import dev.architectury.platform.Platform;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
@@ -83,6 +83,8 @@ public class SettingsScreen extends Screen {
     private HourSlider resetHourSlider;
     private int loadedServerHourLocal; // The hour currently saved/loaded
     private int pendingServerHourLocal; // The hour currently selected on slider
+    private int shownServerRevision; // The server answer the slider currently shows
+    private boolean serverSettingsRequested;
 
     // Star color sliders (Develop tab)
     private ColorSlider starRedSlider;
@@ -106,6 +108,12 @@ public class SettingsScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+
+        // Ask the server for its settings once per opened screen (init also runs on resize)
+        if (!serverSettingsRequested) {
+            serverSettingsRequested = true;
+            ClientServerSettings.request();
+        }
 
         // Clear widget lists to prevent duplication on resize
         serverSettingWidgets.clear();
@@ -199,11 +207,12 @@ public class SettingsScreen extends Screen {
             // "Change Time" logic
             int utcValue = convertLocalToUtc(pendingServerHourLocal);
 
-            // Update local config immediately for responsiveness
-            ServerConfig.getInstance().setGuaranteedTokenResetHour(utcValue);
-
             // Send packet to server using cross-platform networking
             new UpdateGuaranteedResetHourPacket(utcValue).sendToServer();
+
+            // Ask for the settings right behind it: the answer carries the hour that is
+            // really in effect, whether or not the server accepted the change
+            ClientServerSettings.request();
 
             // Update loaded value to current and refresh button state
             this.loadedServerHourLocal = pendingServerHourLocal;
@@ -235,7 +244,7 @@ public class SettingsScreen extends Screen {
         if (activeTab == Tab.SERVER) {
             this.actionButton.setMessage(Component.literal("Change time"));
             // Locked until slider is moved to a different value
-            this.actionButton.active = (pendingServerHourLocal != loadedServerHourLocal);
+            this.actionButton.active = canChangeResetHour() && (pendingServerHourLocal != loadedServerHourLocal);
             this.actionButton.visible = true;
         } else if (activeTab == Tab.DEVELOP) {
             this.actionButton.setMessage(Component.literal("Reset Colors"));
@@ -245,6 +254,13 @@ public class SettingsScreen extends Screen {
             // Cheats tab doesn't use the main action button
             this.actionButton.visible = false;
         }
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        // Follow the server's answers and permission changes while the screen is open
+        refreshServerSettings();
     }
 
     @Override
@@ -384,7 +400,9 @@ public class SettingsScreen extends Screen {
             String[] explanationLines = {
                     "The guaranteed token grants an undiscovered figure from the collection.",
                     "This token resets daily at the hour specified above (in your local time).",
-                    "Set this to a time that works best for your server's player base."
+                    !isOperator() ? "Only server operators can change this hour (in single-player, enable cheats)."
+                            : canChangeResetHour() ? "Set this to a time that works best for your server's player base."
+                            : "The server has not reported its reset hour, so it cannot be changed from here."
             };
 
             for (int i = 0; i < explanationLines.length; i++) {
@@ -513,10 +531,13 @@ public class SettingsScreen extends Screen {
      * Returns true if in development mode OR if player is an admin (permission level 2+)
      */
     private boolean canAccessCheats() {
-        if (isDevelopmentMode()) {
-            return true;
-        }
-        // Check if player has admin permissions (level 2, same as /blockpops getbox command)
+        return isDevelopmentMode() || isOperator();
+    }
+
+    /**
+     * Check if the current player has admin permissions (level 2, same as /blockpops getbox command)
+     */
+    private boolean isOperator() {
         if (this.minecraft != null && this.minecraft.player != null) {
             return com.theplumteam.util.ServerLevels.hasCommandLevel(this.minecraft.player, 2);
         }
@@ -524,11 +545,35 @@ public class SettingsScreen extends Screen {
     }
 
     /**
+     * Check if the current player can change the reset hour.
+     * Only admins can, and only once the server has reported the hour it uses.
+     */
+    private boolean canChangeResetHour() {
+        return isOperator() && ClientServerSettings.getGuaranteedResetHour() != null;
+    }
+
+    /**
+     * Show the hour the server last reported and lock the controls the player cannot use
+     */
+    private void refreshServerSettings() {
+        Integer utcHour = ClientServerSettings.getGuaranteedResetHour();
+        if (utcHour == null) {
+            this.resetHourSlider.showUnknown();
+        } else if (ClientServerSettings.getRevision() != this.shownServerRevision) {
+            // A new answer replaces whatever the slider showed
+            this.shownServerRevision = ClientServerSettings.getRevision();
+            this.loadedServerHourLocal = convertUtcToLocal(utcHour);
+            this.pendingServerHourLocal = this.loadedServerHourLocal;
+            this.resetHourSlider.setValue(this.loadedServerHourLocal);
+        }
+        this.resetHourSlider.active = canChangeResetHour();
+        updateActionButtonState();
+    }
+
+    /**
      * Create server settings widgets
      */
     private void createServerSettings() {
-        ServerConfig config = ServerConfig.getInstance();
-
         int sliderHeight = 20;
         int sliderWidth = 400;
 
@@ -540,9 +585,9 @@ public class SettingsScreen extends Screen {
         ZoneId localZone = ZoneId.systemDefault();
         String timezoneName = localZone.getDisplayName(TextStyle.SHORT, Locale.getDefault());
 
-        // Convert UTC hour to local hour
-        int utcHour = config.getGuaranteedTokenResetHour();
-        int localHour = convertUtcToLocal(utcHour);
+        // The hour is the server's: refreshServerSettings() below fills in its last answer
+        int localHour = 0;
+        this.shownServerRevision = -1;
 
         // Initialize tracking variables
         this.loadedServerHourLocal = localHour;
@@ -562,6 +607,7 @@ public class SettingsScreen extends Screen {
                 }
         );
         serverSettingWidgets.add(this.resetHourSlider);
+        refreshServerSettings();
     }
 
     /**
@@ -982,19 +1028,26 @@ public class SettingsScreen extends Screen {
 
         @Override
         protected void updateMessage() {
-            int hour = (int)(this.value * 23);
+            int hour = (int) Math.round(this.value * 23);
             this.setMessage(Component.literal(prefix.getString() + String.format("%02d:00", hour)));
         }
 
         @Override
         protected void applyValue() {
-            int hour = (int)(this.value * 23);
+            int hour = (int) Math.round(this.value * 23);
             onValueChange.accept(hour);
         }
 
         public void setValue(int newValue) {
             this.value = newValue / 23.0;
             this.updateMessage();
+        }
+
+        /**
+         * Keep the label but show no hour, for a server that has not reported one
+         */
+        public void showUnknown() {
+            this.setMessage(Component.literal(prefix.getString() + "--:--"));
         }
     }
 }

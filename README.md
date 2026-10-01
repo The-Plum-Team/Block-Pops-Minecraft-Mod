@@ -18,6 +18,25 @@ target. The matrix validator and build plan show the selected inventory.
 The `blockpops:world_players_box` loot table entry rolls a complete World
 Players box. See [World Players boxes in loot tables](docs/world-players-loot.md).
 
+## Settings and figure previews
+
+Interact with a claw machine to open its collection screen, then select the
+gear icon (tooltip **Settings**), the rightmost button at the top right. The
+Server tab shows the hour of the daily guaranteed-token reset, as reported by
+the connected server and displayed in your local time. Regular tokens have
+their own cooldown.
+
+Changing the hour requires operator level 2. In a single-player world that
+means cheats enabled; otherwise set `guaranteedTokenResetHour` (0-23, UTC) in
+`config/blockpops-server.json` while the game or server is stopped. The slider
+shows `--:--` and stays locked while the server has not reported its hour, for
+example on a server that runs an older BlockPops version.
+
+The collection screen previews every figure you have discovered; undiscovered
+figures show `?`. Operators also get a **Cheats** tab with one **Unlock** button
+per collection: it marks that collection's figures as discovered and drops
+their boxes. It changes your collection progress; it is not a preview mode.
+
 ## Local verification
 
 Set `BUILD_SCOPE` to `legacy` for a `preparing` matrix or `full` for a `shared`
