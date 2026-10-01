@@ -63,7 +63,7 @@ public class SyncTokenDataPacket {
         SyncTokenDataPacket packet = decode(buf);
 
         context.queue(() -> {
-            LOGGER.debug("Received token data sync: {} regular tokens, special token: {}",
+            LOGGER.trace("Received token data sync: {} regular tokens, special token: {}",
                     packet.regularTokens, packet.hasSpecialToken ? "available" : "used");
 
             // Update client token manager
