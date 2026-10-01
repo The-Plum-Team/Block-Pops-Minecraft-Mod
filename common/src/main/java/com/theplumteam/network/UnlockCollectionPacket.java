@@ -77,7 +77,7 @@ public class UnlockCollectionPacket {
 
     private static void unlockEntireCollection(ServerPlayer player, String collectionId, IPlayerDiscovery discovery) {
         CollectionRegistry.getCollection(collectionId).ifPresent(collection -> {
-            List<FigureDefinition> figures = collection.getFigures();
+            List<FigureDefinition> figures = collection.getEnabledFigures();
 
             if (figures.isEmpty()) {
                 LOGGER.warn("Collection {} has no figures", collectionId);

@@ -95,6 +95,10 @@ public class GetBoxCommand {
                 source.sendFailure(Component.literal("Collection '" + collectionId + "' does not exist"));
                 return 0;
             }
+            if (CollectionRegistry.getCollection(collectionId).get().getEnabledFigures().isEmpty()) {
+                source.sendFailure(Component.literal("Collection '" + collectionId + "' has no figures available"));
+                return 0;
+            }
 
             // Use cross-platform PlayerDataManager
             IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(player);
@@ -145,7 +149,7 @@ public class GetBoxCommand {
 
     private static void processBoxDrop(ServerPlayer player, String collectionId, TokenType tokenType, IPlayerDiscovery discovery) {
         CollectionRegistry.getCollection(collectionId).ifPresent(collection -> {
-            List<FigureDefinition> figures = collection.getFigures();
+            List<FigureDefinition> figures = collection.getEnabledFigures();
             if (!figures.isEmpty()) {
                 FigureDefinition selectedFigure = selectFigure(figures, tokenType, discovery, collectionId);
 

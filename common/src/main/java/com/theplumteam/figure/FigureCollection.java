@@ -72,6 +72,7 @@ public class FigureCollection {
     private final ResourceLocation boxTexture;
     private final LogoConfig logoConfig; // Optional: logo configuration for display on the box
     private final List<FigureDefinition> figures;
+    private final List<FigureDefinition> enabledFigures;
     private final int[] backgroundColor; // Optional: RGB color for background (0-255 each)
 
     public FigureCollection(String id, String name, String author, String authorUrl, ResourceLocation boxTexture, LogoConfig logoConfig, List<FigureDefinition> figures, int[] backgroundColor) {
@@ -82,6 +83,7 @@ public class FigureCollection {
         this.boxTexture = boxTexture;
         this.logoConfig = logoConfig;
         this.figures = new ArrayList<>(figures);
+        this.enabledFigures = this.figures.stream().filter(FigureDefinition::isEnabled).toList();
         this.backgroundColor = backgroundColor;
     }
 
@@ -180,6 +182,14 @@ public class FigureCollection {
 
     public List<FigureDefinition> getFigures() {
         return Collections.unmodifiableList(figures);
+    }
+
+    /**
+     * Gets the figures that can be granted and listed. Disabled World Players figures
+     * are left out here but stay in getFigures(), so existing boxes and figures resolve.
+     */
+    public List<FigureDefinition> getEnabledFigures() {
+        return enabledFigures;
     }
 
     /**
