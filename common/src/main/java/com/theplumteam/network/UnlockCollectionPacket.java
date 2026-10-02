@@ -59,6 +59,12 @@ public class UnlockCollectionPacket {
 
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
+                // Check if player has permission (level 2, same as /blockpops getbox)
+                if (!ServerLevels.hasCommandLevel(player, 2)) {
+                    LOGGER.warn("Player {} tried to unlock a collection without permission", player.getName().getString());
+                    return;
+                }
+
                 BlockPopsMod.logDebug("Player {} requested to unlock collection: {}",
                         player.getName().getString(), packet.collectionId);
 
