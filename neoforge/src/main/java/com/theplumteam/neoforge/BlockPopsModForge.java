@@ -61,6 +61,15 @@ public final class BlockPopsModForge {
         BlockPopsMod.logDebug("Registered BlockPops commands");
     }
 
+    /**
+     * Carry the player's data over when a player respawns or returns from the End.
+     * NeoForge carries only its PlayerPersisted child over to the new player entity.
+     */
+    @SubscribeEvent
+    public void onPlayerClone(net.neoforged.neoforge.event.entity.player.PlayerEvent.Clone event) {
+        PlayerDataManager.copyData(event.getOriginal(), event.getEntity());
+    }
+
     private void registerServerEvents() {
         // Load static collections and generate World Players collection when server starts
         LifecycleEvent.SERVER_STARTING.register(server -> {
