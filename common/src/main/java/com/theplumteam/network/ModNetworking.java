@@ -67,6 +67,12 @@ public class ModNetworking {
 
         PacketNetworking.registerReceiver(
             NetworkManager.c2s(),
+            AdminProgressionPacket.ID,
+            AdminProgressionPacket::handleServer
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.c2s(),
             UpdateGuaranteedResetHourPacket.ID,
             UpdateGuaranteedResetHourPacket::handleServer
         );
@@ -74,7 +80,8 @@ public class ModNetworking {
         //? if >=1.21 {
         /*PacketNetworking.registerServerS2CPayloads(
                 SyncTokenDataPacket.ID, SyncDiscoveryDataPacket.ID, UnlockFigurePacket.ID,
-                SyncDynamicCollectionsPacket.ID, OpenFavoriteColorScreenPacket.ID);
+                SyncDynamicCollectionsPacket.ID, OpenFavoriteColorScreenPacket.ID,
+                AdminProgressionSyncPacket.ID);
         *///? }
 
         BlockPopsMod.logDebug("BlockPops networking initialized");
@@ -116,6 +123,12 @@ public class ModNetworking {
             NetworkManager.s2c(),
             OpenFavoriteColorScreenPacket.ID,
             OpenFavoriteColorScreenPacket::handleClient
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.s2c(),
+            AdminProgressionSyncPacket.ID,
+            AdminProgressionSyncPacket::handleClient
         );
 
         BlockPopsMod.logDebug("BlockPops client networking initialized");
