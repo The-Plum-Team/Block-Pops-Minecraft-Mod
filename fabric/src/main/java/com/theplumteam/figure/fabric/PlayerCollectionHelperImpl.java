@@ -5,6 +5,8 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
+import com.theplumteam.data.PlayerDiscovery;
+import com.theplumteam.data.fabric.StateSaverAndLoader;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
@@ -15,10 +17,6 @@ import com.theplumteam.util.GeoAssets;
 import com.theplumteam.util.ResourceLocations;
 import com.theplumteam.util.TagReads;
 import net.minecraft.nbt.CompoundTag;
-//? if >=1.21 {
-/*import net.minecraft.nbt.NbtAccounter;
-*///? }
-import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -30,7 +28,6 @@ import net.minecraft.server.players.GameProfileCache;
 //? }
 
 import java.io.File;
-import java.nio.file.Path;
 import java.util.*;
 
 /**
@@ -48,9 +45,8 @@ public class PlayerCollectionHelperImpl {
      */
     public static FigureCollection generate(MinecraftServer server) {
         try {
-            // Get the playerdata directory from the world save
-            Path worldPath = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT);
-            File playerdataDir = worldPath.resolve("playerdata").toFile();
+            // Get the player data directory from the world save ("playerdata" up to 1.21.x, "players/data" from 26.1)
+            File playerdataDir = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.PLAYER_DATA_DIR).toFile();
 
             List<FigureDefinition> playerFigures = new ArrayList<>();
             Set<UUID> processedPlayers = new HashSet<>();
@@ -110,31 +106,18 @@ public class PlayerCollectionHelperImpl {
                                 }
                                 BlockPopsMod.LOGGER.debug("Loaded favorite color from online player {}: {}", playerName, favoriteColor.getSerializedName());
                             } else {
-                                // Player is offline, read from disk (Fabric uses cardinal components NBT)
+                                // Player is offline, read from the world saved data (Fabric keeps player data
+                                // in StateSaverAndLoader, not in the player's .dat file)
                                 try {
-                                    File playerDataFile = new File(playerdataDir, uuidString + ".dat");
-                                    if (playerDataFile.exists()) {
-                                        //? if >=1.21 {
-                                        /*CompoundTag playerData = NbtIo.readCompressed(playerDataFile.toPath(), NbtAccounter.unlimitedHeap());
-                                        *///? } else {
-                                        CompoundTag playerData = NbtIo.readCompressed(playerDataFile);
-                                        //? }
-                                        if (playerData != null) {
-                                            // Fabric stores cardinal components data differently
-                                            CompoundTag cardinalComponents = TagReads.compound(playerData, "cardinal_components");
-                                            if (cardinalComponents.contains("blockpops:player_discovery")) {
-                                                CompoundTag discoveryTag = TagReads.compound(cardinalComponents, "blockpops:player_discovery");
-                                                if (TagReads.hasString(discoveryTag, "FavoriteColor")) {
-                                                    try {
-                                                        favoriteColor = PopBlockColor.valueOf(TagReads.string(discoveryTag, "FavoriteColor", "").toUpperCase());
-                                                    } catch (IllegalArgumentException e) {
-                                                        BlockPopsMod.LOGGER.warn("Invalid favorite color found for player {}, defaulting to ORIGINAL", playerUUID);
-                                                    }
-                                                }
-                                            }
+                                    CompoundTag playerData = StateSaverAndLoader.findPlayerState(server, playerUUID);
+                                    if (playerData != null) {
+                                        PlayerDiscovery savedDiscovery = new PlayerDiscovery();
+                                        savedDiscovery.deserializeNBT(TagReads.compound(playerData, PlayerDataManager.DATA_KEY));
+                                        if (savedDiscovery.hasChosenFavoriteColor() && savedDiscovery.getFavoriteColor() != null) {
+                                            favoriteColor = savedDiscovery.getFavoriteColor();
                                         }
                                     }
-                                    BlockPopsMod.LOGGER.debug("Loaded favorite color from disk for offline player {}: {}", playerName, favoriteColor.getSerializedName());
+                                    BlockPopsMod.LOGGER.debug("Loaded favorite color from saved data for offline player {}: {}", playerName, favoriteColor.getSerializedName());
                                 } catch (Exception e) {
                                     BlockPopsMod.LOGGER.warn("Failed to load favorite color for player {}, defaulting to ORIGINAL: {}", playerUUID, e.getMessage());
                                 }
