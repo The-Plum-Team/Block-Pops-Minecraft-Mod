@@ -10,6 +10,7 @@ import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.network.SyncDynamicCollectionsPacket;
+import com.theplumteam.server.WorldPlayerRoster;
 import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.util.GeoAssets;
 import com.theplumteam.util.ResourceLocations;
@@ -196,6 +197,9 @@ public class PlayerCollectionHelperImpl {
                 processedPlayers.add(playerUUID);
                 BlockPopsMod.LOGGER.debug("Added online player figure (no .dat file yet): {} ({})", playerName, playerUUID);
             }
+
+            // Flag the players an operator disabled in the roster menu
+            WorldPlayerRoster.get(server).mark(playerFigures);
 
             BlockPopsMod.logDebug("Generated World Players collection with {} figures", playerFigures.size());
 

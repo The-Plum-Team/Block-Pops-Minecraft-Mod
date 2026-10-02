@@ -71,6 +71,12 @@ public class ModNetworking {
             UpdateGuaranteedResetHourPacket::handleServer
         );
 
+        PacketNetworking.registerReceiver(
+            NetworkManager.c2s(),
+            SetWorldPlayerEnabledPacket.ID,
+            SetWorldPlayerEnabledPacket::handleServer
+        );
+
         //? if >=1.21 {
         /*PacketNetworking.registerServerS2CPayloads(
                 SyncTokenDataPacket.ID, SyncDiscoveryDataPacket.ID, UnlockFigurePacket.ID,

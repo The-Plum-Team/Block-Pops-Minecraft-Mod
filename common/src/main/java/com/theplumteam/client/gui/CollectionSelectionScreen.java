@@ -498,7 +498,7 @@ public class CollectionSelectionScreen extends Screen {
         currentY += font.lineHeight + 4;
 
         // Figure count
-        String figureCount = collection.getFigures().size() + " figures in this collection";
+        String figureCount = collection.getEnabledFigures().size() + " figures in this collection";
         graphics.drawString(this.font, figureCount,
                 previewX + 8, currentY, 0xFFAAAAAA, false);
 
@@ -800,7 +800,7 @@ public class CollectionSelectionScreen extends Screen {
 
         return CollectionRegistry.getCollection(selectedCollectionId)
                 .map(collection -> {
-                    for (FigureDefinition figure : collection.getFigures()) {
+                    for (FigureDefinition figure : collection.getEnabledFigures()) {
                         String figureId = collection.getId() + ":" + figure.getId();
                         if (!ClientDiscoveryManager.isDiscovered(figureId)) {
                             return false;
