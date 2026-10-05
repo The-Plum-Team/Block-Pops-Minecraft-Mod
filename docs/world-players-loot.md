@@ -40,7 +40,9 @@ functions) in the format of the running Minecraft version.
 
 - Each roll picks one figure of the collection uniformly at random, whether that
   player is online or offline. The loot context needs no player or entity.
-- If the collection is absent or empty, the entry produces no item.
+- Players an operator disabled in **Manage World Players** are never picked.
+- If the collection is absent or has no enabled player, the entry produces no
+  item.
 - The box takes the selected player's box color, or the server's default player
   color when the player has not chosen one.
 - The box stores the skin of a selected player who is online and, when Quick
