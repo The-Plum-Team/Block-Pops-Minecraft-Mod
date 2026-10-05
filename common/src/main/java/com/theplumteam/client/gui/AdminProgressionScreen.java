@@ -215,12 +215,13 @@ public class AdminProgressionScreen extends Screen {
                 continue;
             }
             int discovered = 0;
-            for (FigureDefinition figure : collection.getFigures()) {
+            // Same count as the collection screen: figures disabled in the roster are left out
+            for (FigureDefinition figure : collection.getEnabledFigures()) {
                 if (snapshot.getDiscovered().contains(collection.getId() + ":" + figure.getId())) {
                     discovered++;
                 }
             }
-            graphics.drawString(this.font, discovered + "/" + collection.getFigures().size(),
+            graphics.drawString(this.font, discovered + "/" + collection.getEnabledFigures().size(),
                     rowX(i) + columnWidth - BUTTONS_WIDTH - COUNT_WIDTH, textY, 0xFFAAAAAA);
         }
     }
