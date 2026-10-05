@@ -428,7 +428,7 @@ jobs:
                   verify_command+=(--scope "$scope")
                   build_command=(python3 scripts/release/build_matrix.py \
                     --matrix release/release-matrix.json --scope "$scope" \
-                    --java-home "$JAVA_HOME" --java17-home "$1" --java21-home "$2" --clean)
+                    --java-home "$JAVA_HOME" --java17-home "$1" --java21-home "$2" --clean --discard-gradle-homes)
                   ;;
                 *) exit 2 ;;
               esac

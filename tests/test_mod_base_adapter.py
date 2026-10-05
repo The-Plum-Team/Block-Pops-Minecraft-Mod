@@ -46,12 +46,16 @@ from e2e.scenario_contract import load_contract  # noqa: E402
 from scripts.ci import e2e_job_graph  # noqa: E402
 from scripts.ci.gate_controller import branch_token  # noqa: E402
 from scripts.ci.mod_base_kit import parse_pin  # noqa: E402
+from scripts.ci.tests.matrix_fixtures import complete_preparing_matrix  # noqa: E402
 from scripts.release.matrix import MAX_MATRIX_BYTES, MatrixDocument, normalize_matrix_inventory  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 MATRIX_PATH = REPO / "release" / "release-matrix.json"
 CONTRACT_PATH = REPO / "e2e" / "scenario-contract.json"
+# Pin-derived preparing input keeps legacy regressions independent of live activation.
 REAL_MATRIX = MATRIX_PATH.read_bytes()
+if json.loads(REAL_MATRIX)["migration"]["mode"] == "shared":
+    REAL_MATRIX = json.dumps(complete_preparing_matrix()).encode()
 REAL_CONTRACT = CONTRACT_PATH.read_bytes()
 CONFIG = load_config(REPO)
 ADAPTER = host_child.load_adapter(REPO / "scripts" / "pages" / "mod_base_adapter.py")
@@ -500,13 +504,15 @@ class SourceJobsTests(_Repository):
                 "conclusion": "success", "head_sha": self.master["commit"]}
 
     def test_the_exact_job_graph_is_e2e_job_graph_unchanged(self) -> None:
+        matrix_path = self.tmp / "preparing-matrix.json"
+        matrix_path.write_bytes(REAL_MATRIX)
         for event, branch in (("schedule", "master"), ("workflow_dispatch", "master"),
                               ("workflow_dispatch", "release/1.21")):
             with self.subTest(event=event, branch=branch):
                 expectation = self.expectation(self.master, event=event)
                 jobs = self.hook(self.master, "expected_source_jobs",
                                  {"expectation": expectation, "tested_run": self.record(event, branch)})
-                expected = e2e_job_graph.expected_jobs(MATRIX_PATH, "on-demand-e2e.yml", event=event,
+                expected = e2e_job_graph.expected_jobs(matrix_path, "on-demand-e2e.yml", event=event,
                                                        source_branch=branch, scope="legacy")
                 self.assertEqual([{"name": job.name, "conclusion": job.conclusion} for job in expected], jobs)
                 public = {job["name"]: job["conclusion"] for job in jobs}[e2e_job_graph.E2E_PUBLIC]

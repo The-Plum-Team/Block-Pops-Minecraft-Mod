@@ -23,6 +23,7 @@ from scripts.release.matrix import (  # noqa: E402
     MatrixError,
     load_matrix_bytes,
     load_trusted_gate_matrix_bytes,
+    load_release_sync_matrix_bytes,
     valid_branch_name,
 )
 from scripts.ci.loader_bootstrap import (  # noqa: E402
@@ -210,7 +211,7 @@ def validate_topology(
         raise GateControllerError("candidate matrix does not authenticate this exact sync pair")
     _, protected_matrix_bytes = _blob(repository, protected_sha)
     try:
-        protected_matrix = load_trusted_gate_matrix_bytes(protected_matrix_bytes)
+        protected_matrix = load_release_sync_matrix_bytes(protected_matrix_bytes)
     except MatrixError as exc:
         raise GateControllerError(f"protected matrix is invalid: {exc}") from exc
     protected_branch = protected_matrix["branch"]

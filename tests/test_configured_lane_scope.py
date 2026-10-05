@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from scripts.release.build_matrix import plan_build
-from scripts.ci.tests.matrix_fixtures import TARGET_COUNT
+from scripts.ci.tests.matrix_fixtures import TARGET_COUNT, complete_preparing_matrix
 from scripts.release.matrix import LaneIdentity, MatrixError, load_matrix_document
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -95,7 +95,7 @@ class NeoForge1211ConfigurationTests(unittest.TestCase):
         """The aggregate context stays legacy-only, so no Stonecutter lane leaks into it."""
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "release-matrix.json"
-            data = json.loads(MATRIX.read_bytes())
+            data = complete_preparing_matrix()
             data["migration"]["legacy_nodes"] = ["forge-1.20.1", "neoforge-1.21.1"]
             path.write_text(json.dumps(data))
             with self.assertRaisesRegex(MatrixError, "must retain both 1.20.1 legacy nodes"):

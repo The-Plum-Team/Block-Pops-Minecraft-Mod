@@ -83,10 +83,12 @@ their protected App contexts remain mandatory.
 
 Version-shim changes require the deployed, separate
 [restricted shim admission](docs/operations.md#restricted-shim-admission).
-Generation 1 permits only the existing `VanillaShim.java` on a
+The shim scope permits only the existing `VanillaShim.java` on a
 `restricted-transition/<purpose>` branch, with an exact base/head declaration
 and a fresh owner approval of its canonical digest. It does not admit matrix or
-controller changes; both authoritative gates remain mandatory.
+controller changes; both authoritative gates remain mandatory. A separately
+deployed [shared matrix admission](docs/operations.md#shared-matrix-admission)
+permits only the exact base-derived activation of the complete inventory.
 
 AI visual review and the public evidence gallery are advisory. Do not weaken a
 deterministic assertion or skip a lane to accommodate visual-review noise.

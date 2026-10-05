@@ -101,10 +101,12 @@ class ReleaseSyncDiscoveryCliTests(unittest.TestCase):
         snapshots = {"master": self.path.read_bytes(), self.branch: release_raw}
         self.assertEqual([release.name], [row.name for row in discovery.discover_from_snapshots(snapshots, integration_branch="master")])
 
-    def test_shared_canonical_inventory_is_not_implicitly_activated(self):
+    def test_shared_canonical_discovery_does_not_enroll_a_release(self):
         raw = json.dumps(schema2_configuration(shared=True)).encode()
-        with self.assertRaisesRegex(discovery.BranchDiscoveryError, "shared"):
-            discovery.discover_from_snapshots({"master": raw}, integration_branch="master")
+        self.assertEqual([], discovery.discover_from_snapshots({"master": raw}, integration_branch="master"))
+        canonical = discovery.discover_from_snapshots({"master": raw}, integration_branch="master",
+                                                      include_integration=True)
+        self.assertEqual(["master"], [row.name for row in canonical])
 
     def test_default_cli_rejects_the_pages_only_canonical_option(self):
         self.commit(schema1_matrix())

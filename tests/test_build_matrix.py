@@ -567,6 +567,9 @@ class BuildMatrixExecutionTests(unittest.TestCase):
     def spawn(self, command, *, lock, env, output):
         node = next(arg.split("=", 1)[1] for arg in command if arg.startswith("-PblockpopsLane="))
         self.events.append(node); self.commands.append(command); self.env_ids.append(id(env))
+        cache = self.root / "build/gradle-home" / node
+        cache.mkdir(parents=True, exist_ok=True)
+        (cache / "fixture-cache").write_text("synthetic Gradle cache")
         self.assertEqual(str(self.homes[21]), env["JAVA_HOME"])
         lock.verify(); output.write(b"synthetic subprocess fixture\n")
         if self.failure == "nonzero": return 7
@@ -714,6 +717,43 @@ class BuildMatrixExecutionTests(unittest.TestCase):
             self.assertEqual("failed", report["status"])
             self.assertEqual([], self.commands)
             self.assertFalse((outside / "gradle.log").exists())
+
+    def test_completed_caches_are_discarded_after_validation_and_other_homes_are_preserved(self):
+        sibling = self.root / "build/gradle-home/unselected"
+        sibling.mkdir(parents=True)
+        (sibling / "keep").write_text("unselected cache")
+        report = self.execute(discard_gradle_homes=True)
+        self.assertEqual("success", report["status"])
+        self.assertTrue((sibling / "keep").is_file())
+        for lane in self.plan["lanes"]:
+            self.assertFalse(Path(lane["gradle_user_home"]).exists())
+            self.assertTrue(Path(lane["outputs"]["production"]).is_file())
+        self.failure = "boundary"
+        failed = self.execute(discard_gradle_homes=True)
+        self.assertEqual("failed", failed["status"])
+        self.assertTrue(Path(self.plan["lanes"][0]["gradle_user_home"]).is_dir())
+
+    def test_cache_cleanup_rejects_links_and_never_follows_an_external_tree(self):
+        from scripts.release.build_matrix import _discard_lane_home
+        parent = self.root / "build/gradle-home"
+        parent.mkdir(parents=True)
+        outside = self.root / "external-cache"
+        outside.mkdir()
+        (outside / "keep").write_text("external cache")
+        lane = self.plan["lanes"][0]
+        home = Path(lane["gradle_user_home"])
+        home.symlink_to(outside, target_is_directory=True)
+        with checkout_lock(self.root) as lock:
+            with self.assertRaises(OSError):
+                _discard_lane_home(lock, lane)
+            with self.assertRaises(BuildProcessError):
+                _discard_lane_home(lock, {**lane, "gradle_user_home": str(outside)})
+            home.unlink()
+            parent.rmdir()
+            parent.symlink_to(outside, target_is_directory=True)
+            with self.assertRaises(OSError):
+                _discard_lane_home(lock, lane)
+        self.assertEqual("external cache", (outside / "keep").read_text())
 
     def test_cli_execution_requires_explicit_homes_and_maps_outcomes_without_ambient_fallback(self):
         args = ["--matrix", str(self.path), "--java-home", str(self.homes[21]), "--java17-home", str(self.homes[17])]

@@ -15,7 +15,8 @@ from unittest import mock
 from scripts.ci.e2e_job_graph import expected_jobs
 from scripts.ci.e2e_fanin import aggregate_artifact_name
 from scripts.ci.loader_bootstrap import HARNESS_BINDING
-from scripts.ci.tests.matrix_fixtures import SCHEMA1_MATRIX_PATH, schema2_configuration
+from scripts.release.matrix import shared_activation_matrix
+from scripts.ci.tests.matrix_fixtures import SCHEMA1_MATRIX_PATH, complete_preparing_matrix, schema2_configuration
 from scripts.ci.pr_gate import (
     CONTROLLER_UPGRADE_REQUIRED,
     CONTEXTS,
@@ -1624,7 +1625,7 @@ class RestrictedShimAdmissionTests(unittest.TestCase):
 
     def setUp(self):
         RestrictedTransitionTreeTests.setUp(self)
-        self.write("release/release-matrix.json", (REPO / "release/release-matrix.json").read_text())
+        self.write("release/release-matrix.json", json.dumps(complete_preparing_matrix()))
         self.write(self.shim, "old adapter\n")
         self.git("add", ".")
         self.git("commit", "--amend", "--no-edit", "-q")
@@ -1710,6 +1711,81 @@ class RestrictedShimAdmissionTests(unittest.TestCase):
                 self.api.body = body
                 with self.assertRaises(PrGateError):
                     restricted_authorization(self.api, self.current, repository=self.repository)
+
+
+class RestrictedMatrixAdmissionTests(unittest.TestCase):
+    git = RestrictedTransitionTreeTests.git
+    write = RestrictedTransitionTreeTests.write
+    merged = RestrictedTransitionTreeTests.merged
+    evaluate = RestrictedShimAdmissionTests.evaluate
+    reauthorize = RestrictedShimAdmissionTests.reauthorize
+    MockGitHub = RestrictedTransitionOwnerTests.MockGitHub
+    Api = RestrictedShimAdmissionTests.Api
+    matrix_path = "release/release-matrix.json"
+
+    def setUp(self):
+        RestrictedTransitionTreeTests.setUp(self)
+        self.base_bytes = json.dumps(complete_preparing_matrix()).encode()
+        self.write(self.matrix_path, self.base_bytes.decode())
+        self.git("add", ".")
+        self.git("commit", "--amend", "--no-edit", "-q")
+        self.base = self.git("rev-parse", "HEAD")
+        self.candidate()
+
+    def candidate(self, matrix=None, *, extra=None):
+        matrix = shared_activation_matrix(self.base_bytes) if matrix is None else matrix
+        self.current = replace(self.merged({self.matrix_path: json.dumps(matrix), **(extra or {})}),
+                               head_branch="restricted-transition/shared-activation")
+        declaration = json.dumps({"schema_version": 1, "controller_generation": 1,
+            "controller_sha": self.base, "base_sha": self.base, "head_sha": self.current.head_sha,
+            "scope": "matrix", "paths": [self.matrix_path]})
+        self.transition = parse_restricted_transition(declaration.encode(), identity=self.current,
+            deployed_controller_sha=self.base, deployed_generation=1)
+        comment = RestrictedTransitionOwnerTests.comment(self,
+            body=f"/restricted-transition approve 1 {self.current.head_sha} {self.transition.digest}")
+        self.api = self.Api(self.current, [comment])
+        self.api.body = ("<!-- blockpops-restricted-transition:start -->" + declaration
+                         + "<!-- blockpops-restricted-transition:end -->")
+        for run_id, workflow in ((51, "build-gate.yml"), (52, "on-demand-e2e.yml")):
+            self.api.job_records[run_id] = [
+                {"id": run_id * 100 + index, "name": item.name, "run_attempt": 1,
+                 "status": "completed", "conclusion": item.conclusion}
+                for index, item in enumerate(expected_jobs(self.repository / self.matrix_path, workflow,
+                    event="pull_request_target", source_branch="master"))]
+
+    def test_exact_base_derived_full_activation_and_fresh_writer(self):
+        result = self.evaluate()
+        self.assertEqual({"success"}, {gate["state"] for gate in result["gates"].values()})
+        self.assertTrue(self.reauthorize(result)["authorization_current"])
+        legacy = self.Api(self.current, self.api.comments)
+        self.api.job_records = legacy.job_records
+        self.assertEqual("failure", self.evaluate()["gates"]["e2e"]["state"])
+
+    def test_candidate_cannot_change_pins_versions_routing_reference_or_authority(self):
+        for mutate in (lambda m: m["project"].update(mod_version="9.9.9"),
+                       lambda m: m["artifacts"][2].update(mod_version="9.9.9"),
+                       lambda m: m["runtimes"][0]["runtime_dependencies"][0].update(coordinate="example:dependency:9.9"),
+                       lambda m: m["source_routing"]["common"].update(canonical="common/src/other"),
+                       lambda m: m["visual_reference"].update(artifact_node="fabric-26.3")):
+            matrix = shared_activation_matrix(self.base_bytes)
+            mutate(matrix)
+            # Invalid matrices must be rejected before evidence selection, not used to define it.
+            with mock.patch("scripts.ci.tests.test_pr_gate.expected_jobs", return_value=()):
+                self.candidate(matrix)
+            with mock.patch.object(self.api, "workflow_runs") as reads:
+                result = self.evaluate()
+            self.assertEqual({"failure"}, {gate["state"] for gate in result["gates"].values()})
+            reads.assert_not_called()
+        self.candidate(extra={"scripts/ci/pr_gate.py": "self-authority"})
+        self.assertEqual("failure", self.evaluate()["gates"]["build"]["state"])
+
+    def test_base_must_be_preparing_complete_and_activation_is_one_shot(self):
+        shared = shared_activation_matrix(self.base_bytes)
+        with self.assertRaises(ValueError):
+            shared_activation_matrix(json.dumps(shared).encode())
+        incomplete = schema2_configuration()
+        with self.assertRaises(ValueError):
+            shared_activation_matrix(json.dumps(incomplete).encode())
 
 
 class RestrictedLoaderTransitionTests(unittest.TestCase):

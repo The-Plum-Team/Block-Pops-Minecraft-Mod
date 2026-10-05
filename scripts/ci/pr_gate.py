@@ -56,6 +56,7 @@ from scripts.release.matrix import (  # noqa: E402
     MatrixError,
     load_matrix_bytes,
     load_trusted_gate_matrix_bytes,
+    shared_activation_matrix,
     valid_branch_name,
 )
 
@@ -864,7 +865,7 @@ def _restricted_requested(identity: PullIdentity) -> bool:
 def restricted_authorization(
     api: GitHubApi, identity: PullIdentity, *, repository: Path | None = None,
 ) -> UpgradeAuthorization:
-    """Admission generation 1: one shim file, base-owned graphs and a separate owner decision.
+    """Admission generation 1: a shim or exact shared activation, and a separate owner decision.
 
     The existing declaration helpers remain inert for every other scope. This route is active
     only when called by the deployed default controller; its candidate cannot change authority.
@@ -888,16 +889,22 @@ def restricted_authorization(
                      deployed_generation=RESTRICTED_TRANSITION_GENERATION)
     transition = parse_restricted_transition(declaration, identity=identity,
         deployed_controller_sha=identity.default_sha, deployed_generation=RESTRICTED_TRANSITION_GENERATION)
-    if transition.scope != "vanilla-shim":
-        _fail("deployed restricted admission supports only the vanilla-shim scope")
+    if transition.scope not in {"vanilla-shim", "matrix"}:
+        _fail("deployed restricted admission supports only shim or shared matrix activation")
     if repository is not None:
         validate_restricted_transition_tree(repository, identity, **arguments)
         if any(_tree_entry(repository, commit, transition.paths[0]) is None
                for commit in (identity.base_sha, identity.merge_sha)):
-            _fail("restricted shim admission requires modifying the existing adapter")
-        # The shim cannot select a new matrix, graph, controller or loader contract.
-        if (_blob(repository, identity.base_sha, MATRIX_PATH, maximum=256 * 1024)
-                != _blob(repository, identity.merge_sha, MATRIX_PATH, maximum=256 * 1024)):
+            _fail("restricted admission requires modifying its existing file")
+        base = _blob(repository, identity.base_sha, MATRIX_PATH, maximum=256 * 1024)
+        candidate = _blob(repository, identity.merge_sha, MATRIX_PATH, maximum=256 * 1024)
+        if transition.scope == "matrix":
+            # Protected base derives every allowed field; the candidate selects no pins or scope.
+            expected = shared_activation_matrix(base)
+            load_trusted_gate_matrix_bytes(candidate)
+            if json.loads(candidate) != expected:
+                _fail("restricted matrix differs from the exact base-derived shared activation")
+        elif base != candidate:
             _fail("restricted shim transition changed its base-owned matrix")
     decision = read_restricted_transition_owner_decision(api, identity, **arguments)
     digest = bind_restricted_transition_decision(transition, repository=api.repository,

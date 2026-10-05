@@ -175,8 +175,11 @@ upgrade:
    projection: the branch policy plus the two legacy lanes `fabric-1.20.1` and
    `forge-1.20.1`. The expected job graphs come from the full document's
    default `legacy` scope, the same two lanes. Both therefore equal the
-   schema-1 gate's; `shared` mode (until its activation task), any other mode
-   and a malformed matrix fail closed. The loader-bootstrap contract still
+   schema-1 gate's. An already protected `shared` integration matrix projects
+   every target, requires the full E2E graph and protects all active loaders;
+   incomplete inventories, release-role schema 2 and malformed matrices fail
+   closed. This controller upgrade does not authorize a matrix transition.
+   The loader-bootstrap contract still
    binds every configured loader, NeoForge included, so an ordinary change to
    NeoForge's `build.gradle` or `src/e2e` must match that contract, which the
    schema-1 gate did not require.
@@ -215,9 +218,9 @@ existing authorized governance process without weakening an established gate.
 
 The deployed controller also accepts `restricted-transition/<purpose>` branches
 targeting the exact current `master`, without the `controller-upgrade` label.
-Generation 1 admits only a modification of the existing
-`common/src/e2e/java/com/theplumteam/e2e/VanillaShim.java`. Extra paths, deletion,
-matrix changes and every other declaration scope fail closed. This route retains
+The `vanilla-shim` scope admits only a modification of the existing
+`common/src/e2e/java/com/theplumteam/e2e/VanillaShim.java`. Extra paths and deletion
+fail closed. This route retains
 the base-owned matrix, job graphs and both mandatory exact-run gate artifacts.
 Its foundation must deploy through the controller-upgrade procedure first;
 a candidate controller cannot authorize its own transition.
@@ -238,6 +241,21 @@ base or declaration invalidates publication. The protected evaluator and writer
 independently reread that decision before publishing the two fixed App contexts.
 Merge only with both newest exact gates and App contexts successful. A new base
 requires a new declaration and fresh approval, even if the candidate is unchanged.
+
+### Shared matrix admission
+
+The independently deployed controller also admits the `matrix` scope on
+`restricted-transition/*`, using the same generation-1 declaration and owner
+command, with `paths` exactly `["release/release-matrix.json"]`.
+`shared_activation_matrix` derives the entire expected candidate from the exact
+protected base. The base must be a complete `preparing` integration inventory.
+Only `migration.mode=shared`, empty `legacy_nodes`, and the former legacy lanes'
+Stonecutter layout/task/output paths may change. Versions, dependencies, installers,
+source routing, reference and every other field remain identical. Activation is
+one-shot; arbitrary matrix edits and every other restricted scope fail closed.
+The required E2E graph is the full protected target set, never the legacy subset.
+Build independently validates the complete scoped report and staged archives.
+No matrix payload may include controller, shim or product changes.
 
 ### Loader-bootstrap transitions
 

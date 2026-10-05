@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import signal
 import stat
 import subprocess
@@ -699,8 +700,32 @@ def _lane_log(lock, path):
         os.close(directory)
 
 
+def _discard_lane_home(lock, lane):
+    """Delete only the completed lane cache through anchored, symlink-safe descriptors."""
+    lock.verify()
+    node = lane["artifact_node"]
+    if (re.fullmatch(r"[a-z]+-[0-9]+(?:\.[0-9]+)*", node) is None
+            or lane["gradle_user_home"] != str(lock.repository / "build/gradle-home" / node)
+            or not shutil.rmtree.avoids_symlink_attacks):
+        raise BuildProcessError("lane cache cleanup requires an exact owned path and safe rmtree")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    directory = os.open(lock.path.parent, flags)
+    try:
+        if _identity(os.fstat(directory)) != lock.parent:
+            raise BuildProcessError("lane cache cleanup build directory identity changed")
+        parent = os.open("gradle-home", flags, dir_fd=directory)
+        try:
+            shutil.rmtree(node, dir_fd=parent)
+        finally:
+            os.close(parent)
+    finally:
+        os.close(directory)
+    lock.verify()
+
+
 def execute_build(matrix_path: Path, *, java_home: Path, java_homes: dict[int, Path],
                   scope: str = "full", artifact_node: str | None = None, clean: bool = False,
+                  discard_gradle_homes: bool = False,
                   environment: dict[str, str] | None = None) -> dict[str, Any]:
     """Fail-fast build diagnostics; process exit, observations and archive boundaries are separate evidence."""
     from scripts.release.artifact_manifest import verify_harness_jar, verify_production_jar
@@ -752,6 +777,8 @@ def execute_build(matrix_path: Path, *, java_home: Path, java_homes: dict[int, P
                 unchanged_outputs()
                 result["archive_validation"] = "boundary-and-metadata"
                 _atomic_report(lock, report)
+                if discard_gradle_homes:
+                    _discard_lane_home(lock, lane)
             return finish_report(lock, run_id, results)
         except BaseException as exc:
             failed = finish_report(lock, run_id, results, error=f"{type(exc).__name__}: {exc}")
@@ -775,9 +802,12 @@ def main(argv: list[str] | None = None) -> int:
     selection.add_argument("--scope", choices=("full", "legacy"))
     selection.add_argument("--artifact-node")
     parser.add_argument("--clean", action="store_true")
+    parser.add_argument("--discard-gradle-homes", action="store_true",
+                        help="discard each completed lane cache after observation and archive validation")
     args = parser.parse_args(argv)
-    if args.plan and any((args.java_home, args.java17_home, args.java21_home, args.java25_home)):
-        parser.error("--plan cannot be combined with execution JDK homes")
+    if args.plan and any((args.java_home, args.java17_home, args.java21_home, args.java25_home,
+                          args.discard_gradle_homes)):
+        parser.error("--plan cannot be combined with execution options")
     if not args.plan and args.java_home is None:
         parser.error("execution requires --java-home; use --plan for planning only")
     try:
@@ -787,7 +817,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             homes = {major: home for major, home in
                      ((17, args.java17_home), (21, args.java21_home), (25, args.java25_home)) if home is not None}
-            result = execute_build(args.matrix, java_home=args.java_home, java_homes=homes, **options)
+            result = execute_build(args.matrix, java_home=args.java_home, java_homes=homes,
+                                   discard_gradle_homes=args.discard_gradle_homes, **options)
     except KeyboardInterrupt:
         print("build matrix interrupted; execution did not complete", file=sys.stderr)
         return 130
