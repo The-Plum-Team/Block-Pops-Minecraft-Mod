@@ -691,9 +691,9 @@ def _lane_log(lock, path):
             child = os.open(part, flags, dir_fd=directory)
             os.close(directory)
             directory = child
-        descriptor = os.open(relative.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+        descriptor = os.open(relative.name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
                              0o600, dir_fd=directory)
-        with os.fdopen(descriptor, "wb") as output:
+        with os.fdopen(descriptor, "w+b") as output:
             yield output
     finally:
         os.close(directory)
@@ -733,7 +733,14 @@ def execute_build(matrix_path: Path, *, java_home: Path, java_homes: dict[int, P
                 _atomic_report(lock, report)
                 log = Path(bound["request"]).with_name("gradle.log")
                 with _lane_log(lock, log) as output:
-                    result["exit_code"] = run_lane(bound["command"], lock=lock, env=env, output=output)
+                    try:
+                        result["exit_code"] = run_lane(bound["command"], lock=lock, env=env, output=output)
+                    finally:
+                        if result["exit_code"] != 0:
+                            output.flush()
+                            output.seek(max(0, output.tell() - 65536))
+                            for line in output.read(65536).decode("utf-8", "replace").splitlines()[-200:]:
+                                print(f"[gradle/{node}] {line}", file=sys.stderr)
                 result["log"] = file_snapshot(repository, log)
                 if type(result["exit_code"]) is not int or result["exit_code"] != 0:
                     raise BuildProcessError(f"lane {node} exited with {result['exit_code']}")

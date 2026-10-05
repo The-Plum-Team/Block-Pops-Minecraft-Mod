@@ -27,6 +27,7 @@ from scripts.release.matrix import (  # noqa: E402
     MAX_MATRIX_BYTES,
     MatrixError,
     load_matrix_bytes,
+    load_trusted_gate_matrix_bytes,
 )
 
 MATRIX_PATH = "release/release-matrix.json"
@@ -256,7 +257,7 @@ def create_sync_merge(
         raise SyncMergeError("target matrix does not enroll this exact branch/source pair")
     _, source_matrix_bytes = _blob(repository, source_sha, MATRIX_PATH)
     try:
-        source_matrix = load_matrix_bytes(source_matrix_bytes)
+        source_matrix = load_trusted_gate_matrix_bytes(source_matrix_bytes)
     except MatrixError as exc:
         raise SyncMergeError(f"source matrix is invalid: {exc}") from exc
     if (

@@ -37,6 +37,14 @@ the canonical source, and synchronization enabled. Missing matrices are not
 release claims. A valid JSON matrix that self-identifies as an enrolled release
 but fails the complete schema aborts discovery.
 
+While the integration matrix is schema 2 in `preparing` mode, synchronization
+uses the trusted gate's legacy projection for canonical discovery, merge
+construction and topology authentication. The complete canonical configuration
+is validated before selecting those lanes. Enrolled release matrices remain
+schema 1; schema-2 release enrollment and `shared` activation are not admitted
+by this compatibility path. Modern configured loaders therefore do not change
+which target-owned loader trees the synchronizer retains.
+
 Ordinary feature PRs and controller upgrades target only the canonical default
 branch. Enrolled releases accept only the separately authenticated generated
 release-sync bridge contexts; they do not consume an ordinary release-base

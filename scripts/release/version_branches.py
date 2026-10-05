@@ -20,8 +20,8 @@ from scripts.release.matrix import (  # noqa: E402
     MAX_MATRIX_BYTES,
     MatrixDocument,
     MatrixError,
-    load_matrix,
-    load_matrix_bytes,
+    load_matrix_document,
+    load_trusted_gate_matrix_bytes,
     normalize_matrix_inventory,
     valid_branch_name,
 )
@@ -74,7 +74,7 @@ def inspect_pages_branch(repository: Path, *, branch: str, ref: str,
 
     Callers authenticate the advertised ref/head separately. This opt-in API does
     not select a run, infer a projection, inspect worktree sources or qualify any
-    lane. Existing sync/default discovery interfaces remain schema1-only.
+    lane. Sync/default discovery uses only the trusted gate's current projection.
     """
     if scope not in ("unscoped", "legacy", "full"):
         raise BranchDiscoveryError("Pages requires explicit unscoped/legacy/full scope")
@@ -314,7 +314,7 @@ def _matrix_from_git(
             f"release branch {branch!r} matrix changed during inspection"
         )
     try:
-        matrix = load_matrix_bytes(raw)
+        matrix = load_trusted_gate_matrix_bytes(raw)
     except MatrixError as exc:
         raise BranchDiscoveryError(
             f"release branch {branch!r} has an invalid matrix: {exc}"
@@ -383,7 +383,7 @@ def discover_from_snapshots(
         ):
             continue
         try:
-            matrix = load_matrix_bytes(snapshots[branch])
+            matrix = load_trusted_gate_matrix_bytes(snapshots[branch])
         except MatrixError as exc:
             raise BranchDiscoveryError(
                 f"release branch {branch!r} has an invalid matrix: {exc}"
@@ -511,7 +511,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.canonical_branch is not None:
             raise BranchDiscoveryError("--canonical-branch requires the opt-in --pages mode")
-        local = load_matrix(args.matrix)
+        local = load_matrix_document(args.matrix).trusted_gate_projection()
         integration = local["branch"]["canonical"]
         if args.target:
             branches = [

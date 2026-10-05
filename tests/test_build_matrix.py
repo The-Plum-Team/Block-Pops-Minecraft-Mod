@@ -631,6 +631,26 @@ class BuildMatrixExecutionTests(unittest.TestCase):
             self.assertIn("--no-daemon", command); self.assertIn("--no-parallel", command)
             self.assertIn("--max-workers=1", command); self.assertIn("strict", command)
 
+    def test_failed_lane_emits_a_bounded_log_tail_without_changing_report_or_continuing(self):
+        self.failure = "nonzero"
+        spawn = self.spawn
+        payload = b"discarded log beginning\n" + b"x" * 70000 + b"\nGradle failure detail: \xff\n"
+        def noisy_spawn(command, **kwargs):
+            kwargs["output"].write(payload)
+            return spawn(command, **kwargs)
+        self.spawn = noisy_spawn
+        error = io.StringIO()
+        with contextlib.redirect_stderr(error):
+            report = self.execute()
+        self.assertEqual("failed", report["status"])
+        self.assertEqual(["probe", "fabric-1.20.1"], self.events)
+        self.assertNotIn("discarded log beginning", error.getvalue())
+        self.assertIn("[gradle/fabric-1.20.1] Gradle failure detail: \ufffd", error.getvalue())
+        self.assertLess(len(error.getvalue()), 66000)
+        self.assertEqual(report, json.loads(self.report_path.read_text()))
+        log = self.root / report["lanes"][0]["log"]["path"]
+        self.assertEqual(payload + b"synthetic subprocess fixture\n", log.read_bytes())
+
     def test_lane_failures_stop_before_next_spawn_and_replace_success_with_failed_report(self):
         for failure in ("check", "nonzero", "startup", "receipt", "boundary", "missing", "source"):
             self.failure, self.commands = failure, []
