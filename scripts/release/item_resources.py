@@ -102,7 +102,7 @@ def generate(source: Path, output: Path, minecraft: str) -> None:
         for relative, payload in {**plan, ".inventory.json": canonical_json(sorted(plan))}.items():
             with ExitStack() as parents:
                 parent = _directory(parents, output.absolute() / Path(relative).parent, create=True)
-                descriptor = os.open(Path(relative).name, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW,
+                descriptor = os.open(Path(relative).name, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
                                      0o644, dir_fd=parent)
                 with os.fdopen(descriptor, "wb") as stream:
                     info = os.fstat(stream.fileno())

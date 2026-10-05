@@ -1,7 +1,10 @@
 """Modern model linkage, old resource compatibility and generated-tree safety."""
 
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -90,3 +93,14 @@ class ItemResourceTests(unittest.TestCase):
         alias.symlink_to(self.source, target_is_directory=True)
         with self.assertRaises(OSError):
             resource_plan(alias, "26.2")
+
+    def test_output_fifo_fails_without_waiting_for_a_reader(self):
+        generate(self.source, self.output, "26.2")
+        generated = self.output / "assets/blockpops/items/box_block_purple.json"
+        generated.unlink()
+        os.mkfifo(generated)
+        result = subprocess.run([sys.executable, "-B", str(ROOT / "scripts/release/item_resources.py"),
+            "--source", str(self.source), "--output", str(self.output), "--minecraft", "26.2"],
+            capture_output=True, timeout=10)
+        self.assertEqual(1, result.returncode)
+        self.assertIn(b"item resources:", result.stderr)
