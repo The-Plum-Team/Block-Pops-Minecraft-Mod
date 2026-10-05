@@ -619,6 +619,8 @@ public class CollectionSelectionScreen extends Screen {
         var pose = graphics.pose();
         pose.pushPose();
         RenderSystem.setShaderTexture(0, cacheTexture);
+        // GUI fills leave a different program bound; select the textured 1.21.4 shader.
+        RenderSystem.setShader(net.minecraft.client.renderer.CoreShaders.POSITION_TEX);
 
         BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
         bufferBuilder.addVertex(pose.last().pose(), 0, starHeight, 0).setUv(u0, v1);
