@@ -31,6 +31,11 @@ import time
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.lib.secure_json import SecureJsonError, loads as secure_loads
+from scripts.release.matrix import MAX_MATRIX_BYTES, MatrixError, normalize_matrix_inventory
+
 STATE_NAME = "sandbox-state.json"
 USER_NAME = "blockpops_candidate"
 VALIDATOR_USER_NAME = "blockpops_validator"
@@ -251,6 +256,32 @@ def _generated_path(relative: str) -> bool:
     )
 
 
+def _stonecutter_output_roots(source: Path, commit: str, tracked: tuple[str, ...]) -> set[str]:
+    """Derive only build/cache roots from the authenticated matrix blob, never candidate code."""
+
+    matrix_path = "release/release-matrix.json"
+    if matrix_path not in tracked:
+        return set()
+    blob = f"{commit}:{matrix_path}"
+    size = _run(("git", "-C", str(source), "cat-file", "-s", blob)).strip()
+    if not size.isdigit() or not 1 <= int(size) <= MAX_MATRIX_BYTES:
+        raise SandboxError("authenticated release matrix exceeds its byte budget")
+    try:
+        matrix = secure_loads(_run(("git", "-C", str(source), "cat-file", "blob", blob)),
+                              label="authenticated release matrix", max_bytes=MAX_MATRIX_BYTES)
+        inventory = normalize_matrix_inventory(matrix)
+    except (MatrixError, SecureJsonError) as exc:
+        raise SandboxError(f"authenticated release matrix is invalid: {exc}") from exc
+    roots = set()
+    for lane in inventory.lanes:
+        if lane.build_layout != "stonecutter":
+            continue
+        for module in ("common", lane.identity.loader):
+            for output in ("build", ".gradle"):
+                roots.add(f"{module}/versions/{lane.identity.minecraft}/{output}")
+    return roots
+
+
 def _restore_authenticated_tree(state: dict[str, Any]) -> None:
     """Prove source bytes are immutable and replace candidate-controlled Git metadata."""
 
@@ -261,9 +292,10 @@ def _restore_authenticated_tree(state: dict[str, Any]) -> None:
         raise SandboxError("authenticated candidate checkout changed during sandbox execution")
     tracked = _tracked_paths(source)
     tracked_set = set(tracked)
+    generated_roots = _stonecutter_output_roots(source, commit, tracked)
     ancestors = {
         PurePosixPath(*PurePosixPath(relative).parts[:index]).as_posix()
-        for relative in tracked
+        for relative in (*tracked, *generated_roots)
         for index in range(1, len(PurePosixPath(relative).parts))
     }
     for relative in tracked:
@@ -294,24 +326,25 @@ def _restore_authenticated_tree(state: dict[str, Any]) -> None:
     pending = [repository]
     while pending:
         directory = pending.pop()
-        for entry in os.scandir(directory):
-            path = Path(entry.path)
-            relative = path.relative_to(repository).as_posix()
-            if relative == ".git":
-                continue
-            if _generated_path(relative):
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                path = Path(entry.path)
+                relative = path.relative_to(repository).as_posix()
+                if relative == ".git":
+                    continue
+                if _generated_path(relative) or relative in generated_roots:
+                    if path.is_symlink() or not entry.is_dir(follow_symlinks=False):
+                        raise SandboxError(
+                            f"generated candidate root {relative!r} is not a real directory"
+                        )
+                    continue
+                if relative in tracked_set:
+                    continue
+                if relative not in ancestors:
+                    raise SandboxError(f"candidate created an undeclared path {relative!r}")
                 if path.is_symlink() or not entry.is_dir(follow_symlinks=False):
-                    raise SandboxError(
-                        f"generated candidate root {relative!r} is not a real directory"
-                    )
-                continue
-            if relative in tracked_set:
-                continue
-            if relative not in ancestors:
-                raise SandboxError(f"candidate created an undeclared path {relative!r}")
-            if path.is_symlink() or not entry.is_dir(follow_symlinks=False):
-                raise SandboxError(f"tracked candidate directory {relative!r} changed type")
-            pending.append(path)
+                    raise SandboxError(f"tracked candidate directory {relative!r} changed type")
+                pending.append(path)
 
     candidate_git = repository / ".git"
     if candidate_git.is_symlink() or (candidate_git.exists() and not candidate_git.is_dir()):

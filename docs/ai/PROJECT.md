@@ -55,6 +55,9 @@ shutdown waits for the JVM to finish writing logs before evidence export, withou
   default branch on `pull_request_target`. They check out the candidate only as data and run all of
   its code (tests, Gradle, Minecraft) inside `scripts/ci/untrusted_runner.py`'s disposable,
   credentialless account, which is killed and locked before any artifact credential exists.
+  Sealing derives Stonecutter node-local `build` and `.gradle` output roots from the authenticated
+  matrix Git blob. It walks their exact parent directories and still rejects undeclared versions,
+  node-local sources, linked roots and every change to tracked source bytes.
 - **Governance.** Branch protection on `master` requires the App-sourced contexts
   `Trusted PR / Build and verify` and `Trusted PR / Packaged E2E gate`. Protected paths
   (`scripts/ci/gate_controller.py` `PROTECTED_PATHS`) change only through the SHA-approved
