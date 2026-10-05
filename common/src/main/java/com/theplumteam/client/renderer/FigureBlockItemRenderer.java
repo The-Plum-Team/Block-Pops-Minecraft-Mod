@@ -33,16 +33,14 @@ public class FigureBlockItemRenderer
     extends BlockEntityWithoutLevelRenderer
     //? }
 {
-    private final FigureBlockRenderer renderer;
+    private FigureBlockRenderer renderer;
     private FigureBlockEntity renderEntity;
 
     public FigureBlockItemRenderer() {
         //? if <1.21.4 {
         super(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
         //? }
-        //? if >=26 {
-        /*this.renderer = new FigureBlockRenderer(GeoRendererContext.get());
-        *///? } else {
+        //? if <26 {
         this.renderer = new FigureBlockRenderer();
         //? }
     }
@@ -213,6 +211,10 @@ public class FigureBlockItemRenderer
                        int packedLight, int packedOverlay, boolean hasGlint, int outlineColor) {
         if (!prepareRenderEntity(stack)) {
             return;
+        }
+        // Model baking precedes block-entity renderer registration in 26.x.
+        if (this.renderer == null) {
+            this.renderer = new FigureBlockRenderer(GeoRendererContext.get());
         }
         float partialTick = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(true);
         net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState renderState =

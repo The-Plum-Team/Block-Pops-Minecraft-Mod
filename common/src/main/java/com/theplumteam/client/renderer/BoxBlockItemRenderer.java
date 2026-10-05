@@ -34,16 +34,14 @@ public class BoxBlockItemRenderer
     extends BlockEntityWithoutLevelRenderer
     //? }
 {
-    private final BoxBlockRenderer renderer;
+    private BoxBlockRenderer renderer;
     private BoxBlockEntity renderEntity;
 
     public BoxBlockItemRenderer() {
         //? if <1.21.4 {
         super(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
         //? }
-        //? if >=26 {
-        /*this.renderer = new BoxBlockRenderer(GeoRendererContext.get());
-        *///? } else {
+        //? if <26 {
         this.renderer = new BoxBlockRenderer();
         //? }
     }
@@ -221,6 +219,10 @@ public class BoxBlockItemRenderer
                        int packedLight, int packedOverlay, boolean hasGlint, int outlineColor) {
         if (!prepareRenderEntity(stack)) {
             return;
+        }
+        // Model baking precedes block-entity renderer registration in 26.x.
+        if (this.renderer == null) {
+            this.renderer = new BoxBlockRenderer(GeoRendererContext.get());
         }
         float partialTick = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(true);
         net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState renderState =
