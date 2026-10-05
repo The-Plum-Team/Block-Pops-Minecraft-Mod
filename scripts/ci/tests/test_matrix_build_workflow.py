@@ -25,13 +25,17 @@ class MatrixBuildWorkflowTests(unittest.TestCase):
     validate_step = "Reverify inert outputs under a fresh credentialless validator identity"
     test_runner = ["python3", "scripts/ci/parallel_unittest.py", "-v", "-t", ".", "scripts/ci/tests", "tests"]
 
-    def test_java17_path_is_a_positional_argument_and_gradle_jdk_remains_default(self):
+    def test_compiler_homes_are_positional_arguments_and_gradle_jdk_remains_default(self):
         workflow = self.workflow.read_text()
         self.assertLess(workflow.index("name: Install the legacy compiler JDK"),
                         workflow.index("name: Install the matrix-owned Gradle JDK"))
         self.assertIn("BLOCKPOPS_JAVA17_HOME: ${{ steps.java17.outputs.path }}", workflow)
-        self.assertIn("' _ \"$BLOCKPOPS_JAVA17_HOME\"", workflow)
-        self.assertNotIn("--pass-env BLOCKPOPS_JAVA17_HOME", workflow)
+        self.assertLess(workflow.index("name: Install the intermediate compiler JDK"),
+                        workflow.index("name: Install the matrix-owned Gradle JDK"))
+        self.assertIn("BLOCKPOPS_JAVA21_HOME: ${{ steps.java21.outputs.path }}", workflow)
+        self.assertIn("' _ \"$BLOCKPOPS_JAVA17_HOME\" \"$BLOCKPOPS_JAVA21_HOME\"", workflow)
+        for major in (17, 21):
+            self.assertNotIn(f"--pass-env BLOCKPOPS_JAVA{major}_HOME", workflow)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -64,7 +68,8 @@ if args[:2] == ["controller/scripts/ci/untrusted_runner.py", "validate"]:
                     "GRADLE_USER_HOME": str(self.root), "BLOCKPOPS_TESTED_SHA": "a" * 40}
 
     def run_step(self, step, scope, argument, **env):
-        result = subprocess.run(["bash", "-euo", "pipefail", "-c", script(self.workflow, step), "_", argument, "a" * 64, "b" * 40],
+        second = "/jdk21 compile home/$(touch forbidden21)" if step == self.build_step else "a" * 64
+        result = subprocess.run(["bash", "-euo", "pipefail", "-c", script(self.workflow, step), "_", argument, second, "b" * 40],
             cwd=self.root, env={**self.env, "MATRIX_SCOPE": scope, **env}, capture_output=True, text=True)
         rows = [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
         self.log.unlink(missing_ok=True)
@@ -86,10 +91,12 @@ if args[:2] == ["controller/scripts/ci/untrusted_runner.py", "validate"]:
                 else:
                     self.assertEqual(["python3", "scripts/release/build_matrix.py", "--matrix",
                         "release/release-matrix.json", "--scope", scope, "--java-home", "/jdk21 home",
-                        "--java17-home", home17, "--clean"], builds[0])
+                        "--java17-home", home17, "--java21-home", "/jdk21 compile home/$(touch forbidden21)",
+                        "--clean"], builds[0])
                 scope_args = [] if scope == "unscoped" else ["--scope", scope]
                 self.assertEqual(["python3", "scripts/release/verify_release.py", *scope_args], rows[-1])
                 self.assertFalse((self.root / "forbidden").exists())
+                self.assertFalse((self.root / "forbidden21").exists())
 
     def test_fresh_validator_derives_selection_from_matrix_and_preserves_exact_paths(self):
         for scope in ("unscoped", "legacy", "full"):
