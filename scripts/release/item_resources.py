@@ -11,20 +11,13 @@ import stat
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.lib.atomic_directory import _directory_fd  # noqa: E402
 from scripts.lib.secure_json import canonical_json, loads  # noqa: E402
 
 
 def _directory(stack: ExitStack, path: Path, *, create: bool = False) -> int:
-    descriptor = os.open(path.anchor, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    descriptor = _directory_fd(path, create=create)
     stack.callback(os.close, descriptor)
-    for component in path.parts[1:]:
-        if create:
-            try:
-                os.mkdir(component, dir_fd=descriptor)
-            except FileExistsError:
-                pass
-        descriptor = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
-        stack.callback(os.close, descriptor)
     return descriptor
 
 

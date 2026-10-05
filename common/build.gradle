@@ -10,7 +10,8 @@ def authoredResources = rootProject.file('common/src/main/resources')
 def resourcePython = providers.environmentVariable('BLOCKPOPS_PYTHON').orElse(
         System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3')
 def generateItemResources = tasks.register('generateSpecialItemResources', Exec) {
-    inputs.files(itemResourceScript, rootProject.file('scripts/lib/secure_json.py'))
+    inputs.files(itemResourceScript, rootProject.file('scripts/lib/secure_json.py'),
+            rootProject.file('scripts/lib/atomic_directory.py'))
     inputs.dir(new File(authoredResources, 'assets/blockpops/models'))
     inputs.property('minecraft', rootProject.minecraft_version)
     outputs.dir(itemResources)

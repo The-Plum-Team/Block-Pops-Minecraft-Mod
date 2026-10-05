@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from scripts.lib.atomic_directory import _directory_fd, atomic_directory, write_new
+from scripts.release.item_resources import generate
 
 
 class AtomicDirectoryTraversalTests(unittest.TestCase):
@@ -34,6 +35,13 @@ class AtomicDirectoryTraversalTests(unittest.TestCase):
 
         self.assertEqual("done", atomic_directory(output, writer))
         self.assertEqual(b"written", (output / "nested/file.txt").read_bytes())
+        source = inner / "source"
+        items = source / "assets/blockpops/models/item"
+        items.mkdir(parents=True)
+        (items.parent / "block").mkdir()
+        (items / "box_block.json").write_text('{"parent":"builtin/entity"}')
+        generate(source, inner / "generated", "26.2")
+        self.assertTrue((inner / "generated/assets/blockpops/items/box_block.json").is_file())
 
     def test_link_in_the_middle_of_the_path_is_still_refused(self):
         real = self.base / "real"
