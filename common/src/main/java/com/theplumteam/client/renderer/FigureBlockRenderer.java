@@ -19,7 +19,7 @@ import software.bernie.geckolib.renderer.base.GeoRenderState;
 *///? }
 
 //? if >=26 {
-/*public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity,
+/*public class FigureBlockRenderer extends BlockPopsGeoBlockRenderer<FigureBlockEntity,
         net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState> {
 
     public FigureBlockRenderer(net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider.Context context) {

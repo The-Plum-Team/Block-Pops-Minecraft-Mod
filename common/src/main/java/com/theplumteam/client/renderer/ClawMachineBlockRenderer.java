@@ -5,7 +5,7 @@ import com.theplumteam.client.model.ClawMachineBlockModel;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
 
 //? if >=26 {
-/*public class ClawMachineBlockRenderer extends GeoBlockRenderer<ClawMachineBlockEntity,
+/*public class ClawMachineBlockRenderer extends BlockPopsGeoBlockRenderer<ClawMachineBlockEntity,
         net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState> {
     public ClawMachineBlockRenderer(net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider.Context context) {
         super(context, new ClawMachineBlockModel());

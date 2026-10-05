@@ -65,11 +65,13 @@ public class ClawMachineBlockEntity extends BlockEntity implements GeoBlockEntit
         ));
     }
 
+    //? if <26 {
     // The packaged E2E photographs the idle animation at one fixed frame.
     @Override
     public double getTick(Object blockEntity) {
         return E2EDeterminism.animationTick(GeoBlockEntity.super.getTick(blockEntity));
     }
+    //? }
 
     @Override
     public AnimatableInstanceCache getAnimatableInstanceCache() {
