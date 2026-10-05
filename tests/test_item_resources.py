@@ -1,0 +1,92 @@
+"""Modern model linkage, old resource compatibility and generated-tree safety."""
+
+import json
+from pathlib import Path
+import tempfile
+import unittest
+
+from scripts.release.item_resources import generate, resource_plan
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE = ROOT / "common/src/main/resources"
+
+
+class ItemResourceTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        self.output = self.root / "generated"
+        self.source = self.root / "source"
+        self.items = self.source / "assets/blockpops/models/item"
+        self.items.mkdir(parents=True)
+        (self.source / "assets/blockpops/models/block").mkdir()
+        self.item = self.items / "box_block_purple.json"
+        self.item.write_text('{"parent":"builtin/entity","gui_light":"front"}')
+
+    def test_every_authored_entity_item_links_a_registered_renderer_and_resolvable_base(self):
+        authored = {path.name for path in (SOURCE / "assets/blockpops/models/item").iterdir()
+                    if json.loads(path.read_text()).get("parent") == "builtin/entity"}
+        for version in ("1.21.4", "1.21.11", "26.1.2", "26.2", "26.3"):
+            with self.subTest(version=version):
+                plan = resource_plan(SOURCE, version)
+                definitions = {path.rsplit("/", 1)[-1]: json.loads(raw)["model"]
+                               for path, raw in plan.items() if "/items/" in path}
+                self.assertEqual(authored, set(definitions))
+                self.assertEqual({"blockpops:box_block", "blockpops:figure_block",
+                                  "blockpops:claw_machine_block"},
+                                 {value["model"]["type"] for value in definitions.values()})
+                for name, definition in definitions.items():
+                    self.assertEqual("minecraft:special", definition["type"])
+                    self.assertEqual("blockpops:item/" + name[:-5], definition["base"])
+                    model = json.loads(plan[f"assets/blockpops/models/item/{name}"])
+                    self.assertEqual("minecraft:item/template_shulker_box", model["parent"])
+                    self.assertEqual("front", model["gui_light"])
+                self.assertTrue(all(b'builtin/entity' not in raw for raw in plan.values()))
+
+    def test_legacy_versions_produce_no_overrides_and_leave_authored_bytes_untouched(self):
+        before = {path: path.read_bytes() for path in (SOURCE / "assets/blockpops/models/item").iterdir()}
+        for version in ("1.20.1", "1.21.1", "1.21.3"):
+            self.assertEqual({}, resource_plan(SOURCE, version))
+        self.assertEqual(before, {path: path.read_bytes() for path in before})
+
+    def test_rerun_removes_stale_generated_resources_without_touching_authored_models(self):
+        generate(self.source, self.output, "26.2")
+        definition = self.output / "assets/blockpops/items/box_block_purple.json"
+        self.assertEqual("blockpops:box_block", json.loads(definition.read_text())["model"]["model"]["type"])
+        generate(self.source, self.output, "1.20.1")
+        self.assertFalse(definition.exists())
+        self.assertTrue(self.item.exists())
+
+    def test_unknown_renderer_duplicate_json_and_model_symlink_fail_closed(self):
+        self.item.rename(self.items / "unknown.json")
+        with self.assertRaisesRegex(ValueError, "no registered"):
+            resource_plan(self.source, "26.2")
+        (self.items / "unknown.json").unlink()
+        self.item.write_text('{"parent":"builtin/entity","parent":"x"}')
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            resource_plan(self.source, "26.2")
+        self.item.unlink()
+        self.item.symlink_to(SOURCE / "assets/blockpops/models/item/box_block.json")
+        with self.assertRaises(OSError):
+            resource_plan(self.source, "26.2")
+
+    def test_directory_and_output_links_or_hardlinks_cannot_modify_an_outside_file(self):
+        outside = self.root / "outside.json"
+        outside.write_bytes(b"canary")
+        generate(self.source, self.output, "26.2")
+        generated = self.output / "assets/blockpops/items/box_block_purple.json"
+        generated.unlink()
+        generated.symlink_to(outside)
+        with self.assertRaises(OSError):
+            generate(self.source, self.output, "26.2")
+        generated.unlink()
+        generated.hardlink_to(outside)
+        with self.assertRaisesRegex(ValueError, "owned regular"):
+            generate(self.source, self.output, "26.2")
+        self.assertEqual(b"canary", outside.read_bytes())
+        alias = self.root / "alias"
+        alias.symlink_to(self.source, target_is_directory=True)
+        with self.assertRaises(OSError):
+            resource_plan(alias, "26.2")
