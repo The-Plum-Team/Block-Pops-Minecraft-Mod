@@ -886,7 +886,7 @@ class WorkflowSecurityTests(unittest.TestCase):
                         }
                     )
                     result = subprocess.run(
-                        ["bash", "-euo", "pipefail", "-c", script, "_", str(root)],
+                        ["bash", "-euo", "pipefail", "-c", script, "_", str(root), str(root)],
                         cwd=root,
                         env=environment,
                         capture_output=True,

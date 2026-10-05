@@ -304,6 +304,13 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Install the intermediate compiler JDK
+        id: java21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
       - name: Install the matrix-owned Gradle JDK
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
@@ -389,6 +396,7 @@ jobs:
         env:
           SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
           BLOCKPOPS_JAVA17_HOME: ${{ steps.java17.outputs.path }}
+          BLOCKPOPS_JAVA21_HOME: ${{ steps.java21.outputs.path }}
         run: |
           set -euo pipefail
           python3 controller/scripts/ci/untrusted_runner.py run \
@@ -420,7 +428,7 @@ jobs:
                   verify_command+=(--scope "$scope")
                   build_command=(python3 scripts/release/build_matrix.py \
                     --matrix release/release-matrix.json --scope "$scope" \
-                    --java-home "$JAVA_HOME" --java17-home "$1" --clean)
+                    --java-home "$JAVA_HOME" --java17-home "$1" --java21-home "$2" --clean)
                   ;;
                 *) exit 2 ;;
               esac
@@ -443,7 +451,7 @@ jobs:
                   head -n 32 || true
                 exit 2
               fi
-            ' _ "$BLOCKPOPS_JAVA17_HOME"
+            ' _ "$BLOCKPOPS_JAVA17_HOME" "$BLOCKPOPS_JAVA21_HOME"
 
       - name: Kill and lock the candidate identity before any artifact credential exists
         id: seal
