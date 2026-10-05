@@ -284,11 +284,15 @@ public class SettingsScreen extends Screen {
             this.actionButton.setMessage(Component.literal("Reset Colors"));
             this.actionButton.active = true;
             this.actionButton.visible = true;
-        } else {
+        } else if (activeTab == Tab.CHEATS) {
             // Cheats tab: open the per-player progression editor
             this.actionButton.setMessage(Component.literal("Progression"));
             this.actionButton.active = true;
             this.actionButton.visible = true;
+        } else {
+            // No action on the other tabs (Collections)
+            this.actionButton.active = false;
+            this.actionButton.visible = false;
         }
     }
 
