@@ -30,12 +30,12 @@ public final class VanillaShim {
      *
      * The vanilla overlay keeps fading for a moment after the world is ready and
      * composites over the whole frame, so a capture taken then measures the splash
-     * instead of the screen. 26.1 removed the accessor along with the overlay it
-     * reported, and there is nothing left to wait for.
+     * instead of the screen. 26.2 moved the accessor onto the in-game GUI;
+     * earlier versions, including 26.1.2, keep it on Minecraft.
      */
     public static boolean overlayPresent(Minecraft minecraft) {
-        //? if >=26 {
-        /*return false;
+        //? if >=26.2 {
+        /*return minecraft.gui.overlay() != null;
         *///? } else {
         return minecraft.getOverlay() != null;
         //? }
