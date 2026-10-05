@@ -35,6 +35,10 @@ authoritative inventory of its Minecraft versions, loaders, Java toolchains, art
 lanes, source routing and canonical visual reference. Never duplicate that inventory in a workflow,
 script or document; derive every consumer from the matrix. Release branch names are opaque.
 
+In 26.x, special item renderers read `GeoRendererContext` on their first draw, after block-entity
+renderer registration, rather than during model baking. Modern favorite-color previews use the
+item model's tilt and center their scaled image within the button; older previews retain their 3D transform.
+
 ## Trust model
 
 - **Protected controller, untrusted candidate.** Build and Packaged E2E run from the protected
