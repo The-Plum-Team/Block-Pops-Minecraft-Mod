@@ -211,6 +211,36 @@ itself after required contexts are enforced: install it before selecting those
 contexts during the initial repository bootstrap, or use the repository's
 existing authorized governance process without weakening an established gate.
 
+### Restricted shim admission
+
+The deployed controller also accepts `restricted-transition/<purpose>` branches
+targeting the exact current `master`, without the `controller-upgrade` label.
+Generation 1 admits only a modification of the existing
+`common/src/e2e/java/com/theplumteam/e2e/VanillaShim.java`. Extra paths, deletion,
+matrix changes and every other declaration scope fail closed. This route retains
+the base-owned matrix, job graphs and both mandatory exact-run gate artifacts.
+Its foundation must deploy through the controller-upgrade procedure first;
+a candidate controller cannot authorize its own transition.
+
+Put one strict JSON declaration between these exact PR-body markers:
+
+```text
+<!-- blockpops-restricted-transition:start -->
+{"schema_version":1,"controller_generation":1,"controller_sha":"<master-sha>","base_sha":"<master-sha>","head_sha":"<candidate-sha>","scope":"vanilla-shim","paths":["common/src/e2e/java/com/theplumteam/e2e/VanillaShim.java"]}
+<!-- blockpops-restricted-transition:end -->
+```
+
+The parser exposes `RestrictedTransition.digest`, the SHA-256 of its canonical
+declaration. After reviewing the exact diff, `AkaNebur` posts the single line
+`/restricted-transition approve 1 <head-sha> <declaration-digest>`.
+The latest owner decision wins; `revoke`, an edited/deleted approval, a new head,
+base or declaration invalidates publication. The protected evaluator and writer
+independently reread that decision before publishing the two fixed App contexts.
+Merge only with both newest exact gates and App contexts successful. A new base
+requires a new declaration and fresh approval, even if the candidate is unchanged.
+
+### Loader-bootstrap transitions
+
 Loader-bootstrap bytes have an additional two-generation constraint. The old
 protected evaluator always checks a controller candidate's loader files against
 the contract in its base commit. Therefore loader bytes and the contract that

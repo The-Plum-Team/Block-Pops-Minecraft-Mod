@@ -47,6 +47,10 @@ script or document; derive every consumer from the matrix. Release branch names 
   controller-upgrade procedure in [`docs/operations.md`](../operations.md). The evaluator
   constants in `scripts/ci/gate_controller.py`, `scripts/ci/pr_gate.py` and
   `scripts/ci/e2e_job_graph.py` are never edited to admit a pull request.
+- **Restricted shim admission.** The deployed generation-1 controller accepts only the existing
+  `VanillaShim.java` on `restricted-transition/*`, with an exact base/head declaration and a fresh
+  owner decision bound to its canonical digest. It retains the base-owned graphs and both gates.
+  Other restricted scopes remain inert; see [the procedure](../operations.md#restricted-shim-admission).
 - **Exact job graph.** `scripts/ci/e2e_job_graph.py` fixes the Packaged E2E job set that the gate,
   release attestation, visual review and public evidence authenticate. Change steps inside a job,
   never the set of jobs, unless the graph itself is deliberately upgraded.

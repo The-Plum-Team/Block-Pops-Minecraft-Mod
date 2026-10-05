@@ -213,7 +213,7 @@ jobs:
           [[ "$BUILD_STATE" =~ ^(pending|success|failure)$ ]]
           [[ "$E2E_STATE" =~ ^(pending|success|failure)$ ]]
           [[ "$AUTHORIZATION_CURRENT" =~ ^(true|false)$ ]]
-          [[ "$POLICY_MODE" =~ ^(ordinary|controller-upgrade)$ ]]
+          [[ "$POLICY_MODE" =~ ^(ordinary|controller-upgrade|restricted-transition)$ ]]
           [[ ${#BUILD_DESCRIPTION} -ge 1 && ${#BUILD_DESCRIPTION} -le 140 ]]
           [[ ${#E2E_DESCRIPTION} -ge 1 && ${#E2E_DESCRIPTION} -le 140 ]]
 
@@ -224,6 +224,9 @@ jobs:
             E2E_RUN_ID=0
             if [[ "$POLICY_MODE" == controller-upgrade ]]; then
               BUILD_DESCRIPTION="Controller upgrade approval changed before publication"
+              E2E_DESCRIPTION="$BUILD_DESCRIPTION"
+            elif [[ "$POLICY_MODE" == restricted-transition ]]; then
+              BUILD_DESCRIPTION="Restricted transition approval changed before publication"
               E2E_DESCRIPTION="$BUILD_DESCRIPTION"
             else
               BUILD_DESCRIPTION="Ordinary PR policy changed before publication"

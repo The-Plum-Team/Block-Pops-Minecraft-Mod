@@ -33,12 +33,14 @@ from scripts.ci.pr_gate import (
     _upgrade_path_allowed,
     bind_restricted_transition_decision,
     controller_upgrade_authorization,
+    evaluate,
     evaluate_restricted_transition,
     _gate_result,
     _result,
     main as pr_gate_main,
     parse_restricted_transition,
     read_restricted_transition_owner_decision,
+    restricted_authorization,
     reauthorize,
     runs_default_controller,
     resolve_dispatch_source,
@@ -1606,6 +1608,110 @@ class RestrictedTransitionEvaluationTests(unittest.TestCase):
                 self.evaluate()
 
 
+class RestrictedShimAdmissionTests(unittest.TestCase):
+    git = RestrictedTransitionTreeTests.git
+    write = RestrictedTransitionTreeTests.write
+    merged = RestrictedTransitionTreeTests.merged
+    MockGitHub = RestrictedTransitionOwnerTests.MockGitHub
+    shim = "common/src/e2e/java/com/theplumteam/e2e/VanillaShim.java"
+
+    class Api(RestrictedTransitionEvaluationTests.MockGitHub):
+        def pull(self, number):
+            value = super().pull(number)
+            value.update(labels=[], body=self.body)
+            value["head"]["ref"] = self.current.head_branch
+            return value
+
+    def setUp(self):
+        RestrictedTransitionTreeTests.setUp(self)
+        self.write("release/release-matrix.json", (REPO / "release/release-matrix.json").read_text())
+        self.write(self.shim, "old adapter\n")
+        self.git("add", ".")
+        self.git("commit", "--amend", "--no-edit", "-q")
+        self.base = self.git("rev-parse", "HEAD")
+        self.candidate()
+
+    def candidate(self, changes=None, scope="vanilla-shim"):
+        changes = {self.shim: "new adapter\n"} if changes is None else changes
+        self.current = replace(self.merged(changes), head_branch="restricted-transition/loading-overlay")
+        self.declaration = json.dumps({"schema_version": 1, "controller_generation": 1,
+            "controller_sha": self.base, "base_sha": self.base, "head_sha": self.current.head_sha,
+            "scope": scope, "paths": [self.shim]})
+        transition = parse_restricted_transition(self.declaration.encode(), identity=self.current,
+            deployed_controller_sha=self.base, deployed_generation=1)
+        self.transition = transition
+        comment = RestrictedTransitionOwnerTests.comment(self,
+            body=f"/restricted-transition approve 1 {self.current.head_sha} {transition.digest}")
+        self.api = self.Api(self.current, [comment])
+        self.api.body = ("PR description\n<!-- blockpops-restricted-transition:start -->\n"
+                         + self.declaration + "\n<!-- blockpops-restricted-transition:end -->")
+
+    def evaluate(self):
+        return evaluate(self.api, repository=self.repository, implementation_sha=self.base,
+            expected_pr_number=17, expected_merge_sha=self.current.merge_sha, pr_number=17)
+
+    def reauthorize(self, result):
+        return reauthorize(self.api, implementation_sha=self.base, expected_pr_number=17,
+            **{f"expected_{key}": result[key] for key in (
+                "default_branch", "default_sha", "base_branch", "base_sha", "head_branch", "head_sha",
+                "merge_sha", "merge_tree", "policy_mode", "authorization_digest", "authorization_comment_id")})
+
+    def test_live_evaluator_and_writer_bind_real_git_preparing_matrix_and_fresh_owner(self):
+        result = self.evaluate()
+        self.assertEqual("restricted-transition", result["policy_mode"])
+        self.assertEqual({"success"}, {gate["state"] for gate in result["gates"].values()})
+        self.assertTrue(self.reauthorize(result)["authorization_current"])
+        self.assertGreaterEqual(self.api.calls.count("/issues/comments/91"), 3)
+        self.api.comments[0]["body"] = self.api.comments[0]["body"].replace("approve", "revoke")
+        self.assertFalse(self.reauthorize(result)["authorization_current"])
+
+    def test_candidate_authority_product_matrix_extra_and_deleted_shim_are_denied(self):
+        for changes in ({self.shim: "new", "scripts/ci/pr_gate.py": "self-authority"},
+                        {self.shim: "new", "common/src/main/Mod.java": "product"},
+                        {self.shim: "new", "release/release-matrix.json": "candidate graph"},
+                        {self.shim: None}):
+            with self.subTest(changes=changes):
+                self.candidate(changes)
+                with mock.patch.object(self.api, "workflow_runs") as reads:
+                    result = self.evaluate()
+                self.assertEqual({"failure"}, {gate["state"] for gate in result["gates"].values()})
+                reads.assert_not_called()
+
+    def test_undeployed_candidate_generation_and_owner_staleness_never_admit(self):
+        with self.assertRaises(NotEligible):
+            evaluate(self.api, repository=self.repository, implementation_sha=self.current.head_sha,
+                expected_pr_number=17, expected_merge_sha=self.current.merge_sha, pr_number=17)
+        result = self.evaluate()
+        for mutate in (lambda: self.api.comments.clear(),
+                       lambda: self.api.comments[0].update(updated_at="2026-09-19T10:01:00Z"),
+                       lambda: self.api.comments[0]["user"].update(login="attacker"),
+                       lambda: setattr(self.api, "body", self.api.body.replace(self.base, HEAD))):
+            self.candidate()
+            result = self.evaluate()
+            mutate()
+            self.assertFalse(self.reauthorize(result)["authorization_current"])
+
+    def test_newer_pending_or_failed_exact_gate_supersedes_prior_success(self):
+        for status, conclusion, expected in (("in_progress", None, "pending"), ("completed", "failure", "failure")):
+            self.candidate()
+            self.api.runs["build-gate.yml"].append(run(53, workflow="build-gate.yml",
+                branch=self.current.head_branch, head=self.current.head_sha, controller=self.base,
+                repository=self.api.repository, status=status, conclusion=conclusion, created_at="2026-08-11T10:02:00Z"))
+            self.assertEqual(expected, self.evaluate()["gates"]["build"]["state"])
+
+    def test_bad_body_and_nonactivated_scopes_cannot_select_admission(self):
+        original = self.api.body
+        for body in (None, "", "x" * 65537, original + original,
+                     original.replace("start", "TEMP").replace("end", "start").replace("TEMP", "end"),
+                     original.replace('"controller_generation": 1', '"controller_generation": 2'),
+                     original.replace('"scope": "vanilla-shim"', '"scope": "matrix"'),
+                     original.replace('"scope": "vanilla-shim"', '"scope": "vanilla-shim", "scope": "vanilla-shim"')):
+            with self.subTest(body=str(body)[:60]):
+                self.api.body = body
+                with self.assertRaises(PrGateError):
+                    restricted_authorization(self.api, self.current, repository=self.repository)
+
+
 class RestrictedLoaderTransitionTests(unittest.TestCase):
     git = RestrictedTransitionTreeTests.git
     write = RestrictedTransitionTreeTests.write
@@ -1919,6 +2025,8 @@ class ResultAndWorkflowContractTests(unittest.TestCase):
         status_step = publish.split("Publish only the two fixed exact-head contexts", 1)[1]
         self.assertNotIn("github.token", status_step)
         self.assertIn("authorization_current", publish)
+        self.assertIn('^(ordinary|controller-upgrade|restricted-transition)$', publish)
+        self.assertIn('Restricted transition approval changed before publication', publish)
         self.assertIn(
             "github.event.workflow_run.event == 'pull_request_target'", workflow
         )
