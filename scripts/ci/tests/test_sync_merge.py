@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.ci.gate_controller import PROTECTED_PATHS, validate_topology
+from scripts.ci.gate_controller import GateControllerError, PROTECTED_PATHS, validate_topology
 from scripts.ci.tests import matrix_fixtures
 from scripts.ci.sync_merge import (
     MATRIX_PATH,
@@ -16,7 +16,7 @@ from scripts.ci.sync_merge import (
     branch_specific_loader_roots,
     create_sync_merge,
 )
-from scripts.ci.tests.matrix_fixtures import canonical_integration_matrix, schema1_matrix
+from scripts.ci.tests.matrix_fixtures import canonical_integration_matrix, schema1_matrix, schema2_configuration
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -106,6 +106,57 @@ class SyncRepository:
 
 
 class SyncMergeTests(unittest.TestCase):
+    def preparing_source(self, fixture: SyncRepository, matrix: dict) -> str:
+        fixture.source_commit()
+        (fixture.root / MATRIX_PATH).write_text(json.dumps(matrix), encoding="utf-8")
+        git(fixture.root, "add", MATRIX_PATH)
+        git(fixture.root, "commit", "-qm", "enroll canonical preparation")
+        return git(fixture.root, "rev-parse", "HEAD")
+
+    def test_preparing_source_merges_and_authenticates_only_legacy_loader_roots(self) -> None:
+        matrices = (schema2_configuration(), json.loads((REPO / MATRIX_PATH).read_bytes()))
+        for matrix in matrices:
+            with self.subTest(lanes=matrix["lane_count"]), tempfile.TemporaryDirectory() as raw:
+                fixture = SyncRepository(Path(raw))
+                target, target_matrix = fixture.release_commit()
+                source = self.preparing_source(fixture, matrix)
+                git(fixture.root, "switch", "-q", "--detach", target)
+                evidence = create_sync_merge(fixture.root, target_sha=target, source_sha=source,
+                                             target_branch="release/one", source_branch="master")
+                self.assertEqual("created", evidence["status"])
+                self.assertEqual(target_matrix, (fixture.root / MATRIX_PATH).read_bytes())
+                self.assertFalse((fixture.root / "neoforge").exists())
+                self.assertEqual("<verification-metadata>release-dependencies</verification-metadata>\n",
+                                 (fixture.root / "gradle/verification-metadata.xml").read_text())
+                authenticated = validate_topology(fixture.root, protected_sha=source, target_sha=target,
+                    head_sha=evidence["merge_sha"], source_branch="master", target_branch="release/one")
+                self.assertEqual(evidence["matrix_sha256"], authenticated["matrix_sha256"])
+                self.assertEqual(f"{target} {source}", git(fixture.root, "show", "-s", "--format=%P"))
+                self.assertEqual("", git(fixture.root, "status", "--porcelain"))
+
+    def test_unsupported_or_invalid_source_fails_before_merge_and_topology_acceptance(self) -> None:
+        invalid_modern = schema2_configuration()
+        modern = next(row for row in invalid_modern["artifacts"] if row["build_layout"] == "stonecutter")
+        modern["java"] = 17
+        wrong_identity = schema2_configuration()
+        wrong_identity["branch"]["name"] = "different-canonical"
+        for matrix in (schema2_configuration(shared=True), invalid_modern, wrong_identity):
+            with self.subTest(matrix=matrix["migration"]), tempfile.TemporaryDirectory() as raw:
+                fixture = SyncRepository(Path(raw))
+                target, _ = fixture.release_commit()
+                source = self.preparing_source(fixture, matrix)
+                git(fixture.root, "switch", "-q", "--detach", target)
+                with self.assertRaises(SyncMergeError):
+                    create_sync_merge(fixture.root, target_sha=target, source_sha=source,
+                                      target_branch="release/one", source_branch="master")
+                self.assertEqual(target, git(fixture.root, "rev-parse", "HEAD"))
+                self.assertEqual("", git(fixture.root, "status", "--porcelain"))
+                tree = git(fixture.root, "rev-parse", f"{target}^{{tree}}")
+                candidate = git(fixture.root, "commit-tree", tree, "-p", target, "-p", source, "-m", "invalid source")
+                with self.assertRaises(GateControllerError):
+                    validate_topology(fixture.root, protected_sha=source, target_sha=target,
+                        head_sha=candidate, source_branch="master", target_branch="release/one")
+
     def test_protected_controller_python_never_imports_candidate_owned_tests(self) -> None:
         for path in sorted((REPO / "scripts/ci").rglob("*.py")):
             tree = ast.parse(path.read_text("utf-8"), filename=str(path))

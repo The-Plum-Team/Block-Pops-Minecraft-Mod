@@ -52,6 +52,9 @@ script or document; derive every consumer from the matrix. Release branch names 
   never the set of jobs, unless the graph itself is deliberately upgraded.
 - **Public evidence is advisory.** GitHub Pages and AI visual review never replace the
   deterministic gates.
+- **Preparing synchronization.** A schema-2 integration matrix uses the trusted gate's legacy
+  projection in release discovery, merge construction and topology authentication. Release
+  targets remain schema 1; this compatibility route activates neither modern lanes nor `shared`.
 
 ## Public evidence through mod-base
 
