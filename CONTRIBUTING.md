@@ -81,6 +81,13 @@ an ordinary PR may change the release matrix, verification metadata, or
 version-specific shims. Both newest exact Build and Packaged E2E attempts and
 their protected App contexts remain mandatory.
 
+Version-shim changes require the deployed, separate
+[restricted shim admission](docs/operations.md#restricted-shim-admission).
+Generation 1 permits only the existing `VanillaShim.java` on a
+`restricted-transition/<purpose>` branch, with an exact base/head declaration
+and a fresh owner approval of its canonical digest. It does not admit matrix or
+controller changes; both authoritative gates remain mandatory.
+
 AI visual review and the public evidence gallery are advisory. Do not weaken a
 deterministic assertion or skip a lane to accommodate visual-review noise.
 The gallery is published by the pinned

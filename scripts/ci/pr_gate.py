@@ -857,6 +857,54 @@ def controller_upgrade_authorization(
     return UpgradeAuthorization(comment_id, updated_at, identity.head_sha, digest)
 
 
+def _restricted_requested(identity: PullIdentity) -> bool:
+    return identity.head_branch.startswith("restricted-transition/")
+
+
+def restricted_authorization(
+    api: GitHubApi, identity: PullIdentity, *, repository: Path | None = None,
+) -> UpgradeAuthorization:
+    """Admission generation 1: one shim file, base-owned graphs and a separate owner decision.
+
+    The existing declaration helpers remain inert for every other scope. This route is active
+    only when called by the deployed default controller; its candidate cannot change authority.
+    """
+    if not _restricted_requested(identity) or _upgrade_requested(api, identity):
+        _fail("restricted transition requires its own branch and no controller-upgrade request")
+    body = api.pull(identity.number).get("body")
+    start, end = ("<!-- blockpops-restricted-transition:start -->",
+                  "<!-- blockpops-restricted-transition:end -->")
+    if (not isinstance(body, str) or len(body) > 65536
+            or body.count(start) != 1 or body.count(end) != 1):
+        _fail("restricted transition requires one bounded declaration in the PR body")
+    if body.index(end) < body.index(start):
+        _fail("restricted transition declaration markers are reordered")
+    declaration = body.split(start, 1)[1].split(end, 1)[0]
+    try:
+        declaration = declaration.strip().encode("utf-8", "strict")
+    except UnicodeError as exc:
+        raise PrGateError("restricted transition declaration is not UTF-8") from exc
+    arguments = dict(declaration=declaration, deployed_controller_sha=identity.default_sha,
+                     deployed_generation=RESTRICTED_TRANSITION_GENERATION)
+    transition = parse_restricted_transition(declaration, identity=identity,
+        deployed_controller_sha=identity.default_sha, deployed_generation=RESTRICTED_TRANSITION_GENERATION)
+    if transition.scope != "vanilla-shim":
+        _fail("deployed restricted admission supports only the vanilla-shim scope")
+    if repository is not None:
+        validate_restricted_transition_tree(repository, identity, **arguments)
+        if any(_tree_entry(repository, commit, transition.paths[0]) is None
+               for commit in (identity.base_sha, identity.merge_sha)):
+            _fail("restricted shim admission requires modifying the existing adapter")
+        # The shim cannot select a new matrix, graph, controller or loader contract.
+        if (_blob(repository, identity.base_sha, MATRIX_PATH, maximum=256 * 1024)
+                != _blob(repository, identity.merge_sha, MATRIX_PATH, maximum=256 * 1024)):
+            _fail("restricted shim transition changed its base-owned matrix")
+    decision = read_restricted_transition_owner_decision(api, identity, **arguments)
+    digest = bind_restricted_transition_decision(transition, repository=api.repository,
+        pull_number=identity.number, authenticated_owner_decision=decision)
+    return UpgradeAuthorization(decision["comment_id"], decision["comment_updated_at"], identity.head_sha, digest)
+
+
 def read_restricted_transition_owner_decision(
     api: GitHubApi, identity: PullIdentity, *, declaration: bytes,
     deployed_controller_sha: str, deployed_generation: int,
@@ -1585,7 +1633,11 @@ def evaluate(
     policy_mode = "ordinary"
     authorization: UpgradeAuthorization | None = None
     try:
-        if _upgrade_requested(api, identity):
+        if _restricted_requested(identity):
+            policy_mode = "restricted-transition"
+            authorization = restricted_authorization(api, identity, repository=repository)
+            matrix_bytes, _ = _matrix_for_identity(repository, identity)
+        elif _upgrade_requested(api, identity):
             policy_mode = "controller-upgrade"
             authorization = controller_upgrade_authorization(api, identity)
             matrix_bytes = validate_controller_upgrade_tree(repository, identity)
@@ -1602,11 +1654,11 @@ def evaluate(
         )
         if current != identity:
             raise NotEligible("pull request changed while reporting a policy failure") from exc
-        description = (
-            "Controller upgrade authorization or protected policy failed"
-            if policy_mode == "controller-upgrade"
-            else "Ordinary PR changed protected branch policy"
-        )
+        description = {
+            "controller-upgrade": "Controller upgrade authorization or protected policy failed",
+            "restricted-transition": "Restricted transition authorization or protected policy failed",
+            "ordinary": "Ordinary PR changed protected branch policy",
+        }[policy_mode]
         failure = GateResult("failure", description, 0, 0)
         return _result(
             identity,
@@ -1627,6 +1679,9 @@ def evaluate(
         if policy_mode == "controller-upgrade":
             if authorization is None or controller_upgrade_authorization(api, current) != authorization:
                 raise NotEligible("controller-upgrade authorization changed during evaluation")
+        elif policy_mode == "restricted-transition":
+            if authorization is None or restricted_authorization(api, current) != authorization:
+                raise NotEligible("restricted-transition authorization changed during evaluation")
 
     with tempfile.TemporaryDirectory(prefix="blockpops-pr-gate-") as temporary:
         matrix_path = Path(temporary) / "release-matrix.json"
@@ -1718,7 +1773,7 @@ def _result(
     policy_mode: str = "ordinary",
     authorization: UpgradeAuthorization | None = None,
 ) -> dict[str, Any]:
-    if policy_mode not in {"ordinary", "controller-upgrade"}:
+    if policy_mode not in {"ordinary", "controller-upgrade", "restricted-transition"}:
         _fail("trusted PR policy mode is invalid")
     return {
         "schema_version": SCHEMA_VERSION,
@@ -1780,7 +1835,7 @@ def reauthorize(
     expected_head_sha = _sha(expected_head_sha, "expected head SHA")
     expected_merge_sha = _sha(expected_merge_sha, "expected merge SHA")
     expected_merge_tree = _sha(expected_merge_tree, "expected merge tree")
-    if expected_policy_mode not in {"ordinary", "controller-upgrade"}:
+    if expected_policy_mode not in {"ordinary", "controller-upgrade", "restricted-transition"}:
         _fail("expected policy mode is invalid")
     if (
         not isinstance(expected_authorization_digest, str)
@@ -1822,12 +1877,13 @@ def reauthorize(
     authorization_current = False
     if expected_policy_mode == "ordinary":
         try:
-            authorization_current = not _upgrade_requested(api, identity)
+            authorization_current = not _restricted_requested(identity) and not _upgrade_requested(api, identity)
         except PrGateError:
             authorization_current = False
     else:
         try:
-            current = controller_upgrade_authorization(api, identity)
+            current = (restricted_authorization(api, identity) if expected_policy_mode == "restricted-transition"
+                       else controller_upgrade_authorization(api, identity))
         except PrGateError:
             authorization_current = False
         else:
