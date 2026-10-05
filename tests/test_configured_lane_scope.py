@@ -96,12 +96,13 @@ class NeoForge1211ConfigurationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "release-matrix.json"
             data = complete_preparing_matrix()
+            path.write_text(json.dumps(data))
+            context = load_matrix_document(path, validate_sources=False).gradle_context()
             data["migration"]["legacy_nodes"] = ["forge-1.20.1", "neoforge-1.21.1"]
             path.write_text(json.dumps(data))
             with self.assertRaisesRegex(MatrixError, "must retain both 1.20.1 legacy nodes"):
                 load_matrix_document(path, validate_sources=False)
-        # The unmutated document keeps the aggregate on the two legacy lanes only.
-        context = self.document.gradle_context()
+        # The unmutated preparing fixture keeps its two legacy lanes after activation too.
         self.assertEqual({"fabric-1.20.1", "forge-1.20.1"},
                          {lane["artifact"]["artifact_node"] for lane in context["lanes"]})
         self.assertTrue(all(lane["build_layout"] == "legacy" for lane in context["lanes"]))
