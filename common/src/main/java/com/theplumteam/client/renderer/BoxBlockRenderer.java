@@ -26,7 +26,7 @@ import software.bernie.geckolib.renderer.base.GeoRenderState;
 *///? }
 
 //? if >=26 {
-/*public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity,
+/*public class BoxBlockRenderer extends BlockPopsGeoBlockRenderer<BoxBlockEntity,
         net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState> {
     private static final Logger LOGGER = LoggerFactory.getLogger(BoxBlockRenderer.class);
     private final GeoBlockRenderer<BoxBlockEntity,
@@ -51,7 +51,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         super(context, new BoxBlockModel());
         GeoRendererContext.capture(context);
         // A separate renderer draws the figure that sits inside the box.
-        this.figureRenderer = new GeoBlockRenderer<>(context, new FigureModel()) {
+        this.figureRenderer = new BlockPopsGeoBlockRenderer<>(context, new FigureModel()) {
             @Override
             @SuppressWarnings("rawtypes")
             protected void tryRotateByBlockstate(com.geckolib.renderer.base.RenderPassInfo renderPassInfo,

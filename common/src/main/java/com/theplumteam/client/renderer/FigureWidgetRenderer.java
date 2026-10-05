@@ -53,7 +53,7 @@ public final class FigureWidgetRenderer {
                 if (!initialized) {
                     figureModel = new FigureModel();
                     //? if >=26 {
-                    /*figureRenderer = new GeoBlockRenderer<>(GeoRendererContext.get(), figureModel);
+                    /*figureRenderer = new BlockPopsGeoBlockRenderer<>(GeoRendererContext.get(), figureModel);
                     *///? } else {
                     figureRenderer = new GeoBlockRenderer<>(figureModel);
                     //? }
