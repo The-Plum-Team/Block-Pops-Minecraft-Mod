@@ -122,7 +122,8 @@ public class AdminProgressionPacket {
             // By prefix, so figures that have since left the collection are locked too.
             changed = edited.removeIf(figureId -> figureId.startsWith(prefix));
         } else {
-            for (FigureDefinition figure : collection.getFigures()) {
+            // Players disabled in the World Players roster stay locked, as in the Cheats unlock
+            for (FigureDefinition figure : collection.getEnabledFigures()) {
                 changed |= edited.add(prefix + figure.getId());
             }
         }
