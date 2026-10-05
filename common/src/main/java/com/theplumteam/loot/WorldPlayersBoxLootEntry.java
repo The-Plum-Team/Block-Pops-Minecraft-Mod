@@ -89,9 +89,9 @@ public final class WorldPlayersBoxLootEntry
 
     @Override
     public void createItemStack(Consumer<ItemStack> output, LootContext context) {
-        // An absent or empty collection rolls nothing
+        // An absent collection, or one without an enabled player, rolls nothing
         List<FigureDefinition> figures = CollectionRegistry.getCollection(COLLECTION_ID)
-                .map(FigureCollection::getFigures).orElse(List.of());
+                .map(FigureCollection::getEnabledFigures).orElse(List.of());
         if (figures.isEmpty()) return;
 
         FigureDefinition selectedFigure = figures.get(context.getRandom().nextInt(figures.size()));
