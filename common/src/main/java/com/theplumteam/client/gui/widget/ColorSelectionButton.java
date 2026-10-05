@@ -176,11 +176,11 @@ public class ColorSelectionButton extends Button {
 
         // Apply transformations and render the item.
         float finalScale = (itemSize / 16f) * this.scale;
-        //? if >=1.21.6 {
-        /*// 1.21.6's GUI pose is two-dimensional, so the swatch keeps its placement and
-        // its scale but not the extra tilt the older versions apply to it.
+        //? if >=1.21.4 {
+        /*// Special item models own their tilt and origin. The legacy offsets below
+        // compensate its old 3D transform and must not displace a modern button preview.
         GuiPose.push(graphics);
-        GuiPose.translate(graphics, itemX + itemSize / 2f + offsetX, itemY + itemSize / 2f + offsetY);
+        GuiPose.translate(graphics, itemX + itemSize / 2f, itemY + itemSize / 2f);
         GuiPose.scale(graphics, finalScale, finalScale);
         GuiPose.translate(graphics, -8, -8);
         graphics.renderItem(boxItem, 0, 0);
