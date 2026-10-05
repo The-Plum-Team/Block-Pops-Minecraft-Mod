@@ -176,7 +176,7 @@ public class ColorSelectionButton extends Button {
 
         // Apply transformations and render the item.
         float finalScale = (itemSize / 16f) * this.scale;
-        //? if >=1.21.4 {
+        //? if >=1.21.6 {
         /*// Special item models own their tilt and origin. The legacy offsets below
         // compensate its old 3D transform and must not displace a modern button preview.
         GuiPose.push(graphics);
