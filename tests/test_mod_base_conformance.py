@@ -5,9 +5,9 @@ This runs exactly the command an owner runs before a kit bump,
 snapshot of this checkout and simulates, against its fake GitHub, a packaged producer, admission,
 collection, the job graph, the display title, the attested and newest-run variants, the site
 build, the cache refresh, rotation and a second generation at a later head, for every key the
-adapter enrolls. The snapshot never touches this checkout. The same run in the matrix's future
-``full`` scope (every target under the one ``master`` key) is proven by the adapter tests, which
-derive that expectation without rendering 440 frames.
+adapter enrolls. The snapshot never touches this checkout. Coverage follows the matrix's
+default scope, including every target after shared activation. Expected lane, frame and
+comparison counts come independently from the matrix and scenario contract.
 """
 
 from __future__ import annotations
@@ -20,6 +20,8 @@ import tempfile
 import unittest
 
 from tests import mod_base_path
+from e2e.scenario_contract import load_contract
+from scripts.release.matrix import load_matrix_document
 
 REPO = mod_base_path.REPO
 MASTER_KEY = "fc613b4dfd6736a7bd268c8a"
@@ -46,17 +48,27 @@ class BlockPopsConformanceTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         mod_base_path.kit_root()
         cls.report = run_conformance()
+        matrix = load_matrix_document(REPO / "release/release-matrix.json", validate_sources=False)
+        contract = load_contract(REPO / "e2e/scenario-contract.json")
+        scenarios = contract.scenarios_for_profile("release")
+        nodes = len(matrix.select_lanes())
+        cls.expected_lanes = nodes * len(scenarios)
+        cls.expected_frames = nodes * sum(step.capture is not None for scenario in scenarios
+            for role in contract.scenario(scenario).roles for step in role.steps)
+        cls.expected_comparisons = nodes * sum(len(contract.comparisons_for(scenario, role.role))
+            for scenario in scenarios for role in contract.scenario(scenario).roles)
 
     def test_the_one_enrolled_master_key_passes_every_generation(self) -> None:
         report = self.report
         self.assertEqual("The-Plum-Team/Block-Pops-Minecraft-Mod", report["repository"])
-        self.assertEqual([{"anchor": True, "comparisons": 6, "frames": 44, "key": MASTER_KEY, "lanes": 4,
+        self.assertEqual([{"anchor": True, "comparisons": self.expected_comparisons,
+                           "frames": self.expected_frames, "key": MASTER_KEY, "lanes": self.expected_lanes,
                            "scope": "complete"}], report["keys"])
         self.assertEqual([], report["families"])
         self.assertGreater(report["checks"], 100)
         site = report["site"]
         self.assertTrue(site["node_check"])
-        self.assertEqual(44, site["frames"])
+        self.assertEqual(self.expected_frames, site["frames"])
         self.assertLessEqual(site["max_job_reads"], 160)
         self.assertEqual([2], [generation["generation"] for generation in site["generations"]])
 
