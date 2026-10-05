@@ -3,19 +3,22 @@
 BlockPops is an Architectury Minecraft mod for collectible figures, animated
 blocks, and interactive claw-machine gameplay.
 
-The repository has two release lines. Each branch owns its exact Minecraft,
-loader, Java, dependency, artifact, and packaged-runtime inventory through
-`release/release-matrix.json`:
+`master` owns the canonical source and its complete Minecraft, loader, Java,
+dependency, artifact and packaged-runtime inventory in
+[`release/release-matrix.json`](release/release-matrix.json). Historical release
+branches retain their own branch-local matrices. Derive supported targets from
+the relevant matrix rather than maintaining another version list.
 
-- `master`: Minecraft 1.20.1 to 26.3 across 20 lanes - Forge and Fabric on
-  1.20.1, NeoForge and Fabric from 1.21.1 - on Java 17, 21 and 25 by era.
-- `1.21.1-neoforge-fabric`: Minecraft 1.21.1, Fabric and NeoForge, Java 21.
-
-Do not add version or loader lists to workflows or helper scripts. Add or
-change a lane in that release branch's matrix, then make every consumer derive
-from it.
+The integration matrix's `migration.mode` controls mandatory gate coverage:
+`preparing` retains the legacy projection; `shared` verifies every configured
+target. The matrix validator and build plan show the selected inventory.
 
 ## Local verification
+
+Set `BUILD_SCOPE` to `legacy` for a `preparing` matrix or `full` for a `shared`
+matrix. Set `JDK25_HOME`, `JDK21_HOME` and `JDK17_HOME` to the installed JDK homes
+required by its build plan. Use a POSIX host for scoped resource generation and
+artifact staging.
 
 ```bash
 python3 scripts/release/matrix.py
@@ -26,14 +29,19 @@ python3 scripts/ci/parallel_unittest.py -t . scripts/ci/tests tests
 python3 scripts/ci/dependency_policy.py --metadata gradle/verification-metadata.xml
 python3 scripts/ci/mod_base_kit.py verify --network
 python3 scripts/ci/mod_base_kit.py run template check --repo .
-./gradlew --no-daemon --no-parallel clean buildAllLanes buildAllE2EHarnesses
+python3 -B scripts/release/build_matrix.py --plan --scope "$BUILD_SCOPE"
+python3 -B scripts/release/build_matrix.py --scope "$BUILD_SCOPE" \
+  --java-home "$JDK25_HOME" --java17-home "$JDK17_HOME" \
+  --java21-home "$JDK21_HOME" --clean --discard-gradle-homes
 python3 scripts/release/verify_release.py \
-  --matrix release/release-matrix.json \
+  --matrix release/release-matrix.json --scope "$BUILD_SCOPE" \
   --manifest build/release/artifacts.json \
   --stage build/release
+python3 scripts/release/verify_release.py --scope "$BUILD_SCOPE" \
+  --manifest build/release/artifacts.json --stage build/release --verify-staged
 ```
 
-The normal Gradle build creates real remapped production JARs and physically
+The serial build creates real remapped production JARs and physically
 separate client-only E2E harness JARs. Packaged E2E installs those exact bytes
 into genuine loader clients and dedicated servers; it never substitutes a Loom
 development launch.
