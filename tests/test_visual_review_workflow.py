@@ -84,7 +84,6 @@ from scripts.ci.tests.matrix_fixtures import (
 from tests.contract_fixtures import representative_contract, representative_contract_path
 from tests.test_mod_base_adapter import (
     REAL_MATRIX,
-    MATRIX_PATH as REAL_MATRIX_PATH,
     REPOSITORY as KIT_REPOSITORY,
     SubjectRepository,
     master_files,
@@ -2047,6 +2046,8 @@ class KitAnchorCurationTests(unittest.TestCase):
         cls.anchor = cls.produced["anchor"]
         cls.contract = load_contract(representative_contract_path())
         cls.matrix = json.loads(REAL_MATRIX)
+        cls.matrix_path = root / "release-matrix.json"
+        cls.matrix_path.write_bytes(REAL_MATRIX)
 
     def run_identity(self, **changes) -> RunIdentity:
         values = dict(repository=KIT_REPOSITORY, head_repository=KIT_REPOSITORY, head_branch="master",
@@ -2066,7 +2067,7 @@ class KitAnchorCurationTests(unittest.TestCase):
                tested: TestedIdentity | None = None):
         return anchor_reference_frames(
             root or self.anchor, run=run or self.run_identity(), tested=tested or self.identity_of_tested(),
-            artifact_id=901, matrix=self.matrix, matrix_path=REAL_MATRIX_PATH, contract=self.contract,
+            artifact_id=901, matrix=self.matrix, matrix_path=self.matrix_path, contract=self.contract,
             scenarios=tuple(sorted(self.contract.scenarios_for_profile("pr"))),
         )
 
@@ -2133,7 +2134,7 @@ class KitAnchorCurationTests(unittest.TestCase):
         with self.assertRaisesRegex(CurationError, "matrix/contract identity is stale"):
             anchor_reference_frames(
                 self.anchor, run=self.run_identity(), tested=self.identity_of_tested(), artifact_id=901,
-                matrix=self.matrix, matrix_path=REAL_MATRIX_PATH, contract=load_contract(CONTRACT_PATH),
+                matrix=self.matrix, matrix_path=self.matrix_path, contract=load_contract(CONTRACT_PATH),
                 scenarios=tuple(sorted(self.contract.scenarios_for_profile("pr"))),
             )
 
