@@ -21,8 +21,10 @@ branch-local matrix owns:
 Never infer any of these from a branch name. Release branch names are opaque.
 A feature branch carrying a copied matrix is deliberately not enrolled because
 the matrix's exact branch identity does not match the feature ref.
-One branch may activate Forge or NeoForge, never both. That matrix-derived
-choice also binds `cpw.mods` and `org.lwjgl` to one reviewed repository origin:
+Each Gradle configuration uses at most one Forge-family loader, Forge or
+NeoForge. A complete integration matrix can configure different Forge-family
+loaders for different Minecraft targets. That matrix-derived choice also binds
+`cpw.mods` and `org.lwjgl` to one reviewed repository origin:
 Maven Central for the Forge line, and the NeoForge/Minecraft repositories for
 the NeoForge line; strict checksums remain mandatory in both cases.
 
@@ -127,8 +129,12 @@ Do not tune a threshold from one loader screenshot and assume it is portable.
 
 ## Release branch synchronization
 
-Shared changes originate on `master`. Automation discovers enrolled releases
-from strict branch-local matrices, creates or reuses one two-parent merge
+Shared product changes originate on `master`. The legacy synchronization path
+accepts schema-1 releases from a schema-1 or `preparing` canonical source; it
+rejects a `shared` integration source. Shared activation neither enrolls nor
+retires historical releases. While that compatibility path applies, automation
+discovers enrolled releases from strict branch-local matrices and creates or
+reuses one two-parent merge
 candidate per exact target head, retains the target matrix byte-for-byte, and
 explicitly dispatches Build and Packaged E2E. The release branch accepts only
 the PR opened for that authenticated `automation/release-sync/<token>` head.
