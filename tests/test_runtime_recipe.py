@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import copy
+from contextlib import nullcontext
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
 from e2e.packaged_runtime import RuntimeFailure, client_runtime_recipe
 from scripts.ci.tests.matrix_fixtures import schema2_configuration
+from scripts.release.matrix import load_matrix_document
 from tests.test_release_matrix_portability import arbitrary_named_1211_release_matrix
 from tests.matrix_fixtures import schema1_matrix
 
@@ -110,6 +114,28 @@ class RuntimeRecipeTests(unittest.TestCase):
         changed = client_runtime_recipe(matrix, row)
         self.assertEqual("b" * 64, changed.installer_sha256)
         self.assertNotEqual(previous.digest(), changed.digest())
+
+    def test_posix_server_owns_the_jvm_and_requires_the_installed_loader_arguments(self):
+        from e2e.packaged_runtime import prepare_server
+        matrix = load_matrix_document(Path(__file__).resolve().parents[1] / "release/release-matrix.json")
+        for lane in matrix.select_lanes(scope="full"):
+            row = lane.runtime
+            if row["loader"] not in {"forge", "neoforge"}:
+                continue
+            with self.subTest(node=row["artifact_node"]), tempfile.TemporaryDirectory() as temporary:
+                server = Path(temporary)
+                module = "net/minecraftforge/forge" if row["loader"] == "forge" else "net/neoforged/neoforge"
+                arguments = server / "libraries" / module / row["loader_version"] / "unix_args.txt"
+                arguments.parent.mkdir(parents=True)
+                arguments.write_text("# checksum-verified installer arguments\n")
+                with patch("e2e.packaged_runtime.leased_installer", return_value=nullcontext(server / "installer.jar")), \
+                        patch("e2e.packaged_runtime.run_checked"), patch("e2e.packaged_runtime.process_env", return_value={}):
+                    command = prepare_server({}, row, server, None, "/reviewed/jdk/bin/java", server / "install.log")
+                    self.assertEqual(["/reviewed/jdk/bin/java", "@user_jvm_args.txt", f"@{arguments}", "nogui"], command)
+                    self.assertIn("-Dblockpops.e2e.enabled=true", (server / "user_jvm_args.txt").read_text())
+                    arguments.unlink()
+                    with self.assertRaisesRegex(RuntimeFailure, "server installer did not create"):
+                        prepare_server({}, row, server, None, "/reviewed/jdk/bin/java", server / "install.log")
 
 
 if __name__ == "__main__":

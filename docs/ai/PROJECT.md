@@ -42,6 +42,13 @@ previews retain their 3D transform. Background quads explicitly select the versi
 shader rather than inheriting the program bound by a preceding GUI fill. Finish queued base
 fills before immediate background drawing on the earlier GUI path.
 
+`common/build.gradle` derives special-item definitions and base-model transforms for Minecraft
+1.21.4 onward with `scripts/release/item_resources.py`, from the authored entity models. Older
+lanes retain their original resources; generated modern resources are never authored or committed.
+
+On POSIX, packaged Forge-family servers launch the installed JVM argument files directly so
+shutdown waits for the JVM to finish writing logs before evidence export, without a shell parent.
+
 ## Trust model
 
 - **Protected controller, untrusted candidate.** Build and Packaged E2E run from the protected

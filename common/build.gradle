@@ -2,6 +2,33 @@ architectury {
     common rootProject.enabled_platforms.split(',')
 }
 
+// SpecialModelRenderer registration also needs an item definition from 1.21.4.
+// Generate it from the authored entity models; older resource bytes stay intact.
+def itemResources = layout.buildDirectory.dir('generated/special-items')
+def itemResourceScript = rootProject.file('scripts/release/item_resources.py')
+def authoredResources = rootProject.file('common/src/main/resources')
+def resourcePython = providers.environmentVariable('BLOCKPOPS_PYTHON').orElse(
+        System.getProperty('os.name').toLowerCase().contains('windows') ? 'python' : 'python3')
+def generateItemResources = tasks.register('generateSpecialItemResources', Exec) {
+    inputs.files(itemResourceScript, rootProject.file('scripts/lib/secure_json.py'),
+            rootProject.file('scripts/lib/atomic_directory.py'))
+    inputs.dir(new File(authoredResources, 'assets/blockpops/models'))
+    inputs.property('minecraft', rootProject.minecraft_version)
+    outputs.dir(itemResources)
+    commandLine(resourcePython.get(), '-B', itemResourceScript.absolutePath,
+            '--source', authoredResources.absolutePath, '--output', itemResources.get().asFile.absolutePath,
+            '--minecraft', rootProject.minecraft_version)
+}
+processResources {
+    dependsOn generateItemResources
+    from(itemResources) { include 'assets/**' }
+    eachFile { details ->
+        def generated = itemResources.get().asFile
+        if (!details.file.toPath().startsWith(generated.toPath()) &&
+                new File(generated, details.path).isFile()) details.exclude()
+    }
+}
+
 // Architectury's transformer and Loom's isolated modCompileOnly resolution
 // must use the same annotation loader as the matrix-owned compile dependency.
 configurations.matching {

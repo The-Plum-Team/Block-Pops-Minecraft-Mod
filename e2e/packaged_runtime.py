@@ -1015,10 +1015,12 @@ def prepare_server(
         if not script.is_file():
             raise RuntimeFailure(f"server installer did not create {script}")
         return ["cmd", "/c", str(script), "nogui"]
-    script = server / "run.sh"
-    if not script.is_file():
-        raise RuntimeFailure(f"server installer did not create {script}")
-    return ["bash", str(script), "nogui"]
+    # Own the JVM, not the shell that can exit before its shutdown hooks flush logs.
+    module = "net/minecraftforge/forge" if row["loader"] == "forge" else "net/neoforged/neoforge"
+    arguments = server / "libraries" / module / row["loader_version"] / "unix_args.txt"
+    if not arguments.is_file():
+        raise RuntimeFailure(f"server installer did not create {arguments}")
+    return [java, "@user_jvm_args.txt", f"@{arguments}", "nogui"]
 
 
 # The server reads the same switch as the client: it seeds claw-machine draws so a packaged
@@ -1218,6 +1220,7 @@ def stop_process(process: subprocess.Popen[bytes] | None) -> None:
                 process.wait(timeout=15)
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=15)
     except (OSError, subprocess.SubprocessError):
         process.kill()
 
