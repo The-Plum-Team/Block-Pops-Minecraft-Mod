@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -8,6 +9,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from scripts.ci.tests.matrix_fixtures import complete_preparing_matrix
 from scripts.ci.untrusted_runner import (
     SandboxError,
     _candidate_environment,
@@ -16,9 +18,11 @@ from scripts.ci.untrusted_runner import (
     _relative,
     _restore_authenticated_tree,
     _root,
+    _stonecutter_output_roots,
     _terminate_identity,
     _validate_export_tree,
 )
+from scripts.release.matrix import shared_activation_matrix
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -269,6 +273,108 @@ class BoundaryTests(unittest.TestCase):
                         "repository": str(repository),
                     }
                 )
+
+
+class StonecutterSourceBoundaryTests(unittest.TestCase):
+    def make_source(self, root: Path, matrix: bytes | None = None):
+        source = root / "source"
+        source.mkdir()
+        tracked = source / "common/src/main/Example.java"
+        tracked.parent.mkdir(parents=True)
+        tracked.write_text("// immutable production source\n")
+        matrix_path = source / "release/release-matrix.json"
+        matrix_path.parent.mkdir()
+        matrix_path.write_bytes(matrix or (REPO / "release/release-matrix.json").read_bytes())
+        git = ["git", "-c", "core.autocrlf=false", "-C", str(source)]
+        for arguments in (
+            ["init", "-q"], ["config", "user.email", "boundary@example.invalid"],
+            ["config", "user.name", "Boundary fixture"], ["add", "."],
+            ["commit", "-qm", "authenticated fixture"],
+        ):
+            subprocess.run(git + arguments, check=True)
+        commit = subprocess.check_output(git + ["rev-parse", "HEAD"], text=True).strip()
+        tree = subprocess.check_output(git + ["rev-parse", "HEAD^{tree}"], text=True).strip()
+        return source, commit, tree
+
+    def restore(self, source: Path, commit: str, tree: str, repository: Path):
+        _restore_authenticated_tree({"source": str(source), "source_commit": commit,
+                                     "source_tree": tree, "repository": str(repository)})
+
+    def test_matrix_declared_node_builds_and_caches_preserve_exact_sources(self):
+        preparing = json.dumps(complete_preparing_matrix()).encode()
+        shared = json.dumps(shared_activation_matrix(preparing)).encode()
+        for payload in (preparing, shared):
+            with (
+                self.subTest(mode=json.loads(payload)["migration"]["mode"]),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                source, commit, tree = self.make_source(root, payload)
+                tracked = ("common/src/main/Example.java", "release/release-matrix.json")
+                expected = set()
+                for artifact in json.loads(payload)["artifacts"]:
+                    if artifact["build_layout"] != "stonecutter":
+                        continue
+                    build = Path(artifact["jar"]).parent.parent
+                    for module_build in (build, Path("common", *build.parts[1:])):
+                        expected.update((module_build.as_posix(),
+                                         (module_build.parent / ".gradle").as_posix()))
+                self.assertEqual(expected, _stonecutter_output_roots(source, commit, tracked))
+                repository = root / "repository"
+                shutil.copytree(source, repository)
+                for relative in expected:
+                    output = repository / relative
+                    output.mkdir(parents=True)
+                    (output / "generated.bin").write_bytes(b"real generated output")
+                self.restore(source, commit, tree, repository)
+                self.assertEqual((source / tracked[0]).read_bytes(), (repository / tracked[0]).read_bytes())
+                self.assertEqual(commit, subprocess.check_output(
+                    ["git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip())
+
+    def test_node_sources_unknown_versions_and_links_remain_undeclared(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, commit, tree = self.make_source(root)
+            roots = _stonecutter_output_roots(source, commit, ("release/release-matrix.json",))
+            output = sorted(relative for relative in roots if relative.endswith("/build"))[0]
+            node = Path(output).parent
+            invalid = {
+                "node-source": node / "src/main/Injected.java",
+                "node-file": node / "unexpected.json",
+                "unknown-version": node.parent / "not-enrolled/build/generated.bin",
+                "changed-source": Path("common/src/main/Example.java"),
+                "changed-matrix": Path("release/release-matrix.json"),
+            }
+            for label, relative in invalid.items():
+                with self.subTest(case=label):
+                    repository = root / label
+                    shutil.copytree(source, repository)
+                    file = repository / relative
+                    file.parent.mkdir(parents=True, exist_ok=True)
+                    file.write_bytes(b"undeclared or changed bytes")
+                    with self.assertRaises(SandboxError):
+                        self.restore(source, commit, tree, repository)
+            for label, relative in (("version-root-link", node.parent),
+                                    ("node-link", node), ("build-link", Path(output))):
+                with self.subTest(case=label):
+                    repository = root / label
+                    shutil.copytree(source, repository)
+                    linked = repository / relative
+                    linked.parent.mkdir(parents=True, exist_ok=True)
+                    linked.symlink_to(source, target_is_directory=True)
+                    with self.assertRaises(SandboxError):
+                        self.restore(source, commit, tree, repository)
+
+    def test_matrix_blob_is_strict_and_cannot_authorize_traversal(self):
+        document = json.loads((REPO / "release/release-matrix.json").read_bytes())
+        document["artifacts"][0]["minecraft"] = "../../outside"
+        payloads = (json.dumps(document).encode(), b'{"schema_version":2,"schema_version":2}')
+        for payload in payloads:
+            with self.subTest(payload=payload[:48]), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source, commit, _tree = self.make_source(root, payload)
+                with self.assertRaises(SandboxError):
+                    _stonecutter_output_roots(source, commit, ("release/release-matrix.json",))
 
 
 class WorkflowContractTests(unittest.TestCase):
