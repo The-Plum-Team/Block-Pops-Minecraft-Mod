@@ -298,6 +298,11 @@ public class FavoriteColorSelectionScreen extends Screen {
         int bgColor = 0xFF000000;
         graphics.fill(0, 0, this.width, this.height, bgColor);
 
+        //? if <1.21.5 {
+        // Finish buffered base fills before the immediate textured quad draws.
+        GuiPose.flush(graphics);
+        //? }
+
         // 2. Render the moving star pattern
         renderStarPattern(graphics, partialTick);
 

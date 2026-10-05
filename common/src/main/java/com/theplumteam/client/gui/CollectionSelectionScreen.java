@@ -554,6 +554,11 @@ public class CollectionSelectionScreen extends Screen {
         int bgHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
         graphics.fill(0, 0, bgWidth, bgHeight, bgColor);
 
+        //? if <1.21.5 {
+        // Finish buffered base fills before the immediate textured quad draws.
+        GuiPose.flush(graphics);
+        //? }
+
         // 2. Render the moving star pattern
         renderStarPattern(graphics, partialTick);
 
