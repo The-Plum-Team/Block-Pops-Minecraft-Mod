@@ -92,7 +92,7 @@ if args[:2] == ["controller/scripts/ci/untrusted_runner.py", "validate"]:
                     self.assertEqual(["python3", "scripts/release/build_matrix.py", "--matrix",
                         "release/release-matrix.json", "--scope", scope, "--java-home", "/jdk21 home",
                         "--java17-home", home17, "--java21-home", "/jdk21 compile home/$(touch forbidden21)",
-                        "--clean"], builds[0])
+                        "--clean", "--discard-gradle-homes"], builds[0])
                 scope_args = [] if scope == "unscoped" else ["--scope", scope]
                 self.assertEqual(["python3", "scripts/release/verify_release.py", *scope_args], rows[-1])
                 self.assertFalse((self.root / "forbidden").exists())

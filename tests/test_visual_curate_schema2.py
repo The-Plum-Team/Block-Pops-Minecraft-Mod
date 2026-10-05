@@ -11,7 +11,7 @@ from pathlib import Path
 
 from e2e.scenario_contract import load_contract
 from e2e.visual_capsule import _gated_nodes
-from scripts.ci.tests.matrix_fixtures import schema2_configuration
+from scripts.ci.tests.matrix_fixtures import complete_preparing_matrix, schema2_configuration
 from scripts.release.artifact_manifest import stage_release
 from scripts.release.matrix import load_matrix
 from scripts.visual.curate import (
@@ -72,8 +72,8 @@ class BranchMatrixScopeTests(unittest.TestCase):
                 self.assertEqual(expected, scope)
                 self.assertEqual(source, matrix)
 
-    def test_the_live_matrix_projects_only_its_legacy_gate(self):
-        matrix, scope = branch_matrix(REPO / "release/release-matrix.json")
+    def test_the_preparing_inventory_projects_only_its_legacy_gate(self):
+        matrix, scope = branch_matrix(self.write("preparing", complete_preparing_matrix()))
         self.assertEqual("legacy", scope)
         contract = load_contract(REPO / "e2e/scenario-contract.json")
         for projection in ("pr-anchors", "scheduled-anchors"):

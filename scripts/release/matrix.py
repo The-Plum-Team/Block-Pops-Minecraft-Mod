@@ -283,22 +283,20 @@ class MatrixDocument:
     def trusted_gate_projection(self) -> dict[str, Any]:
         """Branch policy and lanes the trusted PR gate evaluates; never an execution plan.
 
-        Schema 1 keeps every executable row. Schema 2 is accepted only while `preparing` on
-        the integration branch, as exactly its legacy nodes: the two-lane gate the schema-1
-        matrix defined before enrollment. `shared` waits for its own activation task, and
-        `execution_supported` stays false, so this view enables no other consumer.
+        Schema 1 keeps every executable row. Schema 2 requires the integration branch:
+        `preparing` keeps exactly its legacy nodes; `shared` requires every configured target.
+        This is a policy projection, not permission to change the protected matrix, and
+        `execution_supported` stays false for the legacy schema-1 reader.
         """
         data = self.data
         if self.inventory.schema_version == 1:
             lanes = self.inventory.require_complete()
         else:
-            if self.inventory.migration_mode != "preparing":
-                _fail(f"the trusted PR gate does not evaluate schema-2 "
-                      f"{self.inventory.migration_mode!r} mode yet")
             if data["branch"]["role"] != "integration":
                 _fail("the trusted PR gate evaluates schema 2 only on the integration branch")
-            lanes = self.select_lanes(scope="legacy")
-            if {lane.identity.artifact_node for lane in lanes} != LEGACY_TARGET_NODES:
+            lanes = self.select_lanes(scope=self.default_scope)
+            if (self.inventory.migration_mode == "preparing"
+                    and {lane.identity.artifact_node for lane in lanes} != LEGACY_TARGET_NODES):
                 _fail("the trusted PR gate requires exactly the configured legacy lanes")
         return {
             "schema_version": self.inventory.schema_version,
@@ -1203,6 +1201,47 @@ def load_trusted_gate_matrix_bytes(data: bytes) -> dict[str, Any]:
     except SecureJsonError as exc:
         raise MatrixError(str(exc)) from exc
     return MatrixDocument(inventory, json.dumps(matrix)).trusted_gate_projection()
+
+
+def load_release_sync_matrix_bytes(data: bytes) -> dict[str, Any]:
+    """Keep legacy release synchronization separate from shared integration PR policy."""
+    from scripts.lib.secure_json import loads
+
+    try:
+        matrix = loads(data, label="release matrix snapshot", max_bytes=MAX_MATRIX_BYTES)
+        inventory = normalize_matrix_inventory(matrix)
+    except SecureJsonError as exc:
+        raise MatrixError(str(exc)) from exc
+    if inventory.migration_mode == "shared":
+        _fail("shared integration is not a legacy release synchronization source")
+    return MatrixDocument(inventory, json.dumps(matrix)).trusted_gate_projection()
+
+
+def shared_activation_matrix(data: bytes) -> dict[str, Any]:
+    """Derive the only permitted preparing-to-shared activation from protected base bytes."""
+    from scripts.lib.secure_json import loads
+
+    try:
+        matrix = loads(data, label="activation base matrix", max_bytes=MAX_MATRIX_BYTES)
+        inventory = normalize_matrix_inventory(matrix)
+    except SecureJsonError as exc:
+        raise MatrixError(str(exc)) from exc
+    if (inventory.schema_version != 2 or inventory.migration_mode != "preparing"
+            or matrix["branch"]["role"] != "integration"):
+        _fail("shared activation requires a preparing integration base")
+    inventory.require_complete()
+    matrix["migration"] = {"mode": "shared", "legacy_nodes": []}
+    for row in matrix["artifacts"]:
+        if row["artifact_node"] not in inventory.legacy_nodes:
+            continue
+        loader, minecraft = row["loader"], row["minecraft"]
+        row["build_layout"] = "stonecutter"
+        for field in ("gradle_task", "harness_task"):
+            row[field] = f":{loader}:{minecraft}:{row[field].rsplit(':', 1)[1]}"
+        for field in ("jar", "harness_jar"):
+            row[field] = f"{loader}/versions/{minecraft}/" + row[field].removeprefix(f"{loader}/")
+    normalize_matrix_inventory(matrix).require_complete()
+    return matrix
 
 
 def load_matrix_inventory(path: Path, *, validate_sources: bool = True) -> MatrixInventory:

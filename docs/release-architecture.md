@@ -45,6 +45,11 @@ schema 1; schema-2 release enrollment and `shared` activation are not admitted
 by this compatibility path. Modern configured loaders therefore do not change
 which target-owned loader trees the synchronizer retains.
 
+The PR gate can authenticate a protected `shared` integration inventory and its
+full graph. Branch discovery can inspect that inventory for public evidence,
+but it enrolls no release and grants no merge authority. Legacy sync merge and
+topology validators separately reject a `shared` canonical source.
+
 Ordinary feature PRs and controller upgrades target only the canonical default
 branch. Enrolled releases accept only the separately authenticated generated
 release-sync bridge contexts; they do not consume an ordinary release-base
@@ -85,12 +90,19 @@ dependencies, and places the harness on clients only.
 
 Schema-2 matrices use schema-3 manifests with an explicit caller scope:
 `verify_release.py --artifact-node fabric-1.20.1`, `--scope legacy` while preparing,
-or `--scope full` for all twelve configured lanes. Reverification adds
+or `--scope full` for all configured lanes. Reverification adds
 `--verify-staged` with the same selection. Both archives must already embed the
 matching lane/build identity; these commands do not build, qualify or publish a
 lane. Schema-1 historical staging keeps its existing unscoped interface.
 Scoped staging currently requires POSIX no-follow directory descriptors;
 unsupported platforms fail before modifying staged outputs.
+
+The serial build runner accepts `--discard-gradle-homes`, enabled in both CI
+bundle jobs, to discard each completed lane's isolated cache after its process,
+compiler observation and archive boundaries validate. Cleanup uses anchored
+symlink-safe descriptors; failed lanes retain diagnostics. It preserves archives,
+reports, other lane homes and external/shared Gradle caches, bounding disk use
+when the complete target set builds on one runner.
 
 The branch matrix owns the Gradle JVM independently from each artifact/runtime
 Java toolchain, plus the mod version and all full runtime dependency

@@ -114,7 +114,8 @@ class SyncMergeTests(unittest.TestCase):
         return git(fixture.root, "rev-parse", "HEAD")
 
     def test_preparing_source_merges_and_authenticates_only_legacy_loader_roots(self) -> None:
-        matrices = (schema2_configuration(), json.loads((REPO / MATRIX_PATH).read_bytes()))
+        from scripts.ci.tests.matrix_fixtures import complete_preparing_matrix
+        matrices = (schema2_configuration(), complete_preparing_matrix())
         for matrix in matrices:
             with self.subTest(lanes=matrix["lane_count"]), tempfile.TemporaryDirectory() as raw:
                 fixture = SyncRepository(Path(raw))

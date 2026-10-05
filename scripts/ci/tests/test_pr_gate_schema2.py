@@ -32,7 +32,7 @@ from scripts.ci.pr_gate import (
     validate_controller_upgrade_tree,
     validate_pr_tree,
 )
-from scripts.ci.tests.matrix_fixtures import SCHEMA1_MATRIX_PATH, schema2_configuration
+from scripts.ci.tests.matrix_fixtures import SCHEMA1_MATRIX_PATH, complete_preparing_matrix, schema2_configuration
 from scripts.release.matrix import (
     LEGACY_TARGET_NODES,
     MAX_MATRIX_BYTES,
@@ -45,7 +45,7 @@ from scripts.release.matrix import (
 REPO = Path(__file__).resolve().parents[3]
 SCHEMA1 = SCHEMA1_MATRIX_PATH.read_bytes()
 PREPARING = {
-    "master": (REPO / "release/release-matrix.json").read_bytes(),
+    "master": json.dumps(complete_preparing_matrix()).encode(),
     "fixture": json.dumps(schema2_configuration(), indent=2).encode(),
 }
 REPOSITORY_NAME = "The-Plum-Team/Block-Pops-Minecraft-Mod"
@@ -176,14 +176,13 @@ class TrustedGateSchema2Tests(unittest.TestCase):
                 with self.assertRaisesRegex(MatrixError, "inventory only"):
                     load_matrix_bytes(raw)
 
-    def test_shared_unknown_mode_release_role_and_malformed_matrices_fail_closed(self) -> None:
+    def test_unknown_mode_release_role_and_malformed_matrices_fail_closed(self) -> None:
         def mutated(mutate) -> bytes:
             matrix = schema2_configuration()
             mutate(matrix)
             return json.dumps(matrix).encode()
 
         cases = {
-            "shared mode": json.dumps(schema2_configuration(shared=True)).encode(),
             "unknown mode": mutated(lambda matrix: matrix["migration"].update(mode="ready")),
             "missing migration": mutated(lambda matrix: matrix.pop("migration")),
             "one legacy node": mutated(lambda matrix: matrix["migration"]["legacy_nodes"].pop()),
@@ -202,8 +201,6 @@ class TrustedGateSchema2Tests(unittest.TestCase):
         for label, raw in cases.items():
             with self.subTest(matrix=label), self.assertRaises(MatrixError):
                 load_trusted_gate_matrix_bytes(raw)
-        with self.assertRaisesRegex(MatrixError, "'shared' mode"):
-            load_trusted_gate_matrix_bytes(cases["shared mode"])
 
     def assert_ordinary_pr_matches_schema1(self, matrix: bytes) -> None:
         repository = self.repository(matrix)
@@ -258,11 +255,11 @@ class TrustedGateSchema2Tests(unittest.TestCase):
     def test_controller_upgrade_on_a_preparing_fixture(self) -> None:
         self.assert_controller_upgrade_matches_schema1(PREPARING["fixture"])
 
-    def evaluate(self, matrix: bytes, branch: str) -> dict[str, Any]:
+    def evaluate(self, matrix: bytes, branch: str, *, evidence_matrix: bytes | None = None) -> dict[str, Any]:
         repository = self.repository(matrix)
         current = repository.pull({"docs/operations.md": "changed\n"}, branch=branch)
         labels = ["controller-upgrade"] if branch.startswith("controller-upgrade/") else []
-        api = FakeGitHub(current, self.graphs(SCHEMA1), labels)
+        api = FakeGitHub(current, self.graphs(matrix if evidence_matrix is None else evidence_matrix), labels)
         authorization = UpgradeAuthorization(91, "2026-09-26T10:00:00Z", current.head_sha, "7" * 64)
         with mock.patch("scripts.ci.pr_gate.resolve_pull_identity", return_value=current), \
                 mock.patch("scripts.ci.pr_gate.controller_upgrade_authorization", return_value=authorization), \
@@ -286,11 +283,26 @@ class TrustedGateSchema2Tests(unittest.TestCase):
     def test_complete_evaluation_of_a_preparing_fixture(self) -> None:
         self.assert_complete_evaluation_accepts_schema1_evidence(PREPARING["fixture"])
 
-    def test_complete_evaluation_refuses_shared_mode_as_policy(self) -> None:
-        result = self.evaluate(json.dumps(schema2_configuration(shared=True)).encode(), "feature/ui")
-        for gate in result["gates"].values():
-            self.assertEqual(("failure", "Ordinary PR changed protected branch policy", 0),
-                             (gate["state"], gate["description"], gate["run_id"]))
+    def test_shared_policy_requires_full_graph_and_protects_every_loader(self) -> None:
+        raw = json.dumps(schema2_configuration(shared=True)).encode()
+        inventory = normalize_matrix_inventory(json.loads(raw))
+        view = load_trusted_gate_matrix_bytes(raw)
+        self.assertEqual(set(inventory.target_nodes), {row['artifact_node'] for row in view['artifacts']})
+        self.assertEqual(set(inventory.target_nodes), {row['artifact_node'] for row in view['runtimes']})
+        for branch in ("feature/ui", "controller-upgrade/shared-gate"):
+            self.assertEqual({"success"}, {gate["state"] for gate in self.evaluate(raw, branch)["gates"].values()})
+        legacy = self.evaluate(raw, "feature/ui", evidence_matrix=SCHEMA1)
+        self.assertEqual("failure", legacy["gates"]["e2e"]["state"])
+        repository = self.repository(raw)
+        for path in ("neoforge/src/e2e/Bootstrap.java", "release/release-matrix.json"):
+            refused = repository.pull({path: "candidate\n"})
+            with self.subTest(path=path), mock.patch(BOOTSTRAPS[0]), self.assertRaises(GateControllerError):
+                validate_pr_tree(repository.root, refused)
+        for missing in ("artifacts", "runtimes", "targets"):
+            invalid = json.loads(raw)
+            invalid[missing].pop()
+            with self.subTest(missing=missing), self.assertRaises(MatrixError):
+                load_trusted_gate_matrix_bytes(json.dumps(invalid).encode())
 
 
 if __name__ == "__main__":

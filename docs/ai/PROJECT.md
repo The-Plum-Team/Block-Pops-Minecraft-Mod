@@ -47,18 +47,20 @@ script or document; derive every consumer from the matrix. Release branch names 
   controller-upgrade procedure in [`docs/operations.md`](../operations.md). The evaluator
   constants in `scripts/ci/gate_controller.py`, `scripts/ci/pr_gate.py` and
   `scripts/ci/e2e_job_graph.py` are never edited to admit a pull request.
-- **Restricted shim admission.** The deployed generation-1 controller accepts only the existing
-  `VanillaShim.java` on `restricted-transition/*`, with an exact base/head declaration and a fresh
-  owner decision bound to its canonical digest. It retains the base-owned graphs and both gates.
-  Other restricted scopes remain inert; see [the procedure](../operations.md#restricted-shim-admission).
+- **Restricted admission.** The generation-1 controller accepts the existing `VanillaShim.java`
+  or a complete base-derived preparing-to-shared matrix activation on `restricted-transition/*`.
+  Each scope has its own exact base/head declaration and fresh digest-bound owner decision.
+  Both gates remain mandatory; all other scopes are inert. See the [shim](../operations.md#restricted-shim-admission)
+  and [matrix](../operations.md#shared-matrix-admission) procedures.
 - **Exact job graph.** `scripts/ci/e2e_job_graph.py` fixes the Packaged E2E job set that the gate,
   release attestation, visual review and public evidence authenticate. Change steps inside a job,
   never the set of jobs, unless the graph itself is deliberately upgraded.
 - **Public evidence is advisory.** GitHub Pages and AI visual review never replace the
   deterministic gates.
-- **Preparing synchronization.** A schema-2 integration matrix uses the trusted gate's legacy
-  projection in release discovery, merge construction and topology authentication. Release
-  targets remain schema 1; this compatibility route activates neither modern lanes nor `shared`.
+- **Matrix scope.** A schema-2 integration matrix in `preparing` uses the trusted gate's legacy
+  projection. A protected `shared` matrix requires every configured target and its full E2E graph,
+  including parity for all active loader controllers. Matrix mutation remains separately restricted;
+  changing the projection alone activates no lanes. Enrolled release targets remain schema 1.
 
 ## Public evidence through mod-base
 

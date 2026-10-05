@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from scripts.release.matrix import EXPECTED_TARGETS, _era_java, _numeric_version
+from scripts.release.matrix import EXPECTED_TARGETS, LEGACY_TARGET_NODES, _era_java, _numeric_version
 
 SCHEMA1_MATRIX_PATH = Path(__file__).resolve().parents[3] / "tests/fixtures/release-matrix-schema1.json"
 
@@ -24,6 +24,23 @@ TARGET_COUNT = len(EXPECTED_TARGETS)
 def schema1_matrix() -> dict[str, Any]:
     """Return independent frozen input without importing candidate-owned test code."""
     return json.loads(SCHEMA1_MATRIX_PATH.read_bytes())
+
+
+def complete_preparing_matrix() -> dict[str, Any]:
+    """Keep migration tests independent of activation, deriving pins from the live inventory."""
+    matrix = json.loads((SCHEMA1_MATRIX_PATH.parents[2] / "release/release-matrix.json").read_bytes())
+    matrix["migration"] = {"mode": "preparing", "legacy_nodes": sorted(LEGACY_TARGET_NODES)}
+    for row in matrix["artifacts"]:
+        if row["artifact_node"] not in LEGACY_TARGET_NODES:
+            continue
+        loader, minecraft = row["loader"], row["minecraft"]
+        row["build_layout"] = "legacy"
+        row["mod_version"] = matrix["project"]["mod_version"]
+        for field in ("gradle_task", "harness_task"):
+            row[field] = f":{loader}:{row[field].rsplit(':', 1)[1]}"
+        for field in ("jar", "harness_jar"):
+            row[field] = row[field].replace(f"{loader}/versions/{minecraft}/", f"{loader}/", 1)
+    return matrix
 
 
 def canonical_integration_matrix(source: dict[str, Any]) -> dict[str, Any]:
