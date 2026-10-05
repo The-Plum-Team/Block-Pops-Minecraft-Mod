@@ -33,16 +33,14 @@ public class ClawMachineBlockItemRenderer
     extends BlockEntityWithoutLevelRenderer
     //? }
 {
-    private final ClawMachineBlockRenderer renderer;
+    private ClawMachineBlockRenderer renderer;
     private ClawMachineBlockEntity renderEntity;
 
     public ClawMachineBlockItemRenderer() {
         //? if <1.21.4 {
         super(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
         //? }
-        //? if >=26 {
-        /*this.renderer = new ClawMachineBlockRenderer(GeoRendererContext.get());
-        *///? } else {
+        //? if <26 {
         this.renderer = new ClawMachineBlockRenderer();
         //? }
     }
@@ -223,6 +221,10 @@ public class ClawMachineBlockItemRenderer
                        int packedLight, int packedOverlay, boolean hasGlint, int outlineColor) {
         if (!prepareRenderEntity(stack)) {
             return;
+        }
+        // Model baking precedes block-entity renderer registration in 26.x.
+        if (this.renderer == null) {
+            this.renderer = new ClawMachineBlockRenderer(GeoRendererContext.get());
         }
         float partialTick = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(true);
         net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState renderState =

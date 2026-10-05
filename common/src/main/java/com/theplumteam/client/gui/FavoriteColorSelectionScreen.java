@@ -298,6 +298,11 @@ public class FavoriteColorSelectionScreen extends Screen {
         int bgColor = 0xFF000000;
         graphics.fill(0, 0, this.width, this.height, bgColor);
 
+        //? if <1.21.5 {
+        // Finish buffered base fills before the immediate textured quad draws.
+        GuiPose.flush(graphics);
+        //? }
+
         // 2. Render the moving star pattern
         renderStarPattern(graphics, partialTick);
 
@@ -363,6 +368,8 @@ public class FavoriteColorSelectionScreen extends Screen {
         var pose = graphics.pose();
         pose.pushPose();
         RenderSystem.setShaderTexture(0, cacheTexture);
+        // GUI fills leave a different program bound; select the textured 1.21.4 shader.
+        RenderSystem.setShader(net.minecraft.client.renderer.CoreShaders.POSITION_TEX);
 
         BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
         bufferBuilder.addVertex(pose.last().pose(), 0, starHeight, 0).setUv(u0, v1);

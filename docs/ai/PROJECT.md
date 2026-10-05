@@ -35,6 +35,13 @@ authoritative inventory of its Minecraft versions, loaders, Java toolchains, art
 lanes, source routing and canonical visual reference. Never duplicate that inventory in a workflow,
 script or document; derive every consumer from the matrix. Release branch names are opaque.
 
+In 26.x, special item renderers read `GeoRendererContext` on their first draw, after block-entity
+renderer registration, rather than during model baking. With 2D GUI poses, favorite-color
+previews use the item model's tilt and center their scaled image within the button; earlier
+previews retain their 3D transform. Background quads explicitly select the version’s textured
+shader rather than inheriting the program bound by a preceding GUI fill. Finish queued base
+fills before immediate background drawing on the earlier GUI path.
+
 ## Trust model
 
 - **Protected controller, untrusted candidate.** Build and Packaged E2E run from the protected
