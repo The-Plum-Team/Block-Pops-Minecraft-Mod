@@ -273,6 +273,14 @@ public class FavoriteColorSelectionScreen extends Screen {
         }
     }
 
+    //? if >=1.21.4 {
+    /*@Override
+    public void renderBackground(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // This screen draws its own opaque background. The vanilla pass would
+        // blur those stars when Screen.render draws the widgets in 1.21.4/1.21.5.
+    }
+    *///? }
+
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         // Render animated starry background

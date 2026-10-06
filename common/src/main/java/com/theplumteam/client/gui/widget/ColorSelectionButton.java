@@ -6,6 +6,10 @@ import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
 import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.registry.ModItems;
+//? if >=1.21.4 {
+/*import com.theplumteam.client.renderer.BoxBlockItemRenderer;
+import net.minecraft.core.component.DataComponents;
+*///? }
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -45,6 +49,9 @@ public class ColorSelectionButton extends Button {
 
         // Create the box item for this color
         this.boxItem = new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(color).get());
+        //? if >=1.21.4 {
+        /*this.boxItem.set(DataComponents.ITEM_MODEL, BoxBlockItemRenderer.FAVORITE_COLOR_MODEL);
+        *///? }
 
         // Configure NBT to show the player inside the box
         CompoundTag blockEntityTag = BlockEntityItemData.read(this.boxItem);
@@ -176,12 +183,15 @@ public class ColorSelectionButton extends Button {
 
         // Apply transformations and render the item.
         float finalScale = (itemSize / 16f) * this.scale;
-        //? if >=1.21.6 {
-        /*// Special item models own their tilt and origin. The legacy offsets below
-        // compensate its old 3D transform and must not displace a modern button preview.
+        //? if >=1.21.4 {
+        /*// The dedicated preview model owns the canonical camera. Legacy offsets
+        // compensate the old GUI depth transform and do not apply to modern models.
+        // Its baked scale allocates a full-resolution target in the deferred GUI;
+        // cancel that scale here instead of enlarging a tiny atlas thumbnail.
+        float screenScale = finalScale / 4f;
         GuiPose.push(graphics);
         GuiPose.translate(graphics, itemX + itemSize / 2f, itemY + itemSize / 2f);
-        GuiPose.scale(graphics, finalScale, finalScale);
+        GuiPose.scale(graphics, screenScale, screenScale);
         GuiPose.translate(graphics, -8, -8);
         graphics.renderItem(boxItem, 0, 0);
         GuiPose.pop(graphics);

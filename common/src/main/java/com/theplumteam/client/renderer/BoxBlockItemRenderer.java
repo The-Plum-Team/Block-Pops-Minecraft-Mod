@@ -15,6 +15,7 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.util.ResourceLocations;
 import net.minecraft.client.model.geom.EntityModelSet;
 import net.minecraft.client.renderer.special.SpecialModelRenderer;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.resources.ResourceLocation;
 *///? } else {
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
@@ -153,6 +154,8 @@ public class BoxBlockItemRenderer
     //? if >=1.21.4 {
     /*public static final ResourceLocation ID =
             ResourceLocations.of(BlockPopsMod.MOD_ID, "box_block");
+    public static final ResourceLocation FAVORITE_COLOR_MODEL =
+            ResourceLocations.of(BlockPopsMod.MOD_ID, "favorite_color_box");
 
     // 1.21.4 binds a special renderer to an item model through this unbaked codec.
     //? if >=26 {
@@ -185,9 +188,15 @@ public class BoxBlockItemRenderer
     //? if >=26 {
     /*@Override
     public void getExtents(java.util.function.Consumer<org.joml.Vector3fc> extents) {
-        // The model occupies the block's own unit cube.
-        extents.accept(new org.joml.Vector3f(0, 0, 0));
-        extents.accept(new org.joml.Vector3f(1, 1, 1));
+        // Minecraft transforms each vertex before computing the GUI bounds.
+        // Opposite corners alone lose the width/depth of a rotated cube.
+        for (int x = 0; x <= 1; x++) {
+            for (int y = 0; y <= 1; y++) {
+                for (int z = 0; z <= 1; z++) {
+                    extents.accept(new org.joml.Vector3f(x, y, z));
+                }
+            }
+        }
     }
 
     // Builds the block entity the item stack stands for, mirroring what the older
@@ -229,15 +238,28 @@ public class BoxBlockItemRenderer
                 this.renderer.createRenderState();
         this.renderer.extractRenderState(renderEntity, renderState, partialTick,
                 net.minecraft.world.phys.Vec3.ZERO, null);
+        poseStack.pushPose();
+        if (FAVORITE_COLOR_MODEL.equals(stack.get(DataComponents.ITEM_MODEL))) {
+            // Preserve the legacy GUI-facing side and one-pixel lift for this preview.
+            poseStack.translate(0.5, 0.5, 0.5);
+            poseStack.mulPose(new org.joml.Matrix4f().rotationY((float) Math.PI));
+            poseStack.translate(-0.5, -0.4375F, -0.5);
+        }
         this.renderer.submit(renderState, poseStack, renderTasks,
                 new net.minecraft.client.renderer.state.level.CameraRenderState());
+        poseStack.popPose();
     }
     *///? } elif >=1.21.6 {
     /*@Override
     public void getExtents(java.util.Set<org.joml.Vector3f> extents) {
-        // The model occupies the block's own unit cube.
-        extents.add(new org.joml.Vector3f(0, 0, 0));
-        extents.add(new org.joml.Vector3f(1, 1, 1));
+        // Include all corners so the rotated GUI bounds enclose every face.
+        for (int x = 0; x <= 1; x++) {
+            for (int y = 0; y <= 1; y++) {
+                for (int z = 0; z <= 1; z++) {
+                    extents.add(new org.joml.Vector3f(x, y, z));
+                }
+            }
+        }
     }
     *///? }
 }
