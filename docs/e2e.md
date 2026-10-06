@@ -64,6 +64,10 @@ xvfb-run -a python3 -m e2e.orchestrator \
 
 CI on Ubuntu with Xvfb and Mesa is authoritative when a local macOS/Windows
 display or the required JDK is unavailable.
+The protected runtime action installs Mesa EGL and passes `SDL_VIDEO_FORCE_EGL=1`
+explicitly into the credentialless account. Minecraft 26.3's SDL3 backend can then
+create its required sRGB OpenGL window under Xvfb; older GLFW clients ignore the
+hint. This selects a real Mesa context without overriding reported capabilities.
 
 ## Visual comparison
 
