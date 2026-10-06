@@ -81,6 +81,24 @@ class BoundaryTests(unittest.TestCase):
             with self.assertRaises(SandboxError):
                 _candidate_environment(Path(temporary), ("GITHUB_TOKEN",))
 
+    def test_sdl_context_hint_is_explicit_without_allowing_native_library_injection(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.dict(
+            os.environ,
+            {
+                "SDL_VIDEO_FORCE_EGL": "1",
+                "SDL_DYNAMIC_API": "/untrusted/library.so",
+                "GH_TOKEN": "must-not-escape",
+            },
+        ):
+            root = Path(temporary)
+            self.assertNotIn("SDL_VIDEO_FORCE_EGL=1", _candidate_environment(root, ()))
+            values = _candidate_environment(root, ("SDL_VIDEO_FORCE_EGL",))
+            self.assertIn("SDL_VIDEO_FORCE_EGL=1", values)
+            self.assertFalse(any(value.startswith("SDL_DYNAMIC_API=") for value in values))
+            self.assertNotIn("must-not-escape", "\n".join(values))
+            with self.assertRaises(SandboxError):
+                _candidate_environment(root, ("SDL_DYNAMIC_API",))
+
     def test_copied_index_stat_metadata_is_refreshed_inside_the_empty_boundary(self) -> None:
         root = Path("/tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox")
         repository = root / "repository"

@@ -64,7 +64,7 @@ runs:
         unset ACTIONS_RUNTIME_TOKEN ACTIONS_CACHE_URL ACTIONS_RESULTS_URL GITHUB_TOKEN GH_TOKEN
         sudo apt-get update
         sudo apt-get install --yes --no-install-recommends \
-          xvfb xauth mesa-utils libgl1-mesa-dri libglx-mesa0 libasound2t64 \
+          xvfb xauth mesa-utils libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 libasound2t64 \
           libopenal1 libx11-6 libxcursor1 libxext6 libxi6 libxinerama1 \
           libxrandr2 libxrender1 libxtst6 libxxf86vm1
 
@@ -100,6 +100,8 @@ runs:
         E2E_SCENARIOS: ${{ inputs.scenarios }}
         LIBGL_ALWAYS_SOFTWARE: "1"
         GALLIUM_DRIVER: llvmpipe
+        # SDL3's sRGB window needs Mesa EGL under Xvfb; older GLFW clients ignore this hint.
+        SDL_VIDEO_FORCE_EGL: "1"
         SANDBOX_ROOT: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox
         __GLX_VENDOR_LIBRARY_NAME: mesa
       run: |
@@ -109,6 +111,7 @@ runs:
           --pass-env BLOCKPOPS_PROJECTION \
           --pass-env E2E_ROW_JSON --pass-env E2E_SCENARIOS \
           --pass-env LIBGL_ALWAYS_SOFTWARE --pass-env GALLIUM_DRIVER \
+          --pass-env SDL_VIDEO_FORCE_EGL \
           --pass-env __GLX_VENDOR_LIBRARY_NAME -- \
           bash -euo pipefail -c '
             python3 -m pip install --user --disable-pip-version-check \
