@@ -242,7 +242,7 @@ public class BoxBlockItemRenderer
         if (FAVORITE_COLOR_MODEL.equals(stack.get(DataComponents.ITEM_MODEL))) {
             // Preserve the legacy GUI-facing side and one-pixel lift for this preview.
             poseStack.translate(0.5, 0.5, 0.5);
-            poseStack.mulPose(Axis.YP.rotationDegrees(180));
+            poseStack.mulPose(new org.joml.Matrix4f().rotationY((float) Math.PI));
             poseStack.translate(-0.5, -0.4375F, -0.5);
         }
         this.renderer.submit(renderState, poseStack, renderTasks,

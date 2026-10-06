@@ -38,7 +38,9 @@ script or document; derive every consumer from the matrix. Release branch names 
 In 26.x, special item renderers read `GeoRendererContext` on their first draw, after block-entity
 renderer registration, rather than during model baking. From 1.21.4, favorite-color previews
 select a dedicated item model with the 1.20.1 camera and scale, centered within the button;
-earlier previews retain their 3D transform. Box item extents include every cube corner so
+earlier previews retain their 3D transform. The modern model bakes its preview scale and the
+widget cancels it in screen space, allowing the deferred GUI to render at full resolution
+instead of enlarging a tiny atlas thumbnail. Box item extents include every cube corner so
 rotated GUI bounds cannot clip the model. The 26.x preview retains the legacy GUI-facing
 rotation and lift. Background quads explicitly select the version’s textured
 shader rather than inheriting the program bound by a preceding GUI fill. Finish queued base

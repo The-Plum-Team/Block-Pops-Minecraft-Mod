@@ -186,9 +186,12 @@ public class ColorSelectionButton extends Button {
         //? if >=1.21.4 {
         /*// The dedicated preview model owns the canonical camera. Legacy offsets
         // compensate the old GUI depth transform and do not apply to modern models.
+        // Its baked scale allocates a full-resolution target in the deferred GUI;
+        // cancel that scale here instead of enlarging a tiny atlas thumbnail.
+        float screenScale = finalScale / 4f;
         GuiPose.push(graphics);
         GuiPose.translate(graphics, itemX + itemSize / 2f, itemY + itemSize / 2f);
-        GuiPose.scale(graphics, finalScale, finalScale);
+        GuiPose.scale(graphics, screenScale, screenScale);
         GuiPose.translate(graphics, -8, -8);
         graphics.renderItem(boxItem, 0, 0);
         GuiPose.pop(graphics);
