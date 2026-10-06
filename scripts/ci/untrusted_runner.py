@@ -63,6 +63,7 @@ SAFE_ENV_NAMES = frozenset(
         "GALLIUM_DRIVER",
         "LIBGL_ALWAYS_SOFTWARE",
         "MATRIX_KIND",
+        "SDL_VIDEO_FORCE_EGL",
         "SOURCE_DATE_EPOCH",
         "__GLX_VENDOR_LIBRARY_NAME",
     }
