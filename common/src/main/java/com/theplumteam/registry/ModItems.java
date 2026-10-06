@@ -19,10 +19,13 @@ import java.util.Map;
 
 public class ModItems {
     //? if >=1.21.2 {
-    /*// 1.21.2 made Item.Properties require its registry id up front.
+    /*// 1.21.2 made Item.Properties require its registry id up front. It also stopped naming a
+    // block item after its block: without the block prefix every item here would be named
+    // item.blockpops.<id>, a key the language files never had.
     private static Item.Properties itemProperties(String name) {
         return new Item.Properties().setId(
-                ResourceKey.create(Registries.ITEM, ResourceLocations.of(BlockPopsMod.MOD_ID, name)));
+                ResourceKey.create(Registries.ITEM, ResourceLocations.of(BlockPopsMod.MOD_ID, name)))
+                .useBlockDescriptionPrefix();
     }
 
     *///? }
