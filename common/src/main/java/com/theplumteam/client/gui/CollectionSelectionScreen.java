@@ -1026,7 +1026,7 @@ public class CollectionSelectionScreen extends Screen {
         int scanCode = bpEvent.scancode();
         int modifiers = bpEvent.modifiers();
         // Allow ESC to close
-        if (keyCode == 256) { // ESC key
+        if (keyCode == com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE) {
             this.onClose();
             return true;
         }
@@ -1035,7 +1035,7 @@ public class CollectionSelectionScreen extends Screen {
     *///? } else {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         // Allow ESC to close
-        if (keyCode == 256) { // ESC key
+        if (keyCode == com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE) {
             this.onClose();
             return true;
         }

@@ -247,7 +247,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         double mouseX = bpEvent.x();
         double mouseY = bpEvent.y();
         int button = bpEvent.button();
-        if (button == 0) {
+        if (button == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT) {
             // Check if link button was clicked
             if (this.isLinkHovered && collection.getAuthorUrl() != null && !collection.getAuthorUrl().isEmpty()) {
                 // Open the URL in the default browser
@@ -297,7 +297,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
     }
     *///? } else {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0) {
+        if (button == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT) {
             // Check if link button was clicked
             if (this.isLinkHovered && collection.getAuthorUrl() != null && !collection.getAuthorUrl().isEmpty()) {
                 // Open the URL in the default browser
