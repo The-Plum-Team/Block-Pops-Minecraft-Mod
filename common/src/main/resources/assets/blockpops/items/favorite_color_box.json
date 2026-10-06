@@ -1,0 +1,9 @@
+{
+  "model": {
+    "type": "minecraft:special",
+    "base": "blockpops:item/favorite_color_box",
+    "model": {
+      "type": "blockpops:box_block"
+    }
+  }
+}
