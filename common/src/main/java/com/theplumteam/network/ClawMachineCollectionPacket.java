@@ -1,6 +1,7 @@
 package com.theplumteam.network;
 
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
@@ -56,6 +57,11 @@ public class ClawMachineCollectionPacket {
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
                 BlockEntity blockEntity = player.level().getBlockEntity(packet.pos);
+                if (ServerConfig.getInstance().getHiddenCollections().contains(packet.collectionId)) {
+                    LOGGER.warn("Player {} tried to select hidden collection {}",
+                            player.getName().getString(), packet.collectionId);
+                    return;
+                }
                 if (blockEntity instanceof ClawMachineBlockEntity clawMachineBlockEntity) {
                     BlockPopsMod.logDebug("Setting collection ID on ClawMachineBlockEntity");
                     clawMachineBlockEntity.setCollectionId(packet.collectionId);

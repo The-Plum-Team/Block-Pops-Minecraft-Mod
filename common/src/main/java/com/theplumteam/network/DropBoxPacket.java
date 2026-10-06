@@ -4,6 +4,7 @@ import com.theplumteam.util.PlayerSounds;
 import com.theplumteam.util.ServerLevels;
 import com.mojang.authlib.GameProfile;
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
@@ -84,6 +85,14 @@ public class DropBoxPacket {
                 if (player.getInventory().getFreeSlot() == -1) {
                     player.sendSystemMessage(Component.literal("\u00A7cInventory is full! Cannot receive figure box."));
                     BlockPopsMod.logDebug("Player {} inventory is full, token not consumed", player.getName().getString());
+                    return;
+                }
+
+                // The list only leaves a hidden collection out; a machine set to it before, or a
+                // modified client, still names it here
+                if (ServerConfig.getInstance().getHiddenCollections().contains(packet.collectionId)) {
+                    player.sendSystemMessage(Component.literal("§cThis collection is not available."));
+                    BlockPopsMod.logDebug("Collection {} is hidden, token not consumed", packet.collectionId);
                     return;
                 }
 

@@ -736,6 +736,14 @@ public class CollectionSelectionScreen extends Screen {
             }
         }
 
+        // A hidden collection is not offered, so it cannot stay this machine's selection
+        if (selectedCollectionId != null && ClientHiddenCollections.isHidden(selectedCollectionId)) {
+            selectedCollectionId = "";
+            if (figureListWidget != null) {
+                figureListWidget.setCollection(null);
+            }
+        }
+
         // Select the current collection if it exists
         if (selectedCollectionId != null && !selectedCollectionId.isEmpty()) {
             collectionListWidget.selectByCollectionId(selectedCollectionId);
