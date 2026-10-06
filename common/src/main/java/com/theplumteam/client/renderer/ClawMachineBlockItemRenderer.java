@@ -92,10 +92,15 @@ public class ClawMachineBlockItemRenderer
             // Apply transformations for item rendering
             poseStack.pushPose();
 
-            // Rotate 90 degrees clockwise around Y-axis to match block placement
-            poseStack.translate(0.5, 0, 0.5);
-            poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(90));
-            poseStack.translate(-0.5, 0, -0.5);
+            boolean firstPerson = displayContext == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND ||
+                    displayContext == ItemDisplayContext.FIRST_PERSON_LEFT_HAND;
+            // First-person rotation and scale belong to the authored item model.
+            // That also supplies the same transform to the context-free 26.x submit path.
+            if (!firstPerson) {
+                poseStack.translate(0.5, 0, 0.5);
+                poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(90));
+                poseStack.translate(-0.5, 0, -0.5);
+            }
 
             // Base scale: divide by 3 since the model is about 3 blocks tall
             float baseScale = 1.0F / 3.0F;
@@ -119,15 +124,8 @@ public class ClawMachineBlockItemRenderer
                 poseStack.scale(baseScale * 0.8F, baseScale * 0.8F, baseScale * 0.8F);
                 poseStack.translate(-0.5, 1.0, -0.5);
             }
-            // Scale for first person view
-            else if (displayContext == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND ||
-                     displayContext == ItemDisplayContext.FIRST_PERSON_LEFT_HAND) {
-                poseStack.translate(0.5, 0, 0.5);
-                poseStack.scale(baseScale * 1.0F, baseScale * 1.0F, baseScale * 1.0F);
-                poseStack.translate(-0.5, 0, -0.5);
-            }
             // Default scaling for other contexts
-            else {
+            else if (!firstPerson) {
                 poseStack.translate(0.5, 0, 0.5);
                 poseStack.scale(baseScale, baseScale, baseScale);
                 poseStack.translate(-0.5, 0, -0.5);
