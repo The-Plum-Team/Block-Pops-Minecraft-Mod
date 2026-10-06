@@ -50,6 +50,12 @@ fills before immediate background drawing on the earlier GUI path.
 1.21.4 onward with `scripts/release/item_resources.py`, from the authored entity models. Older
 lanes retain their original resources; generated modern resources are never authored or committed.
 
+First-person boxes on the legacy entity-renderer path use the modern shulker template's
+40% scale and mirrored 315-degree rotation. The claw machine's authored item model owns
+its first-person 90-degree rotation, one-third scale and vertical pivot compensation,
+preserving the legacy held appearance across both immediate drawing and 26.x submission.
+The immediate renderer applies its other context transforms only outside first person.
+
 On POSIX, packaged Forge-family servers launch the installed JVM argument files directly so
 shutdown waits for the JVM to finish writing logs before evidence export, without a shell parent.
 

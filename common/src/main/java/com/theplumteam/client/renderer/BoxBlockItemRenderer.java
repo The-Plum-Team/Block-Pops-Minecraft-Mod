@@ -106,6 +106,19 @@ public class BoxBlockItemRenderer
             // Apply transformations for item rendering
             poseStack.pushPose();
 
+            // Legacy entity models lack the modern shulker template's held transform.
+            // Apply it around the item center, including the mirrored left-hand rotation.
+            //? if <1.21.4 {
+            if (displayContext == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND ||
+                displayContext == ItemDisplayContext.FIRST_PERSON_LEFT_HAND) {
+                float rotation = displayContext == ItemDisplayContext.FIRST_PERSON_LEFT_HAND ? -315 : 315;
+                poseStack.translate(0.5, 0.5, 0.5);
+                poseStack.mulPose(Axis.YP.rotationDegrees(rotation));
+                poseStack.scale(0.4F, 0.4F, 0.4F);
+                poseStack.translate(-0.5, -0.5, -0.5);
+            }
+            //? }
+
             // Rotate 180 degrees in inventory/GUI
             if (displayContext == ItemDisplayContext.GUI) {
                 poseStack.translate(0.5, 0.5, 0.5); // Move to center
