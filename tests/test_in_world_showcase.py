@@ -22,11 +22,15 @@ SETBLOCK = re.compile(
 
 
 class InWorldShowcaseTests(unittest.TestCase):
-    def test_contract_photographs_one_wall_per_packaged_collection_in_id_order(self) -> None:
+    def test_contract_photographs_packaged_collection_walls_in_id_order(self) -> None:
+        # A new collection lands in two steps: an ordinary pull request packages it, then a
+        # controller upgrade adds its wall here. Between the two it is built but not photographed.
         contract = load_contract(CONTRACT)
         steps = contract.expected_capture_steps("in-world", "client_a")
         walls = [step.removeprefix("collection_") for step in steps if step.startswith("collection_")]
-        self.assertEqual([collection for collection, _ in runtime.showcase_collections(COLLECTIONS)], walls)
+        packaged = [collection for collection, _ in runtime.showcase_collections(COLLECTIONS)]
+        self.assertEqual(len(walls), len(set(walls)))
+        self.assertEqual([collection for collection in packaged if collection in walls], walls)
 
     def test_every_figure_stands_in_its_own_box_on_its_wall(self) -> None:
         collections = runtime.showcase_collections(COLLECTIONS)
