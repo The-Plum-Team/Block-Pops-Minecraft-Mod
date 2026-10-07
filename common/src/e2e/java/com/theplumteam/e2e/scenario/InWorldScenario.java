@@ -7,6 +7,7 @@ import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
 import com.theplumteam.e2e.Scenario;
 import com.theplumteam.e2e.Step;
 import com.theplumteam.e2e.VanillaShim;
+import com.theplumteam.e2e.generated.ScenarioContract;
 import com.theplumteam.e2e.generated.ScenarioContract.ScenarioId;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
@@ -23,7 +24,9 @@ import net.minecraft.world.phys.Vec3;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * The mod as a player meets it in the world: a box drawn from the claw machine, that box in
@@ -157,9 +160,19 @@ public final class InWorldScenario implements Scenario {
                         && minecraft.player.getMainHandItem().is(ModItems.CLAW_MACHINE_BLOCK_ITEM.get())
                         ? Step.Result.pass("third-person view of the player holding the claw machine")
                         : Step.Result.fail("third-person view or held claw machine is missing")));
+        // A new collection is packaged before the contract photographs it. The data pack builds
+        // every wall at its index either way; only the walls the contract names are captured.
+        Set<String> contracted = new HashSet<>();
+        for (String role : ScenarioContract.roles(ScenarioId.IN_WORLD)) {
+            for (ScenarioContract.StepSpec step : ScenarioContract.role(ScenarioId.IN_WORLD, role).steps()) {
+                contracted.add(step.id());
+            }
+        }
         List<String> collections = showcaseCollections();
         for (int index = 0; index < collections.size(); index++) {
-            steps.add(collectionWall(minecraft, collections.get(index), index));
+            if (contracted.contains("collection_" + collections.get(index))) {
+                steps.add(collectionWall(minecraft, collections.get(index), index));
+            }
         }
         return steps;
     }
