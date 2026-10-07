@@ -65,6 +65,17 @@ public class ServerTickHandler {
     }
 
     /**
+     * Start the wait for the next regular token when a full stock is first spent from.
+     * A full stock earns nothing, so its deadline is long past; left alone, the spent token
+     * would come straight back. Call before the token is taken.
+     */
+    public static void onRegularTokenSpent(ServerPlayer player, IPlayerDiscovery discovery) {
+        if (discovery.getRegularTokens() >= MAX_REGULAR_TOKENS) {
+            discovery.setNextRegularTokenTime(ServerLevels.of(player).getGameTime() + REGULAR_TOKEN_COOLDOWN_TICKS);
+        }
+    }
+
+    /**
      * Process regular token generation based on world time.
      * @return true if tokens were updated and must be saved
      */

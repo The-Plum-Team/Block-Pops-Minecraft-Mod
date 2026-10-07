@@ -237,6 +237,7 @@ public class DropBoxPacket {
     private static boolean verifyAndConsumeToken(ServerPlayer player, IPlayerDiscovery discovery, TokenType tokenType) {
         if (tokenType == TokenType.REGULAR) {
             if (discovery.getRegularTokens() > 0) {
+                ServerTickHandler.onRegularTokenSpent(player, discovery);
                 discovery.setRegularTokens(discovery.getRegularTokens() - 1);
                 BlockPopsMod.logDebug("Player {} used a regular token. Remaining: {}",
                         player.getName().getString(), discovery.getRegularTokens());
