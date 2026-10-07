@@ -1,0 +1,140 @@
+{
+  "id": "doom",
+  "name": "DOOM Collection",
+  "author": "KaramelKing3000",
+  "author_url": "https://www.planetminecraft.com/member/karamelking3000/",
+  "box_texture": "blockpops:textures/block/box/doom.png",
+  "logo": {
+    "texture": "blockpops:textures/block/box/logo/logo_doom.png",
+    "position_x": -1.788,
+    "position_y": -0.345,
+    "position_z": 0.0,
+    "scale_x": 6.869,
+    "scale_y": 6.653,
+    "scale_z": 1.0
+  },
+  "background_color": {
+    "r": 139,
+    "g": 0,
+    "b": 0
+  },
+  "figures": [
+    {
+      "id": "doom-guy-doom-1993-v3",
+      "name": "Doom Guy",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/doom/doom-guy-doom-1993-smiling.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Doom Guy (Serious)",
+          "texture": "blockpops:textures/block/figure/doom/doom-guy-doom-1993-v3.png"
+        },
+        {
+          "name": "Doom Guy (Helmet)",
+          "texture": "blockpops:textures/block/figure/doom/doom-guy-doom-1993-helmet-v3.png"
+        }
+      ]
+    },
+    {
+      "id": "doom-guy-doom-1993-green",
+      "name": "Doom Marine",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/doom/doom-guy-doom-1993-green.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Doom Marine (Red)",
+          "texture": "blockpops:textures/block/figure/doom/doom-marine-doom-1993-red.png"
+        },
+        {
+          "name": "Doom Marine (Blue)",
+          "texture": "blockpops:textures/block/figure/doom/doom-marine-doom-1993-blue.png"
+        },
+        {
+          "name": "Doom Marine (Indigo)",
+          "texture": "blockpops:textures/block/figure/doom/doom-marine-doom-1993-indigo.png"
+        },
+        {
+          "name": "Doom Marine (Black)",
+          "texture": "blockpops:textures/block/figure/doom/doom-marine-doom-black.png"
+        }
+      ]
+    },
+    {
+      "id": "shotgun-guy-doom-1993",
+      "name": "Shotgun Guy",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/doom/shotgun-guy-doom-1993.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "zombieman-doom-1993",
+      "name": "Zombieman",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/doom/zombieman-doom-1993.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "doom-slayer-doom-2016-hd-v2",
+      "name": "Doom Slayer (2016)",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/doom/doom-slayer-doom-2016-hd-v2.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "doom-slayer-doom-eternal-v3",
+      "name": "Doom Slayer (Eternal)",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/doom/doom-slayer-doom-eternal-v3.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Doom Slayer Eternal (HD)",
+          "texture": "blockpops:textures/block/figure/doom/doom-slayer-doom-eternal-hd-v3.png"
+        },
+        {
+          "name": "Doom Slayer Eternal (Classic)",
+          "texture": "blockpops:textures/block/figure/doom/doom-slayer-doom-eternal-hd-classic-skin.png"
+        },
+        {
+          "name": "Doom Slayer Eternal (Cultist)",
+          "texture": "blockpops:textures/block/figure/doom/doom-slayer-doom-eternal-cultist-skin.png"
+        },
+        {
+          "name": "Doom Slayer Eternal (Christmas)",
+          "texture": "blockpops:textures/block/figure/doom/doom-slayer-doom-eternal-christmas-skin.png"
+        },
+        {
+          "name": "Doom Slayer Eternal (Gold)",
+          "texture": "blockpops:textures/block/figure/doom/doom-slayer-doom-eternal-gold-skin.png"
+        },
+        {
+          "name": "Doom Slayer Eternal (Phobos)",
+          "texture": "blockpops:textures/block/figure/doom/doom-slayer-doom-eternal-phobos.png"
+        }
+      ]
+    },
+    {
+      "id": "maroder-doom-eternal",
+      "name": "Marauder",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/doom/maroder-doom-eternal.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "mancubus-doom-eternal",
+      "name": "Mancubus",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/doom/mancubus-doom-eternal.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "revenant-doom-eternal-5854902",
+      "name": "Revenant",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/doom/revenant-doom-eternal-5854902.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    }
+  ]
+}
