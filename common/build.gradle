@@ -4,6 +4,8 @@ architectury {
 
 // SpecialModelRenderer registration also needs an item definition from 1.21.4.
 // Generate it from the authored entity models; older resource bytes stay intact.
+// 1.21 also moved recipes to data/<namespace>/recipe and later changed their ingredients;
+// the same script derives them from the authored 1.20.1 recipes.
 def itemResources = layout.buildDirectory.dir('generated/special-items')
 def itemResourceScript = rootProject.file('scripts/release/item_resources.py')
 def authoredResources = rootProject.file('common/src/main/resources')
@@ -13,6 +15,7 @@ def generateItemResources = tasks.register('generateSpecialItemResources', Exec)
     inputs.files(itemResourceScript, rootProject.file('scripts/lib/secure_json.py'),
             rootProject.file('scripts/lib/atomic_directory.py'))
     inputs.dir(new File(authoredResources, 'assets/blockpops/models'))
+    inputs.dir(new File(authoredResources, 'data/blockpops/recipes'))
     inputs.property('minecraft', rootProject.minecraft_version)
     outputs.dir(itemResources)
     commandLine(resourcePython.get(), '-B', itemResourceScript.absolutePath,
@@ -21,7 +24,7 @@ def generateItemResources = tasks.register('generateSpecialItemResources', Exec)
 }
 processResources {
     dependsOn generateItemResources
-    from(itemResources) { include 'assets/**' }
+    from(itemResources) { include 'assets/**', 'data/**' }
     eachFile { details ->
         def generated = itemResources.get().asFile
         if (!details.file.toPath().startsWith(generated.toPath()) &&

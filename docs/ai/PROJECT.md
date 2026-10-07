@@ -49,6 +49,10 @@ fills before immediate background drawing on the earlier GUI path.
 `common/build.gradle` derives special-item definitions and base-model transforms for Minecraft
 1.21.4 onward with `scripts/release/item_resources.py`, from the authored entity models. Older
 lanes retain their original resources; generated modern resources are never authored or committed.
+The same script derives `data/blockpops/recipe/` for Minecraft 1.21 onward from the authored
+1.20.1 `recipes/`: 1.21 renamed the directory and the result field, 1.21.2 reads ingredients as
+bare ids, and 1.21.9 renamed `minecraft:chain` to `minecraft:iron_chain`. Author a recipe only in
+`recipes/`, as a plain shaped recipe.
 
 First-person boxes on the legacy entity-renderer path use the modern shulker template's
 40% scale and mirrored 315-degree rotation. The claw machine's authored item model owns

@@ -25,7 +25,11 @@ The `in-world` flow shows the mod as a player meets it in the world:
    captured in first and third person.
 4. The test data pack builds one wall of real box blocks per collection (every
    figure, rows of nine; see `showcase_function` in `e2e/packaged_runtime.py`)
-   and the harness photographs each wall, asserting every box's figure.
+   and the harness photographs each wall the contract names, asserting every
+   box's figure. A new collection therefore lands in two pull requests: an
+   ordinary one packages it (its wall is built but not yet photographed), then
+   a controller upgrade adds its `collection_<id>` step to
+   `e2e/scenario-contract.json`.
 
 Only the packaged E2E sets `blockpops.e2e.enabled` on the client and server. With
 it the star background and the GeckoLib idle animations hold one frame, the
