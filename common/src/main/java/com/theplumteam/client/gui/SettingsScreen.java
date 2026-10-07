@@ -2,6 +2,8 @@ package com.theplumteam.client.gui;
 
 import com.theplumteam.client.gui.util.GuiPose;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.theplumteam.client.ClientServerSettings;
+import com.theplumteam.client.ClientHiddenCollections;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.gui.util.ButtonFactory;
 import com.theplumteam.client.gui.widget.TabButton;
@@ -9,8 +11,8 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.network.UnlockCollectionPacket;
 import com.theplumteam.network.ReloadTokensPacket;
+import com.theplumteam.network.SetCollectionHiddenPacket;
 import com.theplumteam.network.UpdateGuaranteedResetHourPacket;
-import com.theplumteam.server.config.ServerConfig;
 import dev.architectury.platform.Platform;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
@@ -23,8 +25,10 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Settings screen displayed as a modal overlay with tabbed interface
@@ -53,7 +57,8 @@ public class SettingsScreen extends Screen {
     private enum Tab {
         SERVER("Server"),
         DEVELOP("Develop"),
-        CHEATS("Cheats");
+        CHEATS("Cheats"),
+        COLLECTIONS("Collections");
 
         private final String displayName;
 
@@ -70,9 +75,12 @@ public class SettingsScreen extends Screen {
     private TabButton serverTabButton;
     private TabButton developTabButton;
     private TabButton cheatsTabButton;
+    private TabButton collectionsTabButton;
     private final List<AbstractWidget> serverSettingWidgets = new ArrayList<>();
     private final List<AbstractWidget> developSettingWidgets = new ArrayList<>();
     private final List<AbstractWidget> cheatsSettingWidgets = new ArrayList<>();
+    // Hide/Show toggle of each collection (Collections tab)
+    private final Map<FigureCollection, Button> collectionToggleButtons = new LinkedHashMap<>();
 
     // Buttons and sliders
     private Button closeButton;
@@ -83,6 +91,8 @@ public class SettingsScreen extends Screen {
     private HourSlider resetHourSlider;
     private int loadedServerHourLocal; // The hour currently saved/loaded
     private int pendingServerHourLocal; // The hour currently selected on slider
+    private int shownServerRevision; // The server answer the slider currently shows
+    private boolean serverSettingsRequested;
 
     // Star color sliders (Develop tab)
     private ColorSlider starRedSlider;
@@ -107,10 +117,22 @@ public class SettingsScreen extends Screen {
     protected void init() {
         super.init();
 
+        // Ask the server for its settings once per opened screen (init also runs on resize)
+        if (!serverSettingsRequested) {
+            serverSettingsRequested = true;
+            ClientServerSettings.request();
+        }
+
         // Clear widget lists to prevent duplication on resize
         serverSettingWidgets.clear();
         developSettingWidgets.clear();
         cheatsSettingWidgets.clear();
+        collectionToggleButtons.clear();
+        // The Collections tab goes away when the player may no longer manage collections
+        collectionsTabButton = null;
+        if (activeTab == Tab.COLLECTIONS && !canManageCollections()) {
+            activeTab = Tab.SERVER;
+        }
 
         // Calculate centered panel position
         this.panelX = (this.width - this.panelWidth) / 2;
@@ -154,6 +176,19 @@ public class SettingsScreen extends Screen {
                     btn -> switchTab(Tab.CHEATS)
             );
             this.addRenderableWidget(cheatsTabButton);
+            nextTabX += TAB_WIDTH + TAB_SPACING;
+        }
+
+        // Collections tab (for admins, on a server that syncs its hidden collections)
+        if (canManageCollections()) {
+            collectionsTabButton = (TabButton) ButtonFactory.createTab(
+                    nextTabX, tabY,
+                    TAB_WIDTH, TAB_HEIGHT,
+                    Component.literal(Tab.COLLECTIONS.getDisplayName()),
+                    activeTab == Tab.COLLECTIONS,
+                    btn -> switchTab(Tab.COLLECTIONS)
+            );
+            this.addRenderableWidget(collectionsTabButton);
         }
 
         // Create button instances
@@ -187,6 +222,10 @@ public class SettingsScreen extends Screen {
             createCheatsSettings();
         }
 
+        if (canManageCollections()) {
+            createCollectionsSettings();
+        }
+
         // Show initial tab and update action button state
         switchTab(activeTab);
     }
@@ -199,11 +238,12 @@ public class SettingsScreen extends Screen {
             // "Change Time" logic
             int utcValue = convertLocalToUtc(pendingServerHourLocal);
 
-            // Update local config immediately for responsiveness
-            ServerConfig.getInstance().setGuaranteedTokenResetHour(utcValue);
-
             // Send packet to server using cross-platform networking
             new UpdateGuaranteedResetHourPacket(utcValue).sendToServer();
+
+            // Ask for the settings right behind it: the answer carries the hour that is
+            // really in effect, whether or not the server accepted the change
+            ClientServerSettings.request();
 
             // Update loaded value to current and refresh button state
             this.loadedServerHourLocal = pendingServerHourLocal;
@@ -225,6 +265,9 @@ public class SettingsScreen extends Screen {
             this.panelOpacitySlider.setValue(0.90);
             // Reset color transition toggle
             this.colorTransitionToggle.setMessage(Component.literal("Transition: ON"));
+        } else if (activeTab == Tab.CHEATS) {
+            // "Progression" opens the per-player collection editor
+            this.minecraft.setScreen(new AdminProgressionScreen(this));
         }
     }
 
@@ -235,16 +278,29 @@ public class SettingsScreen extends Screen {
         if (activeTab == Tab.SERVER) {
             this.actionButton.setMessage(Component.literal("Change time"));
             // Locked until slider is moved to a different value
-            this.actionButton.active = (pendingServerHourLocal != loadedServerHourLocal);
+            this.actionButton.active = canChangeResetHour() && (pendingServerHourLocal != loadedServerHourLocal);
             this.actionButton.visible = true;
         } else if (activeTab == Tab.DEVELOP) {
             this.actionButton.setMessage(Component.literal("Reset Colors"));
             this.actionButton.active = true;
             this.actionButton.visible = true;
+        } else if (activeTab == Tab.CHEATS) {
+            // Cheats tab: open the per-player progression editor
+            this.actionButton.setMessage(Component.literal("Progression"));
+            this.actionButton.active = true;
+            this.actionButton.visible = true;
         } else {
-            // Cheats tab doesn't use the main action button
+            // No action on the other tabs (Collections)
+            this.actionButton.active = false;
             this.actionButton.visible = false;
         }
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        // Follow the server's answers and permission changes while the screen is open
+        refreshServerSettings();
     }
 
     @Override
@@ -287,7 +343,7 @@ public class SettingsScreen extends Screen {
         // all, so the Server tab sat on top of its collection header. An opaque base goes
         // under both; the themed fills below still draw on top of it.
         int tabsRight = this.panelX;
-        for (TabButton tab : new TabButton[] {serverTabButton, developTabButton, cheatsTabButton}) {
+        for (TabButton tab : new TabButton[] {serverTabButton, developTabButton, cheatsTabButton, collectionsTabButton}) {
             if (tab != null && tab.visible) {
                 tabsRight = Math.max(tabsRight, tab.getX() + tab.getWidth());
             }
@@ -384,7 +440,9 @@ public class SettingsScreen extends Screen {
             String[] explanationLines = {
                     "The guaranteed token grants an undiscovered figure from the collection.",
                     "This token resets daily at the hour specified above (in your local time).",
-                    "Set this to a time that works best for your server's player base."
+                    !isOperator() ? "Only server operators can change this hour (in single-player, enable cheats)."
+                            : canChangeResetHour() ? "Set this to a time that works best for your server's player base."
+                            : "The server has not reported its reset hour, so it cannot be changed from here."
             };
 
             for (int i = 0; i < explanationLines.length; i++) {
@@ -417,6 +475,25 @@ public class SettingsScreen extends Screen {
                         explanationY + (i * 12),
                         0xFFAAAAAA);
             }
+        }
+
+        // Draw collections tab content (for admins)
+        if (activeTab == Tab.COLLECTIONS) {
+            // A toggle is answered with the server's new list, so the labels follow that list
+            collectionToggleButtons.forEach((collection, button) -> button.setMessage(collectionToggleLabel(collection)));
+
+            int headerY = this.panelY + TAB_HEIGHT + 10;
+            graphics.drawCenteredString(this.font, "Collection Visibility",
+                    this.panelX + this.panelWidth / 2,
+                    headerY,
+                    0xFFFFFFFF);
+
+            // Draw explanation text
+            String explanation = "A hidden collection is removed from every player's collection list on this server.";
+            graphics.drawString(this.font, explanation,
+                    this.panelX + (this.panelWidth - this.font.width(explanation)) / 2,
+                    this.panelY + TAB_HEIGHT + 30,
+                    0xFFAAAAAA);
         }
 
         // Draw color preview boxes (only in Develop tab)
@@ -513,10 +590,13 @@ public class SettingsScreen extends Screen {
      * Returns true if in development mode OR if player is an admin (permission level 2+)
      */
     private boolean canAccessCheats() {
-        if (isDevelopmentMode()) {
-            return true;
-        }
-        // Check if player has admin permissions (level 2, same as /blockpops getbox command)
+        return isDevelopmentMode() || isOperator();
+    }
+
+    /**
+     * Check if the current player has admin permissions (level 2, same as /blockpops getbox command)
+     */
+    private boolean isOperator() {
         if (this.minecraft != null && this.minecraft.player != null) {
             return com.theplumteam.util.ServerLevels.hasCommandLevel(this.minecraft.player, 2);
         }
@@ -524,11 +604,43 @@ public class SettingsScreen extends Screen {
     }
 
     /**
+     * Check if the current player can change the reset hour.
+     * Only admins can, and only once the server has reported the hour it uses.
+     */
+    private boolean canChangeResetHour() {
+        return isOperator() && ClientServerSettings.getGuaranteedResetHour() != null;
+    }
+
+    /**
+     * Show the hour the server last reported and lock the controls the player cannot use
+     */
+    private void refreshServerSettings() {
+        Integer utcHour = ClientServerSettings.getGuaranteedResetHour();
+        if (utcHour == null) {
+            this.resetHourSlider.showUnknown();
+        } else if (ClientServerSettings.getRevision() != this.shownServerRevision) {
+            // A new answer replaces whatever the slider showed
+            this.shownServerRevision = ClientServerSettings.getRevision();
+            this.loadedServerHourLocal = convertUtcToLocal(utcHour);
+            this.pendingServerHourLocal = this.loadedServerHourLocal;
+            this.resetHourSlider.setValue(this.loadedServerHourLocal);
+        }
+        this.resetHourSlider.active = canChangeResetHour();
+        updateActionButtonState();
+    }
+
+    /**
+     * Check if the current player can hide collections for the whole server.
+     * Same access as cheats, and the server has to be one that syncs its hidden collections.
+     */
+    private boolean canManageCollections() {
+        return canAccessCheats() && ClientHiddenCollections.isSynced();
+    }
+
+    /**
      * Create server settings widgets
      */
     private void createServerSettings() {
-        ServerConfig config = ServerConfig.getInstance();
-
         int sliderHeight = 20;
         int sliderWidth = 400;
 
@@ -540,9 +652,9 @@ public class SettingsScreen extends Screen {
         ZoneId localZone = ZoneId.systemDefault();
         String timezoneName = localZone.getDisplayName(TextStyle.SHORT, Locale.getDefault());
 
-        // Convert UTC hour to local hour
-        int utcHour = config.getGuaranteedTokenResetHour();
-        int localHour = convertUtcToLocal(utcHour);
+        // The hour is the server's: refreshServerSettings() below fills in its last answer
+        int localHour = 0;
+        this.shownServerRevision = -1;
 
         // Initialize tracking variables
         this.loadedServerHourLocal = localHour;
@@ -562,6 +674,15 @@ public class SettingsScreen extends Screen {
                 }
         );
         serverSettingWidgets.add(this.resetHourSlider);
+        refreshServerSettings();
+
+        // World Players roster (admins only, like the Cheats tab; the server checks again)
+        if (canAccessCheats()) {
+            serverSettingWidgets.add(Button.builder(Component.literal("Manage World Players"),
+                            button -> this.minecraft.setScreen(new WorldPlayerRosterScreen(this)))
+                    .bounds(this.panelX + (this.panelWidth - 160) / 2, this.panelY + TAB_HEIGHT + 200, 160, 20)
+                    .build());
+        }
     }
 
     /**
@@ -856,6 +977,59 @@ public class SettingsScreen extends Screen {
     }
 
     /**
+     * Create collections settings widgets (one hide/show toggle per collection)
+     */
+    private void createCollectionsSettings() {
+        int padding = 20;
+        int buttonWidth = 180;
+        int buttonHeight = 24;
+        int verticalSpacing = 30;
+        int horizontalSpacing = 15;
+        int buttonsPerRow = 3;
+
+        int startY = this.panelY + TAB_HEIGHT + 50;
+        int startX = this.panelX + padding;
+
+        int row = 0;
+        int col = 0;
+
+        for (FigureCollection collection : CollectionRegistry.getAllCollections()) {
+            // The default collection is never listed, so there is nothing to hide
+            if (collection.getId().equals("default")) {
+                continue;
+            }
+
+            int buttonX = startX + (col * (buttonWidth + horizontalSpacing));
+            int buttonY = startY + (row * verticalSpacing);
+
+            Button toggleButton = Button.builder(
+                            collectionToggleLabel(collection),
+                            // Send packet to server to hide or show this collection for every player
+                            button -> new SetCollectionHiddenPacket(collection.getId(),
+                                    !ClientHiddenCollections.isHidden(collection.getId())).sendToServer()
+                    )
+                    .bounds(buttonX, buttonY, buttonWidth, buttonHeight)
+                    .build();
+
+            collectionToggleButtons.put(collection, toggleButton);
+
+            col++;
+            if (col >= buttonsPerRow) {
+                col = 0;
+                row++;
+            }
+        }
+    }
+
+    /**
+     * Label of a collection toggle: the action a click asks the server for
+     */
+    private static Component collectionToggleLabel(FigureCollection collection) {
+        return Component.literal(
+                (ClientHiddenCollections.isHidden(collection.getId()) ? "Show " : "Hide ") + collection.getName());
+    }
+
+    /**
      * Switch to a different tab
      */
     private void switchTab(Tab tab) {
@@ -871,6 +1045,9 @@ public class SettingsScreen extends Screen {
         for (AbstractWidget widget : cheatsSettingWidgets) {
             this.removeWidget(widget);
         }
+        for (AbstractWidget widget : collectionToggleButtons.values()) {
+            this.removeWidget(widget);
+        }
 
         // Add widgets for active tab
         List<AbstractWidget> activeWidgets;
@@ -880,6 +1057,8 @@ public class SettingsScreen extends Screen {
             activeWidgets = developSettingWidgets;
         } else if (tab == Tab.CHEATS) {
             activeWidgets = cheatsSettingWidgets;
+        } else if (tab == Tab.COLLECTIONS) {
+            activeWidgets = new ArrayList<>(collectionToggleButtons.values());
         } else {
             activeWidgets = new ArrayList<>();
         }
@@ -895,6 +1074,9 @@ public class SettingsScreen extends Screen {
         }
         if (cheatsTabButton != null) {
             cheatsTabButton.setSelected(tab == Tab.CHEATS);
+        }
+        if (collectionsTabButton != null) {
+            collectionsTabButton.setSelected(tab == Tab.COLLECTIONS);
         }
 
         // Update action button text/state/visibility based on new tab
@@ -982,19 +1164,26 @@ public class SettingsScreen extends Screen {
 
         @Override
         protected void updateMessage() {
-            int hour = (int)(this.value * 23);
+            int hour = (int) Math.round(this.value * 23);
             this.setMessage(Component.literal(prefix.getString() + String.format("%02d:00", hour)));
         }
 
         @Override
         protected void applyValue() {
-            int hour = (int)(this.value * 23);
+            int hour = (int) Math.round(this.value * 23);
             onValueChange.accept(hour);
         }
 
         public void setValue(int newValue) {
             this.value = newValue / 23.0;
             this.updateMessage();
+        }
+
+        /**
+         * Keep the label but show no hour, for a server that has not reported one
+         */
+        public void showUnknown() {
+            this.setMessage(Component.literal(prefix.getString() + "--:--"));
         }
     }
 }

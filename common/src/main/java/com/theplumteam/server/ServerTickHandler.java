@@ -25,8 +25,6 @@ public class ServerTickHandler {
     // Maximum regular tokens a player can have
     private static final int MAX_REGULAR_TOKENS = 3;
 
-    // Track last tick to avoid processing every tick
-    private static long lastCheckTick = 0;
     private static final int CHECK_INTERVAL = 20; // Check once per second (20 ticks)
 
     /**
@@ -39,34 +37,47 @@ public class ServerTickHandler {
     }
 
     private static void onServerTick(MinecraftServer server) {
-        // Don't check every tick to reduce overhead
-        if (server.getTickCount() - lastCheckTick < CHECK_INTERVAL) {
+        // Don't check every tick to reduce overhead. The gate reads this server's own tick count:
+        // a remembered tick would outlive an integrated server and stall the next world's checks.
+        if (server.getTickCount() % CHECK_INTERVAL != 0) {
             return;
         }
-        lastCheckTick = server.getTickCount();
 
         // Process all online players
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(player);
-            boolean needsSync = false;
+            boolean changed = false;
 
             // Handle regular token generation
-            needsSync |= processRegularTokens(player, discovery);
+            changed |= processRegularTokens(player, discovery);
 
             // Handle special token reset
-            needsSync |= processSpecialTokenReset(discovery);
+            changed |= processSpecialTokenReset(discovery);
 
-            // Save changes and sync to client if anything changed
-            if (needsSync) {
+            // Save changes if anything changed
+            if (changed) {
                 PlayerDataManager.markDirty(player, discovery);
-                sendSyncPacket(player, discovery);
             }
+
+            // Sync on every check: the client only shows the countdown it was last sent
+            sendSyncPacket(player, discovery);
+        }
+    }
+
+    /**
+     * Start the wait for the next regular token when a full stock is first spent from.
+     * A full stock earns nothing, so its deadline is long past; left alone, the spent token
+     * would come straight back. Call before the token is taken.
+     */
+    public static void onRegularTokenSpent(ServerPlayer player, IPlayerDiscovery discovery) {
+        if (discovery.getRegularTokens() >= MAX_REGULAR_TOKENS) {
+            discovery.setNextRegularTokenTime(ServerLevels.of(player).getGameTime() + REGULAR_TOKEN_COOLDOWN_TICKS);
         }
     }
 
     /**
      * Process regular token generation based on world time.
-     * @return true if tokens were updated and sync is needed
+     * @return true if tokens were updated and must be saved
      */
     private static boolean processRegularTokens(ServerPlayer player, IPlayerDiscovery discovery) {
         ServerLevel world = ServerLevels.of(player);
@@ -95,7 +106,7 @@ public class ServerTickHandler {
 
     /**
      * Process special token daily reset.
-     * @return true if token was reset and sync is needed
+     * @return true if the reset state was updated and must be saved
      */
     private static boolean processSpecialTokenReset(IPlayerDiscovery discovery) {
         long lastUpdateMillis = discovery.getLastSpecialTokenResetTimestamp();
@@ -137,7 +148,7 @@ public class ServerTickHandler {
                 BlockPopsMod.LOGGER.debug("Daily token reset for player (Reset point was: {})", mostRecentReset);
             }
 
-            // Always return true to trigger a sync
+            // Always return true to save the new timestamp
             return true;
         }
 

@@ -10,6 +10,7 @@ import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.network.SyncDynamicCollectionsPacket;
+import com.theplumteam.server.WorldPlayerRoster;
 import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.util.GeoAssets;
 import com.theplumteam.util.ResourceLocations;
@@ -30,7 +31,6 @@ import net.minecraft.server.players.GameProfileCache;
 //? }
 
 import java.io.File;
-import java.nio.file.Path;
 import java.util.*;
 
 /**
@@ -48,9 +48,8 @@ public class PlayerCollectionHelperImpl {
      */
     public static FigureCollection generate(MinecraftServer server) {
         try {
-            // Get the playerdata directory from the world save
-            Path worldPath = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT);
-            File playerdataDir = worldPath.resolve("playerdata").toFile();
+            // Get the player data directory from the world save ("playerdata" up to 1.21.x, "players/data" from 26.1)
+            File playerdataDir = server.getWorldPath(net.minecraft.world.level.storage.LevelResource.PLAYER_DATA_DIR).toFile();
 
             List<FigureDefinition> playerFigures = new ArrayList<>();
             Set<UUID> processedPlayers = new HashSet<>();
@@ -196,6 +195,9 @@ public class PlayerCollectionHelperImpl {
                 processedPlayers.add(playerUUID);
                 BlockPopsMod.LOGGER.debug("Added online player figure (no .dat file yet): {} ({})", playerName, playerUUID);
             }
+
+            // Flag the players an operator disabled in the roster menu
+            WorldPlayerRoster.get(server).mark(playerFigures);
 
             BlockPopsMod.logDebug("Generated World Players collection with {} figures", playerFigures.size());
 

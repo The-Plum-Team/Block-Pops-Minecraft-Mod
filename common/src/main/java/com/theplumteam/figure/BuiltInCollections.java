@@ -19,7 +19,10 @@ public class BuiltInCollections {
         "deltarune",
         "alienstage",
         "strangerthings",
-        "dispatch"
+        "dispatch",
+        "ultrakill",
+        "theamazingdigitalcircus",
+        "winx"
         // Add more collections as needed
     );
 
@@ -39,6 +42,9 @@ public class BuiltInCollections {
             case "alienstage" -> "Alien Stage";
             case "strangerthings" -> "Stranger Things";
             case "dispatch" -> "Dispatch";
+            case "ultrakill" -> "ULTRAKILL";
+            case "theamazingdigitalcircus" -> "The Amazing Digital Circus";
+            case "winx" -> "Winx Club";
             default -> collectionId;
         };
     }

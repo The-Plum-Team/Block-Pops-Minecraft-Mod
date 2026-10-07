@@ -1,12 +1,15 @@
 package com.theplumteam;
 
 import com.theplumteam.network.ModNetworking;
+import com.theplumteam.network.SyncHiddenCollectionsPacket;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModBlocks;
 import com.theplumteam.registry.ModCreativeTabs;
 import com.theplumteam.registry.ModItems;
+import com.theplumteam.registry.ModLoot;
 import com.theplumteam.server.ServerTickHandler;
 import com.theplumteam.server.config.ServerConfig;
+import dev.architectury.event.events.common.PlayerEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,11 +53,17 @@ public final class BlockPopsMod {
     public static void init() {
         LOGGER.info("Initializing BlockPops mod");
 
+        // Register the datapack loot entry type
+        ModLoot.register();
+
         // Initialize cross-platform networking
         ModNetworking.init();
 
         // Initialize server tick handler for token management
         ServerTickHandler.init();
+
+        // Send the server's hidden collections to every player that joins
+        PlayerEvent.PLAYER_JOIN.register(SyncHiddenCollectionsPacket::sendToPlayer);
 
         LOGGER.info("BlockPops mod initialization complete");
     }

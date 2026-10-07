@@ -4,6 +4,7 @@ import com.theplumteam.util.PlayerSounds;
 import com.theplumteam.util.ServerLevels;
 import com.mojang.authlib.GameProfile;
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
@@ -87,6 +88,22 @@ public class DropBoxPacket {
                     return;
                 }
 
+                // The list only leaves a hidden collection out; a machine set to it before, or a
+                // modified client, still names it here
+                if (ServerConfig.getInstance().getHiddenCollections().contains(packet.collectionId)) {
+                    player.sendSystemMessage(Component.literal("§cThis collection is not available."));
+                    BlockPopsMod.logDebug("Collection {} is hidden, token not consumed", packet.collectionId);
+                    return;
+                }
+
+                // Every World Players figure can be disabled, and an empty pool must not cost a token
+                if (CollectionRegistry.getCollection(packet.collectionId)
+                        .map(collection -> collection.getEnabledFigures().isEmpty()).orElse(true)) {
+                    player.sendSystemMessage(Component.literal("\u00A7cThis collection has no figures available."));
+                    BlockPopsMod.logDebug("Collection {} has no available figures, token not consumed", packet.collectionId);
+                    return;
+                }
+
                 IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(player);
                 if (!verifyAndConsumeToken(player, discovery, packet.tokenType)) {
                     LOGGER.warn("Player {} tried to use unavailable {} token",
@@ -136,7 +153,7 @@ public class DropBoxPacket {
 
     private static void processBoxDrop(ServerPlayer player, DropBoxPacket packet, IPlayerDiscovery discovery) {
         CollectionRegistry.getCollection(packet.collectionId).ifPresent(collection -> {
-            List<FigureDefinition> figures = collection.getFigures();
+            List<FigureDefinition> figures = collection.getEnabledFigures();
             if (!figures.isEmpty()) {
                 FigureDefinition selectedFigure = selectFigure(figures, packet.tokenType,
                         discovery, packet.collectionId);
@@ -220,6 +237,7 @@ public class DropBoxPacket {
     private static boolean verifyAndConsumeToken(ServerPlayer player, IPlayerDiscovery discovery, TokenType tokenType) {
         if (tokenType == TokenType.REGULAR) {
             if (discovery.getRegularTokens() > 0) {
+                ServerTickHandler.onRegularTokenSpent(player, discovery);
                 discovery.setRegularTokens(discovery.getRegularTokens() - 1);
                 BlockPopsMod.logDebug("Player {} used a regular token. Remaining: {}",
                         player.getName().getString(), discovery.getRegularTokens());

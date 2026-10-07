@@ -16,6 +16,7 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 //? }
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.client.ClientHiddenCollections;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.util.GuiScaleManager;
@@ -58,6 +59,8 @@ public class CollectionSelectionScreen extends Screen {
     private final BlockPos blockPos;
     private String selectedCollectionId;
     private final List<FigureCollection> collections;
+    // Revision of the server's hidden collections the list was last built from
+    private int shownHiddenRevision;
 
     // Widgets
     @Nullable
@@ -460,7 +463,7 @@ public class CollectionSelectionScreen extends Screen {
         currentY += font.lineHeight + 4;
 
         // Collection count
-        String collectionCount = collections.size() + " collections available";
+        String collectionCount = collectionListWidget.children().size() + " collections available";
         graphics.drawString(this.font, collectionCount,
                 componentX + 8, currentY, 0xFFAAAAAA, false);
 
@@ -498,7 +501,7 @@ public class CollectionSelectionScreen extends Screen {
         currentY += font.lineHeight + 4;
 
         // Figure count
-        String figureCount = collection.getFigures().size() + " figures in this collection";
+        String figureCount = collection.getEnabledFigures().size() + " figures in this collection";
         graphics.drawString(this.font, figureCount,
                 previewX + 8, currentY, 0xFFAAAAAA, false);
 
@@ -722,8 +725,23 @@ public class CollectionSelectionScreen extends Screen {
             return;
         }
 
+        // Start over: the server can change its hidden collections while the screen is open
+        collectionListWidget.clearAllEntries();
+        collectionListWidget.setScrollAmount(0);
+        shownHiddenRevision = ClientHiddenCollections.getRevision();
+
         for (FigureCollection collection : collections) {
-            collectionListWidget.addCollectionEntry(collection);
+            if (!ClientHiddenCollections.isHidden(collection.getId())) {
+                collectionListWidget.addCollectionEntry(collection);
+            }
+        }
+
+        // A hidden collection is not offered, so it cannot stay this machine's selection
+        if (selectedCollectionId != null && ClientHiddenCollections.isHidden(selectedCollectionId)) {
+            selectedCollectionId = "";
+            if (figureListWidget != null) {
+                figureListWidget.setCollection(null);
+            }
         }
 
         // Select the current collection if it exists
@@ -807,7 +825,7 @@ public class CollectionSelectionScreen extends Screen {
 
         return CollectionRegistry.getCollection(selectedCollectionId)
                 .map(collection -> {
-                    for (FigureDefinition figure : collection.getFigures()) {
+                    for (FigureDefinition figure : collection.getEnabledFigures()) {
                         String figureId = collection.getId() + ":" + figure.getId();
                         if (!ClientDiscoveryManager.isDiscovered(figureId)) {
                             return false;
@@ -873,6 +891,10 @@ public class CollectionSelectionScreen extends Screen {
     @Override
     public void tick() {
         super.tick();
+        // Rebuild the list when the server changes its hidden collections
+        if (shownHiddenRevision != ClientHiddenCollections.getRevision()) {
+            loadCollections();
+        }
         // Update button states each tick to reflect token changes
         updateTokenButtonStates();
     }
@@ -1004,7 +1026,7 @@ public class CollectionSelectionScreen extends Screen {
         int scanCode = bpEvent.scancode();
         int modifiers = bpEvent.modifiers();
         // Allow ESC to close
-        if (keyCode == 256) { // ESC key
+        if (keyCode == com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE) {
             this.onClose();
             return true;
         }
@@ -1013,7 +1035,7 @@ public class CollectionSelectionScreen extends Screen {
     *///? } else {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         // Allow ESC to close
-        if (keyCode == 256) { // ESC key
+        if (keyCode == com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE) {
             this.onClose();
             return true;
         }

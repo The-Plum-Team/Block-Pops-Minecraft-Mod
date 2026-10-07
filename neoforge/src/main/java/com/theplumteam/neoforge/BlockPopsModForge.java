@@ -25,9 +25,6 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
 
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-
 @Mod(BlockPopsMod.MOD_ID)
 public final class BlockPopsModForge {
 
@@ -59,6 +56,15 @@ public final class BlockPopsModForge {
         // Register cross-platform commands from common
         ModCommands.register(event.getDispatcher(), event.getBuildContext(), event.getCommandSelection());
         BlockPopsMod.logDebug("Registered BlockPops commands");
+    }
+
+    /**
+     * Carry the player's data over when a player respawns or returns from the End.
+     * NeoForge carries only its PlayerPersisted child over to the new player entity.
+     */
+    @SubscribeEvent
+    public void onPlayerClone(net.neoforged.neoforge.event.entity.player.PlayerEvent.Clone event) {
+        PlayerDataManager.copyData(event.getOriginal(), event.getEntity());
     }
 
     private void registerServerEvents() {
@@ -135,7 +141,7 @@ public final class BlockPopsModForge {
                     long ticksUntilNext = Math.max(0, nextRegularTime - gameTime);
 
                     // Calculate millis until next special reset
-                    long millisUntilReset = calculateMillisUntilNextReset();
+                    long millisUntilReset = com.theplumteam.server.ServerTickHandler.calculateMillisUntilNextReset();
 
                     SyncTokenDataPacket.sendToPlayer(
                             serverPlayer,
@@ -159,20 +165,5 @@ public final class BlockPopsModForge {
                 }
             }
         });
-    }
-
-    /**
-     * Calculate milliseconds until the next daily reset at 18:00 UTC (6 PM).
-     */
-    private static long calculateMillisUntilNextReset() {
-        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
-        ZonedDateTime nextReset = now.withHour(18).withMinute(0).withSecond(0).withNano(0);
-
-        // If we're past reset hour today, next reset is tomorrow
-        if (now.getHour() >= 18) {
-            nextReset = nextReset.plusDays(1);
-        }
-
-        return nextReset.toInstant().toEpochMilli() - now.toInstant().toEpochMilli();
     }
 }

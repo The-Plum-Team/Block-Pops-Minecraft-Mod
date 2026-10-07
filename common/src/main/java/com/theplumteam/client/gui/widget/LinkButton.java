@@ -120,7 +120,7 @@ public class LinkButton extends Button {
     *///? } else {
     protected boolean isValidClickButton(int button) {
     //? }
-        // Only allow left-click
-        return button == 0;
+        // Only allow left-click. The constant, not 0: 26.3 numbers the left button 1
+        return button == com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT;
     }
 }
