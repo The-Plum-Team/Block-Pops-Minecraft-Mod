@@ -89,7 +89,8 @@ def _image(path: Path, node: str, step_index: int, capture, *, metadata: str) ->
         draw.rectangle((index * stripe, 0, (index + 1) * stripe, height), fill=color)
     offset = 35 + step_index * 91
     draw.rectangle((offset, 120, offset + 420, 390), fill=(225, 225 - step_index * 12, 210))
-    draw.rectangle((310, 470 + step_index * 9, 1280, 690), fill=(20, 25, 42))
+    # Wrapped so the band stays above its fixed bottom edge however many steps the contract has.
+    draw.rectangle((310, 470 + step_index * 9 % 220, 1280, 690), fill=(20, 25, 42))
     draw.ellipse((690 + step_index * 23, 290, 890 + step_index * 23, 490), fill=(170, 70, 215))
     # Derive synthetic fixtures from the active branch contract. This keeps the mutation
     # suite portable when a release branch owns different probe regions or thresholds.
