@@ -13,6 +13,7 @@ from scripts.release.item_resources import generate, resource_plan
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "common/src/main/resources"
+RECIPE = "data/blockpops/recipe/claw_machine_block.json"
 
 
 class ItemResourceTests(unittest.TestCase):
@@ -50,9 +51,52 @@ class ItemResourceTests(unittest.TestCase):
 
     def test_legacy_versions_produce_no_overrides_and_leave_authored_bytes_untouched(self):
         before = {path: path.read_bytes() for path in (SOURCE / "assets/blockpops/models/item").iterdir()}
-        for version in ("1.20.1", "1.21.1", "1.21.3"):
-            self.assertEqual({}, resource_plan(SOURCE, version))
+        self.assertEqual({}, resource_plan(SOURCE, "1.20.1"))
+        for version in ("1.21.1", "1.21.3"):
+            self.assertEqual({RECIPE}, set(resource_plan(SOURCE, version)))
         self.assertEqual(before, {path: path.read_bytes() for path in before})
+
+    def test_the_claw_machine_recipe_follows_each_version_s_directory_and_format(self):
+        authored = json.loads((SOURCE / "data/blockpops/recipes/claw_machine_block.json").read_text())
+        self.assertEqual({"item": "blockpops:claw_machine_block"}, authored["result"])
+        self.assertEqual({"item": "minecraft:chain"}, authored["key"]["C"])
+        for version, chain in (("1.21.1", {"item": "minecraft:chain"}), ("1.21.3", "minecraft:chain"),
+                               ("1.21.8", "minecraft:chain"), ("1.21.9", "minecraft:iron_chain"),
+                               ("26.1.2", "minecraft:iron_chain"), ("26.3", "minecraft:iron_chain")):
+            with self.subTest(version=version):
+                recipe = json.loads(resource_plan(SOURCE, version)[RECIPE])
+                self.assertEqual("minecraft:crafting_shaped", recipe["type"])
+                self.assertEqual(authored["pattern"], recipe["pattern"])
+                self.assertEqual({"id": "blockpops:claw_machine_block", "count": 1}, recipe["result"])
+                self.assertEqual(set(authored["key"]), set(recipe["key"]))
+                self.assertEqual(chain, recipe["key"]["C"])
+                self.assertEqual({"item": "minecraft:glass"} if version == "1.21.1" else "minecraft:glass",
+                                 recipe["key"]["G"])
+
+    def test_tags_counts_and_unsupported_recipes(self):
+        recipes = self.source / "data/blockpops/recipes"
+        recipes.mkdir(parents=True)
+        recipe = recipes / "sample.json"
+        recipe.write_text(json.dumps({
+            "type": "minecraft:crafting_shaped", "pattern": ["PP"],
+            "key": {"P": {"tag": "minecraft:planks"}}, "result": {"item": "blockpops:sample", "count": 2}}))
+        path = "data/blockpops/recipe/sample.json"
+        self.assertEqual({"tag": "minecraft:planks"}, json.loads(resource_plan(self.source, "1.21.1")[path])["key"]["P"])
+        modern = json.loads(resource_plan(self.source, "26.2")[path])
+        self.assertEqual("#minecraft:planks", modern["key"]["P"])
+        self.assertEqual({"id": "blockpops:sample", "count": 2}, modern["result"])
+        generate(self.source, self.output, "26.2")
+        self.assertTrue((self.output / path).is_file())
+        generate(self.source, self.output, "1.20.1")
+        self.assertFalse((self.output / path).exists())
+        for broken in ({"type": "minecraft:crafting_shapeless", "pattern": [], "key": {}, "result": {"item": "a:b"}},
+                       {"type": "minecraft:crafting_shaped", "pattern": ["P"],
+                        "key": {"P": [{"item": "a:b"}]}, "result": {"item": "a:b"}},
+                       {"type": "minecraft:crafting_shaped", "pattern": ["P"],
+                        "key": {"P": {"item": "a:b"}}, "result": {"item": "a:b", "nbt": "{}"}}):
+            recipe.write_text(json.dumps(broken))
+            with self.assertRaises(ValueError):
+                resource_plan(self.source, "26.2")
 
     def test_rerun_removes_stale_generated_resources_without_touching_authored_models(self):
         generate(self.source, self.output, "26.2")

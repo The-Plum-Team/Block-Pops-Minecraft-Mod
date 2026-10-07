@@ -1,4 +1,4 @@
-"""Derive modern special-item resources from the authored entity models."""
+"""Derive modern special-item resources and recipes from the authored 1.20.1 resources."""
 
 from __future__ import annotations
 
@@ -35,13 +35,68 @@ def _json(parent: int, name: str):
         return loads(payload, label="resource JSON", max_bytes=65536)
 
 
+# 1.21.9 added copper chains and renamed the iron one.
+RENAMED_ITEMS = {(1, 21, 9): {"minecraft:chain": "minecraft:iron_chain"}}
+ITEM_ID = r"[a-z0-9_.-]+:[a-z0-9_./-]+"
+
+
+def _ingredient(value, version: tuple[int, ...]):
+    if not isinstance(value, dict) or len(value) != 1:
+        raise ValueError("recipe ingredient must name exactly one item or tag")
+    (kind, name), = value.items()
+    if kind not in {"item", "tag"} or not isinstance(name, str) or not re.fullmatch(ITEM_ID, name):
+        raise ValueError("recipe ingredient must name exactly one item or tag")
+    if kind == "item":
+        for since, renames in RENAMED_ITEMS.items():
+            if version >= since:
+                name = renames.get(name, name)
+    if version < (1, 21, 2):
+        return {kind: name}
+    # 1.21.2 reads an ingredient as a bare id, with tags marked by a leading #.
+    return name if kind == "item" else "#" + name
+
+
+def recipe_plan(source: Path, version: tuple[int, ...]) -> dict[str, bytes]:
+    """The authored 1.20.1 shaped recipes in the directory and format 1.21 and later read."""
+    result = {}
+    with ExitStack() as stack:
+        try:
+            descriptor = _directory(stack, (source / "data/blockpops/recipes").absolute())
+        except FileNotFoundError:
+            return result
+        names = sorted(os.listdir(descriptor))
+        if len(names) > 64:
+            raise ValueError("too many authored recipes")
+        for name in names:
+            if not re.fullmatch(r"[a-z0-9_]+\.json", name):
+                raise ValueError("invalid authored recipe filename")
+            recipe = _json(descriptor, name)
+            if (not isinstance(recipe, dict) or set(recipe) != {"type", "pattern", "key", "result"}
+                    or recipe["type"] != "minecraft:crafting_shaped"
+                    or not isinstance(recipe["key"], dict) or not isinstance(recipe["result"], dict)
+                    or not set(recipe["result"]) <= {"item", "count"}
+                    or not isinstance(recipe["result"].get("item"), str)
+                    or not re.fullmatch(ITEM_ID, recipe["result"]["item"])
+                    or not isinstance(recipe["result"].get("count", 1), int)
+                    or isinstance(recipe["result"].get("count", 1), bool)):
+                raise ValueError("only a plain shaped recipe can be derived")
+            result[f"data/blockpops/recipe/{name}"] = canonical_json({
+                "type": recipe["type"], "pattern": recipe["pattern"],
+                "key": {symbol: _ingredient(value, version) for symbol, value in recipe["key"].items()},
+                "result": {"id": recipe["result"]["item"], "count": recipe["result"].get("count", 1)}})
+    return result
+
+
 def resource_plan(source: Path, minecraft: str) -> dict[str, bytes]:
     if not re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,2}", minecraft):
         raise ValueError("invalid Minecraft resource version")
     version = tuple(int(part) for part in minecraft.split("."))
-    if version < (1, 21, 4):
+    if version < (1, 21):
         return {}
-    result = {}
+    # 1.21 reads data/<namespace>/recipe; the authored recipes/ directory is ignored there.
+    result = recipe_plan(source, version)
+    if version < (1, 21, 4):
+        return result
     for kind in ("item", "block"):
         directory = source / "assets/blockpops/models" / kind
         with ExitStack() as stack:
@@ -82,7 +137,8 @@ def generate(source: Path, output: Path, minecraft: str) -> None:
             previous = []
         if not isinstance(previous, list) or len(previous) > 1024 or any(
                 not isinstance(path, str) or not re.fullmatch(
-                    r"assets/blockpops/(?:items|models/(?:item|block))/[a-z0-9_]+\.json", path)
+                    r"(?:assets/blockpops/(?:items|models/(?:item|block))|data/blockpops/recipe)/[a-z0-9_]+\.json",
+                    path)
                 for path in previous):
             raise ValueError("invalid generated resource inventory")
         for relative in sorted(set(previous) - set(plan)):
