@@ -873,7 +873,7 @@ class VisualReviewHandoffTests(unittest.TestCase):
         )
 
     def test_prompts_are_chunked_and_expose_only_the_chunk_images(self) -> None:
-        self.assertEqual(48, MAX_CAPSULE_PAIRS)
+        self.assertEqual(60, MAX_CAPSULE_PAIRS)
         self.assertEqual(MAX_CAPSULE_PAIRS, MAX_HANDOFF_PAIRS)
         self.assertEqual(MAX_CAPSULE_PAIRS, review_client.MAX_PAIRS)
         self.assertEqual(MAX_CAPSULE_PAIRS, MAX_OUTPUT_PAIRS)

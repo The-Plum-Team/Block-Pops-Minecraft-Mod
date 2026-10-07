@@ -44,8 +44,8 @@ TRIAGE_MODEL = "claude-opus-5-5"
 VERIFY_MODEL = "claude-opus-5-5"
 SONNET_MAX_PAIRS = 5
 FABLE_MAX_PAIRS = 4
-# Worst case for MAX_PAIRS changed pairs: ceil(48 / 5) triage + ceil(48 / 4) verification.
-MAX_MODEL_CALLS = 22
+# Worst case for MAX_PAIRS changed pairs: ceil(60 / 5) triage + ceil(60 / 4) verification.
+MAX_MODEL_CALLS = 27
 MAX_MODEL_ATTEMPTS = MAX_MODEL_CALLS * 2
 MODEL_CALL_SPACING_SECONDS = 15.0
 RETRY_BACKOFF_MAXIMUM_SECONDS = 60.0
@@ -65,8 +65,8 @@ MAX_FILES = 1100
 MAX_FILE_BYTES = 7 * 1024 * 1024
 MAX_TOTAL_BYTES = 96 * 1024 * 1024
 # Expanding beyond today's 2 lanes x 5 captures requires an explicit cost/security review.
-MAX_PAIRS = 48
-MAX_IMAGES = 96
+MAX_PAIRS = 60
+MAX_IMAGES = 120
 MAX_FINDINGS = 16
 MAX_VISIBLE_CHARS = 2048
 MAX_FINDING_CHARS = 1024

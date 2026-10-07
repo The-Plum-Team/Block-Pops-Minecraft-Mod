@@ -78,13 +78,15 @@ changed pairs only; no similarity threshold can declare a semantic pass.
 
 Changed pairs are ordered with key captures first. Triage chunks contain at
 most five pairs and verification chunks at most four, so the model opens at
-most ten images per call. The current matrix produces 44 pairs (two loaders by
-22 semantic captures: five `ui-regression` screens and seventeen `in-world`
-views), within a 48-pair budget whose full escalation is bounded to 22 logical
-calls (ceil(48 / 5) triage plus ceil(48 / 4) verification). A byte-identical pair
+most ten images per call. The current matrix produces 50 pairs (two loaders by
+25 semantic captures: five `ui-regression` screens and twenty `in-world`
+views), within a 60-pair budget whose full escalation is bounded to 27 logical
+calls (ceil(60 / 5) triage plus ceil(60 / 4) verification). The budget was
+raised from 48 pairs and 22 calls when the Winx Club, ULTRAKILL and Amazing
+Digital Circus walls were added; it leaves room for five more collection walls. A byte-identical pair
 never reaches the model, and the E2E-only determinism (frozen star scroll and
 GeckoLib clocks, seeded claw-machine draws, cleared toasts, no clouds) keeps
-unchanged captures byte-identical. A capsule with more than 48 pairs, or whose
+unchanged captures byte-identical. A capsule with more than 60 pairs, or whose
 worst-case prompt exceeds its byte budget, fails before any model call and
 requires an explicit cost-envelope review.
 
@@ -242,7 +244,7 @@ queue input expire
 When adding a Minecraft lane or capture, update only the branch matrix or
 scenario contract as appropriate, preserve semantic `capture_id` stability,
 add deterministic probe calibration canaries, and deliberately re-evaluate the
-48-pair/22-call budget. Do not raise image, queue, retry or cost
+60-pair/27-call budget. Do not raise image, queue, retry or cost
 limits as a mechanical response to a failure.
 
 BlockPops does not enable AI-generated functional repair. Its two release lines

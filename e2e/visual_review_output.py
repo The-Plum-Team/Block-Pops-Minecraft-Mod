@@ -29,10 +29,10 @@ MAX_REVIEW_OUTPUT_BYTES = 1024 * 1024
 MAX_VISIBLE_CHARS = 2048
 MAX_FINDINGS = 16
 MAX_FINDING_CHARS = 1024
-MAX_PAIRS = 48
-# Worst case for MAX_PAIRS changed pairs: ceil(48 / 5) triage + ceil(48 / 4) verification.
-MAX_MODEL_CALLS = 22
-MAX_MODEL_ATTEMPTS = 44
+MAX_PAIRS = 60
+# Worst case for MAX_PAIRS changed pairs: ceil(60 / 5) triage + ceil(60 / 4) verification.
+MAX_MODEL_CALLS = 27
+MAX_MODEL_ATTEMPTS = 54
 MAX_DURATION_MS = 90 * 60 * 1000
 MAX_USAGE_TOKENS = 100_000_000
 
