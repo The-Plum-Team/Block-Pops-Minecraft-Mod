@@ -438,6 +438,36 @@
                 "expectation": "A wall of 31 placed boxes in 4 rows of up to nine, HUD hidden, one box per figure of the Super Mario Collection: every box shows the collection's art and logo and holds a different, fully textured figure standing upright inside it; no empty boxes, missing (magenta and black) textures, duplicated figures, or figures poking through their box.",
                 "probes": []
               }
+            },
+            {
+              "id": "collection_theamazingdigitalcircus",
+              "assertion_required": true,
+              "capture": {
+                "title": "The Amazing Digital Circus Collection placed in the world",
+                "review_tier": "all",
+                "expectation": "A wall of 5 placed boxes in 1 row of up to nine, HUD hidden, one box per figure of the The Amazing Digital Circus Collection: every box shows the collection's art and logo and holds a different, fully textured figure standing upright inside it; no empty boxes, missing (magenta and black) textures, duplicated figures, or figures poking through their box.",
+                "probes": []
+              }
+            },
+            {
+              "id": "collection_ultrakill",
+              "assertion_required": true,
+              "capture": {
+                "title": "ULTRAKILL Collection placed in the world",
+                "review_tier": "all",
+                "expectation": "A wall of 15 placed boxes in 2 rows of up to nine, HUD hidden, one box per figure of the ULTRAKILL Collection: every box shows the collection's art and logo and holds a different, fully textured figure standing upright inside it; no empty boxes, missing (magenta and black) textures, duplicated figures, or figures poking through their box.",
+                "probes": []
+              }
+            },
+            {
+              "id": "collection_winx",
+              "assertion_required": true,
+              "capture": {
+                "title": "Winx Club Collection placed in the world",
+                "review_tier": "all",
+                "expectation": "A wall of 11 placed boxes in 2 rows of up to nine, HUD hidden, one box per figure of the Winx Club Collection: every box shows the collection's art and logo and holds a different, fully textured figure standing upright inside it; no empty boxes, missing (magenta and black) textures, duplicated figures, or figures poking through their box.",
+                "probes": []
+              }
             }
           ],
           "comparisons": []
