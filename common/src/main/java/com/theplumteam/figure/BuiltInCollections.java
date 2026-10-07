@@ -21,6 +21,7 @@ public class BuiltInCollections {
         "strangerthings",
         "dispatch",
         "ultrakill",
+        "doom",
         "theamazingdigitalcircus",
         "winx"
         // Add more collections as needed
@@ -43,6 +44,7 @@ public class BuiltInCollections {
             case "strangerthings" -> "Stranger Things";
             case "dispatch" -> "Dispatch";
             case "ultrakill" -> "ULTRAKILL";
+            case "doom" -> "DOOM";
             case "theamazingdigitalcircus" -> "The Amazing Digital Circus";
             case "winx" -> "Winx Club";
             default -> collectionId;
