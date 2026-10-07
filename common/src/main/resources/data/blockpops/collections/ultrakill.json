@@ -1,0 +1,149 @@
+{
+  "id": "ultrakill",
+  "name": "ULTRAKILL Collection",
+  "author": "Unknown",
+  "author_url": "https://www.planetminecraft.com/collection/292805/ultrakill/",
+  "box_texture": "blockpops:textures/block/box/ultrakill.png",
+  "logo": {
+    "texture": "blockpops:textures/block/box/logo/logo_ultrakill.png",
+    "position_x": -2.602,
+    "position_y": -0.641,
+    "position_z": 0.0,
+    "scale_x": 9.496,
+    "scale_y": 10.0,
+    "scale_z": 1.0
+  },
+  "background_color": {
+    "r": 30,
+    "g": 0,
+    "b": 0
+  },
+  "figures": [
+    {
+      "id": "v1",
+      "name": "V1",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/ultrakill/v1.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "author_url": "https://www.planetminecraft.com/collection/292805/ultrakill/",
+      "alternatives": [
+        {
+          "name": "V2",
+          "texture": "blockpops:textures/block/figure/ultrakill/v2.png"
+        }
+      ]
+    },
+    {
+      "id": "cerberus",
+      "name": "Cerberus",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/ultrakill/cerberus.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "author_url": "https://www.planetminecraft.com/collection/292805/ultrakill/"
+    },
+    {
+      "id": "filth",
+      "name": "Filth",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/ultrakill/filth.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "author_url": "https://www.planetminecraft.com/collection/292805/ultrakill/"
+    },
+    {
+      "id": "schism",
+      "name": "Schism",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/ultrakill/schism.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "author_url": "https://www.planetminecraft.com/collection/292805/ultrakill/"
+    },
+    {
+      "id": "soldier",
+      "name": "Soldier",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/ultrakill/soldier.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "author_url": "https://www.planetminecraft.com/collection/292805/ultrakill/"
+    },
+    {
+      "id": "stalker",
+      "name": "Stalker",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/ultrakill/stalker.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "author_url": "https://www.planetminecraft.com/collection/292805/ultrakill/"
+    },
+    {
+      "id": "stray",
+      "name": "Stray",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/ultrakill/stray.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "author_url": "https://www.planetminecraft.com/collection/292805/ultrakill/"
+    },
+    {
+      "id": "streetcleaner",
+      "name": "Streetcleaner",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/ultrakill/streetcleaner.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "author_url": "https://www.planetminecraft.com/collection/292805/ultrakill/"
+    },
+    {
+      "id": "swordsmachine",
+      "name": "Swordsmachine",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/ultrakill/swordsmachine.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "author_url": "https://www.planetminecraft.com/collection/292805/ultrakill/"
+    },
+    {
+      "id": "ferryman",
+      "name": "Ferryman",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/ultrakill/ferryman.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "author_url": "https://www.planetminecraft.com/skin/ferryman-ultrakill-6048342/"
+    },
+    {
+      "id": "gabriel",
+      "name": "Gabriel",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/ultrakill/gabriel.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "author_url": "https://www.planetminecraft.com/skin/gabriel-ultrakill/"
+    },
+    {
+      "id": "maurice",
+      "name": "Maurice",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/ultrakill/maurice.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "author_url": "https://www.planetminecraft.com/skin/maurice-with-legs-malicious-faces-ultrakill-6004994/"
+    },
+    {
+      "id": "mindflayer",
+      "name": "Mindflayer",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/ultrakill/mindflayer.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "author_url": "https://www.planetminecraft.com/skin/mindflayer-ultrakill-6669083/"
+    },
+    {
+      "id": "minos_prime",
+      "name": "Minos Prime",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/ultrakill/minos_prime.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "author_url": "https://www.planetminecraft.com/skin/minos-prime-ultrakill-6090385/"
+    },
+    {
+      "id": "sisyphus_prime",
+      "name": "Sisyphus Prime",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/ultrakill/sisyphus_prime.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "author_url": "https://www.planetminecraft.com/skin/sisyphus-prime-ultrakill-3710557/"
+    }
+  ]
+}

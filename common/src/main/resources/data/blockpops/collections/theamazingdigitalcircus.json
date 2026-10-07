@@ -1,0 +1,58 @@
+{
+  "id": "theamazingdigitalcircus",
+  "name": "The Amazing Digital Circus Collection",
+  "author": "abreba",
+  "author_url": "https://www.planetminecraft.com/member/abreba/",
+  "box_texture": "blockpops:textures/block/box/theamazingdigitalcircus.png",
+  "logo": {
+    "texture": "blockpops:textures/block/box/logo/logo_theamazingdigitalcircus.png",
+    "position_x": -1.515,
+    "position_y": -0.342,
+    "position_z": 0.0,
+    "scale_x": 5.934,
+    "scale_y": 6.905,
+    "scale_z": 1.0
+  },
+  "background_color": {
+    "r": 75,
+    "g": 0,
+    "b": 130
+  },
+  "figures": [
+    {
+      "id": "pomni",
+      "name": "Pomni",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/theamazingdigitalcircus/pomni.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "caine",
+      "name": "Caine",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/theamazingdigitalcircus/caine.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "jax",
+      "name": "Jax",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/theamazingdigitalcircus/jax.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "gangle",
+      "name": "Gangle",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/theamazingdigitalcircus/gangle.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "kinger",
+      "name": "Kinger",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/theamazingdigitalcircus/kinger.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    }
+  ]
+}
