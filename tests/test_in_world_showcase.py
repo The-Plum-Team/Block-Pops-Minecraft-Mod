@@ -17,7 +17,7 @@ CONTRACT = ROOT / "e2e" / "scenario-contract.json"
 SCENARIO = ROOT / "common/src/e2e/java/com/theplumteam/e2e/scenario/InWorldScenario.java"
 SETBLOCK = re.compile(
     r'^setblock (-?\d+) (-?\d+) (-?\d+) blockpops:box_block\[facing=south\]'
-    r'\{CollectionId:"([a-z0-9_]+)",FigureId:"([a-z0-9_]+)"\}$'
+    r'\{CollectionId:"([a-z0-9_]+)",FigureId:"([a-z0-9_-]+)"\}$'
 )
 
 
