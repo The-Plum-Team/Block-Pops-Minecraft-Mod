@@ -54,7 +54,7 @@ from scripts.release.matrix import (
 CAPSULE_MANIFEST = "visual-capsule.json"
 CAPSULE_DIGEST = "visual-capsule.sha256"
 CAPSULE_PURPOSE = "advisory-semantic-ui-review"
-# Two loaders by 25 contract captures, with room for five more collection walls.
+# Two loaders by 26 contract captures, with room for four more collection walls.
 MAX_CAPSULE_PAIRS = 60
 MAX_CAPSULE_IMAGES = 120
 MAX_CAPSULE_IMAGE_BYTES = 7 * 1024 * 1024

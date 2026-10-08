@@ -401,7 +401,7 @@ class ExpectationTests(_Repository):
     def test_legacy_scope_expectation_of_the_real_contract_and_matrix(self) -> None:
         expectation = self.expectation(self.master)
         self.assert_lanes(expectation, LEGACY_NODES)
-        self.assertEqual((50, 6), (len(expectation["captures"]), len(expectation["comparisons"])))
+        self.assertEqual((52, 6), (len(expectation["captures"]), len(expectation["comparisons"])))
         self.assertEqual(REPOSITORY, expectation["repository"])
         self.assertEqual((MASTER_KEY, "master"), (expectation["key"], expectation["label"]))
         self.assertEqual("pr-anchors", expectation["profile"])
@@ -437,7 +437,7 @@ class ExpectationTests(_Repository):
             key=lambda lane: (tuple(map(int, lane.identity.minecraft.split("."))), lane.identity.loader))]
         self.assertEqual(20, len(nodes))
         self.assert_lanes(expectation, nodes)
-        self.assertEqual((40, 500, 60), (len(expectation["lanes"]), len(expectation["captures"]),
+        self.assertEqual((40, 520, 60), (len(expectation["lanes"]), len(expectation["captures"]),
                                          len(expectation["comparisons"])))
         self.assertEqual(MASTER_KEY, expectation["key"])
         self.assertEqual(("full", False), (expectation["scope"]["detail"]["kind"],

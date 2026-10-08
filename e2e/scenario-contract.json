@@ -370,6 +370,16 @@
               }
             },
             {
+              "id": "collection_doom",
+              "assertion_required": true,
+              "capture": {
+                "title": "DOOM Collection placed in the world",
+                "review_tier": "all",
+                "expectation": "A wall of 9 placed boxes in 1 row of up to nine, HUD hidden, one box per figure of the DOOM Collection: every box shows the collection's art and logo and holds a different, fully textured figure standing upright inside it; no empty boxes, missing (magenta and black) textures, duplicated figures, or figures poking through their box.",
+                "probes": []
+              }
+            },
+            {
               "id": "collection_fnaf",
               "assertion_required": true,
               "capture": {
