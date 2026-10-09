@@ -23,6 +23,10 @@ CREDENTIAL_SCRUB = (
 )
 SCRUBBED_CREDENTIALS = frozenset(CREDENTIAL_SCRUB.split()[1:])
 PREPARE_EVIDENCE = "The-Plum-Team/mod-base/actions/prepare-evidence@"
+# The kit's managed Build/E2E callers (site/mod-base-build-activation.json in shadow or a shared
+# mode). `template check` keeps them byte-identical to the pinned kit's templates; they run the
+# kit's sandboxed Build and packaged E2E from the default branch on pull_request_target.
+MANAGED_CALLERS_ON_PRT = frozenset({"mod-base-build.yml", "mod-base-packaged-e2e.yml", "mod-base-gate-status.yml"})
 KIT_PIN_LINE = re.compile(
     r"^\s*(?:-\s+)?uses: The-Plum-Team/mod-base/(\S+)@([0-9a-f]{40}) # (v\d+\.\d+\.\d+)$"
 )
@@ -261,6 +265,8 @@ class WorkflowSecurityTests(unittest.TestCase):
                         "types: [opened, synchronize, reopened, edited, labeled, unlabeled]",
                         text,
                     )
+                    self.assertNotIn("\n  pull_request:", text)
+                elif path.name in MANAGED_CALLERS_ON_PRT:
                     self.assertNotIn("\n  pull_request:", text)
                 else:
                     self.assertNotIn("\n  pull_request_target:", text)
