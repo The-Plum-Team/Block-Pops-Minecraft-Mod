@@ -9,6 +9,7 @@ unavailable kit raises and fails the test, never skips it.
 
 from __future__ import annotations
 
+import json
 import re
 import unittest
 from pathlib import Path
@@ -58,7 +59,7 @@ FORBIDDEN = (
     "secrets.",
     "secrets: inherit",
 )
-#: Every workflow that references the kit, each at the one pin.
+#: Every native workflow that references the kit, each at the one pin.
 PINNED_WORKFLOWS = frozenset(
     {
         ".github/workflows/build-gate.yml",
@@ -69,6 +70,30 @@ PINNED_WORKFLOWS = frozenset(
         ".github/workflows/visual-review.yml",
     }
 )
+ACTIVATION = REPO / "site" / "mod-base-build-activation.json"
+_BUILD_CALLERS = frozenset(
+    {".github/workflows/mod-base-build.yml", ".github/workflows/mod-base-gate-status.yml"}
+)
+#: The kit's Build/E2E callers that call the kit at the same pin, by the mode of the activation
+#: manifest (a reviewed rollback keeps the callers of the mode it leaves). ``template check`` keeps
+#: each one byte-identical to the pinned template; ``mod-base-guard.yml`` names the pin only as
+#: data and calls no kit workflow.
+KIT_CALLERS = {
+    "disabled": frozenset(),
+    "shadow": _BUILD_CALLERS | {".github/workflows/mod-base-packaged-e2e.yml"},
+    "shared-build": _BUILD_CALLERS,
+    "shared-build-and-e2e": _BUILD_CALLERS | {".github/workflows/mod-base-packaged-e2e.yml"},
+}
+
+
+def pinned_workflows() -> frozenset[str]:
+    """The native pinned workflows plus the kit callers the activation mode manages."""
+
+    if not ACTIVATION.exists():
+        return PINNED_WORKFLOWS
+    manifest = json.loads(ACTIVATION.read_bytes())
+    mode = manifest["rollback_from"] if manifest["mode"] == "reviewed-rollback" else manifest["mode"]
+    return PINNED_WORKFLOWS | KIT_CALLERS[mode]
 
 
 def kit_root() -> Path:
@@ -138,7 +163,7 @@ class ManagedCallerTests(unittest.TestCase):
         self.assertRegex(pin.sha, r"^[0-9a-f]{40}$")
         self.assertRegex(pin.version, r"^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
         referencing = {reference.rsplit("@", 1)[0] for reference in pin.references}
-        self.assertEqual(PINNED_WORKFLOWS, referencing)
+        self.assertEqual(pinned_workflows(), referencing)
         text = caller_text()
         for job, callee in CALLEES.items():
             with self.subTest(job=job):
