@@ -232,6 +232,14 @@ def _descendants() -> list[int]:
     return found
 
 
+def _process_name(pid: int) -> str:
+    try:
+        with open(f"/proc/{pid}/comm", "rb") as stream:
+            return stream.read(64).decode("ascii", "replace").strip() or "?"
+    except OSError:
+        return "?"
+
+
 def _reap() -> None:
     while True:
         try:
@@ -245,15 +253,15 @@ def _reap() -> None:
 def _stop_leftovers(label: str) -> None:
     """Stop every process a native command left behind; they are all ours (we are subreaper)."""
 
-    stopped = set()
+    stopped: dict[int, str] = {}
     for signum, grace in ((signal.SIGTERM, 10.0), (signal.SIGKILL, 5.0)):
         alive = _descendants()
         if not alive:
             break
         for pid in alive:
+            stopped.setdefault(pid, _process_name(pid))
             try:
                 os.kill(pid, signum)
-                stopped.add(pid)
             except ProcessLookupError:
                 pass
         deadline = time.monotonic() + grace
@@ -266,7 +274,8 @@ def _stop_leftovers(label: str) -> None:
     if _descendants():
         raise adapter.AdapterError(f"{label} left processes that cannot be stopped")
     if stopped:
-        print(f"blockpops: stopped {len(stopped)} process(es) {label} left behind", flush=True)
+        names = ", ".join(sorted(set(stopped.values())))
+        print(f"blockpops: stopped {len(stopped)} process(es) {label} left behind ({names})", flush=True)
 
 
 def _run(command: list[str], *, cwd: Path, env: dict[str, str], label: str, quiet: bool = False) -> None:
