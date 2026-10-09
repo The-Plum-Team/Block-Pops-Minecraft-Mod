@@ -1,6 +1,6 @@
 {
   "kind": "mod-base.ci.activation",
-  "mode": "disabled",
+  "mode": "shadow",
   "profile": "block-pops",
   "repository": "The-Plum-Team/Block-Pops-Minecraft-Mod",
   "rollback_from": null,
