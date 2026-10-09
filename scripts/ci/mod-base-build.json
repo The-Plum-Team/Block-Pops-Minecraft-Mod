@@ -36,7 +36,7 @@
       },
       {
         "path": "scripts/ci/mod_base_build_dispatch.py",
-        "sha256": "a35bf696499ac031a2f121c092a9e70b473e9d270a448ea91eeba6f88f38d96b"
+        "sha256": "4d71a4dff72d0bee98bf5797455244ca6afa7defad4de6269dfb6dafbee2466f"
       },
       {
         "path": "scripts/ci/mod_base_build_policy.py",
