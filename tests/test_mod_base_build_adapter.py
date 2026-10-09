@@ -322,5 +322,48 @@ class KitPlanningTests(unittest.TestCase):
             self.assertEqual(len(adapter.target_outputs(plan, target["id"])), 8)
 
 
+#: The adoption order: each committed mode enters from this one predecessor (``None``: no
+#: manifest), in a controller upgrade of its own that does not move the pin.
+PREVIOUS_MODE = {"disabled": None, "shadow": "disabled"}
+
+
+class ActivationTransitionTests(unittest.TestCase):
+    """The kit admits a manifest change only at an unchanged pin, and no workflow checks it: the
+    operator procedure runs ``template transition`` against the protected base."""
+
+    def test_the_procedure_runs_the_transition_check_apart_from_the_bump(self) -> None:
+        text = (REPO / "docs" / "operations.md").read_text("utf-8")
+        section = text.split("### mod-base Build adapter\n", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("python3 scripts/ci/mod_base_kit.py run template transition --repo . --base ../base", section)
+        self.assertIn("the kit bump\nalone (`bump --to vX.Y.Z`, no Build config and no manifest)", section)
+
+    def test_the_committed_manifest_enters_only_at_an_unchanged_pin(self) -> None:
+        if _pinned_version() < KIT_WITH_BUILD_ADAPTER:
+            self.skipTest("the pinned kit predates activation manifests; the mod-base v1.1.0 bump runs this")
+        from scripts.ci import mod_base_kit
+        from tests.mod_base_path import kit_root
+
+        kit_root()
+        from mod_base.build_ci.transition import admit_transition
+        from mod_base.errors import MbError
+        from mod_base.pin import Pin
+
+        current = (REPO / "site" / "mod-base-build-activation.json").read_bytes()
+        mode = json.loads(current)["mode"]
+        self.assertIn(mode, PREVIOUS_MODE)
+        previous = None
+        if PREVIOUS_MODE[mode] is not None:
+            previous = (json.dumps({**json.loads(current), "mode": PREVIOUS_MODE[mode]}, indent=2) + "\n").encode()
+        bootstrap = mod_base_kit.parse_pin(REPO)
+        pin = Pin(bootstrap.sha, bootstrap.version, ())
+        admitted = admit_transition(previous, current, protected_pin=pin, candidate_pin=pin)
+        self.assertEqual((admitted.previous, admitted.current, admitted.changed),
+                         (PREVIOUS_MODE[mode] or "absent", mode, True))
+        older = Pin("0" * 40, "v1.0.3", ())
+        with self.assertRaises(MbError) as caught:
+            admit_transition(previous, current, protected_pin=older, candidate_pin=pin)
+        self.assertIn("never comes with a pin change", str(caught.exception))
+
+
 if __name__ == "__main__":
     unittest.main()
