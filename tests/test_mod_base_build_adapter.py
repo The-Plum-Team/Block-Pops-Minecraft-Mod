@@ -30,7 +30,7 @@ from scripts.lib.secure_json import canonical_json
 from scripts.release.build_matrix import plan_build
 from scripts.release.matrix import load_matrix_document
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = Path(__file__).resolve().parents[1]
 CONFIG = "scripts/ci/mod-base-build.json"
 REPOSITORY = "The-Plum-Team/Block-Pops-Minecraft-Mod"
 MATRIX = REPO / "release" / "release-matrix.json"
