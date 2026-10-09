@@ -36,7 +36,7 @@
       },
       {
         "path": "scripts/ci/mod_base_build_dispatch.py",
-        "sha256": "4d71a4dff72d0bee98bf5797455244ca6afa7defad4de6269dfb6dafbee2466f"
+        "sha256": "a5e276eb6122972b9c1da10b7bd08c8ace29df4c8797ce36587bc015c00e891d"
       },
       {
         "path": "scripts/ci/mod_base_build_policy.py",
@@ -103,7 +103,7 @@
   "timeouts": {
     "policy_seconds": 2100,
     "runtime_seconds": 1800,
-    "target_seconds": 3600,
+    "target_seconds": 2700,
     "validator_seconds": 600
   }
 }
