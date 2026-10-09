@@ -338,9 +338,26 @@ each with its SHA-256. `site/mod-base-build-activation.json` says how far the ki
 runs: `disabled` runs nothing; `shadow` runs the kit's managed callers beside the
 native gates, which stay authoritative, and publishes their results as
 `Trusted PR / Build and verify (shadow)` and `Trusted PR / Packaged E2E gate
-(shadow)`, which no ruleset requires. Every mode change is its own controller
-upgrade at an unchanged pin (`template activation`, `template sync --write`,
-`template transition --base <protected base>`).
+(shadow)`, which no ruleset requires. The kit writes those contexts with the
+same App as the required `Trusted PR / ...` ones: only their names differ.
+
+The kit admits a change of the manifest only at an unchanged pin, so adoption is
+three controller upgrades, each merged before the next starts: the kit bump
+alone (`bump --to vX.Y.Z`, no Build config and no manifest); then, at that pin,
+the Build config, the adapter and the manifest in `disabled`; then `shadow`.
+Every pull request that adds, changes or removes the manifest runs, before the
+owner approves its head:
+
+```bash
+git worktree add --detach ../base origin/master
+python3 scripts/ci/mod_base_kit.py run template activation --repo .
+python3 scripts/ci/mod_base_kit.py run template sync --repo . --write
+python3 scripts/ci/mod_base_kit.py run template check --repo .
+python3 scripts/ci/mod_base_kit.py run template transition --repo . --base ../base
+```
+
+`template transition` exits 2 when the pin changed too, or when the mode skips
+a step. No workflow runs it; record its output in the pull request.
 
 The adapter adds no policy: one kit target per Minecraft version runs
 `build_matrix.py --artifact-node` and the lane-scoped `verify_release.py` for
