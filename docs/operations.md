@@ -327,6 +327,30 @@ managed files out again, or run
 rewrites them with LF. Once `.gitattributes` has landed, delete and check out
 those paths once more.
 
+### mod-base Build adapter
+
+From mod-base v1.1.0 the kit can run Build and Packaged E2E itself, in its own
+sandbox, through a protected Build adapter: `scripts/ci/mod-base-build.json`
+names the dispatcher `scripts/ci/mod_base_build_dispatch.py`, the native glue
+`scripts/ci/mod_base_build_adapter.py`, the policy suite
+`scripts/ci/mod_base_build_policy.py` and every file the protected hooks import,
+each with its SHA-256. `site/mod-base-build-activation.json` says how far the kit
+runs: `disabled` runs nothing; `shadow` runs the kit's managed callers beside the
+native gates, which stay authoritative, and publishes their results as
+`Trusted PR / Build and verify (shadow)` and `Trusted PR / Packaged E2E gate
+(shadow)`, which no ruleset requires. Every mode change is its own controller
+upgrade at an unchanged pin (`template activation`, `template sync --write`,
+`template transition --base <protected base>`).
+
+The adapter adds no policy: one kit target per Minecraft version runs
+`build_matrix.py --artifact-node` and the lane-scoped `verify_release.py` for
+each of its lanes; one kit lane runs the native packaged scenarios of one
+artifact node with its `pr-anchors` row; the protected hooks call the native
+verifiers on the sealed files. Any change to a file the config lists changes
+its hash: run `python3 scripts/ci/mod_base_build_config.py --write` in an LF
+checkout and commit the config with the change, or the kit refuses it. `tests/test_mod_base_build_adapter.py` pins the plan to the
+native matrix and the hashes to the files.
+
 ## Bootstrap a release branch
 
 Matrix discovery cannot safely infer a legacy release from its name. Bootstrap
