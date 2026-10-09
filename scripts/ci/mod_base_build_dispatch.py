@@ -69,8 +69,8 @@ class Output:
         self.root = root
         self.written: list[Path] = []
 
-    def write(self, relative: str, data: bytes) -> None:
-        if not data:
+    def write(self, relative: str, data: bytes, *, allow_empty: bool = False) -> None:
+        if not data and not allow_empty:
             raise adapter.AdapterError(f"{relative} would be empty")
         path = self.root.joinpath(*relative.split("/"))
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -422,7 +422,10 @@ def _run_lane(candidate: Candidate, output: Output, lane_id: str, bundle_path: s
     for relative in sorted(_files(results)):
         if relative == WORKSPACE_MARKER:
             continue  # The orchestrator's ownership marker is not evidence (scripts/ci/e2e_fanin.py).
-        output.write(f"lanes/{lane_id}/{relative}", _read(results, relative))
+        # The kit gives a result file its role by name: a .json report or a .png screenshot must
+        # not be empty, a log (every other file) may be.
+        output.write(f"lanes/{lane_id}/{relative}", _read(results, relative),
+                     allow_empty=not relative.endswith((".json", ".png")))
 
 
 def _hook(hook: str, unit: str | None, home: Path, output: Output) -> None:
