@@ -329,7 +329,7 @@ those paths once more.
 
 ### mod-base Build adapter
 
-From mod-base v1.1.0 the kit can run Build and Packaged E2E itself, in its own
+From mod-base v1.1.1 (v1.1.0 failed its canary and is never pinned) the kit can run Build and Packaged E2E itself, in its own
 sandbox, through a protected Build adapter: `scripts/ci/mod-base-build.json`
 names the dispatcher `scripts/ci/mod_base_build_dispatch.py`, the native glue
 `scripts/ci/mod_base_build_adapter.py`, the policy suite
@@ -338,8 +338,12 @@ each with its SHA-256. `site/mod-base-build-activation.json` says how far the ki
 runs: `disabled` runs nothing; `shadow` runs the kit's managed callers beside the
 native gates, which stay authoritative, and publishes their results as
 `Trusted PR / Build and verify (shadow)` and `Trusted PR / Packaged E2E gate
-(shadow)`, which no ruleset requires. The kit writes those contexts with the
-same App as the required `Trusted PR / ...` ones: only their names differ.
+(shadow)`, which no ruleset requires. Only the `publish` job of the managed
+`mod-base-gate-status.yml` writes them, as commit statuses, with the dedicated
+gate status App `plum-mod-base-gate` (its one permission is "Commit statuses:
+Read and write"); its client ID and private key live only in the environment
+`mod-base-gate`, whose deployment branch is `master` alone. The App that writes
+the required `Trusted PR / ...` contexts is not used for them.
 
 The kit admits a change of the manifest only at an unchanged pin, so adoption is
 three controller upgrades, each merged before the next starts: the kit bump
