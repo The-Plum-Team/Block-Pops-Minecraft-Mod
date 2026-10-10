@@ -5,13 +5,7 @@
   "author_url": "https://www.planetminecraft.com/member/jasmine_/",
   "box_texture": "blockpops:textures/block/box/strangerthings.png",
   "logo": {
-    "texture": "blockpops:textures/block/box/logo/logo_strangerthings.png",
-    "position_x": -1.666,
-    "position_y": -0.144,
-    "position_z": 0.0,
-    "scale_x": 6.469,
-    "scale_y": 4.156,
-    "scale_z": 1.0
+    "texture": "blockpops:textures/block/box/logo/logo_strangerthings.png"
   },
   "background_color": {
     "r": 30,
