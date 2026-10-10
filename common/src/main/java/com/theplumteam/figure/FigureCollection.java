@@ -15,29 +15,64 @@ import java.util.Optional;
  */
 public class FigureCollection {
     /**
-     * Configuration for how the logo should be rendered on the box
+     * Configuration for how the logo should be rendered on the box. An automatic logo is
+     * fitted onto the box from its own image (see LogoLayout); scale and the offsets, in
+     * model pixels, adjust that fit. An explicit logo carries the raw transform instead.
      */
     public static class LogoConfig {
         private final ResourceLocation texture;
+        private final boolean automatic;
         private final float positionX;
         private final float positionY;
         private final float positionZ;
         private final float scaleX;
         private final float scaleY;
         private final float scaleZ;
+        private final float scale;
+        private final float offsetX;
+        private final float offsetY;
 
         public LogoConfig(ResourceLocation texture, float positionX, float positionY, float positionZ, float scaleX, float scaleY, float scaleZ) {
+            this(texture, false, positionX, positionY, positionZ, scaleX, scaleY, scaleZ, 1.0f, 0.0f, 0.0f);
+        }
+
+        private LogoConfig(ResourceLocation texture, boolean automatic, float positionX, float positionY, float positionZ,
+                           float scaleX, float scaleY, float scaleZ, float scale, float offsetX, float offsetY) {
             this.texture = texture;
+            this.automatic = automatic;
             this.positionX = positionX;
             this.positionY = positionY;
             this.positionZ = positionZ;
             this.scaleX = scaleX;
             this.scaleY = scaleY;
             this.scaleZ = scaleZ;
+            this.scale = scale;
+            this.offsetX = offsetX;
+            this.offsetY = offsetY;
+        }
+
+        public static LogoConfig automatic(ResourceLocation texture, float scale, float offsetX, float offsetY) {
+            return new LogoConfig(texture, true, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, scale, offsetX, offsetY);
         }
 
         public ResourceLocation getTexture() {
             return texture;
+        }
+
+        public boolean isAutomatic() {
+            return automatic;
+        }
+
+        public float getScale() {
+            return scale;
+        }
+
+        public float getOffsetX() {
+            return offsetX;
+        }
+
+        public float getOffsetY() {
+            return offsetY;
         }
 
         public float getPositionX() {
@@ -64,6 +99,10 @@ public class FigureCollection {
             return scaleZ;
         }
     }
+
+    // A logo naming any of these keeps its hand-placed transform; without them it is fitted.
+    private static final List<String> EXPLICIT_LOGO_KEYS =
+            List.of("position_x", "position_y", "position_z", "scale_x", "scale_y", "scale_z");
 
     private final String id;
     private final String name;
@@ -102,13 +141,20 @@ public class FigureCollection {
         if (json.has("logo")) {
             JsonObject logoJson = json.getAsJsonObject("logo");
             ResourceLocation logoTexture = ResourceLocation.tryParse(logoJson.get("texture").getAsString());
-            float positionX = logoJson.has("position_x") ? logoJson.get("position_x").getAsFloat() : -3.5f;
-            float positionY = logoJson.has("position_y") ? logoJson.get("position_y").getAsFloat() : 0.8f;
-            float positionZ = logoJson.has("position_z") ? logoJson.get("position_z").getAsFloat() : -7.4f;
-            float scaleX = logoJson.has("scale_x") ? logoJson.get("scale_x").getAsFloat() : 1.0f;
-            float scaleY = logoJson.has("scale_y") ? logoJson.get("scale_y").getAsFloat() : 5.0f;
-            float scaleZ = logoJson.has("scale_z") ? logoJson.get("scale_z").getAsFloat() : 5.0f;
-            logoConfig = new LogoConfig(logoTexture, positionX, positionY, positionZ, scaleX, scaleY, scaleZ);
+            if (EXPLICIT_LOGO_KEYS.stream().noneMatch(logoJson::has)) {
+                logoConfig = LogoConfig.automatic(logoTexture,
+                        logoJson.has("scale") ? logoJson.get("scale").getAsFloat() : 1.0f,
+                        logoJson.has("offset_x") ? logoJson.get("offset_x").getAsFloat() : 0.0f,
+                        logoJson.has("offset_y") ? logoJson.get("offset_y").getAsFloat() : 0.0f);
+            } else {
+                float positionX = logoJson.has("position_x") ? logoJson.get("position_x").getAsFloat() : -3.5f;
+                float positionY = logoJson.has("position_y") ? logoJson.get("position_y").getAsFloat() : 0.8f;
+                float positionZ = logoJson.has("position_z") ? logoJson.get("position_z").getAsFloat() : -7.4f;
+                float scaleX = logoJson.has("scale_x") ? logoJson.get("scale_x").getAsFloat() : 1.0f;
+                float scaleY = logoJson.has("scale_y") ? logoJson.get("scale_y").getAsFloat() : 5.0f;
+                float scaleZ = logoJson.has("scale_z") ? logoJson.get("scale_z").getAsFloat() : 5.0f;
+                logoConfig = new LogoConfig(logoTexture, positionX, positionY, positionZ, scaleX, scaleY, scaleZ);
+            }
         } else if (json.has("logo_texture")) {
             // Backward compatibility: support old format
             ResourceLocation logoTexture = ResourceLocation.tryParse(json.get("logo_texture").getAsString());
@@ -240,12 +286,18 @@ public class FigureCollection {
         if (logoConfig != null) {
             JsonObject logoJson = new JsonObject();
             logoJson.addProperty("texture", logoConfig.getTexture().toString());
-            logoJson.addProperty("position_x", logoConfig.getPositionX());
-            logoJson.addProperty("position_y", logoConfig.getPositionY());
-            logoJson.addProperty("position_z", logoConfig.getPositionZ());
-            logoJson.addProperty("scale_x", logoConfig.getScaleX());
-            logoJson.addProperty("scale_y", logoConfig.getScaleY());
-            logoJson.addProperty("scale_z", logoConfig.getScaleZ());
+            if (logoConfig.isAutomatic()) {
+                logoJson.addProperty("scale", logoConfig.getScale());
+                logoJson.addProperty("offset_x", logoConfig.getOffsetX());
+                logoJson.addProperty("offset_y", logoConfig.getOffsetY());
+            } else {
+                logoJson.addProperty("position_x", logoConfig.getPositionX());
+                logoJson.addProperty("position_y", logoConfig.getPositionY());
+                logoJson.addProperty("position_z", logoConfig.getPositionZ());
+                logoJson.addProperty("scale_x", logoConfig.getScaleX());
+                logoJson.addProperty("scale_y", logoConfig.getScaleY());
+                logoJson.addProperty("scale_z", logoConfig.getScaleZ());
+            }
             json.add("logo", logoJson);
         }
 

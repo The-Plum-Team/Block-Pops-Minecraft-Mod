@@ -6,12 +6,7 @@
   "box_texture": "blockpops:textures/block/box/doom.png",
   "logo": {
     "texture": "blockpops:textures/block/box/logo/logo_doom.png",
-    "position_x": -1.788,
-    "position_y": -0.345,
-    "position_z": 0.0,
-    "scale_x": 6.869,
-    "scale_y": 6.653,
-    "scale_z": 1.0
+    "scale": 1.08
   },
   "background_color": {
     "r": 139,

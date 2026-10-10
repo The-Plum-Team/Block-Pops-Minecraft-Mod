@@ -191,15 +191,7 @@ public class PlayerCollectionHelperImpl {
 
             // Create logo configuration for World Players collection
             ResourceLocation logoTexture = ResourceLocations.of("blockpops", "textures/block/box/logo/logo_worldplayers.png");
-            FigureCollection.LogoConfig logoConfig = new FigureCollection.LogoConfig(
-                logoTexture,
-                -0.915f,  // positionX
-                -0.165f,  // positionY
-                -0.001f,  // positionZ
-                4.004f,   // scaleX (Width)
-                4.503f,   // scaleY (Height)
-                1.0f      // scaleZ
-            );
+            FigureCollection.LogoConfig logoConfig = FigureCollection.LogoConfig.automatic(logoTexture, 1.0f, 0.0f, 0.0f);
 
             return new FigureCollection(
                 COLLECTION_ID,
@@ -226,15 +218,7 @@ public class PlayerCollectionHelperImpl {
 
         // Create logo configuration for World Players collection
         ResourceLocation logoTexture = ResourceLocations.of("blockpops", "textures/block/box/logo/logo_worldplayers.png");
-        FigureCollection.LogoConfig logoConfig = new FigureCollection.LogoConfig(
-            logoTexture,
-            -0.915f,  // positionX
-            -0.165f,  // positionY
-            -0.001f,  // positionZ
-            4.004f,   // scaleX (Width)
-            4.503f,   // scaleY (Height)
-            1.0f      // scaleZ
-        );
+        FigureCollection.LogoConfig logoConfig = FigureCollection.LogoConfig.automatic(logoTexture, 1.0f, 0.0f, 0.0f);
 
         return new FigureCollection(
             COLLECTION_ID,

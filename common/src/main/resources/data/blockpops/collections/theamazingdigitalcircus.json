@@ -5,13 +5,7 @@
   "author_url": "https://www.planetminecraft.com/member/abreba/",
   "box_texture": "blockpops:textures/block/box/theamazingdigitalcircus.png",
   "logo": {
-    "texture": "blockpops:textures/block/box/logo/logo_theamazingdigitalcircus.png",
-    "position_x": -1.515,
-    "position_y": -0.342,
-    "position_z": 0.0,
-    "scale_x": 5.934,
-    "scale_y": 6.905,
-    "scale_z": 1.0
+    "texture": "blockpops:textures/block/box/logo/logo_theamazingdigitalcircus.png"
   },
   "background_color": {
     "r": 75,
