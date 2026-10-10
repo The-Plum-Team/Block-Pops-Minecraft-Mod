@@ -241,6 +241,7 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
             "repo.spongepowered.org/repository/maven-public",
             "dl.cloudsmith.io/public/geckolib3/geckolib/maven",
             "repo.maven.apache.org/maven2",
+            "the-plum-team.github.io/maven-mirror",
         ):
             self.assertEqual(after_hosts.count(f"case '{identity}':"), 1, identity)
         self.assertIn("default:", after_hosts)
@@ -277,7 +278,7 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
             ),
             1,
         )
-        self.assertEqual(policy.count("if (useNeoForgeRepositoryOrigins)"), 3)
+        self.assertEqual(policy.count("if (useNeoForgeRepositoryOrigins)"), 4)
         self.assertNotIn("includeGroupByRegex('org\\\\.lwjgl.*')", policy)
         self.assertNotIn("includeGroupByRegex('cpw\\\\.mods.*')", policy)
         self.assertIn("actualLocalPath != expectedLocalPath", policy)
@@ -402,8 +403,8 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
     def test_plugin_repositories_are_include_filtered_and_portal_rejects_generated_groups(self) -> None:
         settings = (REPO / "settings.gradle").read_text("utf-8")
         plugin_management = settings.split("plugins {", 1)[0]
-        self.assertEqual(plugin_management.count("mavenContent { releasesOnly() }"), 7)
-        self.assertEqual(plugin_management.count("content {"), 8)
+        self.assertEqual(plugin_management.count("mavenContent { releasesOnly() }"), 8)
+        self.assertEqual(plugin_management.count("content {"), 9)
         expected_exclusions = {
             "excludeGroup('loom')": 1,
             "excludeGroup('net.minecraft')": 1,
