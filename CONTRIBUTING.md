@@ -58,6 +58,13 @@ canonical cache paths. Git-tracked `.gradle` content and implicit `buildSrc`
 builds are forbidden. Never broaden either side or add observed generated
 hashes one run at a time.
 
+The Plum Team's [Maven mirror](https://github.com/The-Plum-Team/maven-mirror) is the first
+repository for the Fabric, Architectury, Stonecutter, NeoForge, Forge and GeckoLib groups, in
+`settings.gradle` and through `gradle/repository-policy.gradle`. It serves only openly licensed
+files whose SHA-256 matched the mods' verification metadata and answers 404 for everything else,
+so Gradle falls back to the upstream repositories unchanged. Strict verification still checks
+every file it serves.
+
 Two deterministic gates are authoritative. On ordinary PRs into `master`, branch
 protection must require their protected App-authenticated bridge contexts, not a
 check run created from candidate-controlled workflow YAML:
