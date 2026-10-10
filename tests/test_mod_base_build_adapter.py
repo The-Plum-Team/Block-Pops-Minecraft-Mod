@@ -8,7 +8,7 @@ that copy from the listed files, run ``derive_plan`` and ``derive_runtime`` thro
 the way the kit runs them (``<python> -I -B <dispatcher> --hook <name>``) and compare the result
 with what the native code derives: ``build_matrix.plan_build`` for targets, lanes and JAR names,
 ``matrix.py``'s ``pr-anchors`` projection for the runtime rows. Once the pin is a kit with the
-Build adapter contract (v1.1.0 or later), the derived document also goes through the kit's own
+Build adapter contract (v1.1.1 or later), the derived document also goes through the kit's own
 planning (``mod_base.build_ci.planning.build_plan``) and protected config loader.
 """
 
@@ -286,7 +286,7 @@ class KitPlanningTests(unittest.TestCase):
 
     def test_the_kit_builds_the_plan_from_the_derived_document(self) -> None:
         if _pinned_version() < KIT_WITH_BUILD_ADAPTER:
-            self.skipTest("the pinned kit predates the Build adapter contract; the mod-base v1.1.0 bump runs this")
+            self.skipTest("the pinned kit predates the Build adapter contract; the mod-base v1.1.1 bump runs this")
         from tests.mod_base_path import kit_root
 
         kit_root()
@@ -339,7 +339,7 @@ class ActivationTransitionTests(unittest.TestCase):
 
     def test_the_committed_manifest_enters_only_at_an_unchanged_pin(self) -> None:
         if _pinned_version() < KIT_WITH_BUILD_ADAPTER:
-            self.skipTest("the pinned kit predates activation manifests; the mod-base v1.1.0 bump runs this")
+            self.skipTest("the pinned kit predates activation manifests; the mod-base v1.1.1 bump runs this")
         from scripts.ci import mod_base_kit
         from tests.mod_base_path import kit_root
 
