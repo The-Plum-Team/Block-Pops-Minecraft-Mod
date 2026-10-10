@@ -142,12 +142,9 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
                     'dev.architectury', 'dev.architectury.loom', 'dev.architectury.loom-no-remap',
                     'architectury-plugin', 'dev.kikugie', 'dev.kikugie.stonecutter',
                     'net.neoforged', 'net.neoforged.fancymodloader', 'net.neoforged.installertools',
-                    'net.neoforged.accesstransformers', 'net.minecraftforge',
+                    'net.neoforged.accesstransformers', 'cpw.mods', 'net.minecraftforge',
                     'software.bernie.geckolib', 'com.geckolib',
                 ].each { includeGroup(it) }
-                if (useNeoForgeRepositoryOrigins) {
-                    includeGroup('cpw.mods')
-                }
             }
             break
         case 'repo.maven.apache.org/maven2':

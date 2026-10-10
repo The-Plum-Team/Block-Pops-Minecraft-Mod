@@ -278,7 +278,7 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
             ),
             1,
         )
-        self.assertEqual(policy.count("if (useNeoForgeRepositoryOrigins)"), 4)
+        self.assertEqual(policy.count("if (useNeoForgeRepositoryOrigins)"), 3)
         self.assertNotIn("includeGroupByRegex('org\\\\.lwjgl.*')", policy)
         self.assertNotIn("includeGroupByRegex('cpw\\\\.mods.*')", policy)
         self.assertIn("actualLocalPath != expectedLocalPath", policy)
