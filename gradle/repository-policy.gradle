@@ -133,6 +133,20 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
                 includeGroup('com.eliotlash.mclib')
             }
             break
+        case 'the-plum-team.github.io/maven-mirror':
+            // The Plum Team's hash-checked mirror, added first below. Exact groups only, so
+            // Loom's generated hash-named namespaces can never match it.
+            repository.content {
+                [
+                    'net.fabricmc', 'net.fabricmc.fabric-api', 'net.fabricmc.unpick',
+                    'dev.architectury', 'dev.architectury.loom', 'dev.architectury.loom-no-remap',
+                    'architectury-plugin', 'dev.kikugie', 'dev.kikugie.stonecutter',
+                    'net.neoforged', 'net.neoforged.fancymodloader', 'net.neoforged.installertools',
+                    'net.neoforged.accesstransformers', 'cpw.mods', 'net.minecraftforge',
+                    'software.bernie.geckolib', 'com.geckolib',
+                ].each { includeGroup(it) }
+            }
+            break
         case 'repo.maven.apache.org/maven2':
             repository.content {
                 excludeGroupByRegex('dev\\.architectury(\\..*)?')
@@ -158,3 +172,20 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
             )
     }
 }
+
+// The Plum Team's hash-checked Maven mirror (https://github.com/The-Plum-Team/maven-mirror) serves
+// the openly licensed Fabric, Architectury, Stonecutter, NeoForge, Forge and GeckoLib artifacts
+// this build resolves. It is searched first, limited by the case above, so an outage of those
+// hosts does not break the build; whenever it answers 404, Gradle continues with the upstream
+// repositories declared after it, unchanged. Every file it serves is still checked against
+// gradle/verification-metadata.xml.
+def plumMirror = repositories.findByName('PlumMavenMirror') ?: repositories.maven {
+    name = 'PlumMavenMirror'
+    url = 'https://the-plum-team.github.io/maven-mirror/'
+    // The mirror holds exactly the files in the verification metadata: a module's .module file,
+    // without the .pom that only points to it.
+    metadataSources { gradleMetadata(); mavenPom() }
+    mavenContent { releasesOnly() }
+}
+repositories.remove(plumMirror)
+repositories.addFirst(plumMirror)
