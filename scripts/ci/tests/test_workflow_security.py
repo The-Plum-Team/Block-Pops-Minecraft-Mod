@@ -240,18 +240,32 @@ else:
 
 
 class WorkflowSecurityTests(unittest.TestCase):
-    def test_gradle_builders_share_one_noncancelling_repository_queue(self) -> None:
-        groups = []
+    def test_gradle_builders_run_in_parallel_across_runs_on_hosted_machines(self) -> None:
+        # Lane serialization is per machine: the serial Python runner and its checkout lease.
+        # Every builder runs on its own GitHub-hosted VM, reads the Gradle cache without writing
+        # it and uploads only run-scoped artifacts, so nothing is shared between runs and a
+        # repository-wide queue would only make every PR wait for every other.
         for name in ("build-gate.yml", "on-demand-e2e.yml"):
-            text = (WORKFLOWS / name).read_text("utf-8")
-            build = text.split("\n  build:\n", 1)[1].split("    steps:", 1)[0]
-            # Read the full four-line job header, not the separate workflow cancellation policy.
-            header = build.splitlines()[:4]
-            self.assertEqual("    concurrency:", header[0])
-            self.assertEqual("      cancel-in-progress: false", header[2])
-            self.assertEqual("      queue: max", header[3])
-            groups.append(header[1].strip())
-        self.assertEqual(["group: blockpops-gradle-build"] * 2, groups)
+            with self.subTest(workflow=name):
+                text = (WORKFLOWS / name).read_text("utf-8")
+                build = text.split("\n  build:\n", 1)[1].split("\n  e2e:\n", 1)[0]
+                build = build.split("\n  required:\n", 1)[0]
+                header, body = build.split("    steps:\n", 1)
+                self.assertNotIn("concurrency:", header)
+                self.assertIn("    runs-on: ubuntu-24.04\n", header)
+                self.assertIn("          cache-read-only: true\n", body)
+                self.assertNotIn("actions/cache", body)
+                self.assertIn("--no-daemon --no-parallel --max-workers=1", body)
+                self.assertIn("scripts/release/build_matrix.py", body)
+                # Workflow-level obsolete-run cancellation stays keyed by PR or ref.
+                workflow = text.split("\nconcurrency:\n", 1)[1].split("\njobs:\n", 1)[0]
+                self.assertIn("github.event.pull_request.number || github.ref }}", workflow)
+                self.assertIn("  cancel-in-progress: true", workflow)
+        for path in WORKFLOWS.glob("*.yml"):
+            with self.subTest(workflow=path.name):
+                text = path.read_text("utf-8")
+                self.assertNotIn("blockpops-gradle-build", text)
+                self.assertNotIn("queue: max", text)
 
     def test_only_protected_candidate_gates_trigger_on_prt_and_actions_are_pinned(self) -> None:
         files = [*WORKFLOWS.glob("*.yml"), REPO / ".github/actions/run-packaged-e2e/action.yml"]
