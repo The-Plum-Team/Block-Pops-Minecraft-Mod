@@ -434,18 +434,33 @@ no longer runs on `pull_request_target` into `master`; its nightly `schedule`
 an enrolled release branch are unchanged, and so are both `Release sync / ...`
 contexts.
 
-**Not mergeable yet.** In this mode no native evaluation is left on a pull
-request into `master`, and the kit's gate status checks neither protected-path
-parity, nor the exact-head `/controller-upgrade approve`, nor restricted
-transitions. A pull request that changes `scripts/ci/pr_gate.py` would get both
-required contexts without the owner's approval. Before this mode lands, one of
-these must exist and be reviewed:
+In this mode no native evaluation runs on a pull request into `master`. The
+owner's approval is kept by the kit's protected admission (mod-base v1.3.0 or
+later; the kit's `docs/BUILD-ADAPTER.md`, "Protected admission"). The admission
+is the `admission` of `scripts/ci/mod-base-build.json`, which comes into force
+in the same pull request that enters this mode:
 
-1. a mod-base release whose gate status runs a protected, owner-approval-aware
-   admission of the mod (protected paths, controller upgrades, restricted
-   transitions) before it publishes `success`; or
-2. a third required context written only by `handle-pr-gate-result.yml` for that
-   admission, added to the `master` ruleset by the owner.
+- `protected_paths` lists the `PROTECTED_PATHS` of `scripts/ci/gate_controller.py`,
+  its `FORBIDDEN_PATHS` (`.gradle`, `buildSrc`), the `build.gradle` and
+  `src/e2e` of every loader, `release/release-matrix.json` and
+  `gradle/verification-metadata.xml`.
+- `command` is `/controller-upgrade`, and the only approver is `AkaNebur` as a
+  `MEMBER`. `tests/test_mod_base_build_adapter.py` keeps the list equal to the
+  native one.
+- The kit's gate status reads the config from the protected `master` it runs
+  as, never from the pull request.
+- A pull request whose tested merge changes a protected path gets `failure`
+  (`admission: ...`) on both contexts, unless the owner's newest decision on
+  its exact head is `/controller-upgrade approve <head sha>`. A new head needs
+  a new approval.
+- A comment does not start the status caller. After approving a pull request
+  whose gates have already finished, dispatch `mod-base gate status` for it
+  (`gh workflow run mod-base-gate-status.yml -f pr-number=<N>`).
+
+The kit checks only this generic rule. It does not check the native route's exact
+path inventory of a controller upgrade, its required files, the loader
+bootstrap or a restricted transition's declaration and decision. The owner
+reviews those before approving.
 
 Advisory AI visual review and the advisory current-head public evidence read
 the native pull-request E2E runs; they stop for pull requests into `master` in
