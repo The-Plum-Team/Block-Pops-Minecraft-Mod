@@ -63,7 +63,9 @@ repository for the Fabric, Architectury, Stonecutter, NeoForge, Forge and GeckoL
 `settings.gradle` and through `gradle/repository-policy.gradle`. It serves only openly licensed
 files whose SHA-256 matched the mods' verification metadata and answers 404 for everything else,
 so Gradle falls back to the upstream repositories unchanged. Strict verification still checks
-every file it serves.
+every file it serves. `-Pplum.mavenMirror=false` (or `ORG_GRADLE_PROJECT_plum.mavenMirror=false`
+in the environment) is the emergency switch: it leaves the mirror out of both places, so every
+group resolves from its upstream repositories.
 
 Two deterministic gates are authoritative. On ordinary PRs into `master`, branch
 protection must require their protected App-authenticated bridge contexts, not a

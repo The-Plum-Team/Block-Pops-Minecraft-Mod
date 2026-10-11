@@ -337,6 +337,29 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
                 with self.assertRaises(DependencyPolicyError):
                     validate_repository_policy_text(candidate)
 
+    def test_maven_mirror_has_an_emergency_switch(self) -> None:
+        guard = "if (plumMirrorSwitch != 'false') {"
+        for relative in ("settings.gradle", "gradle/repository-policy.gradle"):
+            with self.subTest(script=relative):
+                script = (REPO / relative).read_text("utf-8")
+                self.assertIn(
+                    "def plumMirrorSwitch = providers.gradleProperty('plum.mavenMirror').orNull",
+                    script,
+                )
+                self.assertIn('"plum.mavenMirror must be true or false', script)
+                # The mirror repository is declared exactly once, inside the switch's block.
+                declaration = "url = 'https://the-plum-team.github.io/maven-mirror/'"
+                self.assertEqual(script.count(declaration), 1)
+                start = script.index(guard)
+                self.assertGreater(script.index(declaration), start)
+                depth = 0
+                for position in range(start + len(guard) - 1, len(script)):
+                    depth += {"{": 1, "}": -1}.get(script[position], 0)
+                    if depth == 0:
+                        break
+                self.assertLess(script.index(declaration), position)
+        self.assertIn("-Pplum.mavenMirror=false", (REPO / "CONTRIBUTING.md").read_text("utf-8"))
+
     def test_plugin_management_filter_broadening_fails_closed(self) -> None:
         settings = (REPO / "settings.gradle").read_text("utf-8")
         plugin_management = settings.split("plugins {", 1)[0]

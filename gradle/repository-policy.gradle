@@ -179,13 +179,22 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
 // hosts does not break the build; whenever it answers 404, Gradle continues with the upstream
 // repositories declared after it, unchanged. Every file it serves is still checked against
 // gradle/verification-metadata.xml.
-def plumMirror = repositories.findByName('PlumMavenMirror') ?: repositories.maven {
-    name = 'PlumMavenMirror'
-    url = 'https://the-plum-team.github.io/maven-mirror/'
-    // The mirror holds exactly the files in the verification metadata: a module's .module file,
-    // without the .pom that only points to it.
-    metadataSources { gradleMetadata(); mavenPom() }
-    mavenContent { releasesOnly() }
+// Emergency switch: -Pplum.mavenMirror=false leaves the mirror out, so every group resolves from
+// its upstream repositories only (for example while GitHub Pages is down or serves a bad file).
+// settings.gradle reads the same property for plugins.
+def plumMirrorSwitch = providers.gradleProperty('plum.mavenMirror').orNull
+if (!(plumMirrorSwitch in [null, 'true', 'false'])) {
+    throw new GradleException("plum.mavenMirror must be true or false, not '${plumMirrorSwitch}'")
 }
-repositories.remove(plumMirror)
-repositories.addFirst(plumMirror)
+if (plumMirrorSwitch != 'false') {
+    def plumMirror = repositories.findByName('PlumMavenMirror') ?: repositories.maven {
+        name = 'PlumMavenMirror'
+        url = 'https://the-plum-team.github.io/maven-mirror/'
+        // The mirror holds exactly the files in the verification metadata: a module's .module
+        // file, without the .pom that only points to it.
+        metadataSources { gradleMetadata(); mavenPom() }
+        mavenContent { releasesOnly() }
+    }
+    repositories.remove(plumMirror)
+    repositories.addFirst(plumMirror)
+}
