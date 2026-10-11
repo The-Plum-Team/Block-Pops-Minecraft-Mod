@@ -271,10 +271,6 @@ jobs:
           printf 'Coverage projection: `%s`.\n' "$matrix_kind" >> "$GITHUB_STEP_SUMMARY"
 
   build:
-    concurrency:
-      group: blockpops-gradle-build
-      cancel-in-progress: false
-      queue: max
     name: Build immutable E2E input bundle
     needs: identity
     if: needs.identity.result == 'success'
@@ -456,7 +452,9 @@ jobs:
     timeout-minutes: 180
     strategy:
       fail-fast: false
-      max-parallel: 2
+      # Each lane runs on its own hosted runner. The API limit is hourly, so running more lanes
+      # at once does not raise the run's total request count; 8 bounds the 20-lane matrix.
+      max-parallel: 8
       matrix: ${{ fromJSON(needs.identity.outputs.anchors) }}
     steps:
       - name: Check out only the protected default-branch controller
@@ -854,7 +852,7 @@ jobs:
           "${fanin_command[@]}"
 
       - name: Prepare and hand off current-head public evidence
-        uses: The-Plum-Team/mod-base/actions/prepare-evidence@f30b5b6576c3c4fbc2b43219a8a2d67b5dd2a51f # v1.1.1
+        uses: The-Plum-Team/mod-base/actions/prepare-evidence@4199d8561980a28bf37c8a7f37f9fbe65137f1a9 # v1.1.3
         with:
           e2e-root: ${{ runner.temp }}/blockpops-public-aggregate
           key: ${{ steps.identity.outputs.token }}

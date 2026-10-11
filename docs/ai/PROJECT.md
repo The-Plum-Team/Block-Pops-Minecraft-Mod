@@ -98,9 +98,12 @@ shutdown waits for the JVM to finish writing logs before evidence export, withou
 The Pages pipeline is the pinned mod-base kit; the shared rules are in
 `docs/ai/shared/PUBLIC-EVIDENCE.md`. BlockPops specifics:
 
-- **One pin, six workflows.** `pages.yml` (the managed caller), `notify-pages.yml`,
+- **One pin, six workflows plus the Build/E2E callers.** `pages.yml` (the managed caller), `notify-pages.yml`,
   `on-demand-e2e.yml`, `build-gate.yml`, `visual-review.yml` and `visual-review-drain.yml`
-  reference the kit at one `@<40-hex> # vX.Y.Z` pin. All of them, the configuration and the adapter lie under protected
+  reference the kit at one `@<40-hex> # vX.Y.Z` pin, and so do the kit's managed
+  `mod-base-build.yml`, `mod-base-gate-status.yml` and `mod-base-packaged-e2e.yml` in every mode of
+  `site/mod-base-build-activation.json` that manages them (`shadow` manages all three;
+  `mod-base-guard.yml` names the pin only as data). All of them, the configuration and the adapter lie under protected
   roots, so every kit bump is a `controller-upgrade/mod-base-vX.Y.Z` pull request made with
   `python3 scripts/ci/mod_base_kit.py bump --to vX.Y.Z`.
 - **Producer.** The Packaged E2E `public-evidence` job keeps its name, conditions and read-only
