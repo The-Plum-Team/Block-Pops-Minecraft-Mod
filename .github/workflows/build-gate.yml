@@ -285,7 +285,7 @@ jobs:
           allow-unsafe-pr-checkout: true
 
       - name: Validate the Gradle wrapper
-        uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
       - name: Verify exact Gradle bootstrap checksums
         shell: bash
@@ -299,20 +299,20 @@ jobs:
 
       - name: Install the legacy compiler JDK
         id: java17
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Install the intermediate compiler JDK
         id: java21
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: "21"
 
       - name: Install the matrix-owned Gradle JDK
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: ${{ needs.identity.outputs.gradle_java }}
@@ -323,7 +323,7 @@ jobs:
           python-version: "3.13"
 
       - name: Configure read-only Gradle cache
-        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
           cache-read-only: true
 
@@ -523,7 +523,7 @@ jobs:
         if: >-
           steps.candidate.outcome == 'success' && steps.seal.outcome == 'success' &&
           steps.validator.outcome == 'success'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: staged-release-bundle-${{ needs.identity.outputs.tested_sha }}-${{ github.run_attempt }}
           path: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/build/release/
@@ -535,7 +535,7 @@ jobs:
         if: >-
           steps.candidate.outcome == 'success' && steps.seal.outcome == 'success' &&
           steps.validator.outcome == 'success' && steps.validator.outputs.build_report == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: build-run-report-${{ needs.identity.outputs.tested_sha }}-${{ github.run_attempt }}
           path: /tmp/blockpops-sandbox-boundary/blockpops-candidate-sandbox/repository/build/build-matrix-report.json

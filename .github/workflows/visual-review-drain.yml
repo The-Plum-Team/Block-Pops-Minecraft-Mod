@@ -136,7 +136,7 @@ jobs:
 
       - name: Upload the durable owner-action report
         id: report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ needs.select.outputs.report_name }}
           path: ${{ runner.temp }}/visual-review-report/
@@ -187,7 +187,7 @@ jobs:
 
       - name: Upload the immutable cooldown marker
         id: marker
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.identity.outputs.artifact_name }}
           path: ${{ runner.temp }}/visual-review-attempt/
@@ -256,7 +256,7 @@ jobs:
           printf 'implementation_sha=%s\n' "$implementation_sha" >> "$GITHUB_OUTPUT"
 
       - name: Download the exact selected data-only queue artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.select.outputs.artifact_id }}
           path: ${{ runner.temp }}/visual-review-queue
@@ -356,7 +356,7 @@ jobs:
       - name: Upload the pre-credential authentication owner-action report
         if: >-
           failure() && steps.reauth_report_data.outcome == 'success'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ needs.select.outputs.report_name }}
           path: ${{ runner.temp }}/visual-review-authentication-report/
@@ -399,7 +399,7 @@ jobs:
       - name: Upload the single-use exact handoff
         id: handoff
         if: steps.reauth.outputs.status == 'authenticated'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ needs.select.outputs.handoff_name }}
           path: ${{ runner.temp }}/visual-review-handoff/
@@ -452,7 +452,7 @@ jobs:
           --requirement scripts/visual/requirements.txt
 
       - name: Download the exact prepared handoff
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.prepare.outputs.artifact_id }}
           path: ${{ runner.temp }}/visual-review-admission-handoff
@@ -541,7 +541,7 @@ jobs:
       - name: Upload only the newly admitted exact handoff
         id: handoff
         if: steps.reauth.outputs.status == 'authenticated'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.identity.outputs.name }}
           path: ${{ runner.temp }}/visual-review-admission-handoff/
@@ -573,7 +573,7 @@ jobs:
       client_exit: ${{ steps.invoke.outputs.client_exit }}
     steps:
       - name: Download only this run's exact handoff id
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.admit.outputs.artifact_id }}
           path: ${{ runner.temp }}/visual-review-handoff
@@ -743,7 +743,7 @@ jobs:
 
       - name: Upload only the bounded normalized result or failure marker
         id: result
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ needs.select.outputs.result_name }}
           path: ${{ runner.temp }}/visual-review-result/
@@ -805,7 +805,7 @@ jobs:
           --requirement scripts/visual/requirements.txt
 
       - name: Download this run's exact handoff id into an isolated root
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.prepare.outputs.artifact_id }}
           path: ${{ runner.temp }}/visual-review-publication/handoff
@@ -813,7 +813,7 @@ jobs:
           digest-mismatch: error
 
       - name: Download this run's exact sanitized result id into a separate root
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.review.outputs.artifact_id }}
           path: ${{ runner.temp }}/visual-review-publication/result
@@ -906,7 +906,7 @@ jobs:
         id: reauth_report
         if: >-
           failure() && steps.publish_reauth_report_data.outcome == 'success'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ needs.select.outputs.report_name }}
           path: ${{ runner.temp }}/visual-review-authentication-report/
@@ -1050,7 +1050,7 @@ jobs:
         if: >-
           steps.publication.outputs.outcome == 'external_capacity' ||
           steps.publication.outputs.outcome == 'transient_network'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.publication.outputs.cooldown_name }}
           path: ${{ runner.temp }}/visual-review-cooldown/
@@ -1067,7 +1067,7 @@ jobs:
           steps.publication.outputs.outcome == 'configuration' ||
           steps.publication.outputs.outcome == 'provider' ||
           steps.publication.outputs.outcome == 'unknown'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ needs.select.outputs.report_name }}
           path: ${{ runner.temp }}/visual-review-report/
@@ -1116,7 +1116,7 @@ jobs:
       pull-requests: read
     steps:
       - name: Download only this run's exact normalized report id
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.publish.outputs.report_artifact_id }}
           path: ${{ runner.temp }}/visual-review-comment/report
