@@ -4,6 +4,7 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.BoxBlock;
 import com.theplumteam.block.ClawMachineBlock;
 import com.theplumteam.block.FigureBlock;
+import com.theplumteam.block.GachaMachineBlock;
 import dev.architectury.registry.registries.DeferredRegister;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.minecraft.core.registries.Registries;
@@ -48,6 +49,18 @@ public class ModBlocks {
             *///? }
                 .strength(1.5F, 6.0F)
                 .requiresCorrectToolForDrops()
+                .noOcclusion()
+        )
+    );
+
+    public static final RegistrySupplier<Block> GACHA_MACHINE_BLOCK = BLOCKS.register(
+        "gacha_machine_block",
+        () -> new GachaMachineBlock(
+            BlockBehaviour.Properties.of()
+            //? if >=1.21.2 {
+            /*.setId(blockKey("gacha_machine_block"))
+            *///? }
+                .strength(1.5F, 6.0F)
                 .noOcclusion()
         )
     );

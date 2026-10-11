@@ -3,6 +3,7 @@ package com.theplumteam.forge;
 import com.theplumteam.client.renderer.BoxBlockRenderer;
 import com.theplumteam.client.renderer.ClawMachineBlockRenderer;
 import com.theplumteam.client.renderer.FigureBlockRenderer;
+import com.theplumteam.client.renderer.GachaMachineBlockRenderer;
 import com.theplumteam.network.ModNetworking;
 import com.theplumteam.registry.ModBlockEntities;
 import net.minecraftforge.api.distmarker.Dist;
@@ -24,6 +25,7 @@ public class BlockPopsModForgeClient {
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(ModBlockEntities.BOX_BLOCK.get(), context -> new BoxBlockRenderer());
         event.registerBlockEntityRenderer(ModBlockEntities.CLAW_MACHINE_BLOCK.get(), context -> new ClawMachineBlockRenderer());
+        event.registerBlockEntityRenderer(ModBlockEntities.GACHA_MACHINE_BLOCK.get(), context -> new GachaMachineBlockRenderer());
         event.registerBlockEntityRenderer(ModBlockEntities.FIGURE_BLOCK.get(), context -> new FigureBlockRenderer());
     }
 

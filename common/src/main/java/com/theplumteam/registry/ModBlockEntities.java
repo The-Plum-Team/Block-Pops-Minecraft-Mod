@@ -5,6 +5,7 @@ import com.theplumteam.platform.PlatformHelper;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
 import com.theplumteam.blockentity.FigureBlockEntity;
+import com.theplumteam.blockentity.GachaMachineBlockEntity;
 import dev.architectury.registry.registries.DeferredRegister;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.minecraft.core.registries.Registries;
@@ -34,6 +35,18 @@ public class ModBlockEntities {
             BlockEntityType.Builder.of(
                 ClawMachineBlockEntity::new,
                 ModBlocks.CLAW_MACHINE_BLOCK.get()
+            ).build(null)
+            //? }
+        );
+
+    public static final RegistrySupplier<BlockEntityType<GachaMachineBlockEntity>> GACHA_MACHINE_BLOCK =
+        BLOCK_ENTITIES.register("gacha_machine_block", () ->
+            //? if >=1.21.2 {
+            /*PlatformHelper.createBlockEntityType(GachaMachineBlockEntity::new, ModBlocks.GACHA_MACHINE_BLOCK.get())
+            *///? } else {
+            BlockEntityType.Builder.of(
+                GachaMachineBlockEntity::new,
+                ModBlocks.GACHA_MACHINE_BLOCK.get()
             ).build(null)
             //? }
         );

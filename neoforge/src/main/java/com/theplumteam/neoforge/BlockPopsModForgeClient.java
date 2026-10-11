@@ -9,6 +9,7 @@ import com.theplumteam.client.renderer.ClawMachineBlockItemRenderer;
 import com.theplumteam.client.renderer.ClawMachineBlockRenderer;
 import com.theplumteam.client.renderer.FigureBlockItemRenderer;
 import com.theplumteam.client.renderer.FigureBlockRenderer;
+import com.theplumteam.client.renderer.GachaMachineBlockRenderer;
 import com.theplumteam.network.ModNetworking;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModItems;
@@ -63,6 +64,13 @@ public class BlockPopsModForgeClient {
                 /*new ClawMachineBlockRenderer(context)
                 *///? } else {
                 new ClawMachineBlockRenderer()
+                //? }
+        );
+        event.registerBlockEntityRenderer(ModBlockEntities.GACHA_MACHINE_BLOCK.get(), context ->
+                //? if >=26 {
+                /*new GachaMachineBlockRenderer(context)
+                *///? } else {
+                new GachaMachineBlockRenderer()
                 //? }
         );
         event.registerBlockEntityRenderer(ModBlockEntities.FIGURE_BLOCK.get(), context ->

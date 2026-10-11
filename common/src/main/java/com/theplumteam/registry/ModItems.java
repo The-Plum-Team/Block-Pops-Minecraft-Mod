@@ -7,6 +7,7 @@ import com.theplumteam.platform.PlatformHelper;
 import dev.architectury.registry.registries.DeferredRegister;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 //? if >=1.21.2 {
 /*import net.minecraft.core.registries.Registries;
@@ -44,6 +45,16 @@ public class ModItems {
         /*() -> PlatformHelper.createGeoBlockItem(ModBlocks.CLAW_MACHINE_BLOCK.get(), itemProperties("claw_machine_block"))
         *///? } else {
         () -> PlatformHelper.createGeoBlockItem(ModBlocks.CLAW_MACHINE_BLOCK.get(), new Item.Properties())
+        //? }
+    );
+
+    // A plain block item: its icon is a flat sprite, so it needs no GeckoLib item renderer.
+    public static final RegistrySupplier<Item> GACHA_MACHINE_BLOCK_ITEM = ITEMS.register(
+        "gacha_machine_block",
+        //? if >=1.21.2 {
+        /*() -> new BlockItem(ModBlocks.GACHA_MACHINE_BLOCK.get(), itemProperties("gacha_machine_block"))
+        *///? } else {
+        () -> new BlockItem(ModBlocks.GACHA_MACHINE_BLOCK.get(), new Item.Properties())
         //? }
     );
 

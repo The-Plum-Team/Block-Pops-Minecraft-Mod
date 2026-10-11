@@ -23,6 +23,9 @@ public class ModCreativeTabs {
                         // Add claw machine
                         output.accept(ModItems.CLAW_MACHINE_BLOCK_ITEM.get());
 
+                        // Add gacha machine
+                        output.accept(ModItems.GACHA_MACHINE_BLOCK_ITEM.get());
+
                         // Add the original color variant box block
                         output.accept(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(PopBlockColor.ORIGINAL).get().getDefaultInstance());
 

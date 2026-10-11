@@ -1,0 +1,190 @@
+package com.theplumteam.block;
+
+//? if >=1.21 {
+/*import com.mojang.serialization.MapCodec;
+*///? }
+import com.theplumteam.blockentity.GachaMachineBlockEntity;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BaseEntityBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
+//? if <1.21.2 {
+import net.minecraft.world.level.block.RenderShape;
+//? }
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+//? if >=1.21.2 {
+/*import net.minecraft.world.level.block.state.properties.EnumProperty;
+*///? } else {
+import net.minecraft.world.level.block.state.properties.DirectionProperty;
+//? }
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.level.block.state.properties.EnumProperty;
+import org.jetbrains.annotations.Nullable;
+
+/**
+ * A two-block-tall decorative machine. It places and breaks like the claw machine,
+ * and does nothing when used.
+ */
+public class GachaMachineBlock extends BaseEntityBlock {
+    //? if >=26.3 {
+    /*// 26.3 dropped the block codec contract, so neither the codec nor the
+    // accessor below exists any more.
+    *///? } elif >=1.21 {
+    /*public static final MapCodec<GachaMachineBlock> CODEC = simpleCodec(GachaMachineBlock::new);
+    *///? }
+    //? if >=1.21.2 {
+    /*public static final EnumProperty<Direction> FACING = HorizontalDirectionalBlock.FACING;
+    *///? } else {
+    public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
+    //? }
+    public static final EnumProperty<DoubleBlockHalf> HALF = BlockStateProperties.DOUBLE_BLOCK_HALF;
+
+    public GachaMachineBlock(Properties properties) {
+        super(properties);
+        this.registerDefaultState(this.stateDefinition.any()
+                .setValue(FACING, Direction.NORTH)
+                .setValue(HALF, DoubleBlockHalf.LOWER));
+    }
+
+    //? if >=26.3 {
+    /*
+    *///? } elif >=1.21 {
+/*@Override
+    protected MapCodec<? extends BaseEntityBlock> codec() {
+        return CODEC;
+    }
+    *///? }
+
+    // The lower half owns the block entity, which draws the whole machine.
+    @Nullable
+    @Override
+    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        return state.getValue(HALF) == DoubleBlockHalf.LOWER
+                ? new GachaMachineBlockEntity(pos, state)
+                : null;
+    }
+
+    //? if <1.21.2 {
+    @Override
+    public RenderShape getRenderShape(BlockState state) {
+        return RenderShape.ENTITYBLOCK_ANIMATED;
+    }
+    //? }
+
+    @Nullable
+    @Override
+    public BlockState getStateForPlacement(BlockPlaceContext context) {
+        BlockPos pos = context.getClickedPos();
+        Level level = context.getLevel();
+
+        //? if >=1.21.2 {
+        /*if (pos.getY() < level.getMaxY() - 1
+        *///? } else {
+        if (pos.getY() < level.getMaxBuildHeight() - 1
+        //? }
+                && level.getBlockState(pos.above()).canBeReplaced(context)) {
+
+            Direction playerFacing = context.getHorizontalDirection();
+            Direction blockFacing = playerFacing.getOpposite();
+
+            return this.defaultBlockState()
+                    .setValue(FACING, blockFacing)
+                    .setValue(HALF, DoubleBlockHalf.LOWER);
+        }
+        return null;
+    }
+
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state,
+                            @Nullable LivingEntity placer, ItemStack stack) {
+        level.setBlock(pos.above(), state.setValue(HALF, DoubleBlockHalf.UPPER), 3);
+    }
+
+    @Override
+    //? if >=1.21 {
+    /*public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+    *///? } else {
+    public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+    //? }
+        if (!level.isClientSide()) {
+            if (player.isCreative()) {
+                preventCreativeDropFromBottomPart(level, pos, state, player);
+            } else {
+                dropResources(state, level, pos, null, player, player.getMainHandItem());
+            }
+        }
+        //? if >=1.21 {
+        /*return super.playerWillDestroy(level, pos, state, player);
+        *///? } else {
+        super.playerWillDestroy(level, pos, state, player);
+        //? }
+    }
+
+    // 1.21.5 replaced onRemove by a hook that runs after the block is already gone
+    // and is only given the removed state, so the "did the block change" guard the
+    // older hook needed is implicit there.
+    //? if >=1.21.5 {
+    /*@Override
+    protected void affectNeighborsAfterRemoval(BlockState state, net.minecraft.server.level.ServerLevel level,
+                                               BlockPos pos, boolean movedByPiston) {
+        DoubleBlockHalf half = state.getValue(HALF);
+        BlockPos otherPos = half == DoubleBlockHalf.LOWER ? pos.above() : pos.below();
+        BlockState otherState = level.getBlockState(otherPos);
+
+        if (otherState.is(this) && otherState.getValue(HALF) != half) {
+            level.setBlock(otherPos, Blocks.AIR.defaultBlockState(), 35);
+            level.levelEvent(null, 2001, otherPos, Block.getId(otherState));
+        }
+        super.affectNeighborsAfterRemoval(state, level, pos, movedByPiston);
+    }
+    *///? } else {
+    @Override
+    public void onRemove(BlockState state, Level level, BlockPos pos,
+                         BlockState newState, boolean isMoving) {
+        if (!state.is(newState.getBlock())) {
+            DoubleBlockHalf half = state.getValue(HALF);
+            BlockPos otherPos = half == DoubleBlockHalf.LOWER ? pos.above() : pos.below();
+            BlockState otherState = level.getBlockState(otherPos);
+
+            if (otherState.is(this) && otherState.getValue(HALF) != half) {
+                level.setBlock(otherPos, Blocks.AIR.defaultBlockState(), 35);
+                level.levelEvent(null, 2001, otherPos, Block.getId(otherState));
+            }
+        }
+        super.onRemove(state, level, pos, newState, isMoving);
+    }
+    //? }
+
+    protected static void preventCreativeDropFromBottomPart(Level level, BlockPos pos,
+                                                            BlockState state, Player player) {
+        DoubleBlockHalf half = state.getValue(HALF);
+        if (half == DoubleBlockHalf.UPPER) {
+            BlockPos lowerPos = pos.below();
+            BlockState lowerState = level.getBlockState(lowerPos);
+            if (lowerState.is(state.getBlock())
+                    && lowerState.getValue(HALF) == DoubleBlockHalf.LOWER) {
+                BlockState airState = lowerState.hasProperty(BlockStateProperties.WATERLOGGED)
+                        && lowerState.getValue(BlockStateProperties.WATERLOGGED)
+                        ? Blocks.WATER.defaultBlockState()
+                        : Blocks.AIR.defaultBlockState();
+                level.setBlock(lowerPos, airState, 35);
+                level.levelEvent(player, 2001, lowerPos, Block.getId(lowerState));
+            }
+        }
+    }
+
+    @Override
+    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
+        builder.add(FACING, HALF);
+    }
+}
