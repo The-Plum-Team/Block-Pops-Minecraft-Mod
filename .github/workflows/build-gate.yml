@@ -5,6 +5,13 @@ run-name: Build gate / ${{ inputs.attest_run_id && inputs.attest_target_sha || i
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    # site/mod-base-build-activation.json is in shared-build: the mod-base Build caller is the
+    # Build gate of every pull request into master and the kit's gate status App writes its
+    # "Trusted PR / Build and verify" (pr_gate.py reports it delegated). Pull requests into an
+    # enrolled release branch, the canonical push that wakes release synchronization and the
+    # synchronization dispatches keep this native gate.
+    branches-ignore:
+      - master
   push:
     branches:
       - master
