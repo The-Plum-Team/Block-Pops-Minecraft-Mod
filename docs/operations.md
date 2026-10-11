@@ -420,6 +420,41 @@ a new head then gets no Build status and cannot merge until the rollback
 lands. A head that already has a Build `success` keeps it (GitHub cannot
 withdraw a status), so check the open pull requests before merging any.
 
+#### Shared Build and packaged E2E (`shared-build-and-e2e`)
+
+`shared-build-and-e2e` adds the kit's packaged E2E caller
+`mod-base-packaged-e2e.yml` back: every lane of a pull request into `master`
+runs in its own disposable kit worker on the Build bundle of the same
+generation, with no second compilation and no two-lane ceiling (the kit's
+`docs/BUILD-E2E-DESIGN.md`, B3). The kit's gate status App writes both required
+contexts; `scripts/ci/pr_gate.py` reports both `delegated` for a pull request
+into `master` and `handle-pr-gate-result.yml` writes neither. `on-demand-e2e.yml`
+no longer runs on `pull_request_target` into `master`; its nightly `schedule`
+(Pages anchors), its dispatches (release synchronization) and pull requests into
+an enrolled release branch are unchanged, and so are both `Release sync / ...`
+contexts.
+
+**Not mergeable yet.** In this mode no native evaluation is left on a pull
+request into `master`, and the kit's gate status checks neither protected-path
+parity, nor the exact-head `/controller-upgrade approve`, nor restricted
+transitions. A pull request that changes `scripts/ci/pr_gate.py` would get both
+required contexts without the owner's approval. Before this mode lands, one of
+these must exist and be reviewed:
+
+1. a mod-base release whose gate status runs a protected, owner-approval-aware
+   admission of the mod (protected paths, controller upgrades, restricted
+   transitions) before it publishes `success`; or
+2. a third required context written only by `handle-pr-gate-result.yml` for that
+   admission, added to the `master` ruleset by the owner.
+
+Advisory AI visual review and the advisory current-head public evidence read
+the native pull-request E2E runs; they stop for pull requests into `master` in
+this mode until they read the kit's packaged runs.
+
+Leaving it is the same two-step rollback: `reviewed-rollback` with
+`"rollback_from": "shared-build-and-e2e"` (all four callers stay; the native
+`pull_request_target` triggers into `master` come back), then `disabled`.
+
 ## Bootstrap a release branch
 
 Matrix discovery cannot safely infer a legacy release from its name. Bootstrap

@@ -5,6 +5,13 @@ run-name: Packaged E2E / ${{ inputs.attest_run_id && inputs.attest_target_sha ||
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    # site/mod-base-build-activation.json is in shared-build-and-e2e: the mod-base packaged E2E
+    # caller is the packaged gate of every pull request into master and the kit's gate status
+    # App writes its "Trusted PR / Packaged E2E gate" (pr_gate.py reports it delegated). Pull
+    # requests into an enrolled release branch, the nightly schedule that feeds Pages and the
+    # synchronization dispatches keep this native gate.
+    branches-ignore:
+      - master
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
