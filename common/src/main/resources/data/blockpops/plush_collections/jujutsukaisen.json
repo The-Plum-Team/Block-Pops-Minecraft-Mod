@@ -1,0 +1,114 @@
+{
+  "id": "plush_jujutsukaisen",
+  "name": "Jujutsu Kaisen Plushes",
+  "author": "The Plum Team",
+  "author_url": "",
+  "logo": {
+    "texture": "blockpops:textures/gui/plush_collections/logo_jujutsukaisen.png"
+  },
+  "background_color": {
+    "r": 68,
+    "g": 4,
+    "b": 13
+  },
+  "figures": [
+    {
+      "id": "itadori",
+      "name": "Itadori",
+      "model": "blockpops:geo/plush/itadori.geo.json",
+      "texture": "blockpops:textures/item/plush_itadori.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "sukuna",
+      "name": "Sukuna",
+      "model": "blockpops:geo/plush/sukuna.geo.json",
+      "texture": "blockpops:textures/item/plush_sukuna.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "gojo",
+      "name": "Gojo",
+      "model": "blockpops:geo/plush/gojo.geo.json",
+      "texture": "blockpops:textures/item/plush_gojo.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "gojo_unmasked",
+      "name": "Gojo Unmasked",
+      "model": "blockpops:geo/plush/gojo_unmasked.geo.json",
+      "texture": "blockpops:textures/item/plush_gojo_unmasked.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "megumi",
+      "name": "Megumi",
+      "model": "blockpops:geo/plush/megumi.geo.json",
+      "texture": "blockpops:textures/item/plush_megumi.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "nobara",
+      "name": "Nobara",
+      "model": "blockpops:geo/plush/nobara.geo.json",
+      "texture": "blockpops:textures/item/plush_nobara.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "maki",
+      "name": "Maki",
+      "model": "blockpops:geo/plush/maki.geo.json",
+      "texture": "blockpops:textures/item/plush_maki.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "toge",
+      "name": "Toge",
+      "model": "blockpops:geo/plush/toge.geo.json",
+      "texture": "blockpops:textures/item/plush_toge.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "panda",
+      "name": "Panda",
+      "model": "blockpops:geo/plush/panda.geo.json",
+      "texture": "blockpops:textures/item/plush_panda.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "yuta",
+      "name": "Yuta",
+      "model": "blockpops:geo/plush/yuta.geo.json",
+      "texture": "blockpops:textures/item/plush_yuta.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "todo",
+      "name": "Todo",
+      "model": "blockpops:geo/plush/todo.geo.json",
+      "texture": "blockpops:textures/item/plush_todo.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "geto",
+      "name": "Geto",
+      "model": "blockpops:geo/plush/geto.geo.json",
+      "texture": "blockpops:textures/item/plush_geto.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "kenjaku",
+      "name": "Kenjaku",
+      "model": "blockpops:geo/plush/kenjaku.geo.json",
+      "texture": "blockpops:textures/item/plush_kenjaku.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "kirara",
+      "name": "Kirara",
+      "model": "blockpops:geo/plush/kirara.geo.json",
+      "texture": "blockpops:textures/item/plush_kirara.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    }
+  ]
+}

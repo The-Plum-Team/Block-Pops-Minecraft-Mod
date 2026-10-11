@@ -1,0 +1,121 @@
+{
+  "id": "plush_chainsawman",
+  "name": "Chainsaw Man Plushes",
+  "author": "The Plum Team",
+  "author_url": "",
+  "logo": {
+    "texture": "blockpops:textures/gui/plush_collections/logo_chainsawman.png"
+  },
+  "background_color": {
+    "r": 196,
+    "g": 62,
+    "b": 22
+  },
+  "figures": [
+    {
+      "id": "denji",
+      "name": "Denji",
+      "model": "blockpops:geo/plush/denji.geo.json",
+      "texture": "blockpops:textures/item/plush_denji.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "power",
+      "name": "Power",
+      "model": "blockpops:geo/plush/power.geo.json",
+      "texture": "blockpops:textures/item/plush_power.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "blood_fiend",
+      "name": "Blood Fiend",
+      "model": "blockpops:geo/plush/blood_fiend.geo.json",
+      "texture": "blockpops:textures/item/plush_blood_fiend.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "makima",
+      "name": "Makima",
+      "model": "blockpops:geo/plush/makima.geo.json",
+      "texture": "blockpops:textures/item/plush_makima.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "aki",
+      "name": "Aki",
+      "model": "blockpops:geo/plush/aki.geo.json",
+      "texture": "blockpops:textures/item/plush_aki.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "kishibe",
+      "name": "Kishibe",
+      "model": "blockpops:geo/plush/kishibe.geo.json",
+      "texture": "blockpops:textures/item/plush_kishibe.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "mad_dog",
+      "name": "Mad Dog",
+      "model": "blockpops:geo/plush/mad_dog.geo.json",
+      "texture": "blockpops:textures/item/plush_mad_dog.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "kobeni",
+      "name": "Kobeni",
+      "model": "blockpops:geo/plush/kobeni.geo.json",
+      "texture": "blockpops:textures/item/plush_kobeni.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "himeno",
+      "name": "Himeno",
+      "model": "blockpops:geo/plush/himeno.geo.json",
+      "texture": "blockpops:textures/item/plush_himeno.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "reze",
+      "name": "Reze",
+      "model": "blockpops:geo/plush/reze.geo.json",
+      "texture": "blockpops:textures/item/plush_reze.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "bomb_girl",
+      "name": "Bomb Girl",
+      "model": "blockpops:geo/plush/bomb_girl.geo.json",
+      "texture": "blockpops:textures/item/plush_bomb_girl.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "angel",
+      "name": "Angel",
+      "model": "blockpops:geo/plush/angel.geo.json",
+      "texture": "blockpops:textures/item/plush_angel.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "beam",
+      "name": "Beam",
+      "model": "blockpops:geo/plush/beam.geo.json",
+      "texture": "blockpops:textures/item/plush_beam.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "yoru",
+      "name": "Yoru",
+      "model": "blockpops:geo/plush/yoru.geo.json",
+      "texture": "blockpops:textures/item/plush_yoru.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "chainsaw_man",
+      "name": "Chainsaw Man",
+      "model": "blockpops:geo/plush/chainsaw_man.geo.json",
+      "texture": "blockpops:textures/item/plush_chainsaw_man.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    }
+  ]
+}

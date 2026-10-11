@@ -14,7 +14,12 @@
 				{
 					"name": "plush",
 					"pivot": [0, 0, 0],
-					"rotation": [0, 180, 0],
+					"rotation": [0, 180, 0]
+				},
+				{
+					"name": "root",
+					"parent": "plush",
+					"pivot": [0, 0.8125, 0],
 					"cubes": [
 						{
 							"origin": [-4.2792, 0.8125, -4.05],
@@ -53,11 +58,6 @@
 							}
 						}
 					]
-				},
-				{
-					"name": "root",
-					"parent": "plush",
-					"pivot": [0, 0.8125, 0]
 				},
 				{
 					"name": "kweebechead",

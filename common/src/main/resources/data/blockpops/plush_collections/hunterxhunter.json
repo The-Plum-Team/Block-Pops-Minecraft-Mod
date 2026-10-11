@@ -1,0 +1,72 @@
+{
+  "id": "plush_hunterxhunter",
+  "name": "Hunter x Hunter Plushes",
+  "author": "The Plum Team",
+  "author_url": "",
+  "logo": {
+    "texture": "blockpops:textures/gui/plush_collections/logo_hunterxhunter.png"
+  },
+  "background_color": {
+    "r": 36,
+    "g": 122,
+    "b": 60
+  },
+  "figures": [
+    {
+      "id": "gon",
+      "name": "Gon",
+      "model": "blockpops:geo/plush/gon.geo.json",
+      "texture": "blockpops:textures/item/plush_gon.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "gon_san",
+      "name": "Gon-san",
+      "model": "blockpops:geo/plush/gon_san.geo.json",
+      "texture": "blockpops:textures/item/plush_gon_san.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "killua",
+      "name": "Killua",
+      "model": "blockpops:geo/plush/killua.geo.json",
+      "texture": "blockpops:textures/item/plush_killua.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "kurapika",
+      "name": "Kurapika",
+      "model": "blockpops:geo/plush/kurapika.geo.json",
+      "texture": "blockpops:textures/item/plush_kurapika.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "kurapika_kurta",
+      "name": "Kurapika Kurta",
+      "model": "blockpops:geo/plush/kurapika_kurta.geo.json",
+      "texture": "blockpops:textures/item/plush_kurapika_kurta.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "leorio",
+      "name": "Leorio",
+      "model": "blockpops:geo/plush/leorio.geo.json",
+      "texture": "blockpops:textures/item/plush_leorio.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "hisoka",
+      "name": "Hisoka",
+      "model": "blockpops:geo/plush/hisoka.geo.json",
+      "texture": "blockpops:textures/item/plush_hisoka.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "hisoka_4",
+      "name": "Hisoka #4",
+      "model": "blockpops:geo/plush/hisoka_4.geo.json",
+      "texture": "blockpops:textures/item/plush_hisoka_4.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "id": "plush_adventuretime",
+  "name": "Adventure Time Plushes",
+  "author": "The Plum Team",
+  "author_url": "",
+  "logo": {
+    "texture": "blockpops:textures/gui/plush_collections/logo_adventuretime.png"
+  },
+  "background_color": {
+    "r": 14,
+    "g": 138,
+    "b": 222
+  },
+  "figures": [
+    {
+      "id": "finn",
+      "name": "Finn",
+      "model": "blockpops:geo/plush/finn.geo.json",
+      "texture": "blockpops:textures/item/plush_finn.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "fionna",
+      "name": "Fionna",
+      "model": "blockpops:geo/plush/fionna.geo.json",
+      "texture": "blockpops:textures/item/plush_fionna.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "jake",
+      "name": "Jake",
+      "model": "blockpops:geo/plush/jake.geo.json",
+      "texture": "blockpops:textures/item/plush_jake.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "cake",
+      "name": "Cake",
+      "model": "blockpops:geo/plush/cake.geo.json",
+      "texture": "blockpops:textures/item/plush_cake.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "bubblegum_princess",
+      "name": "Bubblegum Princess",
+      "model": "blockpops:geo/plush/bubblegum_princess.geo.json",
+      "texture": "blockpops:textures/item/plush_bubblegum_princess.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "marceline",
+      "name": "Marceline",
+      "model": "blockpops:geo/plush/marceline.geo.json",
+      "texture": "blockpops:textures/item/plush_marceline.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "ice_king",
+      "name": "Ice King",
+      "model": "blockpops:geo/plush/ice_king.geo.json",
+      "texture": "blockpops:textures/item/plush_ice_king.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "simon",
+      "name": "Simon",
+      "model": "blockpops:geo/plush/simon.geo.json",
+      "texture": "blockpops:textures/item/plush_simon.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    }
+  ]
+}
