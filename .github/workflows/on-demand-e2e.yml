@@ -452,7 +452,9 @@ jobs:
     timeout-minutes: 180
     strategy:
       fail-fast: false
-      max-parallel: 2
+      # Each lane runs on its own hosted runner. The API limit is hourly, so running more lanes
+      # at once does not raise the run's total request count; 8 bounds the 20-lane matrix.
+      max-parallel: 8
       matrix: ${{ fromJSON(needs.identity.outputs.anchors) }}
     steps:
       - name: Check out only the protected default-branch controller

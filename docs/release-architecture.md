@@ -113,7 +113,10 @@ run attempt, so builders of different pull requests, pushes and schedules, and
 the Build and E2E builders of the same head, build at the same time. Gate
 evidence is chosen by workflow, exact head and run creation order, never by
 completion order. Workflow-level concurrency, keyed by pull request or ref,
-still cancels an obsolete run of the same workflow.
+still cancels an obsolete run of the same workflow. The Packaged E2E lane jobs
+then run up to eight at once (`max-parallel: 8`, `fail-fast: false`), each on
+its own hosted runner; the API limit is hourly, so more lanes at once do not
+raise a run's total request count.
 
 The branch matrix owns the Gradle JVM independently from each artifact/runtime
 Java toolchain, plus the mod version and all full runtime dependency

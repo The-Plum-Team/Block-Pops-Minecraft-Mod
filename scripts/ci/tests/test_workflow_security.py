@@ -267,6 +267,20 @@ class WorkflowSecurityTests(unittest.TestCase):
                 self.assertNotIn("blockpops-gradle-build", text)
                 self.assertNotIn("queue: max", text)
 
+    def test_packaged_e2e_lanes_run_up_to_eight_at_once(self) -> None:
+        # The former 2 dates from when the matrix had two lanes; it now has twenty. Each lane runs
+        # on its own hosted runner, and the API limit is hourly, so running more lanes at once
+        # does not raise a run's total request count. A failing lane never cancels its siblings.
+        text = (WORKFLOWS / "on-demand-e2e.yml").read_text("utf-8")
+        e2e = text.split("\n  e2e:\n", 1)[1]
+        header = e2e.split("    steps:\n", 1)[0]
+        strategy = header.split("    strategy:\n", 1)[1]
+        self.assertIn("    runs-on: ubuntu-24.04\n", header)
+        self.assertNotIn("concurrency:", header)
+        self.assertIn("      fail-fast: false\n", strategy)
+        self.assertEqual(["8"], re.findall(r"(?m)^      max-parallel: (\S+)$", strategy))
+        self.assertIn("      matrix: ${{ fromJSON(needs.identity.outputs.anchors) }}\n", strategy)
+
     def test_only_protected_candidate_gates_trigger_on_prt_and_actions_are_pinned(self) -> None:
         files = [*WORKFLOWS.glob("*.yml"), REPO / ".github/actions/run-packaged-e2e/action.yml"]
         self.assertTrue(files)
