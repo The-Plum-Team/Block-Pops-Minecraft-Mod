@@ -20,24 +20,10 @@
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
-      "id": "sukuna",
-      "name": "Sukuna",
-      "model": "blockpops:geo/plush/sukuna.geo.json",
-      "texture": "blockpops:textures/item/plush_sukuna.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
       "id": "gojo",
       "name": "Gojo",
       "model": "blockpops:geo/plush/gojo.geo.json",
       "texture": "blockpops:textures/item/plush_gojo.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "gojo_unmasked",
-      "name": "Gojo Unmasked",
-      "model": "blockpops:geo/plush/gojo_unmasked.geo.json",
-      "texture": "blockpops:textures/item/plush_gojo_unmasked.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
@@ -94,13 +80,6 @@
       "name": "Geto",
       "model": "blockpops:geo/plush/geto.geo.json",
       "texture": "blockpops:textures/item/plush_geto.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "kenjaku",
-      "name": "Kenjaku",
-      "model": "blockpops:geo/plush/kenjaku.geo.json",
-      "texture": "blockpops:textures/item/plush_kenjaku.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {

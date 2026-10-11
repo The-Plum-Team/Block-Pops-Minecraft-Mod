@@ -5,9 +5,13 @@ package com.theplumteam.block;
 *///? }
 import com.theplumteam.blockentity.PlushBlockEntity;
 import com.theplumteam.platform.PlatformHelper;
+import com.theplumteam.plush.BuiltInPlushes;
 import com.theplumteam.registry.ModBlockEntities;
+import com.theplumteam.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 //? if >=1.21.2 {
@@ -40,7 +44,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * A plush toy placed as a block of its own. It faces whoever places it. In a development
+ * A plush toy placed as a block of its own. It faces whoever places it. Right-click turns a
+ * plush into its next variant, as it cycles a figure's alternative skins. In a development
  * environment, shift-right-click with an empty hand opens the placement adjustment screen.
  */
 public class PlushBlock extends BaseEntityBlock {
@@ -123,7 +128,35 @@ public class PlushBlock extends BaseEntityBlock {
             return InteractionResult.sidedSuccess(level.isClientSide());
             //? }
         }
+
+        // Right-click (no shift) to cycle the plush's variants
+        String nextVariant = player.isShiftKeyDown() ? null : BuiltInPlushes.nextVariant(plushId);
+        if (nextVariant != null) {
+            if (!level.isClientSide()) {
+                becomeVariant(state, level, pos, nextVariant);
+            }
+            //? if >=1.21.2 {
+            /*return InteractionResult.SUCCESS;
+            *///? } else {
+            return InteractionResult.sidedSuccess(level.isClientSide());
+            //? }
+        }
         return InteractionResult.PASS;
+    }
+
+    // A variant is a block of its own, so the plush is replaced where it stands, keeping its
+    // facing and whatever placement the adjustment screen gave it.
+    private static void becomeVariant(BlockState state, Level level, BlockPos pos, String variantId) {
+        PlushBlockEntity previous = level.getBlockEntity(pos) instanceof PlushBlockEntity plush ? plush : null;
+        BlockState variant = ModBlocks.PLUSH_BLOCKS.get(variantId).get().defaultBlockState()
+                .setValue(FACING, state.getValue(FACING));
+        level.setBlock(pos, variant, 3);
+        if (previous != null && level.getBlockEntity(pos) instanceof PlushBlockEntity current) {
+            current.setPlacement(previous.getOffsetX(), previous.getOffsetY(), previous.getOffsetZ(), previous.getScale(),
+                    previous.getHitboxOffsetX(), previous.getHitboxOffsetY(), previous.getHitboxOffsetZ(),
+                    previous.getHitboxScaleX(), previous.getHitboxScaleY(), previous.getHitboxScaleZ());
+        }
+        level.playSound(null, pos, SoundEvents.WOOL_PLACE, SoundSource.BLOCKS, 1.0F, 1.0F);
     }
 
     @Nullable

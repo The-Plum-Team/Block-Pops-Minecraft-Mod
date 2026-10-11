@@ -1,5 +1,7 @@
 package com.theplumteam.plush;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.List;
 
 /**
@@ -71,4 +73,33 @@ public class BuiltInPlushes {
         "blue_pikmin",
         "white_pikmin"
     );
+
+    // Plushes that are variants of one another, the base plush first. A gacha machine hands out
+    // the base; right-clicking a placed plush turns it into the next one of its group.
+    public static final List<List<String>> VARIANT_GROUPS = List.of(
+        List.of("finn", "fionna"),
+        List.of("jake", "cake"),
+        List.of("ice_king", "simon"),
+        List.of("power", "blood_fiend"),
+        List.of("kishibe", "mad_dog"),
+        List.of("reze", "bomb_girl"),
+        List.of("gon", "gon_san"),
+        List.of("kurapika", "kurapika_kurta"),
+        List.of("hisoka", "hisoka_4"),
+        List.of("itadori", "sukuna"),
+        List.of("gojo", "gojo_unmasked"),
+        List.of("geto", "kenjaku")
+    );
+
+    /** The plush a right-click turns this one into, or null when it has no variants. */
+    @Nullable
+    public static String nextVariant(String plushId) {
+        for (List<String> group : VARIANT_GROUPS) {
+            int index = group.indexOf(plushId);
+            if (index >= 0) {
+                return group.get((index + 1) % group.size());
+            }
+        }
+        return null;
+    }
 }

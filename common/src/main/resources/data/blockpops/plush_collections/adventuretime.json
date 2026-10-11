@@ -20,24 +20,10 @@
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
-      "id": "fionna",
-      "name": "Fionna",
-      "model": "blockpops:geo/plush/fionna.geo.json",
-      "texture": "blockpops:textures/item/plush_fionna.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
       "id": "jake",
       "name": "Jake",
       "model": "blockpops:geo/plush/jake.geo.json",
       "texture": "blockpops:textures/item/plush_jake.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "cake",
-      "name": "Cake",
-      "model": "blockpops:geo/plush/cake.geo.json",
-      "texture": "blockpops:textures/item/plush_cake.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
@@ -59,13 +45,6 @@
       "name": "Ice King",
       "model": "blockpops:geo/plush/ice_king.geo.json",
       "texture": "blockpops:textures/item/plush_ice_king.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "simon",
-      "name": "Simon",
-      "model": "blockpops:geo/plush/simon.geo.json",
-      "texture": "blockpops:textures/item/plush_simon.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     }
   ]

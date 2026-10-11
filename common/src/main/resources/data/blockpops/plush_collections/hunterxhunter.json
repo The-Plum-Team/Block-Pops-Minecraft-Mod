@@ -20,13 +20,6 @@
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
-      "id": "gon_san",
-      "name": "Gon-san",
-      "model": "blockpops:geo/plush/gon_san.geo.json",
-      "texture": "blockpops:textures/item/plush_gon_san.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
       "id": "killua",
       "name": "Killua",
       "model": "blockpops:geo/plush/killua.geo.json",
@@ -41,13 +34,6 @@
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
-      "id": "kurapika_kurta",
-      "name": "Kurapika Kurta",
-      "model": "blockpops:geo/plush/kurapika_kurta.geo.json",
-      "texture": "blockpops:textures/item/plush_kurapika_kurta.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
       "id": "leorio",
       "name": "Leorio",
       "model": "blockpops:geo/plush/leorio.geo.json",
@@ -59,13 +45,6 @@
       "name": "Hisoka",
       "model": "blockpops:geo/plush/hisoka.geo.json",
       "texture": "blockpops:textures/item/plush_hisoka.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "hisoka_4",
-      "name": "Hisoka #4",
-      "model": "blockpops:geo/plush/hisoka_4.geo.json",
-      "texture": "blockpops:textures/item/plush_hisoka_4.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     }
   ]

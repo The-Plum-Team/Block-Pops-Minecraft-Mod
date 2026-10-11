@@ -27,13 +27,6 @@
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
-      "id": "blood_fiend",
-      "name": "Blood Fiend",
-      "model": "blockpops:geo/plush/blood_fiend.geo.json",
-      "texture": "blockpops:textures/item/plush_blood_fiend.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
       "id": "makima",
       "name": "Makima",
       "model": "blockpops:geo/plush/makima.geo.json",
@@ -55,13 +48,6 @@
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
-      "id": "mad_dog",
-      "name": "Mad Dog",
-      "model": "blockpops:geo/plush/mad_dog.geo.json",
-      "texture": "blockpops:textures/item/plush_mad_dog.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
       "id": "kobeni",
       "name": "Kobeni",
       "model": "blockpops:geo/plush/kobeni.geo.json",
@@ -80,13 +66,6 @@
       "name": "Reze",
       "model": "blockpops:geo/plush/reze.geo.json",
       "texture": "blockpops:textures/item/plush_reze.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
-    },
-    {
-      "id": "bomb_girl",
-      "name": "Bomb Girl",
-      "model": "blockpops:geo/plush/bomb_girl.geo.json",
-      "texture": "blockpops:textures/item/plush_bomb_girl.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json"
     },
     {
