@@ -3,6 +3,7 @@ package com.theplumteam.network;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.blockentity.GachaMachineBlockEntity;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
@@ -70,6 +71,12 @@ public class ClawMachineCollectionPacket {
                         blockEntity.getBlockState(),
                         blockEntity.getBlockState(), 3);
                     BlockPopsMod.logDebug("Collection ID updated successfully");
+                } else if (blockEntity instanceof GachaMachineBlockEntity gachaMachineBlockEntity) {
+                    // The gacha machine shares the claw machine's menu, so it is set the same way
+                    gachaMachineBlockEntity.setCollectionId(packet.collectionId);
+                    player.level().sendBlockUpdated(packet.pos,
+                        blockEntity.getBlockState(),
+                        blockEntity.getBlockState(), 3);
                 } else {
                     LOGGER.warn("BlockEntity at {} is not a ClawMachineBlockEntity", packet.pos);
                 }

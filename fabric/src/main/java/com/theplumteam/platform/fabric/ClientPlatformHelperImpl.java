@@ -2,6 +2,7 @@ package com.theplumteam.platform.fabric;
 
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.blockentity.GachaMachineBlockEntity;
 import com.theplumteam.blockentity.PlushBlockEntity;
 import com.theplumteam.client.gui.CollectionSelectionScreen;
 import com.theplumteam.client.gui.FigurePositionScreen;
@@ -53,6 +54,16 @@ public class ClientPlatformHelperImpl {
                 boxBlockEntity.getLogoScaleX(),
                 boxBlockEntity.getLogoScaleY(),
                 boxBlockEntity.getLogoScaleZ()
+            )
+        );
+    }
+
+    public static void openGachaMachineScreen(BlockPos pos, GachaMachineBlockEntity gachaMachineBlockEntity) {
+        Minecraft.getInstance().setScreen(
+            new CollectionSelectionScreen(
+                pos,
+                gachaMachineBlockEntity.getCollectionId(),
+                true
             )
         );
     }

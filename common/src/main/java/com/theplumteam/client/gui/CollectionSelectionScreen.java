@@ -111,11 +111,16 @@ public class CollectionSelectionScreen extends Screen {
     private static final String MODRINTH_URL = "https://modrinth.com/mod/blockpops";
 
     public CollectionSelectionScreen(BlockPos blockPos, String currentCollectionId) {
-        super(Component.literal("Claw Machine Configuration"));
+        this(blockPos, currentCollectionId, false);
+    }
+
+    /** With plush set this is the gacha machine's menu: the same screen over the plush collections. */
+    public CollectionSelectionScreen(BlockPos blockPos, String currentCollectionId, boolean plush) {
+        super(Component.literal(plush ? "Gacha Machine Configuration" : "Claw Machine Configuration"));
         this.blockPos = blockPos;
         this.selectedCollectionId = currentCollectionId;
         // Filter out the default collection from the menu
-        this.collections = CollectionRegistry.getAllCollections().stream()
+        this.collections = (plush ? CollectionRegistry.getPlushCollections() : CollectionRegistry.getAllCollections()).stream()
                 .filter(c -> !"default".equals(c.getId()))
                 .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
 

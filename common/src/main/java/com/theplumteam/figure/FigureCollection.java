@@ -74,8 +74,16 @@ public class FigureCollection {
     private final List<FigureDefinition> figures;
     private final List<FigureDefinition> enabledFigures;
     private final int[] backgroundColor; // Optional: RGB color for background (0-255 each)
+    // A plush collection's figures are plush blocks: the gacha machine lists it and hands out the
+    // plushes themselves, and no box is ever made for it.
+    private final boolean plush;
 
     public FigureCollection(String id, String name, String author, String authorUrl, ResourceLocation boxTexture, LogoConfig logoConfig, List<FigureDefinition> figures, int[] backgroundColor) {
+        this(id, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor, false);
+    }
+
+    public FigureCollection(String id, String name, String author, String authorUrl, ResourceLocation boxTexture, LogoConfig logoConfig, List<FigureDefinition> figures, int[] backgroundColor, boolean plush) {
+        this.plush = plush;
         this.id = id;
         this.name = name;
         this.author = author;
@@ -95,7 +103,9 @@ public class FigureCollection {
         String name = json.get("name").getAsString();
         String author = json.has("author") ? json.get("author").getAsString() : "Unknown";
         String authorUrl = json.has("author_url") ? json.get("author_url").getAsString() : null;
-        ResourceLocation boxTexture = ResourceLocation.tryParse(json.get("box_texture").getAsString());
+        // A plush collection has no box, so it may leave the texture out
+        ResourceLocation boxTexture = json.has("box_texture")
+                ? ResourceLocation.tryParse(json.get("box_texture").getAsString()) : null;
 
         // Parse logo configuration (optional)
         LogoConfig logoConfig = null;
@@ -145,7 +155,19 @@ public class FigureCollection {
             backgroundColor = new int[]{r, g, b};
         }
 
-        return new FigureCollection(id, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor);
+        boolean plush = json.has("plush") && json.get("plush").getAsBoolean();
+        return new FigureCollection(id, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor, plush);
+    }
+
+    /** Whether this collection's figures are plush blocks rather than boxed figures. */
+    public boolean isPlush() {
+        return plush;
+    }
+
+    /** This collection marked as a plush collection. */
+    public FigureCollection asPlush() {
+        return plush ? this
+                : new FigureCollection(id, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor, true);
     }
 
     public String getId() {
@@ -234,7 +256,12 @@ public class FigureCollection {
         if (authorUrl != null) {
             json.addProperty("author_url", authorUrl);
         }
-        json.addProperty("box_texture", boxTexture.toString());
+        if (boxTexture != null) {
+            json.addProperty("box_texture", boxTexture.toString());
+        }
+        if (plush) {
+            json.addProperty("plush", true);
+        }
 
         // Serialize logo configuration
         if (logoConfig != null) {

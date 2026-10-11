@@ -41,6 +41,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     private float xOffset = -60.0f;
     private float yOffset = 15.0f;
     private float zOffset = 0.0f;
+    // Shrinks the preview of models wider than a figure, so they stay inside their cell
+    private float previewScale = 1.0f;
 
     private static final int FIGURE_SIZE = 80;
     private static final int GRID_SPACING = 4;
@@ -60,6 +62,10 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         this.xOffset = xOffset;
         this.yOffset = yOffset;
         this.zOffset = zOffset;
+    }
+
+    public void setPreviewScale(float previewScale) {
+        this.previewScale = previewScale;
     }
 
     //? if >=26 {
@@ -212,7 +218,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         GuiLighting.flatItems();
 
         poseStack.translate(centerX, centerY, centerZ);
-        float scale = size * modelScale;
+        float scale = size * modelScale * previewScale;
         poseStack.scale(scale, -scale, scale);
 
         poseStack.mulPose(Axis.YP.rotationDegrees(yRotation));

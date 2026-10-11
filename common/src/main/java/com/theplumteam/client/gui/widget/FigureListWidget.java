@@ -14,6 +14,9 @@ import java.util.List;
  * Scrollable list widget for displaying figures with 3D models
  */
 public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
+    // A plush is about twice as wide as a figure and some carry horns or fins above the head
+    private static final float PLUSH_PREVIEW_SCALE = 0.6f;
+
     @Nullable
     private FigureCollection currentCollection;
 
@@ -46,6 +49,7 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
                 if (currentRow.size() == 4 || i == figures.size() - 1) {
                     FigureEntry entry = new FigureEntry(currentRow, collection.getId());
                     entry.setConfiguration(modelScale, xRotation, yRotation, zRotation, xOffset, yOffset, zOffset);
+                    entry.setPreviewScale(collection.isPlush() ? PLUSH_PREVIEW_SCALE : 1.0f);
                     this.addEntry(entry);
                     currentRow = new java.util.ArrayList<>();
                 }

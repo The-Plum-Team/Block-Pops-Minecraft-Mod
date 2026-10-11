@@ -3,6 +3,7 @@ package com.theplumteam.platform;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.blockentity.GachaMachineBlockEntity;
 import com.theplumteam.blockentity.PlushBlockEntity;
 import dev.architectury.injectables.annotations.ExpectPlatform;
 import net.minecraft.core.BlockPos;
@@ -81,6 +82,14 @@ public class PlatformHelper {
      */
     @ExpectPlatform
     public static void openBoxFigureScreen(BlockPos pos, BoxBlockEntity boxBlockEntity) {
+        throw new AssertionError();
+    }
+
+    /**
+     * Opens the gacha machine's plush collection screen (client-side)
+     */
+    @ExpectPlatform
+    public static void openGachaMachineScreen(BlockPos pos, GachaMachineBlockEntity gachaMachineBlockEntity) {
         throw new AssertionError();
     }
 

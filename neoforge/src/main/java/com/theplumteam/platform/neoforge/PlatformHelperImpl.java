@@ -4,6 +4,7 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.blockentity.GachaMachineBlockEntity;
 import com.theplumteam.blockentity.PlushBlockEntity;
 import com.theplumteam.item.BoxBlockItem;
 import com.theplumteam.item.GeoBlockItem;
@@ -80,6 +81,16 @@ public class PlatformHelperImpl {
         if (FMLEnvironment.dist == Dist.CLIENT) {
         //? }
             com.theplumteam.client.ClientHelpers.openPlushScreen(pos, plushBlockEntity);
+        }
+    }
+
+    public static void openGachaMachineScreen(BlockPos pos, GachaMachineBlockEntity gachaMachineBlockEntity) {
+        //? if >=26 {
+        /*if (FMLEnvironment.getDist() == Dist.CLIENT) {
+        *///? } else {
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+        //? }
+            com.theplumteam.client.ClientHelpers.openGachaMachineScreen(pos, gachaMachineBlockEntity);
         }
     }
 

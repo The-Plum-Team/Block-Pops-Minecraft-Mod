@@ -2,6 +2,7 @@ package com.theplumteam.client;
 
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.blockentity.GachaMachineBlockEntity;
 import com.theplumteam.blockentity.PlushBlockEntity;
 import com.theplumteam.client.gui.CollectionSelectionScreen;
 import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
@@ -57,6 +58,14 @@ public class ClientHelpers {
         Minecraft.getInstance().setScreen(new CollectionSelectionScreen(
                 pos,
                 entity.getCollectionId()
+        ));
+    }
+
+    public static void openGachaMachineScreen(BlockPos pos, GachaMachineBlockEntity entity) {
+        Minecraft.getInstance().setScreen(new CollectionSelectionScreen(
+                pos,
+                entity.getCollectionId(),
+                true
         ));
     }
 

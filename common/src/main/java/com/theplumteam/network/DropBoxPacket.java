@@ -158,6 +158,12 @@ public class DropBoxPacket {
                 FigureDefinition selectedFigure = selectFigure(figures, packet.tokenType,
                         discovery, packet.collectionId);
 
+                if (collection.isPlush()) {
+                    // A plush collection hands out the plush itself, not a box
+                    givePlush(player, packet.collectionId, selectedFigure, discovery);
+                    return;
+                }
+
                 ItemStack boxItem = null;
                 if (packet.collectionId.equals(PlayerCollectionHelper.WORLD_PLAYERS_COLLECTION_ID)) {
                     PopBlockColor color = selectedFigure.getFavoriteColor();
@@ -232,6 +238,25 @@ public class DropBoxPacket {
                 }
             }
         });
+    }
+
+    private static void givePlush(ServerPlayer player, String collectionId, FigureDefinition figure,
+                                  IPlayerDiscovery discovery) {
+        var plushItem = ModItems.PLUSH_ITEMS.get(figure.getId());
+        if (plushItem == null) {
+            LOGGER.warn("Plush collection {} names {}, which is not a registered plush", collectionId, figure.getId());
+            return;
+        }
+        String uniqueFigureId = collectionId + ":" + figure.getId();
+        if (!discovery.isDiscovered(uniqueFigureId)) {
+            discovery.discover(uniqueFigureId);
+            UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, figure.getName(), null, null);
+            PlayerSounds.notify(player, SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1.0F, 1.0F);
+        } else {
+            PlayerSounds.notify(player, SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 1.0F, 1.0F);
+        }
+        player.getInventory().add(new ItemStack(plushItem.get()));
+        PlayerDataManager.markDirty(player, discovery);
     }
 
     private static boolean verifyAndConsumeToken(ServerPlayer player, IPlayerDiscovery discovery, TokenType tokenType) {

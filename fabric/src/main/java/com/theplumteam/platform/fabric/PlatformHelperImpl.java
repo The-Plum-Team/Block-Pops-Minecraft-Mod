@@ -4,6 +4,7 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.blockentity.GachaMachineBlockEntity;
 import com.theplumteam.blockentity.PlushBlockEntity;
 import com.theplumteam.item.BoxBlockItem;
 import com.theplumteam.item.GeoBlockItem;
@@ -66,6 +67,13 @@ public class PlatformHelperImpl {
         // Only call client code on the client side to avoid ClassNotFoundException on server
         if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
             ClientPlatformHelperImpl.openPlushScreen(pos, plushBlockEntity);
+        }
+    }
+
+    public static void openGachaMachineScreen(BlockPos pos, GachaMachineBlockEntity gachaMachineBlockEntity) {
+        // Only call client code on the client side to avoid ClassNotFoundException on server
+        if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+            ClientPlatformHelperImpl.openGachaMachineScreen(pos, gachaMachineBlockEntity);
         }
     }
 

@@ -4,8 +4,22 @@ package com.theplumteam.block;
 /*import com.mojang.serialization.MapCodec;
 *///? }
 import com.theplumteam.blockentity.GachaMachineBlockEntity;
+import com.theplumteam.data.IPlayerDiscovery;
+import com.theplumteam.data.PlayerDataManager;
+import com.theplumteam.network.SyncTokenDataPacket;
+import com.theplumteam.platform.PlatformHelper;
+import com.theplumteam.server.ServerTickHandler;
+import com.theplumteam.util.ServerLevels;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+//? if >=1.21.2 {
+/*// 1.21.2 restored InteractionResult on useItemOn.
+*///? } elif >=1.21 {
+/*import net.minecraft.world.ItemInteractionResult;
+*///? }
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -29,11 +43,12 @@ import net.minecraft.world.level.block.state.properties.DirectionProperty;
 //? }
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
+import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * A two-block-tall decorative machine. It places and breaks like the claw machine,
- * and does nothing when used.
+ * A two-block-tall machine that hands out plushes. It places and breaks like the claw
+ * machine and opens the same menu, over the plush collections.
  */
 public class GachaMachineBlock extends BaseEntityBlock {
     //? if >=26.3 {
@@ -80,6 +95,65 @@ public class GachaMachineBlock extends BaseEntityBlock {
         return RenderShape.ENTITYBLOCK_ANIMATED;
     }
     //? }
+
+    //? if >=1.21.2 {
+    /*@Override
+    protected InteractionResult useItemOn(ItemStack heldItem, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+        return BlockInteractionResults.forItem(interact(state, level, pos, player, hand, hit));
+    }
+    *///? } elif >=1.21 {
+    /*@Override
+    protected ItemInteractionResult useItemOn(ItemStack heldItem, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+        return BlockInteractionResults.forItem(interact(state, level, pos, player, hand, hit));
+    }
+    *///? } else {
+    @Override
+    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player,
+                                 InteractionHand hand, BlockHitResult hit) {
+        return interact(state, level, pos, player, hand, hit);
+    }
+    //? }
+
+    private InteractionResult interact(BlockState state, Level level, BlockPos pos, Player player,
+                                 InteractionHand hand, BlockHitResult hit) {
+        BlockPos lowerPos = state.getValue(HALF) == DoubleBlockHalf.LOWER
+                ? pos
+                : pos.below();
+
+        BlockEntity blockEntity = level.getBlockEntity(lowerPos);
+        if (blockEntity instanceof GachaMachineBlockEntity gachaMachineBlockEntity) {
+            if (level.isClientSide()) {
+                PlatformHelper.openGachaMachineScreen(lowerPos, gachaMachineBlockEntity);
+            } else {
+                // Server side: sync token data to ensure client UI shows correct state
+                if (player instanceof ServerPlayer serverPlayer) {
+                    syncTokenDataToClient(serverPlayer);
+                }
+            }
+            //? if >=1.21.2 {
+            /*return InteractionResult.SUCCESS;
+            *///? } else {
+            return InteractionResult.sidedSuccess(level.isClientSide());
+            //? }
+        }
+        return InteractionResult.PASS;
+    }
+
+    private static void syncTokenDataToClient(ServerPlayer player) {
+        IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(player);
+        long gameTime = ServerLevels.of(player).getGameTime();
+        long nextRegularTime = discovery.getNextRegularTokenTime();
+        long ticksUntilNext = Math.max(0, nextRegularTime - gameTime);
+        long millisUntilReset = ServerTickHandler.calculateMillisUntilNextReset();
+
+        SyncTokenDataPacket.sendToPlayer(
+                player,
+                discovery.getRegularTokens(),
+                ticksUntilNext,
+                !discovery.hasUsedTodaySpecialToken(),
+                millisUntilReset
+        );
+    }
 
     @Nullable
     @Override
