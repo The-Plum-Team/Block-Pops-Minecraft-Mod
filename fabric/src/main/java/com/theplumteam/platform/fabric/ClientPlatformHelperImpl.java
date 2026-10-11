@@ -2,6 +2,7 @@ package com.theplumteam.platform.fabric;
 
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.blockentity.PlushBlockEntity;
 import com.theplumteam.client.gui.CollectionSelectionScreen;
 import com.theplumteam.client.gui.FigurePositionScreen;
 import net.fabricmc.api.EnvType;
@@ -15,6 +16,22 @@ import net.minecraft.core.BlockPos;
  */
 @Environment(EnvType.CLIENT)
 public class ClientPlatformHelperImpl {
+
+    public static void openPlushScreen(BlockPos pos, PlushBlockEntity plushBlockEntity) {
+        Minecraft.getInstance().setScreen(FigurePositionScreen.forPlush(
+                pos,
+                plushBlockEntity.getOffsetX(),
+                plushBlockEntity.getOffsetY(),
+                plushBlockEntity.getOffsetZ(),
+                plushBlockEntity.getScale(),
+                plushBlockEntity.getHitboxOffsetX(),
+                plushBlockEntity.getHitboxOffsetY(),
+                plushBlockEntity.getHitboxOffsetZ(),
+                plushBlockEntity.getHitboxScaleX(),
+                plushBlockEntity.getHitboxScaleY(),
+                plushBlockEntity.getHitboxScaleZ()
+        ));
+    }
 
     public static void openBoxFigureScreen(BlockPos pos, BoxBlockEntity boxBlockEntity) {
         Minecraft.getInstance().setScreen(

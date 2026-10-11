@@ -4,6 +4,7 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.figure.BuiltInCollections;
 import com.theplumteam.platform.PlatformHelper;
+import com.theplumteam.plush.BuiltInPlushes;
 import dev.architectury.registry.registries.DeferredRegister;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.minecraft.core.registries.Registries;
@@ -16,6 +17,7 @@ import com.theplumteam.util.ResourceLocations;
 *///? }
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class ModItems {
@@ -38,6 +40,9 @@ public class ModItems {
 
     // Map of color to box block item (for default collection only)
     public static final Map<PopBlockColor, RegistrySupplier<Item>> DEFAULT_BOX_BLOCK_ITEMS = new HashMap<>();
+
+    // Map of plush ID to its block item, in creative tab order
+    public static final Map<String, RegistrySupplier<Item>> PLUSH_ITEMS = new LinkedHashMap<>();
 
     public static final RegistrySupplier<Item> CLAW_MACHINE_BLOCK_ITEM = ITEMS.register(
         "claw_machine_block",
@@ -68,6 +73,18 @@ public class ModItems {
     );
 
     static {
+        // Register one plain block item per plush; like the gacha machine, their items are vanilla models
+        for (String plushId : BuiltInPlushes.PLUSH_IDS) {
+            PLUSH_ITEMS.put(plushId, ITEMS.register(
+                "plush_" + plushId,
+                //? if >=1.21.2 {
+                /*() -> new BlockItem(ModBlocks.PLUSH_BLOCKS.get(plushId).get(), itemProperties("plush_" + plushId))
+                *///? } else {
+                () -> new BlockItem(ModBlocks.PLUSH_BLOCKS.get(plushId).get(), new Item.Properties())
+                //? }
+            ));
+        }
+
         // Register 16 color variant box block items
         // All items reference the same BOX_BLOCK but with different colors pre-set in NBT
         for (PopBlockColor color : PopBlockColor.values()) {

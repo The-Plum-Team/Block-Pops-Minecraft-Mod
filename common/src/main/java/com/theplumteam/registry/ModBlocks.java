@@ -5,6 +5,8 @@ import com.theplumteam.block.BoxBlock;
 import com.theplumteam.block.ClawMachineBlock;
 import com.theplumteam.block.FigureBlock;
 import com.theplumteam.block.GachaMachineBlock;
+import com.theplumteam.block.PlushBlock;
+import com.theplumteam.plush.BuiltInPlushes;
 import dev.architectury.registry.registries.DeferredRegister;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.minecraft.core.registries.Registries;
@@ -14,6 +16,9 @@ import com.theplumteam.util.ResourceLocations;
 *///? }
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class ModBlocks {
     //? if >=1.21.2 {
@@ -76,6 +81,25 @@ public class ModBlocks {
                 .noOcclusion()
         )
     );
+
+    // One block per plush, in the order the creative tab lists them
+    public static final Map<String, RegistrySupplier<Block>> PLUSH_BLOCKS = new LinkedHashMap<>();
+
+    static {
+        for (String plushId : BuiltInPlushes.PLUSH_IDS) {
+            PLUSH_BLOCKS.put(plushId, BLOCKS.register(
+                "plush_" + plushId,
+                () -> new PlushBlock(plushId,
+                    BlockBehaviour.Properties.of()
+                    //? if >=1.21.2 {
+                    /*.setId(blockKey("plush_" + plushId))
+                    *///? }
+                        .strength(0.5F, 1.0F)
+                        .noOcclusion()
+                )
+            ));
+        }
+    }
 
     public static void register() {
         BLOCKS.register();

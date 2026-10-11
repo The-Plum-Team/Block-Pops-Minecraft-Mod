@@ -10,6 +10,7 @@ import com.theplumteam.client.renderer.FigureBlockItemRenderer;
 import com.theplumteam.client.renderer.FigureBlockRenderer;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.client.renderer.GachaMachineBlockRenderer;
+import com.theplumteam.client.renderer.PlushBlockRenderer;
 import com.theplumteam.network.ModNetworking;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModItems;
@@ -62,6 +63,14 @@ public class BlockPopsFabricClient implements ClientModInitializer {
                 new GachaMachineBlockRenderer()
                 //? }
         );
+        ModBlockEntities.PLUSH_BLOCKS.forEach((plushId, type) ->
+                BlockEntityRendererRegistry.register(type.get(), context ->
+                        //? if >=26 {
+                        /*new PlushBlockRenderer(context, plushId)
+                        *///? } else {
+                        new PlushBlockRenderer(plushId)
+                        //? }
+                ));
         BlockEntityRendererRegistry.register(ModBlockEntities.FIGURE_BLOCK.get(), context ->
                 //? if >=26 {
                 /*new FigureBlockRenderer(context)

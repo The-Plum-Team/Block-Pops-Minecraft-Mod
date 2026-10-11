@@ -35,6 +35,9 @@ public class ModCreativeTabs {
                                 output.accept(ModItems.BOX_BLOCK_ITEMS.get(collectionId).get().getDefaultInstance());
                             }
                         }
+
+                        // Add plushes
+                        ModItems.PLUSH_ITEMS.values().forEach(item -> output.accept(item.get()));
                     })
                     .build()
     );

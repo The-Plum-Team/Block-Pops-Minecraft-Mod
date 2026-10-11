@@ -4,6 +4,7 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.blockentity.PlushBlockEntity;
 import com.theplumteam.item.BoxBlockItem;
 import com.theplumteam.item.GeoBlockItem;
 import net.minecraft.core.BlockPos;
@@ -69,6 +70,16 @@ public class PlatformHelperImpl {
         if (FMLEnvironment.dist == Dist.CLIENT) {
         //? }
             com.theplumteam.client.ClientHelpers.openBoxFigureScreen(pos, boxBlockEntity);
+        }
+    }
+
+    public static void openPlushScreen(BlockPos pos, PlushBlockEntity plushBlockEntity) {
+        //? if >=26 {
+        /*if (FMLEnvironment.getDist() == Dist.CLIENT) {
+        *///? } else {
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+        //? }
+            com.theplumteam.client.ClientHelpers.openPlushScreen(pos, plushBlockEntity);
         }
     }
 

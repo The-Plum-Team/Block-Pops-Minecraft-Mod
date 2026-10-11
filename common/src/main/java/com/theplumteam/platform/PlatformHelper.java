@@ -3,6 +3,7 @@ package com.theplumteam.platform;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.blockentity.PlushBlockEntity;
 import dev.architectury.injectables.annotations.ExpectPlatform;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.Item;
@@ -80,6 +81,14 @@ public class PlatformHelper {
      */
     @ExpectPlatform
     public static void openBoxFigureScreen(BlockPos pos, BoxBlockEntity boxBlockEntity) {
+        throw new AssertionError();
+    }
+
+    /**
+     * Opens the plush adjustment screen (client-side, dev mode only)
+     */
+    @ExpectPlatform
+    public static void openPlushScreen(BlockPos pos, PlushBlockEntity plushBlockEntity) {
         throw new AssertionError();
     }
 
