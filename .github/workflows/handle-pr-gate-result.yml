@@ -210,18 +210,25 @@ jobs:
           set -euo pipefail
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-          [[ "$BUILD_STATE" =~ ^(pending|success|failure)$ ]]
-          [[ "$E2E_STATE" =~ ^(pending|success|failure)$ ]]
+          # delegated: site/mod-base-build-activation.json on the protected default branch puts
+          # that gate under the mod-base gate status App, which writes its context itself. A
+          # required status is the newest of its context from any writer, so never touch it here.
+          [[ "$BUILD_STATE" =~ ^(pending|success|failure|delegated)$ ]]
+          [[ "$E2E_STATE" =~ ^(pending|success|failure|delegated)$ ]]
           [[ "$AUTHORIZATION_CURRENT" =~ ^(true|false)$ ]]
           [[ "$POLICY_MODE" =~ ^(ordinary|controller-upgrade|restricted-transition)$ ]]
           [[ ${#BUILD_DESCRIPTION} -ge 1 && ${#BUILD_DESCRIPTION} -le 140 ]]
           [[ ${#E2E_DESCRIPTION} -ge 1 && ${#E2E_DESCRIPTION} -le 140 ]]
 
           if [[ "$AUTHORIZATION_CURRENT" != true ]]; then
-            BUILD_STATE=failure
-            E2E_STATE=failure
-            BUILD_RUN_ID=0
-            E2E_RUN_ID=0
+            if [[ "$BUILD_STATE" != delegated ]]; then
+              BUILD_STATE=failure
+              BUILD_RUN_ID=0
+            fi
+            if [[ "$E2E_STATE" != delegated ]]; then
+              E2E_STATE=failure
+              E2E_RUN_ID=0
+            fi
             if [[ "$POLICY_MODE" == controller-upgrade ]]; then
               BUILD_DESCRIPTION="Controller upgrade approval changed before publication"
               E2E_DESCRIPTION="$BUILD_DESCRIPTION"
@@ -236,6 +243,7 @@ jobs:
 
           publish_status() {
             local context="$1" state="$2" description="$3" run_id="$4"
+            [[ "$state" == delegated ]] && return 0
             local target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/pull/$PR_NUMBER"
             if [[ "$run_id" =~ ^[1-9][0-9]*$ ]]; then
               target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$run_id"
