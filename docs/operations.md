@@ -372,6 +372,54 @@ its hash: run `python3 scripts/ci/mod_base_build_config.py --write` in an LF
 checkout and commit the config with the change, or the kit refuses it. `tests/test_mod_base_build_adapter.py` pins the plan to the
 native matrix and the hashes to the files.
 
+#### Shared Build (`shared-build`)
+
+`shared-build` makes the kit's Build the Build gate of every pull request into
+`master`. The managed callers are `mod-base-guard.yml`, `mod-base-build.yml` and
+`mod-base-gate-status.yml`; `mod-base-packaged-e2e.yml` is removed, and packaged
+E2E stays the native `on-demand-e2e.yml`, which still compiles its own JARs on
+its own runner (the temporary double compilation of the kit's
+`docs/BUILD-E2E-DESIGN.md`, B2). The kit's gate status App now
+writes the required `Trusted PR / Build and verify` itself, without the
+` (shadow)` suffix. A required status is the newest status of its context from
+any writer, so `scripts/ci/pr_gate.py` reads the mode from the protected
+`master` commit it runs as (never from the candidate) and reports the Build
+gate of a pull request into `master` as `delegated`: it reads no native Build
+run for it and `handle-pr-gate-result.yml` never writes that context.
+`build-gate.yml` therefore no longer runs on `pull_request_target` into `master`;
+its canonical `push` (which wakes release synchronization), its dispatches and
+pull requests into an enrolled release branch are unchanged, and so are both
+`Release sync / ...` contexts.
+
+`Trusted PR / Packaged E2E gate` keeps all native admission: protected-path
+parity of an ordinary pull request, the exact-head `/controller-upgrade
+approve`, restricted transitions and the exact E2E job graph. The kit's Build
+gate checks none of these, so a pull request that changes a protected path
+without approval keeps a failing required E2E context.
+
+Before the owner approves the pull request that enters `shared-build`:
+
+1. The ruleset requires both contexts from the PR gate App. The kit writes the
+   Build context with the App in environment `mod-base-gate`, so that
+   environment must hold the client ID and a private key of the PR gate App
+   (the kit's `docs/OPERATIONS.md`, "The gate status App": Block Pops keeps that
+   App), or the owner changes the Build context's expected source in the
+   ruleset to the gate status App. Otherwise every Build status the kit writes
+   blocks the merge.
+2. A shadow observation window with no `shadow-looser` and no
+   `missing-shadow` verdict for the Build gate.
+
+Leaving `shared-build` is the kit's two-step rollback: first
+`reviewed-rollback` with `"rollback_from": "shared-build"` (the three callers
+stay; this pull request restores the `pull_request_target` trigger of
+`build-gate.yml` for `master`, while the kit keeps writing the Build context),
+then `disabled`, which removes the callers and gives the Build context back to
+the native writer. To stop at once without a pull request, the owner disables
+`mod-base-build.yml` and `mod-base-gate-status.yml` (`gh workflow disable`):
+a new head then gets no Build status and cannot merge until the rollback
+lands. A head that already has a Build `success` keeps it (GitHub cannot
+withdraw a status), so check the open pull requests before merging any.
+
 ## Bootstrap a release branch
 
 Matrix discovery cannot safely infer a legacy release from its name. Bootstrap

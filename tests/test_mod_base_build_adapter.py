@@ -128,7 +128,7 @@ class BuildConfigTests(unittest.TestCase):
         self.assertEqual(set(manifest), {"kind", "schema_version", "repository", "profile", "mode", "rollback_from"})
         self.assertEqual((manifest["kind"], manifest["schema_version"]), ("mod-base.ci.activation", 1))
         self.assertEqual((manifest["repository"], manifest["profile"]), (REPOSITORY, "block-pops"))
-        self.assertIn(manifest["mode"], {"disabled", "shadow"})
+        self.assertIn(manifest["mode"], {"disabled", "shadow", "shared-build"})
         self.assertIsNone(manifest["rollback_from"])
 
     def test_the_protected_copy_imports_every_verifier(self) -> None:
@@ -324,7 +324,7 @@ class KitPlanningTests(unittest.TestCase):
 
 #: The adoption order: each committed mode enters from this one predecessor (``None``: no
 #: manifest), in a controller upgrade of its own that does not move the pin.
-PREVIOUS_MODE = {"disabled": None, "shadow": "disabled"}
+PREVIOUS_MODE = {"disabled": None, "shadow": "disabled", "shared-build": "shadow"}
 
 
 class ActivationTransitionTests(unittest.TestCase):

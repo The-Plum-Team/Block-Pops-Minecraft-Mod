@@ -301,6 +301,28 @@ class WorkflowSecurityTests(unittest.TestCase):
                 for action, revision in REMOTE_USE.findall(text):
                     self.assertRegex(revision, r"^[0-9a-f]{40}$", action)
 
+    def test_native_gates_leave_master_pull_requests_only_to_the_kit_gate_that_owns_them(self) -> None:
+        # pr_gate.py stops reading a native gate for pull requests into master exactly when the
+        # protected activation mode hands its context to the mod-base gate status App. The same
+        # mode stops that gate's pull_request_target runs into master, so no global Gradle slot is
+        # spent on evidence nothing reads. A reviewed rollback restores the native triggers
+        # before the writer takes the contexts back (its next step, disabled).
+        manifest = json.loads((REPO / "site/mod-base-build-activation.json").read_bytes())
+        handed = {
+            "build-gate.yml": {"shared-build", "shared-build-and-e2e"},
+            "on-demand-e2e.yml": {"shared-build-and-e2e"},
+        }
+        for name, modes in handed.items():
+            text = (WORKFLOWS / name).read_text("utf-8")
+            block = re.search(r"\n  pull_request_target:\n((?:    .*\n)*)", text).group(1)
+            with self.subTest(name=name, mode=manifest["mode"]):
+                if manifest["mode"] in modes:
+                    self.assertTrue(block.endswith("    branches-ignore:\n      - master\n"), block)
+                else:
+                    self.assertNotIn("branches", block)
+                self.assertNotIn("branches:", block)
+                self.assertIn("\n  workflow_dispatch:", text.split("\npermissions:", 1)[0])
+
     def test_candidate_gates_have_no_write_permission(self) -> None:
         for name in ("build-gate.yml", "on-demand-e2e.yml"):
             text = (WORKFLOWS / name).read_text("utf-8")

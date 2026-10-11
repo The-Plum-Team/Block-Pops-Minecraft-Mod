@@ -73,7 +73,11 @@ shutdown waits for the JVM to finish writing logs before evidence export, withou
   matrix Git blob. It walks their exact parent directories and still rejects undeclared versions,
   node-local sources, linked roots and every change to tracked source bytes.
 - **Governance.** Branch protection on `master` requires the App-sourced contexts
-  `Trusted PR / Build and verify` and `Trusted PR / Packaged E2E gate`. Protected paths
+  `Trusted PR / Build and verify` and `Trusted PR / Packaged E2E gate`. When
+  `site/mod-base-build-activation.json` on `master` hands a gate to the mod-base kit
+  (`shared-build`: Build), the kit's gate status App writes that context and
+  `scripts/ci/pr_gate.py` reports it `delegated`, never writing it; see
+  [`docs/operations.md`](../operations.md#shared-build-shared-build). Protected paths
   (`scripts/ci/gate_controller.py` `PROTECTED_PATHS`) change only through the SHA-approved
   controller-upgrade procedure in [`docs/operations.md`](../operations.md). The evaluator
   constants in `scripts/ci/gate_controller.py`, `scripts/ci/pr_gate.py` and
