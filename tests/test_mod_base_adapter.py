@@ -638,6 +638,17 @@ class CollectTests(_Repository):
             self.hook(head, "collect", {"runtime_root": str(self.output), "target": target, "expectation": expectation})
 
 
+class FixturePatternTests(unittest.TestCase):
+    def test_the_kit_pattern_repeats_exactly_with_the_fixture_seed_period(self) -> None:
+        # synthesize asks image_factory for seed % PATTERN_SEEDS and reuses each frame; that is the
+        # uncached derivation only while the pinned pattern_png has exactly this period.
+        period = FIXTURES.PATTERN_SEEDS
+        patterns = [pattern_png(64, 36, seed) for seed in range(period)]
+        self.assertEqual(period, len(set(patterns)))
+        for seed in range(period, 4 * period):
+            self.assertEqual(patterns[seed % period], pattern_png(64, 36, seed), seed)
+
+
 class ExtensionTests(_Repository):
     def test_a_supplied_aggregate_scope_is_recomputed_from_the_subject(self) -> None:
         expectation = self.expectation(self.master)
