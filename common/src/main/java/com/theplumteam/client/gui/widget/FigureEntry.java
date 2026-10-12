@@ -8,6 +8,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
+import com.theplumteam.client.gui.GreyedTextures;
 import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.figure.FigureDefinition;
@@ -43,6 +44,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     private float zOffset = 0.0f;
     // Shrinks the preview of models wider than a figure, so they stay inside their cell
     private float previewScale = 1.0f;
+    // Draws a figure not yet discovered in black and white, where otherwise it is a question mark
+    private boolean greyUndiscovered = false;
     // Written above this row, in the widened gap after the row before, to head a group of figures
     @org.jetbrains.annotations.Nullable
     private String heading;
@@ -77,8 +80,42 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         this.previewScale = previewScale;
     }
 
+    public void setGreyUndiscovered(boolean greyUndiscovered) {
+        this.greyUndiscovered = greyUndiscovered;
+    }
+
     public void setHeading(@org.jetbrains.annotations.Nullable String heading) {
         this.heading = heading;
+    }
+
+    private void drawFigureName(GuiGraphics graphics, FigureDefinition figure, int figureX, int y,
+                                int effectiveFigureSize, int color) {
+        // Draw figure name only if GUI scale is less than 3
+        int guiScale = mc.options.guiScale().get();
+        if (guiScale < 3) {
+            Component figureName = Component.literal(figure.getName());
+            int nameWidth = mc.font.width(figureName);
+            if (nameWidth > effectiveFigureSize - 4) {
+                String truncated = figure.getName();
+                while (mc.font.width(truncated + "...") > effectiveFigureSize - 4 && truncated.length() > 0) {
+                    truncated = truncated.substring(0, truncated.length() - 1);
+                }
+                figureName = Component.literal(truncated + "...");
+            }
+
+            int nameX = figureX + (effectiveFigureSize - mc.font.width(figureName)) / 2;
+            int nameY = y + effectiveFigureSize - mc.font.lineHeight - 2;
+            graphics.drawString(mc.font, figureName, nameX, nameY, color, true);
+        }
+    }
+
+    private boolean greysUndiscovered() {
+        //? if >=26 {
+        /*// 26.1 has no 3D preview to turn black and white
+        return false;
+        *///? } else {
+        return greyUndiscovered;
+        //? }
     }
 
     //? if >=26 {
@@ -174,25 +211,13 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
             if (isDiscovered) {
                 // Render the 3D figure model for discovered figures
-                render3DFigure(graphics, figure, figureX, y, effectiveFigureSize, partialTick);
+                render3DFigure(graphics, figure, figureX, y, effectiveFigureSize, partialTick, false);
 
-                // Draw figure name only if GUI scale is less than 3
-                int guiScale = mc.options.guiScale().get();
-                if (guiScale < 3) {
-                    Component figureName = Component.literal(figure.getName());
-                    int nameWidth = mc.font.width(figureName);
-                    if (nameWidth > effectiveFigureSize - 4) {
-                        String truncated = figure.getName();
-                        while (mc.font.width(truncated + "...") > effectiveFigureSize - 4 && truncated.length() > 0) {
-                            truncated = truncated.substring(0, truncated.length() - 1);
-                        }
-                        figureName = Component.literal(truncated + "...");
-                    }
-
-                    int nameX = figureX + (effectiveFigureSize - mc.font.width(figureName)) / 2;
-                    int nameY = y + effectiveFigureSize - mc.font.lineHeight - 2;
-                    graphics.drawString(mc.font, figureName, nameX, nameY, 0xFFFFFFFF, true);
-                }
+                drawFigureName(graphics, figure, figureX, y, effectiveFigureSize, 0xFFFFFFFF);
+            } else if (greysUndiscovered()) {
+                // The figure is there to see, in black and white until it is discovered
+                render3DFigure(graphics, figure, figureX, y, effectiveFigureSize, partialTick, true);
+                drawFigureName(graphics, figure, figureX, y, effectiveFigureSize, 0xFFC0C0C0);
             } else {
                 // Draw a question mark for undiscovered figures
                 Component questionMark = Component.literal("?");
@@ -214,10 +239,10 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     // registered against GuiRenderer. Until that exists the row shows the figure's
     // face flat, which the caller already falls back to when no model resolves.
     private void render3DFigure(GuiGraphicsExtractor graphics, FigureDefinition figure,
-                                int x, int y, int size, float partialTick) {
+                                int x, int y, int size, float partialTick, boolean greyed) {
     }
     *///? } else {
-    private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick) {
+    private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick, boolean greyed) {
         // From 1.21.6 the GUI's own pose is two-dimensional, so the model is placed in a
         // stack of its own and drawn straight into the buffer source below.
         //? if >=1.21.6 {
@@ -298,6 +323,16 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 poseStack.popPose();
                 return;
             }
+            if (greyed) {
+                // A figure that cannot be turned black and white is left out rather than shown in colour
+                textureResource = GreyedTextures.of(textureResource);
+                if (textureResource == null) {
+                    restoreDepthTest();
+                    graphics.disableScissor();
+                    poseStack.popPose();
+                    return;
+                }
+            }
 
             //? if >=1.21.5 {
             /*RenderType renderType = figureModel.getRenderType(renderState, textureResource);
@@ -316,7 +351,11 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 0xFFFFFFFF
             );
             *///? } else {
-            RenderType renderType = figureModel.getRenderType(renderEntity, textureResource);
+            // Below 1.21.5 the model resolves its own texture again and ignores the one it is
+            // handed, so the black-and-white copy gets its render type directly
+            RenderType renderType = greyed
+                    ? RenderType.entityCutoutNoCull(textureResource)
+                    : figureModel.getRenderType(renderEntity, textureResource);
             VertexConsumer buffer = bufferSource.getBuffer(renderType);
 
             figureRenderer.actuallyRender(
