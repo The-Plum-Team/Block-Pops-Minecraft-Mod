@@ -228,7 +228,7 @@ jobs:
       # reauth.py reaches the kit's mb-anchor grammar through curate.py; this verifies the kit this
       # checkout pins instead of leaving the bootstrap to fetch it anonymously.
       - name: Verify the pinned mod-base kit
-        uses: The-Plum-Team/mod-base/actions/setup@b4b3831c78b6dac6705db320d1e0ecfc8054371f # v1.3.1
+        uses: The-Plum-Team/mod-base/actions/setup@9f9fddd1a6c40dce13114ff7272e1bcedfc59f65 # v1.4.1
         with:
           install-imaging: "false"
 
@@ -436,7 +436,7 @@ jobs:
       # reauth.py reaches the kit's mb-anchor grammar through curate.py; this verifies the kit this
       # checkout pins instead of leaving the bootstrap to fetch it anonymously.
       - name: Verify the pinned mod-base kit
-        uses: The-Plum-Team/mod-base/actions/setup@b4b3831c78b6dac6705db320d1e0ecfc8054371f # v1.3.1
+        uses: The-Plum-Team/mod-base/actions/setup@9f9fddd1a6c40dce13114ff7272e1bcedfc59f65 # v1.4.1
         with:
           install-imaging: "false"
 
@@ -789,7 +789,7 @@ jobs:
       # reauth.py reaches the kit's mb-anchor grammar through curate.py; this verifies the kit this
       # checkout pins instead of leaving the bootstrap to fetch it anonymously.
       - name: Verify the pinned mod-base kit
-        uses: The-Plum-Team/mod-base/actions/setup@b4b3831c78b6dac6705db320d1e0ecfc8054371f # v1.3.1
+        uses: The-Plum-Team/mod-base/actions/setup@9f9fddd1a6c40dce13114ff7272e1bcedfc59f65 # v1.4.1
         with:
           install-imaging: "false"
 
