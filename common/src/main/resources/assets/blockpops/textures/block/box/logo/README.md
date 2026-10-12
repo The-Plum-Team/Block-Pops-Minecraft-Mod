@@ -1,74 +1,40 @@
 # Logo Textures
 
-This directory contains logo textures that are displayed on collection boxes.
-
-## How It Works
-
-Logo textures are rendered on separate bones in the box model with different aspect ratios. This allows for high-resolution logos without being limited by the box texture's 16x16 resolution.
-
-## Logo Types
-
-There are three logo types to match different aspect ratios:
-
-- **`square`** - 6×6 units - For square logos (1:1 aspect ratio)
-- **`wide`** - 8×5 units - For wide logos (e.g., 16:10, 16:9 aspect ratios)
-- **`tall`** - 5×8 units - For tall logos (e.g., 10:16, 9:16 aspect ratios)
+This directory contains the collection logos shown on the front of the box, under the window.
 
 ## Adding a Logo
 
-1. Create a PNG texture file (recommended: 64x64 or higher for best quality)
-2. Place it in this directory (e.g., `jojos_logo.png`)
-3. Reference it in your collection JSON file with the appropriate `logo_type`:
+1. Put the PNG here as `logo_{id}.png`. Any size works, and transparent margins are ignored.
+2. Name it in the collection JSON:
 
 ```json
-{
-  "id": "your_collection",
-  "name": "Your Collection Name",
-  "box_texture": "blockpops:textures/block/box/your_box.png",
-  "logo_texture": "blockpops:textures/block/box/logo/your_logo.png",
-  "logo_type": "wide",
-  "figures": [...]
+"logo": {
+  "texture": "blockpops:textures/block/box/logo/logo_{id}.png"
 }
 ```
 
-**Note**: If `logo_type` is not specified, it defaults to `"square"`.
+Nothing else is needed. The box fits the logo by itself (`LogoLayout`): the visible part of the
+image keeps its proportions, sits at the bottom-left corner of the window frame, and gets the
+size the existing logos were hand-placed at.
 
-## Logo Properties
+## Adjusting a Logo
 
-- **Position**: Side face of the box
-- **Format**: PNG with transparency support
-- **Resolution**: Any size (64x64, 128x128, 256x256, etc.)
-- **Optional**: Collections without logos will work fine
+Only when a logo should differ from that fit, add any of these keys:
 
-## Examples
+| Key | Default | Meaning |
+|---|---|---|
+| `scale` | `1.0` | Multiplies the fitted size; `0.9` is 10% smaller. |
+| `offset_x` | `0.0` | Moves the logo right, in box pixels. The front of the box is 11 wide. |
+| `offset_y` | `0.0` | Moves the logo up, in box pixels. The front of the box is 14 tall. |
 
-### Wide Logo (JoJos Collection)
 ```json
-{
-  "id": "jojos",
-  "logo_texture": "blockpops:textures/block/box/logo/jojos_logo.png",
-  "logo_type": "wide"
+"logo": {
+  "texture": "blockpops:textures/block/box/logo/logo_winx.png",
+  "scale": 1.21,
+  "offset_x": -0.62,
+  "offset_y": -0.71
 }
 ```
 
-For a logo with dimensions 1280×807 (aspect ratio ~1.6:1), use `"wide"`.
-
-### Square Logo
-```json
-{
-  "logo_texture": "blockpops:textures/block/box/logo/square_logo.png",
-  "logo_type": "square"
-}
-```
-
-For a logo with dimensions 512×512 (1:1), use `"square"` or omit `logo_type`.
-
-### Tall Logo
-```json
-{
-  "logo_texture": "blockpops:textures/block/box/logo/tall_logo.png",
-  "logo_type": "tall"
-}
-```
-
-For a logo with dimensions 600×960 (aspect ratio ~0.625:1), use `"tall"`.
+The older `position_x/y/z` and `scale_x/y/z` keys still work. They are the renderer's raw
+transform and bypass the fit, so new collections should not use them.
