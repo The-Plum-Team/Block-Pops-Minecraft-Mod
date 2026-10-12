@@ -44,8 +44,6 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     private float zOffset = 0.0f;
     // Shrinks the preview of models wider than a figure, so they stay inside their cell
     private float previewScale = 1.0f;
-    // Draws a figure not yet discovered in black and white, where otherwise it is a question mark
-    private boolean greyUndiscovered = false;
     // Written above this row, in the widened gap after the row before, to head a group of figures
     @org.jetbrains.annotations.Nullable
     private String heading;
@@ -80,10 +78,6 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         this.previewScale = previewScale;
     }
 
-    public void setGreyUndiscovered(boolean greyUndiscovered) {
-        this.greyUndiscovered = greyUndiscovered;
-    }
-
     public void setHeading(@org.jetbrains.annotations.Nullable String heading) {
         this.heading = heading;
     }
@@ -109,12 +103,13 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         }
     }
 
+    // A figure not yet discovered is drawn in black and white. 26.1 has no 3D preview, so
+    // there it stays a question mark.
     private boolean greysUndiscovered() {
         //? if >=26 {
-        /*// 26.1 has no 3D preview to turn black and white
-        return false;
+        /*return false;
         *///? } else {
-        return greyUndiscovered;
+        return true;
         //? }
     }
 

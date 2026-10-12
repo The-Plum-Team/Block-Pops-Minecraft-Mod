@@ -32,8 +32,8 @@ means cheats enabled; otherwise set `guaranteedTokenResetHour` (0-23, UTC) in
 shows `--:--` and stays locked while the server has not reported its hour, for
 example on a server that runs an older BlockPops version.
 
-The collection screen previews every figure you have discovered; undiscovered
-figures show `?`. Operators also get a **Cheats** tab with one **Unlock** button
+The collection screen previews every figure in colour once you have discovered
+it and in black and white until then. Operators also get a **Cheats** tab with one **Unlock** button
 per collection: it marks that collection's figures as discovered and drops
 their boxes. It changes your collection progress; it is not a preview mode.
 

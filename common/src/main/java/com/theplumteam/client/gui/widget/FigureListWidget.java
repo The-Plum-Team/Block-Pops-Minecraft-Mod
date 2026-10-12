@@ -62,7 +62,6 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
                 FigureEntry entry = new FigureEntry(currentRow, collection.getId());
                 entry.setConfiguration(modelScale, xRotation, yRotation, zRotation, xOffset, yOffset, zOffset);
                 entry.setPreviewScale(collection.isPlush() ? PLUSH_PREVIEW_SCALE : 1.0f);
-                entry.setGreyUndiscovered(collection.isPlush());
                 if (heading != null) {
                     entry.setHeading(heading);
                     this.headingRow = this.children().size();
