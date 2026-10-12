@@ -75,7 +75,7 @@ shutdown waits for the JVM to finish writing logs before evidence export, withou
 - **Governance.** Branch protection on `master` requires the App-sourced contexts
   `Trusted PR / Build and verify` and `Trusted PR / Packaged E2E gate`. When
   `site/mod-base-build-activation.json` on `master` hands a gate to the mod-base kit
-  (`shared-build`: Build), the kit's gate status App writes that context and
+  (`shared-build`: Build; `shared-build-and-e2e`: both), the kit's gate status App writes that context and
   `scripts/ci/pr_gate.py` reports it `delegated`, never writing it; see
   [`docs/operations.md`](../operations.md#shared-build-shared-build). Protected paths
   (`scripts/ci/gate_controller.py` `PROTECTED_PATHS`) change only through the SHA-approved

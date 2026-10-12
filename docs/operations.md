@@ -420,6 +420,56 @@ a new head then gets no Build status and cannot merge until the rollback
 lands. A head that already has a Build `success` keeps it (GitHub cannot
 withdraw a status), so check the open pull requests before merging any.
 
+#### Shared Build and packaged E2E (`shared-build-and-e2e`)
+
+`shared-build-and-e2e` adds the kit's packaged E2E caller
+`mod-base-packaged-e2e.yml` back: every lane of a pull request into `master`
+runs in its own disposable kit worker on the Build bundle of the same
+generation, with no second compilation and no two-lane ceiling (the kit's
+`docs/BUILD-E2E-DESIGN.md`, B3). The kit's gate status App writes both required
+contexts; `scripts/ci/pr_gate.py` reports both `delegated` for a pull request
+into `master` and `handle-pr-gate-result.yml` writes neither. `on-demand-e2e.yml`
+no longer runs on `pull_request_target` into `master`; its nightly `schedule`
+(Pages anchors), its dispatches (release synchronization) and pull requests into
+an enrolled release branch are unchanged, and so are both `Release sync / ...`
+contexts.
+
+In this mode no native evaluation runs on a pull request into `master`. The
+owner's approval is kept by the kit's protected admission (mod-base v1.3.0 or
+later; the kit's `docs/BUILD-ADAPTER.md`, "Protected admission"). The admission
+is the `admission` of `scripts/ci/mod-base-build.json`, which comes into force
+in the same pull request that enters this mode:
+
+- `protected_paths` lists the `PROTECTED_PATHS` of `scripts/ci/gate_controller.py`,
+  its `FORBIDDEN_PATHS` (`.gradle`, `buildSrc`), the `build.gradle` and
+  `src/e2e` of every loader, `release/release-matrix.json` and
+  `gradle/verification-metadata.xml`.
+- `command` is `/controller-upgrade`, and the only approver is `AkaNebur` as a
+  `MEMBER`. `tests/test_mod_base_build_adapter.py` keeps the list equal to the
+  native one.
+- The kit's gate status reads the config from the protected `master` it runs
+  as, never from the pull request.
+- A pull request whose tested merge changes a protected path gets `failure`
+  (`admission: ...`) on both contexts, unless the owner's newest decision on
+  its exact head is `/controller-upgrade approve <head sha>`. A new head needs
+  a new approval.
+- A comment does not start the status caller. After approving a pull request
+  whose gates have already finished, dispatch `mod-base gate status` for it
+  (`gh workflow run mod-base-gate-status.yml -f pr-number=<N>`).
+
+The kit checks only this generic rule. It does not check the native route's exact
+path inventory of a controller upgrade, its required files, the loader
+bootstrap or a restricted transition's declaration and decision. The owner
+reviews those before approving.
+
+Advisory AI visual review and the advisory current-head public evidence read
+the native pull-request E2E runs; they stop for pull requests into `master` in
+this mode until they read the kit's packaged runs.
+
+Leaving it is the same two-step rollback: `reviewed-rollback` with
+`"rollback_from": "shared-build-and-e2e"` (all four callers stay; the native
+`pull_request_target` triggers into `master` come back), then `disabled`.
+
 ## Bootstrap a release branch
 
 Matrix discovery cannot safely infer a legacy release from its name. Bootstrap
