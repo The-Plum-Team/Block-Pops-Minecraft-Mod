@@ -606,3 +606,5 @@ conflict allowlist to force this bootstrap.
   the environment job, then store a fresh `claude setup-token` token before
   waking the queue. Deterministic gates remain valid because they never receive
   the token or model access.
+
+<!-- B3 first pull request generation probe (PR closed without merging). -->
