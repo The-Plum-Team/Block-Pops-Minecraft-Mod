@@ -19,6 +19,8 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
 
     @Nullable
     private FigureCollection currentCollection;
+    // The row that carries a heading and so sits lower, with every row after it; -1 without one
+    private int headingRow = -1;
 
     // Configuration values
     private float modelScale = 1.0f;
@@ -36,28 +38,39 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
     public void setCollection(@Nullable FigureCollection collection) {
         this.currentCollection = collection;
         this.clearEntries();
+        this.headingRow = -1;
 
         if (collection != null) {
-            List<FigureDefinition> figures = collection.getEnabledFigures();
-
-            // Group figures into rows of 4
-            List<FigureDefinition> currentRow = new java.util.ArrayList<>();
-            for (int i = 0; i < figures.size(); i++) {
-                currentRow.add(figures.get(i));
-
-                // When we have 4 figures or reached the end, create a row entry
-                if (currentRow.size() == 4 || i == figures.size() - 1) {
-                    FigureEntry entry = new FigureEntry(currentRow, collection.getId());
-                    entry.setConfiguration(modelScale, xRotation, yRotation, zRotation, xOffset, yOffset, zOffset);
-                    entry.setPreviewScale(collection.isPlush() ? PLUSH_PREVIEW_SCALE : 1.0f);
-                    this.addEntry(entry);
-                    currentRow = new java.util.ArrayList<>();
-                }
-            }
+            // The specials follow the regular figures, on rows of their own
+            addRows(collection, collection.getRegularFigures(), null);
+            addRows(collection, collection.getSpecialFigures(), "Specials");
         }
 
         // Reset scroll to top when collection changes
         this.setScrollAmount(0.0);
+    }
+
+    // The heading, if any, is written above the first of the rows
+    private void addRows(FigureCollection collection, List<FigureDefinition> figures, @Nullable String heading) {
+        // Group figures into rows of 4
+        List<FigureDefinition> currentRow = new java.util.ArrayList<>();
+        for (int i = 0; i < figures.size(); i++) {
+            currentRow.add(figures.get(i));
+
+            // When we have 4 figures or reached the end, create a row entry
+            if (currentRow.size() == 4 || i == figures.size() - 1) {
+                FigureEntry entry = new FigureEntry(currentRow, collection.getId());
+                entry.setConfiguration(modelScale, xRotation, yRotation, zRotation, xOffset, yOffset, zOffset);
+                entry.setPreviewScale(collection.isPlush() ? PLUSH_PREVIEW_SCALE : 1.0f);
+                if (heading != null) {
+                    entry.setHeading(heading);
+                    this.headingRow = this.children().size();
+                    heading = null;
+                }
+                this.addEntry(entry);
+                currentRow = new java.util.ArrayList<>();
+            }
+        }
     }
 
     public void updateConfiguration(float modelScale, float xRotation, float yRotation, float zRotation,
@@ -197,10 +210,19 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
     //? }
         // Use scaled itemHeight for consistent spacing in scaled coordinate space
         //? if >=1.21.2 {
-        /*return this.y0 + 4 - (int)this.scrollAmount() + index * getScaledItemHeight() + this.headerHeight;
+        /*return this.y0 + 4 - (int)this.scrollAmount() + index * getScaledItemHeight() + this.headerHeight
+                + (headingRow >= 0 && index >= headingRow ? getScaledHeadingSpace() : 0);
         *///? } else {
-        return this.y0 + 4 - (int)this.getScrollAmount() + index * getScaledItemHeight() + this.headerHeight;
+        return this.y0 + 4 - (int)this.getScrollAmount() + index * getScaledItemHeight() + this.headerHeight
+                + (headingRow >= 0 && index >= headingRow ? getScaledHeadingSpace() : 0);
         //? }
+    }
+
+    private int getScaledHeadingSpace() {
+        if (GuiScaleManager.isUsingInverseScale()) {
+            return (int)(FigureEntry.HEADING_SPACE * GuiScaleManager.getRenderScaleFactor());
+        }
+        return FigureEntry.HEADING_SPACE;
     }
 
     @Override
@@ -210,7 +232,8 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
     protected int getMaxPosition() {
     //? }
         // Use scaled itemHeight for correct scroll limits
-        return this.headerHeight + this.getItemCount() * getScaledItemHeight();
+        return this.headerHeight + this.getItemCount() * getScaledItemHeight()
+                + (headingRow >= 0 ? getScaledHeadingSpace() : 0);
     }
 
     @Override

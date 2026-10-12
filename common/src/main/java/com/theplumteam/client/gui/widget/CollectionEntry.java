@@ -180,16 +180,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         graphics.drawString(mc.font, collection.getName(), textX, textY, textColor, false);
 
         // Draw figure count below the name (discovered/total)
-        java.util.List<FigureDefinition> figures = getCollection().getEnabledFigures();
-        int totalFigures = figures.size();
-        int discoveredCount = 0;
-        for (FigureDefinition figure : figures) {
-            String figureId = collection.getId() + ":" + figure.getId();
-            if (ClientDiscoveryManager.isDiscovered(figureId)) {
-                discoveredCount++;
-            }
-        }
-        String figureCount = discoveredCount + "/" + totalFigures + " figures";
+        String figureCount = figureCountText();
         int subTextY = textY + mc.font.lineHeight + 2;
         int subTextColor = isSelected ? 0xFFAAAAAA : 0xFF808080;
         graphics.drawString(mc.font, figureCount, textX, subTextY, subTextColor, false);
@@ -340,8 +331,20 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
 
     @Override
     public Component getNarration() {
-        java.util.List<FigureDefinition> figures = getCollection().getEnabledFigures();
-        int totalFigures = figures.size();
+        return Component.literal(collection.getName() + " - " + figureCountText());
+    }
+
+    // A collection's specials are counted apart from its regular figures: "3/5 | 0/7 figures"
+    private String figureCountText() {
+        FigureCollection current = getCollection();
+        String count = discoveredCount(current.getRegularFigures()) + "/" + current.getRegularFigures().size();
+        if (current.hasSpecials()) {
+            count += " | " + discoveredCount(current.getSpecialFigures()) + "/" + current.getSpecialFigures().size();
+        }
+        return count + " figures";
+    }
+
+    private int discoveredCount(java.util.List<FigureDefinition> figures) {
         int discoveredCount = 0;
         for (FigureDefinition figure : figures) {
             String figureId = collection.getId() + ":" + figure.getId();
@@ -349,8 +352,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
                 discoveredCount++;
             }
         }
-        return Component.literal(collection.getName() + " - " +
-                               discoveredCount + "/" + totalFigures + " figures");
+        return discoveredCount;
     }
 
     public FigureCollection getCollection() {

@@ -3,6 +3,7 @@ package com.theplumteam.plush;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * The plushes that exist as blocks of their own. Each id registers a block, its item and a
@@ -90,6 +91,19 @@ public class BuiltInPlushes {
         List.of("gojo", "gojo_unmasked"),
         List.of("geto", "kenjaku")
     );
+
+    // Secret plushes: no machine hands them out and no right-click reaches them. A supporter
+    // turns a plush into its secret, and back, by using shears on it.
+    public static final Map<String, String> SECRET_TRANSFORMS = Map.of(
+        "ice_king", "ice_king_no_beard",
+        "ice_king_no_beard", "ice_king"
+    );
+
+    /** The plush shears turn this one into, or null when it has no secret. */
+    @Nullable
+    public static String secretTransform(String plushId) {
+        return SECRET_TRANSFORMS.get(plushId);
+    }
 
     /** The plush a right-click turns this one into, or null when it has no variants. */
     @Nullable

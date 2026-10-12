@@ -43,9 +43,18 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     private float zOffset = 0.0f;
     // Shrinks the preview of models wider than a figure, so they stay inside their cell
     private float previewScale = 1.0f;
+    // Written above this row, in the widened gap after the row before, to head a group of figures
+    @org.jetbrains.annotations.Nullable
+    private String heading;
 
     private static final int FIGURE_SIZE = 80;
     private static final int GRID_SPACING = 4;
+    // The gap the list leaves between two rows, and what it adds above a row with a heading
+    private static final int ROW_GAP = 10;
+    static final int HEADING_SPACE = 16;
+    // Special figures are outlined in the purple the BlockPops-Hytale project gives its specials
+    private static final int SPECIAL_BORDER_COLOR = 0xE0BB8FCE;
+    private static final int SPECIAL_BORDER_COLOR_UNDISCOVERED = 0x80BB8FCE;
 
     public FigureEntry(List<FigureDefinition> figures, String collectionId) {
         this.mc = Minecraft.getInstance();
@@ -66,6 +75,10 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
     public void setPreviewScale(float previewScale) {
         this.previewScale = previewScale;
+    }
+
+    public void setHeading(@org.jetbrains.annotations.Nullable String heading) {
+        this.heading = heading;
     }
 
     //? if >=26 {
@@ -100,6 +113,23 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         // Calculate starting X position to center the figures
         int startX = x + (entryWidth - totalFiguresWidth) / 2;
 
+        if (heading != null) {
+            // Centred over the row, between two rules as wide as a full row
+            int fullRowWidth = 4 * effectiveFigureSize + 3 * effectiveSpacing;
+            int rowLeft = x + (entryWidth - fullRowWidth) / 2;
+            int headingWidth = mc.font.width(heading);
+            int headingX = x + (entryWidth - headingWidth) / 2;
+            int headingGap = ROW_GAP + HEADING_SPACE;
+            if (GuiScaleManager.isUsingInverseScale()) {
+                headingGap = (int)(headingGap * GuiScaleManager.getRenderScaleFactor());
+            }
+            int headingY = y - (headingGap + mc.font.lineHeight) / 2;
+            int ruleY = headingY + mc.font.lineHeight / 2 - 1;
+            graphics.fill(rowLeft, ruleY, headingX - 6, ruleY + 1, SPECIAL_BORDER_COLOR_UNDISCOVERED);
+            graphics.fill(headingX + headingWidth + 6, ruleY, rowLeft + fullRowWidth, ruleY + 1, SPECIAL_BORDER_COLOR_UNDISCOVERED);
+            graphics.drawString(mc.font, heading, headingX, headingY, SPECIAL_BORDER_COLOR, false);
+        }
+
         // Render each figure in this row (up to 4)
         for (int i = 0; i < figures.size(); i++) {
             FigureDefinition figure = figures.get(i);
@@ -130,6 +160,9 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
             // Draw border around each figure
             int borderColor = isDiscovered ? 0x80FFFFFF : 0x60808080; // White for discovered, gray for undiscovered
+            if (figure.isSpecial()) {
+                borderColor = isDiscovered ? SPECIAL_BORDER_COLOR : SPECIAL_BORDER_COLOR_UNDISCOVERED;
+            }
             // Top border
             graphics.fill(figureX, y, figureX + effectiveFigureSize, y + 1, borderColor);
             // Bottom border

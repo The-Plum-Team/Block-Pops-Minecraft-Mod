@@ -11,6 +11,7 @@
     "g": 62,
     "b": 22
   },
+  "specials_released_at": "2026-03-30",
   "figures": [
     {
       "id": "denji",
@@ -45,14 +46,16 @@
       "name": "Kishibe",
       "model": "blockpops:geo/plush/kishibe.geo.json",
       "texture": "blockpops:textures/item/plush_kishibe.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
     },
     {
       "id": "kobeni",
       "name": "Kobeni",
       "model": "blockpops:geo/plush/kobeni.geo.json",
       "texture": "blockpops:textures/item/plush_kobeni.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
     },
     {
       "id": "himeno",
@@ -66,35 +69,40 @@
       "name": "Reze",
       "model": "blockpops:geo/plush/reze.geo.json",
       "texture": "blockpops:textures/item/plush_reze.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
     },
     {
       "id": "angel",
       "name": "Angel",
       "model": "blockpops:geo/plush/angel.geo.json",
       "texture": "blockpops:textures/item/plush_angel.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
     },
     {
       "id": "beam",
       "name": "Beam",
       "model": "blockpops:geo/plush/beam.geo.json",
       "texture": "blockpops:textures/item/plush_beam.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
     },
     {
       "id": "yoru",
       "name": "Yoru",
       "model": "blockpops:geo/plush/yoru.geo.json",
       "texture": "blockpops:textures/item/plush_yoru.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
     },
     {
       "id": "chainsaw_man",
       "name": "Chainsaw Man",
       "model": "blockpops:geo/plush/chainsaw_man.geo.json",
       "texture": "blockpops:textures/item/plush_chainsaw_man.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
     }
   ]
 }

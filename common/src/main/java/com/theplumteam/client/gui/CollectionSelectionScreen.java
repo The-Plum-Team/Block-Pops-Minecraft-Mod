@@ -17,6 +17,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 //? }
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.ClientHiddenCollections;
+import com.theplumteam.client.ClientSpecialAccess;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.util.GuiScaleManager;
@@ -32,6 +33,7 @@ import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.network.ClawMachineCollectionPacket;
 import com.theplumteam.network.DropBoxPacket;
 import com.theplumteam.network.TokenType;
+import com.theplumteam.server.SpecialAccess;
 import com.theplumteam.util.ResourceLocations;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -57,6 +59,7 @@ public class CollectionSelectionScreen extends Screen {
     private static final Logger LOGGER = LoggerFactory.getLogger(CollectionSelectionScreen.class);
 
     private final BlockPos blockPos;
+    private final boolean plush;
     private String selectedCollectionId;
     private final List<FigureCollection> collections;
     // Revision of the server's hidden collections the list was last built from
@@ -104,6 +107,10 @@ public class CollectionSelectionScreen extends Screen {
 
     // Icon textures
     private static final ResourceLocation SETTINGS_ICON = ResourceLocations.of("blockpops", "textures/gui/settings_icon.png");
+    private static final ResourceLocation KOFI_ICON = ResourceLocations.of("blockpops", "textures/gui/kofi_icon.png");
+
+    // The purple the BlockPops-Hytale project gives its specials
+    private static final int SPECIAL_COLOR = 0xFFBB8FCE;
 
     // URLs
     private static final String DISCORD_URL = "https://discord.gg/yGxdvA7qej";
@@ -118,6 +125,7 @@ public class CollectionSelectionScreen extends Screen {
     public CollectionSelectionScreen(BlockPos blockPos, String currentCollectionId, boolean plush) {
         super(Component.literal(plush ? "Gacha Machine Configuration" : "Claw Machine Configuration"));
         this.blockPos = blockPos;
+        this.plush = plush;
         this.selectedCollectionId = currentCollectionId;
         // Filter out the default collection from the menu
         this.collections = (plush ? CollectionRegistry.getPlushCollections() : CollectionRegistry.getAllCollections()).stream()
@@ -334,6 +342,20 @@ public class CollectionSelectionScreen extends Screen {
                 MODRINTH_URL,
                 Component.literal("Visit our Modrinth page")
         ));
+
+        if (plush) {
+            // Ko-fi button (left of Modrinth): the special plushes are for supporters
+            int kofiButtonX = modrinthButtonX - buttonSize - scaledSpacing;
+            this.addRenderableWidget(new LinkButton(
+                    kofiButtonX,
+                    linkButtonY,
+                    buttonSize,
+                    buttonSize,
+                    KOFI_ICON,
+                    SpecialAccess.SUPPORT_URL,
+                    Component.literal("Support us on Ko-fi to get the special plushes")
+            ));
+        }
     }
 
     /**
@@ -506,9 +528,17 @@ public class CollectionSelectionScreen extends Screen {
         currentY += font.lineHeight + 4;
 
         // Figure count
-        String figureCount = collection.getEnabledFigures().size() + " figures in this collection";
+        String figureCount = collection.getRegularFigures().size() + " figures"
+                + (collection.hasSpecials() ? " and " + collection.getSpecialFigures().size() + " specials" : "")
+                + " in this collection";
         graphics.drawString(this.font, figureCount,
                 previewX + 8, currentY, 0xFFAAAAAA, false);
+
+        // Tell a player the server gives this collection's specials to
+        if (collection.hasSpecials() && ClientSpecialAccess.has(collection.getId())) {
+            graphics.drawString(this.font, "Special access",
+                    previewX + 8 + font.width(figureCount) + 8, currentY, SPECIAL_COLOR, false);
+        }
 
         // Separator line (full width - will render on top of buttons)
         currentY += font.lineHeight + 4;
@@ -821,7 +851,7 @@ public class CollectionSelectionScreen extends Screen {
     }
 
     /**
-     * Check if the selected collection is complete (all figures discovered)
+     * Check if the selected collection is complete (every figure a token can give is discovered)
      */
     private boolean isCollectionComplete() {
         if (selectedCollectionId == null || selectedCollectionId.isEmpty()) {
@@ -830,7 +860,7 @@ public class CollectionSelectionScreen extends Screen {
 
         return CollectionRegistry.getCollection(selectedCollectionId)
                 .map(collection -> {
-                    for (FigureDefinition figure : collection.getEnabledFigures()) {
+                    for (FigureDefinition figure : ClientSpecialAccess.figuresFor(collection)) {
                         String figureId = collection.getId() + ":" + figure.getId();
                         if (!ClientDiscoveryManager.isDiscovered(figureId)) {
                             return false;

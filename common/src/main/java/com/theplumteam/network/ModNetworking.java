@@ -100,7 +100,7 @@ public class ModNetworking {
                 SyncTokenDataPacket.ID, SyncDiscoveryDataPacket.ID, UnlockFigurePacket.ID,
                 SyncDynamicCollectionsPacket.ID, OpenFavoriteColorScreenPacket.ID,
                 SyncServerSettingsPacket.ID, SyncHiddenCollectionsPacket.ID,
-                AdminProgressionSyncPacket.ID);
+                AdminProgressionSyncPacket.ID, SyncSpecialAccessPacket.ID);
         *///? }
 
         BlockPopsMod.logDebug("BlockPops networking initialized");
@@ -160,6 +160,12 @@ public class ModNetworking {
             NetworkManager.s2c(),
             AdminProgressionSyncPacket.ID,
             AdminProgressionSyncPacket::handleClient
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.s2c(),
+            SyncSpecialAccessPacket.ID,
+            SyncSpecialAccessPacket::handleClient
         );
 
         BlockPopsMod.logDebug("BlockPops client networking initialized");

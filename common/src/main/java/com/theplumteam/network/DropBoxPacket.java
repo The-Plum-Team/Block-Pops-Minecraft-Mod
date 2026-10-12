@@ -15,6 +15,7 @@ import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.registry.ModItems;
 import com.theplumteam.server.ServerTickHandler;
+import com.theplumteam.server.SpecialAccess;
 import com.theplumteam.util.AuthlibProfiles;
 import com.theplumteam.util.ResourceLocations;
 import dev.architectury.networking.NetworkManager;
@@ -98,7 +99,7 @@ public class DropBoxPacket {
 
                 // Every World Players figure can be disabled, and an empty pool must not cost a token
                 if (CollectionRegistry.getCollection(packet.collectionId)
-                        .map(collection -> collection.getEnabledFigures().isEmpty()).orElse(true)) {
+                        .map(collection -> SpecialAccess.figuresFor(player, collection).isEmpty()).orElse(true)) {
                     player.sendSystemMessage(Component.literal("\u00A7cThis collection has no figures available."));
                     BlockPopsMod.logDebug("Collection {} has no available figures, token not consumed", packet.collectionId);
                     return;
@@ -153,7 +154,8 @@ public class DropBoxPacket {
 
     private static void processBoxDrop(ServerPlayer player, DropBoxPacket packet, IPlayerDiscovery discovery) {
         CollectionRegistry.getCollection(packet.collectionId).ifPresent(collection -> {
-            List<FigureDefinition> figures = collection.getEnabledFigures();
+            // A collection's specials are only in the pool of a player with special access
+            List<FigureDefinition> figures = SpecialAccess.figuresFor(player, collection);
             if (!figures.isEmpty()) {
                 FigureDefinition selectedFigure = selectFigure(figures, packet.tokenType,
                         discovery, packet.collectionId);

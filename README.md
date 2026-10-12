@@ -37,6 +37,18 @@ figures show `?`. Operators also get a **Cheats** tab with one **Unlock** button
 per collection: it marks that collection's figures as discovered and drops
 their boxes. It changes your collection progress; it is not a preview mode.
 
+## Special plushes
+
+Some plush collections have special plushes, outlined in purple and counted
+apart in the gacha machine's menu (`3/5 | 0/7 figures`). A token gives them
+only to Ko-fi supporters; the Ko-fi button at the top right of that menu
+opens the support page.
+
+To tell who is a supporter, the server sends each joining player's name to
+the service named by `specialAccessApiUrl` in `config/blockpops-server.json`
+and keeps the answer for `specialAccessCacheMinutes`. Set the URL to `""` to
+ask nobody; the special plushes then stay locked for everyone.
+
 ## Local verification
 
 Set `BUILD_SCOPE` to `legacy` for a `preparing` matrix or `full` for a `shared`

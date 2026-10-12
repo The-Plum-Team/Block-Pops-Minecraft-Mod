@@ -6,6 +6,7 @@ package com.theplumteam.block;
 import com.theplumteam.blockentity.GachaMachineBlockEntity;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
+import com.theplumteam.network.SyncSpecialAccessPacket;
 import com.theplumteam.network.SyncTokenDataPacket;
 import com.theplumteam.platform.PlatformHelper;
 import com.theplumteam.server.ServerTickHandler;
@@ -128,6 +129,7 @@ public class GachaMachineBlock extends BaseEntityBlock {
                 // Server side: sync token data to ensure client UI shows correct state
                 if (player instanceof ServerPlayer serverPlayer) {
                     syncTokenDataToClient(serverPlayer);
+                    SyncSpecialAccessPacket.sendToPlayer(serverPlayer);
                 }
             }
             //? if >=1.21.2 {

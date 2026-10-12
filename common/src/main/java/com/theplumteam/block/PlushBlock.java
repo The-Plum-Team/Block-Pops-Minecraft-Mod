@@ -8,8 +8,13 @@ import com.theplumteam.platform.PlatformHelper;
 import com.theplumteam.plush.BuiltInPlushes;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModBlocks;
+import com.theplumteam.server.SpecialAccess;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
@@ -21,6 +26,7 @@ import net.minecraft.world.InteractionResult;
 *///? }
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -45,7 +51,8 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * A plush toy placed as a block of its own. It faces whoever places it. Right-click turns a
- * plush into its next variant, as it cycles a figure's alternative skins. In a development
+ * plush into its next variant, as it cycles a figure's alternative skins. Shears turn a plush
+ * into its secret, for supporters. In a development
  * environment, shift-right-click with an empty hand opens the placement adjustment screen.
  */
 public class PlushBlock extends BaseEntityBlock {
@@ -129,6 +136,23 @@ public class PlushBlock extends BaseEntityBlock {
             //? }
         }
 
+        // Shears turn the plush into its secret, and back
+        String secret = player.getItemInHand(hand).is(Items.SHEARS) ? BuiltInPlushes.secretTransform(plushId) : null;
+        if (secret != null) {
+            if (player instanceof ServerPlayer serverPlayer) {
+                if (SpecialAccess.isSupporter(serverPlayer)) {
+                    becomeVariant(state, level, pos, secret);
+                } else {
+                    sendSupporterHint(serverPlayer);
+                }
+            }
+            //? if >=1.21.2 {
+            /*return InteractionResult.SUCCESS;
+            *///? } else {
+            return InteractionResult.sidedSuccess(level.isClientSide());
+            //? }
+        }
+
         // Right-click (no shift) to cycle the plush's variants
         String nextVariant = player.isShiftKeyDown() ? null : BuiltInPlushes.nextVariant(plushId);
         if (nextVariant != null) {
@@ -157,6 +181,22 @@ public class PlushBlock extends BaseEntityBlock {
                     previous.getHitboxScaleX(), previous.getHitboxScaleY(), previous.getHitboxScaleZ());
         }
         level.playSound(null, pos, SoundEvents.WOOL_PLACE, SoundSource.BLOCKS, 1.0F, 1.0F);
+    }
+
+    private static void sendSupporterHint(ServerPlayer player) {
+        MutableComponent link = Component.literal("Become a supporter here");
+        //? if >=1.21.5 {
+        /*// 1.21.5 made ClickEvent a sealed hierarchy whose open-url case takes a parsed URI
+        link.withStyle(style -> style.withColor(0xBB8FCE).withBold(true).withUnderlined(true)
+                .withClickEvent(new ClickEvent.OpenUrl(java.net.URI.create(SpecialAccess.SUPPORT_URL))));
+        *///? } else {
+        link.withStyle(style -> style.withColor(0xBB8FCE).withBold(true).withUnderlined(true)
+                .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, SpecialAccess.SUPPORT_URL)));
+        //? }
+        player.sendSystemMessage(Component.literal("[BlockPops] ").withStyle(style -> style.withColor(0xBB8FCE))
+                .append(Component.literal("This plush has an alternate version exclusive to supporters! ")
+                        .withStyle(style -> style.withColor(0xE8D5F5)))
+                .append(link));
     }
 
     @Nullable

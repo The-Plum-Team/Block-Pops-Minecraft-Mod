@@ -39,6 +39,7 @@ public class FigureDefinition {
     private final List<AlternativeSkin> alternatives;
     private final PopBlockColor favoriteColor; // For player figures, stores their chosen color
     private final boolean enabled; // False once an operator disables a World Players figure
+    private final boolean special; // A plush only players with special access receive
 
     public FigureDefinition(String id, String name, ResourceLocation modelPath,
                            ResourceLocation texturePath, ResourceLocation animationPath) {
@@ -48,6 +49,15 @@ public class FigureDefinition {
     public FigureDefinition(String id, String name, ResourceLocation modelPath,
                            ResourceLocation texturePath, ResourceLocation animationPath,
                            List<AlternativeSkin> alternatives) {
+        this(id, name, modelPath, texturePath, animationPath, alternatives, false);
+    }
+
+    /**
+     * Constructor for static figures that may be special
+     */
+    public FigureDefinition(String id, String name, ResourceLocation modelPath,
+                           ResourceLocation texturePath, ResourceLocation animationPath,
+                           List<AlternativeSkin> alternatives, boolean special) {
         this.id = id;
         this.name = name;
         this.modelPath = modelPath;
@@ -58,6 +68,7 @@ public class FigureDefinition {
         this.alternatives = new ArrayList<>(alternatives);
         this.favoriteColor = null; // Static figures don't have favorite colors
         this.enabled = true;
+        this.special = special;
     }
 
     /**
@@ -84,6 +95,7 @@ public class FigureDefinition {
         this.alternatives = Collections.emptyList();
         this.favoriteColor = favoriteColor;
         this.enabled = enabled;
+        this.special = false;
     }
 
     /**
@@ -126,7 +138,8 @@ public class FigureDefinition {
                 }
             }
 
-            return new FigureDefinition(id, name, modelPath, texturePath, animationPath, alternatives);
+            boolean special = json.has("special") && json.get("special").getAsBoolean();
+            return new FigureDefinition(id, name, modelPath, texturePath, animationPath, alternatives, special);
         }
     }
 
@@ -180,6 +193,14 @@ public class FigureDefinition {
     }
 
     /**
+     * Whether this is a special plush: listed and counted apart from the regular ones, and
+     * handed out only to players with special access.
+     */
+    public boolean isSpecial() {
+        return special;
+    }
+
+    /**
      * Serializes this FigureDefinition to a JSON object
      */
     public JsonObject toJson() {
@@ -217,6 +238,9 @@ public class FigureDefinition {
                     alternativesArray.add(altJson);
                 }
                 json.add("alternatives", alternativesArray);
+            }
+            if (special) {
+                json.addProperty("special", true);
             }
         }
 
