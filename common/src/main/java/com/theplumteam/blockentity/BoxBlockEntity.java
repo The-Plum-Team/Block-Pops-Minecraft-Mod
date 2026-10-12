@@ -459,6 +459,21 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         loadFields(new FieldSource(tag));
     }
 
+    /**
+     * Returns to a new box of the given collection or color. An item renderer draws every
+     * stack with one entity, and a stack's tag leaves whatever it does not name as the stack
+     * drawn before left it, so the renderer calls this before it loads each stack.
+     */
+    public void resetForItemRendering(@Nullable String collectionId, @Nullable PopBlockColor color) {
+        this.figureId = "";
+        this.isFigureExtracted = false;
+        this.alternativeSkinIndex = 0;
+        this.poseIndex = 0;
+        this.hideLogo = false;
+        this.collectionIdOverride = collectionId;
+        this.colorOverride = color != null ? color.getSerializedName() : null;
+    }
+
     private void loadFields(FieldSource source) {
         this.isOpen = source.getBoolean("IsOpen", false);
         this.figureId = source.getString("FigureId", this.figureId);
