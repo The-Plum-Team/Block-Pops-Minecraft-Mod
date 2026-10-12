@@ -5,7 +5,9 @@ Candidate Build/E2E workflows are deliberately treated only as evidence producer
 controller runs from the protected default branch, authenticates the current pull request and its
 synthetic merge, requires branch-portable controller parity, and selects the newest exact run and
 attempt for both deterministic gates.  It never writes to GitHub; a separate App-only job consumes
-its bounded outputs and publishes the two trusted commit-status contexts.
+its bounded outputs and publishes the two trusted commit-status contexts, except a context that
+the protected mod-base activation manifest hands to the kit's gate status App
+(:func:`kit_owned_gates`): that gate is reported ``delegated`` and never written here.
 """
 
 from __future__ import annotations
@@ -69,6 +71,28 @@ CONTEXTS = {
     "build": "Trusted PR / Build and verify",
     "e2e": "Trusted PR / Packaged E2E gate",
 }
+# Once the protected default branch's mod-base activation manifest puts a gate under the kit, the
+# kit's gate status App publishes that gate's context itself, under the same name (mod-base
+# OPERATIONS.md, "Build/E2E activation and rollback" and "The gate status App"): the Build context
+# in ``shared-build``, both in ``shared-build-and-e2e``, and the same in a ``reviewed-rollback``
+# that leaves one of those. ``shadow`` publishes only `` (shadow)`` contexts that no ruleset
+# requires. A required status is the newest status of its context, whoever wrote it, so this
+# evaluator never writes a context the kit owns: it reports that gate as ``delegated`` and the
+# writer leaves it alone. The mode is read from the protected default-branch commit this
+# evaluator runs from, never from the candidate.
+ACTIVATION_PATH = "site/mod-base-build-activation.json"
+ACTIVATION_KIND = "mod-base.ci.activation"
+ACTIVATION_PROFILE = "block-pops"
+ACTIVATION_KEYS = frozenset({"kind", "schema_version", "repository", "profile", "mode", "rollback_from"})
+MAX_ACTIVATION_BYTES = 8 * 1024
+KIT_OWNED_GATES = {
+    "disabled": frozenset(),
+    "shadow": frozenset(),
+    "shared-build": frozenset({"build"}),
+    "shared-build-and-e2e": frozenset({"build", "e2e"}),
+}
+ROLLBACK_MODE = "reviewed-rollback"
+DELEGATED = "delegated"
 # GitHub records a ``pull_request_target`` run under the pull request's head branch and head
 # commit, never the controller that ran it. GitHub runs that workflow from the default branch at
 # event time, whatever the PR's base, and resolves its repository-local ``uses:`` there. Both
@@ -1171,6 +1195,55 @@ def validate_restricted_loader_transition(
     return transition
 
 
+def kit_owned_gates(repository: Path, identity: PullIdentity, *, repository_name: str) -> frozenset[str]:
+    """The gates (``build``, ``e2e``) whose required context the mod-base gate status App
+    publishes for this pull request, from the activation manifest of the protected default-branch
+    commit ``identity.default_sha`` (the implementation this evaluator runs as).
+
+    The kit's callers run only for pull requests into the default branch, so any other base keeps
+    both native gates. No manifest is the legacy state. A manifest that is not the strict
+    ``mod-base.ci.activation`` v1 document of this repository raises :class:`PrGateError`.
+    """
+
+    if identity.base_branch != identity.default_branch:
+        return frozenset()
+    if _tree_entry(repository, identity.default_sha, ACTIVATION_PATH) is None:
+        return frozenset()
+    raw = _blob(repository, identity.default_sha, ACTIVATION_PATH, maximum=MAX_ACTIVATION_BYTES)
+    try:
+        document = json.loads(
+            raw.decode("utf-8", "strict"), object_pairs_hook=_reject_duplicates,
+            parse_constant=_reject_nonfinite,
+        )
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise PrGateError(f"protected {ACTIVATION_PATH} is not strict JSON") from exc
+    if not isinstance(document, dict) or set(document) != ACTIVATION_KEYS:
+        _fail(f"protected {ACTIVATION_PATH} has unexpected keys")
+    if (
+        document["kind"] != ACTIVATION_KIND
+        or type(document["schema_version"]) is not int
+        or document["schema_version"] != 1
+        or document["repository"] != repository_name
+        or document["profile"] != ACTIVATION_PROFILE
+    ):
+        _fail(f"protected {ACTIVATION_PATH} is not this repository's activation manifest v1")
+    mode, rollback_from = document["mode"], document["rollback_from"]
+    if not isinstance(mode, str) or not (rollback_from is None or isinstance(rollback_from, str)):
+        _fail(f"protected {ACTIVATION_PATH} has a malformed mode")
+    if mode == ROLLBACK_MODE:
+        if rollback_from not in KIT_OWNED_GATES or rollback_from == "disabled":
+            _fail(f"protected {ACTIVATION_PATH} rolls back from an unknown mode")
+        return KIT_OWNED_GATES[rollback_from]
+    if mode not in KIT_OWNED_GATES or rollback_from is not None:
+        _fail(f"protected {ACTIVATION_PATH} has an unknown mode")
+    return KIT_OWNED_GATES[mode]
+
+
+def _delegated(kind: str) -> GateResult:
+    label = "Build" if kind == "build" else "Packaged E2E"
+    return GateResult(DELEGATED, f"{label} context is published by the mod-base gate status App", 0, 0)
+
+
 def _require_exact_base_owned(repository: Path, identity: PullIdentity) -> None:
     for path in EXACT_BASE_OWNED_PATHS:
         base = _tree_entry(repository, identity.base_sha, path)
@@ -1525,10 +1598,13 @@ def _gate_result(
 
 def _snapshot(
     api: GitHubApi, *, identity: PullIdentity, matrix_path: Path,
-    evidence: dict[str, Any] | None = None,
+    evidence: dict[str, Any] | None = None, owned: frozenset[str] = frozenset(),
 ) -> tuple[dict[str, GateResult], dict[str, SelectedRun | None]]:
+    """Select and validate the newest exact run of every native gate; a gate in ``owned`` (see
+    :func:`kit_owned_gates`) has no native run to read and is reported ``delegated``."""
+
     selected = {
-        kind: select_newest_pull_run(
+        kind: None if kind in owned else select_newest_pull_run(
             api.workflow_runs(workflow),
             workflow=workflow,
             repository=api.repository,
@@ -1537,7 +1613,7 @@ def _snapshot(
         for kind, workflow in WORKFLOWS.items()
     }
     results = {
-        kind: _gate_result(
+        kind: _delegated(kind) if kind in owned else _gate_result(
             api,
             kind=kind,
             identity=identity,
@@ -1640,6 +1716,13 @@ def evaluate(
     policy_mode = "ordinary"
     authorization: UpgradeAuthorization | None = None
     try:
+        owned = kit_owned_gates(repository, identity, repository_name=api.repository)
+    except PrGateError:
+        # An unreadable protected manifest cannot say which contexts the kit writes; a failure
+        # on both is the restrictive answer and is reported on the authenticated current head.
+        failure = GateResult("failure", "Protected mod-base activation manifest is unreadable", 0, 0)
+        return _result(identity, {"build": failure, "e2e": failure}, policy_mode=policy_mode)
+    try:
         if _restricted_requested(identity):
             policy_mode = "restricted-transition"
             authorization = restricted_authorization(api, identity, repository=repository)
@@ -1672,6 +1755,7 @@ def evaluate(
             {"build": failure, "e2e": failure},
             policy_mode=policy_mode,
             authorization=authorization,
+            owned=owned,
         )
 
     def current_identity_and_authorization() -> None:
@@ -1695,7 +1779,7 @@ def evaluate(
         matrix_path.write_bytes(matrix_bytes)
         try:
             first_results, first_selected = _snapshot(
-                api, identity=identity, matrix_path=matrix_path
+                api, identity=identity, matrix_path=matrix_path, owned=owned
             )
         except (JobGraphError, MatrixError, PrGateError) as exc:
             current = resolve_pull_identity(
@@ -1719,11 +1803,12 @@ def evaluate(
                 {"build": failure, "e2e": failure},
                 policy_mode=policy_mode,
                 authorization=authorization,
+                owned=owned,
             )
         current_identity_and_authorization()
         try:
             second_results, second_selected = _snapshot(
-                api, identity=identity, matrix_path=matrix_path
+                api, identity=identity, matrix_path=matrix_path, owned=owned
             )
         except (JobGraphError, MatrixError, PrGateError) as exc:
             current = resolve_pull_identity(
@@ -1747,6 +1832,7 @@ def evaluate(
                 {"build": failure, "e2e": failure},
                 policy_mode=policy_mode,
                 authorization=authorization,
+                owned=owned,
             )
         current_identity_and_authorization()
         if first_selected != second_selected or first_results != second_results:
@@ -1764,12 +1850,14 @@ def evaluate(
                 pending,
                 policy_mode=policy_mode,
                 authorization=authorization,
+                owned=owned,
             )
         return _result(
             identity,
             second_results,
             policy_mode=policy_mode,
             authorization=authorization,
+            owned=owned,
         )
 
 
@@ -1779,9 +1867,14 @@ def _result(
     *,
     policy_mode: str = "ordinary",
     authorization: UpgradeAuthorization | None = None,
+    owned: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     if policy_mode not in {"ordinary", "controller-upgrade", "restricted-transition"}:
         _fail("trusted PR policy mode is invalid")
+    if not owned <= set(WORKFLOWS):
+        _fail("kit-owned gates are invalid")
+    # A context the kit owns is never written here, whatever the native evaluation said.
+    gates = {kind: _delegated(kind) if kind in owned else gates[kind] for kind in WORKFLOWS}
     return {
         "schema_version": SCHEMA_VERSION,
         "eligible": True,

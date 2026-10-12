@@ -18,7 +18,9 @@ from scripts.ci.loader_bootstrap import HARNESS_BINDING
 from scripts.release.matrix import shared_activation_matrix
 from scripts.ci.tests.matrix_fixtures import SCHEMA1_MATRIX_PATH, complete_preparing_matrix, schema2_configuration
 from scripts.ci.pr_gate import (
+    ACTIVATION_PATH,
     CONTROLLER_UPGRADE_REQUIRED,
+    DELEGATED,
     CONTEXTS,
     CONTROLLER_ANCHOR_WORKFLOW,
     EXACT_BASE_OWNED_PATHS,
@@ -37,6 +39,7 @@ from scripts.ci.pr_gate import (
     evaluate,
     evaluate_restricted_transition,
     _gate_result,
+    kit_owned_gates,
     _result,
     main as pr_gate_main,
     parse_restricted_transition,
@@ -2047,6 +2050,160 @@ class ControllerUpgradeTreeTests(unittest.TestCase):
                         validate_controller_upgrade_tree(self.repository, current)
 
 
+def activation(mode: object, rollback_from: object = None, **overrides: object) -> str:
+    """A ``site/mod-base-build-activation.json`` of this repository in ``mode``."""
+
+    value: dict[str, object] = {
+        "kind": "mod-base.ci.activation", "mode": mode, "profile": "block-pops",
+        "repository": RestrictedTransitionOwnerTests.MockGitHub.repository,
+        "rollback_from": rollback_from, "schema_version": 1,
+    }
+    value.update(overrides)
+    return json.dumps(value, indent=2, sort_keys=True) + "\n"
+
+
+class KitOwnedGateTests(unittest.TestCase):
+    """The protected activation mode decides which required contexts the mod-base gate status App
+    writes; the native writer never touches those."""
+
+    git = RestrictedTransitionTreeTests.git
+    write = RestrictedTransitionTreeTests.write
+    merged = RestrictedTransitionTreeTests.merged
+    repository_name = RestrictedTransitionOwnerTests.MockGitHub.repository
+
+    def setUp(self):
+        RestrictedTransitionTreeTests.setUp(self)
+
+    def protected(self, manifest: str | None) -> PullIdentity:
+        self.git("switch", "--discard-changes", "-qC", "protected", self.base)
+        self.write(ACTIVATION_PATH, manifest)
+        self.git("add", "-A")
+        self.git("commit", "--allow-empty", "-qm", "protected")
+        commit = self.git("rev-parse", "HEAD")
+        return identity(default_sha=commit, base_sha=commit)
+
+    def owned(self, current: PullIdentity) -> frozenset[str]:
+        return kit_owned_gates(self.repository, current, repository_name=self.repository_name)
+
+    def test_the_protected_mode_alone_decides_the_kit_owned_gates(self):
+        for manifest, expected in (
+            (None, set()),
+            (activation("disabled"), set()),
+            (activation("shadow"), set()),
+            (activation("shared-build"), {"build"}),
+            (activation("shared-build-and-e2e"), {"build", "e2e"}),
+            (activation("reviewed-rollback", "shadow"), set()),
+            (activation("reviewed-rollback", "shared-build"), {"build"}),
+            (activation("reviewed-rollback", "shared-build-and-e2e"), {"build", "e2e"}),
+        ):
+            with self.subTest(manifest=manifest):
+                self.assertEqual(expected, self.owned(self.protected(manifest)))
+
+    def test_a_release_base_keeps_both_native_gates(self):
+        current = replace(self.protected(activation("shared-build-and-e2e")), base_branch="1.21.1-neoforge-fabric")
+        self.assertEqual(frozenset(), self.owned(current))
+
+    def test_the_candidate_manifest_never_selects_the_writer(self):
+        protected = self.protected(activation("shadow"))
+        self.base = protected.default_sha
+        for mode in ("shared-build", "shared-build-and-e2e"):
+            with self.subTest(mode=mode):
+                current = self.merged({ACTIVATION_PATH: activation(mode)})
+                self.assertEqual(protected.default_sha, current.default_sha)
+                self.assertEqual(frozenset(), self.owned(current))
+
+    def test_a_malformed_protected_manifest_fails_closed(self):
+        valid = activation("shared-build")
+        for manifest in (
+            "", "not json\n", valid[:-3], "[]\n",
+            valid.replace('"mode"', '"mode": "shadow", "mode"', 1),
+            activation("shared-build", extra=True),
+            activation("shared-build", kind="mod-base.ci.other"),
+            activation("shared-build", schema_version=2),
+            activation("shared-build", schema_version="1"),
+            activation("shared-build", schema_version=True),
+            activation("shared-build", repository="The-Plum-Team/Quick-Skin-Mod"),
+            activation("shared-build", profile="quick-skin"),
+            activation("shared"), activation(["shared-build"]), activation(None),
+            activation("shared-build", "shadow"),
+            activation("reviewed-rollback"), activation("reviewed-rollback", "disabled"),
+            activation("reviewed-rollback", "reviewed-rollback"), activation("reviewed-rollback", ["shadow"]),
+            activation("shared-build") + " " * 9000,
+        ):
+            with self.subTest(manifest=manifest[:80]), self.assertRaises(PrGateError):
+                self.owned(self.protected(manifest))
+
+    def test_an_owned_gate_is_reported_delegated_whatever_native_said(self):
+        failure = GateResult("failure", "Ordinary PR changed protected branch policy", 0, 0)
+        value = _result(identity(), {"build": failure, "e2e": failure}, owned=frozenset({"build"}))
+        self.assertEqual(DELEGATED, value["gates"]["build"]["state"])
+        self.assertEqual((0, 0), (value["gates"]["build"]["run_id"], value["gates"]["build"]["run_attempt"]))
+        self.assertEqual("failure", value["gates"]["e2e"]["state"])
+        self.assertLessEqual(len(value["gates"]["build"]["description"]), 140)
+        with self.assertRaises(PrGateError):
+            _result(identity(), {"build": failure, "e2e": failure}, owned=frozenset({"pages"}))
+
+
+class KitOwnedGateEvaluationTests(unittest.TestCase):
+    """End to end through :func:`evaluate` on real Git: an owned gate reads no native run."""
+
+    git = RestrictedTransitionTreeTests.git
+    write = RestrictedTransitionTreeTests.write
+    merged = RestrictedTransitionTreeTests.merged
+    shim = RestrictedShimAdmissionTests.shim
+    MockGitHub = RestrictedShimAdmissionTests.MockGitHub
+    Api = RestrictedShimAdmissionTests.Api
+    candidate = RestrictedShimAdmissionTests.candidate
+    evaluate = RestrictedShimAdmissionTests.evaluate
+
+    def start(self, manifest: str | None) -> None:
+        RestrictedTransitionTreeTests.setUp(self)
+        self.write("release/release-matrix.json", json.dumps(complete_preparing_matrix()))
+        self.write(self.shim, "old adapter\n")
+        self.write(ACTIVATION_PATH, manifest)
+        self.git("add", "-A")
+        self.git("commit", "--amend", "--no-edit", "-q")
+        self.base = self.git("rev-parse", "HEAD")
+        self.candidate()
+
+    def gates(self) -> tuple[dict[str, str], list[str]]:
+        with mock.patch.object(self.api, "workflow_runs", wraps=self.api.workflow_runs) as reads:
+            result = self.evaluate()
+        return ({kind: gate["state"] for kind, gate in result["gates"].items()},
+                sorted({call.args[0] for call in reads.call_args_list}))
+
+    def test_each_mode_reads_only_the_native_gates_it_keeps(self):
+        for manifest, states, read in (
+            (None, {"build": "success", "e2e": "success"}, ["build-gate.yml", "on-demand-e2e.yml"]),
+            (activation("shadow"), {"build": "success", "e2e": "success"}, ["build-gate.yml", "on-demand-e2e.yml"]),
+            (activation("shared-build"), {"build": DELEGATED, "e2e": "success"}, ["on-demand-e2e.yml"]),
+            (activation("shared-build-and-e2e"), {"build": DELEGATED, "e2e": DELEGATED}, []),
+            (activation("reviewed-rollback", "shared-build"), {"build": DELEGATED, "e2e": "success"},
+             ["on-demand-e2e.yml"]),
+        ):
+            with self.subTest(manifest=manifest):
+                self.start(manifest)
+                self.assertEqual((states, read), self.gates())
+
+    def test_policy_failure_never_writes_an_owned_context(self):
+        self.start(activation("shared-build"))
+        self.candidate({self.shim: "new", "scripts/ci/pr_gate.py": "self-authority"})
+        states, read = self.gates()
+        self.assertEqual({"build": DELEGATED, "e2e": "failure"}, states)
+        self.assertEqual([], read)
+
+    def test_a_failed_native_e2e_still_fails_under_shared_build(self):
+        self.start(activation("shared-build"))
+        self.api.runs["on-demand-e2e.yml"].append(run(53, workflow="on-demand-e2e.yml",
+            branch=self.current.head_branch, head=self.current.head_sha, controller=self.base,
+            repository=self.api.repository, conclusion="failure", created_at="2026-08-11T10:02:00Z"))
+        self.assertEqual({"build": DELEGATED, "e2e": "failure"}, self.gates()[0])
+
+    def test_an_unreadable_protected_manifest_fails_both_contexts(self):
+        self.start("{\n")
+        self.assertEqual(({"build": "failure", "e2e": "failure"}, []), self.gates())
+
+
 class ResultAndWorkflowContractTests(unittest.TestCase):
     def test_contexts_are_fixed_and_result_is_source_head_bound(self) -> None:
         value = _result(
@@ -2098,6 +2255,11 @@ class ResultAndWorkflowContractTests(unittest.TestCase):
         self.assertIn("private-key: ${{ secrets.PR_GATE_APP_PRIVATE_KEY }}", publish)
         self.assertIn("permission-statuses: write", publish)
         self.assertEqual(4, publish.count('publish_status "Trusted PR /'))
+        # A context the mod-base gate status App owns is never written by this App.
+        self.assertIn('[[ "$state" == delegated ]] && return 0', publish)
+        self.assertIn('^(pending|success|failure|delegated)$', publish)
+        self.assertIn('if [[ "$BUILD_STATE" != delegated ]]; then', publish)
+        self.assertIn('if [[ "$E2E_STATE" != delegated ]]; then', publish)
         status_step = publish.split("Publish only the two fixed exact-head contexts", 1)[1]
         self.assertNotIn("github.token", status_step)
         self.assertIn("authorization_current", publish)

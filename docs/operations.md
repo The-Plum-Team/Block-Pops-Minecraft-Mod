@@ -327,6 +327,149 @@ managed files out again, or run
 rewrites them with LF. Once `.gitattributes` has landed, delete and check out
 those paths once more.
 
+### mod-base Build adapter
+
+From mod-base v1.1.1 (v1.1.0 failed its canary and is never pinned) the kit can run Build and Packaged E2E itself, in its own
+sandbox, through a protected Build adapter: `scripts/ci/mod-base-build.json`
+names the dispatcher `scripts/ci/mod_base_build_dispatch.py`, the native glue
+`scripts/ci/mod_base_build_adapter.py`, the policy suite
+`scripts/ci/mod_base_build_policy.py` and every file the protected hooks import,
+each with its SHA-256. `site/mod-base-build-activation.json` says how far the kit
+runs: `disabled` runs nothing; `shadow` runs the kit's managed callers beside the
+native gates, which stay authoritative, and publishes their results as
+`Trusted PR / Build and verify (shadow)` and `Trusted PR / Packaged E2E gate
+(shadow)`, which no ruleset requires. Only the `publish` job of the managed
+`mod-base-gate-status.yml` writes them, as commit statuses, with the dedicated
+gate status App `plum-mod-base-gate` (its one permission is "Commit statuses:
+Read and write"); its client ID and private key live only in the environment
+`mod-base-gate`, whose deployment branch is `master` alone. The App that writes
+the required `Trusted PR / ...` contexts is not used for them.
+
+The kit admits a change of the manifest only at an unchanged pin, so adoption is
+three controller upgrades, each merged before the next starts: the kit bump
+alone (`bump --to vX.Y.Z`, no Build config and no manifest); then, at that pin,
+the Build config, the adapter and the manifest in `disabled`; then `shadow`.
+Every pull request that adds, changes or removes the manifest runs, before the
+owner approves its head:
+
+```bash
+git worktree add --detach ../base origin/master
+python3 scripts/ci/mod_base_kit.py run template activation --repo .
+python3 scripts/ci/mod_base_kit.py run template sync --repo . --write
+python3 scripts/ci/mod_base_kit.py run template check --repo .
+python3 scripts/ci/mod_base_kit.py run template transition --repo . --base ../base
+```
+
+`template transition` exits 2 when the pin changed too, or when the mode skips
+a step. No workflow runs it; record its output in the pull request.
+
+The adapter adds no policy: one kit target per Minecraft version runs
+`build_matrix.py --artifact-node` and the lane-scoped `verify_release.py` for
+each of its lanes; one kit lane runs the native packaged scenarios of one
+artifact node with its `pr-anchors` row; the protected hooks call the native
+verifiers on the sealed files. Any change to a file the config lists changes
+its hash: run `python3 scripts/ci/mod_base_build_config.py --write` in an LF
+checkout and commit the config with the change, or the kit refuses it. `tests/test_mod_base_build_adapter.py` pins the plan to the
+native matrix and the hashes to the files.
+
+#### Shared Build (`shared-build`)
+
+`shared-build` makes the kit's Build the Build gate of every pull request into
+`master`. The managed callers are `mod-base-guard.yml`, `mod-base-build.yml` and
+`mod-base-gate-status.yml`; `mod-base-packaged-e2e.yml` is removed, and packaged
+E2E stays the native `on-demand-e2e.yml`, which still compiles its own JARs on
+its own runner (the temporary double compilation of the kit's
+`docs/BUILD-E2E-DESIGN.md`, B2). The kit's gate status App now
+writes the required `Trusted PR / Build and verify` itself, without the
+` (shadow)` suffix. A required status is the newest status of its context from
+any writer, so `scripts/ci/pr_gate.py` reads the mode from the protected
+`master` commit it runs as (never from the candidate) and reports the Build
+gate of a pull request into `master` as `delegated`: it reads no native Build
+run for it and `handle-pr-gate-result.yml` never writes that context.
+`build-gate.yml` therefore no longer runs on `pull_request_target` into `master`;
+its canonical `push` (which wakes release synchronization), its dispatches and
+pull requests into an enrolled release branch are unchanged, and so are both
+`Release sync / ...` contexts.
+
+`Trusted PR / Packaged E2E gate` keeps all native admission: protected-path
+parity of an ordinary pull request, the exact-head `/controller-upgrade
+approve`, restricted transitions and the exact E2E job graph. The kit's Build
+gate checks none of these, so a pull request that changes a protected path
+without approval keeps a failing required E2E context.
+
+Before the owner approves the pull request that enters `shared-build`:
+
+1. The ruleset requires both contexts from the PR gate App. The kit writes the
+   Build context with the App in environment `mod-base-gate`, so that
+   environment must hold the client ID and a private key of the PR gate App
+   (the kit's `docs/OPERATIONS.md`, "The gate status App": Block Pops keeps that
+   App), or the owner changes the Build context's expected source in the
+   ruleset to the gate status App. Otherwise every Build status the kit writes
+   blocks the merge.
+2. A shadow observation window with no `shadow-looser` and no
+   `missing-shadow` verdict for the Build gate.
+
+Leaving `shared-build` is the kit's two-step rollback: first
+`reviewed-rollback` with `"rollback_from": "shared-build"` (the three callers
+stay; this pull request restores the `pull_request_target` trigger of
+`build-gate.yml` for `master`, while the kit keeps writing the Build context),
+then `disabled`, which removes the callers and gives the Build context back to
+the native writer. To stop at once without a pull request, the owner disables
+`mod-base-build.yml` and `mod-base-gate-status.yml` (`gh workflow disable`):
+a new head then gets no Build status and cannot merge until the rollback
+lands. A head that already has a Build `success` keeps it (GitHub cannot
+withdraw a status), so check the open pull requests before merging any.
+
+#### Shared Build and packaged E2E (`shared-build-and-e2e`)
+
+`shared-build-and-e2e` adds the kit's packaged E2E caller
+`mod-base-packaged-e2e.yml` back: every lane of a pull request into `master`
+runs in its own disposable kit worker on the Build bundle of the same
+generation, with no second compilation and no two-lane ceiling (the kit's
+`docs/BUILD-E2E-DESIGN.md`, B3). The kit's gate status App writes both required
+contexts; `scripts/ci/pr_gate.py` reports both `delegated` for a pull request
+into `master` and `handle-pr-gate-result.yml` writes neither. `on-demand-e2e.yml`
+no longer runs on `pull_request_target` into `master`; its nightly `schedule`
+(Pages anchors), its dispatches (release synchronization) and pull requests into
+an enrolled release branch are unchanged, and so are both `Release sync / ...`
+contexts.
+
+In this mode no native evaluation runs on a pull request into `master`. The
+owner's approval is kept by the kit's protected admission (mod-base v1.3.0 or
+later; the kit's `docs/BUILD-ADAPTER.md`, "Protected admission"). The admission
+is the `admission` of `scripts/ci/mod-base-build.json`, which comes into force
+in the same pull request that enters this mode:
+
+- `protected_paths` lists the `PROTECTED_PATHS` of `scripts/ci/gate_controller.py`,
+  its `FORBIDDEN_PATHS` (`.gradle`, `buildSrc`), the `build.gradle` and
+  `src/e2e` of every loader, `release/release-matrix.json` and
+  `gradle/verification-metadata.xml`.
+- `command` is `/controller-upgrade`, and the only approver is `AkaNebur` as a
+  `MEMBER`. `tests/test_mod_base_build_adapter.py` keeps the list equal to the
+  native one.
+- The kit's gate status reads the config from the protected `master` it runs
+  as, never from the pull request.
+- A pull request whose tested merge changes a protected path gets `failure`
+  (`admission: ...`) on both contexts, unless the owner's newest decision on
+  its exact head is `/controller-upgrade approve <head sha>`. A new head needs
+  a new approval.
+- A comment does not start the status caller. After approving a pull request
+  whose gates have already finished, dispatch `mod-base gate status` for it
+  (`gh workflow run mod-base-gate-status.yml -f pr-number=<N>`).
+
+The kit checks only this generic rule. It does not check the native route's exact
+path inventory of a controller upgrade, its required files, the loader
+bootstrap or a restricted transition's declaration and decision. The owner
+reviews those before approving.
+
+Advisory AI visual review and the advisory current-head public evidence read
+the native pull-request E2E runs; they stop for pull requests into `master` in
+this mode until they read the kit's packaged runs.
+
+Leaving it is the same two-step rollback: `reviewed-rollback` with
+`"rollback_from": "shared-build-and-e2e"` (all four callers stay; the native
+`pull_request_target` triggers into `master` come back), then `disabled`.
+
 ## Bootstrap a release branch
 
 Matrix discovery cannot safely infer a legacy release from its name. Bootstrap
