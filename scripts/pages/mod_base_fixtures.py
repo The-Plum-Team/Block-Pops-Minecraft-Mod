@@ -11,6 +11,13 @@ generic blank checks, and then satisfies the capture's own contract probes the w
 does: the ``OPAQUE_STARS`` background region is dark and every required GUI text box holds bright
 glyph pixels. Its recorded ``pixel_validation`` is measured by ``e2e.packaged_runtime`` itself, so
 the conformance run proves that the kit's independent metrics agree with Block Pops' own.
+
+The complete shared matrix asks for hundreds of 1600x900 frames per call, but only a few distinct
+ones: the pattern seed only matters modulo :data:`PATTERN_SEEDS` (the kit's ``pattern_png`` rotates
+an eight-colour palette and a four-step gradient by the seed), and a frame depends only on its
+pattern and its capture's probes. ``synthesize`` therefore encodes and compares each distinct frame
+once per call and writes the same bytes into every lane that shows it. Every file it writes is
+byte-identical to the uncached derivation; ``tests/test_mod_base_adapter.py`` pins that period.
 """
 
 from __future__ import annotations
@@ -29,6 +36,8 @@ DARK_BACKGROUND = (3, 4, 8)
 BRIGHT_GLYPHS = (250, 250, 250)
 PORT = 25565
 ELAPSED_SECONDS = 42.5
+#: ``image_factory(width, height, seed)`` equals ``image_factory(width, height, seed % PATTERN_SEEDS)``.
+PATTERN_SEEDS = 8
 
 
 def _digest(label: str) -> str:
@@ -67,13 +76,26 @@ def synthesize(ctx: Any, target: dict[str, Any], expectation: dict[str, Any], ou
     contract, _ = read_contract(ctx, target["subject"]["commit"])
     width, height = expectation["image_policy"]["source_size"]
     root = Path(out_root)
+    # Per call (the kit loads this module afresh for each one): pattern by seed, frame bytes by
+    # (seed, probes) and comparison result by (first frame, second frame, threshold, region).
+    patterns: dict[int, bytes] = {}
+    frames: dict[tuple[int, tuple[Any, ...]], bytes] = {}
+    compared: dict[tuple[Any, ...], dict[str, Any]] = {}
+
+    def frame_bytes(seed: int, probes: tuple[Any, ...]) -> bytes:
+        if seed not in patterns:
+            patterns[seed] = image_factory(width, height, seed)
+        if (seed, probes) not in frames:
+            frames[seed, probes] = frame(patterns[seed], probes)
+        return frames[seed, probes]
+
     for index, lane in enumerate(expectation["lanes"]):
         profile = profile_path(lane)
         node = lane["artifact_node"]
         reports = {}
         for role in lane["roles"]:
             screenshots = root / profile / role / "screenshots"
-            steps, metrics, paths, ordinal = [], {}, {}, 0
+            steps, metrics, paths, sources, ordinal = [], {}, {}, {}, 0
             for step in contract.role(lane["scenario"], role).steps:
                 capture = step.capture
                 screenshot = None
@@ -82,20 +104,25 @@ def synthesize(ctx: Any, target: dict[str, Any], expectation: dict[str, Any], ou
                     screenshots.mkdir(parents=True, exist_ok=True)
                     path = screenshots / screenshot
                     # Consecutive seeds rotate the palette, so every compared pair differs.
-                    path.write_bytes(frame(image_factory(width, height, 5 * index + ordinal), capture.probes))
+                    seed = (5 * index + ordinal) % PATTERN_SEEDS
+                    path.write_bytes(frame_bytes(seed, capture.probes))
                     metrics[step.id] = packaged_runtime.inspect_screenshot_for_step(
                         path, lane["scenario"], role, step.id)
                     paths[step.id] = path
+                    sources[step.id] = (seed, capture.probes)
                     ordinal += 1
                 steps.append({"id": step.id, "status": "pass", "message": f"{step.id} passed on {node}",
                               "capture_id": None if capture is None else capture.capture_id,
                               "screenshot": screenshot})
-            comparisons = {
-                f"{comparison.first_step}->{comparison.second_step}": packaged_runtime.compare_screenshots(
-                    paths[comparison.first_step], paths[comparison.second_step],
-                    comparison.minimum_changed_fraction, comparison.region)
-                for comparison in contract.comparisons_for(lane["scenario"], role)
-            }
+            comparisons = {}
+            for comparison in contract.comparisons_for(lane["scenario"], role):
+                pair = (sources[comparison.first_step], sources[comparison.second_step],
+                        comparison.minimum_changed_fraction, comparison.region)
+                if pair not in compared:
+                    compared[pair] = packaged_runtime.compare_screenshots(
+                        paths[comparison.first_step], paths[comparison.second_step],
+                        comparison.minimum_changed_fraction, comparison.region)
+                comparisons[f"{comparison.first_step}->{comparison.second_step}"] = dict(compared[pair])
             reports[role] = {"schema_version": 1, "minecraft": lane["minecraft"], "role": role,
                              "scenario": lane["scenario"], "contract_sha256": expectation["contract_sha256"],
                              "status": "pass", "steps": steps,
