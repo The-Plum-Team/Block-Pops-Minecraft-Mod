@@ -81,8 +81,8 @@
   "admission": {
     "approvers": [
       {
-        "association": "MEMBER",
-        "login": "AkaNebur"
+        "organization": "The-Plum-Team",
+        "role": "member"
       }
     ],
     "command": "/controller-upgrade",
