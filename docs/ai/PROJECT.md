@@ -46,6 +46,13 @@ rotation and lift. Background quads explicitly select the version’s textured
 shader rather than inheriting the program bound by a preceding GUI fill. Finish queued base
 fills before immediate background drawing on the earlier GUI path.
 
+A collection screen shows each figure or plush in colour once discovered and in black and white
+before. Through 1.21.1 it draws the model straight into the screen. From 1.21.4 it draws an item
+bound to `FigurePreviewItemRenderer`, whose `figure_preview` model bakes that same camera and a
+fourfold scale the widget cancels, because an item is the one way a model of this mod reaches
+the deferred interface of 1.21.6 and later. The preview entity stands on the box block: 1.21.1
+refuses a block entity on a block its type does not list.
+
 `common/build.gradle` derives special-item definitions and base-model transforms for Minecraft
 1.21.4 onward with `scripts/release/item_resources.py`, from the authored entity models. Older
 lanes retain their original resources; generated modern resources are never authored or committed.

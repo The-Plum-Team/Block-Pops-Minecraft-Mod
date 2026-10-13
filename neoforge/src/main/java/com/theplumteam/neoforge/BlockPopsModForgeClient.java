@@ -8,6 +8,7 @@ import com.theplumteam.client.renderer.BoxBlockRenderer;
 import com.theplumteam.client.renderer.ClawMachineBlockItemRenderer;
 import com.theplumteam.client.renderer.ClawMachineBlockRenderer;
 import com.theplumteam.client.renderer.FigureBlockItemRenderer;
+import com.theplumteam.client.renderer.FigurePreviewItemRenderer;
 import com.theplumteam.client.renderer.FigureBlockRenderer;
 import com.theplumteam.client.renderer.GachaMachineBlockRenderer;
 import com.theplumteam.client.renderer.PlushBlockRenderer;
@@ -99,6 +100,7 @@ public class BlockPopsModForgeClient {
         event.register(BoxBlockItemRenderer.ID, BoxBlockItemRenderer.Unbaked.MAP_CODEC);
         event.register(FigureBlockItemRenderer.ID, FigureBlockItemRenderer.Unbaked.MAP_CODEC);
         event.register(ClawMachineBlockItemRenderer.ID, ClawMachineBlockItemRenderer.Unbaked.MAP_CODEC);
+        event.register(FigurePreviewItemRenderer.ID, FigurePreviewItemRenderer.Unbaked.MAP_CODEC);
     }
     *///? } else {
     /**

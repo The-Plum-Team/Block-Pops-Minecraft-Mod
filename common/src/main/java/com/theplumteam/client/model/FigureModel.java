@@ -105,6 +105,11 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
         return renderState.getOrDefaultGeckolibData(FIGURE_TEXTURE, FALLBACK_TEXTURE);
     }
 
+    // Swaps the texture a state resolved to, for a caller that draws with a copy of it.
+    public static void overrideTexture(GeoRenderState renderState, ResourceLocation texture) {
+        renderState.addGeckolibData(FIGURE_TEXTURE, texture);
+    }
+
     @Override
     public void addAdditionalStateData(BoxBlockEntity animatable,
                                        //? if >=1.21.9 {

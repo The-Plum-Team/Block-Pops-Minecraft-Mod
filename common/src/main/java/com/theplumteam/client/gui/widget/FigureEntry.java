@@ -10,6 +10,8 @@ import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.GreyedTextures;
 import com.theplumteam.client.gui.util.GuiScaleManager;
+import com.theplumteam.client.gui.util.GuiPose;
+import com.theplumteam.client.renderer.FigurePreviewItemRenderer;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.client.Minecraft;
@@ -21,6 +23,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 
 import java.util.ArrayList;
@@ -101,16 +104,6 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             int nameY = y + effectiveFigureSize - mc.font.lineHeight - 2;
             graphics.drawString(mc.font, figureName, nameX, nameY, color, true);
         }
-    }
-
-    // A figure not yet discovered is drawn in black and white. 26.1 has no 3D preview, so
-    // there it stays a question mark.
-    private boolean greysUndiscovered() {
-        //? if >=26 {
-        /*return false;
-        *///? } else {
-        return true;
-        //? }
     }
 
     //? if >=26 {
@@ -209,42 +202,37 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 render3DFigure(graphics, figure, figureX, y, effectiveFigureSize, partialTick, false);
 
                 drawFigureName(graphics, figure, figureX, y, effectiveFigureSize, 0xFFFFFFFF);
-            } else if (greysUndiscovered()) {
+            } else {
                 // The figure is there to see, in black and white until it is discovered
                 render3DFigure(graphics, figure, figureX, y, effectiveFigureSize, partialTick, true);
                 drawFigureName(graphics, figure, figureX, y, effectiveFigureSize, 0xFFC0C0C0);
-            } else {
-                // Draw a question mark for undiscovered figures
-                Component questionMark = Component.literal("?");
-                int qmWidth = mc.font.width(questionMark);
-                int qmX = figureX + (effectiveFigureSize - qmWidth) / 2;
-                int qmY = y + (effectiveFigureSize - mc.font.lineHeight) / 2;
-                graphics.drawString(mc.font, questionMark, qmX, qmY, 0xFF808080, false);
-
-                // Don't show name for undiscovered figures
             }
         }
     }
 
-    //? if >=26 {
-    /*// 26.1 routes every 3D element in a screen through picture-in-picture, and
-    // its GUI accepts only the state types vanilla declares: an entity, a skin, a
-    // book, a sign, a map. A GeckoLib model is none of those, so drawing one here
-    // needs a PictureInPictureRenderState of this mod's own plus a renderer
-    // registered against GuiRenderer. Until that exists the row shows the figure's
-    // face flat, which the caller already falls back to when no model resolves.
-    private void render3DFigure(GuiGraphicsExtractor graphics, FigureDefinition figure,
-                                int x, int y, int size, float partialTick, boolean greyed) {
+    //? if >=1.21.4 {
+    /*// From 1.21.4 a figure is drawn as an item whose model holds this screen's camera: the
+    // rotation is baked there, and only the placement and size come from the widget. From
+    // 1.21.6 an item is also the one way a model reaches the deferred interface.
+    private final java.util.Map<String, ItemStack> previewStacks = new java.util.HashMap<>();
+
+    private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick, boolean greyed) {
+        ItemStack stack = previewStacks.computeIfAbsent(figure.getId() + (greyed ? "|greyed" : ""),
+                key -> FigurePreviewItemRenderer.stack(collectionId, figure.getId(), greyed));
+        graphics.enableScissor(x, y, x + size, y + size);
+        GuiPose.push(graphics);
+        GuiPose.translate(graphics, x + size / 2.0f + xOffset, y + size * 0.6f + yOffset);
+        // The model bakes its scale so the deferred interface renders it at full resolution.
+        float scale = size * modelScale * previewScale / (16.0f * FigurePreviewItemRenderer.BAKED_SCALE);
+        GuiPose.scale(graphics, scale, scale);
+        GuiPose.translate(graphics, -8, -8);
+        graphics.renderItem(stack, 0, 0);
+        GuiPose.pop(graphics);
+        graphics.disableScissor();
     }
     *///? } else {
     private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick, boolean greyed) {
-        // From 1.21.6 the GUI's own pose is two-dimensional, so the model is placed in a
-        // stack of its own and drawn straight into the buffer source below.
-        //? if >=1.21.6 {
-        /*PoseStack poseStack = new PoseStack();
-        *///? } else {
         PoseStack poseStack = graphics.pose();
-        //? }
         poseStack.pushPose();
 
         BoxBlockEntity renderEntity = FigureWidgetRenderer.getOrCreateRenderEntity(figure, collectionId);
@@ -257,10 +245,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         graphics.enableScissor(x, y, x + size, y + size);
 
         // Disable depth test to prevent z-fighting and clipping issues.
-        // 1.21.5 removed the global depth state; the render type owns it there.
-        //? if <1.21.5 {
         RenderSystem.disableDepthTest();
-        //? }
 
         float centerX = (x + size / 2.0f) + xOffset;
         float centerY = (y + size * 0.6f) + yOffset;
@@ -277,6 +262,11 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         poseStack.mulPose(Axis.YP.rotationDegrees(yRotation));
         poseStack.mulPose(Axis.XP.rotationDegrees(xRotation));
         poseStack.mulPose(Axis.ZP.rotationDegrees(zRotation));
+        //? if >=1.21 {
+        /*// GeckoLib 4.7 centres the block inside actuallyRender. From 4.8 that half-block
+        // step runs before it, in a hook this direct call never reaches.
+        poseStack.translate(0.5, 0, 0.5);
+        *///? }
 
         MultiBufferSource.BufferSource bufferSource = mc.renderBuffers().bufferSource();
 
@@ -285,14 +275,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         var figureRenderer = FigureWidgetRenderer.getRenderer();
 
         try {
-            //? if >=1.21.5 {
-            /*// GeckoLib 5 resolves everything from a render state, so the widget builds
-            // the same state the block renderer would and draws from that.
-            software.bernie.geckolib.renderer.base.GeoRenderState renderState =
-                    figureRenderer.fillRenderState(renderEntity, null,
-                            new software.bernie.geckolib.renderer.base.GeoRenderState.Impl(), partialTick);
-            ResourceLocation modelResource = figureModel.getModelResource(renderState);
-            *///? } elif >=1.21.2 {
+            //? if >=1.21.2 {
             /*ResourceLocation modelResource = figureModel.getModelResource(renderEntity, null);
             *///? } else {
             ResourceLocation modelResource = figureModel.getModelResource(renderEntity);
@@ -305,9 +288,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             }
 
             BakedGeoModel bakedModel = figureModel.getBakedModel(modelResource);
-            //? if >=1.21.5 {
-            /*ResourceLocation textureResource = figureModel.getTextureResource(renderState);
-            *///? } elif >=1.21.2 {
+            //? if >=1.21.2 {
             /*ResourceLocation textureResource = figureModel.getTextureResource(renderEntity, null);
             *///? } else {
             ResourceLocation textureResource = figureModel.getTextureResource(renderEntity);
@@ -329,25 +310,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 }
             }
 
-            //? if >=1.21.5 {
-            /*RenderType renderType = figureModel.getRenderType(renderState, textureResource);
-            VertexConsumer buffer = bufferSource.getBuffer(renderType);
-
-            figureRenderer.actuallyRender(
-                renderState,
-                poseStack,
-                bakedModel,
-                renderType,
-                bufferSource,
-                buffer,
-                false,
-                15728880,
-                net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY,
-                0xFFFFFFFF
-            );
-            *///? } else {
-            // Below 1.21.5 the model resolves its own texture again and ignores the one it is
-            // handed, so the black-and-white copy gets its render type directly
+            // The model resolves its own texture again and ignores the one it is handed, so
+            // the black-and-white copy gets its render type directly
             RenderType renderType = greyed
                     ? RenderType.entityCutoutNoCull(textureResource)
                     : figureModel.getRenderType(renderEntity, textureResource);
@@ -370,7 +334,6 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 1f, 1f, 1f, 1f
                 //? }
             );
-            //? }
 
             bufferSource.endBatch();
         } catch (Exception e) {
@@ -384,14 +347,11 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         GuiLighting.items3D();
         poseStack.popPose();
     }
-    //? }
 
-    /** Restores the global depth test, which only exists below 1.21.5. */
     private static void restoreDepthTest() {
-        //? if <1.21.5 {
         RenderSystem.enableDepthTest();
-        //? }
     }
+    //? }
 
     @Override
     //? if >=26 {
