@@ -39,6 +39,11 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
     private static final ResourceLocation FALLBACK_TEXTURE = ResourceLocations.of("minecraft", "textures/entity/player/wide/steve.png");
     private static final ResourceLocation POSE_ANIMATION = GeoAssets.animation(BlockPopsMod.MOD_ID, "figure/figure_poses");
 
+    //? if <26 {
+    // The model the animation processor was last switched to, runtime or bundled
+    private BakedGeoModel activeModel;
+    //? }
+
     // GeckoLib 5 resolves the model and texture from the render state alone, so
     // what the figure resolves to is carried across as render data.
     //? if >=1.21.5 {
@@ -305,8 +310,17 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
     // caches (see RuntimeGeo), so both lookups ask there first.
     @Override
     public BakedGeoModel getBakedModel(ResourceLocation location) {
-        BakedGeoModel model = RuntimeGeo.model(location);
-        return model != null ? model : super.getBakedModel(location);
+        BakedGeoModel runtime = RuntimeGeo.model(location);
+        BakedGeoModel model = runtime != null ? runtime : super.getBakedModel(location);
+        //? if <26 {
+        // Below GeckoLib 5.5 the model in use is also the one whose bones the animation
+        // processor drives; GeckoLib's own lookup switches it, so a runtime model must too.
+        if (model != activeModel) {
+            getAnimationProcessor().setActiveModel(model);
+            activeModel = model;
+        }
+        //? }
+        return model;
     }
 
     //? if >=26 {
