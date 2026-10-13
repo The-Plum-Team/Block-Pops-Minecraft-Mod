@@ -173,6 +173,11 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     public void cyclePose() {
+        // A figure posed for one stance only keeps it
+        FigureDefinition figure = getFigureDefinition();
+        if (figure != null && figure.getRenderOptions().poseLocked()) {
+            return;
+        }
         // Toggles between 0 (Standing) and 1 (Sitting)
         this.poseIndex = (this.poseIndex + 1) % 2;
         setChanged();

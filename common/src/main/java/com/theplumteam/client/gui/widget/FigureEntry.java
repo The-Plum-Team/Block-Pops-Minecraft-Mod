@@ -212,7 +212,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         GuiLighting.flatItems();
 
         poseStack.translate(centerX, centerY, centerZ);
-        float scale = size * modelScale;
+        // A figure with its own model declares its size on this screen
+        float scale = size * modelScale * figure.getRenderOptions().guiScale();
         poseStack.scale(scale, -scale, scale);
 
         poseStack.mulPose(Axis.YP.rotationDegrees(yRotation));

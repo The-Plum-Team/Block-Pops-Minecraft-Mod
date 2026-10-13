@@ -156,6 +156,21 @@ public class CollectionRegistry {
     }
 
     /**
+     * Removes a dynamic collection, as when an operator disables a Custom collection.
+     * Collections loaded from the resource packs are never removed here.
+     */
+    public static void unregisterDynamicCollection(String collectionId) {
+        FigureCollection collection = dynamicCollections.remove(collectionId);
+        if (collection == null) {
+            return;
+        }
+        collections.remove(collectionId);
+        for (FigureDefinition figure : collection.getFigures()) {
+            figuresById.remove(collectionId + ":" + figure.getId());
+        }
+    }
+
+    /**
      * Internal method to register a collection to the main maps
      *
      * @param collection The collection to register
