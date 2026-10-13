@@ -7,9 +7,11 @@ import com.theplumteam.registry.ModBlocks;
 import com.theplumteam.registry.ModCreativeTabs;
 import com.theplumteam.registry.ModItems;
 import com.theplumteam.registry.ModLoot;
+import com.theplumteam.server.CustomCollections;
 import com.theplumteam.server.ServerTickHandler;
 import com.theplumteam.server.SpecialAccess;
 import com.theplumteam.server.config.ServerConfig;
+import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.PlayerEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,6 +70,11 @@ public final class BlockPopsMod {
 
         // Ask whether a joining player is a supporter, so the answer is there by the time it counts
         PlayerEvent.PLAYER_JOIN.register(SpecialAccess::refresh);
+
+        // Custom collections: loaded with the world, sent to each player that joins
+        LifecycleEvent.SERVER_STARTING.register(CustomCollections::onServerStarting);
+        LifecycleEvent.SERVER_STOPPED.register(server -> CustomCollections.onServerStopped());
+        PlayerEvent.PLAYER_JOIN.register(CustomCollections::sendTo);
 
         LOGGER.info("BlockPops mod initialization complete");
     }

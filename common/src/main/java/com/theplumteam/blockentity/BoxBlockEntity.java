@@ -77,10 +77,14 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     // Figure pose index (0 = standing, 1 = sitting)
     private int poseIndex = 0;
 
-    // Figure positioning - correct values found through testing
-    private double figureOffsetX = -0.53;
-    private double figureOffsetY = 0.01;
-    private double figureOffsetZ = -0.55;
+    // Figure positioning - correct values found through testing. A box still at these
+    // defaults takes a figure's own offset when its definition declares one.
+    public static final double DEFAULT_FIGURE_OFFSET_X = -0.53;
+    public static final double DEFAULT_FIGURE_OFFSET_Y = 0.01;
+    public static final double DEFAULT_FIGURE_OFFSET_Z = -0.55;
+    private double figureOffsetX = DEFAULT_FIGURE_OFFSET_X;
+    private double figureOffsetY = DEFAULT_FIGURE_OFFSET_Y;
+    private double figureOffsetZ = DEFAULT_FIGURE_OFFSET_Z;
     private double figureScale = 1.0;
 
     // Hitbox offset - allows fine-tuning hitbox position
@@ -356,6 +360,11 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     }
 
     public void cyclePose() {
+        // A figure posed for one stance only keeps it
+        FigureDefinition figure = getFigureDefinition();
+        if (figure != null && figure.getRenderOptions().poseLocked()) {
+            return;
+        }
         // Toggles between 0 (Standing) and 1 (Sitting)
         this.poseIndex = (this.poseIndex + 1) % 2;
         setChanged();

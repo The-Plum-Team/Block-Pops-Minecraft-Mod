@@ -223,7 +223,9 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         GuiPose.push(graphics);
         GuiPose.translate(graphics, x + size / 2.0f + xOffset, y + size * 0.6f + yOffset);
         // The model bakes its scale so the deferred interface renders it at full resolution.
-        float scale = size * modelScale * previewScale / (16.0f * FigurePreviewItemRenderer.BAKED_SCALE);
+        // A figure with its own model also declares its size on this screen.
+        float scale = size * modelScale * previewScale * figure.getRenderOptions().guiScale()
+                / (16.0f * FigurePreviewItemRenderer.BAKED_SCALE);
         GuiPose.scale(graphics, scale, scale);
         GuiPose.translate(graphics, -8, -8);
         graphics.renderItem(stack, 0, 0);
@@ -256,7 +258,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         GuiLighting.flatItems();
 
         poseStack.translate(centerX, centerY, centerZ);
-        float scale = size * modelScale * previewScale;
+        // A figure with its own model declares its size on this screen
+        float scale = size * modelScale * previewScale * figure.getRenderOptions().guiScale();
         poseStack.scale(scale, -scale, scale);
 
         poseStack.mulPose(Axis.YP.rotationDegrees(yRotation));

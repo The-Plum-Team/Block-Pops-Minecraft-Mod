@@ -31,6 +31,10 @@ public class SyncDynamicCollectionsPacket {
     public SyncDynamicCollectionsPacket(List<FigureCollection> collections) {
         this.collectionsJson = new ArrayList<>();
         for (FigureCollection collection : collections) {
+            // Custom collections only travel in SyncCustomCollectionsPacket, to clients that can load them
+            if (com.theplumteam.server.CustomCollections.isCustom(collection.getId())) {
+                continue;
+            }
             JsonObject json = collection.toJson();
             this.collectionsJson.add(GSON.toJson(json));
         }
