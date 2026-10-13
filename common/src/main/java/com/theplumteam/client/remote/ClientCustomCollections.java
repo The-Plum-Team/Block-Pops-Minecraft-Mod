@@ -121,7 +121,12 @@ public final class ClientCustomCollections {
             return;
         }
         if (Minecraft.getInstance().player != null) {
-            Minecraft.getInstance().player.sendSystemMessage(message(status));
+            // 26.1 removed displayClientMessage; its chat line is sendSystemMessage there
+            //? if >=26 {
+            /*Minecraft.getInstance().player.sendSystemMessage(message(status));
+            *///? } else {
+            Minecraft.getInstance().player.displayClientMessage(message(status), false);
+            //? }
         }
     }
 
