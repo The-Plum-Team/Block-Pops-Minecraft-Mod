@@ -1,0 +1,260 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.cyd_sc.andriod17",
+				"texture_width": 128,
+				"texture_height": 128,
+				"visible_bounds_width": 5,
+				"visible_bounds_height": 4.5,
+				"visible_bounds_offset": [0, 1.75, 0]
+			},
+			"bones": [
+				{
+					"name": "ax_foot",
+					"pivot": [2, 12, -18],
+					"locators": {
+						"ax_foot_r": [-2, 12, -18],
+						"ax_foot_l": [2, 12, -18]
+					}
+				},
+				{
+					"name": "Root",
+					"pivot": [0, 0, -1]
+				},
+				{
+					"name": "all",
+					"parent": "Root",
+					"pivot": [0, 0, -1]
+				},
+				{
+					"name": "android17",
+					"parent": "all",
+					"pivot": [0, 17, 0]
+				},
+				{
+					"name": "upper",
+					"parent": "android17",
+					"pivot": [0, 13.5, 0]
+				},
+				{
+					"name": "Body1",
+					"parent": "upper",
+					"pivot": [-0.25, 13.5, 0],
+					"cubes": [
+						{"origin": [-5.05, 18.05, -2.15], "size": [10.1, 6, 4.3], "uv": [11, 118]},
+						{"origin": [-4, 17.5, -2], "size": [8, 6, 4], "uv": [1, 50]},
+						{"origin": [-4, 13.5, -2], "size": [8, 4, 4], "uv": [68, 49]},
+						{"origin": [-4.4, 14.5, -2.3], "size": [8.7, 2, 4.6], "uv": [27, 33]}
+					]
+				},
+				{
+					"name": "handkerchief",
+					"parent": "Body1",
+					"pivot": [3.05, 21.05, -1.35],
+					"cubes": [
+						{"origin": [-5.05, 17.65, -2.75], "size": [10.1, 6.5, 5.5], "uv": [10, 103]},
+						{"origin": [-1.05, 22.15, 2.25], "size": [2.1, 2, 1], "uv": [17, 96]}
+					]
+				},
+				{
+					"name": "bow1",
+					"parent": "handkerchief",
+					"pivot": [2.4, 22, 3],
+					"rotation": [0, -13, 33],
+					"cubes": [
+						{"origin": [-0.43866, 19.5986, 3.43097], "size": [5.6, 4.5, 0], "uv": [7, 88]}
+					]
+				},
+				{
+					"name": "bow2",
+					"parent": "handkerchief",
+					"pivot": [-6.4, 21, -3],
+					"rotation": [0, 12, -17],
+					"cubes": [
+						{"origin": [-6.95, 18.65, 4.05], "size": [5.6, 4.5, 0], "uv": [6, 82], "mirror": true}
+					]
+				},
+				{
+					"name": "Head1",
+					"parent": "Body1",
+					"pivot": [0, 23.5, 0],
+					"cubes": [
+						{"origin": [-4, 24.4, -3.6], "size": [8, 8, 0], "inflate": 0.5, "uv": [0, 41]},
+						{"origin": [-4, 24.5, -4], "size": [8, 9, 8], "uv": [0, 7]},
+						{"origin": [-3, 23.5, -2], "size": [6, 1, 4], "uv": [106, 29]}
+					]
+				},
+				{
+					"name": "hair_normal",
+					"parent": "Head1",
+					"pivot": [3, 23, 2],
+					"cubes": [
+						{"origin": [-4.5, 24.7, -4], "size": [9, 9.5, 8], "inflate": 0.5, "uv": [29, 41]},
+						{"origin": [-4, 27.1, -4.2], "size": [8, 8, 8], "inflate": 0.5, "uv": [33, 16]}
+					]
+				},
+				{
+					"name": "hair_pieces",
+					"parent": "hair_normal",
+					"pivot": [3, 23, 2],
+					"rotation": [0, -27.5, 0]
+				},
+				{
+					"name": "hair_pieces3",
+					"parent": "hair_normal",
+					"pivot": [-0.5, 23, 3],
+					"rotation": [0, -90, 0]
+				},
+				{
+					"name": "hair_pieces2",
+					"parent": "hair_normal",
+					"pivot": [-5, 23, 1],
+					"rotation": [0, 27.5, 0]
+				},
+				{
+					"name": "hair_pieces4",
+					"parent": "hair_normal",
+					"pivot": [-0.83052, 31.5, -0.30738],
+					"rotation": [-10, 0, 0]
+				},
+				{
+					"name": "hair_pieces5",
+					"parent": "hair_normal",
+					"pivot": [-0.83052, 31.5, -2.55738],
+					"rotation": [-10, 0, 0]
+				},
+				{
+					"name": "LeftArm",
+					"parent": "Body1",
+					"pivot": [5, 23, 0],
+					"cubes": [
+						{"origin": [4.5, 10, -2], "size": [4, 14, 4], "uv": [48, 68]},
+						{"origin": [4.3, 10, -2.2], "size": [4.5, 14.1, 4.4], "uv": [32, 68]}
+					]
+				},
+				{
+					"name": "ax4",
+					"parent": "LeftArm",
+					"pivot": [5, 23, 0],
+					"locators": {
+						"ax10": [6.5, 9.25, 0]
+					}
+				},
+				{
+					"name": "RightArm",
+					"parent": "Body1",
+					"pivot": [-5, 23, 0],
+					"cubes": [
+						{"origin": [-8.5, 10, -2], "size": [4, 14, 4], "uv": [48, 68], "mirror": true},
+						{"origin": [-8.7, 10, -2.2], "size": [4.4, 14.1, 4.4], "uv": [32, 68], "mirror": true}
+					]
+				},
+				{
+					"name": "ax5",
+					"parent": "RightArm",
+					"pivot": [0, 0, 0],
+					"locators": {
+						"ax11": [-6.5, 9.25, 0]
+					}
+				},
+				{
+					"name": "lower",
+					"parent": "android17",
+					"pivot": [0, 17, 0]
+				},
+				{
+					"name": "RightLeg",
+					"parent": "lower",
+					"pivot": [-1.9, 13.25, 0],
+					"cubes": [
+						{"origin": [-3.9, 0, -2], "size": [4, 13.5, 4], "uv": [66, 0]},
+						{"origin": [-3.9, 0, -4], "size": [4, 3, 2], "uv": [12, 60], "mirror": true},
+						{"origin": [-3.5, 2.8, -1.9], "size": [3.2, 1.5, 0], "pivot": [0, 0, 0], "rotation": [5, 0, 0], "uv": [43, 0], "mirror": true},
+						{"origin": [-3.9, 5.4, -2], "size": [4, 3, 4], "inflate": 0.25, "uv": [71, 62]}
+					]
+				},
+				{
+					"name": "LeftLeg",
+					"parent": "lower",
+					"pivot": [1.9, 13.25, 0],
+					"cubes": [
+						{"origin": [-0.1, 0, -2], "size": [4, 13.5, 4], "uv": [50, 0], "mirror": true},
+						{"origin": [-0.1, 0, -4], "size": [4, 3, 2], "uv": [12, 60]},
+						{"origin": [0.3, 2.8, -1.9], "size": [3.2, 1.5, 0], "pivot": [0, 0, 0], "rotation": [5, 0, 0], "uv": [43, 0], "mirror": true},
+						{"origin": [-0.1, 5.4, -2], "size": [4, 3, 4], "inflate": 0.25, "uv": [71, 62], "mirror": true}
+					]
+				},
+				{
+					"name": "fx1",
+					"pivot": [0, 0, 0],
+					"locators": {
+						"ax1": [0, 0, 0]
+					}
+				},
+				{
+					"name": "fx2",
+					"pivot": [0, 0, 0],
+					"locators": {
+						"ax2": [0, 0, 0]
+					}
+				},
+				{
+					"name": "ax3",
+					"pivot": [0, 0, 0],
+					"locators": {
+						"ax3": {
+							"offset": [0, 0, 0],
+							"rotation": [0, 0, -180]
+						}
+					}
+				},
+				{
+					"name": "ax2",
+					"pivot": [0, 0, 0],
+					"locators": {
+						"ax12": {
+							"offset": [0, 0, 0],
+							"rotation": [0, 0, -180]
+						}
+					}
+				},
+				{
+					"name": "ax9",
+					"pivot": [0, 0, 0],
+					"locators": {
+						"ax9": {
+							"offset": [0, 0, 0],
+							"rotation": [0, 0, -180]
+						}
+					}
+				},
+				{
+					"name": "ax_transform",
+					"pivot": [2, 12, -18],
+					"locators": {
+						"ax6": [0, 1.5, 0],
+						"ax7": [0, 29.5, 0]
+					}
+				},
+				{
+					"name": "ax_melee",
+					"pivot": [0, 24, -25],
+					"locators": {
+						"ax4": [-4, 18.5, -20],
+						"ax5": [4, 18.5, -21],
+						"ax8": [-20, 18.5, -25]
+					}
+				},
+				{
+					"name": "fxend",
+					"pivot": [0, 0, 0],
+					"locators": {
+						"fxend": [0, 0, 0]
+					}
+				}
+			]
+		}
+	]
+}

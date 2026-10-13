@@ -68,6 +68,17 @@ On Windows, `gradle/build-conventions.gradle` starts every Loom run with
 default, JDK 25 call-site resolution outgrows the committed stack of a worker thread and the
 development game dies with an access violation, leaving no crash report.
 
+Custom collections ([ADR 0002](../architecture/decisions/0002-load-custom-collections-at-runtime.md))
+are the one path by which the game loads content that does not ship with it. That content is
+untrusted, and only `com.theplumteam.remote` fetches it: from the single fixed CDN origin, by
+allowlisted per-collection paths in the `blockpops` namespace, under the limits in `RemoteLimits`,
+kept only once its manifest SHA-256 matches, and parsed with `StrictJson`. Do not add another
+origin, a URL from a server, packet or file, or a path outside `RemotePaths`. A Custom definition
+passes `CustomCollectionCheck` on both sides before registration. Its assets are served only by the
+runtime registries in `client.runtime`, which the figure models consult before GeckoLib, and are
+never written into GeckoLib's caches. They travel only in `SyncCustomCollectionsPacket`, never in
+the shared collection sync. CI never contacts the CDN.
+
 ## Trust model
 
 - **Protected controller, untrusted candidate.** Build and Packaged E2E run from the protected

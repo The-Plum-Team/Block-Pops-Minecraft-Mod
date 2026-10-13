@@ -7,9 +7,11 @@ import com.theplumteam.client.ClientHiddenCollections;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.gui.util.ButtonFactory;
 import com.theplumteam.client.gui.widget.TabButton;
+import com.theplumteam.client.remote.ClientCustomCollections;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.network.UnlockCollectionPacket;
+import com.theplumteam.network.CustomCollectionRequestPacket;
 import com.theplumteam.network.ReloadTokensPacket;
 import com.theplumteam.network.SetCollectionHiddenPacket;
 import com.theplumteam.network.UpdateGuaranteedResetHourPacket;
@@ -18,6 +20,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -58,7 +61,8 @@ public class SettingsScreen extends Screen {
         SERVER("Server"),
         DEVELOP("Develop"),
         CHEATS("Cheats"),
-        COLLECTIONS("Collections");
+        COLLECTIONS("Collections"),
+        CUSTOM("Custom");
 
         private final String displayName;
 
@@ -76,11 +80,20 @@ public class SettingsScreen extends Screen {
     private TabButton developTabButton;
     private TabButton cheatsTabButton;
     private TabButton collectionsTabButton;
+    private TabButton customTabButton;
     private final List<AbstractWidget> serverSettingWidgets = new ArrayList<>();
     private final List<AbstractWidget> developSettingWidgets = new ArrayList<>();
     private final List<AbstractWidget> cheatsSettingWidgets = new ArrayList<>();
     // Hide/Show toggle of each collection (Collections tab)
     private final Map<FigureCollection, Button> collectionToggleButtons = new LinkedHashMap<>();
+
+    // Custom tab: the access code field, a Remove button per enabled collection, and the
+    // server's last answer. The code survives a rebuild of the screen.
+    private final List<AbstractWidget> customWidgets = new ArrayList<>();
+    private EditBox customCodeField;
+    private String pendingCustomCode = "";
+    private Component customStatus;
+    private int shownCustomRevision;
 
     // Buttons and sliders
     private Button closeButton;
@@ -128,9 +141,13 @@ public class SettingsScreen extends Screen {
         developSettingWidgets.clear();
         cheatsSettingWidgets.clear();
         collectionToggleButtons.clear();
+        customWidgets.clear();
+        shownCustomRevision = ClientCustomCollections.revision();
         // The Collections tab goes away when the player may no longer manage collections
         collectionsTabButton = null;
-        if (activeTab == Tab.COLLECTIONS && !canManageCollections()) {
+        customTabButton = null;
+        if ((activeTab == Tab.COLLECTIONS && !canManageCollections())
+                || (activeTab == Tab.CUSTOM && !canManageCustomCollections())) {
             activeTab = Tab.SERVER;
         }
 
@@ -189,6 +206,19 @@ public class SettingsScreen extends Screen {
                     btn -> switchTab(Tab.COLLECTIONS)
             );
             this.addRenderableWidget(collectionsTabButton);
+            nextTabX += TAB_WIDTH + TAB_SPACING;
+        }
+
+        // Custom tab (for admins, on a server that offers Custom collections)
+        if (canManageCustomCollections()) {
+            customTabButton = (TabButton) ButtonFactory.createTab(
+                    nextTabX, tabY,
+                    TAB_WIDTH, TAB_HEIGHT,
+                    Component.literal(Tab.CUSTOM.getDisplayName()),
+                    activeTab == Tab.CUSTOM,
+                    btn -> switchTab(Tab.CUSTOM)
+            );
+            this.addRenderableWidget(customTabButton);
         }
 
         // Create button instances
@@ -224,6 +254,10 @@ public class SettingsScreen extends Screen {
 
         if (canManageCollections()) {
             createCollectionsSettings();
+        }
+
+        if (canManageCustomCollections()) {
+            createCustomSettings();
         }
 
         // Show initial tab and update action button state
@@ -268,6 +302,10 @@ public class SettingsScreen extends Screen {
         } else if (activeTab == Tab.CHEATS) {
             // "Progression" opens the per-player collection editor
             this.minecraft.setScreen(new AdminProgressionScreen(this));
+        } else if (activeTab == Tab.CUSTOM) {
+            // "Add": the server looks the code up and answers with a status
+            new CustomCollectionRequestPacket(true, pendingCustomCode.trim()).sendToServer();
+            customStatus = Component.translatable("blockpops.custom_collections.looking_up");
         }
     }
 
@@ -289,6 +327,10 @@ public class SettingsScreen extends Screen {
             this.actionButton.setMessage(Component.literal("Progression"));
             this.actionButton.active = true;
             this.actionButton.visible = true;
+        } else if (activeTab == Tab.CUSTOM) {
+            this.actionButton.setMessage(Component.literal("Add"));
+            this.actionButton.active = !pendingCustomCode.isBlank();
+            this.actionButton.visible = true;
         } else {
             // No action on the other tabs (Collections)
             this.actionButton.active = false;
@@ -301,6 +343,10 @@ public class SettingsScreen extends Screen {
         super.tick();
         // Follow the server's answers and permission changes while the screen is open
         refreshServerSettings();
+        // A new Custom list, or a server that starts or stops offering them, rebuilds the tabs
+        if (shownCustomRevision != ClientCustomCollections.revision()) {
+            this.rebuildWidgets();
+        }
     }
 
     @Override
@@ -343,7 +389,7 @@ public class SettingsScreen extends Screen {
         // all, so the Server tab sat on top of its collection header. An opaque base goes
         // under both; the themed fills below still draw on top of it.
         int tabsRight = this.panelX;
-        for (TabButton tab : new TabButton[] {serverTabButton, developTabButton, cheatsTabButton, collectionsTabButton}) {
+        for (TabButton tab : new TabButton[] {serverTabButton, developTabButton, cheatsTabButton, collectionsTabButton, customTabButton}) {
             if (tab != null && tab.visible) {
                 tabsRight = Math.max(tabsRight, tab.getX() + tab.getWidth());
             }
@@ -496,6 +542,25 @@ public class SettingsScreen extends Screen {
                     0xFFAAAAAA);
         }
 
+        // Draw Custom tab content (for admins)
+        if (activeTab == Tab.CUSTOM) {
+            int headerY = this.panelY + TAB_HEIGHT + 10;
+            graphics.drawCenteredString(this.font, "Custom Collections",
+                    this.panelX + this.panelWidth / 2, headerY, 0xFFFFFFFF);
+            String explanation = "Add a collection published for BlockPops by its access code. Every player downloads it on joining.";
+            graphics.drawString(this.font, explanation,
+                    this.panelX + (this.panelWidth - this.font.width(explanation)) / 2,
+                    this.panelY + TAB_HEIGHT + 26, 0xFFAAAAAA);
+            if (customStatus != null) {
+                graphics.drawCenteredString(this.font, customStatus,
+                        this.panelX + this.panelWidth / 2, this.panelY + TAB_HEIGHT + 76, 0xFFFFFF80);
+            }
+            if (ClientCustomCollections.collections().isEmpty()) {
+                graphics.drawCenteredString(this.font, Component.translatable("blockpops.custom_collections.none"),
+                        this.panelX + this.panelWidth / 2, this.panelY + TAB_HEIGHT + 104, 0xFFAAAAAA);
+            }
+        }
+
         // Draw color preview boxes (only in Develop tab)
         if (isDevelopmentMode() && activeTab == Tab.DEVELOP) {
             int previewSize = 35;
@@ -564,6 +629,7 @@ public class SettingsScreen extends Screen {
 
     @Override
     public void onClose() {
+        ClientCustomCollections.setStatusListener(null);
         // Return to parent screen
         this.minecraft.setScreen(this.parent);
     }
@@ -635,6 +701,47 @@ public class SettingsScreen extends Screen {
      */
     private boolean canManageCollections() {
         return canAccessCheats() && ClientHiddenCollections.isSynced();
+    }
+
+    /**
+     * Check if the current player can enable Custom collections for this world.
+     * Same access as cheats, and the server has to be one that offers Custom collections.
+     */
+    private boolean canManageCustomCollections() {
+        return canAccessCheats() && ClientCustomCollections.isSynced();
+    }
+
+    /**
+     * Create the Custom tab: the access code field and a Remove button per enabled collection
+     */
+    private void createCustomSettings() {
+        ClientCustomCollections.setStatusListener(status -> customStatus = ClientCustomCollections.message(status));
+
+        int fieldWidth = 240;
+        int fieldY = this.panelY + TAB_HEIGHT + 46;
+        customCodeField = new EditBox(this.font, this.panelX + (this.panelWidth - fieldWidth) / 2, fieldY,
+                fieldWidth, 20, Component.literal("Access code"));
+        customCodeField.setMaxLength(64);
+        customCodeField.setHint(Component.literal("Access code"));
+        customCodeField.setValue(pendingCustomCode);
+        customCodeField.setResponder(value -> {
+            pendingCustomCode = value;
+            updateActionButtonState();
+        });
+        customWidgets.add(customCodeField);
+
+        int rowWidth = 300;
+        int rowX = this.panelX + (this.panelWidth - rowWidth) / 2;
+        int rowY = this.panelY + TAB_HEIGHT + 96;
+        int maxRows = 8;
+        List<FigureCollection> collections = ClientCustomCollections.collections();
+        for (int i = 0; i < collections.size() && i < maxRows; i++) {
+            FigureCollection collection = collections.get(i);
+            customWidgets.add(Button.builder(Component.literal("Remove " + collection.getName()),
+                            button -> new CustomCollectionRequestPacket(false, collection.getId()).sendToServer())
+                    .bounds(rowX, rowY + i * 24, rowWidth, 20)
+                    .build());
+        }
     }
 
     /**
@@ -1048,6 +1155,9 @@ public class SettingsScreen extends Screen {
         for (AbstractWidget widget : collectionToggleButtons.values()) {
             this.removeWidget(widget);
         }
+        for (AbstractWidget widget : customWidgets) {
+            this.removeWidget(widget);
+        }
 
         // Add widgets for active tab
         List<AbstractWidget> activeWidgets;
@@ -1059,6 +1169,8 @@ public class SettingsScreen extends Screen {
             activeWidgets = cheatsSettingWidgets;
         } else if (tab == Tab.COLLECTIONS) {
             activeWidgets = new ArrayList<>(collectionToggleButtons.values());
+        } else if (tab == Tab.CUSTOM) {
+            activeWidgets = customWidgets;
         } else {
             activeWidgets = new ArrayList<>();
         }
@@ -1077,6 +1189,9 @@ public class SettingsScreen extends Screen {
         }
         if (collectionsTabButton != null) {
             collectionsTabButton.setSelected(tab == Tab.COLLECTIONS);
+        }
+        if (customTabButton != null) {
+            customTabButton.setSelected(tab == Tab.CUSTOM);
         }
 
         // Update action button text/state/visibility based on new tab
