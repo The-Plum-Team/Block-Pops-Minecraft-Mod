@@ -190,12 +190,19 @@ upgrade:
    evaluator still requires its own exact job graphs and one immutable exact-run
    artifact from each successful newest attempt; candidate YAML cannot redefine
    that expected graph.
-4. After reviewing the complete current-head diff, the repository owner
-   `AkaNebur` posts one plain, single-line issue comment (no Markdown fence):
+4. After reviewing the complete current-head diff, an approver posts one plain,
+   single-line issue comment (no Markdown fence):
    `/controller-upgrade approve <40-character-lowercase-head-sha>`. A new commit
-   always needs a new SHA-bound approval. The latest owner command for that exact
-   head wins; `/controller-upgrade revoke <sha>`, editing the approval, or
-   deleting it invalidates publication and wakes the protected handler.
+   always needs a new SHA-bound approval. While `master` is in
+   `shared-build-and-e2e` (today), the kit's protected admission decides, and
+   any current member of the `The-Plum-Team` organization is an approver (see
+   [Shared Build and packaged E2E](#shared-build-and-packaged-e2e-shared-build-and-e2e)
+   for who counts and how to revoke). The native evaluator described in this
+   procedure is dormant in that mode; it accepts only the repository owner
+   `AkaNebur`, and it applies again only after a rollback out of the mode. Under
+   the native evaluator, the latest owner command for that exact head wins;
+   `/controller-upgrade revoke <sha>`, editing the approval, or deleting it
+   invalidates publication and wakes the protected handler.
 5. Merge only while both ordinary stable contexts are current successes on that
    exact source head. The `pr-gate` environment writer first re-reads the open PR,
    current default/base/head, exact synthetic merge parents/tree, and approval
@@ -236,6 +243,8 @@ Put one strict JSON declaration between these exact PR-body markers:
 The parser exposes `RestrictedTransition.digest`, the SHA-256 of its canonical
 declaration. After reviewing the exact diff, `AkaNebur` posts the single line
 `/restricted-transition approve 1 <head-sha> <declaration-digest>`.
+`/restricted-transition` stays `AkaNebur`-only: the organization approvers of
+the kit's admission do not extend to it.
 The latest owner decision wins; `revoke`, an edited/deleted approval, a new head,
 base or declaration invalidates publication. The protected evaluator and writer
 independently reread that decision before publishing the two fixed App contexts.
@@ -444,23 +453,46 @@ in the same pull request that enters this mode:
   its `FORBIDDEN_PATHS` (`.gradle`, `buildSrc`), the `build.gradle` and
   `src/e2e` of every loader, `release/release-matrix.json` and
   `gradle/verification-metadata.xml`.
-- `command` is `/controller-upgrade`, and the only approver is `AkaNebur` as a
-  `MEMBER`. `tests/test_mod_base_build_adapter.py` keeps the list equal to the
-  native one.
+- `command` is `/controller-upgrade`, and the only approver entry is
+  `{"organization": "The-Plum-Team", "role": "member"}` (mod-base v1.6.0 or
+  later): any current member of the `The-Plum-Team` organization may decide,
+  its owners included (so `AkaNebur` still counts), and so does a future member
+  with no further change. A private (concealed) membership counts too.
+  `tests/test_mod_base_build_adapter.py` keeps `protected_paths` equal to the
+  native list and pins this approver entry.
+- Membership is proven by the gate App's member list (organization permission
+  "Members: Read-only"), not by `author_association`. The managed
+  `mod-base-gate-status.yml` runs its `members` job ("Read the organization
+  members") for that. An outside collaborator (for example `Nanarng`), a
+  former member or a billing manager never counts, whatever their repository
+  permission, and neither does a comment posted through a GitHub App.
 - The kit's gate status reads the config from the protected `master` it runs
-  as, never from the pull request.
+  as, never from the pull request. A pull request that changes this approver
+  entry is therefore decided by the approvers already on `master`.
 - A pull request whose tested merge changes a protected path gets `failure`
-  (`admission: ...`) on both contexts, unless the owner's newest decision on
-  its exact head is `/controller-upgrade approve <head sha>`. A new head needs
-  a new approval.
+  (`admission: ...`) on both contexts, unless the newest decision of a member
+  on its exact head is `/controller-upgrade approve <head sha>`. A new head needs
+  a new approval. An edited decision (also an older comment edited into one)
+  is refused until it is deleted, so post a fresh comment instead of editing
+  one. A decision posted while an evaluation was running is refused by that
+  run ("evaluate again") and counted by the next dispatch.
 - A comment does not start the status caller. After approving a pull request
   whose gates have already finished, dispatch `mod-base gate status` for it
   (`gh workflow run mod-base-gate-status.yml -f pr-number=<N>`).
+- To revoke an approval, a member posts `/controller-upgrade revoke <head sha>`
+  and then either pushes a new head or converts the pull request to draft,
+  then dispatches `gh workflow run mod-base-gate-status.yml -f pr-number=<N>`.
+  The revocation alone is not enough, because any collaborator with write
+  access can delete a comment, and a success already written on a head stays
+  until a newer status replaces it. Check the two `Trusted PR / ...` contexts
+  are no longer `success` before trusting the revocation.
+- `/restricted-transition` stays `AkaNebur`-only. It is read only by the
+  native evaluator, which is dormant in this mode (below).
 
 The kit checks only this generic rule. It does not check the native route's exact
 path inventory of a controller upgrade, its required files, the loader
-bootstrap or a restricted transition's declaration and decision. The owner
-reviews those before approving.
+bootstrap or a restricted transition's declaration and decision. The approving
+member reviews those before approving.
 
 Advisory AI visual review and the advisory current-head public evidence read
 the native pull-request E2E runs; they stop for pull requests into `master` in
@@ -469,6 +501,22 @@ this mode until they read the kit's packaged runs.
 Leaving it is the same two-step rollback: `reviewed-rollback` with
 `"rollback_from": "shared-build-and-e2e"` (all four callers stay; the native
 `pull_request_target` triggers into `master` come back), then `disabled`.
+
+Two approver rules matter for a rollback:
+
+- The native evaluator `scripts/ci/pr_gate.py` comes back with the native
+  triggers, and it still accepts only `AkaNebur`
+  (`CONTROLLER_UPGRADE_OWNER`, association `MEMBER`) for `/controller-upgrade`
+  and `/restricted-transition`. It fails closed: from the rollback on, a
+  member's approval no longer admits a protected change, and only `AkaNebur`
+  can approve one. Giving it organization approvers would be its own
+  controller upgrade.
+- A pin rollback below mod-base v1.6.0 requires removing the organization
+  approver first, because older kits refuse a Build config that names one.
+  Revert the entry to `{"association": "MEMBER", "login": "AkaNebur"}`
+  (with the assertion in `tests/test_mod_base_build_adapter.py`) through the
+  controller-upgrade procedure, wait until it is on `master`, then bump the
+  pin back.
 
 ## Bootstrap a release branch
 
