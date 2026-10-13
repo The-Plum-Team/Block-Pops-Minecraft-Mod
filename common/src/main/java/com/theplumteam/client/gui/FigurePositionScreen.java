@@ -397,7 +397,11 @@ public class FigurePositionScreen extends Screen {
 
             GameProfile profile = profileCache.computeIfAbsent(figure.getPlayerUUID(), uuid -> new GameProfile(uuid, figure.getName()));
             if (registeredSkins.add(figure.getPlayerUUID())) {
-                //? if >=1.21 {
+                //? if >=1.21.9 {
+                /*// The populated profile is a new one there, so it replaces the cached one.
+                ClientSkinRegistration.register(profile,
+                        prepared -> profileCache.put(figure.getPlayerUUID(), prepared));
+                *///? } elif >=1.21 {
                 /*ClientSkinRegistration.register(profile);
                 *///? } else {
                 Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, p) -> {}, false);
