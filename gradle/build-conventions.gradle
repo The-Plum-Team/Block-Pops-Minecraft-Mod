@@ -433,6 +433,13 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
         loom.interfaceInjection.enableDependencyInterfaceInjection.set(true)
     }
 
+    // HotSpot on Windows keeps only 8 pages of committed stack below a Java frame for the
+    // VM's own use, and JDK 25 needs more to resolve a call site. The development game then
+    // dies with an access violation and no crash report. Other platforms default to 20.
+    if (System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows')) {
+        loom.runs.configureEach { vmArg '-XX:StackShadowPages=20' }
+    }
+
     dependencies {
         minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
         if (!noRemap) {
