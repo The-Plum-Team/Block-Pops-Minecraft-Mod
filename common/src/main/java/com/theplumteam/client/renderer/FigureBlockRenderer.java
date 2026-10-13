@@ -127,11 +127,17 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
                        packedLight, packedOverlay, red, green, blue, alpha);
                        //? }
 
-        // The pose stack is pushed around the whole draw and GeckoLib centres the model
-        // after this, so the figure's own scale goes here, once: render layers re-enter
-        // with the stack already scaled.
+        // The pose stack is pushed around the whole draw, so the figure's own scale goes
+        // here, once: render layers re-enter with the stack already scaled. GeckoLib 4.8
+        // has just centred the model in super.preRender, so the scale is about where the
+        // stack is; GeckoLib 4.7 centres it later, in actuallyRender.
         if (!isReRender) {
-            FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(animatable.getFigureDefinition(), animatable.getAlternativeSkinIndex()));
+            float scale = FigurePlacement.scale(animatable.getFigureDefinition(), animatable.getAlternativeSkinIndex());
+            //? if >=1.21 {
+            /*poseStack.scale(scale, scale, scale);
+            *///? } else {
+            FigurePlacement.scaleAboutCentre(poseStack, scale);
+            //? }
         }
 
         // Detect skin model and show/hide appropriate arms
