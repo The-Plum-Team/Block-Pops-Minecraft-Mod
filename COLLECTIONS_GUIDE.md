@@ -180,8 +180,10 @@ A figure on its own model usually needs some of these optional keys, next to `mo
 | `gui_scale` | Its size in the collection screen. Defaults to `scale`. |
 | `box_face_uv` | Where the face shown on the front of the box lies in its texture, in texels: `{"u": 8, "v": 8, "w": 8, "h": 8, "tex_width": 128, "tex_height": 128}`. Without it a figure on its own model shows no face there. |
 | `offset_x`, `offset_y`, `offset_z` | Its position in the box, in place of the box default. A box an operator has moved keeps its own position. |
+| `show_box_face` | Whether the box shows its face, when the default is not right: by default it does with `box_face_uv`, or on the default skin model. `true` without `box_face_uv` reads the face from a skin layout, hat layer included. |
+| `pose_locked` | `true` keeps the figure in its pose instead of cycling between standing and sitting on use. |
 
-An entry in `alternatives` may also name its own `model`; without one it uses the figure's.
+An entry in `alternatives` may also name its own `model` and `scale`, and its own `show_box_face` together with its own `box_face_uv`; whatever it leaves out comes from the figure. A skin on the default skin model always takes the shared poses; a skin on any other model takes the figure's `pose_animation`.
 
 ```json
 {

@@ -34,9 +34,9 @@ public final class FigurePlacement {
         return offset;
     }
 
-    /** The figure's own scale, 1 for figures on the default model. */
-    public static float scale(FigureDefinition figure) {
-        return figure != null ? figure.getRenderOptions().scale() : 1.0f;
+    /** A skin's own scale, 1 for figures on the default model. */
+    public static float scale(FigureDefinition figure, int skinIndex) {
+        return figure != null ? figure.getScaleForSkinIndex(skinIndex) : 1.0f;
     }
 
     /**

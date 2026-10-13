@@ -55,7 +55,7 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
                               float partialTick) {
         super.addRenderData(animatable, relatedObject, renderState, partialTick);
         ((com.geckolib.renderer.base.GeoRenderState) renderState).addGeckolibData(FIGURE_SCALE,
-                FigurePlacement.scale(animatable.getFigureDefinition()));
+                FigurePlacement.scale(animatable.getFigureDefinition(), animatable.getAlternativeSkinIndex()));
     }
 
     @Override
@@ -97,7 +97,7 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
             return;
         }
         poseStack.pushPose();
-        FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(animatable.getFigureDefinition()));
+        FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(animatable.getFigureDefinition(), animatable.getAlternativeSkinIndex()));
         super.render(animatable, partialTick, poseStack, bufferSource, packedLight, packedOverlay, camPos);
         poseStack.popPose();
     }
@@ -131,7 +131,7 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
         // after this, so the figure's own scale goes here, once: render layers re-enter
         // with the stack already scaled.
         if (!isReRender) {
-            FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(animatable.getFigureDefinition()));
+            FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(animatable.getFigureDefinition(), animatable.getAlternativeSkinIndex()));
         }
 
         // Detect skin model and show/hide appropriate arms

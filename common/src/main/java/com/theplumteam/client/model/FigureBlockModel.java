@@ -237,7 +237,7 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     public ResourceLocation getAnimationResource(FigureBlockEntity animatable) {
         // The pose file holds both Pose_Stand and Pose_Sit; a figure with its own bones names its own
         FigureDefinition figure = animatable.getFigureDefinition();
-        ResourceLocation poses = figure != null ? figure.getRenderOptions().poseAnimation() : null;
+        ResourceLocation poses = figure != null ? figure.getPoseAnimationForSkinIndex(animatable.getAlternativeSkinIndex()) : null;
         return poses != null ? poses : POSE_ANIMATION;
     }
 
