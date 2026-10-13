@@ -26,12 +26,13 @@ public class FigureDefinition {
      * @param scale       its size in place of the figure's
      * @param showBoxFace whether the box shows its face, in place of the figure's choice;
      *                    when set, {@code boxFaceUv} replaces the figure's face region too
+     * @param hiddenBones bones not drawn on this skin, in place of the figure's when not empty
      */
     public record AlternativeSkin(String name, ResourceLocation texture, @Nullable ResourceLocation model,
                                   @Nullable Float scale, @Nullable Boolean showBoxFace,
-                                  @Nullable float[] boxFaceUv) {
+                                  @Nullable float[] boxFaceUv, List<String> hiddenBones) {
         public AlternativeSkin(String name, ResourceLocation texture) {
-            this(name, texture, null, null, null, null);
+            this(name, texture, null, null, null, null, List.of());
         }
 
         public static AlternativeSkin fromJson(JsonObject json) {
@@ -42,7 +43,8 @@ public class FigureDefinition {
                     : null;
             Float scale = json.has("scale") ? json.get("scale").getAsFloat() : null;
             Boolean showBoxFace = json.has("show_box_face") ? json.get("show_box_face").getAsBoolean() : null;
-            return new AlternativeSkin(name, texture, model, scale, showBoxFace, readBoxFaceUv(json));
+            return new AlternativeSkin(name, texture, model, scale, showBoxFace, readBoxFaceUv(json),
+                    readStrings(json, "hidden_bones"));
         }
 
         JsonObject toJson() {
@@ -59,6 +61,25 @@ public class FigureDefinition {
                 json.addProperty("show_box_face", showBoxFace);
             }
             writeBoxFaceUv(json, boxFaceUv);
+            writeStrings(json, "hidden_bones", hiddenBones);
+            return json;
+        }
+    }
+
+    /**
+     * A texture the named bones of a figure's own model are drawn with, instead of the
+     * figure's texture, for models laid out across several images.
+     */
+    public record ExtraTexture(ResourceLocation texture, List<String> bones) {
+        static ExtraTexture fromJson(JsonObject json) {
+            return new ExtraTexture(ResourceLocation.tryParse(json.get("texture").getAsString()),
+                    readStrings(json, "bones"));
+        }
+
+        JsonObject toJson() {
+            JsonObject json = new JsonObject();
+            json.addProperty("texture", texture.toString());
+            writeStrings(json, "bones", bones);
             return json;
         }
     }
@@ -78,11 +99,15 @@ public class FigureDefinition {
      * @param showBoxFace   whether the box shows the figure's face, when the default (a face
      *                      region, or the default skin model) is not right
      * @param poseLocked    whether the figure keeps its pose instead of cycling on use
+     * @param hiddenBones   bones of the figure's model that are not drawn
+     * @param extraTextures textures some bones of the figure's model are drawn with
      */
     public record RenderOptions(@Nullable ResourceLocation poseAnimation, float scale, float guiScale,
                                 @Nullable float[] boxFaceUv, @Nullable float[] offset,
-                                @Nullable Boolean showBoxFace, boolean poseLocked) {
-        public static final RenderOptions DEFAULT = new RenderOptions(null, 1.0f, 1.0f, null, null, null, false);
+                                @Nullable Boolean showBoxFace, boolean poseLocked,
+                                List<String> hiddenBones, List<ExtraTexture> extraTextures) {
+        public static final RenderOptions DEFAULT = new RenderOptions(null, 1.0f, 1.0f, null, null, null, false,
+                List.of(), List.of());
         private static final String[] OFFSET_KEYS = {"offset_x", "offset_y", "offset_z"};
 
         static RenderOptions fromJson(JsonObject json) {
@@ -102,8 +127,14 @@ public class FigureDefinition {
             }
             Boolean showBoxFace = json.has("show_box_face") ? json.get("show_box_face").getAsBoolean() : null;
             boolean poseLocked = json.has("pose_locked") && json.get("pose_locked").getAsBoolean();
+            List<ExtraTexture> extraTextures = new ArrayList<>();
+            if (json.has("extra_textures")) {
+                for (var element : json.getAsJsonArray("extra_textures")) {
+                    extraTextures.add(ExtraTexture.fromJson(element.getAsJsonObject()));
+                }
+            }
             return new RenderOptions(poseAnimation, scale, guiScale, readBoxFaceUv(json), offset,
-                    showBoxFace, poseLocked);
+                    showBoxFace, poseLocked, readStrings(json, "hidden_bones"), List.copyOf(extraTextures));
         }
 
         void toJson(JsonObject json) {
@@ -130,7 +161,33 @@ public class FigureDefinition {
             if (poseLocked) {
                 json.addProperty("pose_locked", true);
             }
+            writeStrings(json, "hidden_bones", hiddenBones);
+            if (!extraTextures.isEmpty()) {
+                JsonArray array = new JsonArray();
+                extraTextures.forEach(extra -> array.add(extra.toJson()));
+                json.add("extra_textures", array);
+            }
         }
+    }
+
+    private static List<String> readStrings(JsonObject json, String key) {
+        if (!json.has(key)) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        for (var element : json.getAsJsonArray(key)) {
+            values.add(element.getAsString());
+        }
+        return List.copyOf(values);
+    }
+
+    private static void writeStrings(JsonObject json, String key, List<String> values) {
+        if (values.isEmpty()) {
+            return;
+        }
+        JsonArray array = new JsonArray();
+        values.forEach(array::add);
+        json.add(key, array);
     }
 
     @Nullable
@@ -340,6 +397,21 @@ public class FigureDefinition {
         AlternativeSkin alternative = alternative(skinIndex);
         return alternative != null && alternative.showBoxFace() != null
                 ? alternative.boxFaceUv() : renderOptions.boxFaceUv();
+    }
+
+    /** The bones a skin does not draw: its alternative's own when it names any, else the figure's. */
+    public List<String> getHiddenBonesForSkinIndex(int skinIndex) {
+        AlternativeSkin alternative = alternative(skinIndex);
+        return alternative != null && !alternative.hiddenBones().isEmpty()
+                ? alternative.hiddenBones() : renderOptions.hiddenBones();
+    }
+
+    /**
+     * The extra textures a skin is drawn with. They belong to the figure's own model, so
+     * an alternative on another model has none.
+     */
+    public List<ExtraTexture> getExtraTexturesForSkinIndex(int skinIndex) {
+        return modelPath.equals(getModelForSkinIndex(skinIndex)) ? renderOptions.extraTextures() : List.of();
     }
 
     /**

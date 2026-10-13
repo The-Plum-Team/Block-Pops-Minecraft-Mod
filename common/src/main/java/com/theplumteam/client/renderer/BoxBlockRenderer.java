@@ -405,11 +405,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         if (figure == null) return;
 
         // Get the player skin texture directly (bypassing figure model)
-        //? if >=1.21.2 {
-        /*ResourceLocation skinTexture = figureRenderer.getGeoModel().getTextureResource(animatable, figureRenderer);
-        *///? } else {
-        ResourceLocation skinTexture = figureRenderer.getGeoModel().getTextureResource(animatable);
-        //? }
+        ResourceLocation skinTexture = ((FigureModel) figureRenderer.getGeoModel()).resolveTexture(animatable);
         if (skinTexture == null) return; // Safety check
 
         // Render both the base skin layer and 3D overlay layer directly from player skin

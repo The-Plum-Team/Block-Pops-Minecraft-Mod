@@ -9,6 +9,9 @@ import com.theplumteam.blockentity.FigureBlockEntity;
 /*import com.theplumteam.client.ClientSkinRegistration;
 *///? }
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
+import com.theplumteam.client.runtime.FigureVariants;
+import com.theplumteam.client.runtime.RuntimeGeo;
+import com.theplumteam.client.runtime.RuntimeTextures;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import com.theplumteam.util.GeoAssets;
@@ -18,6 +21,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
+import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.model.GeoModel;
 //? if >=1.21.5 {
 /*import software.bernie.geckolib.constant.dataticket.DataTicket;
@@ -115,7 +119,7 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
                 renderState);
         ResourceLocation model = resolveModel(animatable);
         renderState.addGeckolibData(FIGURE_MODEL, model != null ? model : FALLBACK_MODEL);
-        ResourceLocation texture = resolveTexture(animatable);
+        ResourceLocation texture = drawnTexture(animatable);
         renderState.addGeckolibData(FIGURE_TEXTURE, texture != null ? texture : FALLBACK_TEXTURE);
     }
     *///? } elif >=1.21.2 {
@@ -126,7 +130,7 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
 
     @Override
     public ResourceLocation getTextureResource(FigureBlockEntity animatable, GeoRenderer<FigureBlockEntity> renderer) {
-        return resolveTexture(animatable);
+        return drawnTexture(animatable);
     }
     *///? } else {
     @Override
@@ -136,14 +140,47 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
 
     @Override
     public ResourceLocation getTextureResource(FigureBlockEntity animatable) {
-        return resolveTexture(animatable);
+        return drawnTexture(animatable);
     }
     //? }
+
+    /**
+     * The model a skin is drawn with: its variant when it has a ready one, the default
+     * figure while its own model is still being downloaded.
+     */
+    private static ResourceLocation drawnModel(FigureDefinition figure, int skinIndex) {
+        FigureVariants.Variant variant = FigureVariants.resolve(figure, skinIndex);
+        if (variant != null) {
+            return variant.model();
+        }
+        ResourceLocation model = figure.getModelForSkinIndex(skinIndex);
+        return RuntimeGeo.isPending(model) ? FigureDefinition.DEFAULT_MODEL : model;
+    }
+
+    /** The texture GeckoLib draws the figure with: a variant's combined texture when it has one. */
+    private ResourceLocation drawnTexture(FigureBlockEntity animatable) {
+        FigureDefinition figure = animatable.getFigureDefinition();
+        if (figure != null) {
+            int skinIndex = animatable.getAlternativeSkinIndex();
+            if (RuntimeGeo.isPending(figure.getModelForSkinIndex(skinIndex))) {
+                return FALLBACK_TEXTURE;
+            }
+            FigureVariants.Variant variant = FigureVariants.resolve(figure, skinIndex);
+            if (variant != null) {
+                return variant.texture();
+            }
+        }
+        return resolveTexture(animatable);
+    }
+
+    private static ResourceLocation unlessPending(ResourceLocation texture) {
+        return RuntimeTextures.isPending(texture) ? FALLBACK_TEXTURE : texture;
+    }
 
     private ResourceLocation resolveModel(FigureBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure == null) return FALLBACK_MODEL;
-        return figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex());
+        return drawnModel(figure, animatable.getAlternativeSkinIndex());
     }
 
     private ResourceLocation resolveTexture(FigureBlockEntity animatable) {
@@ -154,7 +191,7 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
         if (skinIndex > 0 && figure.hasAlternatives()) {
             int altListIndex = skinIndex - 1;
             if (altListIndex < figure.getAlternatives().size()) {
-                return figure.getAlternatives().get(altListIndex).texture();
+                return unlessPending(figure.getAlternatives().get(altListIndex).texture());
             }
         }
 
@@ -211,7 +248,7 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
             return PlayerSkins.insecureTexture(profile);
         }
 
-        return figure.getTexturePath() != null ? figure.getTexturePath() : FALLBACK_TEXTURE;
+        return figure.getTexturePath() != null ? unlessPending(figure.getTexturePath()) : FALLBACK_TEXTURE;
     }
 
     private ResourceLocation getSkinLocationFromSnapshot(FigureDefinition figure, String snapshot) {
@@ -237,9 +274,56 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     public ResourceLocation getAnimationResource(FigureBlockEntity animatable) {
         // The pose file holds both Pose_Stand and Pose_Sit; a figure with its own bones names its own
         FigureDefinition figure = animatable.getFigureDefinition();
-        ResourceLocation poses = figure != null ? figure.getPoseAnimationForSkinIndex(animatable.getAlternativeSkinIndex()) : null;
-        return poses != null ? poses : POSE_ANIMATION;
+        if (figure == null) {
+            return POSE_ANIMATION;
+        }
+        int skinIndex = animatable.getAlternativeSkinIndex();
+        ResourceLocation poses = figure.getPoseAnimationForSkinIndex(skinIndex);
+        if (poses == null || RuntimeGeo.isPending(poses) || RuntimeGeo.isPending(figure.getModelForSkinIndex(skinIndex))) {
+            return POSE_ANIMATION;
+        }
+        return poses;
     }
+
+    // Models and animations that arrive while the game runs live outside GeckoLib's
+    // caches (see RuntimeGeo), so both lookups ask there first.
+    @Override
+    public BakedGeoModel getBakedModel(ResourceLocation location) {
+        BakedGeoModel model = RuntimeGeo.model(location);
+        return model != null ? model : super.getBakedModel(location);
+    }
+
+    //? if >=26 {
+    /*@Override
+    public com.geckolib.cache.animation.Animation getBakedAnimation(FigureBlockEntity animatable, String name) {
+        ResourceLocation poses = getAnimationResource(animatable);
+        if (RuntimeGeo.ownsAnimations(poses)) {
+            var animations = RuntimeGeo.animations(poses);
+            return animations != null ? animations.getAnimation(name) : null;
+        }
+        return super.getBakedAnimation(animatable, name);
+    }
+    *///? } elif >=1.21 {
+    /*@Override
+    public software.bernie.geckolib.animation.Animation getAnimation(FigureBlockEntity animatable, String name) {
+        ResourceLocation poses = getAnimationResource(animatable);
+        if (RuntimeGeo.ownsAnimations(poses)) {
+            var animations = RuntimeGeo.animations(poses);
+            return animations != null ? animations.getAnimation(name) : null;
+        }
+        return super.getAnimation(animatable, name);
+    }
+    *///? } else {
+    @Override
+    public software.bernie.geckolib.core.animation.Animation getAnimation(FigureBlockEntity animatable, String name) {
+        ResourceLocation poses = getAnimationResource(animatable);
+        if (RuntimeGeo.ownsAnimations(poses)) {
+            var animations = RuntimeGeo.animations(poses);
+            return animations != null ? animations.getAnimation(name) : null;
+        }
+        return super.getAnimation(animatable, name);
+    }
+    //? }
 
     //? if >=1.21.9 {
     /*// GeckoLib 5.4 moved getRenderType off GeoModel and onto the renderer,
@@ -252,7 +336,7 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     *///? } else {
     @Override
     public RenderType getRenderType(FigureBlockEntity animatable, ResourceLocation texture) {
-        ResourceLocation textureToUse = resolveTexture(animatable);
+        ResourceLocation textureToUse = drawnTexture(animatable);
         if (textureToUse == null) textureToUse = FALLBACK_TEXTURE;
         return RenderType.entityCutoutNoCull(textureToUse);
     }
