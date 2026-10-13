@@ -3,6 +3,7 @@
 Accepted project decisions:
 
 - [ADR 0001: Adopt mod-base public evidence](0001-adopt-mod-base-public-evidence.md)
+- [ADR 0002: Load Custom collections at runtime](0002-load-custom-collections-at-runtime.md)
 
 An ADR records the evidence and trade-offs behind a decision. Operational instructions remain in
 the focused human and AI documentation linked from the repository root. Name each record

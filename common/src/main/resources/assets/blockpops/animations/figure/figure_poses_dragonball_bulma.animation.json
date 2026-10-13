@@ -1,0 +1,30 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"Pose_Stand": {
+			"loop": true,
+			"animation_length": 0.01,
+			"bones": {
+				"Head": { "rotation": [0, 0, 0], "position": [0, 0, 0], "scale": 1 },
+				"Body": { "rotation": [0, 0, 0], "position": [0, 0, 0], "scale": 1 },
+				"LeftArm": { "rotation": [0, 0, 0], "position": [0, 0, 0], "scale": 1 },
+				"RightArm": { "rotation": [0, 0, 0], "position": [0, 0, 0], "scale": 1 },
+				"RightLeg": { "rotation": [0, 0, 0], "position": [0, 0, 0], "scale": 1 },
+				"LeftLeg": { "rotation": [0, 0, 0], "position": [0, 0, 0], "scale": 1 },
+				"Root": { "position": [0, 0, 0] }
+			}
+		},
+		"Pose_Sit": {
+			"loop": true,
+			"animation_length": 0.125,
+			"bones": {
+				"Head": { "rotation": [5, 0, 0], "position": [0, -1.82, -0.4], "scale": 1 },
+				"LeftArm": { "rotation": [-45, 0, 0], "position": [0, -1.82, 0], "scale": 1 },
+				"RightArm": { "rotation": [-40, 0, 0], "position": [0, -1.82, 0], "scale": 1 },
+				"RightLeg": { "rotation": [-90.24133, 17.43127, -1.5741], "position": [-0.2, -1.24, -1], "scale": 1 },
+				"LeftLeg": { "rotation": [-90, -20, 0], "position": [0, -1.24, -1], "scale": 1 },
+				"Root": { "position": [0, -8.73, 0] }
+			}
+		}
+	}
+}
