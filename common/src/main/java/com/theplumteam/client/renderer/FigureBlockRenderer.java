@@ -43,6 +43,32 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
         return blockEntity.hasFigure() && super.shouldRender(blockEntity, cameraPos);
     }
 
+    // The figure's own scale is read off the block entity while it is in hand and
+    // applied around the whole submission.
+    private static final com.geckolib.constant.dataticket.DataTicket<Float> FIGURE_SCALE =
+            com.geckolib.constant.dataticket.DataTicket.create("blockpops:figure_scale", Float.class);
+
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public void addRenderData(FigureBlockEntity animatable, Void relatedObject,
+                              net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState renderState,
+                              float partialTick) {
+        super.addRenderData(animatable, relatedObject, renderState, partialTick);
+        ((com.geckolib.renderer.base.GeoRenderState) renderState).addGeckolibData(FIGURE_SCALE,
+                FigurePlacement.scale(animatable.getFigureDefinition()));
+    }
+
+    @Override
+    public void submit(net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState renderState,
+                       PoseStack poseStack, net.minecraft.client.renderer.SubmitNodeCollector renderTasks,
+                       net.minecraft.client.renderer.state.level.CameraRenderState cameraState) {
+        Float scale = ((com.geckolib.renderer.base.GeoRenderState) renderState).getGeckolibData(FIGURE_SCALE);
+        poseStack.pushPose();
+        FigurePlacement.scaleAboutCentre(poseStack, scale != null ? scale : 1.0f);
+        super.submit(renderState, poseStack, renderTasks, cameraState);
+        poseStack.popPose();
+    }
+
     @Override
     public RenderType getRenderType(net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState renderState,
                                     ResourceLocation texture) {
@@ -70,7 +96,10 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
         if (!animatable.hasFigure()) {
             return;
         }
+        poseStack.pushPose();
+        FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(animatable.getFigureDefinition()));
         super.render(animatable, partialTick, poseStack, bufferSource, packedLight, packedOverlay, camPos);
+        poseStack.popPose();
     }
 
     @Override
@@ -97,6 +126,13 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
                        *///? } else {
                        packedLight, packedOverlay, red, green, blue, alpha);
                        //? }
+
+        // The pose stack is pushed around the whole draw and GeckoLib centres the model
+        // after this, so the figure's own scale goes here, once: render layers re-enter
+        // with the stack already scaled.
+        if (!isReRender) {
+            FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(animatable.getFigureDefinition()));
+        }
 
         // Detect skin model and show/hide appropriate arms
         if (animatable.hasFigure()) {

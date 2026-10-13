@@ -145,7 +145,7 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
 
     private ResourceLocation resolveModel(BoxBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
-        return (figure != null) ? figure.getModelPath() : null;
+        return (figure != null) ? figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex()) : null;
     }
 
     /** Resolves a box's figure skin. Public so the box renderer can draw the face with it. */
@@ -251,8 +251,10 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
 
     @Override
     public ResourceLocation getAnimationResource(BoxBlockEntity animatable) {
-        // Always return the pose animation file which contains both Pose_Stand and Pose_Sit
-        return POSE_ANIMATION;
+        // The pose file holds both Pose_Stand and Pose_Sit; a figure with its own bones names its own
+        FigureDefinition figure = animatable.getFigureDefinition();
+        ResourceLocation poses = figure != null ? figure.getRenderOptions().poseAnimation() : null;
+        return poses != null ? poses : POSE_ANIMATION;
     }
 
     //? if >=1.21.9 {

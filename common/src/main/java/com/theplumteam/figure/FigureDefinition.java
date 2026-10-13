@@ -19,13 +19,90 @@ import java.util.UUID;
  */
 public class FigureDefinition {
     /**
-     * Represents an alternative skin variant for a figure
+     * Represents an alternative skin variant for a figure. A variant may bring its own
+     * model; without one it uses the figure's.
      */
-    public record AlternativeSkin(String name, ResourceLocation texture) {
+    public record AlternativeSkin(String name, ResourceLocation texture, @Nullable ResourceLocation model) {
         public static AlternativeSkin fromJson(JsonObject json) {
             String name = json.get("name").getAsString();
             ResourceLocation texture = ResourceLocation.tryParse(json.get("texture").getAsString());
-            return new AlternativeSkin(name, texture);
+            ResourceLocation model = json.has("model")
+                    ? GeoAssets.declared(ResourceLocation.tryParse(json.get("model").getAsString()))
+                    : null;
+            return new AlternativeSkin(name, texture, model);
+        }
+    }
+
+    /**
+     * How a figure with its own model is drawn. Figures on the default skin model need
+     * none of it, so every value is optional.
+     *
+     * @param poseAnimation the figure's own stand and sit poses, for models whose bones
+     *                      the shared poses do not drive
+     * @param scale         the figure's size in the box and as a placed figure
+     * @param guiScale      the figure's size in the collection screen
+     * @param boxFaceUv     where the face shown on the box lies in the figure's texture:
+     *                      {u, v, width, height, textureWidth, textureHeight}
+     * @param offset        the figure's own position in the box, {x, y, z}, each NaN when
+     *                      the box default applies
+     */
+    public record RenderOptions(@Nullable ResourceLocation poseAnimation, float scale, float guiScale,
+                                @Nullable float[] boxFaceUv, @Nullable float[] offset) {
+        public static final RenderOptions DEFAULT = new RenderOptions(null, 1.0f, 1.0f, null, null);
+        private static final String[] OFFSET_KEYS = {"offset_x", "offset_y", "offset_z"};
+
+        static RenderOptions fromJson(JsonObject json) {
+            ResourceLocation poseAnimation = json.has("pose_animation")
+                    ? GeoAssets.declared(ResourceLocation.tryParse(json.get("pose_animation").getAsString()))
+                    : null;
+            float scale = json.has("scale") ? json.get("scale").getAsFloat() : 1.0f;
+            float guiScale = json.has("gui_scale") ? json.get("gui_scale").getAsFloat() : scale;
+            float[] boxFaceUv = null;
+            if (json.has("box_face_uv")) {
+                JsonObject uv = json.getAsJsonObject("box_face_uv");
+                boxFaceUv = new float[] {uv.get("u").getAsFloat(), uv.get("v").getAsFloat(),
+                        uv.get("w").getAsFloat(), uv.get("h").getAsFloat(),
+                        uv.get("tex_width").getAsFloat(), uv.get("tex_height").getAsFloat()};
+            }
+            float[] offset = null;
+            for (int i = 0; i < OFFSET_KEYS.length; i++) {
+                if (json.has(OFFSET_KEYS[i])) {
+                    if (offset == null) {
+                        offset = new float[] {Float.NaN, Float.NaN, Float.NaN};
+                    }
+                    offset[i] = json.get(OFFSET_KEYS[i]).getAsFloat();
+                }
+            }
+            return new RenderOptions(poseAnimation, scale, guiScale, boxFaceUv, offset);
+        }
+
+        void toJson(JsonObject json) {
+            if (poseAnimation != null) {
+                json.addProperty("pose_animation", poseAnimation.toString());
+            }
+            if (scale != 1.0f) {
+                json.addProperty("scale", scale);
+            }
+            if (guiScale != scale) {
+                json.addProperty("gui_scale", guiScale);
+            }
+            if (boxFaceUv != null) {
+                JsonObject uv = new JsonObject();
+                uv.addProperty("u", boxFaceUv[0]);
+                uv.addProperty("v", boxFaceUv[1]);
+                uv.addProperty("w", boxFaceUv[2]);
+                uv.addProperty("h", boxFaceUv[3]);
+                uv.addProperty("tex_width", boxFaceUv[4]);
+                uv.addProperty("tex_height", boxFaceUv[5]);
+                json.add("box_face_uv", uv);
+            }
+            if (offset != null) {
+                for (int i = 0; i < OFFSET_KEYS.length; i++) {
+                    if (!Float.isNaN(offset[i])) {
+                        json.addProperty(OFFSET_KEYS[i], offset[i]);
+                    }
+                }
+            }
         }
     }
 
@@ -39,6 +116,7 @@ public class FigureDefinition {
     private final List<AlternativeSkin> alternatives;
     private final PopBlockColor favoriteColor; // For player figures, stores their chosen color
     private final boolean enabled; // False once an operator disables a World Players figure
+    private final RenderOptions renderOptions;
 
     public FigureDefinition(String id, String name, ResourceLocation modelPath,
                            ResourceLocation texturePath, ResourceLocation animationPath) {
@@ -48,6 +126,12 @@ public class FigureDefinition {
     public FigureDefinition(String id, String name, ResourceLocation modelPath,
                            ResourceLocation texturePath, ResourceLocation animationPath,
                            List<AlternativeSkin> alternatives) {
+        this(id, name, modelPath, texturePath, animationPath, alternatives, RenderOptions.DEFAULT);
+    }
+
+    public FigureDefinition(String id, String name, ResourceLocation modelPath,
+                           ResourceLocation texturePath, ResourceLocation animationPath,
+                           List<AlternativeSkin> alternatives, RenderOptions renderOptions) {
         this.id = id;
         this.name = name;
         this.modelPath = modelPath;
@@ -58,6 +142,7 @@ public class FigureDefinition {
         this.alternatives = new ArrayList<>(alternatives);
         this.favoriteColor = null; // Static figures don't have favorite colors
         this.enabled = true;
+        this.renderOptions = renderOptions;
     }
 
     /**
@@ -84,6 +169,7 @@ public class FigureDefinition {
         this.alternatives = Collections.emptyList();
         this.favoriteColor = favoriteColor;
         this.enabled = enabled;
+        this.renderOptions = RenderOptions.DEFAULT;
     }
 
     /**
@@ -126,7 +212,8 @@ public class FigureDefinition {
                 }
             }
 
-            return new FigureDefinition(id, name, modelPath, texturePath, animationPath, alternatives);
+            return new FigureDefinition(id, name, modelPath, texturePath, animationPath, alternatives,
+                    RenderOptions.fromJson(json));
         }
     }
 
@@ -148,6 +235,24 @@ public class FigureDefinition {
 
     public ResourceLocation getAnimationPath() {
         return animationPath;
+    }
+
+    /**
+     * The model of a skin: 0 is the figure's own, 1 and up are its alternatives, which
+     * fall back to the figure's model when they do not name one.
+     */
+    public ResourceLocation getModelForSkinIndex(int skinIndex) {
+        if (skinIndex > 0 && skinIndex - 1 < alternatives.size()) {
+            ResourceLocation model = alternatives.get(skinIndex - 1).model();
+            if (model != null) {
+                return model;
+            }
+        }
+        return modelPath;
+    }
+
+    public RenderOptions getRenderOptions() {
+        return renderOptions;
     }
 
     public FigureType getType() {
@@ -214,10 +319,14 @@ public class FigureDefinition {
                     JsonObject altJson = new JsonObject();
                     altJson.addProperty("name", alt.name());
                     altJson.addProperty("texture", alt.texture().toString());
+                    if (alt.model() != null) {
+                        altJson.addProperty("model", alt.model().toString());
+                    }
                     alternativesArray.add(altJson);
                 }
                 json.add("alternatives", alternativesArray);
             }
+            renderOptions.toJson(json);
         }
 
         return json;

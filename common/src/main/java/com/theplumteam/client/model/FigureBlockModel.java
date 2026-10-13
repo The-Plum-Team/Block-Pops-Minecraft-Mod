@@ -143,7 +143,7 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     private ResourceLocation resolveModel(FigureBlockEntity animatable) {
         FigureDefinition figure = animatable.getFigureDefinition();
         if (figure == null) return FALLBACK_MODEL;
-        return figure.getModelPath();
+        return figure.getModelForSkinIndex(animatable.getAlternativeSkinIndex());
     }
 
     private ResourceLocation resolveTexture(FigureBlockEntity animatable) {
@@ -235,8 +235,10 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
 
     @Override
     public ResourceLocation getAnimationResource(FigureBlockEntity animatable) {
-        // Always return the pose animation file which contains both Pose_Stand and Pose_Sit
-        return POSE_ANIMATION;
+        // The pose file holds both Pose_Stand and Pose_Sit; a figure with its own bones names its own
+        FigureDefinition figure = animatable.getFigureDefinition();
+        ResourceLocation poses = figure != null ? figure.getRenderOptions().poseAnimation() : null;
+        return poses != null ? poses : POSE_ANIMATION;
     }
 
     //? if >=1.21.9 {
