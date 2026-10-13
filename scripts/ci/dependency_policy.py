@@ -110,6 +110,7 @@ EXPECTED_REMOTE_IDENTITIES = frozenset(
         "repo.spongepowered.org/repository/maven-public",
         "dl.cloudsmith.io/public/geckolib3/geckolib/maven",
         "repo.maven.apache.org/maven2",
+        "the-plum-team.github.io/maven-mirror",
     }
 )
 EXPECTED_LOCAL_REPOSITORIES = frozenset(
@@ -142,9 +143,9 @@ PLUGIN_ONLY_EXCLUSIONS = tuple(
     f"excludeModule('{group}', '{name}')"
     for group, name, _ in STONECUTTER_COMPONENTS
 )
-EXPECTED_POLICY_SHA256 = "410c9e6fc6b3dd840f50fd48c67f8e37fd0e7aa761c204e89271a3ffba9f8e64"
-EXPECTED_PLUGIN_MANAGEMENT_SHA256 = "fb5e6e4641227587e68ce7180f2edbe3be84b5990e858e5b2c80af9b699521f8"
-EXPECTED_SETTINGS_SHA256 = "98ffaa956f57a5e668b80795c45774ca90b94c76c3380160f5e3f9b088417dd6"
+EXPECTED_POLICY_SHA256 = "d1a6ec49759f12f67ed6a65bcbb1e75275fc5bc2bc0effc7e7d959a6b44b1955"
+EXPECTED_PLUGIN_MANAGEMENT_SHA256 = "26d4fb2569159d40e1828f25ab5e8b41ea2027e93e824ca40edf7cd6fcbb480e"
+EXPECTED_SETTINGS_SHA256 = "7888f6893188e1fdae133cc6cb6beb25346f297e4a73e21e5d4997277fc41be0"
 XML_DECLARATION = b'<?xml version="1.0" encoding="UTF-8"?>\n'
 
 
@@ -258,14 +259,15 @@ def validate_plugin_management_text(plugin_management: str) -> None:
             "https://maven.neoforged.net/releases/",
             "https://repo.spongepowered.org/repository/maven-public/",
             "https://maven.kikugie.dev/releases",
+            "https://the-plum-team.github.io/maven-mirror/",
         }
     )
     if plugin_urls != expected_plugin_urls:
         raise DependencyPolicyError("plugin repository URLs are not exact")
     if (
-        plugin_management.count("maven {") != 7
-        or plugin_management.count("content {") != 8
-        or plugin_management.count("mavenContent { releasesOnly() }") != 7
+        plugin_management.count("maven {") != 8
+        or plugin_management.count("content {") != 9
+        or plugin_management.count("mavenContent { releasesOnly() }") != 8
     ):
         raise DependencyPolicyError("plugin repositories are not release-only")
     expected_plugin_exclusion_counts = (1, 1, 2, 2, 1)

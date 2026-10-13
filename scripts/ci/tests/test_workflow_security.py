@@ -23,6 +23,10 @@ CREDENTIAL_SCRUB = (
 )
 SCRUBBED_CREDENTIALS = frozenset(CREDENTIAL_SCRUB.split()[1:])
 PREPARE_EVIDENCE = "The-Plum-Team/mod-base/actions/prepare-evidence@"
+# The kit's managed Build/E2E callers (site/mod-base-build-activation.json in shadow or a shared
+# mode). `template check` keeps them byte-identical to the pinned kit's templates; they run the
+# kit's sandboxed Build and packaged E2E from the default branch on pull_request_target.
+MANAGED_CALLERS_ON_PRT = frozenset({"mod-base-build.yml", "mod-base-packaged-e2e.yml", "mod-base-gate-status.yml"})
 KIT_PIN_LINE = re.compile(
     r"^\s*(?:-\s+)?uses: The-Plum-Team/mod-base/(\S+)@([0-9a-f]{40}) # (v\d+\.\d+\.\d+)$"
 )
@@ -236,18 +240,46 @@ else:
 
 
 class WorkflowSecurityTests(unittest.TestCase):
-    def test_gradle_builders_share_one_noncancelling_repository_queue(self) -> None:
-        groups = []
+    def test_gradle_builders_run_in_parallel_across_runs_on_hosted_machines(self) -> None:
+        # Lane serialization is per machine: the serial Python runner and its checkout lease.
+        # Every builder runs on its own GitHub-hosted VM, reads the Gradle cache without writing
+        # it and uploads only run-scoped artifacts, so nothing is shared between runs and a
+        # repository-wide queue would only make every PR wait for every other.
         for name in ("build-gate.yml", "on-demand-e2e.yml"):
-            text = (WORKFLOWS / name).read_text("utf-8")
-            build = text.split("\n  build:\n", 1)[1].split("    steps:", 1)[0]
-            # Read the full four-line job header, not the separate workflow cancellation policy.
-            header = build.splitlines()[:4]
-            self.assertEqual("    concurrency:", header[0])
-            self.assertEqual("      cancel-in-progress: false", header[2])
-            self.assertEqual("      queue: max", header[3])
-            groups.append(header[1].strip())
-        self.assertEqual(["group: blockpops-gradle-build"] * 2, groups)
+            with self.subTest(workflow=name):
+                text = (WORKFLOWS / name).read_text("utf-8")
+                build = text.split("\n  build:\n", 1)[1].split("\n  e2e:\n", 1)[0]
+                build = build.split("\n  required:\n", 1)[0]
+                header, body = build.split("    steps:\n", 1)
+                self.assertNotIn("concurrency:", header)
+                self.assertIn("    runs-on: ubuntu-24.04\n", header)
+                self.assertIn("          cache-read-only: true\n", body)
+                self.assertNotIn("actions/cache", body)
+                self.assertIn("--no-daemon --no-parallel --max-workers=1", body)
+                self.assertIn("scripts/release/build_matrix.py", body)
+                # Workflow-level obsolete-run cancellation stays keyed by PR or ref.
+                workflow = text.split("\nconcurrency:\n", 1)[1].split("\njobs:\n", 1)[0]
+                self.assertIn("github.event.pull_request.number || github.ref }}", workflow)
+                self.assertIn("  cancel-in-progress: true", workflow)
+        for path in WORKFLOWS.glob("*.yml"):
+            with self.subTest(workflow=path.name):
+                text = path.read_text("utf-8")
+                self.assertNotIn("blockpops-gradle-build", text)
+                self.assertNotIn("queue: max", text)
+
+    def test_packaged_e2e_lanes_run_up_to_eight_at_once(self) -> None:
+        # The former 2 dates from when the matrix had two lanes; it now has twenty. Each lane runs
+        # on its own hosted runner, and the API limit is hourly, so running more lanes at once
+        # does not raise a run's total request count. A failing lane never cancels its siblings.
+        text = (WORKFLOWS / "on-demand-e2e.yml").read_text("utf-8")
+        e2e = text.split("\n  e2e:\n", 1)[1]
+        header = e2e.split("    steps:\n", 1)[0]
+        strategy = header.split("    strategy:\n", 1)[1]
+        self.assertIn("    runs-on: ubuntu-24.04\n", header)
+        self.assertNotIn("concurrency:", header)
+        self.assertIn("      fail-fast: false\n", strategy)
+        self.assertEqual(["8"], re.findall(r"(?m)^      max-parallel: (\S+)$", strategy))
+        self.assertIn("      matrix: ${{ fromJSON(needs.identity.outputs.anchors) }}\n", strategy)
 
     def test_only_protected_candidate_gates_trigger_on_prt_and_actions_are_pinned(self) -> None:
         files = [*WORKFLOWS.glob("*.yml"), REPO / ".github/actions/run-packaged-e2e/action.yml"]
@@ -262,10 +294,34 @@ class WorkflowSecurityTests(unittest.TestCase):
                         text,
                     )
                     self.assertNotIn("\n  pull_request:", text)
+                elif path.name in MANAGED_CALLERS_ON_PRT:
+                    self.assertNotIn("\n  pull_request:", text)
                 else:
                     self.assertNotIn("\n  pull_request_target:", text)
                 for action, revision in REMOTE_USE.findall(text):
                     self.assertRegex(revision, r"^[0-9a-f]{40}$", action)
+
+    def test_native_gates_leave_master_pull_requests_only_to_the_kit_gate_that_owns_them(self) -> None:
+        # pr_gate.py stops reading a native gate for pull requests into master exactly when the
+        # protected activation mode hands its context to the mod-base gate status App. The same
+        # mode stops that gate's pull_request_target runs into master, so no global Gradle slot is
+        # spent on evidence nothing reads. A reviewed rollback restores the native triggers
+        # before the writer takes the contexts back (its next step, disabled).
+        manifest = json.loads((REPO / "site/mod-base-build-activation.json").read_bytes())
+        handed = {
+            "build-gate.yml": {"shared-build", "shared-build-and-e2e"},
+            "on-demand-e2e.yml": {"shared-build-and-e2e"},
+        }
+        for name, modes in handed.items():
+            text = (WORKFLOWS / name).read_text("utf-8")
+            block = re.search(r"\n  pull_request_target:\n((?:    .*\n)*)", text).group(1)
+            with self.subTest(name=name, mode=manifest["mode"]):
+                if manifest["mode"] in modes:
+                    self.assertTrue(block.endswith("    branches-ignore:\n      - master\n"), block)
+                else:
+                    self.assertNotIn("branches", block)
+                self.assertNotIn("branches:", block)
+                self.assertIn("\n  workflow_dispatch:", text.split("\npermissions:", 1)[0])
 
     def test_candidate_gates_have_no_write_permission(self) -> None:
         for name in ("build-gate.yml", "on-demand-e2e.yml"):

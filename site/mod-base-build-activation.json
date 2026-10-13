@@ -1,6 +1,6 @@
 {
   "kind": "mod-base.ci.activation",
-  "mode": "disabled",
+  "mode": "shared-build-and-e2e",
   "profile": "block-pops",
   "repository": "The-Plum-Team/Block-Pops-Minecraft-Mod",
   "rollback_from": null,

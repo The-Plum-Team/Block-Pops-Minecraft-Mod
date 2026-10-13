@@ -3,6 +3,34 @@ import java.nio.charset.StandardCharsets
 
 pluginManagement {
     repositories {
+        // The Plum Team's hash-checked mirror is searched first for these groups only; a 404 falls
+        // through to the upstream repositories below. Keep this list equal to the one in
+        // gradle/repository-policy.gradle. -Pplum.mavenMirror=false is the emergency switch that
+        // leaves it out, as there.
+        def plumMirrorSwitch = providers.gradleProperty('plum.mavenMirror').orNull
+        if (!(plumMirrorSwitch in [null, 'true', 'false'])) {
+            throw new GradleException("plum.mavenMirror must be true or false, not '${plumMirrorSwitch}'")
+        }
+        if (plumMirrorSwitch != 'false') {
+            maven {
+                name = 'PlumMavenMirror'
+                url = 'https://the-plum-team.github.io/maven-mirror/'
+                // The mirror holds exactly the files in the verification metadata: a module's
+                // .module file, without the .pom that only points to it.
+                metadataSources { gradleMetadata(); mavenPom() }
+                mavenContent { releasesOnly() }
+                content {
+                    [
+                        'net.fabricmc', 'net.fabricmc.fabric-api', 'net.fabricmc.unpick',
+                        'dev.architectury', 'dev.architectury.loom', 'dev.architectury.loom-no-remap',
+                        'architectury-plugin', 'dev.kikugie', 'dev.kikugie.stonecutter',
+                        'net.neoforged', 'net.neoforged.fancymodloader', 'net.neoforged.installertools',
+                        'net.neoforged.accesstransformers', 'net.minecraftforge',
+                        'software.bernie.geckolib', 'com.geckolib',
+                    ].each { includeGroup(it) }
+                }
+            }
+        }
         maven {
             name = 'FabricPluginRepository'
             url = 'https://maven.fabricmc.net/'

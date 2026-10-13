@@ -128,8 +128,29 @@ class BuildConfigTests(unittest.TestCase):
         self.assertEqual(set(manifest), {"kind", "schema_version", "repository", "profile", "mode", "rollback_from"})
         self.assertEqual((manifest["kind"], manifest["schema_version"]), ("mod-base.ci.activation", 1))
         self.assertEqual((manifest["repository"], manifest["profile"]), (REPOSITORY, "block-pops"))
-        self.assertIn(manifest["mode"], {"disabled", "shadow"})
+        self.assertIn(manifest["mode"], {"disabled", "shadow", "shared-build", "shared-build-and-e2e"})
         self.assertIsNone(manifest["rollback_from"])
+
+    def test_the_admission_protects_what_the_native_gate_protects(self) -> None:
+        # Once the kit's gate status writes both required contexts (shared-build-and-e2e), no
+        # native evaluator runs on a pull request into master. The kit's admission must then
+        # refuse success, without the owner's exact-head approval, for every path the native
+        # controller-upgrade route protects: the protected roots, the forbidden paths, every
+        # loader's build script and E2E sources, and the base-owned release matrix and
+        # verification metadata.
+        from scripts.ci.gate_controller import FORBIDDEN_PATHS, PROTECTED_PATHS
+
+        expected = set(PROTECTED_PATHS) | set(FORBIDDEN_PATHS)
+        expected |= {"release/release-matrix.json", "gradle/verification-metadata.xml"}
+        for script in REPO.glob("*/build.gradle"):
+            expected |= {f"{script.parent.name}/build.gradle", f"{script.parent.name}/src/e2e"}
+        admission = _config()["admission"]
+        self.assertEqual(admission["protected_paths"], sorted(expected))
+        self.assertEqual(admission["command"], "/controller-upgrade")
+        self.assertEqual(admission["approvers"], [{"association": "MEMBER", "login": "AkaNebur"}])
+        for root in admission["protected_paths"]:
+            with self.subTest(root=root):
+                self.assertFalse(any(root.startswith(other + "/") for other in admission["protected_paths"]))
 
     def test_the_protected_copy_imports_every_verifier(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -324,7 +345,10 @@ class KitPlanningTests(unittest.TestCase):
 
 #: The adoption order: each committed mode enters from this one predecessor (``None``: no
 #: manifest), in a controller upgrade of its own that does not move the pin.
-PREVIOUS_MODE = {"disabled": None, "shadow": "disabled"}
+PREVIOUS_MODE = {
+    "disabled": None, "shadow": "disabled", "shared-build": "shadow",
+    "shared-build-and-e2e": "shared-build",
+}
 
 
 class ActivationTransitionTests(unittest.TestCase):

@@ -104,6 +104,20 @@ symlink-safe descriptors; failed lanes retain diagnostics. It preserves archives
 reports, other lane homes and external/shared Gradle caches, bounding disk use
 when the complete target set builds on one runner.
 
+Lane Gradle processes are serialized per machine: the serial runner starts one
+`--no-daemon --no-parallel --max-workers=1` process at a time under its checkout
+lock. The two CI bundle jobs (Build and Packaged E2E) share no repository-wide
+queue. Each runs on its own GitHub-hosted runner, reads the Gradle cache without
+writing it and uploads only artifacts of its own run, named by tested commit and
+run attempt, so builders of different pull requests, pushes and schedules, and
+the Build and E2E builders of the same head, build at the same time. Gate
+evidence is chosen by workflow, exact head and run creation order, never by
+completion order. Workflow-level concurrency, keyed by pull request or ref,
+still cancels an obsolete run of the same workflow. The Packaged E2E lane jobs
+then run up to eight at once (`max-parallel: 8`, `fail-fast: false`), each on
+its own hosted runner; the API limit is hourly, so more lanes at once do not
+raise a run's total request count.
+
 The branch matrix owns the Gradle JVM independently from each artifact/runtime
 Java toolchain, plus the mod version and all full runtime dependency
 coordinates. This lets modern Loom run on Java 21 while Minecraft 1.20.1 output

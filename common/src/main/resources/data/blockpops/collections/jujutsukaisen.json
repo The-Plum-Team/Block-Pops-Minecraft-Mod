@@ -5,13 +5,7 @@
   "author_url": "https://www.planetminecraft.com/member/strawbrysage",
   "box_texture": "blockpops:textures/block/box/jujutsukaisen.png",
   "logo": {
-    "texture": "blockpops:textures/block/box/logo/logo_jujutsukaisen.png",
-    "position_x": -1.225,
-    "position_y": -0.181,
-    "position_z": 0.0,
-    "scale_x": 5.000,
-    "scale_y": 5.000,
-    "scale_z": 1.0
+    "texture": "blockpops:textures/block/box/logo/logo_jujutsukaisen.png"
   },
   "background_color": {
     "r": 68,

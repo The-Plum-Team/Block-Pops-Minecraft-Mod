@@ -35,26 +35,9 @@ file ModelToProcess/*
 - Box.png/box.png is missing
 - Any file is WebP format instead of PNG (convert using: `ffmpeg -y -i "input.png" -update 1 -frames:v 1 "output.png"`)
 
-### Step 2: Compare Logo Dimensions
+### Step 2: Check the Logo
 
-Check the new logo's dimensions and compare with existing logos to find similar aspect ratios:
-
-```bash
-# Check new logo dimensions
-file ModelToProcess/logo.png
-
-# Check all existing logo dimensions
-for f in forge/src/main/resources/assets/blockpops/textures/block/box/logo/*.png; do file "$f"; done
-```
-
-Calculate the aspect ratio (width/height) of the new logo and find the existing logo with the closest aspect ratio. Then read that collection's JSON to copy its logo position/scale settings:
-
-```bash
-# Example: Read a similar collection's settings
-cat forge/src/main/resources/assets/blockpops/collections/{similar_collection}.json
-```
-
-Use the `position_x`, `position_y`, `position_z`, `scale_x`, `scale_y`, `scale_z` values from the most similar logo for the new collection.
+The logo needs no position or size values: the box fits it from its visible pixels and keeps its proportions (see `textures/block/box/logo/README.md`). Only check that `logo.png` has a transparent background, since anything opaque around the logo is drawn on the box too.
 
 ### Step 3: Determine Collection ID
 
@@ -64,7 +47,7 @@ Convert the collection name to a lowercase ID with no spaces:
 
 ### Step 4: Create Collection JSON
 
-Create `forge/src/main/resources/assets/blockpops/collections/{id}.json` (use logo settings from similar collection found in Step 2):
+Create `forge/src/main/resources/assets/blockpops/collections/{id}.json`:
 
 ```json
 {
@@ -74,13 +57,7 @@ Create `forge/src/main/resources/assets/blockpops/collections/{id}.json` (use lo
   "author_url": "",
   "box_texture": "blockpops:textures/block/box/{id}.png",
   "logo": {
-    "texture": "blockpops:textures/block/box/logo/logo_{id}.png",
-    "position_x": -1.5,
-    "position_y": -0.2,
-    "position_z": 0.0,
-    "scale_x": 6.0,
-    "scale_y": 4.0,
-    "scale_z": 1.0
+    "texture": "blockpops:textures/block/box/logo/logo_{id}.png"
   },
   "background_color": {
     "r": 30,
@@ -174,4 +151,4 @@ Report to the user:
 - All textures MUST be actual PNG files (64x64 for skins, any size for logo/box)
 - WebP files disguised as PNG will cause missing textures (magenta/black)
 - The author can be changed from "The Plum Team" if needed
-- Logo position/scale should be copied from an existing collection with similar logo dimensions (Step 2), but may still need minor adjustment after testing in-game
+- The logo is placed automatically; only if it looks wrong in-game, add `scale`, `offset_x` or `offset_y` to it (see `textures/block/box/logo/README.md`)

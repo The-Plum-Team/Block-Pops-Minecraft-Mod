@@ -73,7 +73,11 @@ shutdown waits for the JVM to finish writing logs before evidence export, withou
   matrix Git blob. It walks their exact parent directories and still rejects undeclared versions,
   node-local sources, linked roots and every change to tracked source bytes.
 - **Governance.** Branch protection on `master` requires the App-sourced contexts
-  `Trusted PR / Build and verify` and `Trusted PR / Packaged E2E gate`. Protected paths
+  `Trusted PR / Build and verify` and `Trusted PR / Packaged E2E gate`. When
+  `site/mod-base-build-activation.json` on `master` hands a gate to the mod-base kit
+  (`shared-build`: Build; `shared-build-and-e2e`: both), the kit's gate status App writes that context and
+  `scripts/ci/pr_gate.py` reports it `delegated`, never writing it; see
+  [`docs/operations.md`](../operations.md#shared-build-shared-build). Protected paths
   (`scripts/ci/gate_controller.py` `PROTECTED_PATHS`) change only through the SHA-approved
   controller-upgrade procedure in [`docs/operations.md`](../operations.md). The evaluator
   constants in `scripts/ci/gate_controller.py`, `scripts/ci/pr_gate.py` and
@@ -98,9 +102,12 @@ shutdown waits for the JVM to finish writing logs before evidence export, withou
 The Pages pipeline is the pinned mod-base kit; the shared rules are in
 `docs/ai/shared/PUBLIC-EVIDENCE.md`. BlockPops specifics:
 
-- **One pin, six workflows.** `pages.yml` (the managed caller), `notify-pages.yml`,
+- **One pin, six workflows plus the Build/E2E callers.** `pages.yml` (the managed caller), `notify-pages.yml`,
   `on-demand-e2e.yml`, `build-gate.yml`, `visual-review.yml` and `visual-review-drain.yml`
-  reference the kit at one `@<40-hex> # vX.Y.Z` pin. All of them, the configuration and the adapter lie under protected
+  reference the kit at one `@<40-hex> # vX.Y.Z` pin, and so do the kit's managed
+  `mod-base-build.yml`, `mod-base-gate-status.yml` and `mod-base-packaged-e2e.yml` in every mode of
+  `site/mod-base-build-activation.json` that manages them (`shadow` manages all three;
+  `mod-base-guard.yml` names the pin only as data). All of them, the configuration and the adapter lie under protected
   roots, so every kit bump is a `controller-upgrade/mod-base-vX.Y.Z` pull request made with
   `python3 scripts/ci/mod_base_kit.py bump --to vX.Y.Z`.
 - **Producer.** The Packaged E2E `public-evidence` job keeps its name, conditions and read-only

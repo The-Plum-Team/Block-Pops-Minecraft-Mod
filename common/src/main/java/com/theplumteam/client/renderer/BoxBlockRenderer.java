@@ -508,13 +508,14 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         FigureCollection.LogoConfig config = collection.getLogoConfig();
         if (config == null) return null;
 
+        float[] placement = LogoLayout.placement(config);
         return new float[] {
-            animatable.getLogoPositionX() != null ? animatable.getLogoPositionX().floatValue() : config.getPositionX(),
-            animatable.getLogoPositionY() != null ? animatable.getLogoPositionY().floatValue() : config.getPositionY(),
-            animatable.getLogoPositionZ() != null ? animatable.getLogoPositionZ().floatValue() : config.getPositionZ(),
-            animatable.getLogoScaleX() != null ? animatable.getLogoScaleX().floatValue() : config.getScaleX(),
-            animatable.getLogoScaleY() != null ? animatable.getLogoScaleY().floatValue() : config.getScaleY(),
-            animatable.getLogoScaleZ() != null ? animatable.getLogoScaleZ().floatValue() : config.getScaleZ(),
+            animatable.getLogoPositionX() != null ? animatable.getLogoPositionX().floatValue() : placement[0],
+            animatable.getLogoPositionY() != null ? animatable.getLogoPositionY().floatValue() : placement[1],
+            animatable.getLogoPositionZ() != null ? animatable.getLogoPositionZ().floatValue() : placement[2],
+            animatable.getLogoScaleX() != null ? animatable.getLogoScaleX().floatValue() : placement[3],
+            animatable.getLogoScaleY() != null ? animatable.getLogoScaleY().floatValue() : placement[4],
+            animatable.getLogoScaleZ() != null ? animatable.getLogoScaleZ().floatValue() : placement[5],
         };
     }
 }

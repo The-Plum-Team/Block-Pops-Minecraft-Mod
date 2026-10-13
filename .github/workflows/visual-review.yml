@@ -519,7 +519,7 @@ jobs:
       # The curator validates the durable mb-anchor with the kit pinned by this exact checkout; a
       # kit that is not that pin's verified tree stops the (advisory) curation here.
       - name: Verify the pinned mod-base kit
-        uses: The-Plum-Team/mod-base/actions/setup@c7981f8b3ad4a7cf62373898e90d9ce6deb99c31 # v1.2.0
+        uses: The-Plum-Team/mod-base/actions/setup@1273a5384dd1e39e6eb941148610d4555d8ff3f0 # v1.5.0
         with:
           install-imaging: "false"
 
@@ -578,7 +578,7 @@ jobs:
 
       - name: Upload the durable data-only queue item
         id: queue
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ needs.authenticate.outputs.queue_name }}
           path: ${{ runner.temp }}/visual-review-queue/
