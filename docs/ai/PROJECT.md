@@ -58,7 +58,9 @@ First-person boxes on the legacy entity-renderer path use the modern shulker tem
 40% scale and mirrored 315-degree rotation. The claw machine's authored item model owns
 its first-person 90-degree rotation, one-third scale and vertical pivot compensation,
 preserving the legacy held appearance across both immediate drawing and 26.x submission.
-The immediate renderer applies its other context transforms only outside first person.
+It owns the GUI view on every lane as well: a side-lit perspective with the machine's front
+forward, sized and centred to fill the slot as the gacha machine's item does. The immediate
+renderer applies its other context transforms only outside first person and the GUI.
 
 On POSIX, packaged Forge-family servers launch the installed JVM argument files directly so
 shutdown waits for the JVM to finish writing logs before evidence export, without a shell parent.
