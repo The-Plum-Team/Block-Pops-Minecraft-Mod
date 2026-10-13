@@ -34,5 +34,17 @@
   "block.blockpops.box_block_winx": "Winx Club Box",
   "block.blockpops.claw_machine_block": "Arcade Claw Machine",
   "tooltip.blockpops.has_alternatives": "Has alternative skins! (Right-click to cycle)",
-  "tooltip.blockpops.pose_hint": "Shift + Right-click to change pose"
+  "tooltip.blockpops.pose_hint": "Shift + Right-click to change pose",
+  "blockpops.custom_collections.looking_up": "Looking up the code...",
+  "blockpops.custom_collections.added": "Enabled the Custom collection %s",
+  "blockpops.custom_collections.removed": "Disabled the Custom collection %s",
+  "blockpops.custom_collections.unknown_code": "No Custom collection has that code",
+  "blockpops.custom_collections.already_enabled": "%s is already enabled",
+  "blockpops.custom_collections.not_enabled": "No enabled Custom collection is called %s",
+  "blockpops.custom_collections.clashes": "%s has the id of a bundled collection and cannot be enabled",
+  "blockpops.custom_collections.full": "This world already has the most Custom collections it can enable",
+  "blockpops.custom_collections.failed": "Could not load that Custom collection; the server log says why",
+  "blockpops.custom_collections.none": "No Custom collections are enabled in this world",
+  "blockpops.custom_collections.loaded": "%s",
+  "blockpops.custom_collections.not_loaded": "%s (not loaded yet)"
 }

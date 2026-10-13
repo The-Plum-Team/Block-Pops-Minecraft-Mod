@@ -2,6 +2,7 @@ package com.theplumteam.figure;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.util.GeoAssets;
 import net.minecraft.resources.ResourceLocation;
@@ -20,16 +21,66 @@ import java.util.UUID;
 public class FigureDefinition {
     /**
      * Represents an alternative skin variant for a figure. A variant may bring its own
-     * model; without one it uses the figure's.
+     * model, size and box face; whatever it leaves out comes from the figure.
+     *
+     * @param scale       its size in place of the figure's
+     * @param showBoxFace whether the box shows its face, in place of the figure's choice;
+     *                    when set, {@code boxFaceUv} replaces the figure's face region too
+     * @param hiddenBones bones not drawn on this skin, in place of the figure's when not empty
      */
-    public record AlternativeSkin(String name, ResourceLocation texture, @Nullable ResourceLocation model) {
+    public record AlternativeSkin(String name, ResourceLocation texture, @Nullable ResourceLocation model,
+                                  @Nullable Float scale, @Nullable Boolean showBoxFace,
+                                  @Nullable float[] boxFaceUv, List<String> hiddenBones) {
+        public AlternativeSkin(String name, ResourceLocation texture) {
+            this(name, texture, null, null, null, null, List.of());
+        }
+
         public static AlternativeSkin fromJson(JsonObject json) {
             String name = json.get("name").getAsString();
             ResourceLocation texture = ResourceLocation.tryParse(json.get("texture").getAsString());
             ResourceLocation model = json.has("model")
                     ? GeoAssets.declared(ResourceLocation.tryParse(json.get("model").getAsString()))
                     : null;
-            return new AlternativeSkin(name, texture, model);
+            Float scale = json.has("scale") ? json.get("scale").getAsFloat() : null;
+            Boolean showBoxFace = json.has("show_box_face") ? json.get("show_box_face").getAsBoolean() : null;
+            return new AlternativeSkin(name, texture, model, scale, showBoxFace, readBoxFaceUv(json),
+                    readStrings(json, "hidden_bones"));
+        }
+
+        JsonObject toJson() {
+            JsonObject json = new JsonObject();
+            json.addProperty("name", name);
+            json.addProperty("texture", texture.toString());
+            if (model != null) {
+                json.addProperty("model", model.toString());
+            }
+            if (scale != null) {
+                json.addProperty("scale", scale);
+            }
+            if (showBoxFace != null) {
+                json.addProperty("show_box_face", showBoxFace);
+            }
+            writeBoxFaceUv(json, boxFaceUv);
+            writeStrings(json, "hidden_bones", hiddenBones);
+            return json;
+        }
+    }
+
+    /**
+     * A texture the named bones of a figure's own model are drawn with, instead of the
+     * figure's texture, for models laid out across several images.
+     */
+    public record ExtraTexture(ResourceLocation texture, List<String> bones) {
+        static ExtraTexture fromJson(JsonObject json) {
+            return new ExtraTexture(ResourceLocation.tryParse(json.get("texture").getAsString()),
+                    readStrings(json, "bones"));
+        }
+
+        JsonObject toJson() {
+            JsonObject json = new JsonObject();
+            json.addProperty("texture", texture.toString());
+            writeStrings(json, "bones", bones);
+            return json;
         }
     }
 
@@ -45,10 +96,18 @@ public class FigureDefinition {
      *                      {u, v, width, height, textureWidth, textureHeight}
      * @param offset        the figure's own position in the box, {x, y, z}, each NaN when
      *                      the box default applies
+     * @param showBoxFace   whether the box shows the figure's face, when the default (a face
+     *                      region, or the default skin model) is not right
+     * @param poseLocked    whether the figure keeps its pose instead of cycling on use
+     * @param hiddenBones   bones of the figure's model that are not drawn
+     * @param extraTextures textures some bones of the figure's model are drawn with
      */
     public record RenderOptions(@Nullable ResourceLocation poseAnimation, float scale, float guiScale,
-                                @Nullable float[] boxFaceUv, @Nullable float[] offset) {
-        public static final RenderOptions DEFAULT = new RenderOptions(null, 1.0f, 1.0f, null, null);
+                                @Nullable float[] boxFaceUv, @Nullable float[] offset,
+                                @Nullable Boolean showBoxFace, boolean poseLocked,
+                                List<String> hiddenBones, List<ExtraTexture> extraTextures) {
+        public static final RenderOptions DEFAULT = new RenderOptions(null, 1.0f, 1.0f, null, null, null, false,
+                List.of(), List.of());
         private static final String[] OFFSET_KEYS = {"offset_x", "offset_y", "offset_z"};
 
         static RenderOptions fromJson(JsonObject json) {
@@ -57,13 +116,6 @@ public class FigureDefinition {
                     : null;
             float scale = json.has("scale") ? json.get("scale").getAsFloat() : 1.0f;
             float guiScale = json.has("gui_scale") ? json.get("gui_scale").getAsFloat() : scale;
-            float[] boxFaceUv = null;
-            if (json.has("box_face_uv")) {
-                JsonObject uv = json.getAsJsonObject("box_face_uv");
-                boxFaceUv = new float[] {uv.get("u").getAsFloat(), uv.get("v").getAsFloat(),
-                        uv.get("w").getAsFloat(), uv.get("h").getAsFloat(),
-                        uv.get("tex_width").getAsFloat(), uv.get("tex_height").getAsFloat()};
-            }
             float[] offset = null;
             for (int i = 0; i < OFFSET_KEYS.length; i++) {
                 if (json.has(OFFSET_KEYS[i])) {
@@ -73,7 +125,16 @@ public class FigureDefinition {
                     offset[i] = json.get(OFFSET_KEYS[i]).getAsFloat();
                 }
             }
-            return new RenderOptions(poseAnimation, scale, guiScale, boxFaceUv, offset);
+            Boolean showBoxFace = json.has("show_box_face") ? json.get("show_box_face").getAsBoolean() : null;
+            boolean poseLocked = json.has("pose_locked") && json.get("pose_locked").getAsBoolean();
+            List<ExtraTexture> extraTextures = new ArrayList<>();
+            if (json.has("extra_textures")) {
+                for (var element : json.getAsJsonArray("extra_textures")) {
+                    extraTextures.add(ExtraTexture.fromJson(element.getAsJsonObject()));
+                }
+            }
+            return new RenderOptions(poseAnimation, scale, guiScale, readBoxFaceUv(json), offset,
+                    showBoxFace, poseLocked, readStrings(json, "hidden_bones"), List.copyOf(extraTextures));
         }
 
         void toJson(JsonObject json) {
@@ -86,16 +147,7 @@ public class FigureDefinition {
             if (guiScale != scale) {
                 json.addProperty("gui_scale", guiScale);
             }
-            if (boxFaceUv != null) {
-                JsonObject uv = new JsonObject();
-                uv.addProperty("u", boxFaceUv[0]);
-                uv.addProperty("v", boxFaceUv[1]);
-                uv.addProperty("w", boxFaceUv[2]);
-                uv.addProperty("h", boxFaceUv[3]);
-                uv.addProperty("tex_width", boxFaceUv[4]);
-                uv.addProperty("tex_height", boxFaceUv[5]);
-                json.add("box_face_uv", uv);
-            }
+            writeBoxFaceUv(json, boxFaceUv);
             if (offset != null) {
                 for (int i = 0; i < OFFSET_KEYS.length; i++) {
                     if (!Float.isNaN(offset[i])) {
@@ -103,8 +155,68 @@ public class FigureDefinition {
                     }
                 }
             }
+            if (showBoxFace != null) {
+                json.addProperty("show_box_face", showBoxFace);
+            }
+            if (poseLocked) {
+                json.addProperty("pose_locked", true);
+            }
+            writeStrings(json, "hidden_bones", hiddenBones);
+            if (!extraTextures.isEmpty()) {
+                JsonArray array = new JsonArray();
+                extraTextures.forEach(extra -> array.add(extra.toJson()));
+                json.add("extra_textures", array);
+            }
         }
     }
+
+    private static List<String> readStrings(JsonObject json, String key) {
+        if (!json.has(key)) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        for (var element : json.getAsJsonArray(key)) {
+            values.add(element.getAsString());
+        }
+        return List.copyOf(values);
+    }
+
+    private static void writeStrings(JsonObject json, String key, List<String> values) {
+        if (values.isEmpty()) {
+            return;
+        }
+        JsonArray array = new JsonArray();
+        values.forEach(array::add);
+        json.add(key, array);
+    }
+
+    @Nullable
+    private static float[] readBoxFaceUv(JsonObject json) {
+        if (!json.has("box_face_uv")) {
+            return null;
+        }
+        JsonObject uv = json.getAsJsonObject("box_face_uv");
+        return new float[] {uv.get("u").getAsFloat(), uv.get("v").getAsFloat(),
+                uv.get("w").getAsFloat(), uv.get("h").getAsFloat(),
+                uv.get("tex_width").getAsFloat(), uv.get("tex_height").getAsFloat()};
+    }
+
+    private static void writeBoxFaceUv(JsonObject json, @Nullable float[] boxFaceUv) {
+        if (boxFaceUv == null) {
+            return;
+        }
+        JsonObject uv = new JsonObject();
+        uv.addProperty("u", boxFaceUv[0]);
+        uv.addProperty("v", boxFaceUv[1]);
+        uv.addProperty("w", boxFaceUv[2]);
+        uv.addProperty("h", boxFaceUv[3]);
+        uv.addProperty("tex_width", boxFaceUv[4]);
+        uv.addProperty("tex_height", boxFaceUv[5]);
+        json.add("box_face_uv", uv);
+    }
+
+    /** The skin model every collection figure was drawn on before figures had their own. */
+    public static final ResourceLocation DEFAULT_MODEL = GeoAssets.model(BlockPopsMod.MOD_ID, "figure/box_figure_default");
 
     private final String id;
     private final String name;
@@ -255,6 +367,68 @@ public class FigureDefinition {
         return renderOptions;
     }
 
+    @Nullable
+    private AlternativeSkin alternative(int skinIndex) {
+        return skinIndex > 0 && skinIndex - 1 < alternatives.size() ? alternatives.get(skinIndex - 1) : null;
+    }
+
+    /** A skin's size: its alternative's own, or the figure's. */
+    public float getScaleForSkinIndex(int skinIndex) {
+        AlternativeSkin alternative = alternative(skinIndex);
+        return alternative != null && alternative.scale() != null ? alternative.scale() : renderOptions.scale();
+    }
+
+    /**
+     * A skin's poses, or null for the shared poses. A skin on the default skin model
+     * always takes the shared ones, which drive that model's bones; any other model
+     * takes the figure's own.
+     */
+    @Nullable
+    public ResourceLocation getPoseAnimationForSkinIndex(int skinIndex) {
+        return DEFAULT_MODEL.equals(getModelForSkinIndex(skinIndex)) ? null : renderOptions.poseAnimation();
+    }
+
+    /**
+     * Where a skin's face lies in its texture, or null for the skin layout. An
+     * alternative that decides whether its face shows brings its own region.
+     */
+    @Nullable
+    public float[] getBoxFaceUvForSkinIndex(int skinIndex) {
+        AlternativeSkin alternative = alternative(skinIndex);
+        return alternative != null && alternative.showBoxFace() != null
+                ? alternative.boxFaceUv() : renderOptions.boxFaceUv();
+    }
+
+    /** The bones a skin does not draw: its alternative's own when it names any, else the figure's. */
+    public List<String> getHiddenBonesForSkinIndex(int skinIndex) {
+        AlternativeSkin alternative = alternative(skinIndex);
+        return alternative != null && !alternative.hiddenBones().isEmpty()
+                ? alternative.hiddenBones() : renderOptions.hiddenBones();
+    }
+
+    /**
+     * The extra textures a skin is drawn with. They belong to the figure's own model, so
+     * an alternative on another model has none.
+     */
+    public List<ExtraTexture> getExtraTexturesForSkinIndex(int skinIndex) {
+        return modelPath.equals(getModelForSkinIndex(skinIndex)) ? renderOptions.extraTextures() : List.of();
+    }
+
+    /**
+     * Whether the box shows a skin's face. Unless the alternative or the figure says,
+     * it does when the face has a region or the skin is on the default skin model.
+     */
+    public boolean showsBoxFaceForSkinIndex(int skinIndex) {
+        AlternativeSkin alternative = alternative(skinIndex);
+        if (alternative != null && alternative.showBoxFace() != null) {
+            return alternative.showBoxFace();
+        }
+        if (renderOptions.showBoxFace() != null) {
+            return renderOptions.showBoxFace();
+        }
+        return getBoxFaceUvForSkinIndex(skinIndex) != null || DEFAULT_MODEL.equals(getModelForSkinIndex(skinIndex));
+    }
+
     public FigureType getType() {
         return type;
     }
@@ -316,13 +490,7 @@ public class FigureDefinition {
             if (!alternatives.isEmpty()) {
                 JsonArray alternativesArray = new JsonArray();
                 for (AlternativeSkin alt : alternatives) {
-                    JsonObject altJson = new JsonObject();
-                    altJson.addProperty("name", alt.name());
-                    altJson.addProperty("texture", alt.texture().toString());
-                    if (alt.model() != null) {
-                        altJson.addProperty("model", alt.model().toString());
-                    }
-                    alternativesArray.add(altJson);
+                    alternativesArray.add(alt.toJson());
                 }
                 json.add("alternatives", alternativesArray);
             }

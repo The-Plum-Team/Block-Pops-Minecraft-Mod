@@ -180,8 +180,12 @@ A figure on its own model usually needs some of these optional keys, next to `mo
 | `gui_scale` | Its size in the collection screen. Defaults to `scale`. |
 | `box_face_uv` | Where the face shown on the front of the box lies in its texture, in texels: `{"u": 8, "v": 8, "w": 8, "h": 8, "tex_width": 128, "tex_height": 128}`. Without it a figure on its own model shows no face there. |
 | `offset_x`, `offset_y`, `offset_z` | Its position in the box, in place of the box default. A box an operator has moved keeps its own position. |
+| `show_box_face` | Whether the box shows its face, when the default is not right: by default it does with `box_face_uv`, or on the default skin model. `true` without `box_face_uv` reads the face from a skin layout, hat layer included. |
+| `pose_locked` | `true` keeps the figure in its pose instead of cycling between standing and sitting on use. |
+| `hidden_bones` | Bones of its model that are not drawn, with their children, such as alternative expressions. An alternative may name its own. |
+| `extra_textures` | For a model laid out across several images: `[{"texture": "...", "bones": ["Head", ...]}]`. Those bones are drawn with that texture instead of the figure's. An alternative on another model does not use them. |
 
-An entry in `alternatives` may also name its own `model`; without one it uses the figure's.
+An entry in `alternatives` may also name its own `model` and `scale`, and its own `show_box_face` together with its own `box_face_uv`; whatever it leaves out comes from the figure. A skin on the default skin model always takes the shared poses; a skin on any other model takes the figure's `pose_animation`.
 
 ```json
 {
@@ -251,6 +255,36 @@ case "marvel" -> "Marvel";  // in getDisplayName()
    - `animations/figure/marvel/spiderman.animation.json` (copy from default)
 
 4. Build and test!
+
+## Custom Collections
+
+Custom collections are published on the BlockPops CDN instead of shipping with the mod. An operator
+(permission level 2) enables one in a world by its access code, from the **Custom** tab of the claw
+machine's Settings or with a command:
+
+```
+/blockpops customcollections add <code>
+/blockpops customcollections remove <id>
+/blockpops customcollections list
+```
+
+The world remembers the list in `data/blockpops-custom-collections.json` (worlds from 1.5.0 are
+imported once from `data/blockpops_world.dat`). Every player downloads the collection's files when
+they join, into `blockpops-cache/` in the game directory, and a figure is drawn as the default figure
+until its own files arrive.
+
+A Custom collection is published with a definition at `data/blockpops/collections/<id>.json` and its
+files under `assets/blockpops/`, all listed with their SHA-256 in the CDN's `manifest.json`, and an
+access code at `codes/<code>.json` (`{"id": "<id>", "name": "<name>"}`). Only these layouts are
+downloaded:
+
+- `geckolib/models/figure/<id>/<name>.geo.json`
+- `geckolib/animations/figure/figure_poses_<id>[_<name>].animation.json`
+- `textures/block/figure/<id>/<name>.png`
+- `textures/block/box/<id>.png` and `textures/block/box/logo/logo_<id>.png`
+
+The definition may name only those files, plus the default figure model and the shared poses. Every
+file is checked against its manifest hash, so a file uploaded again needs the manifest regenerated.
 
 ## Troubleshooting
 

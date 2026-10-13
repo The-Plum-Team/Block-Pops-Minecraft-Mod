@@ -55,7 +55,7 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
                               float partialTick) {
         super.addRenderData(animatable, relatedObject, renderState, partialTick);
         ((com.geckolib.renderer.base.GeoRenderState) renderState).addGeckolibData(FIGURE_SCALE,
-                FigurePlacement.scale(animatable.getFigureDefinition()));
+                FigurePlacement.scale(animatable.getFigureDefinition(), animatable.getAlternativeSkinIndex()));
     }
 
     @Override
@@ -97,7 +97,7 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
             return;
         }
         poseStack.pushPose();
-        FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(animatable.getFigureDefinition()));
+        FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(animatable.getFigureDefinition(), animatable.getAlternativeSkinIndex()));
         super.render(animatable, partialTick, poseStack, bufferSource, packedLight, packedOverlay, camPos);
         poseStack.popPose();
     }
@@ -132,11 +132,11 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
         // has just centred the model in super.preRender, so the scale is about where the
         // stack is; GeckoLib 4.7 centres it later, in actuallyRender.
         if (!isReRender) {
+            float scale = FigurePlacement.scale(animatable.getFigureDefinition(), animatable.getAlternativeSkinIndex());
             //? if >=1.21 {
-            /*float scale = FigurePlacement.scale(animatable.getFigureDefinition());
-            poseStack.scale(scale, scale, scale);
+            /*poseStack.scale(scale, scale, scale);
             *///? } else {
-            FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(animatable.getFigureDefinition()));
+            FigurePlacement.scaleAboutCentre(poseStack, scale);
             //? }
         }
 

@@ -1,10 +1,7 @@
 package com.theplumteam.client.renderer;
 
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.theplumteam.BlockPopsMod;
 import com.theplumteam.figure.FigureDefinition;
-import com.theplumteam.util.GeoAssets;
-import net.minecraft.resources.ResourceLocation;
 
 /**
  * The figure's face drawn on the front of the box.
@@ -13,10 +10,9 @@ import net.minecraft.resources.ResourceLocation;
  * and its hat layer, at (40, 8), each 8 pixels square on a 64 pixel texture. A figure
  * with its own model has a texture laid out differently, so it names where its face is
  * ({@code box_face_uv}) and the head bone reads that region instead; the hat bone is
- * not drawn. A figure with its own model that names no face shows none.
+ * not drawn. Whether a skin shows a face at all is {@link FigureDefinition#showsBoxFaceForSkinIndex}.
  */
 public final class FigureFace {
-    private static final ResourceLocation DEFAULT_MODEL = GeoAssets.model(BlockPopsMod.MOD_ID, "figure/box_figure_default");
     // The head front the face bone reads on the box model's 64 pixel texture.
     private static final float BONE_UV = 8.0f;
     private static final float BONE_UV_SIZE = 8.0f;
@@ -25,17 +21,17 @@ public final class FigureFace {
     private FigureFace() {
     }
 
-    /** Whether the box draws this face bone for the figure; {@code hatLayer} is the 3D overlay bone. */
-    public static boolean shows(FigureDefinition figure, boolean hatLayer) {
-        if (figure.getRenderOptions().boxFaceUv() != null) {
-            return !hatLayer;
+    /** Whether the box draws this face bone for the skin; {@code hatLayer} is the 3D overlay bone. */
+    public static boolean shows(FigureDefinition figure, int skinIndex, boolean hatLayer) {
+        if (!figure.showsBoxFaceForSkinIndex(skinIndex)) {
+            return false;
         }
-        return DEFAULT_MODEL.equals(figure.getModelPath());
+        return !hatLayer || figure.getBoxFaceUvForSkinIndex(skinIndex) == null;
     }
 
-    /** The buffer the face bone draws into: remapped to the figure's own face region when it names one. */
-    public static VertexConsumer buffer(VertexConsumer buffer, FigureDefinition figure) {
-        float[] uv = figure.getRenderOptions().boxFaceUv();
+    /** The buffer the face bone draws into: remapped to the skin's own face region when it has one. */
+    public static VertexConsumer buffer(VertexConsumer buffer, FigureDefinition figure, int skinIndex) {
+        float[] uv = figure.getBoxFaceUvForSkinIndex(skinIndex);
         return uv != null ? new Remap(buffer, uv) : buffer;
     }
 

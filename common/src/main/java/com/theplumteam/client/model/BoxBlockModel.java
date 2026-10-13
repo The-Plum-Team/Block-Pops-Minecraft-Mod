@@ -4,6 +4,7 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.client.runtime.RuntimeTextures;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.util.GeoAssets;
 import com.theplumteam.util.ResourceLocations;
@@ -88,8 +89,10 @@ public class BoxBlockModel extends GeoModel<BoxBlockEntity> {
 
         // Otherwise, get texture from the collection
         String collectionId = animatable.getCollectionId();
+        // A Custom collection's box texture that is still downloading draws the plain box
         return CollectionRegistry.getCollection(collectionId)
                 .map(FigureCollection::getBoxTexture)
+                .filter(texture -> !RuntimeTextures.isPending(texture))
                 .orElse(DEFAULT_TEXTURE);
     }
 

@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.model.BoxBlockModel;
 import com.theplumteam.client.model.FigureModel;
+import com.theplumteam.client.runtime.RuntimeTextures;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
@@ -130,7 +131,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
 
     private record BoxOverlay(boolean hasFigure, boolean figureExtracted,
                               float offsetX, float offsetY, float offsetZ, float scale,
-                              FigureDefinition figure,
+                              FigureDefinition figure, int skinIndex,
                               net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState figureState,
                               ResourceLocation skinTexture,
                               ResourceLocation logoTexture, float[] logoPlacement) {
@@ -154,7 +155,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         ((com.geckolib.renderer.base.GeoRenderState) renderState).addGeckolibData(BOX_OVERLAY, new BoxOverlay(
                 animatable.hasFigure(), animatable.isFigureExtracted(),
                 (float) offset[0], (float) offset[1], (float) offset[2], (float) animatable.getFigureScale(),
-                animatable.getFigureDefinition(),
+                animatable.getFigureDefinition(), animatable.getAlternativeSkinIndex(),
                 figureState,
                 ((FigureModel) figureRenderer.getGeoModel()).resolveTexture(animatable),
                 logoTexture(animatable), logoPlacement(animatable)));
@@ -188,12 +189,13 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
             String name = bone.name();
             if (overlay.hasFigure() && isFaceBone(name) && overlay.skinTexture() != null) {
                 FigureDefinition figure = overlay.figure();
-                if (figure == null || !FigureFace.shows(figure, name.equals("figure_face_3d"))) {
+                int skinIndex = overlay.skinIndex();
+                if (figure == null || !FigureFace.shows(figure, skinIndex, name.equals("figure_face_3d"))) {
                     continue;
                 }
                 renderPassInfo.addPerBoneRender(bone, (info, posedBone, tasks) -> submitBone(info, posedBone, tasks,
                         net.minecraft.client.renderer.rendertype.RenderTypes.entityTranslucent(overlay.skinTexture()),
-                        figure));
+                        buffer -> FigureFace.buffer(buffer, figure, skinIndex)));
             } else if (name.equals("logo") && overlay.logoPlacement() != null && overlay.logoTexture() != null) {
                 renderPassInfo.addPerBoneRender(bone, (info, posedBone, tasks) -> {
                     float[] placement = overlay.logoPlacement();
@@ -203,7 +205,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                     poseStack.scale(placement[3], placement[4], placement[5]);
                     submitBone(info, posedBone, tasks,
                             net.minecraft.client.renderer.rendertype.RenderTypes.entityCutout(overlay.logoTexture()),
-                            null);
+                            java.util.function.UnaryOperator.identity());
                     poseStack.popPose();
                 });
             }
@@ -214,7 +216,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
             poseStack.pushPose();
             poseStack.translate(overlay.offsetX(), overlay.offsetY(), overlay.offsetZ());
             poseStack.scale(overlay.scale(), overlay.scale(), overlay.scale());
-            FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(overlay.figure()));
+            FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(overlay.figure(), overlay.skinIndex()));
             figureRenderer.submit(overlay.figureState(), poseStack, renderTasks,
                     new net.minecraft.client.renderer.state.level.CameraRenderState());
             poseStack.popPose();
@@ -225,13 +227,14 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     private static void submitBone(com.geckolib.renderer.base.RenderPassInfo info,
                                    com.geckolib.cache.model.GeoBone bone,
                                    net.minecraft.client.renderer.SubmitNodeCollector tasks,
-                                   RenderType renderType, FigureDefinition faceOf) {
+                                   RenderType renderType,
+                                   java.util.function.UnaryOperator<VertexConsumer> buffer) {
         tasks.submitCustomGeometry(info.poseStack(), renderType, (pose, vertexConsumer) -> {
             PoseStack poseStack = info.poseStack();
             poseStack.pushPose();
             poseStack.last().set(pose);
-            bone.positionAndRender(info, faceOf != null ? FigureFace.buffer(vertexConsumer, faceOf) : vertexConsumer,
-                    info.packedLight(), info.packedOverlay(), info.renderColor());
+            bone.positionAndRender(info, buffer.apply(vertexConsumer), info.packedLight(), info.packedOverlay(),
+                    info.renderColor());
             poseStack.popPose();
         });
     }
@@ -274,7 +277,8 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                 poseStack.scale((float) animatable.getFigureScale(),
                               (float) animatable.getFigureScale(),
                               (float) animatable.getFigureScale());
-                FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(animatable.getFigureDefinition()));
+                FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(animatable.getFigureDefinition(),
+                        animatable.getAlternativeSkinIndex()));
 
                 // Render the figure using separate renderer
                 figureRenderer.render(animatable, this.currentPartialTick, poseStack, bufferSource,
@@ -306,10 +310,11 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
 
         for (GeoBone bone : model.topLevelBones()) {
             String name = GeoBones.name(bone);
-            if (isFaceBone(name) && FigureFace.shows(figure, name.equals("figure_face_3d"))) {
+            if (isFaceBone(name)
+                    && FigureFace.shows(figure, animatable.getAlternativeSkinIndex(), name.equals("figure_face_3d"))) {
                 poseStack.pushPose();
                 renderRecursively(renderState, poseStack, bone, skinRenderType, bufferSource,
-                        FigureFace.buffer(skinBuffer, figure), true, packedLight, packedOverlay, 0xFFFFFFFF);
+                        FigureFace.buffer(skinBuffer, figure, animatable.getAlternativeSkinIndex()), true, packedLight, packedOverlay, 0xFFFFFFFF);
                 poseStack.popPose();
             }
         }
@@ -377,7 +382,8 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                 poseStack.scale((float) animatable.getFigureScale(),
                               (float) animatable.getFigureScale(),
                               (float) animatable.getFigureScale());
-                FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(animatable.getFigureDefinition()));
+                FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(animatable.getFigureDefinition(),
+                        animatable.getAlternativeSkinIndex()));
 
                 // Render the figure using separate renderer
                 figureRenderer.render(animatable, partialTick, poseStack, bufferSource,
@@ -400,11 +406,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         if (figure == null) return;
 
         // Get the player skin texture directly (bypassing figure model)
-        //? if >=1.21.2 {
-        /*ResourceLocation skinTexture = figureRenderer.getGeoModel().getTextureResource(animatable, figureRenderer);
-        *///? } else {
-        ResourceLocation skinTexture = figureRenderer.getGeoModel().getTextureResource(animatable);
-        //? }
+        ResourceLocation skinTexture = ((FigureModel) figureRenderer.getGeoModel()).resolveTexture(animatable);
         if (skinTexture == null) return; // Safety check
 
         // Render both the base skin layer and 3D overlay layer directly from player skin
@@ -418,12 +420,13 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
 
         for (GeoBone bone : model.topLevelBones()) {
             String name = GeoBones.name(bone);
-            if (isFaceBone(name) && FigureFace.shows(figure, name.equals("figure_face_3d"))) {
+            if (isFaceBone(name)
+                    && FigureFace.shows(figure, animatable.getAlternativeSkinIndex(), name.equals("figure_face_3d"))) {
                 // Base skin layer is the head front; the 3D bone is the hat overlay.
                 // Both use the same render type for consistency with player rendering.
                 poseStack.pushPose();
                 renderRecursively(poseStack, animatable, bone, skinRenderType, bufferSource,
-                                FigureFace.buffer(skinBuffer, figure),
+                                FigureFace.buffer(skinBuffer, figure, animatable.getAlternativeSkinIndex()),
                                 //? if >=1.21 {
                                 /*true, partialTick, packedLight, packedOverlay, 0xFFFFFFFF);
                                 *///? } else {
@@ -500,9 +503,11 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
 
     /** The logo texture the box's collection declares. */
     private static ResourceLocation logoTexture(BoxBlockEntity animatable) {
+        // A Custom collection's logo that is still downloading is not drawn yet
         return CollectionRegistry.getCollection(animatable.getCollectionId())
                 .map(FigureCollection::getLogoConfig)
                 .map(FigureCollection.LogoConfig::getTexture)
+                .filter(texture -> !RuntimeTextures.isPending(texture))
                 .orElse(null);
     }
 
@@ -518,7 +523,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         if (collection == null) return null;
 
         FigureCollection.LogoConfig config = collection.getLogoConfig();
-        if (config == null) return null;
+        if (config == null || logoTexture(animatable) == null) return null;
 
         float[] placement = LogoLayout.placement(config);
         return new float[] {
