@@ -39,6 +39,8 @@ file ModelToProcess/*
 
 The logo needs no position or size values: the box fits it from its visible pixels and keeps its proportions (see `textures/block/box/logo/README.md`). Only check that `logo.png` has a transparent background, since anything opaque around the logo is drawn on the box too.
 
+Then check the size of `logo.png` and `Box.png`: both sides of each must be multiples of 16. Every texture under `textures/block/` goes into the game's shared block atlas, and one texture with any other size turns off mipmapping for every block in the game. If the logo is not, pad it with transparent pixels, centered, up to the next multiples of 16 (pixel art: enlarge it 16 times with nearest-neighbour instead). Do not crop, stretch or resample it: the box ignores the padding, but the collection menu draws the whole image. If the box texture is not, stop and report it.
+
 ### Step 3: Determine Collection ID
 
 Convert the collection name to a lowercase ID with no spaces:
