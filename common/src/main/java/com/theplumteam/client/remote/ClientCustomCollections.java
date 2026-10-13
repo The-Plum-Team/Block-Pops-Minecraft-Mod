@@ -38,6 +38,9 @@ import java.util.function.Consumer;
 public final class ClientCustomCollections {
     private static final List<String> REGISTERED = new ArrayList<>();
     private static Consumer<CustomCollections.Status> statusListener;
+    // Whether this server sends its Custom collections at all, and how often it has
+    private static boolean synced;
+    private static int revision;
 
     private ClientCustomCollections() {
     }
@@ -45,6 +48,8 @@ public final class ClientCustomCollections {
     /** Applies the server's list. Client thread. */
     public static void apply(List<SyncCustomCollectionsPacket.Entry> entries) {
         forget();
+        synced = true;
+        revision++;
         int generation = RuntimeAssets.generation();
         Map<String, ManifestEntry> files = new LinkedHashMap<>();
         for (SyncCustomCollectionsPacket.Entry entry : entries) {
@@ -112,6 +117,27 @@ public final class ClientCustomCollections {
         REGISTERED.forEach(CollectionRegistry::unregisterDynamicCollection);
         REGISTERED.clear();
         RuntimeAssets.clear();
+        synced = false;
+        revision++;
+    }
+
+    /** Whether the server this client is connected to offers Custom collections. */
+    public static boolean isSynced() {
+        return synced;
+    }
+
+    /** Changes every time the list changes, so a screen knows to rebuild. */
+    public static int revision() {
+        return revision;
+    }
+
+    /** The Custom collections of this server, in the order it sent them. */
+    public static List<FigureCollection> collections() {
+        List<FigureCollection> collections = new ArrayList<>();
+        for (String collectionId : REGISTERED) {
+            CollectionRegistry.getCollection(collectionId).ifPresent(collections::add);
+        }
+        return collections;
     }
 
     /** Shows an operator what their request came to: in an open screen that listens, else in chat. */
