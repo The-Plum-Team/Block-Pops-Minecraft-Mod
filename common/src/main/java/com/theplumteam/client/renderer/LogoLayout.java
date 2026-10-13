@@ -2,6 +2,7 @@ package com.theplumteam.client.renderer;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.client.runtime.RuntimeTextures;
 import com.theplumteam.figure.FigureCollection;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
@@ -56,7 +57,9 @@ public final class LogoLayout {
             return new float[] {config.getPositionX(), config.getPositionY(), config.getPositionZ(),
                     config.getScaleX(), config.getScaleY(), config.getScaleZ()};
         }
-        int[] bounds = BOUNDS.computeIfAbsent(config.getTexture(), LogoLayout::measure);
+        // A logo still downloading is measured again once it arrives.
+        int[] bounds = RuntimeTextures.isPending(config.getTexture()) ? new int[] {1, 1, 0, 0, 1, 1}
+                : BOUNDS.computeIfAbsent(config.getTexture(), LogoLayout::measure);
         return place(bounds, config.getScale(), config.getOffsetX(), config.getOffsetY());
     }
 
@@ -79,34 +82,43 @@ public final class LogoLayout {
     }
 
     private static int[] measure(ResourceLocation texture) {
+        // A logo of a collection downloaded at runtime is not in the resource packs.
+        NativeImage runtime = RuntimeTextures.image(texture);
+        if (runtime != null) {
+            return measure(runtime);
+        }
         try (InputStream stream = Minecraft.getInstance().getResourceManager().getResource(texture).orElseThrow().open();
              NativeImage image = NativeImage.read(stream)) {
-            int width = image.getWidth();
-            int height = image.getHeight();
-            int left = 0;
-            int top = 0;
-            int right = width;
-            int bottom = height;
-            while (top < bottom && rowClear(image, top, left, right)) {
-                top++;
-            }
-            if (top == bottom) {
-                return new int[] {width, height, 0, 0, width, height};
-            }
-            while (rowClear(image, bottom - 1, left, right)) {
-                bottom--;
-            }
-            while (columnClear(image, left, top, bottom)) {
-                left++;
-            }
-            while (columnClear(image, right - 1, top, bottom)) {
-                right--;
-            }
-            return new int[] {width, height, left, top, right, bottom};
+            return measure(image);
         } catch (Exception e) {
             BlockPopsMod.LOGGER.warn("Could not measure logo {}, fitting it as a square", texture, e);
             return new int[] {1, 1, 0, 0, 1, 1};
         }
+    }
+
+    private static int[] measure(NativeImage image) {
+        int width = image.getWidth();
+        int height = image.getHeight();
+        int left = 0;
+        int top = 0;
+        int right = width;
+        int bottom = height;
+        while (top < bottom && rowClear(image, top, left, right)) {
+            top++;
+        }
+        if (top == bottom) {
+            return new int[] {width, height, 0, 0, width, height};
+        }
+        while (rowClear(image, bottom - 1, left, right)) {
+            bottom--;
+        }
+        while (columnClear(image, left, top, bottom)) {
+            left++;
+        }
+        while (columnClear(image, right - 1, top, bottom)) {
+            right--;
+        }
+        return new int[] {width, height, left, top, right, bottom};
     }
 
     private static boolean rowClear(NativeImage image, int y, int fromX, int toX) {

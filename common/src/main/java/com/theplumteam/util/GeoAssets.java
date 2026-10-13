@@ -33,6 +33,24 @@ public final class GeoAssets {
         //? }
     }
 
+    /** The resource file a model id is read from, for reading a model's JSON directly. */
+    public static ResourceLocation modelFile(ResourceLocation id) {
+        //? if >=1.21.5 {
+        /*return ResourceLocations.of(id.getNamespace(), "geckolib/models/" + id.getPath() + ".geo.json");
+        *///? } else {
+        return id;
+        //? }
+    }
+
+    /** The resource file an animation id is read from. */
+    public static ResourceLocation animationFile(ResourceLocation id) {
+        //? if >=1.21.5 {
+        /*return ResourceLocations.of(id.getNamespace(), "geckolib/animations/" + id.getPath() + ".animation.json");
+        *///? } else {
+        return id;
+        //? }
+    }
+
     /**
      * Normalises an id declared in collection data, which is authored once in the
      * GeckoLib 4 form and has to keep working on every version.
