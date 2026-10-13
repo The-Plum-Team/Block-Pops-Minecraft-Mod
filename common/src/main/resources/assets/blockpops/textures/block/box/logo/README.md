@@ -4,7 +4,11 @@ This directory contains the collection logos shown on the front of the box, unde
 
 ## Adding a Logo
 
-1. Put the PNG here as `logo_{id}.png`. Any size works, and transparent margins are ignored.
+1. Put the PNG here as `logo_{id}.png`. Both sides must be multiples of 16: every texture under
+   `textures/block/` is stitched into the game's shared block atlas, and one sprite with any other
+   size lowers mipmapping for every block in the game. Reach that size by padding the image with
+   transparent pixels, or for pixel art by enlarging it 16 times, not by cropping or stretching it.
+   The box ignores transparent margins, but the collection menu draws the whole image.
 2. Name it in the collection JSON:
 
 ```json
