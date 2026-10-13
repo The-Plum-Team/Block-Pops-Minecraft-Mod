@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.model.BoxBlockModel;
 import com.theplumteam.client.model.FigureModel;
+import com.theplumteam.client.runtime.RuntimeTextures;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
@@ -502,9 +503,11 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
 
     /** The logo texture the box's collection declares. */
     private static ResourceLocation logoTexture(BoxBlockEntity animatable) {
+        // A Custom collection's logo that is still downloading is not drawn yet
         return CollectionRegistry.getCollection(animatable.getCollectionId())
                 .map(FigureCollection::getLogoConfig)
                 .map(FigureCollection.LogoConfig::getTexture)
+                .filter(texture -> !RuntimeTextures.isPending(texture))
                 .orElse(null);
     }
 
@@ -520,7 +523,7 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
         if (collection == null) return null;
 
         FigureCollection.LogoConfig config = collection.getLogoConfig();
-        if (config == null) return null;
+        if (config == null || logoTexture(animatable) == null) return null;
 
         float[] placement = LogoLayout.placement(config);
         return new float[] {

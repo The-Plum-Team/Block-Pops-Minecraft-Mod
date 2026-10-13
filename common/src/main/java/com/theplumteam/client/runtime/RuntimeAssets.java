@@ -58,12 +58,43 @@ public final class RuntimeAssets {
         return executor;
     }
 
+    /** The current generation, which {@link #clear()} advances; pass it to {@link #load}. */
+    public static int generation() {
+        return GENERATION.get();
+    }
+
+    /**
+     * Marks the files at these asset paths as coming, before anything that names them is
+     * registered, so they are drawn by their fallbacks until {@link #load} delivers them.
+     */
+    public static void expect(Iterable<String> paths) {
+        List<ResourceLocation> geo = new ArrayList<>();
+        List<ResourceLocation> textures = new ArrayList<>();
+        for (String path : paths) {
+            Asset asset = classify(path, null);
+            if (asset != null) {
+                (asset.kind() == Kind.TEXTURE ? textures : geo).add(asset.id());
+            }
+        }
+        RuntimeGeo.expect(geo);
+        RuntimeTextures.expect(textures);
+    }
+
     /**
      * Loads files keyed by their path in the asset tree, such as
      * {@code assets/blockpops/geckolib/models/figure/x/y.geo.json}. Paths outside the
      * mod's models, animations and textures are ignored. The ids become pending at once.
      */
     public static CompletableFuture<Void> load(Map<String, Path> files) {
+        return load(files, GENERATION.get());
+    }
+
+    /** Loads files for a generation taken earlier; nothing is published if it has passed. */
+    public static CompletableFuture<Void> load(Map<String, Path> files, int generation) {
+        if (generation != GENERATION.get()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        expect(files.keySet());
         List<Asset> assets = new ArrayList<>();
         files.forEach((path, file) -> {
             Asset asset = classify(path, file);
@@ -71,15 +102,6 @@ public final class RuntimeAssets {
                 assets.add(asset);
             }
         });
-        List<ResourceLocation> geo = new ArrayList<>();
-        List<ResourceLocation> textures = new ArrayList<>();
-        for (Asset asset : assets) {
-            (asset.kind() == Kind.TEXTURE ? textures : geo).add(asset.id());
-        }
-        RuntimeGeo.expect(geo);
-        RuntimeTextures.expect(textures);
-
-        int generation = GENERATION.get();
         List<CompletableFuture<Void>> tasks = new ArrayList<>();
         for (Asset asset : assets) {
             tasks.add(CompletableFuture.runAsync(() -> loadOne(asset, generation), executor()));
