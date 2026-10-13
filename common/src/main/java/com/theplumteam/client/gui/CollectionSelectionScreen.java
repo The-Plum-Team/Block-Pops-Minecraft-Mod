@@ -388,6 +388,14 @@ public class CollectionSelectionScreen extends Screen {
         }
     }
 
+    //? if >=1.21 && <1.21.6 {
+    /*@Override
+    public void renderBackground(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // This screen draws its own opaque background before Screen.render, which on
+        // 1.21 to 1.21.5 calls this vanilla pass and would blur the panel on top of it.
+    }
+    *///? }
+
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         // Transform mouse coordinates if using inverse scale (shaders active)
