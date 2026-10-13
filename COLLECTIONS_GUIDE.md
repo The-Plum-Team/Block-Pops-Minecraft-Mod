@@ -256,6 +256,36 @@ case "marvel" -> "Marvel";  // in getDisplayName()
 
 4. Build and test!
 
+## Custom Collections
+
+Custom collections are published on the BlockPops CDN instead of shipping with the mod. An operator
+(permission level 2) enables one in a world by its access code, from the **Custom** tab of the claw
+machine's Settings or with a command:
+
+```
+/blockpops customcollections add <code>
+/blockpops customcollections remove <id>
+/blockpops customcollections list
+```
+
+The world remembers the list in `data/blockpops-custom-collections.json` (worlds from 1.5.0 are
+imported once from `data/blockpops_world.dat`). Every player downloads the collection's files when
+they join, into `blockpops-cache/` in the game directory, and a figure is drawn as the default figure
+until its own files arrive.
+
+A Custom collection is published with a definition at `data/blockpops/collections/<id>.json` and its
+files under `assets/blockpops/`, all listed with their SHA-256 in the CDN's `manifest.json`, and an
+access code at `codes/<code>.json` (`{"id": "<id>", "name": "<name>"}`). Only these layouts are
+downloaded:
+
+- `geckolib/models/figure/<id>/<name>.geo.json`
+- `geckolib/animations/figure/figure_poses_<id>[_<name>].animation.json`
+- `textures/block/figure/<id>/<name>.png`
+- `textures/block/box/<id>.png` and `textures/block/box/logo/logo_<id>.png`
+
+The definition may name only those files, plus the default figure model and the shared poses. Every
+file is checked against its manifest hash, so a file uploaded again needs the manifest regenerated.
+
 ## Troubleshooting
 
 **Collection not loading?**
