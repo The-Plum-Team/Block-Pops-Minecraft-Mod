@@ -171,6 +171,39 @@ To add a new figure to an existing collection:
 4. Export as GeckoLib model
 5. Save to `geo/figure/collection_name/character_name.geo.json`
 
+A figure on its own model usually needs some of these optional keys, next to `model`:
+
+| Key | Meaning |
+|---|---|
+| `pose_animation` | Its own `Pose_Stand` and `Pose_Sit`, for a model whose bones the shared poses (`figure_poses`) do not drive. Without it a sitting figure is posed as a skin figure. |
+| `scale` | Its size in the box and as a placed figure, scaled about the centre of the block. Default `1`. |
+| `gui_scale` | Its size in the collection screen. Defaults to `scale`. |
+| `box_face_uv` | Where the face shown on the front of the box lies in its texture, in texels: `{"u": 8, "v": 8, "w": 8, "h": 8, "tex_width": 128, "tex_height": 128}`. Without it a figure on its own model shows no face there. |
+| `offset_x`, `offset_y`, `offset_z` | Its position in the box, in place of the box default. A box an operator has moved keeps its own position. |
+
+An entry in `alternatives` may also name its own `model`; without one it uses the figure's.
+
+```json
+{
+  "id": "goku",
+  "name": "Goku",
+  "model": "blockpops:geo/figure/dragonballz/goku.geo.json",
+  "texture": "blockpops:textures/block/figure/dragonballz/goku.png",
+  "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+  "pose_animation": "blockpops:animations/figure/figure_poses_dragonball_goku.animation.json",
+  "scale": 0.29,
+  "gui_scale": 0.35,
+  "box_face_uv": {"u": 8, "v": 8, "w": 8, "h": 8, "tex_width": 128, "tex_height": 128},
+  "alternatives": [
+    {
+      "name": "Goku (SSJ)",
+      "model": "blockpops:geo/figure/dragonballz/goku_ssj1.geo.json",
+      "texture": "blockpops:textures/block/figure/dragonballz/goku_ssj1.png"
+    }
+  ]
+}
+```
+
 ### Creating Custom Animations
 
 1. Open your model in Blockbench
