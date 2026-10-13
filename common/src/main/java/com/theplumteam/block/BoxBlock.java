@@ -365,9 +365,11 @@ public class BoxBlock extends BaseEntityBlock {
                 ItemStack dropStack;
                 if (color != null) {
                     dropStack = new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(color).get());
-                } else if (collectionId != null && !collectionId.isEmpty()) {
+                } else if (collectionId != null && ModItems.BOX_BLOCK_ITEMS.containsKey(collectionId)) {
                     dropStack = new ItemStack(ModItems.BOX_BLOCK_ITEMS.get(collectionId).get());
                 } else {
+                    // A Custom collection has no box item of its own: it drops this plain box,
+                    // which keeps its collection in the item data like every other box
                     dropStack = new ItemStack(this.asItem());
                 }
 

@@ -95,12 +95,18 @@ public class ModNetworking {
             SetWorldPlayerEnabledPacket::handleServer
         );
 
+        PacketNetworking.registerReceiver(
+            NetworkManager.c2s(),
+            CustomCollectionRequestPacket.ID,
+            CustomCollectionRequestPacket::handleServer
+        );
+
         //? if >=1.21 {
         /*PacketNetworking.registerServerS2CPayloads(
                 SyncTokenDataPacket.ID, SyncDiscoveryDataPacket.ID, UnlockFigurePacket.ID,
                 SyncDynamicCollectionsPacket.ID, OpenFavoriteColorScreenPacket.ID,
                 SyncServerSettingsPacket.ID, SyncHiddenCollectionsPacket.ID,
-                AdminProgressionSyncPacket.ID);
+                AdminProgressionSyncPacket.ID, SyncCustomCollectionsPacket.ID, CustomCollectionStatusPacket.ID);
         *///? }
 
         BlockPopsMod.logDebug("BlockPops networking initialized");
@@ -161,6 +167,22 @@ public class ModNetworking {
             AdminProgressionSyncPacket.ID,
             AdminProgressionSyncPacket::handleClient
         );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.s2c(),
+            SyncCustomCollectionsPacket.ID,
+            SyncCustomCollectionsPacket::handleClient
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.s2c(),
+            CustomCollectionStatusPacket.ID,
+            CustomCollectionStatusPacket::handleClient
+        );
+
+        // Leaving a server forgets its Custom collections and their downloaded assets
+        dev.architectury.event.events.client.ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(
+                player -> com.theplumteam.client.remote.ClientCustomCollections.forget());
 
         BlockPopsMod.logDebug("BlockPops client networking initialized");
     }
