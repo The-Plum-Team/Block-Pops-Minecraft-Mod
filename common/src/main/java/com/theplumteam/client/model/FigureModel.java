@@ -36,7 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class FigureModel extends GeoModel<BoxBlockEntity> {
     private static final ResourceLocation FALLBACK_MODEL = GeoAssets.model(BlockPopsMod.MOD_ID, "figure/box_figure_default");
-    private static final ResourceLocation FALLBACK_TEXTURE = ResourceLocations.of("minecraft", "textures/entity/steve.png");
+    private static final ResourceLocation FALLBACK_TEXTURE = ResourceLocations.of("minecraft", "textures/entity/player/wide/steve.png");
     private static final ResourceLocation POSE_ANIMATION = GeoAssets.animation(BlockPopsMod.MOD_ID, "figure/figure_poses");
 
     // GeckoLib 5 resolves the model and texture from the render state alone, so
