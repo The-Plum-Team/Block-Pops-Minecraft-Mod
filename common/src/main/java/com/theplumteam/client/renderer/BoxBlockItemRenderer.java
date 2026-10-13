@@ -264,6 +264,9 @@ public class BoxBlockItemRenderer
                 this.renderer.createRenderState();
         this.renderer.extractRenderState(renderEntity, renderState, partialTick,
                 net.minecraft.world.phys.Vec3.ZERO, null);
+        // The entity has a level, so its state took the world's light at the origin;
+        // a stack is lit by whatever holds it instead.
+        renderState.lightCoords = packedLight;
         poseStack.pushPose();
         if (FAVORITE_COLOR_MODEL.equals(stack.get(DataComponents.ITEM_MODEL))) {
             // Preserve the legacy GUI-facing side and one-pixel lift for this preview.
