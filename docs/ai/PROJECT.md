@@ -49,6 +49,10 @@ fills before immediate background drawing on the earlier GUI path.
 `common/build.gradle` derives special-item definitions and base-model transforms for Minecraft
 1.21.4 onward with `scripts/release/item_resources.py`, from the authored entity models. Older
 lanes retain their original resources; generated modern resources are never authored or committed.
+A box shows its flat front in a slot on every lane, as the authored 1.20.1 model does, so the
+script gives each derived box base model a GUI display in place of the shulker template's corner
+view. The renderer adds the half turn and one-pixel lift in code until 26.x, where a special
+renderer is no longer told its display context and the display carries them instead.
 The same script derives `data/blockpops/recipe/` for Minecraft 1.21 onward from the authored
 1.20.1 `recipes/`: 1.21 renamed the directory and the result field, 1.21.2 reads ingredients as
 bare ids, and 1.21.9 renamed `minecraft:chain` to `minecraft:iron_chain`. Author a recipe only in
