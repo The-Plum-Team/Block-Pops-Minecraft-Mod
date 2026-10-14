@@ -95,7 +95,12 @@ the shared collection sync. CI never contacts the CDN.
   `scripts/ci/pr_gate.py` reports it `delegated`, never writing it; see
   [`docs/operations.md`](../operations.md#shared-build-shared-build). Protected paths
   (`scripts/ci/gate_controller.py` `PROTECTED_PATHS`) change only through the SHA-approved
-  controller-upgrade procedure in [`docs/operations.md`](../operations.md). The evaluator
+  controller-upgrade procedure in [`docs/operations.md`](../operations.md). In
+  `shared-build-and-e2e` the kit's admission accepts `/controller-upgrade approve <head sha>` from
+  any current member of `The-Plum-Team` (`admission.approvers` in `scripts/ci/mod-base-build.json`);
+  outside collaborators never count, `/restricted-transition` and the dormant native
+  `scripts/ci/pr_gate.py` stay `AkaNebur`-only, and a pin rollback below mod-base v1.6.0 reverts
+  that entry first. The evaluator
   constants in `scripts/ci/gate_controller.py`, `scripts/ci/pr_gate.py` and
   `scripts/ci/e2e_job_graph.py` are never edited to admit a pull request.
 - **Restricted admission.** The generation-1 controller accepts the existing `VanillaShim.java`
