@@ -38,6 +38,12 @@ def _json(parent: int, name: str):
 # 1.21.9 added copper chains and renamed the iron one.
 RENAMED_ITEMS = {(1, 21, 9): {"minecraft:chain": "minecraft:iron_chain"}}
 ITEM_ID = r"[a-z0-9_.-]+:[a-z0-9_./-]+"
+# A box shows its flat front in a GUI slot, as the authored 1.20.1 model does, so its base model
+# replaces the shulker template's corner view. The renderer adds the half turn and one-pixel
+# lift itself until 26.1, which stopped telling a special renderer its display context; from
+# there the model carries them.
+BOX_GUI_DISPLAY = {"rotation": [0, 0, 0], "translation": [0, 0, 0], "scale": [1, 1, 1]}
+BOX_GUI_DISPLAY_26 = {"rotation": [0, 180, 0], "translation": [0, 1, 0], "scale": [1, 1, 1]}
 
 
 def _ingredient(value, version: tuple[int, ...]):
@@ -120,7 +126,14 @@ def resource_plan(source: Path, minecraft: str) -> dict[str, bytes]:
                 renderer = "box_block" if stem == "box_block" or stem.startswith("box_block_") else stem
                 if renderer not in {"box_block", "figure_block", "claw_machine_block"}:
                     raise ValueError("entity item has no registered special renderer")
-                result[base] = canonical_json({**model, "parent": "minecraft:item/template_shulker_box"})
+                derived = {**model, "parent": "minecraft:item/template_shulker_box"}
+                if renderer == "box_block":
+                    display = model.get("display", {})
+                    if not isinstance(display, dict):
+                        raise ValueError("authored model display must be an object")
+                    derived["display"] = {
+                        **display, "gui": BOX_GUI_DISPLAY_26 if version >= (26,) else BOX_GUI_DISPLAY}
+                result[base] = canonical_json(derived)
                 result[f"assets/blockpops/items/{name}"] = canonical_json({"model": {
                     "type": "minecraft:special", "base": f"blockpops:item/{stem}",
                     "model": {"type": f"blockpops:{renderer}"}}})
