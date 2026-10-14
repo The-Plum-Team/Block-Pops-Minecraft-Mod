@@ -94,9 +94,10 @@ public class ClawMachineBlockItemRenderer
 
             boolean firstPerson = displayContext == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND ||
                     displayContext == ItemDisplayContext.FIRST_PERSON_LEFT_HAND;
-            // First-person rotation and scale belong to the authored item model.
+            // First-person and GUI rotation and scale belong to the authored item model.
             // That also supplies the same transform to the context-free 26.x submit path.
-            if (!firstPerson) {
+            boolean modelOwned = firstPerson || displayContext == ItemDisplayContext.GUI;
+            if (!modelOwned) {
                 poseStack.translate(0.5, 0, 0.5);
                 poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(90));
                 poseStack.translate(-0.5, 0, -0.5);
@@ -111,12 +112,6 @@ public class ClawMachineBlockItemRenderer
                 poseStack.scale(baseScale * 0.7F, baseScale * 0.7F, baseScale * 0.7F);
                 poseStack.translate(-0.5, 0.5, -0.5);
             }
-            // Scale for GUI/inventory display
-            else if (displayContext == ItemDisplayContext.GUI) {
-                poseStack.translate(0.5, 0, 0.5);
-                poseStack.scale(baseScale, baseScale, baseScale);
-                poseStack.translate(-0.5, 0, -0.5);
-            }
             // Scale down when held in hand (third person view)
             else if (displayContext == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND ||
                      displayContext == ItemDisplayContext.THIRD_PERSON_LEFT_HAND) {
@@ -125,7 +120,7 @@ public class ClawMachineBlockItemRenderer
                 poseStack.translate(-0.5, 1.0, -0.5);
             }
             // Default scaling for other contexts
-            else if (!firstPerson) {
+            else if (!modelOwned) {
                 poseStack.translate(0.5, 0, 0.5);
                 poseStack.scale(baseScale, baseScale, baseScale);
                 poseStack.translate(-0.5, 0, -0.5);

@@ -136,6 +136,7 @@ public class BlockPopsFabric implements ModInitializer {
                 if (player instanceof ServerPlayer) {
                     ServerPlayer serverPlayer = (ServerPlayer) player;
                     List<FigureCollection> allCollections = new ArrayList<>(CollectionRegistry.getAllCollections());
+                    allCollections.addAll(CollectionRegistry.getPlushCollections());
                     SyncDynamicCollectionsPacket.sendToPlayer(serverPlayer, allCollections);
                     BlockPopsMod.logDebug("Synced {} collections to joining player {}", allCollections.size(), player.getName().getString());
                 }

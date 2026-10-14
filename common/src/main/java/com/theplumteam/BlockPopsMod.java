@@ -9,6 +9,7 @@ import com.theplumteam.registry.ModItems;
 import com.theplumteam.registry.ModLoot;
 import com.theplumteam.server.CustomCollections;
 import com.theplumteam.server.ServerTickHandler;
+import com.theplumteam.server.SpecialAccess;
 import com.theplumteam.server.config.ServerConfig;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.PlayerEvent;
@@ -66,6 +67,9 @@ public final class BlockPopsMod {
 
         // Send the server's hidden collections to every player that joins
         PlayerEvent.PLAYER_JOIN.register(SyncHiddenCollectionsPacket::sendToPlayer);
+
+        // Ask whether a joining player is a supporter, so the answer is there by the time it counts
+        PlayerEvent.PLAYER_JOIN.register(SpecialAccess::refresh);
 
         // Custom collections: loaded with the world, sent to each player that joins
         LifecycleEvent.SERVER_STARTING.register(CustomCollections::onServerStarting);

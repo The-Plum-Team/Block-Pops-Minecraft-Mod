@@ -195,28 +195,25 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
                 }
                 renderPassInfo.addPerBoneRender(bone, (info, posedBone, tasks) -> submitBone(info, posedBone, tasks,
                         net.minecraft.client.renderer.rendertype.RenderTypes.entityTranslucent(overlay.skinTexture()),
-                        buffer -> FigureFace.buffer(buffer, figure, skinIndex)));
+                        null, buffer -> FigureFace.buffer(buffer, figure, skinIndex)));
             } else if (name.equals("logo") && overlay.logoPlacement() != null && overlay.logoTexture() != null) {
-                renderPassInfo.addPerBoneRender(bone, (info, posedBone, tasks) -> {
-                    float[] placement = overlay.logoPlacement();
-                    PoseStack poseStack = info.poseStack();
-                    poseStack.pushPose();
-                    poseStack.translate(placement[0], placement[1], placement[2]);
-                    poseStack.scale(placement[3], placement[4], placement[5]);
-                    submitBone(info, posedBone, tasks,
-                            net.minecraft.client.renderer.rendertype.RenderTypes.entityCutout(overlay.logoTexture()),
-                            java.util.function.UnaryOperator.identity());
-                    poseStack.popPose();
-                });
+                renderPassInfo.addPerBoneRender(bone, (info, posedBone, tasks) -> submitBone(info, posedBone, tasks,
+                        net.minecraft.client.renderer.rendertype.RenderTypes.entityCutout(overlay.logoTexture()),
+                        overlay.logoPlacement(), java.util.function.UnaryOperator.identity()));
             }
         }
 
         if (overlay.figureState() != null) {
             PoseStack poseStack = renderPassInfo.poseStack();
             poseStack.pushPose();
+            // The box only turns to its facing after this hook, so the figure takes
+            // that turn here; its own renderer leaves the blockstate alone.
+            tryRotateByBlockstate(renderPassInfo, poseStack);
             poseStack.translate(overlay.offsetX(), overlay.offsetY(), overlay.offsetZ());
             poseStack.scale(overlay.scale(), overlay.scale(), overlay.scale());
             FigurePlacement.scaleAboutCentre(poseStack, FigurePlacement.scale(overlay.figure(), overlay.skinIndex()));
+            // The figure is lit as its box is, which for a held stack is not the world's light.
+            overlay.figureState().lightCoords = renderPassInfo.packedLight();
             figureRenderer.submit(overlay.figureState(), poseStack, renderTasks,
                     new net.minecraft.client.renderer.state.level.CameraRenderState());
             poseStack.popPose();
@@ -227,16 +224,25 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
     private static void submitBone(com.geckolib.renderer.base.RenderPassInfo info,
                                    com.geckolib.cache.model.GeoBone bone,
                                    net.minecraft.client.renderer.SubmitNodeCollector tasks,
-                                   RenderType renderType,
+                                   RenderType renderType, float[] placement,
                                    java.util.function.UnaryOperator<VertexConsumer> buffer) {
-        tasks.submitCustomGeometry(info.poseStack(), renderType, (pose, vertexConsumer) -> {
-            PoseStack poseStack = info.poseStack();
+        PoseStack poseStack = info.poseStack();
+        poseStack.pushPose();
+        // A per-bone task is handed a pose already carried to the bone's pivot, but
+        // positionAndRender places the bone itself, so this starts over from the model's pose.
+        poseStack.last().set(info.getModelRenderMatrixPose());
+        if (placement != null) {
+            poseStack.translate(placement[0], placement[1], placement[2]);
+            poseStack.scale(placement[3], placement[4], placement[5]);
+        }
+        tasks.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> {
             poseStack.pushPose();
             poseStack.last().set(pose);
             bone.positionAndRender(info, buffer.apply(vertexConsumer), info.packedLight(), info.packedOverlay(),
                     info.renderColor());
             poseStack.popPose();
         });
+        poseStack.popPose();
     }
     *///? } elif >=1.21.5 {
     /*@Override

@@ -1,0 +1,44 @@
+{
+  "id": "plush_pikmin",
+  "name": "Pikmin Plushes",
+  "author": "The Plum Team",
+  "author_url": "",
+  "logo": {
+    "texture": "blockpops:textures/gui/plush_collections/logo_pikmin.png"
+  },
+  "background_color": {
+    "r": 58,
+    "g": 128,
+    "b": 52
+  },
+  "figures": [
+    {
+      "id": "red_pikmin",
+      "name": "Red Pikmin",
+      "model": "blockpops:geo/plush/red_pikmin.geo.json",
+      "texture": "blockpops:textures/item/plush_red_pikmin.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "yellow_pikmin",
+      "name": "Yellow Pikmin",
+      "model": "blockpops:geo/plush/yellow_pikmin.geo.json",
+      "texture": "blockpops:textures/item/plush_yellow_pikmin.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "blue_pikmin",
+      "name": "Blue Pikmin",
+      "model": "blockpops:geo/plush/blue_pikmin.geo.json",
+      "texture": "blockpops:textures/item/plush_blue_pikmin.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "white_pikmin",
+      "name": "White Pikmin",
+      "model": "blockpops:geo/plush/white_pikmin.geo.json",
+      "texture": "blockpops:textures/item/plush_white_pikmin.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    }
+  ]
+}

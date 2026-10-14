@@ -15,6 +15,7 @@ import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.registry.ModItems;
 import com.theplumteam.server.ServerTickHandler;
+import com.theplumteam.server.SpecialAccess;
 import com.theplumteam.util.AuthlibProfiles;
 import com.theplumteam.util.ResourceLocations;
 import dev.architectury.networking.NetworkManager;
@@ -98,7 +99,7 @@ public class DropBoxPacket {
 
                 // Every World Players figure can be disabled, and an empty pool must not cost a token
                 if (CollectionRegistry.getCollection(packet.collectionId)
-                        .map(collection -> collection.getEnabledFigures().isEmpty()).orElse(true)) {
+                        .map(collection -> SpecialAccess.figuresFor(player, collection).isEmpty()).orElse(true)) {
                     player.sendSystemMessage(Component.literal("\u00A7cThis collection has no figures available."));
                     BlockPopsMod.logDebug("Collection {} has no available figures, token not consumed", packet.collectionId);
                     return;
@@ -153,10 +154,17 @@ public class DropBoxPacket {
 
     private static void processBoxDrop(ServerPlayer player, DropBoxPacket packet, IPlayerDiscovery discovery) {
         CollectionRegistry.getCollection(packet.collectionId).ifPresent(collection -> {
-            List<FigureDefinition> figures = collection.getEnabledFigures();
+            // A collection's specials are only in the pool of a player with special access
+            List<FigureDefinition> figures = SpecialAccess.figuresFor(player, collection);
             if (!figures.isEmpty()) {
                 FigureDefinition selectedFigure = selectFigure(figures, packet.tokenType,
                         discovery, packet.collectionId);
+
+                if (collection.isPlush()) {
+                    // A plush collection hands out the plush itself, not a box
+                    givePlush(player, packet.collectionId, selectedFigure, discovery);
+                    return;
+                }
 
                 ItemStack boxItem = null;
                 if (packet.collectionId.equals(PlayerCollectionHelper.WORLD_PLAYERS_COLLECTION_ID)) {
@@ -232,6 +240,25 @@ public class DropBoxPacket {
                 }
             }
         });
+    }
+
+    private static void givePlush(ServerPlayer player, String collectionId, FigureDefinition figure,
+                                  IPlayerDiscovery discovery) {
+        var plushItem = ModItems.PLUSH_ITEMS.get(figure.getId());
+        if (plushItem == null) {
+            LOGGER.warn("Plush collection {} names {}, which is not a registered plush", collectionId, figure.getId());
+            return;
+        }
+        String uniqueFigureId = collectionId + ":" + figure.getId();
+        if (!discovery.isDiscovered(uniqueFigureId)) {
+            discovery.discover(uniqueFigureId);
+            UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, figure.getName(), null, null);
+            PlayerSounds.notify(player, SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1.0F, 1.0F);
+        } else {
+            PlayerSounds.notify(player, SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 1.0F, 1.0F);
+        }
+        player.getInventory().add(new ItemStack(plushItem.get()));
+        PlayerDataManager.markDirty(player, discovery);
     }
 
     private static boolean verifyAndConsumeToken(ServerPlayer player, IPlayerDiscovery discovery, TokenType tokenType) {

@@ -2,6 +2,8 @@ package com.theplumteam.client;
 
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.blockentity.GachaMachineBlockEntity;
+import com.theplumteam.blockentity.PlushBlockEntity;
 import com.theplumteam.client.gui.CollectionSelectionScreen;
 import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
 import com.theplumteam.client.gui.FigurePositionScreen;
@@ -14,6 +16,22 @@ import net.minecraft.core.BlockPos;
  * This class MUST NOT be loaded on the dedicated server.
  */
 public class ClientHelpers {
+    public static void openPlushScreen(BlockPos pos, PlushBlockEntity plushBlockEntity) {
+        Minecraft.getInstance().setScreen(FigurePositionScreen.forPlush(
+                pos,
+                plushBlockEntity.getOffsetX(),
+                plushBlockEntity.getOffsetY(),
+                plushBlockEntity.getOffsetZ(),
+                plushBlockEntity.getScale(),
+                plushBlockEntity.getHitboxOffsetX(),
+                plushBlockEntity.getHitboxOffsetY(),
+                plushBlockEntity.getHitboxOffsetZ(),
+                plushBlockEntity.getHitboxScaleX(),
+                plushBlockEntity.getHitboxScaleY(),
+                plushBlockEntity.getHitboxScaleZ()
+        ));
+    }
+
     public static void openBoxFigureScreen(BlockPos pos, BoxBlockEntity boxBlockEntity) {
         // Use the cross-platform FigurePositionScreen from common
         // The offset the box is drawn with, which a figure's own offset may set
@@ -43,6 +61,14 @@ public class ClientHelpers {
         Minecraft.getInstance().setScreen(new CollectionSelectionScreen(
                 pos,
                 entity.getCollectionId()
+        ));
+    }
+
+    public static void openGachaMachineScreen(BlockPos pos, GachaMachineBlockEntity entity) {
+        Minecraft.getInstance().setScreen(new CollectionSelectionScreen(
+                pos,
+                entity.getCollectionId(),
+                true
         ));
     }
 

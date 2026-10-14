@@ -1,0 +1,58 @@
+{
+  "id": "plush_castlecrashers",
+  "name": "Castle Crashers Plushes",
+  "author": "The Plum Team",
+  "author_url": "",
+  "logo": {
+    "texture": "blockpops:textures/gui/plush_collections/logo_castlecrashers.png"
+  },
+  "background_color": {
+    "r": 176,
+    "g": 44,
+    "b": 36
+  },
+  "figures": [
+    {
+      "id": "red_knight",
+      "name": "Red Knight",
+      "model": "blockpops:geo/plush/red_knight.geo.json",
+      "texture": "blockpops:textures/item/plush_red_knight.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "blue_knight",
+      "name": "Blue Knight",
+      "model": "blockpops:geo/plush/blue_knight.geo.json",
+      "texture": "blockpops:textures/item/plush_blue_knight.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "green_knight",
+      "name": "Green Knight",
+      "model": "blockpops:geo/plush/green_knight.geo.json",
+      "texture": "blockpops:textures/item/plush_green_knight.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "orange_knight",
+      "name": "Orange Knight",
+      "model": "blockpops:geo/plush/orange_knight.geo.json",
+      "texture": "blockpops:textures/item/plush_orange_knight.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "pink_knight",
+      "name": "Pink Knight",
+      "model": "blockpops:geo/plush/pink_knight.geo.json",
+      "texture": "blockpops:textures/item/plush_pink_knight.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "grey_knight",
+      "name": "Grey Knight",
+      "model": "blockpops:geo/plush/grey_knight.geo.json",
+      "texture": "blockpops:textures/item/plush_grey_knight.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    }
+  ]
+}

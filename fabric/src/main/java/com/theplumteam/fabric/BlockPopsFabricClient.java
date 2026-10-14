@@ -7,8 +7,11 @@ import com.theplumteam.client.renderer.BoxBlockRenderer;
 import com.theplumteam.client.renderer.ClawMachineBlockItemRenderer;
 import com.theplumteam.client.renderer.ClawMachineBlockRenderer;
 import com.theplumteam.client.renderer.FigureBlockItemRenderer;
+import com.theplumteam.client.renderer.FigurePreviewItemRenderer;
 import com.theplumteam.client.renderer.FigureBlockRenderer;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
+import com.theplumteam.client.renderer.GachaMachineBlockRenderer;
+import com.theplumteam.client.renderer.PlushBlockRenderer;
 import com.theplumteam.network.ModNetworking;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModItems;
@@ -54,6 +57,21 @@ public class BlockPopsFabricClient implements ClientModInitializer {
                 new ClawMachineBlockRenderer()
                 //? }
         );
+        BlockEntityRendererRegistry.register(ModBlockEntities.GACHA_MACHINE_BLOCK.get(), context ->
+                //? if >=26 {
+                /*new GachaMachineBlockRenderer(context)
+                *///? } else {
+                new GachaMachineBlockRenderer()
+                //? }
+        );
+        ModBlockEntities.PLUSH_BLOCKS.forEach((plushId, type) ->
+                BlockEntityRendererRegistry.register(type.get(), context ->
+                        //? if >=26 {
+                        /*new PlushBlockRenderer(context, plushId)
+                        *///? } else {
+                        new PlushBlockRenderer(plushId)
+                        //? }
+                ));
         BlockEntityRendererRegistry.register(ModBlockEntities.FIGURE_BLOCK.get(), context ->
                 //? if >=26 {
                 /*new FigureBlockRenderer(context)
@@ -81,6 +99,7 @@ public class BlockPopsFabricClient implements ClientModInitializer {
         SpecialModelRenderers.ID_MAPPER.put(BoxBlockItemRenderer.ID, BoxBlockItemRenderer.Unbaked.MAP_CODEC);
         SpecialModelRenderers.ID_MAPPER.put(FigureBlockItemRenderer.ID, FigureBlockItemRenderer.Unbaked.MAP_CODEC);
         SpecialModelRenderers.ID_MAPPER.put(ClawMachineBlockItemRenderer.ID, ClawMachineBlockItemRenderer.Unbaked.MAP_CODEC);
+        SpecialModelRenderers.ID_MAPPER.put(FigurePreviewItemRenderer.ID, FigurePreviewItemRenderer.Unbaked.MAP_CODEC);
         BlockPopsMod.logDebug("Registered special model renderers for GeckoLib blocks");
     }
     *///? } else {
