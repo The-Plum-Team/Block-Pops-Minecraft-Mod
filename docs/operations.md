@@ -453,25 +453,28 @@ in the same pull request that enters this mode:
   its `FORBIDDEN_PATHS` (`.gradle`, `buildSrc`), the `build.gradle` and
   `src/e2e` of every loader, `release/release-matrix.json` and
   `gradle/verification-metadata.xml`.
-- `command` is `/controller-upgrade`, and the only approver entry is
+- `command` is `/controller-upgrade`, and the approver entries are
   `{"organization": "The-Plum-Team", "role": "member"}` (mod-base v1.6.0 or
   later): any current member of the `The-Plum-Team` organization may decide,
   its owners included (so `AkaNebur` still counts), and so does a future member
   with no further change. A private (concealed) membership counts too.
+  `{"association": "COLLABORATOR", "login": "Nanarng"}`: the outside
+  collaborator `Nanarng` decides as well, matched by login and the
+  `author_association` GitHub shows on their comments.
   `tests/test_mod_base_build_adapter.py` keeps `protected_paths` equal to the
-  native list and pins this approver entry.
+  native list and pins these approver entries.
 - Membership is proven by the gate App's member list (organization permission
   "Members: Read-only"), not by `author_association`. The managed
   `mod-base-gate-status.yml` runs its `members` job ("Read the organization
-  members") for that. An outside collaborator (for example `Nanarng`), a
-  former member or a billing manager never counts, whatever their repository
-  permission, and neither does a comment posted through a GitHub App.
+  members") for that. Any other outside collaborator, a former member or a
+  billing manager never counts, whatever their repository permission, and
+  neither does a comment posted through a GitHub App.
 - The kit's gate status reads the config from the protected `master` it runs
   as, never from the pull request. A pull request that changes this approver
   entry is therefore decided by the approvers already on `master`.
 - A pull request whose tested merge changes a protected path gets `failure`
   (`admission: ...`) on both contexts, unless the newest decision of a member
-  on its exact head is `/controller-upgrade approve <head sha>`. A new head needs
+  or of `Nanarng` on its exact head is `/controller-upgrade approve <head sha>`. A new head needs
   a new approval. An edited decision (also an older comment edited into one)
   is refused until it is deleted, so post a fresh comment instead of editing
   one. A decision posted while an evaluation was running is refused by that

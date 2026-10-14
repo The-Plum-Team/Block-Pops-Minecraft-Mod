@@ -67,6 +67,11 @@ The immediate renderer applies its other context transforms only outside first p
 On POSIX, packaged Forge-family servers launch the installed JVM argument files directly so
 shutdown waits for the JVM to finish writing logs before evidence export, without a shell parent.
 
+On Windows, `gradle/build-conventions.gradle` starts every Loom run with
+`-XX:StackShadowPages=20`, the value other platforms default to. With HotSpot's 8-page Windows
+default, JDK 25 call-site resolution outgrows the committed stack of a worker thread and the
+development game dies with an access violation, leaving no crash report.
+
 Custom collections ([ADR 0002](../architecture/decisions/0002-load-custom-collections-at-runtime.md))
 are the one path by which the game loads content that does not ship with it. That content is
 untrusted, and only `com.theplumteam.remote` fetches it: from the single fixed CDN origin, by
@@ -96,9 +101,9 @@ the shared collection sync. CI never contacts the CDN.
   (`scripts/ci/gate_controller.py` `PROTECTED_PATHS`) change only through the SHA-approved
   controller-upgrade procedure in [`docs/operations.md`](../operations.md). In
   `shared-build-and-e2e` the kit's admission accepts `/controller-upgrade approve <head sha>` from
-  any current member of `The-Plum-Team` (`admission.approvers` in `scripts/ci/mod-base-build.json`);
-  outside collaborators never count, `/restricted-transition` and the dormant native
-  `scripts/ci/pr_gate.py` stay `AkaNebur`-only, and a pin rollback below mod-base v1.6.0 reverts
+  any current member of `The-Plum-Team` and from the outside collaborator `Nanarng`
+  (`admission.approvers` in `scripts/ci/mod-base-build.json`); `/restricted-transition` and the
+  dormant native `scripts/ci/pr_gate.py` stay `AkaNebur`-only, and a pin rollback below mod-base v1.6.0 reverts
   that entry first. The evaluator
   constants in `scripts/ci/gate_controller.py`, `scripts/ci/pr_gate.py` and
   `scripts/ci/e2e_job_graph.py` are never edited to admit a pull request.

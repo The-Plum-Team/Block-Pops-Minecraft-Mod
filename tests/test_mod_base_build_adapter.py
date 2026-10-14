@@ -148,10 +148,12 @@ class BuildConfigTests(unittest.TestCase):
         self.assertEqual(admission["protected_paths"], sorted(expected))
         self.assertEqual(admission["command"], "/controller-upgrade")
         # Any active member of the owning organization decides (mod-base v1.6.0 or later); the
-        # kit proves the membership with the gate App's member list, so an outside collaborator
-        # never counts. A kit older than v1.6.0 refuses this entry: revert it before a pin
-        # rollback below v1.6.0.
-        self.assertEqual(admission["approvers"], [{"organization": "The-Plum-Team", "role": "member"}])
+        # kit proves the membership with the gate App's member list. The outside collaborator
+        # Nanarng is listed by login with the association GitHub shows on their comments. A kit
+        # older than v1.6.0 refuses the organization entry: revert it before a pin rollback below
+        # v1.6.0.
+        self.assertEqual(admission["approvers"], [{"organization": "The-Plum-Team", "role": "member"},
+                                                  {"association": "COLLABORATOR", "login": "Nanarng"}])
         for root in admission["protected_paths"]:
             with self.subTest(root=root):
                 self.assertFalse(any(root.startswith(other + "/") for other in admission["protected_paths"]))

@@ -88,10 +88,10 @@ controller/docs/test or matrix-selected loader-bootstrap roots. After reviewing
 the complete exact-head diff, any current member of the `The-Plum-Team`
 organization may post `/controller-upgrade approve <head-sha>` (the mod-base
 kit's admission proves the membership with the gate App; a private membership
-counts). Outside collaborators, such as `Nanarng`, do not count, whatever their
-repository permission. Every new head requires a new approval; the latest
-exact-head `approve` or `revoke` command of a member wins. Post a fresh comment
-rather than editing one: an edited decision is refused. To revoke, post
+counts), and so may the outside collaborator `Nanarng`, listed by name; no
+other outside collaborator counts. Every new head requires a new approval; the
+latest exact-head `approve` or `revoke` command of an approver wins. Post a
+fresh comment rather than editing one: an edited decision is refused. To revoke, post
 `/controller-upgrade revoke <head-sha>`, then push a new head or convert the PR
 to draft, then dispatch `mod-base-gate-status.yml -f pr-number=<N>`
 ([details](docs/operations.md#shared-build-and-packaged-e2e-shared-build-and-e2e)).
