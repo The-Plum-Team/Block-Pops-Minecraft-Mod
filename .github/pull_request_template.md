@@ -13,7 +13,7 @@ Delete instructional comments, but keep every heading. Use "Not applicable" wher
 - Minecraft version(s):
 - Loader(s):
 - Shared change or version-only change:
-- Controller upgrade (`controller-upgrade/*` branch, `controller-upgrade` label, owner `/controller-upgrade approve <sha>`): yes / no
+- Controller upgrade (`controller-upgrade/*` branch, `controller-upgrade` label, `/controller-upgrade approve <sha>` from a The-Plum-Team member): yes / no
 - Related issue:
 
 ## Implementation notes
