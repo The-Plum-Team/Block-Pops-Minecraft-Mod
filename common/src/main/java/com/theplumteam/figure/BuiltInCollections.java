@@ -24,7 +24,8 @@ public class BuiltInCollections {
         "doom",
         "theamazingdigitalcircus",
         "dragonballz",
-        "winx"
+        "winx",
+        "monsterhigh"
         // Add more collections as needed
     );
 
@@ -49,6 +50,7 @@ public class BuiltInCollections {
             case "theamazingdigitalcircus" -> "The Amazing Digital Circus";
             case "dragonballz" -> "Dragon Ball Z";
             case "winx" -> "Winx Club";
+            case "monsterhigh" -> "Monster High";
             default -> collectionId;
         };
     }
