@@ -23,6 +23,7 @@ import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.client.gui.widget.CollectionEntry;
 import com.theplumteam.client.gui.widget.CollectionListWidget;
+import com.theplumteam.client.gui.widget.FigureEntry;
 import com.theplumteam.client.gui.widget.FigureListWidget;
 import com.theplumteam.client.gui.widget.LinkButton;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
@@ -151,6 +152,9 @@ public class CollectionSelectionScreen extends Screen {
         this.targetColorB = config.backgroundColorB;
         this.colorTransitionProgress = 1.0f; // Start with no transition
 
+        // A draw left over from a screen that closed without onClose belongs to no screen now
+        FigureDraw.reset();
+
         BlockPopsMod.logDebug("CollectionSelectionScreen opened at {} with current collection: {}",
                 blockPos, currentCollectionId);
     }
@@ -264,7 +268,9 @@ public class CollectionSelectionScreen extends Screen {
                 BlockPopsMod.logDebug("Using regular token for collection: {}", selectedCollectionId);
                 DropBoxPacket packet = new DropBoxPacket(blockPos, selectedCollectionId, TokenType.REGULAR);
                 packet.sendToServer();
-                this.onClose(); // Close the screen immediately after using a token
+                // The screen stays open to play the draw out
+                FigureDraw.await(selectedCollectionId, false);
+                updateTokenButtonStates();
             }
         }).bounds(fullWidthX, bottomY, buttonWidth, scaledComponentHeight).build();
         this.addRenderableWidget(useRegularButton);
@@ -275,7 +281,9 @@ public class CollectionSelectionScreen extends Screen {
                 BlockPopsMod.logDebug("Using guaranteed token for collection: {}", selectedCollectionId);
                 DropBoxPacket packet = new DropBoxPacket(blockPos, selectedCollectionId, TokenType.GUARANTEED);
                 packet.sendToServer();
-                this.onClose(); // Close the screen immediately after using a token
+                // The screen stays open to play the draw out
+                FigureDraw.await(selectedCollectionId, true);
+                updateTokenButtonStates();
             }
         }).bounds(fullWidthX + buttonWidth + scaledSpacing, bottomY, buttonWidth, scaledComponentHeight).build();
         this.addRenderableWidget(useSpecialButton);
@@ -400,6 +408,7 @@ public class CollectionSelectionScreen extends Screen {
     public void onClose() {
         // Mark that we are truly closing (not just opening a modal)
         isClosing = true;
+        FigureDraw.reset();
         // Restore GUI scale before closing
         restoreGuiScaleIfNeeded();
         super.onClose();
@@ -471,6 +480,67 @@ public class CollectionSelectionScreen extends Screen {
         if (figureListWidget != null) {
             figureListWidget.render(graphics, adjustedMouseX, adjustedMouseY, partialTick);
         }
+
+        renderDrawResult(graphics, partialTick);
+    }
+
+    /**
+     * Shows the figure a draw stopped on, in a card above everything else on the screen, centred
+     * over the figure list, which it alone dims; the rest of the screen stays usable. Drawn in the
+     * list's own space, which is scaled up when the inverse GUI scale is in use.
+     */
+    private void renderDrawResult(GuiGraphics graphics, float partialTick) {
+        FigureDraw draw = FigureDraw.result();
+        if (draw == null || figureListWidget == null) {
+            return;
+        }
+        FigureEntry row = figureListWidget.rowOf(draw.winner().getId());
+        if (row == null) {
+            return;
+        }
+        // Everything drawn so far lands below the card: the list's models are drawn with depth,
+        // so the card is also lifted in front of them
+        GuiPose.flush(graphics);
+        GuiPose.nextStratum(graphics);
+        GuiPose.push(graphics);
+        GuiPose.lift(graphics, 400.0f);
+
+        float scale = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getRenderScaleFactor() : 1.0f;
+        int left = (int) (figureListWidget.left() * scale);
+        int top = (int) (figureListWidget.top() * scale);
+        int right = (int) (figureListWidget.right() * scale);
+        int bottom = (int) (figureListWidget.bottom() * scale);
+        graphics.fill(left, top, right, bottom, 0xB0000000);
+
+        String name = draw.winner().getName();
+        String label = draw.isNew() ? "NEW!" : "Already in your collection";
+        String hint = "Click or press Esc to close";
+        int line = font.lineHeight + 4;
+        int size = (int) Math.max(40, Math.min(120 * scale, bottom - top - 3 * line - 30));
+        int cardWidth = Math.max(Math.max(size, font.width(hint)), Math.max(font.width(name), font.width(label))) + 40;
+        int cardHeight = size + 3 * line + 20;
+        int cardX = (left + right - cardWidth) / 2;
+        int cardY = (top + bottom - cardHeight) / 2;
+        int frameColor = draw.isNew() ? 0xFFFFD700 : 0xFFAAAAAA;
+        graphics.fill(cardX - 2, cardY - 2, cardX + cardWidth + 2, cardY + cardHeight + 2, frameColor);
+        graphics.fill(cardX, cardY, cardX + cardWidth, cardY + cardHeight, 0xFF181818);
+        GuiPose.flush(graphics);
+
+        int textY = cardY + 8;
+        graphics.drawString(font, label, cardX + (cardWidth - font.width(label)) / 2, textY,
+                draw.isNew() ? 0xFFFFD700 : 0xFFAAAAAA, false);
+        row.renderPreview(graphics, draw.winner(), cardX + (cardWidth - size) / 2, textY + line, size, partialTick);
+        textY += line + size + 4;
+        graphics.drawString(font, name, cardX + (cardWidth - font.width(name)) / 2, textY, 0xFFFFFFFF, false);
+        textY += line;
+        graphics.drawString(font, hint, cardX + (cardWidth - font.width(hint)) / 2, textY, 0xFF888888, false);
+        GuiPose.pop(graphics);
+    }
+
+    /** The figure list, which a draw lights up. */
+    @Nullable
+    FigureListWidget figureList() {
+        return figureListWidget;
     }
 
     /**
@@ -846,7 +916,8 @@ public class CollectionSelectionScreen extends Screen {
      * Update the token button states based on selection and token availability
      */
     private void updateTokenButtonStates() {
-        boolean hasSelection = selectedCollectionId != null && !selectedCollectionId.isEmpty();
+        // One draw at a time: a spent token's draw has to play out first
+        boolean hasSelection = selectedCollectionId != null && !selectedCollectionId.isEmpty() && !FigureDraw.isBusy();
 
         if (useRegularButton != null) {
             useRegularButton.active = hasSelection && ClientTokenManager.getRegularTokens() > 0;
@@ -940,6 +1011,7 @@ public class CollectionSelectionScreen extends Screen {
         if (shownHiddenRevision != ClientHiddenCollections.getRevision()) {
             loadCollections();
         }
+        FigureDraw.tick();
         // Update button states each tick to reflect token changes
         updateTokenButtonStates();
     }
@@ -971,6 +1043,9 @@ public class CollectionSelectionScreen extends Screen {
             mouseX = GuiScaleManager.transformMouseX(mouseX);
             mouseY = GuiScaleManager.transformMouseY(mouseY);
         }
+        if (blocksForDraw(mouseX, mouseY)) {
+            return true;
+        }
         return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), bpDouble);
     }
     *///? } else {
@@ -979,9 +1054,28 @@ public class CollectionSelectionScreen extends Screen {
             mouseX = GuiScaleManager.transformMouseX(mouseX);
             mouseY = GuiScaleManager.transformMouseY(mouseY);
         }
+        if (blocksForDraw(mouseX, mouseY)) {
+            return true;
+        }
         return super.mouseClicked(mouseX, mouseY, button);
     }
     //? }
+
+    // While a draw's light moves only Done is clickable. Once it shows its figure, any click puts
+    // the figure away; one on the figure list does only that, one elsewhere also does its own job
+    private boolean blocksForDraw(double mouseX, double mouseY) {
+        if (FigureDraw.result() != null) {
+            FigureDraw.dismissResult();
+            return isOverFigureList(mouseX, mouseY);
+        }
+        return FigureDraw.isBusy() && !(doneButton != null && doneButton.isMouseOver(mouseX, mouseY));
+    }
+
+    private boolean isOverFigureList(double mouseX, double mouseY) {
+        return figureListWidget != null
+                && mouseX >= figureListWidget.left() && mouseX < figureListWidget.right()
+                && mouseY >= figureListWidget.top() && mouseY < figureListWidget.bottom();
+    }
 
     @Override
     //? if >=26 {
@@ -1043,6 +1137,10 @@ public class CollectionSelectionScreen extends Screen {
             mouseX = GuiScaleManager.transformMouseX(mouseX);
             mouseY = GuiScaleManager.transformMouseY(mouseY);
         }
+        // The figure list holds still while a draw lights its figures or shows the one it drew
+        if (FigureDraw.isBusy() || (FigureDraw.result() != null && isOverFigureList(mouseX, mouseY))) {
+            return true;
+        }
         //? if >=1.21 {
         /*return super.mouseScrolled(mouseX, mouseY, horizontal, delta);
         *///? } else {
@@ -1070,18 +1168,26 @@ public class CollectionSelectionScreen extends Screen {
         int keyCode = bpEvent.key();
         int scanCode = bpEvent.scancode();
         int modifiers = bpEvent.modifiers();
-        // Allow ESC to close
+        // Allow ESC to close, after it has put away a figure a draw shows
         if (keyCode == com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE) {
-            this.onClose();
+            if (FigureDraw.result() != null) {
+                FigureDraw.dismissResult();
+            } else {
+                this.onClose();
+            }
             return true;
         }
         return super.keyPressed(bpEvent);
     }
     *///? } else {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // Allow ESC to close
+        // Allow ESC to close, after it has put away a figure a draw shows
         if (keyCode == com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE) {
-            this.onClose();
+            if (FigureDraw.result() != null) {
+                FigureDraw.dismissResult();
+            } else {
+                this.onClose();
+            }
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);

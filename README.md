@@ -18,6 +18,13 @@ target. The matrix validator and build plan show the selected inventory.
 The `blockpops:world_players_box` loot table entry rolls a complete World
 Players box. See [World Players boxes in loot tables](docs/world-players-loot.md).
 
+## Drawing a figure
+
+Spending a token in the claw or gacha machine's screen keeps the screen open:
+the figures the token could give light up one after another, slowing down until
+the light stops on the one you got, which is then shown. Click to put it away.
+The figure is already in your inventory when the draw starts.
+
 ## Settings and figure previews
 
 Interact with a claw machine to open its collection screen, then select the

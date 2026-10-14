@@ -8,6 +8,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
+import com.theplumteam.client.gui.FigureDraw;
 import com.theplumteam.client.gui.GreyedTextures;
 import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.client.gui.util.GuiPose;
@@ -59,6 +60,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     // Special figures are outlined in the purple the BlockPops-Hytale project gives its specials
     private static final int SPECIAL_BORDER_COLOR = 0xE0BB8FCE;
     private static final int SPECIAL_BORDER_COLOR_UNDISCOVERED = 0x80BB8FCE;
+    // The light of a token's draw, without alpha
+    private static final int DRAW_LIGHT_COLOR = 0xFFD700;
 
     public FigureEntry(List<FigureDefinition> figures, String collectionId) {
         this.mc = Minecraft.getInstance();
@@ -83,6 +86,17 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
     public void setHeading(@org.jetbrains.annotations.Nullable String heading) {
         this.heading = heading;
+    }
+
+    /** Draws one figure of this row in colour at any size, placed as its cell places it. */
+    public void renderPreview(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick) {
+        float cellXOffset = xOffset;
+        float cellYOffset = yOffset;
+        xOffset *= size / (float) FIGURE_SIZE;
+        yOffset *= size / (float) FIGURE_SIZE;
+        render3DFigure(graphics, figure, x, y, size, partialTick, false);
+        xOffset = cellXOffset;
+        yOffset = cellYOffset;
     }
 
     private void drawFigureName(GuiGraphics graphics, FigureDefinition figure, int figureX, int y,
@@ -160,9 +174,11 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             FigureDefinition figure = figures.get(i);
             int figureX = startX + i * (effectiveFigureSize + effectiveSpacing);
 
-            // Check if this figure has been discovered
+            // Check if this figure has been discovered; a draw that unlocked it keeps it hidden
+            // until the draw stops on it
             String uniqueFigureId = collectionId + ":" + figure.getId();
-            boolean isDiscovered = ClientDiscoveryManager.isDiscovered(uniqueFigureId);
+            boolean isDiscovered = ClientDiscoveryManager.isDiscovered(uniqueFigureId)
+                    && !FigureDraw.hides(collectionId, figure.getId());
 
             // Draw background (darker for undiscovered figures)
             if (isDiscovered) {
@@ -196,6 +212,18 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             graphics.fill(figureX, y, figureX + 1, y + effectiveFigureSize, borderColor);
             // Right border
             graphics.fill(figureX + effectiveFigureSize - 1, y, figureX + effectiveFigureSize, y + effectiveFigureSize, borderColor);
+
+            if (FigureDraw.isLit(collectionId, figure.getId())) {
+                // The draw's light: a gold wash under the model and a thick gold frame
+                int alpha = (int) (0x70 * FigureDraw.glow(partialTick));
+                graphics.fill(figureX, y, figureX + effectiveFigureSize, y + effectiveFigureSize, (alpha << 24) | DRAW_LIGHT_COLOR);
+                int frame = 2;
+                int frameColor = 0xFF000000 | DRAW_LIGHT_COLOR;
+                graphics.fill(figureX, y, figureX + effectiveFigureSize, y + frame, frameColor);
+                graphics.fill(figureX, y + effectiveFigureSize - frame, figureX + effectiveFigureSize, y + effectiveFigureSize, frameColor);
+                graphics.fill(figureX, y, figureX + frame, y + effectiveFigureSize, frameColor);
+                graphics.fill(figureX + effectiveFigureSize - frame, y, figureX + effectiveFigureSize, y + effectiveFigureSize, frameColor);
+            }
 
             if (isDiscovered) {
                 // Render the 3D figure model for discovered figures
