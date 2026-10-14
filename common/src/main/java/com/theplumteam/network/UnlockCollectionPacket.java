@@ -88,7 +88,11 @@ public class UnlockCollectionPacket {
                     figures.size(), collectionId, player.getName().getString());
 
             for (FigureDefinition figure : figures) {
-                giveBoxForFigure(player, collectionId, figure, discovery);
+                if (collection.isPlush()) {
+                    givePlush(player, collectionId, figure, discovery);
+                } else {
+                    giveBoxForFigure(player, collectionId, figure, discovery);
+                }
             }
 
             BlockPopsMod.logDebug("Successfully unlocked all figures from collection {} for player {}",
@@ -115,6 +119,30 @@ public class UnlockCollectionPacket {
             // Quick Skin not installed or error accessing
         }
         return null;
+    }
+
+    private static void givePlush(ServerPlayer player, String collectionId, FigureDefinition figure,
+                                  IPlayerDiscovery discovery) {
+        var plushItem = ModItems.PLUSH_ITEMS.get(figure.getId());
+        if (plushItem == null) {
+            LOGGER.warn("Plush collection {} names {}, which is not a registered plush", collectionId, figure.getId());
+            return;
+        }
+        String uniqueFigureId = collectionId + ":" + figure.getId();
+        if (!discovery.isDiscovered(uniqueFigureId)) {
+            discovery.discover(uniqueFigureId);
+            UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, figure.getName(), null, null);
+        }
+
+        ItemEntity itemEntity = new ItemEntity(
+                player.level(),
+                player.getX(),
+                player.getY() + 1.0,
+                player.getZ(),
+                new ItemStack(plushItem.get())
+        );
+        itemEntity.setDeltaMovement(0, 0.2, 0);
+        player.level().addFreshEntity(itemEntity);
     }
 
     private static void giveBoxForFigure(ServerPlayer player, String collectionId,

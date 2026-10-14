@@ -4,6 +4,8 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.blockentity.GachaMachineBlockEntity;
+import com.theplumteam.blockentity.PlushBlockEntity;
 import com.theplumteam.item.ForgeBoxBlockItem;
 import com.theplumteam.item.ForgeGeoBlockItem;
 import net.minecraft.core.BlockPos;
@@ -54,6 +56,18 @@ public class PlatformHelperImpl {
     public static void openBoxFigureScreen(BlockPos pos, BoxBlockEntity boxBlockEntity) {
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
             com.theplumteam.client.ClientHelpers.openBoxFigureScreen(pos, boxBlockEntity)
+        );
+    }
+
+    public static void openPlushScreen(BlockPos pos, PlushBlockEntity plushBlockEntity) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
+            com.theplumteam.client.ClientHelpers.openPlushScreen(pos, plushBlockEntity)
+        );
+    }
+
+    public static void openGachaMachineScreen(BlockPos pos, GachaMachineBlockEntity gachaMachineBlockEntity) {
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
+            com.theplumteam.client.ClientHelpers.openGachaMachineScreen(pos, gachaMachineBlockEntity)
         );
     }
 

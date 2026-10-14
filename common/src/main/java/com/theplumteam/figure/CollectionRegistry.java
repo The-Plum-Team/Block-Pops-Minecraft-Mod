@@ -22,6 +22,8 @@ public class CollectionRegistry {
     private static final Map<String, FigureCollection> collections = new LinkedHashMap<>();
     private static final Map<String, FigureDefinition> figuresById = new HashMap<>();
     private static final Map<String, FigureCollection> dynamicCollections = new LinkedHashMap<>();
+    // Plush collections live apart: every listing of "the collections" means the boxed ones.
+    private static final Map<String, FigureCollection> plushCollections = new LinkedHashMap<>();
     private static boolean initialized = false;
 
     /**
@@ -37,6 +39,7 @@ public class CollectionRegistry {
 
         // Clear only static collections, preserve dynamic ones
         collections.clear();
+        plushCollections.clear();
         figuresById.clear();
 
         // Re-add dynamic collections after clearing
@@ -80,6 +83,8 @@ public class CollectionRegistry {
                 }
             }
 
+            loadPlushCollections(resourceManager);
+
             initialized = true;
             BlockPopsMod.logDebug("Loaded {} collections with {} total figures",
                     collections.size(), figuresById.size());
@@ -90,10 +95,45 @@ public class CollectionRegistry {
     }
 
     /**
-     * Gets a collection by ID
+     * Loads the plush collections from data/blockpops/plush_collections/*.json. They use the
+     * collection format; the folder is what makes them plush collections.
+     */
+    private static void loadPlushCollections(ResourceManager resourceManager) {
+        Map<ResourceLocation, Resource> resources = resourceManager.listResources(
+                "plush_collections",
+                location -> location.getPath().endsWith(".json")
+        );
+
+        for (Map.Entry<ResourceLocation, Resource> entry : resources.entrySet()) {
+            try (InputStream stream = entry.getValue().open();
+                 BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+
+                JsonObject json = GSON.fromJson(reader, JsonObject.class);
+                FigureCollection collection = FigureCollection.fromJson(json).asPlush();
+                registerCollectionInternal(collection, false);
+
+                BlockPopsMod.logDebug("Loaded plush collection '{}' with {} plushes from {}",
+                        collection.getName(), collection.getFigures().size(), entry.getKey());
+
+            } catch (Exception e) {
+                BlockPopsMod.LOGGER.error("Failed to load plush collection from {}: {}", entry.getKey(), e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Gets a collection by ID, boxed or plush
      */
     public static Optional<FigureCollection> getCollection(String collectionId) {
-        return Optional.ofNullable(collections.get(collectionId));
+        FigureCollection collection = collections.get(collectionId);
+        return Optional.ofNullable(collection != null ? collection : plushCollections.get(collectionId));
+    }
+
+    /**
+     * Gets the plush collections, which getAllCollections() leaves out
+     */
+    public static Collection<FigureCollection> getPlushCollections() {
+        return Collections.unmodifiableCollection(plushCollections.values());
     }
 
     /**
@@ -177,7 +217,7 @@ public class CollectionRegistry {
      * @param isDynamic Whether this is a dynamic collection
      */
     private static void registerCollectionInternal(FigureCollection collection, boolean isDynamic) {
-        collections.put(collection.getId(), collection);
+        (collection.isPlush() ? plushCollections : collections).put(collection.getId(), collection);
 
         // Register all figures with collectionId:figureId key
         for (FigureDefinition figure : collection.getFigures()) {

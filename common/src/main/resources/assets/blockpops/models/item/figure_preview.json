@@ -1,0 +1,11 @@
+{
+  "parent": "minecraft:item/template_shulker_box",
+  "gui_light": "front",
+  "display": {
+    "gui": {
+      "rotation": [0, 150, 0],
+      "translation": [-11.7128, 32, 0],
+      "scale": [4, 4, 4]
+    }
+  }
+}

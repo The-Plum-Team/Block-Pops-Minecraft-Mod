@@ -4,6 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.theplumteam.block.BoxBlock;
 import com.theplumteam.blockentity.BoxBlockEntity;
+import com.theplumteam.item.BoxBlockItem;
 import com.theplumteam.item.GeoBlockItem;
 //? if >=1.21 {
 /*import com.theplumteam.item.BlockEntityItemData;
@@ -37,6 +38,16 @@ public class BoxBlockItemRenderer
 {
     private BoxBlockRenderer renderer;
     private BoxBlockEntity renderEntity;
+
+    // One entity draws every box stack, so each stack starts from a new box of its own item:
+    // the collection or color the item stands for, whether or not the stack's tag repeats it
+    private void resetRenderEntity(GeoBlockItem item) {
+        if (item instanceof BoxBlockItem boxItem) {
+            renderEntity.resetForItemRendering(boxItem.getCollectionId(), boxItem.getColor());
+        } else {
+            renderEntity.resetForItemRendering(null, null);
+        }
+    }
 
     public BoxBlockItemRenderer() {
         //? if <1.21.4 {
@@ -80,6 +91,7 @@ public class BoxBlockItemRenderer
                 // Set client level for GeckoLib tick delta calculations
                 renderEntity.setLevel(Minecraft.getInstance().level);
             }
+            resetRenderEntity(geoBlockItem);
 
             // Load NBT data from ItemStack FIRST before any rendering
             // This ensures isOpen is set correctly before the animation controller evaluates
@@ -223,6 +235,7 @@ public class BoxBlockItemRenderer
             renderEntity = new BoxBlockEntity(BlockPos.ZERO, boxBlock.defaultBlockState());
             renderEntity.setLevel(Minecraft.getInstance().level);
         }
+        resetRenderEntity(geoBlockItem);
         CompoundTag blockEntityTag = BlockEntityItemData.read(stack);
         if (blockEntityTag != null) {
             renderEntity.loadForItemRendering(blockEntityTag);
@@ -251,6 +264,9 @@ public class BoxBlockItemRenderer
                 this.renderer.createRenderState();
         this.renderer.extractRenderState(renderEntity, renderState, partialTick,
                 net.minecraft.world.phys.Vec3.ZERO, null);
+        // The entity has a level, so its state took the world's light at the origin;
+        // a stack is lit by whatever holds it instead.
+        renderState.lightCoords = packedLight;
         poseStack.pushPose();
         if (FAVORITE_COLOR_MODEL.equals(stack.get(DataComponents.ITEM_MODEL))) {
             // Preserve the legacy GUI-facing side and one-pixel lift for this preview.

@@ -8,7 +8,10 @@ import com.theplumteam.client.renderer.BoxBlockRenderer;
 import com.theplumteam.client.renderer.ClawMachineBlockItemRenderer;
 import com.theplumteam.client.renderer.ClawMachineBlockRenderer;
 import com.theplumteam.client.renderer.FigureBlockItemRenderer;
+import com.theplumteam.client.renderer.FigurePreviewItemRenderer;
 import com.theplumteam.client.renderer.FigureBlockRenderer;
+import com.theplumteam.client.renderer.GachaMachineBlockRenderer;
+import com.theplumteam.client.renderer.PlushBlockRenderer;
 import com.theplumteam.network.ModNetworking;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModItems;
@@ -65,6 +68,21 @@ public class BlockPopsModForgeClient {
                 new ClawMachineBlockRenderer()
                 //? }
         );
+        event.registerBlockEntityRenderer(ModBlockEntities.GACHA_MACHINE_BLOCK.get(), context ->
+                //? if >=26 {
+                /*new GachaMachineBlockRenderer(context)
+                *///? } else {
+                new GachaMachineBlockRenderer()
+                //? }
+        );
+        ModBlockEntities.PLUSH_BLOCKS.forEach((plushId, type) ->
+                event.registerBlockEntityRenderer(type.get(), context ->
+                        //? if >=26 {
+                        /*new PlushBlockRenderer(context, plushId)
+                        *///? } else {
+                        new PlushBlockRenderer(plushId)
+                        //? }
+                ));
         event.registerBlockEntityRenderer(ModBlockEntities.FIGURE_BLOCK.get(), context ->
                 //? if >=26 {
                 /*new FigureBlockRenderer(context)
@@ -82,6 +100,7 @@ public class BlockPopsModForgeClient {
         event.register(BoxBlockItemRenderer.ID, BoxBlockItemRenderer.Unbaked.MAP_CODEC);
         event.register(FigureBlockItemRenderer.ID, FigureBlockItemRenderer.Unbaked.MAP_CODEC);
         event.register(ClawMachineBlockItemRenderer.ID, ClawMachineBlockItemRenderer.Unbaked.MAP_CODEC);
+        event.register(FigurePreviewItemRenderer.ID, FigurePreviewItemRenderer.Unbaked.MAP_CODEC);
     }
     *///? } else {
     /**
