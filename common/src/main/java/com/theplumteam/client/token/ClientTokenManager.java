@@ -13,7 +13,7 @@ public class ClientTokenManager {
 
     // Token counts
     private static int regularTokens = 0;
-    private static boolean hasSpecialToken = false;
+    private static int guaranteedTokens = 0;
 
     // Cooldown tracking
     private static long ticksUntilNextRegular = 0;
@@ -31,30 +31,40 @@ public class ClientTokenManager {
     public static void update(SyncTokenDataPacket packet) {
         regularTokens = packet.getRegularTokens();
         ticksUntilNextRegular = packet.getTicksUntilNextRegular();
-        hasSpecialToken = packet.hasSpecialToken();
+        guaranteedTokens = packet.getGuaranteedTokens();
         millisUntilNextSpecialReset = packet.getMillisUntilNextSpecialReset();
         lastUpdateTime = System.currentTimeMillis();
 
-        LOGGER.trace("Token data updated: {} regular, special: {}, next regular in {} ticks",
-                regularTokens, hasSpecialToken ? "available" : "used", ticksUntilNextRegular);
+        LOGGER.trace("Token data updated: {} regular, {} guaranteed, next regular in {} ticks",
+                regularTokens, guaranteedTokens, ticksUntilNextRegular);
     }
 
     /**
      * Get the number of regular tokens the player currently has.
      *
-     * @return Number of regular tokens (0-3)
+     * @return Number of regular tokens (up to 3 on their own, more from blue tickets)
      */
     public static int getRegularTokens() {
         return regularTokens;
     }
 
     /**
-     * Check if the player has their guaranteed token available.
+     * Check if the player has a guaranteed token available.
      *
-     * @return true if the special token is available, false if used
+     * @return true if at least one guaranteed token is available
      */
     public static boolean hasSpecialToken() {
-        return hasSpecialToken;
+        return guaranteedTokens > 0;
+    }
+
+    /**
+     * Get the number of guaranteed tokens the player has: today's, if unused, plus those
+     * added by gold tickets.
+     *
+     * @return Number of guaranteed tokens
+     */
+    public static int getGuaranteedTokens() {
+        return guaranteedTokens;
     }
 
     /**
@@ -133,7 +143,7 @@ public class ClientTokenManager {
      */
     public static void clear() {
         regularTokens = 0;
-        hasSpecialToken = false;
+        guaranteedTokens = 0;
         ticksUntilNextRegular = 0;
         millisUntilNextSpecialReset = 0;
         lastUpdateTime = System.currentTimeMillis();

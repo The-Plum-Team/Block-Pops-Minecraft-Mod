@@ -21,14 +21,14 @@ public class SyncTokenDataPacket {
 
     private final int regularTokens;
     private final long ticksUntilNextRegular;
-    private final boolean hasSpecialToken;
+    private final int guaranteedTokens;
     private final long millisUntilNextSpecialReset;
 
     public SyncTokenDataPacket(int regularTokens, long ticksUntilNextRegular,
-                               boolean hasSpecialToken, long millisUntilNextSpecialReset) {
+                               int guaranteedTokens, long millisUntilNextSpecialReset) {
         this.regularTokens = regularTokens;
         this.ticksUntilNextRegular = ticksUntilNextRegular;
-        this.hasSpecialToken = hasSpecialToken;
+        this.guaranteedTokens = guaranteedTokens;
         this.millisUntilNextSpecialReset = millisUntilNextSpecialReset;
     }
 
@@ -39,7 +39,7 @@ public class SyncTokenDataPacket {
         FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
         buffer.writeInt(regularTokens);
         buffer.writeLong(ticksUntilNextRegular);
-        buffer.writeBoolean(hasSpecialToken);
+        buffer.writeInt(guaranteedTokens);
         buffer.writeLong(millisUntilNextSpecialReset);
         return buffer;
     }
@@ -50,10 +50,10 @@ public class SyncTokenDataPacket {
     public static SyncTokenDataPacket decode(FriendlyByteBuf buffer) {
         int regularTokens = buffer.readInt();
         long ticksUntilNextRegular = buffer.readLong();
-        boolean hasSpecialToken = buffer.readBoolean();
+        int guaranteedTokens = buffer.readInt();
         long millisUntilNextSpecialReset = buffer.readLong();
         return new SyncTokenDataPacket(regularTokens, ticksUntilNextRegular,
-                hasSpecialToken, millisUntilNextSpecialReset);
+                guaranteedTokens, millisUntilNextSpecialReset);
     }
 
     /**
@@ -63,8 +63,8 @@ public class SyncTokenDataPacket {
         SyncTokenDataPacket packet = decode(buf);
 
         context.queue(() -> {
-            LOGGER.trace("Received token data sync: {} regular tokens, special token: {}",
-                    packet.regularTokens, packet.hasSpecialToken ? "available" : "used");
+            LOGGER.trace("Received token data sync: {} regular tokens, {} guaranteed tokens",
+                    packet.regularTokens, packet.guaranteedTokens);
 
             // Update client token manager
             ClientTokenManager.update(packet);
@@ -75,9 +75,9 @@ public class SyncTokenDataPacket {
      * Send this packet to a specific player.
      */
     public static void sendToPlayer(ServerPlayer player, int regularTokens, long ticksUntilNextRegular,
-                                    boolean hasSpecialToken, long millisUntilNextSpecialReset) {
+                                    int guaranteedTokens, long millisUntilNextSpecialReset) {
         SyncTokenDataPacket packet = new SyncTokenDataPacket(regularTokens, ticksUntilNextRegular,
-                hasSpecialToken, millisUntilNextSpecialReset);
+                guaranteedTokens, millisUntilNextSpecialReset);
         PacketNetworking.sendToPlayer(player, ID, packet.encode());
     }
 
@@ -89,8 +89,8 @@ public class SyncTokenDataPacket {
         return ticksUntilNextRegular;
     }
 
-    public boolean hasSpecialToken() {
-        return hasSpecialToken;
+    public int getGuaranteedTokens() {
+        return guaranteedTokens;
     }
 
     public long getMillisUntilNextSpecialReset() {

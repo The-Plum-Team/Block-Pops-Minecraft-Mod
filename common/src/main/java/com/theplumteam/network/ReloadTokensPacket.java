@@ -79,7 +79,7 @@ public class ReloadTokensPacket {
                         player,
                         discovery.getRegularTokens(),
                         ticksUntilNext,
-                        !discovery.hasUsedTodaySpecialToken(),
+                        discovery.getGuaranteedTokens(),
                         millisUntilReset
                 );
             }

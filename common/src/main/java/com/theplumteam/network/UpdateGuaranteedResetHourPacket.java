@@ -72,7 +72,7 @@ public class UpdateGuaranteedResetHourPacket {
                 player,
                 discovery.getRegularTokens(),
                 ticksUntilNext,
-                !discovery.hasUsedTodaySpecialToken(),
+                discovery.getGuaranteedTokens(),
                 millisUntilReset
         );
     }
