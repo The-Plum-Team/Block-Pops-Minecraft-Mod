@@ -27,6 +27,7 @@ public class PlayerDiscovery implements IPlayerDiscovery {
     private long nextRegularTokenTime = 0;
     private long lastSpecialTokenResetTimestamp = 0;
     private boolean usedTodaySpecialToken = false;
+    private int extraGuaranteedTokens = 0;
 
     // Favorite color fields
     private boolean hasChosenFavoriteColor = false;
@@ -101,6 +102,16 @@ public class PlayerDiscovery implements IPlayerDiscovery {
     @Override
     public void setUsedTodaySpecialToken(boolean used) {
         this.usedTodaySpecialToken = used;
+    }
+
+    @Override
+    public int getExtraGuaranteedTokens() {
+        return extraGuaranteedTokens;
+    }
+
+    @Override
+    public void setExtraGuaranteedTokens(int count) {
+        this.extraGuaranteedTokens = count;
     }
 
     // Favorite Color Implementation
@@ -187,6 +198,7 @@ public class PlayerDiscovery implements IPlayerDiscovery {
         tag.putLong("NextRegularTokenTime", this.nextRegularTokenTime);
         tag.putLong("LastSpecialTokenResetTimestamp", this.lastSpecialTokenResetTimestamp);
         tag.putBoolean("UsedTodaySpecialToken", this.usedTodaySpecialToken);
+        tag.putInt("ExtraGuaranteedTokens", this.extraGuaranteedTokens);
 
         // Serialize favorite color data
         tag.putBoolean("HasChosenFavoriteColor", this.hasChosenFavoriteColor);
@@ -241,6 +253,7 @@ public class PlayerDiscovery implements IPlayerDiscovery {
         if (tag.contains("UsedTodaySpecialToken")) {
             this.usedTodaySpecialToken = TagReads.bool(tag, "UsedTodaySpecialToken", false);
         }
+        this.extraGuaranteedTokens = Math.max(0, TagReads.integer(tag, "ExtraGuaranteedTokens", 0));
 
         // Deserialize favorite color data
         this.hasChosenFavoriteColor = TagReads.bool(tag, "HasChosenFavoriteColor", false);

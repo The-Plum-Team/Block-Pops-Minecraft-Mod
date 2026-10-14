@@ -56,6 +56,10 @@ refuses a block entity on a block its type does not list.
 `common/build.gradle` derives special-item definitions and base-model transforms for Minecraft
 1.21.4 onward with `scripts/release/item_resources.py`, from the authored entity models. Older
 lanes retain their original resources; generated modern resources are never authored or committed.
+A box shows its flat front in a slot on every lane, as the authored 1.20.1 model does, so the
+script gives each derived box base model a GUI display in place of the shulker template's corner
+view. The renderer adds the half turn and one-pixel lift in code until 26.x, where a special
+renderer is no longer told its display context and the display carries them instead.
 The same script derives `data/blockpops/recipe/` for Minecraft 1.21 onward from the authored
 1.20.1 `recipes/`: 1.21 renamed the directory and the result field, 1.21.2 reads ingredients as
 bare ids, and 1.21.9 renamed `minecraft:chain` to `minecraft:iron_chain`. Author a recipe only in
@@ -71,6 +75,11 @@ renderer applies its other context transforms only outside first person and the 
 
 On POSIX, packaged Forge-family servers launch the installed JVM argument files directly so
 shutdown waits for the JVM to finish writing logs before evidence export, without a shell parent.
+
+On Windows, `gradle/build-conventions.gradle` starts every Loom run with
+`-XX:StackShadowPages=20`, the value other platforms default to. With HotSpot's 8-page Windows
+default, JDK 25 call-site resolution outgrows the committed stack of a worker thread and the
+development game dies with an access violation, leaving no crash report.
 
 Custom collections ([ADR 0002](../architecture/decisions/0002-load-custom-collections-at-runtime.md))
 are the one path by which the game loads content that does not ship with it. That content is
@@ -99,7 +108,12 @@ the shared collection sync. CI never contacts the CDN.
   `scripts/ci/pr_gate.py` reports it `delegated`, never writing it; see
   [`docs/operations.md`](../operations.md#shared-build-shared-build). Protected paths
   (`scripts/ci/gate_controller.py` `PROTECTED_PATHS`) change only through the SHA-approved
-  controller-upgrade procedure in [`docs/operations.md`](../operations.md). The evaluator
+  controller-upgrade procedure in [`docs/operations.md`](../operations.md). In
+  `shared-build-and-e2e` the kit's admission accepts `/controller-upgrade approve <head sha>` from
+  any current member of `The-Plum-Team` and from the outside collaborator `Nanarng`
+  (`admission.approvers` in `scripts/ci/mod-base-build.json`); `/restricted-transition` and the
+  dormant native `scripts/ci/pr_gate.py` stay `AkaNebur`-only, and a pin rollback below mod-base v1.6.0 reverts
+  that entry first. The evaluator
   constants in `scripts/ci/gate_controller.py`, `scripts/ci/pr_gate.py` and
   `scripts/ci/e2e_job_graph.py` are never edited to admit a pull request.
 - **Restricted admission.** The generation-1 controller accepts the existing `VanillaShim.java`

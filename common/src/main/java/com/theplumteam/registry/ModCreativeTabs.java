@@ -38,6 +38,9 @@ public class ModCreativeTabs {
 
                         // Add plushes
                         ModItems.PLUSH_ITEMS.values().forEach(item -> output.accept(item.get()));
+
+                        output.accept(ModItems.BLUE_TICKET.get());
+                        output.accept(ModItems.GOLD_TICKET.get());
                     })
                     .build()
     );

@@ -46,8 +46,27 @@ class ItemResourceTests(unittest.TestCase):
                     self.assertEqual("blockpops:item/" + name[:-5], definition["base"])
                     model = json.loads(plan[f"assets/blockpops/models/item/{name}"])
                     self.assertEqual("minecraft:item/template_shulker_box", model["parent"])
-                    self.assertEqual("front", model["gui_light"])
+                    source = json.loads((SOURCE / "assets/blockpops/models/item" / name).read_text())
+                    self.assertIn(source["gui_light"], ("front", "side"))
+                    self.assertEqual(source["gui_light"], model["gui_light"])
                 self.assertTrue(all(b'builtin/entity' not in raw for raw in plan.values()))
+
+    def test_box_models_show_their_flat_front_in_a_slot_and_26_carries_the_renderer_s_turn(self):
+        box = "assets/blockpops/models/item/box_block_purple.json"
+        claw = "assets/blockpops/models/item/claw_machine_block.json"
+        authored = json.loads((SOURCE / claw).read_text())["display"]
+        for version, rotation, translation in (("1.21.4", [0, 0, 0], [0, 0, 0]), ("1.21.8", [0, 0, 0], [0, 0, 0]),
+                                               ("26.1.2", [0, 180, 0], [0, 1, 0]), ("26.2", [0, 180, 0], [0, 1, 0]),
+                                               ("26.3", [0, 180, 0], [0, 1, 0])):
+            with self.subTest(version=version):
+                self.assertEqual({"gui": {"rotation": rotation, "translation": translation, "scale": [1, 1, 1]}},
+                                 json.loads(resource_plan(self.source, version)[box])["display"])
+                plan = resource_plan(SOURCE, version)
+                self.assertEqual(authored, json.loads(plan[claw])["display"])
+                self.assertNotIn("display", json.loads(plan["assets/blockpops/models/item/figure_block.json"]))
+        self.item.write_text('{"parent":"builtin/entity","display":[]}')
+        with self.assertRaisesRegex(ValueError, "display"):
+            resource_plan(self.source, "26.3")
 
     def test_legacy_versions_produce_no_overrides_and_leave_authored_bytes_untouched(self):
         before = {path: path.read_bytes() for path in (SOURCE / "assets/blockpops/models/item").iterdir()}

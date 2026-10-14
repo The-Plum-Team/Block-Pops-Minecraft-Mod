@@ -85,9 +85,19 @@ ordinary feature PR. Branch from the exact current `master` as
 `controller-upgrade/<purpose>`, target `master`, add the exact
 `controller-upgrade` label, and keep the change within the protected
 controller/docs/test or matrix-selected loader-bootstrap roots. After reviewing
-the complete exact-head diff, only `AkaNebur`, an administrator of the owning organization, may post
-`/controller-upgrade approve <head-sha>`. Every new head requires a new approval;
-the latest exact-head `approve` or `revoke` command wins. Neither this route nor
+the complete exact-head diff, any current member of the `The-Plum-Team`
+organization may post `/controller-upgrade approve <head-sha>` (the mod-base
+kit's admission proves the membership with the gate App; a private membership
+counts), and so may the outside collaborator `Nanarng`, listed by name; no
+other outside collaborator counts. Every new head requires a new approval; the
+latest exact-head `approve` or `revoke` command of an approver wins. Post a
+fresh comment rather than editing one: an edited decision is refused. To revoke, post
+`/controller-upgrade revoke <head-sha>`, then push a new head or convert the PR
+to draft, then dispatch `mod-base-gate-status.yml -f pr-number=<N>`
+([details](docs/operations.md#shared-build-and-packaged-e2e-shared-build-and-e2e)).
+`/restricted-transition` approvals stay `AkaNebur`-only, and so does the dormant
+native evaluator `scripts/ci/pr_gate.py`, which applies again only after a
+rollback of the kit's gates. Neither this route nor
 an ordinary PR may change the release matrix, verification metadata, or
 version-specific shims. Both newest exact Build and Packaged E2E attempts and
 their protected App contexts remain mandatory.
