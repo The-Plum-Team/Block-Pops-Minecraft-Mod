@@ -107,7 +107,7 @@ public class ModNetworking {
                 SyncDynamicCollectionsPacket.ID, OpenFavoriteColorScreenPacket.ID,
                 SyncServerSettingsPacket.ID, SyncHiddenCollectionsPacket.ID,
                 AdminProgressionSyncPacket.ID, SyncSpecialAccessPacket.ID,
-                SyncCustomCollectionsPacket.ID, CustomCollectionStatusPacket.ID);
+                SyncCustomCollectionsPacket.ID, CustomCollectionStatusPacket.ID, DrawResultPacket.ID);
         *///? }
 
         BlockPopsMod.logDebug("BlockPops networking initialized");
@@ -185,6 +185,12 @@ public class ModNetworking {
             NetworkManager.s2c(),
             CustomCollectionStatusPacket.ID,
             CustomCollectionStatusPacket::handleClient
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.s2c(),
+            DrawResultPacket.ID,
+            DrawResultPacket::handleClient
         );
 
         // Leaving a server forgets its Custom collections and their downloaded assets

@@ -1,6 +1,5 @@
 package com.theplumteam.network;
 
-import com.theplumteam.util.PlayerSounds;
 import com.theplumteam.util.ServerLevels;
 import com.mojang.authlib.GameProfile;
 import com.theplumteam.BlockPopsMod;
@@ -26,8 +25,6 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -201,14 +198,14 @@ public class DropBoxPacket {
                         }
                     }
 
-                    if (!discovery.isDiscovered(uniqueFigureId)) {
+                    boolean isNew = !discovery.isDiscovered(uniqueFigureId);
+                    // Ahead of the unlock: the screen plays the draw out and sounds its result
+                    DrawResultPacket.sendToPlayer(player, packet.collectionId, selectedFigure.getId(), isNew);
+                    if (isNew) {
                         discovery.discover(uniqueFigureId);
                         // Use cross-platform networking - PASS QUICKSKIN ID TO CLIENT
                         UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, selectedFigure.getName(), skinSnapshot, quickSkinSnapshot);
                         BlockPopsMod.logDebug("Player {} discovered new figure: {} ({})", player.getName().getString(), selectedFigure.getName(), uniqueFigureId);
-                        PlayerSounds.notify(player, SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1.0F, 1.0F);
-                    } else {
-                        PlayerSounds.notify(player, SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 1.0F, 1.0F);
                     }
 
                     CompoundTag blockEntityTag = new CompoundTag();
@@ -250,12 +247,11 @@ public class DropBoxPacket {
             return;
         }
         String uniqueFigureId = collectionId + ":" + figure.getId();
-        if (!discovery.isDiscovered(uniqueFigureId)) {
+        boolean isNew = !discovery.isDiscovered(uniqueFigureId);
+        DrawResultPacket.sendToPlayer(player, collectionId, figure.getId(), isNew);
+        if (isNew) {
             discovery.discover(uniqueFigureId);
             UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, figure.getName(), null, null);
-            PlayerSounds.notify(player, SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1.0F, 1.0F);
-        } else {
-            PlayerSounds.notify(player, SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 1.0F, 1.0F);
         }
         player.getInventory().add(new ItemStack(plushItem.get()));
         PlayerDataManager.markDirty(player, discovery);

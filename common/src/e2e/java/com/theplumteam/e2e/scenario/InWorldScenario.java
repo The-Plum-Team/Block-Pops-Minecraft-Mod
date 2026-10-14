@@ -4,6 +4,7 @@ import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.gui.CollectionSelectionScreen;
 import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
+import com.theplumteam.client.gui.FigureDraw;
 import com.theplumteam.e2e.Scenario;
 import com.theplumteam.e2e.Step;
 import com.theplumteam.e2e.VanillaShim;
@@ -27,6 +28,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The mod as a player meets it in the world: a box drawn from the claw machine, that box in
@@ -65,6 +67,8 @@ public final class InWorldScenario implements Scenario {
     @Override
     public List<Step> build(Minecraft minecraft) {
         List<Step> steps = new ArrayList<>();
+        // The figure the claw machine's draw stopped on and showed
+        AtomicReference<String> shownFigure = new AtomicReference<>();
         steps.add(Step.of("favorite_color_prompt_open")
                 .minTicks(5)
                 .timeoutTicks(600)
@@ -103,8 +107,22 @@ public final class InWorldScenario implements Scenario {
                 })
                 .minTicks(10)
                 .timeoutTicks(600)
-                .ready(() -> minecraft.screen == null && heldFigureId(minecraft) != null)
-                .assertion(() -> validateDrawnBox(minecraft)));
+                // The screen stays open to play the draw out; once it shows the figure, close it
+                .ready(() -> {
+                    FigureDraw draw = FigureDraw.result();
+                    if (draw != null && minecraft.screen instanceof CollectionSelectionScreen) {
+                        shownFigure.set(draw.winner().getId());
+                        minecraft.screen.onClose();
+                    }
+                    return minecraft.screen == null && heldFigureId(minecraft) != null;
+                })
+                .assertion(() -> {
+                    String held = heldFigureId(minecraft);
+                    if (held != null && !held.equals(shownFigure.get())) {
+                        return Step.Result.fail("the draw showed " + shownFigure.get() + " but delivered " + held);
+                    }
+                    return validateDrawnBox(minecraft);
+                }));
         steps.add(Step.of("box_in_hand")
                 .action(() -> {
                     VanillaShim.hideGui(minecraft, false);

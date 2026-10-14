@@ -18,7 +18,9 @@ The `in-world` flow shows the mod as a player meets it in the world:
 
 1. After dismissing the first-join prompt, the player opens the claw machine and
    presses the real Use Regular Token control; the server's `DropBoxPacket`
-   delivers a box with a drawn One Piece figure, captured in hand.
+   delivers a box with a drawn One Piece figure. The screen plays the draw out
+   and must show that same figure before the harness closes it; the box is then
+   captured in hand.
 2. The held box is placed through the real block-placement packet and captured
    from the front, the side and above.
 3. A claw machine is put in hand through the creative-inventory packet and

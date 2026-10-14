@@ -46,6 +46,16 @@ public final class GuiPose {
     }
 
     /**
+     * Moves later drawing toward the viewer, in front of models drawn into the screen with
+     * depth. From 1.21.6 the GUI has no depth; {@link #nextStratum} orders it instead.
+     */
+    public static void lift(GuiGraphics graphics, float z) {
+        //? if <1.21.6 {
+        graphics.pose().translate(0.0f, 0.0f, z);
+        //? }
+    }
+
+    /**
      * Ends the current batch so later drawing lands above it. From 1.21.6 the GUI is
      * drawn from a deferred render state that has no batch to end, so this does nothing.
      */
