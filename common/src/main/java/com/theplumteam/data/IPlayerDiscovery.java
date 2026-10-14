@@ -87,6 +87,27 @@ public interface IPlayerDiscovery {
      */
     void setUsedTodaySpecialToken(boolean used);
 
+    /**
+     * Get the guaranteed tokens added by gold tickets. Unlike the daily one they have no limit
+     * and never reset.
+     * @return Number of ticket-added guaranteed tokens
+     */
+    int getExtraGuaranteedTokens();
+
+    /**
+     * Set the guaranteed tokens added by gold tickets.
+     * @param count Number of ticket-added guaranteed tokens
+     */
+    void setExtraGuaranteedTokens(int count);
+
+    /**
+     * Get every guaranteed token available now: today's, if unused, plus the ticket-added ones.
+     * @return Number of available guaranteed tokens
+     */
+    default int getGuaranteedTokens() {
+        return (hasUsedTodaySpecialToken() ? 0 : 1) + getExtraGuaranteedTokens();
+    }
+
     // Favorite Color Methods
 
     /**

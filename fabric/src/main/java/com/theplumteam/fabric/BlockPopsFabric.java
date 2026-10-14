@@ -182,13 +182,13 @@ public class BlockPopsFabric implements ModInitializer {
                             serverPlayer,
                             discovery.getRegularTokens(),
                             ticksUntilNext,
-                            !discovery.hasUsedTodaySpecialToken(),
+                            discovery.getGuaranteedTokens(),
                             millisUntilReset
                     );
-                    BlockPopsMod.logDebug("Synced token data to {}: {} regular tokens, special: {}",
+                    BlockPopsMod.logDebug("Synced token data to {}: {} regular tokens, {} guaranteed",
                             serverPlayer.getName().getString(),
                             discovery.getRegularTokens(),
-                            !discovery.hasUsedTodaySpecialToken() ? "available" : "used");
+                            discovery.getGuaranteedTokens());
 
                     // Check if favorite color needs to be chosen
                     if (!discovery.hasChosenFavoriteColor()) {

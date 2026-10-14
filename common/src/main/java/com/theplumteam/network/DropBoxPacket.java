@@ -272,13 +272,18 @@ public class DropBoxPacket {
                 return true;
             }
         } else if (tokenType == TokenType.GUARANTEED) {
+            // Today's token goes first: it comes back at the daily reset, a ticket's does not
             if (!discovery.hasUsedTodaySpecialToken()) {
                 discovery.setUsedTodaySpecialToken(true);
-                BlockPopsMod.logDebug("Player {} used their guaranteed token",
-                        player.getName().getString());
-                syncTokenDataToClient(player, discovery);
-                return true;
+            } else if (discovery.getExtraGuaranteedTokens() > 0) {
+                discovery.setExtraGuaranteedTokens(discovery.getExtraGuaranteedTokens() - 1);
+            } else {
+                return false;
             }
+            BlockPopsMod.logDebug("Player {} used a guaranteed token. Remaining: {}",
+                    player.getName().getString(), discovery.getGuaranteedTokens());
+            syncTokenDataToClient(player, discovery);
+            return true;
         }
         return false;
     }
@@ -293,7 +298,7 @@ public class DropBoxPacket {
                 player,
                 discovery.getRegularTokens(),
                 ticksUntilNext,
-                !discovery.hasUsedTodaySpecialToken(),
+                discovery.getGuaranteedTokens(),
                 millisUntilReset
         );
     }
