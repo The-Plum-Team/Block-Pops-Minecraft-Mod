@@ -7,6 +7,7 @@ import com.theplumteam.util.ServerLevels;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
+import com.theplumteam.item.TokenTickets;
 import com.theplumteam.network.SyncTokenDataPacket;
 import com.theplumteam.platform.PlatformHelper;
 import com.theplumteam.registry.ModBlockEntities;
@@ -133,7 +134,13 @@ public class ClawMachineBlock extends BaseEntityBlock {
 
         BlockEntity blockEntity = level.getBlockEntity(lowerPos);
         if (blockEntity instanceof ClawMachineBlockEntity clawMachineBlockEntity) {
-            if (level.isClientSide()) {
+            ItemStack heldItem = player.getItemInHand(hand);
+            if (TokenTickets.isTicket(heldItem)) {
+                // A ticket is fed to the machine instead of opening its menu
+                if (player instanceof ServerPlayer serverPlayer) {
+                    TokenTickets.redeem(serverPlayer, heldItem);
+                }
+            } else if (level.isClientSide()) {
                 PlatformHelper.openClawMachineScreen(lowerPos, clawMachineBlockEntity);
             } else {
                 // Server side: sync token data to ensure client UI shows correct state
@@ -150,7 +157,7 @@ public class ClawMachineBlock extends BaseEntityBlock {
         return InteractionResult.PASS;
     }
 
-    private static void syncTokenDataToClient(ServerPlayer player) {
+    public static void syncTokenDataToClient(ServerPlayer player) {
         IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(player);
         long gameTime = ServerLevels.of(player).getGameTime();
         long nextRegularTime = discovery.getNextRegularTokenTime();
@@ -161,7 +168,7 @@ public class ClawMachineBlock extends BaseEntityBlock {
                 player,
                 discovery.getRegularTokens(),
                 ticksUntilNext,
-                !discovery.hasUsedTodaySpecialToken(),
+                discovery.getGuaranteedTokens(),
                 millisUntilReset
         );
     }

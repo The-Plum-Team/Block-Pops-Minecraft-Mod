@@ -869,7 +869,8 @@ public class CollectionSelectionScreen extends Screen {
 
         // Regular token section (centered above left button)
         int regularTokens = ClientTokenManager.getRegularTokens();
-        String regularText = "Regular Tokens: " + regularTokens + "/3";
+        // Blue tickets can take the count past the 3 the server grants on its own
+        String regularText = "Regular Tokens: " + regularTokens + (regularTokens <= 3 ? "/3" : "");
         if (regularTokens < 3) {
             String nextRegularTime = ClientTokenManager.formatNextRegularTime();
             regularText += " - Next: " + nextRegularTime;
@@ -882,9 +883,10 @@ public class CollectionSelectionScreen extends Screen {
         graphics.drawString(this.font, regularText, regularTextX, tokenInfoY, blueColor, false);
 
         // Guaranteed token section (centered above right button)
-        boolean hasSpecial = ClientTokenManager.hasSpecialToken();
-        String specialText = "Guaranteed Token: " + (hasSpecial ? "Available" : "Used");
-        if (!hasSpecial) {
+        int guaranteedTokens = ClientTokenManager.getGuaranteedTokens();
+        String specialText = guaranteedTokens > 1 ? "Guaranteed Tokens: " + guaranteedTokens
+                : "Guaranteed Token: " + (guaranteedTokens == 1 ? "Available" : "Used");
+        if (guaranteedTokens == 0) {
             String nextSpecialTime = ClientTokenManager.formatNextSpecialResetTime();
             specialText += " - Resets: " + nextSpecialTime;
         }
