@@ -1,0 +1,223 @@
+{
+  "id": "monsterhigh",
+  "name": "Monster High Collection",
+  "author": "Unknown",
+  "author_url": "https://www.planetminecraft.com/collection/139586/monster-high/",
+  "box_texture": "blockpops:textures/block/box/monsterhigh.png",
+  "logo": {
+    "texture": "blockpops:textures/block/box/logo/logo_monsterhigh.png"
+  },
+  "background_color": {
+    "r": 170,
+    "g": 20,
+    "b": 110
+  },
+  "figures": [
+    {
+      "id": "abbey_bominable",
+      "name": "Abbey Bominable",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/abbey_bominable.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Abbey Bominable (Skintober)",
+          "texture": "blockpops:textures/block/figure/monsterhigh/abbey_bominable_skintober.png"
+        }
+      ]
+    },
+    {
+      "id": "catty_noir",
+      "name": "Catty Noir",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/catty_noir.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "chariclo_arganthone_cupid",
+      "name": "Chariclo Arganthone Cupid",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/chariclo_arganthone_cupid.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "clair",
+      "name": "Clair",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/clair.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "clawdeen_wolf",
+      "name": "Clawdeen Wolf",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/clawdeen_wolf.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "cleo_de_nile",
+      "name": "Cleo de Nile",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/cleo_de_nile.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Cleo de Nile (Alt)",
+          "texture": "blockpops:textures/block/figure/monsterhigh/cleo_de_nile_alt.png"
+        }
+      ]
+    },
+    {
+      "id": "deuce_gorgon",
+      "name": "Deuce Gorgon",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/deuce_gorgon.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "draculaura",
+      "name": "Draculaura",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/draculaura.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Draculaura (Skintober)",
+          "texture": "blockpops:textures/block/figure/monsterhigh/draculaura_skintober.png"
+        }
+      ]
+    },
+    {
+      "id": "frankie_stein",
+      "name": "Frankie Stein",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/frankie_stein.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "ghoulia_yelps",
+      "name": "Ghoulia Yelps",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/ghoulia_yelps.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "gigi_grant",
+      "name": "Gigi Grant",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/gigi_grant.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "howleen_wolf",
+      "name": "Howleen Wolf",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/howleen_wolf.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Howleen Wolf (Alt)",
+          "texture": "blockpops:textures/block/figure/monsterhigh/howleen_wolf_alt.png"
+        }
+      ]
+    },
+    {
+      "id": "jinafire_long",
+      "name": "Jinafire Long",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/jinafire_long.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "lagoona_blue",
+      "name": "Lagoona Blue",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/lagoona_blue.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "meowlody",
+      "name": "Meowlody",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/meowlody.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "mouscedes_king",
+      "name": "Mouscedes King",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/mouscedes_king.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "neighthan_rot",
+      "name": "Neighthan Rot",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/neighthan_rot.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "operetta",
+      "name": "Operetta",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/operetta.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "purrsephone",
+      "name": "Purrsephone",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/purrsephone.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "robecca_steam",
+      "name": "Robecca Steam",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/robecca_steam.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "rochelle_goyle",
+      "name": "Rochelle Goyle",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/rochelle_goyle.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "scarah_screams",
+      "name": "Scarah Screams",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/scarah_screams.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "spectra_vondergeist",
+      "name": "Spectra Vondergeist",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/spectra_vondergeist.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "toralei_stripe",
+      "name": "Toralei Stripe",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/toralei_stripe.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "twyla_boogeyman",
+      "name": "Twyla Boogeyman",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/twyla_boogeyman.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "venus_mcflytrap",
+      "name": "Venus McFlytrap",
+      "model": "blockpops:geo/figure/box_figure_default.geo.json",
+      "texture": "blockpops:textures/block/figure/monsterhigh/venus_mcflytrap.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    }
+  ]
+}
