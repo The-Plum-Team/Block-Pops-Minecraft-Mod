@@ -1,5 +1,7 @@
 {
   "itemGroup.blockpops.blockpops_tab": "BlockPops",
+  "item.blockpops.blue_ticket": "Blue Ticket",
+  "item.blockpops.gold_ticket": "Gold Ticket",
   "block.blockpops.box_block": "Box",
   "block.blockpops.box_block_original": "Box",
   "block.blockpops.box_block_black": "Black Box",

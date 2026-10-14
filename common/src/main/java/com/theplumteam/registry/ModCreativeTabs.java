@@ -32,6 +32,9 @@ public class ModCreativeTabs {
                                 output.accept(ModItems.BOX_BLOCK_ITEMS.get(collectionId).get().getDefaultInstance());
                             }
                         }
+
+                        output.accept(ModItems.BLUE_TICKET.get());
+                        output.accept(ModItems.GOLD_TICKET.get());
                     })
                     .build()
     );

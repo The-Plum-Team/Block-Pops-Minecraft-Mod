@@ -23,9 +23,12 @@ public class ModItems {
     // block item after its block: without the block prefix every item here would be named
     // item.blockpops.<id>, a key the language files never had.
     private static Item.Properties itemProperties(String name) {
+        return plainItemProperties(name).useBlockDescriptionPrefix();
+    }
+
+    private static Item.Properties plainItemProperties(String name) {
         return new Item.Properties().setId(
-                ResourceKey.create(Registries.ITEM, ResourceLocations.of(BlockPopsMod.MOD_ID, name)))
-                .useBlockDescriptionPrefix();
+                ResourceKey.create(Registries.ITEM, ResourceLocations.of(BlockPopsMod.MOD_ID, name)));
     }
 
     *///? }
@@ -55,6 +58,21 @@ public class ModItems {
         () -> PlatformHelper.createGeoBlockItem(ModBlocks.FIGURE_BLOCK.get(), new Item.Properties())
         //? }
     );
+
+    public static final RegistrySupplier<Item> BLUE_TICKET = registerPlainItem("blue_ticket");
+    public static final RegistrySupplier<Item> GOLD_TICKET = registerPlainItem("gold_ticket");
+
+    // A plain item is drawn from its flat sprite and keeps the item.blockpops.<id> name.
+    private static RegistrySupplier<Item> registerPlainItem(String name) {
+        return ITEMS.register(
+            name,
+            //? if >=1.21.2 {
+            /*() -> new Item(plainItemProperties(name))
+            *///? } else {
+            () -> new Item(new Item.Properties())
+            //? }
+        );
+    }
 
     static {
         // Register 16 color variant box block items
