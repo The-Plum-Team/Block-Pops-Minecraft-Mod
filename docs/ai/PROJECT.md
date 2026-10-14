@@ -63,6 +63,11 @@ The immediate renderer applies its other context transforms only outside first p
 On POSIX, packaged Forge-family servers launch the installed JVM argument files directly so
 shutdown waits for the JVM to finish writing logs before evidence export, without a shell parent.
 
+On Windows, `gradle/build-conventions.gradle` starts every Loom run with
+`-XX:StackShadowPages=20`, the value other platforms default to. With HotSpot's 8-page Windows
+default, JDK 25 call-site resolution outgrows the committed stack of a worker thread and the
+development game dies with an access violation, leaving no crash report.
+
 Custom collections ([ADR 0002](../architecture/decisions/0002-load-custom-collections-at-runtime.md))
 are the one path by which the game loads content that does not ship with it. That content is
 untrusted, and only `com.theplumteam.remote` fetches it: from the single fixed CDN origin, by
