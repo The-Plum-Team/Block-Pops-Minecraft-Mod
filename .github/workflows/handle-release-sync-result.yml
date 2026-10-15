@@ -14,30 +14,6 @@ on:
 permissions: {}
 
 jobs:
-  wake-canonical-sync:
-    name: Wake synchronization after canonical Build
-    if: >-
-      github.event_name == 'workflow_run' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.name == 'Build gate' &&
-      github.event.workflow_run.head_branch == github.event.repository.default_branch &&
-      github.event.workflow_run.head_repository.full_name == github.repository &&
-      github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: write
-    steps:
-      - name: Dispatch the protected default-branch synchronizer
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          jq -n --arg source_run_id "${{ github.event.workflow_run.id }}" \
-            '{event_type:"release-sync-requested",client_payload:{reason:"canonical-build",source_run_id:$source_run_id}}' \
-            | gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" --input -
-
   route:
     name: Normalize the candidate wake identity
     if: >-

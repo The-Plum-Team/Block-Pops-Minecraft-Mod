@@ -144,14 +144,21 @@ class CurrentReleaseEvidenceTests(unittest.TestCase):
         api.rows[0]["event"] = "schedule"
         with self.assertRaises(SelectionError): self.read(api, scope="lane", artifact_node="neoforge-1.21.1")
 
-    def test_canonical_build_push_keeps_its_event_and_e2e_push_is_rejected(self):
-        api = self.api(event="push")
-        self.assertEqual("push", self.read(api)["run"]["event"])
+    def test_canonical_build_is_a_dispatch_and_no_push_run_is_evidence(self):
+        # build-gate.yml has no push trigger: operators dispatch it on the canonical head.
+        api = self.api()
+        self.assertEqual("workflow_dispatch", self.read(api)["run"]["event"])
         jobs = self.matrix.parent / "jobs.json"
         jobs.write_text(json.dumps({"jobs": api.jobs}))
-        for workflow, status in (("build-gate.yml", 0), ("on-demand-e2e.yml", 2)):
-            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-                self.assertEqual(status, e2e_job_graph.main(["--matrix", str(self.matrix), "--jobs", str(jobs),
-                    "--workflow", workflow, "--event", "push", "--scope", "legacy", "--run-attempt", "2"]))
+        for workflow in ("build-gate.yml", "on-demand-e2e.yml"):
+            with self.subTest(workflow=workflow):
+                with self.assertRaises(e2e_job_graph.JobGraphError):
+                    expected_jobs(self.matrix, workflow, event="push", source_branch="master", scope="legacy")
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()), \
+                        self.assertRaises(SystemExit) as refused:
+                    e2e_job_graph.main(["--matrix", str(self.matrix), "--jobs", str(jobs),
+                        "--workflow", workflow, "--event", "push", "--scope", "legacy", "--run-attempt", "2"])
+                self.assertEqual(2, refused.exception.code)
         api.rows[0]["event"] = "push"
+        with self.assertRaises(SelectionError): self.read(api)
         with self.assertRaises(SelectionError): self.read(api, scope="lane", artifact_node="fabric-1.20.1")

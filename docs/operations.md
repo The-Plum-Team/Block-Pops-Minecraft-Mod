@@ -396,9 +396,12 @@ any writer, so `scripts/ci/pr_gate.py` reads the mode from the protected
 gate of a pull request into `master` as `delegated`: it reads no native Build
 run for it and `handle-pr-gate-result.yml` never writes that context.
 `build-gate.yml` therefore no longer runs on `pull_request_target` into `master`;
-its canonical `push` (which wakes release synchronization), its dispatches and
-pull requests into an enrolled release branch are unchanged, and so are both
-`Release sync / ...` contexts.
+its dispatches and pull requests into an enrolled release branch are unchanged,
+and so are both `Release sync / ...` contexts. It does not run on a push to
+`master` in any mode: every pull request into `master` was gated before it
+merged, release synchronization is woken by `reconcile-release-sync.yml`, and the
+release planner reads a Build gate run dispatched on the canonical head
+([Local lane release plan](release-architecture.md#local-lane-release-plan)).
 
 `Trusted PR / Packaged E2E gate` keeps all native admission: protected-path
 parity of an ordinary pull request, the exact-head `/controller-upgrade

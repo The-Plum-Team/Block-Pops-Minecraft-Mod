@@ -106,12 +106,29 @@ class ReleaseRunSelectionTests(unittest.TestCase):
         for rows in ([], [run(), run()], [run(), "malformed"], [run()] * 1001):
             with self.subTest(size=len(rows)), self.assertRaises(SelectionError): self.select(Api(rows))
 
-    def test_push_and_schedule_are_only_accepted_for_the_canonical_source(self):
-        for workflow, event in (("build-gate.yml", "push"), ("on-demand-e2e.yml", "schedule")):
-            with self.assertRaises(SelectionError): self.select(Api([run(workflow=workflow, event=event)]), workflow=workflow)
-            api = Api([run(workflow=workflow, commit=CONTROLLER, event=event)])
+    def test_schedule_is_only_accepted_for_the_canonical_e2e(self):
+        workflow = "on-demand-e2e.yml"
+        with self.assertRaises(SelectionError): self.select(Api([run(workflow=workflow, event="schedule")]), workflow=workflow)
+        api = Api([run(workflow=workflow, commit=CONTROLLER, event="schedule")])
+        api.heads["master"] = (CONTROLLER, TREE)
+        self.assertEqual("schedule", self.select(api, workflow=workflow, branch="master", commit=CONTROLLER)["event"])
+
+    def test_canonical_build_is_only_a_dispatch(self):
+        # build-gate.yml has no push trigger and no schedule: a canonical Build run is dispatched.
+        api = Api([run(commit=CONTROLLER)])
+        api.heads["master"] = (CONTROLLER, TREE)
+        self.assertEqual("workflow_dispatch", self.select(api, branch="master", commit=CONTROLLER)["event"])
+        for event in ("push", "schedule"):
+            with self.subTest(event=event), self.assertRaises(SelectionError):
+                self.select(Api([run(event=event)]))
+            api = Api([run(commit=CONTROLLER, event=event)])
             api.heads["master"] = (CONTROLLER, TREE)
-            self.assertEqual(event, self.select(api, workflow=workflow, branch="master", commit=CONTROLLER)["event"])
+            with self.subTest(event=event, branch="master"), self.assertRaises(SelectionError):
+                self.select(api, branch="master", commit=CONTROLLER)
+        # A push run left from before the trigger was removed is never chosen: selection fails closed.
+        api = Api([run(9, commit=CONTROLLER), run(10, commit=CONTROLLER, event="push")])
+        api.heads["master"] = (CONTROLLER, TREE)
+        with self.assertRaises(SelectionError): self.select(api, branch="master", commit=CONTROLLER)
 
     def test_nonidentity_api_metadata_does_not_change_the_selected_producer(self):
         api = Api([run()])
