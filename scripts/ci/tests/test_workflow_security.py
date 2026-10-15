@@ -336,6 +336,24 @@ class WorkflowSecurityTests(unittest.TestCase):
         )
         self.assertNotIn("github.event_name == 'push'", text)
 
+    def test_release_synchronization_dispatches_no_native_packaged_e2e_of_master(self) -> None:
+        # The kit's managed callers test every master head. A native Packaged E2E of each new head
+        # recompiled every lane serially and reran all twenty, about two runner-hours, for Pages
+        # alone; its completion never woke a workflow_run consumer. The synchronizer dispatches the
+        # native gates only for an exact release-sync head; the canonical master run is the nightly
+        # schedule or an operator's dispatch.
+        text = (WORKFLOWS / "sync-release-branches.yml").read_text("utf-8")
+        self.assertEqual(1, text.count("/dispatches"))
+        self.assertIn('"repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/dispatches"', text)
+        self.assertNotIn("on-demand-e2e.yml/", text)
+        self.assertEqual(
+            ["build-gate.yml", "on-demand-e2e.yml"],
+            re.findall(r"(?m)^ +dispatch_if_needed (\S+) \"\$automation_branch\"", text),
+        )
+        e2e = (WORKFLOWS / "on-demand-e2e.yml").read_text("utf-8")
+        triggers = e2e.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+        self.assertIn('\n  schedule:\n    - cron: "17 3 * * *"\n', triggers)
+
     def test_no_workflow_run_consumer_matches_a_run_name(self) -> None:
         # A workflow's run-name replaces the run's name in the workflow_run payload (the Build gate's
         # runs are named "Build gate / <sha>"), so a condition on it silently never matches.

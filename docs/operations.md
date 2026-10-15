@@ -446,6 +446,29 @@ no longer runs on `pull_request_target` into `master`; its nightly `schedule`
 an enrolled release branch are unchanged, and so are both `Release sync / ...`
 contexts.
 
+`sync-release-branches.yml` no longer dispatches `on-demand-e2e.yml` for each
+new `master` head: the managed callers already test every head (fully or by
+post-merge reuse), and that dispatch recompiled every lane serially and reran
+all twenty lanes, about 115 to 130 runner-minutes and 50 to 60 minutes per head,
+only to feed Pages. Its completion never woke a `workflow_run` consumer either, being
+dispatched with the workflow's own token, so it never reached the visual-review
+queue. The canonical `master` run that Pages, the visual-review reference
+anchor and the release planner read is now the nightly schedule (`17 3 * * *`)
+or an operator's dispatch, so the gallery of a new head follows the next
+nightly run and keeps the previous head's evidence until then. For a fresh
+gallery or a release plan of the current head, dispatch it:
+
+```sh
+gh workflow run on-demand-e2e.yml --ref master
+```
+
+The kit's route A (`docs/BUILD-E2E-DESIGN.md`, KQ9-3), a consumer workflow of
+the shared generation as the Pages source, would publish every head without a
+native run. It is not in place: the kit refuses a handoff of any workflow other
+than `site/mod-base.json` `source.workflow`, so the native `public-evidence`
+job, the visual-review reference anchor and the exact job graph that release
+planning reads would have to move with it.
+
 In this mode no native evaluation runs on a pull request into `master`. The
 owner's approval is kept by the kit's protected admission (mod-base v1.3.0 or
 later; the kit's `docs/BUILD-ADAPTER.md`, "Protected admission"). The admission

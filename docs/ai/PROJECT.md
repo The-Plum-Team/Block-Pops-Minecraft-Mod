@@ -147,7 +147,10 @@ The Pages pipeline is the pinned mod-base kit; the shared rules are in
 - **Producer.** The Packaged E2E `public-evidence` job keeps its name, conditions and read-only
   permissions; after revalidating the exact aggregate it runs the kit's `prepare-evidence` step,
   which uploads `mb-handoff--<branch-token>--a<attempt>` and, for a direct canonical run, the
-  lossless `mb-anchor--<branch-token>--<commit>--<run>--a<attempt>`.
+  lossless `mb-anchor--<branch-token>--<commit>--<run>--a<attempt>`. On `master` that is the
+  nightly schedule or an operator's dispatch: release synchronization no longer dispatches it for
+  each new head, so the gallery of a head waits for the next nightly run
+  ([`docs/operations.md`](../operations.md#shared-build-and-packaged-e2e-shared-build-and-e2e)).
 - **Wake.** `notify-pages.yml` is the only `workflow_run` consumer of Packaged E2E for Pages. It
   has no checkout, authenticates the completed run inline and dispatches `pages.yml` holding only
   `actions: write`; a run on another branch, one whose latest attempt is not a completed success,
