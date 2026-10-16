@@ -859,7 +859,7 @@ jobs:
           "${fanin_command[@]}"
 
       - name: Prepare and hand off current-head public evidence
-        uses: The-Plum-Team/mod-base/actions/prepare-evidence@1b0c78bae4e484980a30a51a6bd2b52975029518 # v1.6.1
+        uses: The-Plum-Team/mod-base/actions/prepare-evidence@acb01ca4f625a5d27f1c1a709a416d9725bef64f # v1.7.0
         with:
           e2e-root: ${{ runner.temp }}/blockpops-public-aggregate
           key: ${{ steps.identity.outputs.token }}

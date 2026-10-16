@@ -329,7 +329,7 @@ jobs:
           cache-read-only: true
 
       - name: Verify the controller-pinned mod-base kit
-        uses: The-Plum-Team/mod-base/actions/setup@1b0c78bae4e484980a30a51a6bd2b52975029518 # v1.6.1
+        uses: The-Plum-Team/mod-base/actions/setup@acb01ca4f625a5d27f1c1a709a416d9725bef64f # v1.7.0
         with:
           mod-root: controller
           install-imaging: "false"
