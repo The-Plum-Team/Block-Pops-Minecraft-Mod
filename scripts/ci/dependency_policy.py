@@ -110,6 +110,7 @@ EXPECTED_REMOTE_IDENTITIES = frozenset(
         "repo.spongepowered.org/repository/maven-public",
         "dl.cloudsmith.io/public/geckolib3/geckolib/maven",
         "repo.maven.apache.org/maven2",
+        "maven-central.storage-download.googleapis.com/maven2",
         "the-plum-team.github.io/maven-mirror",
     }
 )
@@ -143,9 +144,9 @@ PLUGIN_ONLY_EXCLUSIONS = tuple(
     f"excludeModule('{group}', '{name}')"
     for group, name, _ in STONECUTTER_COMPONENTS
 )
-EXPECTED_POLICY_SHA256 = "d1a6ec49759f12f67ed6a65bcbb1e75275fc5bc2bc0effc7e7d959a6b44b1955"
-EXPECTED_PLUGIN_MANAGEMENT_SHA256 = "26d4fb2569159d40e1828f25ab5e8b41ea2027e93e824ca40edf7cd6fcbb480e"
-EXPECTED_SETTINGS_SHA256 = "7888f6893188e1fdae133cc6cb6beb25346f297e4a73e21e5d4997277fc41be0"
+EXPECTED_POLICY_SHA256 = "a8882f8501acdfca4a0661e2c3a8d78b2d3cfbb16e8dcbfbdebec8097613110a"
+EXPECTED_PLUGIN_MANAGEMENT_SHA256 = "2338eb73b0bf812e367c3a040c48c6430b3335b9f914b6166846754c533c6e93"
+EXPECTED_SETTINGS_SHA256 = "29acbf650f1f2b132464df635d60be3fbb466d79974601f8d1a2aa5d7ce90e19"
 XML_DECLARATION = b'<?xml version="1.0" encoding="UTF-8"?>\n'
 
 
@@ -260,24 +261,27 @@ def validate_plugin_management_text(plugin_management: str) -> None:
             "https://repo.spongepowered.org/repository/maven-public/",
             "https://maven.kikugie.dev/releases",
             "https://the-plum-team.github.io/maven-mirror/",
+            "https://maven-central.storage-download.googleapis.com/maven2/",
         }
     )
     if plugin_urls != expected_plugin_urls:
         raise DependencyPolicyError("plugin repository URLs are not exact")
     if (
-        plugin_management.count("maven {") != 8
-        or plugin_management.count("content {") != 9
-        or plugin_management.count("mavenContent { releasesOnly() }") != 8
+        plugin_management.count("maven {") != 9
+        or plugin_management.count("content {") != 10
+        or plugin_management.count("mavenContent { releasesOnly() }") != 9
     ):
         raise DependencyPolicyError("plugin repositories are not release-only")
-    expected_plugin_exclusion_counts = (1, 1, 2, 2, 1)
+    # The plugin portal and Google's mirror of Maven Central behind it exclude every generated
+    # namespace; the Forge and NeoForge repositories exclude their own hash-named one.
+    expected_plugin_exclusion_counts = (2, 2, 3, 3, 2)
     if tuple(plugin_management.count(value) for value in REMOTE_EXCLUSIONS) != (
         expected_plugin_exclusion_counts
     ):
         raise DependencyPolicyError("plugin portal generated exclusions are not exact")
     for exclusion in PLUGIN_ONLY_EXCLUSIONS:
         inclusion = exclusion.replace("excludeModule", "includeModule", 1)
-        if plugin_management.count(exclusion) != 1 or plugin_management.count(inclusion) != 1:
+        if plugin_management.count(exclusion) != 2 or plugin_management.count(inclusion) != 1:
             raise DependencyPolicyError("Stonecutter plugin origins are not exact")
     for forbidden in ("mavenLocal(", "flatDir {", "ivy {", "google()"):
         if forbidden in plugin_management:
