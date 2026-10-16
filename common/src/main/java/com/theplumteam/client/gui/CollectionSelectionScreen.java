@@ -169,7 +169,10 @@ public class CollectionSelectionScreen extends Screen {
         return list;
     }
 
-    /** Opens the other tab, with the selection it had when it was left. */
+    /**
+     * Opens the other tab, with the selection it had when it was left. A tab opened for the first
+     * time selects its first collection, as a click on it would.
+     */
     private void switchTab(boolean toPlush) {
         if (toPlush == plush || FigureDraw.isBusy()) {
             return;
@@ -180,6 +183,12 @@ public class CollectionSelectionScreen extends Screen {
         otherTabSelection = leaving;
         collections = collectionsOf(plush);
         rebuildWidgets();
+        if ((selectedCollectionId == null || selectedCollectionId.isEmpty())
+                && collectionListWidget != null && !collectionListWidget.children().isEmpty()) {
+            CollectionEntry first = collectionListWidget.children().get(0);
+            collectionListWidget.setSelected(first);
+            onCollectionSelected(first);
+        }
     }
 
     @Override
