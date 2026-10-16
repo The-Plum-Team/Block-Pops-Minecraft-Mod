@@ -11,7 +11,9 @@ scenarios run in every matrix lane. The `ui-regression` flow:
    for server persistence and the synchronized `world_players` figure.
 3. The client uses Minecraft's real block-interaction path on a datapack-created
    claw machine and validates the production collection screen.
-4. It opens the real Settings link and asserts packaged server settings are
+4. It presses the real Plushes tab, which selects the first plush collection,
+   and waits until the server has stored that selection on the claw machine.
+5. It opens the real Settings link and asserts packaged server settings are
    present while the development-only Develop tab is absent.
 
 The `in-world` flow shows the mod as a player meets it in the world:
