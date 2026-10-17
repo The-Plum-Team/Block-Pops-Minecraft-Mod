@@ -438,6 +438,16 @@
               }
             },
             {
+              "id": "collection_dragonballz",
+              "assertion_required": true,
+              "capture": {
+                "title": "Dragon Ball Z Collection placed in the world",
+                "review_tier": "all",
+                "expectation": "A wall of 12 placed boxes in 2 rows of up to nine, HUD hidden, one box per figure of the Dragon Ball Z Collection: every box shows the collection's art and logo and holds a different, fully textured figure on its own model standing upright inside it, with that figure's face on the front of the box; no empty boxes, missing (magenta and black) textures, duplicated figures, oversized figures, or figures poking through their box.",
+                "probes": []
+              }
+            },
+            {
               "id": "collection_fnaf",
               "assertion_required": true,
               "capture": {
