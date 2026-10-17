@@ -769,10 +769,11 @@ public class SettingsScreen extends Screen {
      * Check if the current player can make World collections for this world.
      * Operators only: unlike the Cheats tab, development mode alone is not enough, because
      * the server refuses every change from a player below level 2. The server also has to
-     * be one that syncs its World collections.
+     * be one that syncs its World collections. The tab is shown only in development mode
+     * while the creator is still being worked on; the commands stay available.
      */
     private boolean canUseCreator() {
-        return isOperator() && ClientWorldCollections.isSynced();
+        return isDevelopmentMode() && isOperator() && ClientWorldCollections.isSynced();
     }
 
     /**
