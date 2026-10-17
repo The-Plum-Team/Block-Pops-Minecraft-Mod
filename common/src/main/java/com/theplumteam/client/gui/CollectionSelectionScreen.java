@@ -29,6 +29,7 @@ import com.theplumteam.client.gui.widget.TabButton;
 import com.theplumteam.client.gui.widget.LinkButton;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.client.token.ClientTokenManager;
+import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
@@ -38,6 +39,7 @@ import com.theplumteam.network.TokenType;
 import com.theplumteam.registry.ModItems;
 import com.theplumteam.server.SpecialAccess;
 import com.theplumteam.util.ResourceLocations;
+import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -71,6 +73,8 @@ public class CollectionSelectionScreen extends Screen {
     private List<FigureCollection> collections;
     // Revision of the server's hidden collections the list was last built from
     private int shownHiddenRevision;
+    // Revision of the server's World collections the list was last built from
+    private int shownWorldRevision = ClientWorldCollections.revision();
 
     // Widgets
     @Nullable
@@ -159,14 +163,27 @@ public class CollectionSelectionScreen extends Screen {
                 blockPos, currentCollectionId);
     }
 
-    /** One tab's collections, the World Players one first, without the default collection. */
+    /**
+     * One tab's collections, the World Players one first and this world's own collections
+     * last in the server's order, without the default collection or an archived one.
+     */
     private static List<FigureCollection> collectionsOf(boolean plush) {
         List<FigureCollection> list = (plush ? CollectionRegistry.getPlushCollections() : CollectionRegistry.getAllCollections()).stream()
                 .filter(c -> !"default".equals(c.getId()))
+                .filter(c -> !ClientWorldCollections.isArchived(c.getId()))
                 .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         // A stable sort: the other collections keep their order
-        list.sort((c1, c2) -> Boolean.compare(!"world_players".equals(c1.getId()), !"world_players".equals(c2.getId())));
+        list.sort((c1, c2) -> Integer.compare(sortKey(c1.getId()), sortKey(c2.getId())));
         return list;
+    }
+
+    // World Players first, then the others, then World collections in the server's order: an
+    // edited one is registered again, so the registry's order is not theirs
+    private static int sortKey(String collectionId) {
+        if ("world_players".equals(collectionId)) {
+            return -1;
+        }
+        return WorldContentIds.isWorldCollectionId(collectionId) ? 1 + Math.max(0, ClientWorldCollections.order(collectionId)) : 0;
     }
 
     /**
@@ -729,6 +746,16 @@ public class CollectionSelectionScreen extends Screen {
      * Render the animated star pattern (OPTIMIZED - pre-tiled texture cache, 1 draw call)
      */
     private void renderStarPattern(GuiGraphics graphics, float partialTick) {
+        int starWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
+        int starHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
+        drawStarPattern(graphics, starWidth, starHeight, partialTick);
+    }
+
+    /**
+     * Draws the scrolling star pattern over an area from the top left corner, in the star
+     * colour and opacity of the client config. The World collection screens draw it too.
+     */
+    static void drawStarPattern(GuiGraphics graphics, int starWidth, int starHeight, float partialTick) {
         double pixelsPerSecond = 5.0;
         int tileSize = StarPatternCache.getTileSize();
 
@@ -737,7 +764,8 @@ public class CollectionSelectionScreen extends Screen {
         /*// 26.2 dropped the GUI tick counter; wall time drives the same scroll.
         double smoothTime = net.minecraft.util.Util.getMillis() / 1000.0;
         *///? } else {
-        int tickCount = this.minecraft != null ? this.minecraft.gui.getGuiTicks() : 0;
+        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        int tickCount = minecraft != null && minecraft.gui != null ? minecraft.gui.getGuiTicks() : 0;
         double smoothTime = (tickCount + partialTick) / 20.0;
         //? }
         double offsetX = (com.theplumteam.util.E2EDeterminism.scrollSeconds(smoothTime) * pixelsPerSecond) % tileSize;
@@ -750,8 +778,6 @@ public class CollectionSelectionScreen extends Screen {
         ResourceLocation cacheTexture = StarPatternCache.getTextureLocation();
         int cacheWidth = StarPatternCache.getTextureWidth();
         int cacheHeight = StarPatternCache.getTextureHeight();
-        int starWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
-        int starHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
 
         //? if >=1.21.6 {
         /*// 1.21.6 selects the GUI shader by render pipeline rather than render type.
@@ -899,12 +925,24 @@ public class CollectionSelectionScreen extends Screen {
             }
         }
 
-        // A hidden collection is not offered, so it cannot stay this machine's selection
-        if (selectedCollectionId != null && ClientHiddenCollections.isHidden(selectedCollectionId)) {
+        // A hidden or archived collection is not offered, so it cannot stay this machine's
+        // selection, and neither can a World collection that was removed
+        if (selectedCollectionId != null && (ClientHiddenCollections.isHidden(selectedCollectionId)
+                || ClientWorldCollections.isArchived(selectedCollectionId)
+                || (WorldContentIds.isWorldCollectionId(selectedCollectionId)
+                        && CollectionRegistry.getCollection(selectedCollectionId).isEmpty()))) {
             selectedCollectionId = "";
             if (figureListWidget != null) {
                 figureListWidget.setCollection(null);
             }
+        }
+
+        // An edit registers the collection again: show its figures as they are now
+        if (selectedCollectionId != null && !selectedCollectionId.isEmpty() && figureListWidget != null
+                && figureListWidget.getCurrentCollection() != null && !FigureDraw.isBusy()) {
+            CollectionRegistry.getCollection(selectedCollectionId)
+                    .filter(collection -> collection != figureListWidget.getCurrentCollection())
+                    .ifPresent(figureListWidget::setCollection);
         }
 
         // Select the current collection if it exists
@@ -1059,6 +1097,13 @@ public class CollectionSelectionScreen extends Screen {
         super.tick();
         // Rebuild the list when the server changes its hidden collections
         if (shownHiddenRevision != ClientHiddenCollections.getRevision()) {
+            loadCollections();
+        }
+        // and when its World collections change, which can add, edit or archive one; a
+        // draw in progress keeps the figures it is showing until it ends
+        if (shownWorldRevision != ClientWorldCollections.revision() && !FigureDraw.isBusy()) {
+            shownWorldRevision = ClientWorldCollections.revision();
+            collections = collectionsOf(plush);
             loadCollections();
         }
         FigureDraw.tick();

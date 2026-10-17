@@ -1,6 +1,7 @@
 package com.theplumteam.client.runtime;
 
 import com.google.gson.JsonObject;
+import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
@@ -14,10 +15,12 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 
 /**
  * GeckoLib models and animations that arrive while the game runs instead of with the
- * resource packs: remote collections, and figure variants built from another model.
+ * resource packs: remote collections, World collections, and figure variants built from
+ * another model.
  *
  * <p>They live in this registry rather than in GeckoLib's own caches, which are rebuilt
  * on every resource reload and on 26.x cannot be added to at all. The figure models look
@@ -25,7 +28,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * every GeckoLib version and survive a reload.
  *
  * <p>An id announced with {@link #expect} but not baked yet is pending: the figure models
- * draw the default figure in its place until it arrives.
+ * draw the default figure in its place until it arrives. So is every World content id
+ * not baked here, which GeckoLib cannot have either: in single player the integrated
+ * server registers a changed collection before its sync tells this client what to expect.
  */
 public final class RuntimeGeo {
     private static final Map<ResourceLocation, BakedGeoModel> MODELS = new ConcurrentHashMap<>();
@@ -42,9 +47,10 @@ public final class RuntimeGeo {
         PENDING.addAll(ids);
     }
 
-    /** Whether an id was announced and has not arrived (or failed to). */
+    /** Whether an id was announced and has not arrived (or failed to), or is World content not baked here. */
     public static boolean isPending(@Nullable ResourceLocation id) {
-        return id != null && PENDING.contains(id);
+        return id != null && (PENDING.contains(id)
+                || WorldContentIds.owns(id) && !MODELS.containsKey(id) && !ANIMATIONS.containsKey(id));
     }
 
     @Nullable
@@ -65,7 +71,7 @@ public final class RuntimeGeo {
 
     /** Whether this registry owns the id, so GeckoLib's caches must not be asked for it. */
     public static boolean ownsAnimations(ResourceLocation id) {
-        return ANIMATIONS.containsKey(id) || PENDING.contains(id);
+        return ANIMATIONS.containsKey(id) || isPending(id);
     }
 
     /** Bakes a model from its JSON; safe off the render thread, published by {@link #putModel}. */
@@ -117,9 +123,14 @@ public final class RuntimeGeo {
 
     /** Forgets everything, as when leaving a server whose collections these were. */
     public static void clear() {
-        MODELS.clear();
-        ANIMATIONS.clear();
-        SOURCES.clear();
-        PENDING.clear();
+        clear(id -> true);
+    }
+
+    /** Forgets the models, animations and pending ids that match, leaving every other owner's. */
+    public static void clear(Predicate<ResourceLocation> which) {
+        MODELS.keySet().removeIf(which);
+        ANIMATIONS.keySet().removeIf(which);
+        SOURCES.keySet().removeIf(which);
+        PENDING.removeIf(which);
     }
 }

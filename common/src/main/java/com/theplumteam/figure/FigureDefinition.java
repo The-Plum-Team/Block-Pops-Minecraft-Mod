@@ -261,6 +261,17 @@ public class FigureDefinition {
                            ResourceLocation texturePath, ResourceLocation animationPath,
                            List<AlternativeSkin> alternatives, RenderOptions renderOptions,
                            boolean special) {
+        this(id, name, modelPath, texturePath, animationPath, alternatives, renderOptions, special, true);
+    }
+
+    /**
+     * Constructor for static figures that an operator may have retired, as World
+     * collection figures can be
+     */
+    public FigureDefinition(String id, String name, ResourceLocation modelPath,
+                           ResourceLocation texturePath, ResourceLocation animationPath,
+                           List<AlternativeSkin> alternatives, RenderOptions renderOptions,
+                           boolean special, boolean enabled) {
         this.id = id;
         this.name = name;
         this.modelPath = modelPath;
@@ -270,7 +281,7 @@ public class FigureDefinition {
         this.playerUUID = null;
         this.alternatives = new ArrayList<>(alternatives);
         this.favoriteColor = null; // Static figures don't have favorite colors
-        this.enabled = true;
+        this.enabled = enabled;
         this.special = special;
         this.renderOptions = renderOptions;
     }
@@ -471,8 +482,9 @@ public class FigureDefinition {
     }
 
     /**
-     * Whether this figure can still be granted and listed. Only World Players figures
-     * can be disabled; a disabled one stays defined so existing boxes and figures resolve.
+     * Whether this figure can still be granted and listed. Only World Players figures and
+     * World collection figures can be disabled; a disabled one stays defined so existing
+     * boxes and figures resolve.
      */
     public boolean isEnabled() {
         return enabled;
