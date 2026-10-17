@@ -401,7 +401,7 @@ class ExpectationTests(_Repository):
     def test_legacy_scope_expectation_of_the_real_contract_and_matrix(self) -> None:
         expectation = self.expectation(self.master)
         self.assert_lanes(expectation, LEGACY_NODES)
-        self.assertEqual((54, 6), (len(expectation["captures"]), len(expectation["comparisons"])))
+        self.assertEqual((56, 8), (len(expectation["captures"]), len(expectation["comparisons"])))
         self.assertEqual(REPOSITORY, expectation["repository"])
         self.assertEqual((MASTER_KEY, "master"), (expectation["key"], expectation["label"]))
         self.assertEqual("pr-anchors", expectation["profile"])
@@ -437,7 +437,7 @@ class ExpectationTests(_Repository):
             key=lambda lane: (tuple(map(int, lane.identity.minecraft.split("."))), lane.identity.loader))]
         self.assertEqual(20, len(nodes))
         self.assert_lanes(expectation, nodes)
-        self.assertEqual((40, 540, 60), (len(expectation["lanes"]), len(expectation["captures"]),
+        self.assertEqual((40, 560, 80), (len(expectation["lanes"]), len(expectation["captures"]),
                                          len(expectation["comparisons"])))
         self.assertEqual(MASTER_KEY, expectation["key"])
         self.assertEqual(("full", False), (expectation["scope"]["detail"]["kind"],
@@ -568,7 +568,7 @@ class CollectTests(_Repository):
                            "jars": {"production_sha256": result["production_jar_sha256"],
                                     "harness_sha256": result["harness_jar_sha256"]},
                            "elapsed_s": result["elapsed_s"]}], collected["lanes"])
-        self.assertEqual(3, len(collected["comparisons"]))
+        self.assertEqual(4, len(collected["comparisons"]))
         self.assertEqual(collected, self.collect())
         # R1: collect over exactly the declared runtime files (the handoff's runtime/) is equal.
         copied = self.tmp / "runtime"

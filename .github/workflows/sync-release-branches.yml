@@ -121,40 +121,10 @@ jobs:
               --input "$payload"
           }
 
-          # Keep the canonical visual reference on an authenticated current-head
-          # workflow_dispatch run as well as the daily schedule. This explicit
-          # dispatch is also immune to GITHUB_TOKEN pull-request recursion rules.
-          canonical_runs="$RUNNER_TEMP/canonical-e2e.runs.json"
-          gh api --paginate --slurp \
-            "repos/$GITHUB_REPOSITORY/actions/workflows/on-demand-e2e.yml/runs?event=workflow_dispatch&head_sha=$source_sha&per_page=100" \
-            > "$canonical_runs"
-          jq -e 'type == "array" and length <= 10 and all(.[]; type == "object") and
-            ([.[].workflow_runs[]] | length) <= 1000' "$canonical_runs" >/dev/null
-          canonical_state="$(jq -r --arg branch "$DEFAULT_BRANCH" --arg head "$source_sha" \
-            --arg title "Packaged E2E / $source_sha" \
-            --arg repository "$GITHUB_REPOSITORY" \
-            '[.[].workflow_runs[] | select(.event == "workflow_dispatch" and
-              .path == ".github/workflows/on-demand-e2e.yml" and
-              .head_branch == $branch and .head_sha == $head and
-              .display_title == $title and
-              .head_repository.full_name == $repository)] |
-             sort_by(.created_at, .id) | last | if . == null then "missing"
-             elif (.status == "queued" or .status == "in_progress" or
-                   .status == "pending" or .status == "waiting" or
-                   .status == "requested" or
-                   (.status == "completed" and .conclusion == "success"))
-             then "settled" else "failed" end' "$canonical_runs")"
-          if [[ "$canonical_state" == missing ]]; then
-            jq -n --arg ref "$DEFAULT_BRANCH" '{ref:$ref,inputs:{}}' \
-              > "$RUNNER_TEMP/canonical-e2e.dispatch.json"
-            gh api --method POST \
-              "repos/$GITHUB_REPOSITORY/actions/workflows/on-demand-e2e.yml/dispatches" \
-              --input "$RUNNER_TEMP/canonical-e2e.dispatch.json"
-          elif [[ "$canonical_state" == failed ]]; then
-            printf 'Canonical Packaged E2E failed for %s; refusing an automatic retry.\n' \
-              "$source_sha" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
+          # The master head itself gets no native Packaged E2E dispatch here: the kit's managed
+          # callers already test every master head. The canonical on-demand-e2e.yml run that
+          # Pages, release planning and the visual-review reference read is its nightly schedule
+          # or an operator's dispatch (docs/operations.md, "Shared Build and packaged E2E").
           while IFS= read -r row; do
             target_branch="$(jq -er .name <<< "$row")"
             target_sha="$(jq -er .commit <<< "$row")"

@@ -323,6 +323,49 @@ class WorkflowSecurityTests(unittest.TestCase):
                 self.assertNotIn("branches:", block)
                 self.assertIn("\n  workflow_dispatch:", text.split("\npermissions:", 1)[0])
 
+    def test_native_build_gate_does_not_run_on_a_push_to_master(self) -> None:
+        # The kit's gates test every pull request into master, so a full serial build of every lane
+        # after each merge proved nothing that a required context reads. Release synchronization is
+        # woken by reconcile-release-sync.yml and the synchronizer's own schedule, and the release
+        # planner reads a canonical Build gate that an operator dispatches.
+        text = (WORKFLOWS / "build-gate.yml").read_text("utf-8")
+        triggers = text.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+        self.assertEqual(
+            ["pull_request_target", "workflow_dispatch"],
+            re.findall(r"(?m)^  ([a-z_]+):", triggers),
+        )
+        self.assertNotIn("github.event_name == 'push'", text)
+
+    def test_release_synchronization_dispatches_no_native_packaged_e2e_of_master(self) -> None:
+        # The kit's managed callers test every master head. A native Packaged E2E of each new head
+        # recompiled every lane serially and reran all twenty, about two runner-hours, for Pages
+        # alone; its completion never woke a workflow_run consumer. The synchronizer dispatches the
+        # native gates only for an exact release-sync head; the canonical master run is the nightly
+        # schedule or an operator's dispatch.
+        text = (WORKFLOWS / "sync-release-branches.yml").read_text("utf-8")
+        self.assertEqual(1, text.count("/dispatches"))
+        self.assertIn('"repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/dispatches"', text)
+        self.assertNotIn("on-demand-e2e.yml/", text)
+        self.assertEqual(
+            ["build-gate.yml", "on-demand-e2e.yml"],
+            re.findall(r"(?m)^ +dispatch_if_needed (\S+) \"\$automation_branch\"", text),
+        )
+        e2e = (WORKFLOWS / "on-demand-e2e.yml").read_text("utf-8")
+        triggers = e2e.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+        self.assertIn('\n  schedule:\n    - cron: "17 3 * * *"\n', triggers)
+
+    def test_no_workflow_run_consumer_matches_a_run_name(self) -> None:
+        # A workflow's run-name replaces the run's name in the workflow_run payload (the Build gate's
+        # runs are named "Build gate / <sha>"), so a condition on it silently never matches.
+        # Consumers match the workflow path and the exact display title instead.
+        for path in WORKFLOWS.glob("*.yml"):
+            with self.subTest(workflow=path.name):
+                self.assertNotIn("workflow_run.name", path.read_text("utf-8"))
+        handler = (WORKFLOWS / "handle-release-sync-result.yml").read_text("utf-8")
+        jobs = handler.split("\njobs:\n", 1)[1]
+        self.assertEqual(["route", "handle"], re.findall(r"(?m)^  ([a-z0-9-]+):$", jobs))
+        self.assertNotIn("contents: write", jobs.split("\n  handle:\n", 1)[0])
+
     def test_candidate_gates_have_no_write_permission(self) -> None:
         for name in ("build-gate.yml", "on-demand-e2e.yml"):
             text = (WORKFLOWS / name).read_text("utf-8")

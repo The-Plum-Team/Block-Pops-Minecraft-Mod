@@ -173,7 +173,7 @@ public class ServerTickHandler {
                 player,
                 discovery.getRegularTokens(),
                 ticksUntilNext,
-                !discovery.hasUsedTodaySpecialToken(),
+                discovery.getGuaranteedTokens(),
                 millisUntilReset
         );
     }

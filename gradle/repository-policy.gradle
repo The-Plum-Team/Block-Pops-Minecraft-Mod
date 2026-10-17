@@ -148,6 +148,8 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
             }
             break
         case 'repo.maven.apache.org/maven2':
+        // Google's mirror of Maven Central, added right after Central below, takes Central's filter.
+        case 'maven-central.storage-download.googleapis.com/maven2':
             repository.content {
                 excludeGroupByRegex('dev\\.architectury(\\..*)?')
                 excludeGroupByRegex('net\\.fabricmc(\\..*)?')
@@ -197,4 +199,24 @@ if (plumMirrorSwitch != 'false') {
     }
     repositories.remove(plumMirror)
     repositories.addFirst(plumMirror)
+}
+
+// Google's mirror of Maven Central follows Central, which Loom declares, under Central's filter
+// (the shared case above), so a transient 404 from Central to one runner falls through to the
+// same path there instead of failing the build. The checksums in
+// gradle/verification-metadata.xml name artifacts, not repositories: every file it serves is
+// verified exactly as one from Central. Loom adds its repositories when it is applied, after this
+// script and before this callback, which also runs before Loom resolves anything after evaluation.
+afterEvaluate {
+    def central = repositories.withType(MavenArtifactRepository).find { repository ->
+        repository.url.toString() == 'https://repo.maven.apache.org/maven2/'
+    }
+    if (central != null && repositories.findByName('GoogleMavenCentralMirror') == null) {
+        def googleMirror = repositories.maven {
+            name = 'GoogleMavenCentralMirror'
+            url = 'https://maven-central.storage-download.googleapis.com/maven2/'
+        }
+        repositories.remove(googleMirror)
+        repositories.add(repositories.indexOf(central) + 1, googleMirror)
+    }
 }

@@ -18,7 +18,52 @@ public final class SkinProfilePreparation {
     }
 
     // Legacy consumers retain native registerSkins; this class has no legacy operations.
-    //? if >=1.21 {
+    //? if >=1.21.9 {
+    /*// Authlib 9 profiles are immutable. A profile without textures is not filled in place:
+    // a new one carrying the local or fetched properties is registered instead, under the
+    // same rules as below.
+    public static void schedule(MinecraftSessionService session, GameProfile target, UUID localId,
+                                PropertyMap localProperties, Executor background, Executor main,
+                                Consumer<GameProfile> register) {
+        background.execute(() -> {
+            boolean populated;
+            try {
+                populated = hasTextures(session, target);
+            } catch (InsecurePublicKeyException exception) {
+                populated = false;
+            }
+            GameProfile prepared = target;
+            if (!populated) {
+                UUID id = AuthlibProfiles.id(target);
+                boolean local = id.equals(localId);
+                PropertyMap properties = local && !localProperties.isEmpty()
+                        ? localProperties : fetchedProperties(session, id);
+                prepared = new GameProfile(id, AuthlibProfiles.name(target), properties);
+                if (local) {
+                    hasTextures(session, prepared);
+                } else {
+                    try {
+                        hasTextures(session, prepared);
+                    } catch (InsecurePublicKeyException exception) {
+                        // Legacy remote decoding tolerates this; local decoding does not.
+                    }
+                }
+            }
+            GameProfile result = prepared;
+            main.execute(() -> register.accept(result));
+        });
+    }
+
+    private static PropertyMap fetchedProperties(MinecraftSessionService session, UUID id) {
+        var result = session.fetchProfile(id, false);
+        return result != null ? AuthlibProfiles.properties(result.profile()) : PropertyMap.EMPTY;
+    }
+
+    private static boolean hasTextures(MinecraftSessionService session, GameProfile profile) {
+        var textures = session.getTextures(profile);
+        return textures.skin() != null || textures.cape() != null || textures.elytra() != null;
+    }
+    *///? } elif >=1.21 {
     /*public static void schedule(MinecraftSessionService session, GameProfile target, UUID localId,
                                 PropertyMap localProperties, Executor background, Executor main,
                                 Consumer<GameProfile> register) {

@@ -56,7 +56,7 @@ public class ReloadRegularTokensCommand {
                     player,
                     discovery.getRegularTokens(),
                     ticksUntilNext,
-                    !discovery.hasUsedTodaySpecialToken(),
+                    discovery.getGuaranteedTokens(),
                     millisUntilReset
             );
 

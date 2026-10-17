@@ -3,8 +3,11 @@ package com.theplumteam.client.renderer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.theplumteam.block.BoxBlock;
+import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
+import com.theplumteam.item.BoxBlockItem;
 import com.theplumteam.item.GeoBlockItem;
+import com.theplumteam.worldcontent.WorldContentIds;
 //? if >=1.21 {
 /*import com.theplumteam.item.BlockEntityItemData;
 *///? }
@@ -27,6 +30,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.Nullable;
 
 public class BoxBlockItemRenderer
     //? if >=1.21.4 {
@@ -37,6 +41,28 @@ public class BoxBlockItemRenderer
 {
     private BoxBlockRenderer renderer;
     private BoxBlockEntity renderEntity;
+
+    // One entity draws every box stack, so each stack starts from a new box of its own item:
+    // the collection or color the item stands for, whether or not the stack's tag repeats it
+    private void resetRenderEntity(GeoBlockItem item) {
+        if (item instanceof BoxBlockItem boxItem) {
+            renderEntity.resetForItemRendering(boxItem.getCollectionId(), boxItem.getColor());
+        } else {
+            renderEntity.resetForItemRendering(null, null);
+        }
+    }
+
+    // A drawn box of a World collection is the plain default box item with the collection in
+    // its tag. Unless the tag names a color itself, it shows the collection's box art, as the
+    // same box placed in the world does. Custom and built-in boxes keep their item's color.
+    private void useCollectionBoxArt(GeoBlockItem item, @Nullable CompoundTag blockEntityTag) {
+        if (item instanceof BoxBlockItem boxItem && boxItem.getCollectionId() == null
+                && boxItem.getColor() == PopBlockColor.ORIGINAL
+                && (blockEntityTag == null || !blockEntityTag.contains("Color"))
+                && WorldContentIds.isWorldCollectionId(renderEntity.getCollectionId())) {
+            renderEntity.clearColorForItemRendering();
+        }
+    }
 
     public BoxBlockItemRenderer() {
         //? if <1.21.4 {
@@ -80,6 +106,7 @@ public class BoxBlockItemRenderer
                 // Set client level for GeckoLib tick delta calculations
                 renderEntity.setLevel(Minecraft.getInstance().level);
             }
+            resetRenderEntity(geoBlockItem);
 
             // Load NBT data from ItemStack FIRST before any rendering
             // This ensures isOpen is set correctly before the animation controller evaluates
@@ -91,8 +118,9 @@ public class BoxBlockItemRenderer
                 renderEntity.loadForItemRendering(new CompoundTag());
             }
             *///? } else {
+            CompoundTag blockEntityTag = null;
             if (stack.hasTag()) {
-                CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
+                blockEntityTag = stack.getTagElement("BlockEntityTag");
                 if (blockEntityTag != null) {
                     renderEntity.load(blockEntityTag);
                 }
@@ -102,6 +130,7 @@ public class BoxBlockItemRenderer
                 renderEntity.load(new CompoundTag());
             }
             //? }
+            useCollectionBoxArt(geoBlockItem, blockEntityTag);
 
             // Apply transformations for item rendering
             poseStack.pushPose();
@@ -223,12 +252,14 @@ public class BoxBlockItemRenderer
             renderEntity = new BoxBlockEntity(BlockPos.ZERO, boxBlock.defaultBlockState());
             renderEntity.setLevel(Minecraft.getInstance().level);
         }
+        resetRenderEntity(geoBlockItem);
         CompoundTag blockEntityTag = BlockEntityItemData.read(stack);
         if (blockEntityTag != null) {
             renderEntity.loadForItemRendering(blockEntityTag);
         } else if (stack.getComponentsPatch().isEmpty()) {
             renderEntity.loadForItemRendering(new CompoundTag());
         }
+        useCollectionBoxArt(geoBlockItem, blockEntityTag);
         return true;
     }
 
@@ -251,6 +282,9 @@ public class BoxBlockItemRenderer
                 this.renderer.createRenderState();
         this.renderer.extractRenderState(renderEntity, renderState, partialTick,
                 net.minecraft.world.phys.Vec3.ZERO, null);
+        // The entity has a level, so its state took the world's light at the origin;
+        // a stack is lit by whatever holds it instead.
+        renderState.lightCoords = packedLight;
         poseStack.pushPose();
         if (FAVORITE_COLOR_MODEL.equals(stack.get(DataComponents.ITEM_MODEL))) {
             // Preserve the legacy GUI-facing side and one-pixel lift for this preview.

@@ -23,7 +23,11 @@ follow-up pull request (#11). `site/mod-base.json` no longer defers it or any ot
   [`docs/visual-review.md`](../visual-review.md) owns the advisory AI review.
 - `docs/architecture/decisions/` records evidence-backed architectural decisions;
   [ADR 0001](../architecture/decisions/0001-adopt-mod-base-public-evidence.md) records the
-  adoption of mod-base public evidence.
+  adoption of mod-base public evidence,
+  [ADR 0002](../architecture/decisions/0002-load-custom-collections-at-runtime.md) runtime Custom
+  collections and
+  [ADR 0003](../architecture/decisions/0003-accept-operator-uploaded-world-collections.md)
+  operator-uploaded World collections.
 - `site/mod-base.json` and `scripts/pages/mod_base_adapter.py` connect this repository to the
   mod-base public-evidence kit; `scripts/ci/mod_base_kit.py` finds the pinned kit.
 
@@ -46,9 +50,20 @@ rotation and lift. Background quads explicitly select the version’s textured
 shader rather than inheriting the program bound by a preceding GUI fill. Finish queued base
 fills before immediate background drawing on the earlier GUI path.
 
+A collection screen shows each figure or plush in colour once discovered and in black and white
+before. Through 1.21.1 it draws the model straight into the screen. From 1.21.4 it draws an item
+bound to `FigurePreviewItemRenderer`, whose `figure_preview` model bakes that same camera and a
+fourfold scale the widget cancels, because an item is the one way a model of this mod reaches
+the deferred interface of 1.21.6 and later. The preview entity stands on the box block: 1.21.1
+refuses a block entity on a block its type does not list.
+
 `common/build.gradle` derives special-item definitions and base-model transforms for Minecraft
 1.21.4 onward with `scripts/release/item_resources.py`, from the authored entity models. Older
 lanes retain their original resources; generated modern resources are never authored or committed.
+A box shows its flat front in a slot on every lane, as the authored 1.20.1 model does, so the
+script gives each derived box base model a GUI display in place of the shulker template's corner
+view. The renderer adds the half turn and one-pixel lift in code until 26.x, where a special
+renderer is no longer told its display context and the display carries them instead.
 The same script derives `data/blockpops/recipe/` for Minecraft 1.21 onward from the authored
 1.20.1 `recipes/`: 1.21 renamed the directory and the result field, 1.21.2 reads ingredients as
 bare ids, and 1.21.9 renamed `minecraft:chain` to `minecraft:iron_chain`. Author a recipe only in
@@ -58,21 +73,46 @@ First-person boxes on the legacy entity-renderer path use the modern shulker tem
 40% scale and mirrored 315-degree rotation. The claw machine's authored item model owns
 its first-person 90-degree rotation, one-third scale and vertical pivot compensation,
 preserving the legacy held appearance across both immediate drawing and 26.x submission.
-The immediate renderer applies its other context transforms only outside first person.
+It owns the GUI view on every lane as well: a side-lit perspective with the machine's front
+forward, sized and centred to fill the slot as the gacha machine's item does. The immediate
+renderer applies its other context transforms only outside first person and the GUI.
 
 On POSIX, packaged Forge-family servers launch the installed JVM argument files directly so
 shutdown waits for the JVM to finish writing logs before evidence export, without a shell parent.
 
+On Windows, `gradle/build-conventions.gradle` starts every Loom run with
+`-XX:StackShadowPages=20`, the value other platforms default to. With HotSpot's 8-page Windows
+default, JDK 25 call-site resolution outgrows the committed stack of a worker thread and the
+development game dies with an access violation, leaving no crash report.
+
 Custom collections ([ADR 0002](../architecture/decisions/0002-load-custom-collections-at-runtime.md))
-are the one path by which the game loads content that does not ship with it. That content is
-untrusted, and only `com.theplumteam.remote` fetches it: from the single fixed CDN origin, by
-allowlisted per-collection paths in the `blockpops` namespace, under the limits in `RemoteLimits`,
-kept only once its manifest SHA-256 matches, and parsed with `StrictJson`. Do not add another
-origin, a URL from a server, packet or file, or a path outside `RemotePaths`. A Custom definition
-passes `CustomCollectionCheck` on both sides before registration. Its assets are served only by the
+are one of the two paths by which the game loads content that does not ship with it; World
+collections are the other. That content is untrusted, and only `com.theplumteam.remote` fetches
+Custom content: from the single fixed CDN origin, by allowlisted per-collection paths in the
+`blockpops` namespace, under the limits in `RemoteLimits`, kept only once its manifest SHA-256
+matches, and parsed with `StrictJson`. For Custom content, do not add another origin, a URL from a
+server, packet or file, or a path outside `RemotePaths`. A Custom definition passes
+`CustomCollectionCheck` on both sides before registration. Its assets are served only by the
 runtime registries in `client.runtime`, which the figure models consult before GeckoLib, and are
 never written into GeckoLib's caches. They travel only in `SyncCustomCollectionsPacket`, never in
 the shared collection sync. CI never contacts the CDN.
+
+World collections
+([ADR 0003](../architecture/decisions/0003-accept-operator-uploaded-world-collections.md)) are
+authored in game by operators at level 2, which the server re-checks for every packet. Their files
+come only from that operator's upload in `WorldUpload*Packet`s or from a datapack's
+`blockpops_world_collections/` directory; never from a URL, the CDN or a path a server names.
+`com.theplumteam.worldcontent` validates every file (`PngValidator`, `GeoJsonCheck`,
+`AnimationJsonCheck`, `StrictJson`) and every definition (`WorldCollectionCheck`) on the server and
+again on the client, under the byte quotas and decoded budgets in `WorldContentLimits`. The server
+alone applies the per-player rate limits in `server.worldcollections.WorldRateLimits` and the
+upload concurrency caps and timeouts in `WorldUploads`. They are stored content-addressed under
+`<world>/data/blockpops-world-collections/` and travel only in `SyncWorldCollectionsPacket` and
+`WorldAssetChunkPacket`, never in the shared collection sync, the Custom packet or
+`blockpops-cache/`. Their ids are `w-<slug>`, and the shared sync refuses them on both sides. Their
+assets are served only by the runtime registries in `client.runtime` under ids `WorldContentIds`
+owns, are never written into GeckoLib's caches, are refused when a bundled resource has the same
+id, and are left alone by `RuntimeAssets.clear()`.
 
 ## Trust model
 
@@ -90,7 +130,12 @@ the shared collection sync. CI never contacts the CDN.
   `scripts/ci/pr_gate.py` reports it `delegated`, never writing it; see
   [`docs/operations.md`](../operations.md#shared-build-shared-build). Protected paths
   (`scripts/ci/gate_controller.py` `PROTECTED_PATHS`) change only through the SHA-approved
-  controller-upgrade procedure in [`docs/operations.md`](../operations.md). The evaluator
+  controller-upgrade procedure in [`docs/operations.md`](../operations.md). In
+  `shared-build-and-e2e` the kit's admission accepts `/controller-upgrade approve <head sha>` from
+  any current member of `The-Plum-Team` and from the outside collaborator `Nanarng`
+  (`admission.approvers` in `scripts/ci/mod-base-build.json`); `/restricted-transition` and the
+  dormant native `scripts/ci/pr_gate.py` stay `AkaNebur`-only, and a pin rollback below mod-base v1.6.0 reverts
+  that entry first. The evaluator
   constants in `scripts/ci/gate_controller.py`, `scripts/ci/pr_gate.py` and
   `scripts/ci/e2e_job_graph.py` are never edited to admit a pull request.
 - **Restricted admission.** The generation-1 controller accepts the existing `VanillaShim.java`
@@ -124,7 +169,10 @@ The Pages pipeline is the pinned mod-base kit; the shared rules are in
 - **Producer.** The Packaged E2E `public-evidence` job keeps its name, conditions and read-only
   permissions; after revalidating the exact aggregate it runs the kit's `prepare-evidence` step,
   which uploads `mb-handoff--<branch-token>--a<attempt>` and, for a direct canonical run, the
-  lossless `mb-anchor--<branch-token>--<commit>--<run>--a<attempt>`.
+  lossless `mb-anchor--<branch-token>--<commit>--<run>--a<attempt>`. On `master` that is the
+  nightly schedule or an operator's dispatch: release synchronization no longer dispatches it for
+  each new head, so the gallery of a head waits for the next nightly run
+  ([`docs/operations.md`](../operations.md#shared-build-and-packaged-e2e-shared-build-and-e2e)).
 - **Wake.** `notify-pages.yml` is the only `workflow_run` consumer of Packaged E2E for Pages. It
   has no checkout, authenticates the completed run inline and dispatches `pages.yml` holding only
   `actions: write`; a run on another branch, one whose latest attempt is not a completed success,

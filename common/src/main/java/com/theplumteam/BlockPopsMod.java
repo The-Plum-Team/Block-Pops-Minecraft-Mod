@@ -9,9 +9,12 @@ import com.theplumteam.registry.ModItems;
 import com.theplumteam.registry.ModLoot;
 import com.theplumteam.server.CustomCollections;
 import com.theplumteam.server.ServerTickHandler;
+import com.theplumteam.server.SpecialAccess;
 import com.theplumteam.server.config.ServerConfig;
+import com.theplumteam.server.worldcollections.WorldCollections;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.PlayerEvent;
+import dev.architectury.event.events.common.TickEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,10 +70,20 @@ public final class BlockPopsMod {
         // Send the server's hidden collections to every player that joins
         PlayerEvent.PLAYER_JOIN.register(SyncHiddenCollectionsPacket::sendToPlayer);
 
+        // Ask whether a joining player is a supporter, so the answer is there by the time it counts
+        PlayerEvent.PLAYER_JOIN.register(SpecialAccess::refresh);
+
         // Custom collections: loaded with the world, sent to each player that joins
         LifecycleEvent.SERVER_STARTING.register(CustomCollections::onServerStarting);
         LifecycleEvent.SERVER_STOPPED.register(server -> CustomCollections.onServerStopped());
         PlayerEvent.PLAYER_JOIN.register(CustomCollections::sendTo);
+
+        // World collections: stored with the world, edited by its operators
+        LifecycleEvent.SERVER_STARTING.register(WorldCollections::onServerStarting);
+        LifecycleEvent.SERVER_STOPPED.register(server -> WorldCollections.onServerStopped());
+        PlayerEvent.PLAYER_JOIN.register(WorldCollections::onPlayerJoin);
+        PlayerEvent.PLAYER_QUIT.register(WorldCollections::onPlayerQuit);
+        TickEvent.SERVER_POST.register(WorldCollections::onServerTick);
 
         LOGGER.info("BlockPops mod initialization complete");
     }

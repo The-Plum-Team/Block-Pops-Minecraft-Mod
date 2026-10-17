@@ -112,9 +112,27 @@ public class FigureCollection {
     private final LogoConfig logoConfig; // Optional: logo configuration for display on the box
     private final List<FigureDefinition> figures;
     private final List<FigureDefinition> enabledFigures;
+    private final List<FigureDefinition> regularFigures;
+    private final List<FigureDefinition> specialFigures;
     private final int[] backgroundColor; // Optional: RGB color for background (0-255 each)
+    // A plush collection's figures are plush blocks: the gacha machine lists it and hands out the
+    // plushes themselves, and no box is ever made for it.
+    private final boolean plush;
+    // Optional: the day (yyyy-MM-dd) this collection's specials came out. A supporter whose
+    // subscription has lapsed keeps the specials released while it was running.
+    private final String specialsReleasedAt;
 
     public FigureCollection(String id, String name, String author, String authorUrl, ResourceLocation boxTexture, LogoConfig logoConfig, List<FigureDefinition> figures, int[] backgroundColor) {
+        this(id, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor, false);
+    }
+
+    public FigureCollection(String id, String name, String author, String authorUrl, ResourceLocation boxTexture, LogoConfig logoConfig, List<FigureDefinition> figures, int[] backgroundColor, boolean plush) {
+        this(id, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor, plush, null);
+    }
+
+    public FigureCollection(String id, String name, String author, String authorUrl, ResourceLocation boxTexture, LogoConfig logoConfig, List<FigureDefinition> figures, int[] backgroundColor, boolean plush, String specialsReleasedAt) {
+        this.plush = plush;
+        this.specialsReleasedAt = specialsReleasedAt;
         this.id = id;
         this.name = name;
         this.author = author;
@@ -123,6 +141,8 @@ public class FigureCollection {
         this.logoConfig = logoConfig;
         this.figures = new ArrayList<>(figures);
         this.enabledFigures = this.figures.stream().filter(FigureDefinition::isEnabled).toList();
+        this.regularFigures = this.enabledFigures.stream().filter(figure -> !figure.isSpecial()).toList();
+        this.specialFigures = this.enabledFigures.stream().filter(FigureDefinition::isSpecial).toList();
         this.backgroundColor = backgroundColor;
     }
 
@@ -134,7 +154,9 @@ public class FigureCollection {
         String name = json.get("name").getAsString();
         String author = json.has("author") ? json.get("author").getAsString() : "Unknown";
         String authorUrl = json.has("author_url") ? json.get("author_url").getAsString() : null;
-        ResourceLocation boxTexture = ResourceLocation.tryParse(json.get("box_texture").getAsString());
+        // A plush collection has no box, so it may leave the texture out
+        ResourceLocation boxTexture = json.has("box_texture")
+                ? ResourceLocation.tryParse(json.get("box_texture").getAsString()) : null;
 
         // Parse logo configuration (optional)
         LogoConfig logoConfig = null;
@@ -191,7 +213,21 @@ public class FigureCollection {
             backgroundColor = new int[]{r, g, b};
         }
 
-        return new FigureCollection(id, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor);
+        boolean plush = json.has("plush") && json.get("plush").getAsBoolean();
+        String specialsReleasedAt = json.has("specials_released_at")
+                ? json.get("specials_released_at").getAsString() : null;
+        return new FigureCollection(id, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor, plush, specialsReleasedAt);
+    }
+
+    /** Whether this collection's figures are plush blocks rather than boxed figures. */
+    public boolean isPlush() {
+        return plush;
+    }
+
+    /** This collection marked as a plush collection. */
+    public FigureCollection asPlush() {
+        return plush ? this
+                : new FigureCollection(id, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor, true, specialsReleasedAt);
     }
 
     public String getId() {
@@ -239,6 +275,31 @@ public class FigureCollection {
     }
 
     /**
+     * Gets the enabled figures any player can be granted: every one that is not special.
+     */
+    public List<FigureDefinition> getRegularFigures() {
+        return regularFigures;
+    }
+
+    /**
+     * Gets the enabled figures only players with special access can be granted.
+     */
+    public List<FigureDefinition> getSpecialFigures() {
+        return specialFigures;
+    }
+
+    public boolean hasSpecials() {
+        return !specialFigures.isEmpty();
+    }
+
+    /**
+     * Gets the day (yyyy-MM-dd) this collection's specials came out, or null if not specified
+     */
+    public String getSpecialsReleasedAt() {
+        return specialsReleasedAt;
+    }
+
+    /**
      * Gets the background color for this collection (RGB 0-255)
      * @return int array [r, g, b] or null if not specified
      */
@@ -280,7 +341,15 @@ public class FigureCollection {
         if (authorUrl != null) {
             json.addProperty("author_url", authorUrl);
         }
-        json.addProperty("box_texture", boxTexture.toString());
+        if (boxTexture != null) {
+            json.addProperty("box_texture", boxTexture.toString());
+        }
+        if (plush) {
+            json.addProperty("plush", true);
+        }
+        if (specialsReleasedAt != null) {
+            json.addProperty("specials_released_at", specialsReleasedAt);
+        }
 
         // Serialize logo configuration
         if (logoConfig != null) {

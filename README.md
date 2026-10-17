@@ -18,6 +18,13 @@ target. The matrix validator and build plan show the selected inventory.
 The `blockpops:world_players_box` loot table entry rolls a complete World
 Players box. See [World Players boxes in loot tables](docs/world-players-loot.md).
 
+## Drawing a figure
+
+Spending a token in the claw or gacha machine's screen keeps the screen open:
+the figures the token could give light up one after another, slowing down until
+the light stops on the one you got, which is then shown. Click to put it away.
+The figure is already in your inventory when the draw starts.
+
 ## Settings and figure previews
 
 Interact with a claw machine to open its collection screen, then select the
@@ -32,10 +39,38 @@ means cheats enabled; otherwise set `guaranteedTokenResetHour` (0-23, UTC) in
 shows `--:--` and stays locked while the server has not reported its hour, for
 example on a server that runs an older BlockPops version.
 
-The collection screen previews every figure you have discovered; undiscovered
-figures show `?`. Operators also get a **Cheats** tab with one **Unlock** button
+The collection screen previews every figure in colour once you have discovered
+it and in black and white until then. Operators also get a **Cheats** tab with one **Unlock** button
 per collection: it marks that collection's figures as discovered and drops
 their boxes. It changes your collection progress; it is not a preview mode.
+
+## Special plushes
+
+Some plush collections have special plushes, outlined in purple and counted
+apart in the gacha machine's menu (`3/5 | 0/7 figures`). A token gives them
+only to Ko-fi supporters; the Ko-fi button at the top right of that menu
+opens the support page.
+
+To tell who is a supporter, the server sends each joining player's name to
+the service named by `specialAccessApiUrl` in `config/blockpops-server.json`
+and keeps the answer for `specialAccessCacheMinutes`. Set the URL to `""` to
+ask nobody; the special plushes then stay locked for everyone.
+
+## World collections
+
+Operators (permission level 2) can make collections for one world from their
+own skins, box textures, logos and Blockbench models with
+`/blockpops worldcollections`, importing the files from a datapack. The
+**Creator** tab of the claw machine's Settings, which uploads them from your
+computer, is still in progress and appears only in a development environment
+for now. The server
+checks every file, stores it with the world under
+`data/blockpops-world-collections/` and sends it to each player who joins;
+nothing is published anywhere else. A datapack can ship one for `importpack`.
+See [World Collections](COLLECTIONS_GUIDE.md#world-collections) for the file
+rules, limits and commands, and
+[ADR 0003](docs/architecture/decisions/0003-accept-operator-uploaded-world-collections.md)
+for the design.
 
 ## Local verification
 

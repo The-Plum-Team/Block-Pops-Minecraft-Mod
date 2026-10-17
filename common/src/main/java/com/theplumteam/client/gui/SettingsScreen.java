@@ -8,6 +8,7 @@ import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.gui.util.ButtonFactory;
 import com.theplumteam.client.gui.widget.TabButton;
 import com.theplumteam.client.remote.ClientCustomCollections;
+import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.network.UnlockCollectionPacket;
@@ -15,6 +16,7 @@ import com.theplumteam.network.CustomCollectionRequestPacket;
 import com.theplumteam.network.ReloadTokensPacket;
 import com.theplumteam.network.SetCollectionHiddenPacket;
 import com.theplumteam.network.UpdateGuaranteedResetHourPacket;
+import com.theplumteam.worldcontent.WorldContentIds;
 import dev.architectury.platform.Platform;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
@@ -62,7 +64,8 @@ public class SettingsScreen extends Screen {
         DEVELOP("Develop"),
         CHEATS("Cheats"),
         COLLECTIONS("Collections"),
-        CUSTOM("Custom");
+        CUSTOM("Custom"),
+        CREATOR("Creator");
 
         private final String displayName;
 
@@ -81,6 +84,7 @@ public class SettingsScreen extends Screen {
     private TabButton cheatsTabButton;
     private TabButton collectionsTabButton;
     private TabButton customTabButton;
+    private TabButton creatorTabButton;
     private final List<AbstractWidget> serverSettingWidgets = new ArrayList<>();
     private final List<AbstractWidget> developSettingWidgets = new ArrayList<>();
     private final List<AbstractWidget> cheatsSettingWidgets = new ArrayList<>();
@@ -94,6 +98,10 @@ public class SettingsScreen extends Screen {
     private String pendingCustomCode = "";
     private Component customStatus;
     private int shownCustomRevision;
+
+    // Creator tab: whether it was shown, to rebuild only when it comes or goes; its text
+    // reads the World collections as it draws
+    private boolean shownCreator;
 
     // Buttons and sliders
     private Button closeButton;
@@ -143,11 +151,14 @@ public class SettingsScreen extends Screen {
         collectionToggleButtons.clear();
         customWidgets.clear();
         shownCustomRevision = ClientCustomCollections.revision();
+        shownCreator = canUseCreator();
         // The Collections tab goes away when the player may no longer manage collections
         collectionsTabButton = null;
         customTabButton = null;
+        creatorTabButton = null;
         if ((activeTab == Tab.COLLECTIONS && !canManageCollections())
-                || (activeTab == Tab.CUSTOM && !canManageCustomCollections())) {
+                || (activeTab == Tab.CUSTOM && !canManageCustomCollections())
+                || (activeTab == Tab.CREATOR && !canUseCreator())) {
             activeTab = Tab.SERVER;
         }
 
@@ -219,6 +230,19 @@ public class SettingsScreen extends Screen {
                     btn -> switchTab(Tab.CUSTOM)
             );
             this.addRenderableWidget(customTabButton);
+            nextTabX += TAB_WIDTH + TAB_SPACING;
+        }
+
+        // Creator tab (for operators, on a server that syncs its World collections)
+        if (canUseCreator()) {
+            creatorTabButton = (TabButton) ButtonFactory.createTab(
+                    nextTabX, tabY,
+                    TAB_WIDTH, TAB_HEIGHT,
+                    Component.literal(Tab.CREATOR.getDisplayName()),
+                    activeTab == Tab.CREATOR,
+                    btn -> switchTab(Tab.CREATOR)
+            );
+            this.addRenderableWidget(creatorTabButton);
         }
 
         // Create button instances
@@ -306,6 +330,9 @@ public class SettingsScreen extends Screen {
             // "Add": the server looks the code up and answers with a status
             new CustomCollectionRequestPacket(true, pendingCustomCode.trim()).sendToServer();
             customStatus = Component.translatable("blockpops.custom_collections.looking_up");
+        } else if (activeTab == Tab.CREATOR) {
+            // The World collections list, which returns here when it closes
+            this.minecraft.setScreen(new WorldCollectionsScreen(this));
         }
     }
 
@@ -331,6 +358,10 @@ public class SettingsScreen extends Screen {
             this.actionButton.setMessage(Component.literal("Add"));
             this.actionButton.active = !pendingCustomCode.isBlank();
             this.actionButton.visible = true;
+        } else if (activeTab == Tab.CREATOR) {
+            this.actionButton.setMessage(Component.literal("Open creator"));
+            this.actionButton.active = true;
+            this.actionButton.visible = true;
         } else {
             // No action on the other tabs (Collections)
             this.actionButton.active = false;
@@ -345,6 +376,12 @@ public class SettingsScreen extends Screen {
         refreshServerSettings();
         // A new Custom list, or a server that starts or stops offering them, rebuilds the tabs
         if (shownCustomRevision != ClientCustomCollections.revision()) {
+            this.rebuildWidgets();
+        }
+        // The Creator tab comes and goes with operator status and a server that syncs World
+        // collections; a sync alone changes nothing built here, and rebuilding would reset
+        // the unsaved reset-hour slider
+        if (shownCreator != canUseCreator()) {
             this.rebuildWidgets();
         }
     }
@@ -389,7 +426,7 @@ public class SettingsScreen extends Screen {
         // all, so the Server tab sat on top of its collection header. An opaque base goes
         // under both; the themed fills below still draw on top of it.
         int tabsRight = this.panelX;
-        for (TabButton tab : new TabButton[] {serverTabButton, developTabButton, cheatsTabButton, collectionsTabButton, customTabButton}) {
+        for (TabButton tab : new TabButton[] {serverTabButton, developTabButton, cheatsTabButton, collectionsTabButton, customTabButton, creatorTabButton}) {
             if (tab != null && tab.visible) {
                 tabsRight = Math.max(tabsRight, tab.getX() + tab.getWidth());
             }
@@ -561,6 +598,23 @@ public class SettingsScreen extends Screen {
             }
         }
 
+        // Draw Creator tab content (for operators)
+        if (activeTab == Tab.CREATOR) {
+            int headerY = this.panelY + TAB_HEIGHT + 10;
+            graphics.drawCenteredString(this.font, "Creator",
+                    this.panelX + this.panelWidth / 2, headerY, 0xFFFFFFFF);
+            String explanation = "Make World collections for this world from your own skins, models, boxes and logos.";
+            graphics.drawString(this.font, explanation,
+                    this.panelX + (this.panelWidth - this.font.width(explanation)) / 2,
+                    this.panelY + TAB_HEIGHT + 30, 0xFFAAAAAA);
+            String usage = ClientWorldCollections.records().size() + " collections \u00b7 "
+                    + WorldCollectionsScreen.mib(ClientWorldCollections.quotaUsedKiB()) + " of "
+                    + WorldCollectionsScreen.mib(ClientWorldCollections.quotaMaxKiB()) + " MiB stored";
+            graphics.drawString(this.font, usage,
+                    this.panelX + (this.panelWidth - this.font.width(usage)) / 2,
+                    this.panelY + TAB_HEIGHT + 46, 0xFFAAAAAA);
+        }
+
         // Draw color preview boxes (only in Develop tab)
         if (isDevelopmentMode() && activeTab == Tab.DEVELOP) {
             int previewSize = 35;
@@ -709,6 +763,17 @@ public class SettingsScreen extends Screen {
      */
     private boolean canManageCustomCollections() {
         return canAccessCheats() && ClientCustomCollections.isSynced();
+    }
+
+    /**
+     * Check if the current player can make World collections for this world.
+     * Operators only: unlike the Cheats tab, development mode alone is not enough, because
+     * the server refuses every change from a player below level 2. The server also has to
+     * be one that syncs its World collections. The tab is shown only in development mode
+     * while the creator is still being worked on; the commands stay available.
+     */
+    private boolean canUseCreator() {
+        return isDevelopmentMode() && isOperator() && ClientWorldCollections.isSynced();
     }
 
     /**
@@ -1033,9 +1098,11 @@ public class SettingsScreen extends Screen {
         // Get all collections
         java.util.Collection<FigureCollection> collections = CollectionRegistry.getAllCollections();
 
-        // Filter out the default collection if it exists
+        // Filter out the default collection if it exists, and World collections, which the
+        // Creator tab unlocks one by one: one more row here would overlap the footer
         java.util.List<FigureCollection> filteredCollections = collections.stream()
                 .filter(collection -> !collection.getId().equals("default"))
+                .filter(collection -> !WorldContentIds.isWorldCollectionId(collection.getId()))
                 .collect(java.util.stream.Collectors.toList());
 
         int row = 0;
@@ -1101,8 +1168,9 @@ public class SettingsScreen extends Screen {
         int col = 0;
 
         for (FigureCollection collection : CollectionRegistry.getAllCollections()) {
-            // The default collection is never listed, so there is nothing to hide
-            if (collection.getId().equals("default")) {
+            // The default collection is never listed, so there is nothing to hide. A World
+            // collection belongs to this world alone; Archive in the Creator hides it instead.
+            if (collection.getId().equals("default") || WorldContentIds.isWorldCollectionId(collection.getId())) {
                 continue;
             }
 
@@ -1192,6 +1260,9 @@ public class SettingsScreen extends Screen {
         }
         if (customTabButton != null) {
             customTabButton.setSelected(tab == Tab.CUSTOM);
+        }
+        if (creatorTabButton != null) {
+            creatorTabButton.setSelected(tab == Tab.CREATOR);
         }
 
         // Update action button text/state/visibility based on new tab

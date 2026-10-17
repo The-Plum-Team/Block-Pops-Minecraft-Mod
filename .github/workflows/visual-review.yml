@@ -519,7 +519,7 @@ jobs:
       # The curator validates the durable mb-anchor with the kit pinned by this exact checkout; a
       # kit that is not that pin's verified tree stops the (advisory) curation here.
       - name: Verify the pinned mod-base kit
-        uses: The-Plum-Team/mod-base/actions/setup@1273a5384dd1e39e6eb941148610d4555d8ff3f0 # v1.5.0
+        uses: The-Plum-Team/mod-base/actions/setup@acb01ca4f625a5d27f1c1a709a416d9725bef64f # v1.7.0
         with:
           install-imaging: "false"
 

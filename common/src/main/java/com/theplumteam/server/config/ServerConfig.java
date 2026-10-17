@@ -33,6 +33,13 @@ public class ServerConfig {
     // Debug logging toggle - when true, shows detailed info logs for troubleshooting
     public boolean debugLogging = false;
 
+    // The service that tells which players are supporters, who receive the special plushes.
+    // With an empty URL nobody is asked and the specials stay locked.
+    public String specialAccessApiUrl = "https://kofi-linker.rubengalandiaz.workers.dev";
+    public String specialAccessApiKey = "built-in";
+    // How long an answer is kept before the service is asked again
+    public int specialAccessCacheMinutes = 30;
+
     // Collection IDs hidden from every player's collection list (an ID that matches no collection is kept)
     private List<String> hiddenCollections = new ArrayList<>();
 
@@ -95,6 +102,18 @@ public class ServerConfig {
     public void setDebugLogging(boolean enabled) {
         this.debugLogging = enabled;
         save();
+    }
+
+    public String getSpecialAccessApiUrl() {
+        return specialAccessApiUrl == null ? "" : specialAccessApiUrl;
+    }
+
+    public String getSpecialAccessApiKey() {
+        return specialAccessApiKey == null ? "" : specialAccessApiKey;
+    }
+
+    public int getSpecialAccessCacheMinutes() {
+        return Math.max(1, specialAccessCacheMinutes);
     }
 
     /**

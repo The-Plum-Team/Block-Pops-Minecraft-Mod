@@ -49,8 +49,9 @@ def select_current_run(api: GitHubApi, *, repository: str, canonical_branch: str
         workflow_id, path = record["id"], ".github/workflows/" + workflow
         _check(type(workflow_id) is int and workflow_id > 0 and record["path"] == path
                and record["state"] == "active", "workflow API identity is not active/exact")
-        events = ({"workflow_dispatch", "push"} if workflow == "build-gate.yml"
-                  else {"workflow_dispatch", "schedule"}) if branch == canonical_branch else {"workflow_dispatch"}
+        # The canonical Build gate runs only when dispatched; the canonical E2E also runs nightly.
+        events = ({"workflow_dispatch", "schedule"} if workflow == "on-demand-e2e.yml"
+                  and branch == canonical_branch else {"workflow_dispatch"})
         title = WORKFLOWS[workflow] + " / " + commit
         def validate(run, *, expected_controller, success):
             _check(isinstance(run, dict) and type(run.get("workflow_id")) is int,

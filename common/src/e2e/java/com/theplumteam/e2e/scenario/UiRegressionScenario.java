@@ -7,6 +7,7 @@ import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
 import com.theplumteam.client.gui.SettingsScreen;
 import com.theplumteam.client.gui.widget.ColorSelectionButton;
 import com.theplumteam.client.gui.widget.LinkButton;
+import com.theplumteam.client.gui.widget.TabButton;
 import com.theplumteam.e2e.E2EHarness;
 import com.theplumteam.e2e.Scenario;
 import com.theplumteam.e2e.Step;
@@ -86,6 +87,19 @@ public final class UiRegressionScenario implements Scenario {
                                 minecraft, CollectionSelectionScreen.class, 8))
                         .screenshot(PREFIX + "collection_screen_initial.png")
                         .assertion(() -> validateCollectionScreen(minecraft)),
+                Step.of("collection_screen_plushes")
+                        .action(() -> {
+                            if (!pressTab(minecraft, "Plushes")) {
+                                throw new IllegalStateException(
+                                        "production Plushes tab could not be pressed");
+                            }
+                        })
+                        .minTicks(20)
+                        .settleTicks(10)
+                        .timeoutTicks(600)
+                        .ready(() -> plushTabSynchronized(minecraft))
+                        .screenshot(PREFIX + "collection_screen_plushes.png")
+                        .assertion(() -> validatePlushTab(minecraft)),
                 Step.of("settings_modal")
                         .action(() -> {
                             if (!pressSettingsLink(minecraft)) {
@@ -166,6 +180,78 @@ public final class UiRegressionScenario implements Scenario {
                 ? Step.Result.pass(
                         "real block interaction opened the production collection and token controls")
                 : Step.Result.fail("collection screen came from the harness container");
+    }
+
+    private static boolean pressTab(Minecraft minecraft, String label) {
+        if (!(minecraft.screen instanceof CollectionSelectionScreen)) {
+            return false;
+        }
+        for (Object child : minecraft.screen.children()) {
+            if (child instanceof TabButton.Folder tab
+                    && label.equals(tab.getMessage().getString())) {
+                return VanillaShim.press(tab);
+            }
+        }
+        return false;
+    }
+
+    /** The collection the open screen has selected, or null when it has none or is not open. */
+    private static String screenSelection(Minecraft minecraft) {
+        if (!(minecraft.screen instanceof CollectionSelectionScreen screen)) {
+            return null;
+        }
+        try {
+            Object selected = field(CollectionSelectionScreen.class, "selectedCollectionId").get(screen);
+            return selected instanceof String id && !id.isEmpty() ? id : null;
+        } catch (ReflectiveOperationException failure) {
+            return null;
+        }
+    }
+
+    private static boolean plushTabSynchronized(Minecraft minecraft) {
+        String selected = screenSelection(minecraft);
+        return readyScreen(minecraft, CollectionSelectionScreen.class, 8)
+                && selected != null
+                && minecraft.level.getBlockEntity(CLAW_POSITION) instanceof ClawMachineBlockEntity claw
+                && selected.equals(claw.getCollectionId());
+    }
+
+    private static Step.Result validatePlushTab(Minecraft minecraft) {
+        Step.Result screen = screenTitleAndWidgets(
+                minecraft,
+                CollectionSelectionScreen.class,
+                "Claw Machine Configuration",
+                8);
+        if (!screen.pass()) {
+            return screen;
+        }
+        try {
+            if (!field(CollectionSelectionScreen.class, "plush").getBoolean(minecraft.screen)) {
+                return Step.Result.fail("pressing the Plushes tab did not open the plush collections");
+            }
+        } catch (ReflectiveOperationException failure) {
+            return Step.Result.fail("could not inspect the open tab: " + failure);
+        }
+        String selected = screenSelection(minecraft);
+        if (selected == null
+                || CollectionRegistry.getPlushCollections().stream()
+                        .noneMatch(collection -> collection.getId().equals(selected))) {
+            return Step.Result.fail("the Plushes tab did not select a plush collection: " + selected);
+        }
+        if (!(minecraft.level.getBlockEntity(CLAW_POSITION) instanceof ClawMachineBlockEntity claw)
+                || !selected.equals(claw.getCollectionId())) {
+            return Step.Result.fail("the plush selection did not reach the claw machine");
+        }
+        List<AbstractWidget> widgets = visibleWidgets(minecraft);
+        if (!hasWidgetMessage(widgets, "Figures") || !hasWidgetMessage(widgets, "Plushes")) {
+            return Step.Result.fail("the collection-type tabs are missing or mislabeled");
+        }
+        if (!hasWidgetMessage(widgets, "Use Regular Token")
+                || !hasWidgetMessage(widgets, "Use Guaranteed Token")) {
+            return Step.Result.fail("token controls are missing on the Plushes tab");
+        }
+        return Step.Result.pass("the real Plushes tab selected " + selected
+                + " and the server stored it on the claw machine");
     }
 
     private static Step.Result validateSettingsScreen(Minecraft minecraft) {

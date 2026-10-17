@@ -114,6 +114,11 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
         return renderState.getOrDefaultGeckolibData(FIGURE_TEXTURE, FALLBACK_TEXTURE);
     }
 
+    // Swaps the texture a state resolved to, for a caller that draws with a copy of it.
+    public static void overrideTexture(GeoRenderState renderState, ResourceLocation texture) {
+        renderState.addGeckolibData(FIGURE_TEXTURE, texture);
+    }
+
     @Override
     public void addAdditionalStateData(BoxBlockEntity animatable,
                                        //? if >=1.21.9 {
@@ -259,7 +264,10 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
             GameProfile profile = liveProfileCache.computeIfAbsent(figure.getPlayerUUID(), uuid ->
                     new GameProfile(uuid, figure.getName()));
             liveRegistrationCache.computeIfAbsent(figure.getPlayerUUID(), uuid -> {
-                //? if >=1.21 {
+                //? if >=1.21.9 {
+                /*// The populated profile is a new one there, so it replaces the cached one.
+                ClientSkinRegistration.register(profile, prepared -> liveProfileCache.put(uuid, prepared));
+                *///? } elif >=1.21 {
                 /*ClientSkinRegistration.register(profile);
                 *///? } else {
                 Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, p) -> {}, false);
@@ -276,9 +284,15 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
         UUID snapshotUUID = UUID.nameUUIDFromBytes((figure.getPlayerUUID().toString() + snapshot).getBytes());
         String uniqueCacheKey = snapshotUUID.toString();
         GameProfile profile = snapshotProfileCache.computeIfAbsent(uniqueCacheKey, id -> {
+            //? if >=1.21.9 {
+            /*// Authlib 9 profiles are immutable, so the snapshot goes in as the profile is built.
+            return new GameProfile(snapshotUUID, figure.getName(), new com.mojang.authlib.properties.PropertyMap(
+                    com.google.common.collect.ImmutableMultimap.of("textures", new Property("textures", snapshot))));
+            *///? } else {
             GameProfile newProfile = new GameProfile(snapshotUUID, figure.getName());
             AuthlibProfiles.properties(newProfile).put("textures", new Property("textures", snapshot));
             return newProfile;
+            //? }
         });
         snapshotRegistrationCache.computeIfAbsent(uniqueCacheKey, id -> {
             //? if >=1.21 {

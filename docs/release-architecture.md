@@ -79,6 +79,10 @@ it as a locator and re-queries GitHub for the newest exact runs and attempts.
 One global non-cancelling handler lock serializes every merge-sensitive release
 operation even when different authenticated candidate SHAs target the same
 mutable release ref; the periodic reconciler recovers any missed wake-up.
+The synchronizer itself is woken by `reconcile-release-sync.yml` (minutes
+11 and 41 of every hour) and its own daily schedule. A push to `master` wakes
+nothing: the native Build gate does not run on it, and the synchronizer tests
+its own exact candidates rather than reading a canonical Build.
 
 ## Artifact chain
 
@@ -109,7 +113,7 @@ Lane Gradle processes are serialized per machine: the serial runner starts one
 lock. The two CI bundle jobs (Build and Packaged E2E) share no repository-wide
 queue. Each runs on its own GitHub-hosted runner, reads the Gradle cache without
 writing it and uploads only artifacts of its own run, named by tested commit and
-run attempt, so builders of different pull requests, pushes and schedules, and
+run attempt, so builders of different pull requests, dispatches and schedules, and
 the Build and E2E builders of the same head, build at the same time. Gate
 evidence is chosen by workflow, exact head and run creation order, never by
 completion order. Workflow-level concurrency, keyed by pull request or ref,
@@ -159,7 +163,17 @@ capture identity. The ordinary aggregate/raw handoff remains short lived.
 The canonical-only planner requires its own implementation to be the exact clean
 GitHub default-branch commit, a schema-2 integration matrix, no inherited `GIT_*`
 variables, and `GH_TOKEN` with read access to the repository and Actions evidence.
-It refuses an undeployed foundation candidate. After those prerequisites hold:
+It refuses an undeployed foundation candidate. Its canonical Build evidence is a
+Build gate run dispatched on the exact current head, because the Build gate does
+not run on a push; its canonical Packaged E2E evidence is the nightly scheduled
+run or a dispatch of the same head:
+
+```sh
+gh workflow run build-gate.yml --ref master
+gh workflow run on-demand-e2e.yml --ref master
+```
+
+After both runs succeed and those prerequisites hold:
 
 ```sh
 python3 scripts/release/plan_release.py --repository The-Plum-Team/Block-Pops-Minecraft-Mod \

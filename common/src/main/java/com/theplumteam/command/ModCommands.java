@@ -35,6 +35,7 @@ public class ModCommands {
         GetBoxCommand.register(dispatcher);
         SetDefaultColorCommand.register(dispatcher);
         CustomCollectionsCommand.register(dispatcher);
+        WorldCollectionsCommand.register(dispatcher);
 
         BlockPopsMod.logDebug("BlockPops commands registered");
     }

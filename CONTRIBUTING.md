@@ -67,6 +67,15 @@ every file it serves. `-Pplum.mavenMirror=false` (or `ORG_GRADLE_PROJECT_plum.ma
 in the environment) is the emergency switch: it leaves the mirror out of both places, so every
 group resolves from its upstream repositories.
 
+Google's mirror of Maven Central (`https://maven-central.storage-download.googleapis.com/maven2/`)
+follows Maven Central under the same content filter: in `settings.gradle` after the plugin portal,
+which redirects every non-plugin artifact to Central, and through `gradle/repository-policy.gradle`
+right after the Central repository Loom declares. A transient 404 from Central then falls through
+to the same path there. The verification checksums name artifacts, not repositories, so it needs no
+new metadata. The Gradle wrapper downloads its distribution from GitHub's release mirror
+(`github.com/gradle/gradle-distributions`), whose zip has the same SHA-256 as the
+`services.gradle.org` one that `distributionSha256Sum` pins.
+
 Two deterministic gates are authoritative. On ordinary PRs into `master`, branch
 protection must require their protected App-authenticated bridge contexts, not a
 check run created from candidate-controlled workflow YAML:
@@ -85,9 +94,19 @@ ordinary feature PR. Branch from the exact current `master` as
 `controller-upgrade/<purpose>`, target `master`, add the exact
 `controller-upgrade` label, and keep the change within the protected
 controller/docs/test or matrix-selected loader-bootstrap roots. After reviewing
-the complete exact-head diff, only `AkaNebur`, an administrator of the owning organization, may post
-`/controller-upgrade approve <head-sha>`. Every new head requires a new approval;
-the latest exact-head `approve` or `revoke` command wins. Neither this route nor
+the complete exact-head diff, any current member of the `The-Plum-Team`
+organization may post `/controller-upgrade approve <head-sha>` (the mod-base
+kit's admission proves the membership with the gate App; a private membership
+counts), and so may the outside collaborator `Nanarng`, listed by name; no
+other outside collaborator counts. Every new head requires a new approval; the
+latest exact-head `approve` or `revoke` command of an approver wins. Post a
+fresh comment rather than editing one: an edited decision is refused. To revoke, post
+`/controller-upgrade revoke <head-sha>`, then push a new head or convert the PR
+to draft, then dispatch `mod-base-gate-status.yml -f pr-number=<N>`
+([details](docs/operations.md#shared-build-and-packaged-e2e-shared-build-and-e2e)).
+`/restricted-transition` approvals stay `AkaNebur`-only, and so does the dormant
+native evaluator `scripts/ci/pr_gate.py`, which applies again only after a
+rollback of the kit's gates. Neither this route nor
 an ordinary PR may change the release matrix, verification metadata, or
 version-specific shims. Both newest exact Build and Packaged E2E attempts and
 their protected App contexts remain mandatory.

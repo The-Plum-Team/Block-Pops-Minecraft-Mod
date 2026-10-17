@@ -147,6 +147,53 @@
               }
             },
             {
+              "id": "collection_screen_plushes",
+              "assertion_required": true,
+              "capture": {
+                "title": "Claw machine collection screen, Plushes tab",
+                "review_tier": "key",
+                "expectation": "After the real Plushes tab is pressed, the same screen shows the Plushes folder tab raised and joined to the panel, the plush collections in the left list with the first one selected and its plushes in the right grid, and the token controls and footer; labels, tabs and controls are not clipped or overlapped.",
+                "probes": [
+                  {
+                    "kind": "required-gui-text",
+                    "label": "collections header",
+                    "box": [
+                      205,
+                      75,
+                      600,
+                      110
+                    ],
+                    "minimum_luma_exclusive": 143,
+                    "minimum_pixels": 200
+                  },
+                  {
+                    "kind": "required-gui-text",
+                    "label": "selected collection and figure header",
+                    "box": [
+                      790,
+                      75,
+                      1200,
+                      110
+                    ],
+                    "minimum_luma_exclusive": 143,
+                    "minimum_pixels": 300
+                  },
+                  {
+                    "kind": "required-gui-text",
+                    "label": "token availability status",
+                    "box": [
+                      400,
+                      745,
+                      1200,
+                      775
+                    ],
+                    "minimum_luma_exclusive": 143,
+                    "minimum_pixels": 250
+                  }
+                ]
+              }
+            },
+            {
               "id": "settings_modal",
               "assertion_required": true,
               "capture": {
@@ -215,6 +262,17 @@
                 0.18,
                 0.75,
                 0.82
+              ]
+            },
+            {
+              "first_step": "collection_screen_initial",
+              "second_step": "collection_screen_plushes",
+              "minimum_changed_fraction": 0.005,
+              "region": [
+                0.09375,
+                0.1111,
+                0.88,
+                0.88
               ]
             },
             {

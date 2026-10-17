@@ -1,0 +1,206 @@
+{
+  "id": "sonic",
+  "name": "Sonic the Hedgehog Collection",
+  "author": "Alphs",
+  "author_url": "https://ko-fi.com/s/6d92c8b561",
+  "box_texture": "blockpops:textures/block/box/sonic.png",
+  "logo": {
+    "texture": "blockpops:textures/block/box/logo/logo_sonic.png"
+  },
+  "background_color": {
+    "r": 20,
+    "g": 60,
+    "b": 170
+  },
+  "figures": [
+    {
+      "id": "sonic",
+      "name": "Sonic",
+      "model": "blockpops:geo/figure/sonic/sonic.geo.json",
+      "texture": "blockpops:textures/block/figure/sonic/sonic.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_sonic_sonic.animation.json",
+      "poses": ["Pose_SuperPeelOut", "Pose_IdleWait", "Pose_IdleLay", "Pose_NoseRub", "Pose_ActClear", "Pose_Applause"],
+      "scale": 0.294,
+      "gui_scale": 0.29,
+      "box_face_uv": {"u": 112, "v": 1, "w": 10, "h": 10, "tex_width": 256, "tex_height": 256},
+      "alternatives": [
+        {
+          "name": "Sonic (Symphony)",
+          "model": "blockpops:geo/figure/sonic/sonic_symphony.geo.json",
+          "texture": "blockpops:textures/block/figure/sonic/sonic_symphony.png",
+          "show_box_face": true,
+          "box_face_uv": {"u": 112, "v": 1, "w": 10, "h": 10, "tex_width": 256, "tex_height": 256}
+        },
+        {
+          "name": "Sonic (Festive)",
+          "model": "blockpops:geo/figure/sonic/sonic_festive.geo.json",
+          "texture": "blockpops:textures/block/figure/sonic/sonic_festive.png",
+          "show_box_face": true,
+          "box_face_uv": {"u": 112, "v": 1, "w": 10, "h": 10, "tex_width": 256, "tex_height": 256}
+        },
+        {
+          "name": "Sonic (Bowtie)",
+          "model": "blockpops:geo/figure/sonic/sonic_bowtie.geo.json",
+          "texture": "blockpops:textures/block/figure/sonic/sonic_bowtie.png",
+          "show_box_face": true,
+          "box_face_uv": {"u": 112, "v": 1, "w": 10, "h": 10, "tex_width": 256, "tex_height": 256}
+        }
+      ]
+    },
+    {
+      "id": "tails",
+      "name": "Tails",
+      "model": "blockpops:geo/figure/sonic/tails.geo.json",
+      "texture": "blockpops:textures/block/figure/sonic/tails.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_sonic_tails.animation.json",
+      "poses": ["Pose_Applause", "Pose_BoredIdle", "Pose_ActClear"],
+      "scale": 0.294,
+      "gui_scale": 0.34,
+      "box_face_uv": {"u": 134, "v": 1, "w": 9, "h": 10, "tex_width": 256, "tex_height": 256},
+      "alternatives": [
+        {
+          "name": "Tails (Symphony)",
+          "model": "blockpops:geo/figure/sonic/tails_symphony.geo.json",
+          "texture": "blockpops:textures/block/figure/sonic/tails_symphony.png",
+          "show_box_face": true,
+          "box_face_uv": {"u": 134, "v": 1, "w": 9, "h": 10, "tex_width": 256, "tex_height": 256}
+        },
+        {
+          "name": "Tails (Warm Scarf)",
+          "model": "blockpops:geo/figure/sonic/tails_warm_scarf.geo.json",
+          "texture": "blockpops:textures/block/figure/sonic/tails_warm_scarf.png",
+          "show_box_face": true,
+          "box_face_uv": {"u": 134, "v": 1, "w": 9, "h": 10, "tex_width": 256, "tex_height": 256}
+        }
+      ]
+    },
+    {
+      "id": "knuckles",
+      "name": "Knuckles",
+      "model": "blockpops:geo/figure/sonic/knuckles.geo.json",
+      "texture": "blockpops:textures/block/figure/sonic/knuckles.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_sonic_knuckles.animation.json",
+      "poses": ["Pose_Furious", "Pose_Chuckle", "Pose_ShadowBoxing", "Pose_Relaxing", "Pose_Applause", "Pose_ActClear"],
+      "scale": 0.294,
+      "gui_scale": 0.32,
+      "box_face_uv": {"u": 127, "v": 1, "w": 10, "h": 9, "tex_width": 256, "tex_height": 256},
+      "alternatives": [
+        {
+          "name": "Knuckles (Symphony)",
+          "model": "blockpops:geo/figure/sonic/knuckles_symphony.geo.json",
+          "texture": "blockpops:textures/block/figure/sonic/knuckles_symphony.png",
+          "show_box_face": true,
+          "box_face_uv": {"u": 127, "v": 1, "w": 10, "h": 9, "tex_width": 256, "tex_height": 256}
+        },
+        {
+          "name": "Knuckles (Treasure Hunter)",
+          "model": "blockpops:geo/figure/sonic/knuckles_treasure_hunter.geo.json",
+          "texture": "blockpops:textures/block/figure/sonic/knuckles_treasure_hunter.png",
+          "show_box_face": true,
+          "box_face_uv": {"u": 127, "v": 1, "w": 12, "h": 6, "tex_width": 256, "tex_height": 256}
+        },
+        {
+          "name": "Knuckles (Tough Antlers)",
+          "model": "blockpops:geo/figure/sonic/knuckles_tough_antlers.geo.json",
+          "texture": "blockpops:textures/block/figure/sonic/knuckles_tough_antlers.png",
+          "show_box_face": true,
+          "box_face_uv": {"u": 127, "v": 1, "w": 10, "h": 9, "tex_width": 256, "tex_height": 256}
+        }
+      ]
+    },
+    {
+      "id": "amy",
+      "name": "Amy Rose",
+      "model": "blockpops:geo/figure/sonic/amy.geo.json",
+      "texture": "blockpops:textures/block/figure/sonic/amy.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_sonic_amy.animation.json",
+      "poses": ["Pose_PikoPikoTwirl", "Pose_Applause", "Pose_Cheer", "Pose_WaitIdle"],
+      "scale": 0.294,
+      "gui_scale": 0.3,
+      "box_face_uv": {"u": 143, "v": 1, "w": 11, "h": 10, "tex_width": 256, "tex_height": 256},
+      "alternatives": [
+        {
+          "name": "Amy Rose (Symphony)",
+          "model": "blockpops:geo/figure/sonic/amy_symphony.geo.json",
+          "texture": "blockpops:textures/block/figure/sonic/amy_symphony.png",
+          "show_box_face": true,
+          "box_face_uv": {"u": 143, "v": 1, "w": 10, "h": 10, "tex_width": 256, "tex_height": 256}
+        },
+        {
+          "name": "Amy Rose (Modern)",
+          "model": "blockpops:geo/figure/sonic/amy_modern.geo.json",
+          "texture": "blockpops:textures/block/figure/sonic/amy_modern.png",
+          "show_box_face": true,
+          "box_face_uv": {"u": 143, "v": 1, "w": 10, "h": 10, "tex_width": 256, "tex_height": 256}
+        },
+        {
+          "name": "Amy Rose (Comfy Sweater)",
+          "model": "blockpops:geo/figure/sonic/amy_comfy_sweater.geo.json",
+          "texture": "blockpops:textures/block/figure/sonic/amy_comfy_sweater.png",
+          "show_box_face": true,
+          "box_face_uv": {"u": 143, "v": 1, "w": 10, "h": 10, "tex_width": 256, "tex_height": 256}
+        }
+      ]
+    },
+    {
+      "id": "eggman",
+      "name": "Dr. Eggman",
+      "model": "blockpops:geo/figure/sonic/eggman.geo.json",
+      "texture": "blockpops:textures/block/figure/sonic/eggman.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_sonic_eggman.animation.json",
+      "poses": ["Pose_Applause", "Pose_Laugh", "Pose_EmeraldJuggle", "Pose_CommandForward"],
+      "scale": 0.294,
+      "gui_scale": 0.26,
+      "box_face_uv": {"u": 99, "v": 1, "w": 8, "h": 8, "tex_width": 256, "tex_height": 256},
+      "alternatives": [
+        {
+          "name": "Dr. Eggman (Symphony)",
+          "model": "blockpops:geo/figure/sonic/eggman_symphony.geo.json",
+          "texture": "blockpops:textures/block/figure/sonic/eggman_symphony.png",
+          "show_box_face": true,
+          "box_face_uv": {"u": 99, "v": 1, "w": 8, "h": 8, "tex_width": 256, "tex_height": 256}
+        },
+        {
+          "name": "Dr. Eggman (Prototype Pajama)",
+          "model": "blockpops:geo/figure/sonic/eggman_prototype_pajama.geo.json",
+          "texture": "blockpops:textures/block/figure/sonic/eggman_prototype_pajama.png",
+          "show_box_face": true,
+          "box_face_uv": {"u": 99, "v": 1, "w": 8, "h": 8, "tex_width": 256, "tex_height": 256}
+        },
+        {
+          "name": "Dr. Eggman (Winter Pajama)",
+          "model": "blockpops:geo/figure/sonic/eggman_winter_pajama.geo.json",
+          "texture": "blockpops:textures/block/figure/sonic/eggman_winter_pajama.png",
+          "show_box_face": true,
+          "box_face_uv": {"u": 99, "v": 1, "w": 8, "h": 8, "tex_width": 256, "tex_height": 256}
+        }
+      ]
+    },
+    {
+      "id": "metal_sonic",
+      "name": "Metal Sonic",
+      "model": "blockpops:geo/figure/sonic/metal_sonic.geo.json",
+      "texture": "blockpops:textures/block/figure/sonic/metal_sonic.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "pose_animation": "blockpops:animations/figure/figure_poses_sonic_metal_sonic.animation.json",
+      "poses": ["Pose_OverdriveAttack", "Pose_RingSparkField", "Pose_Taunting", "Pose_Applause"],
+      "scale": 0.294,
+      "gui_scale": 0.29,
+      "box_face_uv": {"u": 193, "v": 24, "w": 11, "h": 12, "tex_width": 256, "tex_height": 256},
+      "alternatives": [
+        {
+          "name": "Metal Sonic (Ribbon)",
+          "model": "blockpops:geo/figure/sonic/metal_sonic_ribbon.geo.json",
+          "texture": "blockpops:textures/block/figure/sonic/metal_sonic_ribbon.png",
+          "show_box_face": true,
+          "box_face_uv": {"u": 193, "v": 24, "w": 11, "h": 12, "tex_width": 256, "tex_height": 256}
+        }
+      ]
+    }
+  ]
+}

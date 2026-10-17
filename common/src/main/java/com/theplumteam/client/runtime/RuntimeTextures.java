@@ -1,15 +1,19 @@
 package com.theplumteam.client.runtime;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 
 /**
  * Textures that arrive while the game runs, uploaded under the id the collection data
@@ -30,8 +34,12 @@ public final class RuntimeTextures {
         PENDING.addAll(ids);
     }
 
+    /**
+     * Whether an id was announced and not registered yet, or is World content not
+     * registered here, which the texture manager cannot have either.
+     */
     public static boolean isPending(@Nullable ResourceLocation id) {
-        return id != null && PENDING.contains(id);
+        return id != null && (PENDING.contains(id) || WorldContentIds.owns(id) && !TEXTURES.containsKey(id));
     }
 
     /** Uploads an image under the id, taking ownership of it. Render thread only. */
@@ -55,8 +63,21 @@ public final class RuntimeTextures {
 
     /** Releases every texture registered here. Render thread only. */
     public static void clear() {
-        TEXTURES.keySet().forEach(Minecraft.getInstance().getTextureManager()::release);
-        TEXTURES.clear();
-        PENDING.clear();
+        clear(id -> true);
+    }
+
+    /**
+     * Releases the textures whose ids match and forgets those still pending, leaving every
+     * other owner's textures in place. Render thread only.
+     */
+    public static void clear(Predicate<ResourceLocation> which) {
+        TextureManager textures = Minecraft.getInstance().getTextureManager();
+        for (ResourceLocation id : List.copyOf(TEXTURES.keySet())) {
+            if (which.test(id)) {
+                TEXTURES.remove(id);
+                textures.release(id);
+            }
+        }
+        PENDING.removeIf(which);
     }
 }
