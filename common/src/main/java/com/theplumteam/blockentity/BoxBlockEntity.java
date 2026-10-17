@@ -74,7 +74,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     private String skinSnapshot = null; // Saved skin snapshot URL for player figures (Mojang)
     private String quickSkinId = null; // Saved Quick Skin ID (for Quick Skin mod compatibility)
 
-    // Figure pose index (0 = standing, 1 = sitting)
+    // Figure pose index: 0 = standing, then the figure's own poses, and sitting last
     private int poseIndex = 0;
 
     // Figure positioning - correct values found through testing. A box still at these
@@ -145,12 +145,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         *///? } else {
         new AnimationController<>(this, "figure_pose_controller", 5, state -> {
         //? }
-            if (this.poseIndex == 1) {
-                // "Pose_Sit" must match the name inside the pose animation file exactly
-                return state.setAndContinue(RawAnimation.begin().thenLoop("Pose_Sit"));
-            }
-            // Default pose (standing) - play the static standing pose
-            return state.setAndContinue(RawAnimation.begin().thenLoop("Pose_Stand"));
+            // Standing, the figure's own poses, then sitting: each name must match the pose
+            // animation file exactly
+            return state.setAndContinue(RawAnimation.begin().thenLoop(poseOptions().poseName(this.poseIndex)));
         }));
     }
 
@@ -355,6 +352,11 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         }
     }
 
+    private FigureDefinition.RenderOptions poseOptions() {
+        FigureDefinition figure = getFigureDefinition();
+        return figure != null ? figure.getRenderOptions() : FigureDefinition.RenderOptions.DEFAULT;
+    }
+
     public int getPoseIndex() {
         return poseIndex;
     }
@@ -365,8 +367,8 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         if (figure != null && figure.getRenderOptions().poseLocked()) {
             return;
         }
-        // Toggles between 0 (Standing) and 1 (Sitting)
-        this.poseIndex = (this.poseIndex + 1) % 2;
+        // Standing, then the figure's own poses, then sitting, then standing again
+        this.poseIndex = (this.poseIndex + 1) % poseOptions().poseCount();
         setChanged();
         if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
