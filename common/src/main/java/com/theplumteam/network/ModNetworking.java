@@ -101,13 +101,51 @@ public class ModNetworking {
             CustomCollectionRequestPacket::handleServer
         );
 
+        // World collections: uploads and edits from operators, file requests from every player
+        PacketNetworking.registerReceiver(
+            NetworkManager.c2s(),
+            WorldUploadBeginPacket.ID,
+            WorldUploadBeginPacket::handleServer
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.c2s(),
+            WorldUploadChunkPacket.ID,
+            WorldUploadChunkPacket::handleServer
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.c2s(),
+            WorldUploadCommitPacket.ID,
+            WorldUploadCommitPacket::handleServer
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.c2s(),
+            WorldCollectionEditPacket.ID,
+            WorldCollectionEditPacket::handleServer
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.c2s(),
+            WorldAssetRequestPacket.ID,
+            WorldAssetRequestPacket::handleServer
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.c2s(),
+            WorldAssetAckPacket.ID,
+            WorldAssetAckPacket::handleServer
+        );
+
         //? if >=1.21 {
         /*PacketNetworking.registerServerS2CPayloads(
                 SyncTokenDataPacket.ID, SyncDiscoveryDataPacket.ID, UnlockFigurePacket.ID,
                 SyncDynamicCollectionsPacket.ID, OpenFavoriteColorScreenPacket.ID,
                 SyncServerSettingsPacket.ID, SyncHiddenCollectionsPacket.ID,
                 AdminProgressionSyncPacket.ID, SyncSpecialAccessPacket.ID,
-                SyncCustomCollectionsPacket.ID, CustomCollectionStatusPacket.ID, DrawResultPacket.ID);
+                SyncCustomCollectionsPacket.ID, CustomCollectionStatusPacket.ID, DrawResultPacket.ID,
+                SyncWorldCollectionsPacket.ID, WorldAssetChunkPacket.ID, WorldCollectionStatusPacket.ID);
         *///? }
 
         BlockPopsMod.logDebug("BlockPops networking initialized");
@@ -193,9 +231,40 @@ public class ModNetworking {
             DrawResultPacket::handleClient
         );
 
-        // Leaving a server forgets its Custom collections and their downloaded assets
-        dev.architectury.event.events.client.ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(
-                player -> com.theplumteam.client.remote.ClientCustomCollections.forget());
+        PacketNetworking.registerReceiver(
+            NetworkManager.s2c(),
+            SyncWorldCollectionsPacket.ID,
+            SyncWorldCollectionsPacket::handleClient
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.s2c(),
+            WorldAssetChunkPacket.ID,
+            WorldAssetChunkPacket::handleClient
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.s2c(),
+            WorldCollectionStatusPacket.ID,
+            WorldCollectionStatusPacket::handleClient
+        );
+
+        // Leaving a server forgets its Custom and World collections and their downloaded assets
+        dev.architectury.event.events.client.ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(player -> {
+            com.theplumteam.client.remote.ClientCustomCollections.forget();
+            com.theplumteam.client.worldcontent.ClientWorldCollections.forget();
+            com.theplumteam.client.worldcontent.ClientWorldUploads.reset();
+        });
+        // A proxy can move the client to another server without a disconnect; that server sends its own
+        dev.architectury.event.events.client.ClientPlayerEvent.CLIENT_PLAYER_JOIN.register(player -> {
+            com.theplumteam.client.worldcontent.ClientWorldCollections.forget();
+            com.theplumteam.client.worldcontent.ClientWorldUploads.reset();
+        });
+        // Uploads send their chunks and the file picker takes its dialog's answer on the client tick
+        dev.architectury.event.events.client.ClientTickEvent.CLIENT_POST.register(minecraft -> {
+            com.theplumteam.client.worldcontent.FilePicker.tick();
+            com.theplumteam.client.worldcontent.ClientWorldUploads.tick();
+        });
 
         BlockPopsMod.logDebug("BlockPops client networking initialized");
     }

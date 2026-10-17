@@ -5,6 +5,7 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.util.ResourceLocations;
 import com.theplumteam.util.ServerLevels;
+import com.theplumteam.worldcontent.WorldContentIds;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
@@ -54,6 +55,13 @@ public class SetCollectionHiddenPacket {
                 if (!ServerLevels.hasCommandLevel(player, 2)) {
                     LOGGER.warn("Player {} tried to change collection visibility without permission",
                             player.getName().getString());
+                    return;
+                }
+
+                // World collections are hidden per world by archiving them, never in the global list
+                if (packet.hidden && WorldContentIds.isWorldCollectionId(packet.collectionId)) {
+                    LOGGER.warn("Player {} tried to hide World collection {}; archive it instead",
+                            player.getName().getString(), packet.collectionId);
                     return;
                 }
 

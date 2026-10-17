@@ -483,6 +483,15 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         this.colorOverride = color != null ? color.getSerializedName() : null;
     }
 
+    /**
+     * Drops the plain color an item gave this render entity, so the box draws its
+     * collection's own texture as a placed box does. Only for item rendering: the box is
+     * not marked changed.
+     */
+    public void clearColorForItemRendering() {
+        this.colorOverride = null;
+    }
+
     private void loadFields(FieldSource source) {
         this.isOpen = source.getBoolean("IsOpen", false);
         this.figureId = source.getString("FigureId", this.figureId);

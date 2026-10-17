@@ -3,9 +3,11 @@ package com.theplumteam.client.renderer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.theplumteam.block.BoxBlock;
+import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.item.BoxBlockItem;
 import com.theplumteam.item.GeoBlockItem;
+import com.theplumteam.worldcontent.WorldContentIds;
 //? if >=1.21 {
 /*import com.theplumteam.item.BlockEntityItemData;
 *///? }
@@ -28,6 +30,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.Nullable;
 
 public class BoxBlockItemRenderer
     //? if >=1.21.4 {
@@ -46,6 +49,18 @@ public class BoxBlockItemRenderer
             renderEntity.resetForItemRendering(boxItem.getCollectionId(), boxItem.getColor());
         } else {
             renderEntity.resetForItemRendering(null, null);
+        }
+    }
+
+    // A drawn box of a World collection is the plain default box item with the collection in
+    // its tag. Unless the tag names a color itself, it shows the collection's box art, as the
+    // same box placed in the world does. Custom and built-in boxes keep their item's color.
+    private void useCollectionBoxArt(GeoBlockItem item, @Nullable CompoundTag blockEntityTag) {
+        if (item instanceof BoxBlockItem boxItem && boxItem.getCollectionId() == null
+                && boxItem.getColor() == PopBlockColor.ORIGINAL
+                && (blockEntityTag == null || !blockEntityTag.contains("Color"))
+                && WorldContentIds.isWorldCollectionId(renderEntity.getCollectionId())) {
+            renderEntity.clearColorForItemRendering();
         }
     }
 
@@ -103,8 +118,9 @@ public class BoxBlockItemRenderer
                 renderEntity.loadForItemRendering(new CompoundTag());
             }
             *///? } else {
+            CompoundTag blockEntityTag = null;
             if (stack.hasTag()) {
-                CompoundTag blockEntityTag = stack.getTagElement("BlockEntityTag");
+                blockEntityTag = stack.getTagElement("BlockEntityTag");
                 if (blockEntityTag != null) {
                     renderEntity.load(blockEntityTag);
                 }
@@ -114,6 +130,7 @@ public class BoxBlockItemRenderer
                 renderEntity.load(new CompoundTag());
             }
             //? }
+            useCollectionBoxArt(geoBlockItem, blockEntityTag);
 
             // Apply transformations for item rendering
             poseStack.pushPose();
@@ -242,6 +259,7 @@ public class BoxBlockItemRenderer
         } else if (stack.getComponentsPatch().isEmpty()) {
             renderEntity.loadForItemRendering(new CompoundTag());
         }
+        useCollectionBoxArt(geoBlockItem, blockEntityTag);
         return true;
     }
 

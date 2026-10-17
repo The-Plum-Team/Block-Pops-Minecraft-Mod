@@ -286,6 +286,130 @@ downloaded:
 The definition may name only those files, plus the default figure model and the shared poses. Every
 file is checked against its manifest hash, so a file uploaded again needs the manifest regenerated.
 
+## World Collections
+
+World collections are made in game by an operator (permission level 2) from their own files, and
+belong to one world. They need no CDN and no access code: the server stores the files and sends
+them to every player who joins. Their ids are `w-<slug>`, where the slug is 1 to 24 characters of
+`a-z`, `0-9` and `_`, chosen when the collection is created and never changed.
+
+### Making one in game
+
+Open a claw machine's Settings and choose the **Creator** tab (shown to operators once the server
+has sent its World collections, even when it has none), then **Open creator**. The list shows every World collection of the world:
+
+- create one from a slug and a name;
+- **Edit** opens the collection: its name, author, background colour, box and logo on the left,
+  and its figures on the right, with **Add figure**, **Edit figure** and **Retire**/**Restore**;
+- **Archive** (click twice) takes the collection out of every machine, while boxes and figures
+  already in the world keep showing; **Restore** offers it again;
+- **Unlock** gives you every figure of the collection, like the Cheats tab does for bundled ones.
+
+Each file button opens your system's file dialog. If no dialog appears (for example on a Linux
+desktop without one, or behind a fullscreen window), click the button anyway to choose where the
+file goes, then drag the file onto the game window or type its full path and press **Use path**.
+Nothing is sent until you press **Save**; the file's name and your local path never leave your
+computer, and PNG metadata is removed before upload.
+
+### Files
+
+| File | Rules |
+|---|---|
+| Skin (a skin figure's texture) | PNG, exactly 64×64, at most 64 KiB |
+| Box texture | PNG, exactly 64×64 in the `box_block` layout, at most 64 KiB; or one of the 16 plain box colours |
+| Logo | PNG, 16 to 512 px per side, at most 256 KiB |
+| Model texture (a 3D model figure's texture) | PNG, 16 to 512 px per side, at most 512 KiB, in the proportions of the model's `texture_width:texture_height` |
+| Model | Bedrock `.geo.json` from Blockbench, at most 512 KiB, 128 bones and 2048 cubes, every value within ±64 px |
+| Animation (optional, 3D model figures only) | Bedrock `.animation.json`, at most 256 KiB and 4096 keyframes, with a `Pose_Stand` animation and optionally `Pose_Sit` |
+
+PNGs may use any colour type with 8 bits per channel, or a palette or greyscale of 1 to 8 bits;
+16-bit PNGs and animated PNGs are refused. Models may not use `poly_mesh` or `texture_meshes`.
+Animations may only hold numbers: Molang expressions, sounds, particles and timelines are refused,
+time keys are plain numbers in ascending order, and a looping animation needs a length (for
+example `"animation_length": 0.05`).
+
+A skin figure uses the default figure model and the shared poses. A 3D model figure without its
+own animation uses the shared poses and keeps standing; with a `Pose_Sit` animation it can sit
+like a bundled figure. A figure's scale is one of 0.5, 0.75, 1, 1.25, 1.5 and 2. A 3D model figure
+is first fitted to its box from the rest pose of its model, whatever units it was built in: about as
+tall as the bundled 3D figures, centred, with its feet on the floor of the box and its front behind
+the window. Its scale then multiplies that fit, in the box, in hand, as a placed figure and in the
+collection screen.
+
+A world holds at most 32 World collections of at most 128 figures each (retired ones included),
+1024 files and 64 MiB of files; one collection may use at most 16 MiB. Everything the collections
+use together may hold at most 8,388,608 texture pixels, 16,384 cubes and 65,536 keyframes.
+
+### Retiring, archiving and purging
+
+Figures and collections are never deleted from the editor, because boxes in the world still name
+them. A retired figure and every figure of an archived collection can no longer be drawn,
+unlocked or given, but placed and held ones keep showing. Purging deletes a collection for good,
+only by command, and its id can never be used again in that world; its boxes then show empty.
+
+### Commands
+
+Every command needs permission level 2.
+
+```
+/blockpops worldcollections list | quota | gc
+/blockpops worldcollections create <slug> <name>
+/blockpops worldcollections rename <id> <name>
+/blockpops worldcollections author <id> <author>
+/blockpops worldcollections color <id> <r> <g> <b>
+/blockpops worldcollections boxcolor <id> <color|none>
+/blockpops worldcollections archive <id>
+/blockpops worldcollections restore <id>
+/blockpops worldcollections figure retire|restore <id> <figure>
+/blockpops worldcollections importpack <slug> "<namespace>:<path>"
+/blockpops worldcollections purge <id> <id>
+```
+
+`gc` deletes files no collection uses that were uploaded more than a day ago; the server also does
+this when it starts.
+
+### Importing from a datapack
+
+Server administrators without the editor can ship a collection in a datapack and import it with
+`importpack`. The pack lives under `data/<namespace>/blockpops_world_collections/<path>/`, where
+`<path>` is 1 to 32 characters of `a-z`, `0-9` and `_`:
+
+```
+collection.json
+box.png                        (optional)
+logo.png                       (optional)
+figures/<figure id>/texture.png
+figures/<figure id>/model.geo.json              (3D model figures)
+figures/<figure id>/animation.animation.json    (optional, 3D model figures)
+```
+
+```json
+{
+  "name": "My Set",
+  "author": "Neb",
+  "background_color": [152, 48, 167],
+  "box_color": "red",
+  "figures": [
+    {"id": "luffy", "name": "Luffy", "kind": "skin"},
+    {"id": "robot", "name": "Robot", "kind": "model", "scale": 1.5}
+  ]
+}
+```
+
+`box_color` (a plain box colour) and `box.png` are alternatives; give at most one. No other key is
+accepted. Importing the same pack again changes nothing, and a figure the pack no longer lists is
+retired, not deleted. The files are checked exactly as uploads are.
+
+### Where it is stored
+
+The world keeps its World collections in `data/blockpops-world-collections.json` (with a `.bak`
+copy of the previous version) and the files in `data/blockpops-world-collections/blobs/`, named by
+their SHA-256. If the file cannot be read at start, or a stored file was damaged, the server says
+so in its log: a damaged file is moved to `data/blockpops-world-collections/corrupt/` and its figure shows as the default figure
+until the same file is uploaded again, and an unreadable store leaves every World collection
+read-only until the files are fixed and the server restarts. Players keep downloaded files only in
+memory, until they leave the server.
+
 ## Troubleshooting
 
 **Collection not loading?**

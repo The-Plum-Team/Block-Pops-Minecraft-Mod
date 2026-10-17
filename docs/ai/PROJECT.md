@@ -23,7 +23,11 @@ follow-up pull request (#11). `site/mod-base.json` no longer defers it or any ot
   [`docs/visual-review.md`](../visual-review.md) owns the advisory AI review.
 - `docs/architecture/decisions/` records evidence-backed architectural decisions;
   [ADR 0001](../architecture/decisions/0001-adopt-mod-base-public-evidence.md) records the
-  adoption of mod-base public evidence.
+  adoption of mod-base public evidence,
+  [ADR 0002](../architecture/decisions/0002-load-custom-collections-at-runtime.md) runtime Custom
+  collections and
+  [ADR 0003](../architecture/decisions/0003-accept-operator-uploaded-world-collections.md)
+  operator-uploaded World collections.
 - `site/mod-base.json` and `scripts/pages/mod_base_adapter.py` connect this repository to the
   mod-base public-evidence kit; `scripts/ci/mod_base_kit.py` finds the pinned kit.
 
@@ -82,15 +86,33 @@ default, JDK 25 call-site resolution outgrows the committed stack of a worker th
 development game dies with an access violation, leaving no crash report.
 
 Custom collections ([ADR 0002](../architecture/decisions/0002-load-custom-collections-at-runtime.md))
-are the one path by which the game loads content that does not ship with it. That content is
-untrusted, and only `com.theplumteam.remote` fetches it: from the single fixed CDN origin, by
-allowlisted per-collection paths in the `blockpops` namespace, under the limits in `RemoteLimits`,
-kept only once its manifest SHA-256 matches, and parsed with `StrictJson`. Do not add another
-origin, a URL from a server, packet or file, or a path outside `RemotePaths`. A Custom definition
-passes `CustomCollectionCheck` on both sides before registration. Its assets are served only by the
+are one of the two paths by which the game loads content that does not ship with it; World
+collections are the other. That content is untrusted, and only `com.theplumteam.remote` fetches
+Custom content: from the single fixed CDN origin, by allowlisted per-collection paths in the
+`blockpops` namespace, under the limits in `RemoteLimits`, kept only once its manifest SHA-256
+matches, and parsed with `StrictJson`. For Custom content, do not add another origin, a URL from a
+server, packet or file, or a path outside `RemotePaths`. A Custom definition passes
+`CustomCollectionCheck` on both sides before registration. Its assets are served only by the
 runtime registries in `client.runtime`, which the figure models consult before GeckoLib, and are
 never written into GeckoLib's caches. They travel only in `SyncCustomCollectionsPacket`, never in
 the shared collection sync. CI never contacts the CDN.
+
+World collections
+([ADR 0003](../architecture/decisions/0003-accept-operator-uploaded-world-collections.md)) are
+authored in game by operators at level 2, which the server re-checks for every packet. Their files
+come only from that operator's upload in `WorldUpload*Packet`s or from a datapack's
+`blockpops_world_collections/` directory; never from a URL, the CDN or a path a server names.
+`com.theplumteam.worldcontent` validates every file (`PngValidator`, `GeoJsonCheck`,
+`AnimationJsonCheck`, `StrictJson`) and every definition (`WorldCollectionCheck`) on the server and
+again on the client, under the byte quotas and decoded budgets in `WorldContentLimits`. The server
+alone applies the per-player rate limits in `server.worldcollections.WorldRateLimits` and the
+upload concurrency caps and timeouts in `WorldUploads`. They are stored content-addressed under
+`<world>/data/blockpops-world-collections/` and travel only in `SyncWorldCollectionsPacket` and
+`WorldAssetChunkPacket`, never in the shared collection sync, the Custom packet or
+`blockpops-cache/`. Their ids are `w-<slug>`, and the shared sync refuses them on both sides. Their
+assets are served only by the runtime registries in `client.runtime` under ids `WorldContentIds`
+owns, are never written into GeckoLib's caches, are refused when a bundled resource has the same
+id, and are left alone by `RuntimeAssets.clear()`.
 
 ## Trust model
 

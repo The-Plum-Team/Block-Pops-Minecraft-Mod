@@ -21,7 +21,9 @@ import org.lwjgl.opengl.GL11;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * Black-and-white copies of figure textures, for previewing a figure the player has not
@@ -61,8 +63,7 @@ public class GreyedTextures {
                 return new Copy(null, remakeAt);
             }
 
-            ResourceLocation greyed = ResourceLocations.of(BlockPopsMod.MOD_ID,
-                    "greyed/" + texture.getNamespace() + "/" + texture.getPath());
+            ResourceLocation greyed = greyedId(texture);
             //? if >=1.21.5 {
             /*mc.getTextureManager().register(greyed, new DynamicTexture(greyed::toString, image));
             *///? } else {
@@ -73,6 +74,28 @@ public class GreyedTextures {
             BlockPopsMod.LOGGER.warn("Could not grey out texture {}: {}", texture, e.toString());
             return new Copy(null, remakeAt);
         }
+    }
+
+    /**
+     * Releases the copies of the textures that match and forgets them, as when those
+     * textures go away. Render thread only.
+     */
+    public static void forget(Predicate<ResourceLocation> source) {
+        Minecraft mc = Minecraft.getInstance();
+        Iterator<ResourceLocation> textures = GREYED.keySet().iterator();
+        while (textures.hasNext()) {
+            ResourceLocation texture = textures.next();
+            if (source.test(texture)) {
+                // A failed remake keeps no location but may leave an earlier copy registered
+                mc.getTextureManager().release(greyedId(texture));
+                textures.remove();
+            }
+        }
+    }
+
+    private static ResourceLocation greyedId(ResourceLocation texture) {
+        return ResourceLocations.of(BlockPopsMod.MOD_ID,
+                "greyed/" + texture.getNamespace() + "/" + texture.getPath());
     }
 
     private static NativeImage fromResource(Minecraft mc, ResourceLocation texture) throws IOException {
