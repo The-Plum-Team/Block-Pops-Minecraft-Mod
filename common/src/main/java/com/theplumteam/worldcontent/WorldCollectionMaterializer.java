@@ -73,7 +73,8 @@ public final class WorldCollectionMaterializer {
         if (figure.kind() == WorldCollectionRecord.Kind.SKIN) {
             return new FigureDefinition(figure.id(), figure.name(), FigureDefinition.DEFAULT_MODEL, texture,
                     FIGURE_ANIMATION, List.of(),
-                    new FigureDefinition.RenderOptions(null, scale, scale, null, null, null, false, List.of(), List.of()),
+                    new FigureDefinition.RenderOptions(null, scale, scale, null, null, null, false, List.of(), List.of(),
+                            List.of()),
                     false, enabled);
         }
         ResourceLocation poses = figure.animation() != null ? WorldContentIds.animation(figure.animation()) : null;
@@ -91,7 +92,7 @@ public final class WorldCollectionMaterializer {
                 FIGURE_ANIMATION, List.of(),
                 new FigureDefinition.RenderOptions(poses, fitted, guiScale, null,
                         bounds.equals(ModelBounds.NONE) ? null : offset(bounds, fitted), false, poseLocked,
-                        List.of(), List.of()),
+                        List.of(), List.of(), List.of()),
                 false, enabled);
     }
 
