@@ -2,10 +2,14 @@ package com.theplumteam.client.gui.widget;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
+import com.theplumteam.client.gui.util.GuiPose;
 import com.theplumteam.client.gui.util.GuiScaleManager;
+import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.worldcontent.WorldCollectionRecord;
+import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
@@ -17,6 +21,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 
+import java.util.Locale;
+
 /**
  * Individual entry in the collection list widget
  */
@@ -27,6 +33,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
     private static final int PADDING = 4;
     private static final int TOP_PADDING = 12; // Extra padding at the top
     private static final int LOGO_MAX_SIZE = 56; // Maximum size of the logo image
+    private static final int MONOGRAM_SIZE = 40; // The tile drawn in place of a missing logo
 
     // Link button state
     private static final int LINK_BUTTON_SIZE = 14; // Square button like the reference
@@ -170,6 +177,8 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
                     textureWidth, textureHeight,
                     textureWidth, textureHeight);
             //? }
+        } else {
+            drawMonogram(graphics, logoContainerX, y, logoContainerWidth, entryHeight, scale);
         }
 
         // Draw collection name
@@ -190,6 +199,10 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         Component authorText;
         if ("world_players".equals(collection.getId())) {
             authorText = Component.literal("Auto-generated skins")
+                .withStyle(ChatFormatting.GOLD);
+        } else if (isUnsignedWorldCollection()) {
+            // An operator made it in this world and gave no author; "multiple creators" would be wrong
+            authorText = Component.translatable("blockpops.world_collections.created_in_world")
                 .withStyle(ChatFormatting.GOLD);
         } else if (author.equals("Unknown")) {
             authorText = Component.literal("Collection with multiple creators")
@@ -328,6 +341,62 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         return false;
     }
     //? }
+
+    /**
+     * Draws a tile in the collection's own colour with its initials where its logo would be,
+     * for a collection without one, as a World collection may be.
+     */
+    private void drawMonogram(GuiGraphics graphics, int containerX, int y, int containerWidth, int entryHeight,
+                              float scale) {
+        int size = Math.min(containerWidth, (int) (MONOGRAM_SIZE * scale));
+        int tileX = containerX + (containerWidth - size) / 2;
+        int tileY = y + (entryHeight - size) / 2;
+        int[] rgb = collection.getBackgroundColor();
+        int red = rgb != null && rgb.length == 3 ? rgb[0] & 0xFF : 0x40;
+        int green = rgb != null && rgb.length == 3 ? rgb[1] & 0xFF : 0x40;
+        int blue = rgb != null && rgb.length == 3 ? rgb[2] & 0xFF : 0x40;
+        graphics.fill(tileX, tileY, tileX + size, tileY + size, 0xFF000000 | (red << 16) | (green << 8) | blue);
+        graphics.renderOutline(tileX, tileY, size, size, 0x60FFFFFF);
+
+        String initials = initials(collection.getName());
+        if (initials.isEmpty()) {
+            return;
+        }
+        // Dark letters on a light colour, light ones with a shadow on a dark colour
+        boolean light = red * 299 + green * 587 + blue * 114 > 160_000;
+        float textScale = size / 20.0f;
+        GuiPose.push(graphics);
+        GuiPose.translate(graphics, tileX + size / 2.0f, tileY + size / 2.0f);
+        GuiPose.scale(graphics, textScale, textScale);
+        graphics.drawString(mc.font, initials, -mc.font.width(initials) / 2, -4,
+                light ? 0xFF202020 : 0xFFFFFFFF, !light);
+        GuiPose.pop(graphics);
+    }
+
+    /** The first letter or digit of the first two words of a name, in capitals. */
+    static String initials(String name) {
+        StringBuilder initials = new StringBuilder();
+        for (String word : name.trim().split("\\s+")) {
+            if (word.isEmpty() || !Character.isLetterOrDigit(word.codePointAt(0))) {
+                continue;
+            }
+            initials.appendCodePoint(word.codePointAt(0));
+            if (initials.codePointCount(0, initials.length()) == 2) {
+                break;
+            }
+        }
+        return initials.toString().toUpperCase(Locale.ROOT);
+    }
+
+    /** Whether this is a World collection whose operator left the author empty. */
+    private boolean isUnsignedWorldCollection() {
+        if (!WorldContentIds.isWorldCollectionId(collection.getId())) {
+            return false;
+        }
+        // The collection stands in for an empty author with "Unknown"; the record says what was typed
+        WorldCollectionRecord record = ClientWorldCollections.record(collection.getId());
+        return record != null ? record.author().isEmpty() : "Unknown".equals(collection.getAuthor());
+    }
 
     @Override
     public Component getNarration() {

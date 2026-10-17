@@ -67,6 +67,15 @@ every file it serves. `-Pplum.mavenMirror=false` (or `ORG_GRADLE_PROJECT_plum.ma
 in the environment) is the emergency switch: it leaves the mirror out of both places, so every
 group resolves from its upstream repositories.
 
+Google's mirror of Maven Central (`https://maven-central.storage-download.googleapis.com/maven2/`)
+follows Maven Central under the same content filter: in `settings.gradle` after the plugin portal,
+which redirects every non-plugin artifact to Central, and through `gradle/repository-policy.gradle`
+right after the Central repository Loom declares. A transient 404 from Central then falls through
+to the same path there. The verification checksums name artifacts, not repositories, so it needs no
+new metadata. The Gradle wrapper downloads its distribution from GitHub's release mirror
+(`github.com/gradle/gradle-distributions`), whose zip has the same SHA-256 as the
+`services.gradle.org` one that `distributionSha256Sum` pins.
+
 Two deterministic gates are authoritative. On ordinary PRs into `master`, branch
 protection must require their protected App-authenticated bridge contexts, not a
 check run created from candidate-controlled workflow YAML:

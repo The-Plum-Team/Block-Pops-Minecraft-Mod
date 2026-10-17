@@ -101,13 +101,17 @@ public class FigureDefinition {
      * @param poseLocked    whether the figure keeps its pose instead of cycling on use
      * @param hiddenBones   bones of the figure's model that are not drawn
      * @param extraTextures textures some bones of the figure's model are drawn with
+     * @param poses         the figure's own poses, by their names in its pose animation, which
+     *                      using the figure cycles through between standing and sitting
      */
     public record RenderOptions(@Nullable ResourceLocation poseAnimation, float scale, float guiScale,
                                 @Nullable float[] boxFaceUv, @Nullable float[] offset,
                                 @Nullable Boolean showBoxFace, boolean poseLocked,
-                                List<String> hiddenBones, List<ExtraTexture> extraTextures) {
+                                List<String> hiddenBones, List<ExtraTexture> extraTextures, List<String> poses) {
         public static final RenderOptions DEFAULT = new RenderOptions(null, 1.0f, 1.0f, null, null, null, false,
-                List.of(), List.of());
+                List.of(), List.of(), List.of());
+        public static final String STAND_POSE = "Pose_Stand";
+        public static final String SIT_POSE = "Pose_Sit";
         private static final String[] OFFSET_KEYS = {"offset_x", "offset_y", "offset_z"};
 
         static RenderOptions fromJson(JsonObject json) {
@@ -134,7 +138,21 @@ public class FigureDefinition {
                 }
             }
             return new RenderOptions(poseAnimation, scale, guiScale, readBoxFaceUv(json), offset,
-                    showBoxFace, poseLocked, readStrings(json, "hidden_bones"), List.copyOf(extraTextures));
+                    showBoxFace, poseLocked, readStrings(json, "hidden_bones"), List.copyOf(extraTextures),
+                    readStrings(json, "poses"));
+        }
+
+        /** How many poses using the figure cycles through: standing, its own poses, then sitting. */
+        public int poseCount() {
+            return poses.size() + 2;
+        }
+
+        /** The animation of a pose in that cycle; an index out of it stands. */
+        public String poseName(int index) {
+            if (index <= 0 || index >= poseCount()) {
+                return STAND_POSE;
+            }
+            return index == poseCount() - 1 ? SIT_POSE : poses.get(index - 1);
         }
 
         void toJson(JsonObject json) {
@@ -162,6 +180,7 @@ public class FigureDefinition {
                 json.addProperty("pose_locked", true);
             }
             writeStrings(json, "hidden_bones", hiddenBones);
+            writeStrings(json, "poses", poses);
             if (!extraTextures.isEmpty()) {
                 JsonArray array = new JsonArray();
                 extraTextures.forEach(extra -> array.add(extra.toJson()));
@@ -261,6 +280,17 @@ public class FigureDefinition {
                            ResourceLocation texturePath, ResourceLocation animationPath,
                            List<AlternativeSkin> alternatives, RenderOptions renderOptions,
                            boolean special) {
+        this(id, name, modelPath, texturePath, animationPath, alternatives, renderOptions, special, true);
+    }
+
+    /**
+     * Constructor for static figures that an operator may have retired, as World
+     * collection figures can be
+     */
+    public FigureDefinition(String id, String name, ResourceLocation modelPath,
+                           ResourceLocation texturePath, ResourceLocation animationPath,
+                           List<AlternativeSkin> alternatives, RenderOptions renderOptions,
+                           boolean special, boolean enabled) {
         this.id = id;
         this.name = name;
         this.modelPath = modelPath;
@@ -270,7 +300,7 @@ public class FigureDefinition {
         this.playerUUID = null;
         this.alternatives = new ArrayList<>(alternatives);
         this.favoriteColor = null; // Static figures don't have favorite colors
-        this.enabled = true;
+        this.enabled = enabled;
         this.special = special;
         this.renderOptions = renderOptions;
     }
@@ -471,8 +501,9 @@ public class FigureDefinition {
     }
 
     /**
-     * Whether this figure can still be granted and listed. Only World Players figures
-     * can be disabled; a disabled one stays defined so existing boxes and figures resolve.
+     * Whether this figure can still be granted and listed. Only World Players figures and
+     * World collection figures can be disabled; a disabled one stays defined so existing
+     * boxes and figures resolve.
      */
     public boolean isEnabled() {
         return enabled;

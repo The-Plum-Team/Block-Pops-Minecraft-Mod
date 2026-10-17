@@ -113,6 +113,33 @@ pluginManagement {
                 excludeGroupByRegex('net\\.neoforged(\\..*)?')
             }
         }
+        // The portal answers every artifact that is not a plugin with a redirect to Maven Central.
+        // Google's mirror of Central follows it under the same filter, so a transient 404 from
+        // Central to one runner falls through to the same path here. The checksums in
+        // gradle/verification-metadata.xml name artifacts, not repositories: every file it serves
+        // is verified exactly as one from Central.
+        maven {
+            name = 'GoogleMavenCentralMirror'
+            url = 'https://maven-central.storage-download.googleapis.com/maven2/'
+            mavenContent { releasesOnly() }
+            content {
+                excludeModule('dev.kikugie.stonecutter', 'dev.kikugie.stonecutter.gradle.plugin')
+                excludeModule('dev.kikugie', 'stonecutter')
+                excludeGroup('loom')
+                excludeGroup('net.minecraft')
+                excludeGroupByRegex('net\\.minecraftforge\\.[0-9a-f]{64}')
+                excludeGroupByRegex('net\\.neoforged\\.fancymodloader\\.[0-9a-f]{64}')
+                excludeGroupByRegex('remapped\\..+')
+                excludeGroupByRegex('net\\.fabricmc(\\..*)?')
+                excludeGroupByRegex('dev\\.architectury(\\..*)?')
+                excludeGroup('architectury-plugin')
+                excludeGroup('com.github.architectury')
+                excludeGroupByRegex('net\\.minecraftforge(\\..*)?')
+                excludeGroupByRegex('de\\.oceanlabs\\.mcp(\\..*)?')
+                excludeGroupByRegex('org\\.spongepowered(\\..*)?')
+                excludeGroupByRegex('net\\.neoforged(\\..*)?')
+            }
+        }
     }
 }
 

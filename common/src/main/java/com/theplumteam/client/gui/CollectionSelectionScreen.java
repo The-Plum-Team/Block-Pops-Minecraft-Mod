@@ -25,17 +25,21 @@ import com.theplumteam.client.gui.widget.CollectionEntry;
 import com.theplumteam.client.gui.widget.CollectionListWidget;
 import com.theplumteam.client.gui.widget.FigureEntry;
 import com.theplumteam.client.gui.widget.FigureListWidget;
+import com.theplumteam.client.gui.widget.TabButton;
 import com.theplumteam.client.gui.widget.LinkButton;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.client.token.ClientTokenManager;
+import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.network.ClawMachineCollectionPacket;
 import com.theplumteam.network.DropBoxPacket;
 import com.theplumteam.network.TokenType;
+import com.theplumteam.registry.ModItems;
 import com.theplumteam.server.SpecialAccess;
 import com.theplumteam.util.ResourceLocations;
+import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -44,6 +48,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -60,11 +65,16 @@ public class CollectionSelectionScreen extends Screen {
     private static final Logger LOGGER = LoggerFactory.getLogger(CollectionSelectionScreen.class);
 
     private final BlockPos blockPos;
-    private final boolean plush;
+    // Which tab is open: the plush collections or the figure ones. Either machine shows both.
+    private boolean plush;
     private String selectedCollectionId;
-    private final List<FigureCollection> collections;
+    // The selection the other tab keeps until it opens again
+    private String otherTabSelection = "";
+    private List<FigureCollection> collections;
     // Revision of the server's hidden collections the list was last built from
     private int shownHiddenRevision;
+    // Revision of the server's World collections the list was last built from
+    private int shownWorldRevision = ClientWorldCollections.revision();
 
     // Widgets
     @Nullable
@@ -74,6 +84,8 @@ public class CollectionSelectionScreen extends Screen {
     private Button useRegularButton;
     private Button useSpecialButton;
     private Button doneButton;
+    @Nullable
+    private TabButton.Folder selectedTab;
 
     // Panel dimensions
     private int panelX;
@@ -122,25 +134,17 @@ public class CollectionSelectionScreen extends Screen {
         this(blockPos, currentCollectionId, false);
     }
 
-    /** With plush set this is the gacha machine's menu: the same screen over the plush collections. */
+    /**
+     * With plush set this is the gacha machine's menu, which opens on the plush tab. A machine
+     * set to a collection of the other kind opens on that kind's tab instead.
+     */
     public CollectionSelectionScreen(BlockPos blockPos, String currentCollectionId, boolean plush) {
         super(Component.literal(plush ? "Gacha Machine Configuration" : "Claw Machine Configuration"));
         this.blockPos = blockPos;
-        this.plush = plush;
+        this.plush = currentCollectionId == null ? plush
+                : CollectionRegistry.getCollection(currentCollectionId).map(FigureCollection::isPlush).orElse(plush);
         this.selectedCollectionId = currentCollectionId;
-        // Filter out the default collection from the menu
-        this.collections = (plush ? CollectionRegistry.getPlushCollections() : CollectionRegistry.getAllCollections()).stream()
-                .filter(c -> !"default".equals(c.getId()))
-                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
-
-        // Sort collections to show players' collection first
-        this.collections.sort((c1, c2) -> {
-            boolean c1IsPlayers = "world_players".equals(c1.getId());
-            boolean c2IsPlayers = "world_players".equals(c2.getId());
-            if (c1IsPlayers && !c2IsPlayers) return -1;
-            if (!c1IsPlayers && c2IsPlayers) return 1;
-            return 0; // Keep original order for other collections
-        });
+        this.collections = collectionsOf(this.plush);
 
         // Initialize color transition with current background color
         ClientConfig config = ClientConfig.getInstance();
@@ -157,6 +161,51 @@ public class CollectionSelectionScreen extends Screen {
 
         BlockPopsMod.logDebug("CollectionSelectionScreen opened at {} with current collection: {}",
                 blockPos, currentCollectionId);
+    }
+
+    /**
+     * One tab's collections, the World Players one first and this world's own collections
+     * last in the server's order, without the default collection or an archived one.
+     */
+    private static List<FigureCollection> collectionsOf(boolean plush) {
+        List<FigureCollection> list = (plush ? CollectionRegistry.getPlushCollections() : CollectionRegistry.getAllCollections()).stream()
+                .filter(c -> !"default".equals(c.getId()))
+                .filter(c -> !ClientWorldCollections.isArchived(c.getId()))
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        // A stable sort: the other collections keep their order
+        list.sort((c1, c2) -> Integer.compare(sortKey(c1.getId()), sortKey(c2.getId())));
+        return list;
+    }
+
+    // World Players first, then the others, then World collections in the server's order: an
+    // edited one is registered again, so the registry's order is not theirs
+    private static int sortKey(String collectionId) {
+        if ("world_players".equals(collectionId)) {
+            return -1;
+        }
+        return WorldContentIds.isWorldCollectionId(collectionId) ? 1 + Math.max(0, ClientWorldCollections.order(collectionId)) : 0;
+    }
+
+    /**
+     * Opens the other tab, with the selection it had when it was left. A tab opened for the first
+     * time selects its first collection, as a click on it would.
+     */
+    private void switchTab(boolean toPlush) {
+        if (toPlush == plush || FigureDraw.isBusy()) {
+            return;
+        }
+        String leaving = selectedCollectionId == null ? "" : selectedCollectionId;
+        plush = toPlush;
+        selectedCollectionId = otherTabSelection;
+        otherTabSelection = leaving;
+        collections = collectionsOf(plush);
+        rebuildWidgets();
+        if ((selectedCollectionId == null || selectedCollectionId.isEmpty())
+                && collectionListWidget != null && !collectionListWidget.children().isEmpty()) {
+            CollectionEntry first = collectionListWidget.children().get(0);
+            collectionListWidget.setSelected(first);
+            onCollectionSelected(first);
+        }
     }
 
     @Override
@@ -364,6 +413,17 @@ public class CollectionSelectionScreen extends Screen {
                     Component.literal("Support us on Ko-fi to get the special plushes")
             ));
         }
+
+        // Folder tabs on the panel's top edge: the figure collections and the plush ones
+        int panelBg = panelBackgroundColor();
+        Component figuresLabel = Component.literal("Figures");
+        TabButton.Folder figuresTab = new TabButton.Folder(panelX + scaledPadding, panelY, figuresLabel,
+                new ItemStack(ModItems.CLAW_MACHINE_BLOCK_ITEM.get()), !plush, panelBg, button -> switchTab(false));
+        TabButton.Folder plushesTab = new TabButton.Folder(figuresTab.right() + 2, panelY, Component.literal("Plushes"),
+                new ItemStack(ModItems.GACHA_MACHINE_BLOCK_ITEM.get()), plush, panelBg, button -> switchTab(true));
+        this.addRenderableWidget(figuresTab);
+        this.addRenderableWidget(plushesTab);
+        selectedTab = plush ? plushesTab : figuresTab;
     }
 
     /**
@@ -686,6 +746,16 @@ public class CollectionSelectionScreen extends Screen {
      * Render the animated star pattern (OPTIMIZED - pre-tiled texture cache, 1 draw call)
      */
     private void renderStarPattern(GuiGraphics graphics, float partialTick) {
+        int starWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
+        int starHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
+        drawStarPattern(graphics, starWidth, starHeight, partialTick);
+    }
+
+    /**
+     * Draws the scrolling star pattern over an area from the top left corner, in the star
+     * colour and opacity of the client config. The World collection screens draw it too.
+     */
+    static void drawStarPattern(GuiGraphics graphics, int starWidth, int starHeight, float partialTick) {
         double pixelsPerSecond = 5.0;
         int tileSize = StarPatternCache.getTileSize();
 
@@ -694,7 +764,8 @@ public class CollectionSelectionScreen extends Screen {
         /*// 26.2 dropped the GUI tick counter; wall time drives the same scroll.
         double smoothTime = net.minecraft.util.Util.getMillis() / 1000.0;
         *///? } else {
-        int tickCount = this.minecraft != null ? this.minecraft.gui.getGuiTicks() : 0;
+        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        int tickCount = minecraft != null && minecraft.gui != null ? minecraft.gui.getGuiTicks() : 0;
         double smoothTime = (tickCount + partialTick) / 20.0;
         //? }
         double offsetX = (com.theplumteam.util.E2EDeterminism.scrollSeconds(smoothTime) * pixelsPerSecond) % tileSize;
@@ -707,8 +778,6 @@ public class CollectionSelectionScreen extends Screen {
         ResourceLocation cacheTexture = StarPatternCache.getTextureLocation();
         int cacheWidth = StarPatternCache.getTextureWidth();
         int cacheHeight = StarPatternCache.getTextureHeight();
-        int starWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
-        int starHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
 
         //? if >=1.21.6 {
         /*// 1.21.6 selects the GUI shader by render pipeline rather than render type.
@@ -813,21 +882,28 @@ public class CollectionSelectionScreen extends Screen {
      */
     private void renderPanel(GuiGraphics graphics) {
         // Panel background (dark semi-transparent with configurable opacity)
-        ClientConfig config = ClientConfig.getInstance();
-        int alpha = (int)(config.panelOpacity * 255);
-        int panelBgColor = (alpha << 24) | 0x000000;  // Black with configurable alpha
-
         graphics.fill(
                 panelX, panelY,
                 panelX + panelWidth, panelY + panelHeight,
-                panelBgColor
+                panelBackgroundColor()
         );
 
-        // Panel outline (subtle white)
-        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 1, 0x60FFFFFF);
+        // Panel outline (subtle white), open under the selected tab
+        if (selectedTab != null) {
+            graphics.fill(panelX, panelY, selectedTab.left() + 1, panelY + 1, 0x60FFFFFF);
+            graphics.fill(selectedTab.right() - 1, panelY, panelX + panelWidth, panelY + 1, 0x60FFFFFF);
+        } else {
+            graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 1, 0x60FFFFFF);
+        }
         graphics.fill(panelX, panelY + panelHeight - 1, panelX + panelWidth, panelY + panelHeight, 0x60FFFFFF);
         graphics.fill(panelX, panelY + 1, panelX + 1, panelY + panelHeight - 1, 0x60FFFFFF);
         graphics.fill(panelX + panelWidth - 1, panelY + 1, panelX + panelWidth, panelY + panelHeight - 1, 0x60FFFFFF);
+    }
+
+    /** Black with the configured panel opacity. */
+    private static int panelBackgroundColor() {
+        int alpha = (int) (ClientConfig.getInstance().panelOpacity * 255);
+        return alpha << 24;
     }
 
     /**
@@ -849,12 +925,24 @@ public class CollectionSelectionScreen extends Screen {
             }
         }
 
-        // A hidden collection is not offered, so it cannot stay this machine's selection
-        if (selectedCollectionId != null && ClientHiddenCollections.isHidden(selectedCollectionId)) {
+        // A hidden or archived collection is not offered, so it cannot stay this machine's
+        // selection, and neither can a World collection that was removed
+        if (selectedCollectionId != null && (ClientHiddenCollections.isHidden(selectedCollectionId)
+                || ClientWorldCollections.isArchived(selectedCollectionId)
+                || (WorldContentIds.isWorldCollectionId(selectedCollectionId)
+                        && CollectionRegistry.getCollection(selectedCollectionId).isEmpty()))) {
             selectedCollectionId = "";
             if (figureListWidget != null) {
                 figureListWidget.setCollection(null);
             }
+        }
+
+        // An edit registers the collection again: show its figures as they are now
+        if (selectedCollectionId != null && !selectedCollectionId.isEmpty() && figureListWidget != null
+                && figureListWidget.getCurrentCollection() != null && !FigureDraw.isBusy()) {
+            CollectionRegistry.getCollection(selectedCollectionId)
+                    .filter(collection -> collection != figureListWidget.getCurrentCollection())
+                    .ifPresent(figureListWidget::setCollection);
         }
 
         // Select the current collection if it exists
@@ -1009,6 +1097,13 @@ public class CollectionSelectionScreen extends Screen {
         super.tick();
         // Rebuild the list when the server changes its hidden collections
         if (shownHiddenRevision != ClientHiddenCollections.getRevision()) {
+            loadCollections();
+        }
+        // and when its World collections change, which can add, edit or archive one; a
+        // draw in progress keeps the figures it is showing until it ends
+        if (shownWorldRevision != ClientWorldCollections.revision() && !FigureDraw.isBusy()) {
+            shownWorldRevision = ClientWorldCollections.revision();
+            collections = collectionsOf(plush);
             loadCollections();
         }
         FigureDraw.tick();

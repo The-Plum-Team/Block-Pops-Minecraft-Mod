@@ -56,6 +56,22 @@ the service named by `specialAccessApiUrl` in `config/blockpops-server.json`
 and keeps the answer for `specialAccessCacheMinutes`. Set the URL to `""` to
 ask nobody; the special plushes then stay locked for everyone.
 
+## World collections
+
+Operators (permission level 2) can make collections for one world from their
+own skins, box textures, logos and Blockbench models with
+`/blockpops worldcollections`, importing the files from a datapack. The
+**Creator** tab of the claw machine's Settings, which uploads them from your
+computer, is still in progress and appears only in a development environment
+for now. The server
+checks every file, stores it with the world under
+`data/blockpops-world-collections/` and sends it to each player who joins;
+nothing is published anywhere else. A datapack can ship one for `importpack`.
+See [World Collections](COLLECTIONS_GUIDE.md#world-collections) for the file
+rules, limits and commands, and
+[ADR 0003](docs/architecture/decisions/0003-accept-operator-uploaded-world-collections.md)
+for the design.
+
 ## Local verification
 
 Set `BUILD_SCOPE` to `legacy` for a `preparing` matrix or `full` for a `shared`
