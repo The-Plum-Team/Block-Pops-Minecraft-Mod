@@ -296,6 +296,10 @@ them to every player who joins. Their ids are `w-<slug>`, where the slug is 1 to
 
 ### Making one in game
 
+The screens are still in progress: for now the **Creator** tab appears only in a development
+environment (a game started from Gradle or an IDE). Elsewhere, use the [commands](#commands) and
+[import the files from a datapack](#importing-from-a-datapack).
+
 Open a claw machine's Settings and choose the **Creator** tab (shown to operators once the server
 has sent its World collections, even when it has none), then **Open creator**. The list shows every World collection of the world:
 
