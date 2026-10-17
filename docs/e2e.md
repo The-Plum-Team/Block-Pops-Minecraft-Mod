@@ -11,14 +11,18 @@ scenarios run in every matrix lane. The `ui-regression` flow:
    for server persistence and the synchronized `world_players` figure.
 3. The client uses Minecraft's real block-interaction path on a datapack-created
    claw machine and validates the production collection screen.
-4. It opens the real Settings link and asserts packaged server settings are
+4. It presses the real Plushes tab, which selects the first plush collection,
+   and waits until the server has stored that selection on the claw machine.
+5. It opens the real Settings link and asserts packaged server settings are
    present while the development-only Develop tab is absent.
 
 The `in-world` flow shows the mod as a player meets it in the world:
 
 1. After dismissing the first-join prompt, the player opens the claw machine and
    presses the real Use Regular Token control; the server's `DropBoxPacket`
-   delivers a box with a drawn One Piece figure, captured in hand.
+   delivers a box with a drawn One Piece figure. The screen plays the draw out
+   and must show that same figure before the harness closes it; the box is then
+   captured in hand.
 2. The held box is placed through the real block-placement packet and captured
    from the front, the side and above.
 3. A claw machine is put in hand through the creative-inventory packet and

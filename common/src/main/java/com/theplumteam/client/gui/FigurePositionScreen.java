@@ -87,13 +87,35 @@ public class FigurePositionScreen extends Screen {
     private Double logoScaleX;
     private Double logoScaleY;
     private Double logoScaleZ;
+    // A plush block has no box around it: no logo, and its resting placement is all zeros.
+    private final boolean plush;
+
+    /** The screen for a plush block: the figure and hitbox columns, without the logo. */
+    public static FigurePositionScreen forPlush(BlockPos blockPos, double offsetX, double offsetY, double offsetZ, double scale,
+                                                double hitboxOffsetX, double hitboxOffsetY, double hitboxOffsetZ,
+                                                double hitboxScaleX, double hitboxScaleY, double hitboxScaleZ) {
+        return new FigurePositionScreen(blockPos, offsetX, offsetY, offsetZ, scale,
+                hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ, hitboxScaleX, hitboxScaleY, hitboxScaleZ,
+                null, null, null, null, null, null, true);
+    }
 
     public FigurePositionScreen(BlockPos blockPos, double offsetX, double offsetY, double offsetZ, double scale,
                                 double hitboxOffsetX, double hitboxOffsetY, double hitboxOffsetZ,
                                 double hitboxScaleX, double hitboxScaleY, double hitboxScaleZ,
                                 Double logoPositionX, Double logoPositionY, Double logoPositionZ,
                                 Double logoScaleX, Double logoScaleY, Double logoScaleZ) {
-        super(Component.literal("Adjust Figure, Hitbox & Logo"));
+        this(blockPos, offsetX, offsetY, offsetZ, scale,
+                hitboxOffsetX, hitboxOffsetY, hitboxOffsetZ, hitboxScaleX, hitboxScaleY, hitboxScaleZ,
+                logoPositionX, logoPositionY, logoPositionZ, logoScaleX, logoScaleY, logoScaleZ, false);
+    }
+
+    private FigurePositionScreen(BlockPos blockPos, double offsetX, double offsetY, double offsetZ, double scale,
+                                 double hitboxOffsetX, double hitboxOffsetY, double hitboxOffsetZ,
+                                 double hitboxScaleX, double hitboxScaleY, double hitboxScaleZ,
+                                 Double logoPositionX, Double logoPositionY, Double logoPositionZ,
+                                 Double logoScaleX, Double logoScaleY, Double logoScaleZ, boolean plush) {
+        super(Component.literal(plush ? "Adjust Plush & Hitbox" : "Adjust Figure, Hitbox & Logo"));
+        this.plush = plush;
         this.blockPos = blockPos;
         this.offsetX = offsetX;
         this.offsetY = offsetY;
@@ -211,53 +233,55 @@ public class FigurePositionScreen extends Screen {
         addFineTuneButtons(col2X + sliderWidth + 2, startY + 125, () -> { hitboxScaleZ = Math.max(0.5, hitboxScaleZ - 0.01); sendUpdate(); }, () -> { hitboxScaleZ = Math.min(2.0, hitboxScaleZ + 0.01); sendUpdate(); });
 
         // === COLUMN 3: LOGO CONTROLS ===
-        double logoX = logoPositionX != null ? logoPositionX : 0.0;
-        this.addRenderableWidget(new AbstractSliderButton(col3X, startY, sliderWidth, 20,
-                Component.literal("Logo X (Depth): " + String.format("%.2f", logoX)), (logoX + 10.0) / 20.0) {
-            @Override protected void updateMessage() { logoPositionX = (this.value * 20.0) - 10.0; this.setMessage(Component.literal("Logo X (Depth): " + String.format("%.2f", logoPositionX))); sendUpdate(); }
-            @Override protected void applyValue() { logoPositionX = (this.value * 20.0) - 10.0; sendUpdate(); }
-        });
-        addFineTuneButtons(col3X + sliderWidth + 2, startY, () -> { logoPositionX = Math.max(-10.0, (logoPositionX != null ? logoPositionX : 0.0) - 0.001); sendUpdate(); }, () -> { logoPositionX = Math.min(10.0, (logoPositionX != null ? logoPositionX : 0.0) + 0.001); sendUpdate(); });
+        if (!plush) {
+            double logoX = logoPositionX != null ? logoPositionX : 0.0;
+            this.addRenderableWidget(new AbstractSliderButton(col3X, startY, sliderWidth, 20,
+                    Component.literal("Logo X (Depth): " + String.format("%.2f", logoX)), (logoX + 10.0) / 20.0) {
+                @Override protected void updateMessage() { logoPositionX = (this.value * 20.0) - 10.0; this.setMessage(Component.literal("Logo X (Depth): " + String.format("%.2f", logoPositionX))); sendUpdate(); }
+                @Override protected void applyValue() { logoPositionX = (this.value * 20.0) - 10.0; sendUpdate(); }
+            });
+            addFineTuneButtons(col3X + sliderWidth + 2, startY, () -> { logoPositionX = Math.max(-10.0, (logoPositionX != null ? logoPositionX : 0.0) - 0.001); sendUpdate(); }, () -> { logoPositionX = Math.min(10.0, (logoPositionX != null ? logoPositionX : 0.0) + 0.001); sendUpdate(); });
 
-        double logoY = logoPositionY != null ? logoPositionY : 0.0;
-        this.addRenderableWidget(new AbstractSliderButton(col3X, startY + 25, sliderWidth, 20,
-                Component.literal("Logo Y (Vertical): " + String.format("%.2f", logoY)), (logoY + 10.0) / 20.0) {
-            @Override protected void updateMessage() { logoPositionY = (this.value * 20.0) - 10.0; this.setMessage(Component.literal("Logo Y (Vertical): " + String.format("%.2f", logoPositionY))); sendUpdate(); }
-            @Override protected void applyValue() { logoPositionY = (this.value * 20.0) - 10.0; sendUpdate(); }
-        });
-        addFineTuneButtons(col3X + sliderWidth + 2, startY + 25, () -> { logoPositionY = Math.max(-10.0, (logoPositionY != null ? logoPositionY : 0.0) - 0.001); sendUpdate(); }, () -> { logoPositionY = Math.min(10.0, (logoPositionY != null ? logoPositionY : 0.0) + 0.001); sendUpdate(); });
+            double logoY = logoPositionY != null ? logoPositionY : 0.0;
+            this.addRenderableWidget(new AbstractSliderButton(col3X, startY + 25, sliderWidth, 20,
+                    Component.literal("Logo Y (Vertical): " + String.format("%.2f", logoY)), (logoY + 10.0) / 20.0) {
+                @Override protected void updateMessage() { logoPositionY = (this.value * 20.0) - 10.0; this.setMessage(Component.literal("Logo Y (Vertical): " + String.format("%.2f", logoPositionY))); sendUpdate(); }
+                @Override protected void applyValue() { logoPositionY = (this.value * 20.0) - 10.0; sendUpdate(); }
+            });
+            addFineTuneButtons(col3X + sliderWidth + 2, startY + 25, () -> { logoPositionY = Math.max(-10.0, (logoPositionY != null ? logoPositionY : 0.0) - 0.001); sendUpdate(); }, () -> { logoPositionY = Math.min(10.0, (logoPositionY != null ? logoPositionY : 0.0) + 0.001); sendUpdate(); });
 
-        double logoZ = logoPositionZ != null ? logoPositionZ : 0.0;
-        this.addRenderableWidget(new AbstractSliderButton(col3X, startY + 50, sliderWidth, 20,
-                Component.literal("Logo Z (Horizontal): " + String.format("%.2f", logoZ)), (logoZ + 10.0) / 20.0) {
-            @Override protected void updateMessage() { logoPositionZ = (this.value * 20.0) - 10.0; this.setMessage(Component.literal("Logo Z (Horizontal): " + String.format("%.2f", logoPositionZ))); sendUpdate(); }
-            @Override protected void applyValue() { logoPositionZ = (this.value * 20.0) - 10.0; sendUpdate(); }
-        });
-        addFineTuneButtons(col3X + sliderWidth + 2, startY + 50, () -> { logoPositionZ = Math.max(-10.0, (logoPositionZ != null ? logoPositionZ : 0.0) - 0.001); sendUpdate(); }, () -> { logoPositionZ = Math.min(10.0, (logoPositionZ != null ? logoPositionZ : 0.0) + 0.001); sendUpdate(); });
+            double logoZ = logoPositionZ != null ? logoPositionZ : 0.0;
+            this.addRenderableWidget(new AbstractSliderButton(col3X, startY + 50, sliderWidth, 20,
+                    Component.literal("Logo Z (Horizontal): " + String.format("%.2f", logoZ)), (logoZ + 10.0) / 20.0) {
+                @Override protected void updateMessage() { logoPositionZ = (this.value * 20.0) - 10.0; this.setMessage(Component.literal("Logo Z (Horizontal): " + String.format("%.2f", logoPositionZ))); sendUpdate(); }
+                @Override protected void applyValue() { logoPositionZ = (this.value * 20.0) - 10.0; sendUpdate(); }
+            });
+            addFineTuneButtons(col3X + sliderWidth + 2, startY + 50, () -> { logoPositionZ = Math.max(-10.0, (logoPositionZ != null ? logoPositionZ : 0.0) - 0.001); sendUpdate(); }, () -> { logoPositionZ = Math.min(10.0, (logoPositionZ != null ? logoPositionZ : 0.0) + 0.001); sendUpdate(); });
 
-        double scaleX = logoScaleX != null ? logoScaleX : 5.0;
-        this.addRenderableWidget(new AbstractSliderButton(col3X, startY + 75, sliderWidth, 20,
-                Component.literal("Logo Width (X): " + String.format("%.2f", scaleX)), (scaleX - 0.5) / 9.5) {
-            @Override protected void updateMessage() { logoScaleX = 0.5 + (this.value * 9.5); this.setMessage(Component.literal("Logo Width (X): " + String.format("%.2f", logoScaleX))); sendUpdate(); }
-            @Override protected void applyValue() { logoScaleX = 0.5 + (this.value * 9.5); sendUpdate(); }
-        });
-        addFineTuneButtons(col3X + sliderWidth + 2, startY + 75, () -> { logoScaleX = Math.max(0.5, (logoScaleX != null ? logoScaleX : 5.0) - 0.001); sendUpdate(); }, () -> { logoScaleX = Math.min(10.0, (logoScaleX != null ? logoScaleX : 5.0) + 0.001); sendUpdate(); });
+            double scaleX = logoScaleX != null ? logoScaleX : 5.0;
+            this.addRenderableWidget(new AbstractSliderButton(col3X, startY + 75, sliderWidth, 20,
+                    Component.literal("Logo Width (X): " + String.format("%.2f", scaleX)), (scaleX - 0.5) / 9.5) {
+                @Override protected void updateMessage() { logoScaleX = 0.5 + (this.value * 9.5); this.setMessage(Component.literal("Logo Width (X): " + String.format("%.2f", logoScaleX))); sendUpdate(); }
+                @Override protected void applyValue() { logoScaleX = 0.5 + (this.value * 9.5); sendUpdate(); }
+            });
+            addFineTuneButtons(col3X + sliderWidth + 2, startY + 75, () -> { logoScaleX = Math.max(0.5, (logoScaleX != null ? logoScaleX : 5.0) - 0.001); sendUpdate(); }, () -> { logoScaleX = Math.min(10.0, (logoScaleX != null ? logoScaleX : 5.0) + 0.001); sendUpdate(); });
 
-        double scaleY = logoScaleY != null ? logoScaleY : 5.0;
-        this.addRenderableWidget(new AbstractSliderButton(col3X, startY + 100, sliderWidth, 20,
-                Component.literal("Logo Height (Y): " + String.format("%.2f", scaleY)), (scaleY - 0.5) / 9.5) {
-            @Override protected void updateMessage() { logoScaleY = 0.5 + (this.value * 9.5); this.setMessage(Component.literal("Logo Height (Y): " + String.format("%.2f", logoScaleY))); sendUpdate(); }
-            @Override protected void applyValue() { logoScaleY = 0.5 + (this.value * 9.5); sendUpdate(); }
-        });
-        addFineTuneButtons(col3X + sliderWidth + 2, startY + 100, () -> { logoScaleY = Math.max(0.5, (logoScaleY != null ? logoScaleY : 5.0) - 0.001); sendUpdate(); }, () -> { logoScaleY = Math.min(10.0, (logoScaleY != null ? logoScaleY : 5.0) + 0.001); sendUpdate(); });
+            double scaleY = logoScaleY != null ? logoScaleY : 5.0;
+            this.addRenderableWidget(new AbstractSliderButton(col3X, startY + 100, sliderWidth, 20,
+                    Component.literal("Logo Height (Y): " + String.format("%.2f", scaleY)), (scaleY - 0.5) / 9.5) {
+                @Override protected void updateMessage() { logoScaleY = 0.5 + (this.value * 9.5); this.setMessage(Component.literal("Logo Height (Y): " + String.format("%.2f", logoScaleY))); sendUpdate(); }
+                @Override protected void applyValue() { logoScaleY = 0.5 + (this.value * 9.5); sendUpdate(); }
+            });
+            addFineTuneButtons(col3X + sliderWidth + 2, startY + 100, () -> { logoScaleY = Math.max(0.5, (logoScaleY != null ? logoScaleY : 5.0) - 0.001); sendUpdate(); }, () -> { logoScaleY = Math.min(10.0, (logoScaleY != null ? logoScaleY : 5.0) + 0.001); sendUpdate(); });
 
-        double scaleZ = logoScaleZ != null ? logoScaleZ : 1.0;
-        this.addRenderableWidget(new AbstractSliderButton(col3X, startY + 125, sliderWidth, 20,
-                Component.literal("Logo Depth (Z): " + String.format("%.2f", scaleZ)), (scaleZ - 0.5) / 9.5) {
-            @Override protected void updateMessage() { logoScaleZ = 0.5 + (this.value * 9.5); this.setMessage(Component.literal("Logo Depth (Z): " + String.format("%.2f", logoScaleZ))); sendUpdate(); }
-            @Override protected void applyValue() { logoScaleZ = 0.5 + (this.value * 9.5); sendUpdate(); }
-        });
-        addFineTuneButtons(col3X + sliderWidth + 2, startY + 125, () -> { logoScaleZ = Math.max(0.5, (logoScaleZ != null ? logoScaleZ : 1.0) - 0.001); sendUpdate(); }, () -> { logoScaleZ = Math.min(10.0, (logoScaleZ != null ? logoScaleZ : 1.0) + 0.001); sendUpdate(); });
+            double scaleZ = logoScaleZ != null ? logoScaleZ : 1.0;
+            this.addRenderableWidget(new AbstractSliderButton(col3X, startY + 125, sliderWidth, 20,
+                    Component.literal("Logo Depth (Z): " + String.format("%.2f", scaleZ)), (scaleZ - 0.5) / 9.5) {
+                @Override protected void updateMessage() { logoScaleZ = 0.5 + (this.value * 9.5); this.setMessage(Component.literal("Logo Depth (Z): " + String.format("%.2f", logoScaleZ))); sendUpdate(); }
+                @Override protected void applyValue() { logoScaleZ = 0.5 + (this.value * 9.5); sendUpdate(); }
+            });
+            addFineTuneButtons(col3X + sliderWidth + 2, startY + 125, () -> { logoScaleZ = Math.max(0.5, (logoScaleZ != null ? logoScaleZ : 1.0) - 0.001); sendUpdate(); }, () -> { logoScaleZ = Math.min(10.0, (logoScaleZ != null ? logoScaleZ : 1.0) + 0.001); sendUpdate(); });
+        }
 
         // === COPY BUTTONS ===
         int copyButtonY = startY + 160;
@@ -273,7 +297,7 @@ public class FigurePositionScreen extends Screen {
             minecraft.keyboardHandler.setClipboard(data);
         }).bounds(centerX + 5, copyButtonY, copyButtonWidth, 20).build());
 
-        this.addRenderableWidget(Button.builder(Component.literal("Copy Logo"), button -> {
+        if (!plush) this.addRenderableWidget(Button.builder(Component.literal("Copy Logo"), button -> {
             String data = String.format("Logo: X=%.3f Y=%.3f Z=%.3f Width=%.3f Height=%.3f Depth=%.3f",
                     logoPositionX != null ? logoPositionX : 0.0, logoPositionY != null ? logoPositionY : 0.0, logoPositionZ != null ? logoPositionZ : 0.0,
                     logoScaleX != null ? logoScaleX : 5.0, logoScaleY != null ? logoScaleY : 5.0, logoScaleZ != null ? logoScaleZ : 1.0);
@@ -281,8 +305,9 @@ public class FigurePositionScreen extends Screen {
         }).bounds(centerX - 45, copyButtonY + 25, copyButtonWidth, 20).build());
 
         this.addRenderableWidget(Button.builder(Component.literal("Reset All"), button -> {
-            offsetX = 0.0; offsetY = 0.1; offsetZ = 0.0; scale = 1.0;
-            hitboxOffsetX = -0.03; hitboxOffsetY = 0.0; hitboxOffsetZ = -0.06;
+            offsetX = 0.0; offsetY = plush ? 0.0 : 0.1; offsetZ = 0.0; scale = 1.0;
+            hitboxOffsetX = plush ? 0.0 : -0.03; hitboxOffsetY = 0.0; hitboxOffsetZ = plush ? 0.0 : -0.06;
+            if (plush) { hitboxScaleX = 1.0; hitboxScaleY = 1.0; hitboxScaleZ = 1.0; }
             logoPositionX = null; logoPositionY = null; logoPositionZ = null;
             logoScaleX = null; logoScaleY = null; logoScaleZ = null;
             this.rebuildWidgets();
@@ -345,15 +370,15 @@ public class FigurePositionScreen extends Screen {
             }
         }
 
-        guiGraphics.drawCenteredString(this.font, skinTypeText, this.width / 2, 30, skinTypeColor);
+        if (!plush) guiGraphics.drawCenteredString(this.font, skinTypeText, this.width / 2, 30, skinTypeColor);
 
         int centerX = this.width / 2;
         int columnSpacing = 200;
         int headerY = 35;
 
-        guiGraphics.drawCenteredString(this.font, "FIGURE", centerX - columnSpacing, headerY, 0xFFFFD700);
+        guiGraphics.drawCenteredString(this.font, plush ? "PLUSH" : "FIGURE", centerX - columnSpacing, headerY, 0xFFFFD700);
         guiGraphics.drawCenteredString(this.font, "HITBOX", centerX, headerY, 0xFF00FF00);
-        guiGraphics.drawCenteredString(this.font, "LOGO", centerX + columnSpacing, headerY, 0xFF00BFFF);
+        if (!plush) guiGraphics.drawCenteredString(this.font, "LOGO", centerX + columnSpacing, headerY, 0xFF00BFFF);
     }
 
     private ResourceLocation getTextureForFigure(FigureDefinition figure, int skinIndex) {
@@ -372,7 +397,11 @@ public class FigurePositionScreen extends Screen {
 
             GameProfile profile = profileCache.computeIfAbsent(figure.getPlayerUUID(), uuid -> new GameProfile(uuid, figure.getName()));
             if (registeredSkins.add(figure.getPlayerUUID())) {
-                //? if >=1.21 {
+                //? if >=1.21.9 {
+                /*// The populated profile is a new one there, so it replaces the cached one.
+                ClientSkinRegistration.register(profile,
+                        prepared -> profileCache.put(figure.getPlayerUUID(), prepared));
+                *///? } elif >=1.21 {
                 /*ClientSkinRegistration.register(profile);
                 *///? } else {
                 Minecraft.getInstance().getSkinManager().registerSkins(profile, (type, location, p) -> {}, false);

@@ -5,9 +5,9 @@ import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.model.FigureModel;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
+import com.theplumteam.registry.ModBlocks;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.block.Blocks;
 import software.bernie.geckolib.renderer.GeoBlockRenderer;
 
 import java.util.Map;
@@ -108,7 +108,9 @@ public final class FigureWidgetRenderer {
 
         return renderEntityCache.computeIfAbsent(cacheKey, key -> {
             try {
-                BoxBlockEntity entity = new BoxBlockEntity(BlockPos.ZERO, Blocks.AIR.defaultBlockState());
+                // 1.21.1 refuses a block entity on a block its type does not list, so the
+                // preview stands on the box block itself rather than on air.
+                BoxBlockEntity entity = new BoxBlockEntity(BlockPos.ZERO, ModBlocks.BOX_BLOCK.get().defaultBlockState());
 
                 // Set client level for GeckoLib tick delta calculations
                 // Without this, animation controllers may crash when accessing level

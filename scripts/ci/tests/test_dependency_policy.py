@@ -241,6 +241,7 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
             "repo.spongepowered.org/repository/maven-public",
             "dl.cloudsmith.io/public/geckolib3/geckolib/maven",
             "repo.maven.apache.org/maven2",
+            "maven-central.storage-download.googleapis.com/maven2",
             "the-plum-team.github.io/maven-mirror",
         ):
             self.assertEqual(after_hosts.count(f"case '{identity}':"), 1, identity)
@@ -426,14 +427,16 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
     def test_plugin_repositories_are_include_filtered_and_portal_rejects_generated_groups(self) -> None:
         settings = (REPO / "settings.gradle").read_text("utf-8")
         plugin_management = settings.split("plugins {", 1)[0]
-        self.assertEqual(plugin_management.count("mavenContent { releasesOnly() }"), 8)
-        self.assertEqual(plugin_management.count("content {"), 9)
+        self.assertEqual(plugin_management.count("mavenContent { releasesOnly() }"), 9)
+        self.assertEqual(plugin_management.count("content {"), 10)
+        # The portal and Google's mirror of Maven Central behind it reject every generated
+        # namespace; the Forge and NeoForge repositories reject their own hash-named one.
         expected_exclusions = {
-            "excludeGroup('loom')": 1,
-            "excludeGroup('net.minecraft')": 1,
-            "excludeGroupByRegex('net\\\\.minecraftforge\\\\.[0-9a-f]{64}')": 2,
-            "excludeGroupByRegex('net\\\\.neoforged\\\\.fancymodloader\\\\.[0-9a-f]{64}')": 2,
-            "excludeGroupByRegex('remapped\\\\..+')": 1,
+            "excludeGroup('loom')": 2,
+            "excludeGroup('net.minecraft')": 2,
+            "excludeGroupByRegex('net\\\\.minecraftforge\\\\.[0-9a-f]{64}')": 3,
+            "excludeGroupByRegex('net\\\\.neoforged\\\\.fancymodloader\\\\.[0-9a-f]{64}')": 3,
+            "excludeGroupByRegex('remapped\\\\..+')": 2,
         }
         for exclusion, count in expected_exclusions.items():
             self.assertEqual(plugin_management.count(exclusion), count, exclusion)
@@ -447,7 +450,8 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
         for exclusion in PLUGIN_ONLY_EXCLUSIONS:
             inclusion = exclusion.replace("excludeModule", "includeModule", 1)
             self.assertEqual(settings.count(inclusion), 1)
-            self.assertEqual(settings.count(exclusion), 1)
+            # The plugin portal and Google's mirror of Maven Central behind it.
+            self.assertEqual(settings.count(exclusion), 2)
             self.assertEqual(policy.count(exclusion), 1)
             with self.assertRaises(DependencyPolicyError):
                 validate_settings_text(settings.replace(exclusion, "", 1))

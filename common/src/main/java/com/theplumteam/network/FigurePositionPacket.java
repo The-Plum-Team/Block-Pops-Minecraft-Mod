@@ -2,6 +2,7 @@ package com.theplumteam.network;
 
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.blockentity.BoxBlockEntity;
+import com.theplumteam.blockentity.PlushBlockEntity;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
@@ -142,6 +143,11 @@ public class FigurePositionPacket {
                     boxBlockEntity.setLogoScale(packet.logoScaleX, packet.logoScaleY, packet.logoScaleZ);
                     boxBlockEntity.setChanged();
                     BlockPopsMod.logDebug("Figure position updated successfully");
+                } else if (blockEntity instanceof PlushBlockEntity plushBlockEntity) {
+                    // A plush has no logo; it takes the figure and hitbox columns only
+                    plushBlockEntity.setPlacement(packet.offsetX, packet.offsetY, packet.offsetZ, packet.scale,
+                            packet.hitboxOffsetX, packet.hitboxOffsetY, packet.hitboxOffsetZ,
+                            packet.hitboxScaleX, packet.hitboxScaleY, packet.hitboxScaleZ);
                 } else {
                     LOGGER.warn("BlockEntity at {} is not a BoxBlockEntity", packet.pos);
                 }

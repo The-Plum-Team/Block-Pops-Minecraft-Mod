@@ -17,22 +17,29 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 //? }
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.ClientHiddenCollections;
+import com.theplumteam.client.ClientSpecialAccess;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.client.gui.widget.CollectionEntry;
 import com.theplumteam.client.gui.widget.CollectionListWidget;
+import com.theplumteam.client.gui.widget.FigureEntry;
 import com.theplumteam.client.gui.widget.FigureListWidget;
+import com.theplumteam.client.gui.widget.TabButton;
 import com.theplumteam.client.gui.widget.LinkButton;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.client.token.ClientTokenManager;
+import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.network.ClawMachineCollectionPacket;
 import com.theplumteam.network.DropBoxPacket;
 import com.theplumteam.network.TokenType;
+import com.theplumteam.registry.ModItems;
+import com.theplumteam.server.SpecialAccess;
 import com.theplumteam.util.ResourceLocations;
+import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -41,6 +48,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -57,10 +65,16 @@ public class CollectionSelectionScreen extends Screen {
     private static final Logger LOGGER = LoggerFactory.getLogger(CollectionSelectionScreen.class);
 
     private final BlockPos blockPos;
+    // Which tab is open: the plush collections or the figure ones. Either machine shows both.
+    private boolean plush;
     private String selectedCollectionId;
-    private final List<FigureCollection> collections;
+    // The selection the other tab keeps until it opens again
+    private String otherTabSelection = "";
+    private List<FigureCollection> collections;
     // Revision of the server's hidden collections the list was last built from
     private int shownHiddenRevision;
+    // Revision of the server's World collections the list was last built from
+    private int shownWorldRevision = ClientWorldCollections.revision();
 
     // Widgets
     @Nullable
@@ -70,6 +84,8 @@ public class CollectionSelectionScreen extends Screen {
     private Button useRegularButton;
     private Button useSpecialButton;
     private Button doneButton;
+    @Nullable
+    private TabButton.Folder selectedTab;
 
     // Panel dimensions
     private int panelX;
@@ -104,6 +120,10 @@ public class CollectionSelectionScreen extends Screen {
 
     // Icon textures
     private static final ResourceLocation SETTINGS_ICON = ResourceLocations.of("blockpops", "textures/gui/settings_icon.png");
+    private static final ResourceLocation KOFI_ICON = ResourceLocations.of("blockpops", "textures/gui/kofi_icon.png");
+
+    // The purple the BlockPops-Hytale project gives its specials
+    private static final int SPECIAL_COLOR = 0xFFBB8FCE;
 
     // URLs
     private static final String DISCORD_URL = "https://discord.gg/yGxdvA7qej";
@@ -111,22 +131,20 @@ public class CollectionSelectionScreen extends Screen {
     private static final String MODRINTH_URL = "https://modrinth.com/mod/blockpops";
 
     public CollectionSelectionScreen(BlockPos blockPos, String currentCollectionId) {
-        super(Component.literal("Claw Machine Configuration"));
-        this.blockPos = blockPos;
-        this.selectedCollectionId = currentCollectionId;
-        // Filter out the default collection from the menu
-        this.collections = CollectionRegistry.getAllCollections().stream()
-                .filter(c -> !"default".equals(c.getId()))
-                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        this(blockPos, currentCollectionId, false);
+    }
 
-        // Sort collections to show players' collection first
-        this.collections.sort((c1, c2) -> {
-            boolean c1IsPlayers = "world_players".equals(c1.getId());
-            boolean c2IsPlayers = "world_players".equals(c2.getId());
-            if (c1IsPlayers && !c2IsPlayers) return -1;
-            if (!c1IsPlayers && c2IsPlayers) return 1;
-            return 0; // Keep original order for other collections
-        });
+    /**
+     * With plush set this is the gacha machine's menu, which opens on the plush tab. A machine
+     * set to a collection of the other kind opens on that kind's tab instead.
+     */
+    public CollectionSelectionScreen(BlockPos blockPos, String currentCollectionId, boolean plush) {
+        super(Component.literal(plush ? "Gacha Machine Configuration" : "Claw Machine Configuration"));
+        this.blockPos = blockPos;
+        this.plush = currentCollectionId == null ? plush
+                : CollectionRegistry.getCollection(currentCollectionId).map(FigureCollection::isPlush).orElse(plush);
+        this.selectedCollectionId = currentCollectionId;
+        this.collections = collectionsOf(this.plush);
 
         // Initialize color transition with current background color
         ClientConfig config = ClientConfig.getInstance();
@@ -138,8 +156,56 @@ public class CollectionSelectionScreen extends Screen {
         this.targetColorB = config.backgroundColorB;
         this.colorTransitionProgress = 1.0f; // Start with no transition
 
+        // A draw left over from a screen that closed without onClose belongs to no screen now
+        FigureDraw.reset();
+
         BlockPopsMod.logDebug("CollectionSelectionScreen opened at {} with current collection: {}",
                 blockPos, currentCollectionId);
+    }
+
+    /**
+     * One tab's collections, the World Players one first and this world's own collections
+     * last in the server's order, without the default collection or an archived one.
+     */
+    private static List<FigureCollection> collectionsOf(boolean plush) {
+        List<FigureCollection> list = (plush ? CollectionRegistry.getPlushCollections() : CollectionRegistry.getAllCollections()).stream()
+                .filter(c -> !"default".equals(c.getId()))
+                .filter(c -> !ClientWorldCollections.isArchived(c.getId()))
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        // A stable sort: the other collections keep their order
+        list.sort((c1, c2) -> Integer.compare(sortKey(c1.getId()), sortKey(c2.getId())));
+        return list;
+    }
+
+    // World Players first, then the others, then World collections in the server's order: an
+    // edited one is registered again, so the registry's order is not theirs
+    private static int sortKey(String collectionId) {
+        if ("world_players".equals(collectionId)) {
+            return -1;
+        }
+        return WorldContentIds.isWorldCollectionId(collectionId) ? 1 + Math.max(0, ClientWorldCollections.order(collectionId)) : 0;
+    }
+
+    /**
+     * Opens the other tab, with the selection it had when it was left. A tab opened for the first
+     * time selects its first collection, as a click on it would.
+     */
+    private void switchTab(boolean toPlush) {
+        if (toPlush == plush || FigureDraw.isBusy()) {
+            return;
+        }
+        String leaving = selectedCollectionId == null ? "" : selectedCollectionId;
+        plush = toPlush;
+        selectedCollectionId = otherTabSelection;
+        otherTabSelection = leaving;
+        collections = collectionsOf(plush);
+        rebuildWidgets();
+        if ((selectedCollectionId == null || selectedCollectionId.isEmpty())
+                && collectionListWidget != null && !collectionListWidget.children().isEmpty()) {
+            CollectionEntry first = collectionListWidget.children().get(0);
+            collectionListWidget.setSelected(first);
+            onCollectionSelected(first);
+        }
     }
 
     @Override
@@ -251,7 +317,9 @@ public class CollectionSelectionScreen extends Screen {
                 BlockPopsMod.logDebug("Using regular token for collection: {}", selectedCollectionId);
                 DropBoxPacket packet = new DropBoxPacket(blockPos, selectedCollectionId, TokenType.REGULAR);
                 packet.sendToServer();
-                this.onClose(); // Close the screen immediately after using a token
+                // The screen stays open to play the draw out
+                FigureDraw.await(selectedCollectionId, false);
+                updateTokenButtonStates();
             }
         }).bounds(fullWidthX, bottomY, buttonWidth, scaledComponentHeight).build();
         this.addRenderableWidget(useRegularButton);
@@ -262,7 +330,9 @@ public class CollectionSelectionScreen extends Screen {
                 BlockPopsMod.logDebug("Using guaranteed token for collection: {}", selectedCollectionId);
                 DropBoxPacket packet = new DropBoxPacket(blockPos, selectedCollectionId, TokenType.GUARANTEED);
                 packet.sendToServer();
-                this.onClose(); // Close the screen immediately after using a token
+                // The screen stays open to play the draw out
+                FigureDraw.await(selectedCollectionId, true);
+                updateTokenButtonStates();
             }
         }).bounds(fullWidthX + buttonWidth + scaledSpacing, bottomY, buttonWidth, scaledComponentHeight).build();
         this.addRenderableWidget(useSpecialButton);
@@ -329,6 +399,31 @@ public class CollectionSelectionScreen extends Screen {
                 MODRINTH_URL,
                 Component.literal("Visit our Modrinth page")
         ));
+
+        if (plush) {
+            // Ko-fi button (left of Modrinth): the special plushes are for supporters
+            int kofiButtonX = modrinthButtonX - buttonSize - scaledSpacing;
+            this.addRenderableWidget(new LinkButton(
+                    kofiButtonX,
+                    linkButtonY,
+                    buttonSize,
+                    buttonSize,
+                    KOFI_ICON,
+                    SpecialAccess.SUPPORT_URL,
+                    Component.literal("Support us on Ko-fi to get the special plushes")
+            ));
+        }
+
+        // Folder tabs on the panel's top edge: the figure collections and the plush ones
+        int panelBg = panelBackgroundColor();
+        Component figuresLabel = Component.literal("Figures");
+        TabButton.Folder figuresTab = new TabButton.Folder(panelX + scaledPadding, panelY, figuresLabel,
+                new ItemStack(ModItems.CLAW_MACHINE_BLOCK_ITEM.get()), !plush, panelBg, button -> switchTab(false));
+        TabButton.Folder plushesTab = new TabButton.Folder(figuresTab.right() + 2, panelY, Component.literal("Plushes"),
+                new ItemStack(ModItems.GACHA_MACHINE_BLOCK_ITEM.get()), plush, panelBg, button -> switchTab(true));
+        this.addRenderableWidget(figuresTab);
+        this.addRenderableWidget(plushesTab);
+        selectedTab = plush ? plushesTab : figuresTab;
     }
 
     /**
@@ -373,6 +468,7 @@ public class CollectionSelectionScreen extends Screen {
     public void onClose() {
         // Mark that we are truly closing (not just opening a modal)
         isClosing = true;
+        FigureDraw.reset();
         // Restore GUI scale before closing
         restoreGuiScaleIfNeeded();
         super.onClose();
@@ -444,6 +540,67 @@ public class CollectionSelectionScreen extends Screen {
         if (figureListWidget != null) {
             figureListWidget.render(graphics, adjustedMouseX, adjustedMouseY, partialTick);
         }
+
+        renderDrawResult(graphics, partialTick);
+    }
+
+    /**
+     * Shows the figure a draw stopped on, in a card above everything else on the screen, centred
+     * over the figure list, which it alone dims; the rest of the screen stays usable. Drawn in the
+     * list's own space, which is scaled up when the inverse GUI scale is in use.
+     */
+    private void renderDrawResult(GuiGraphics graphics, float partialTick) {
+        FigureDraw draw = FigureDraw.result();
+        if (draw == null || figureListWidget == null) {
+            return;
+        }
+        FigureEntry row = figureListWidget.rowOf(draw.winner().getId());
+        if (row == null) {
+            return;
+        }
+        // Everything drawn so far lands below the card: the list's models are drawn with depth,
+        // so the card is also lifted in front of them
+        GuiPose.flush(graphics);
+        GuiPose.nextStratum(graphics);
+        GuiPose.push(graphics);
+        GuiPose.lift(graphics, 400.0f);
+
+        float scale = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getRenderScaleFactor() : 1.0f;
+        int left = (int) (figureListWidget.left() * scale);
+        int top = (int) (figureListWidget.top() * scale);
+        int right = (int) (figureListWidget.right() * scale);
+        int bottom = (int) (figureListWidget.bottom() * scale);
+        graphics.fill(left, top, right, bottom, 0xB0000000);
+
+        String name = draw.winner().getName();
+        String label = draw.isNew() ? "NEW!" : "Already in your collection";
+        String hint = "Click or press Esc to close";
+        int line = font.lineHeight + 4;
+        int size = (int) Math.max(40, Math.min(120 * scale, bottom - top - 3 * line - 30));
+        int cardWidth = Math.max(Math.max(size, font.width(hint)), Math.max(font.width(name), font.width(label))) + 40;
+        int cardHeight = size + 3 * line + 20;
+        int cardX = (left + right - cardWidth) / 2;
+        int cardY = (top + bottom - cardHeight) / 2;
+        int frameColor = draw.isNew() ? 0xFFFFD700 : 0xFFAAAAAA;
+        graphics.fill(cardX - 2, cardY - 2, cardX + cardWidth + 2, cardY + cardHeight + 2, frameColor);
+        graphics.fill(cardX, cardY, cardX + cardWidth, cardY + cardHeight, 0xFF181818);
+        GuiPose.flush(graphics);
+
+        int textY = cardY + 8;
+        graphics.drawString(font, label, cardX + (cardWidth - font.width(label)) / 2, textY,
+                draw.isNew() ? 0xFFFFD700 : 0xFFAAAAAA, false);
+        row.renderPreview(graphics, draw.winner(), cardX + (cardWidth - size) / 2, textY + line, size, partialTick);
+        textY += line + size + 4;
+        graphics.drawString(font, name, cardX + (cardWidth - font.width(name)) / 2, textY, 0xFFFFFFFF, false);
+        textY += line;
+        graphics.drawString(font, hint, cardX + (cardWidth - font.width(hint)) / 2, textY, 0xFF888888, false);
+        GuiPose.pop(graphics);
+    }
+
+    /** The figure list, which a draw lights up. */
+    @Nullable
+    FigureListWidget figureList() {
+        return figureListWidget;
     }
 
     /**
@@ -509,9 +666,17 @@ public class CollectionSelectionScreen extends Screen {
         currentY += font.lineHeight + 4;
 
         // Figure count
-        String figureCount = collection.getEnabledFigures().size() + " figures in this collection";
+        String figureCount = collection.getRegularFigures().size() + " figures"
+                + (collection.hasSpecials() ? " and " + collection.getSpecialFigures().size() + " specials" : "")
+                + " in this collection";
         graphics.drawString(this.font, figureCount,
                 previewX + 8, currentY, 0xFFAAAAAA, false);
+
+        // Tell a player the server gives this collection's specials to
+        if (collection.hasSpecials() && ClientSpecialAccess.has(collection.getId())) {
+            graphics.drawString(this.font, "Special access",
+                    previewX + 8 + font.width(figureCount) + 8, currentY, SPECIAL_COLOR, false);
+        }
 
         // Separator line (full width - will render on top of buttons)
         currentY += font.lineHeight + 4;
@@ -581,6 +746,16 @@ public class CollectionSelectionScreen extends Screen {
      * Render the animated star pattern (OPTIMIZED - pre-tiled texture cache, 1 draw call)
      */
     private void renderStarPattern(GuiGraphics graphics, float partialTick) {
+        int starWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
+        int starHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
+        drawStarPattern(graphics, starWidth, starHeight, partialTick);
+    }
+
+    /**
+     * Draws the scrolling star pattern over an area from the top left corner, in the star
+     * colour and opacity of the client config. The World collection screens draw it too.
+     */
+    static void drawStarPattern(GuiGraphics graphics, int starWidth, int starHeight, float partialTick) {
         double pixelsPerSecond = 5.0;
         int tileSize = StarPatternCache.getTileSize();
 
@@ -589,7 +764,8 @@ public class CollectionSelectionScreen extends Screen {
         /*// 26.2 dropped the GUI tick counter; wall time drives the same scroll.
         double smoothTime = net.minecraft.util.Util.getMillis() / 1000.0;
         *///? } else {
-        int tickCount = this.minecraft != null ? this.minecraft.gui.getGuiTicks() : 0;
+        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        int tickCount = minecraft != null && minecraft.gui != null ? minecraft.gui.getGuiTicks() : 0;
         double smoothTime = (tickCount + partialTick) / 20.0;
         //? }
         double offsetX = (com.theplumteam.util.E2EDeterminism.scrollSeconds(smoothTime) * pixelsPerSecond) % tileSize;
@@ -602,8 +778,6 @@ public class CollectionSelectionScreen extends Screen {
         ResourceLocation cacheTexture = StarPatternCache.getTextureLocation();
         int cacheWidth = StarPatternCache.getTextureWidth();
         int cacheHeight = StarPatternCache.getTextureHeight();
-        int starWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
-        int starHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
 
         //? if >=1.21.6 {
         /*// 1.21.6 selects the GUI shader by render pipeline rather than render type.
@@ -708,21 +882,28 @@ public class CollectionSelectionScreen extends Screen {
      */
     private void renderPanel(GuiGraphics graphics) {
         // Panel background (dark semi-transparent with configurable opacity)
-        ClientConfig config = ClientConfig.getInstance();
-        int alpha = (int)(config.panelOpacity * 255);
-        int panelBgColor = (alpha << 24) | 0x000000;  // Black with configurable alpha
-
         graphics.fill(
                 panelX, panelY,
                 panelX + panelWidth, panelY + panelHeight,
-                panelBgColor
+                panelBackgroundColor()
         );
 
-        // Panel outline (subtle white)
-        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 1, 0x60FFFFFF);
+        // Panel outline (subtle white), open under the selected tab
+        if (selectedTab != null) {
+            graphics.fill(panelX, panelY, selectedTab.left() + 1, panelY + 1, 0x60FFFFFF);
+            graphics.fill(selectedTab.right() - 1, panelY, panelX + panelWidth, panelY + 1, 0x60FFFFFF);
+        } else {
+            graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 1, 0x60FFFFFF);
+        }
         graphics.fill(panelX, panelY + panelHeight - 1, panelX + panelWidth, panelY + panelHeight, 0x60FFFFFF);
         graphics.fill(panelX, panelY + 1, panelX + 1, panelY + panelHeight - 1, 0x60FFFFFF);
         graphics.fill(panelX + panelWidth - 1, panelY + 1, panelX + panelWidth, panelY + panelHeight - 1, 0x60FFFFFF);
+    }
+
+    /** Black with the configured panel opacity. */
+    private static int panelBackgroundColor() {
+        int alpha = (int) (ClientConfig.getInstance().panelOpacity * 255);
+        return alpha << 24;
     }
 
     /**
@@ -744,12 +925,24 @@ public class CollectionSelectionScreen extends Screen {
             }
         }
 
-        // A hidden collection is not offered, so it cannot stay this machine's selection
-        if (selectedCollectionId != null && ClientHiddenCollections.isHidden(selectedCollectionId)) {
+        // A hidden or archived collection is not offered, so it cannot stay this machine's
+        // selection, and neither can a World collection that was removed
+        if (selectedCollectionId != null && (ClientHiddenCollections.isHidden(selectedCollectionId)
+                || ClientWorldCollections.isArchived(selectedCollectionId)
+                || (WorldContentIds.isWorldCollectionId(selectedCollectionId)
+                        && CollectionRegistry.getCollection(selectedCollectionId).isEmpty()))) {
             selectedCollectionId = "";
             if (figureListWidget != null) {
                 figureListWidget.setCollection(null);
             }
+        }
+
+        // An edit registers the collection again: show its figures as they are now
+        if (selectedCollectionId != null && !selectedCollectionId.isEmpty() && figureListWidget != null
+                && figureListWidget.getCurrentCollection() != null && !FigureDraw.isBusy()) {
+            CollectionRegistry.getCollection(selectedCollectionId)
+                    .filter(collection -> collection != figureListWidget.getCurrentCollection())
+                    .ifPresent(figureListWidget::setCollection);
         }
 
         // Select the current collection if it exists
@@ -811,7 +1004,8 @@ public class CollectionSelectionScreen extends Screen {
      * Update the token button states based on selection and token availability
      */
     private void updateTokenButtonStates() {
-        boolean hasSelection = selectedCollectionId != null && !selectedCollectionId.isEmpty();
+        // One draw at a time: a spent token's draw has to play out first
+        boolean hasSelection = selectedCollectionId != null && !selectedCollectionId.isEmpty() && !FigureDraw.isBusy();
 
         if (useRegularButton != null) {
             useRegularButton.active = hasSelection && ClientTokenManager.getRegularTokens() > 0;
@@ -824,7 +1018,7 @@ public class CollectionSelectionScreen extends Screen {
     }
 
     /**
-     * Check if the selected collection is complete (all figures discovered)
+     * Check if the selected collection is complete (every figure a token can give is discovered)
      */
     private boolean isCollectionComplete() {
         if (selectedCollectionId == null || selectedCollectionId.isEmpty()) {
@@ -833,7 +1027,7 @@ public class CollectionSelectionScreen extends Screen {
 
         return CollectionRegistry.getCollection(selectedCollectionId)
                 .map(collection -> {
-                    for (FigureDefinition figure : collection.getEnabledFigures()) {
+                    for (FigureDefinition figure : ClientSpecialAccess.figuresFor(collection)) {
                         String figureId = collection.getId() + ":" + figure.getId();
                         if (!ClientDiscoveryManager.isDiscovered(figureId)) {
                             return false;
@@ -869,7 +1063,8 @@ public class CollectionSelectionScreen extends Screen {
 
         // Regular token section (centered above left button)
         int regularTokens = ClientTokenManager.getRegularTokens();
-        String regularText = "Regular Tokens: " + regularTokens + "/3";
+        // Blue tickets can take the count past the 3 the server grants on its own
+        String regularText = "Regular Tokens: " + regularTokens + (regularTokens <= 3 ? "/3" : "");
         if (regularTokens < 3) {
             String nextRegularTime = ClientTokenManager.formatNextRegularTime();
             regularText += " - Next: " + nextRegularTime;
@@ -882,9 +1077,10 @@ public class CollectionSelectionScreen extends Screen {
         graphics.drawString(this.font, regularText, regularTextX, tokenInfoY, blueColor, false);
 
         // Guaranteed token section (centered above right button)
-        boolean hasSpecial = ClientTokenManager.hasSpecialToken();
-        String specialText = "Guaranteed Token: " + (hasSpecial ? "Available" : "Used");
-        if (!hasSpecial) {
+        int guaranteedTokens = ClientTokenManager.getGuaranteedTokens();
+        String specialText = guaranteedTokens > 1 ? "Guaranteed Tokens: " + guaranteedTokens
+                : "Guaranteed Token: " + (guaranteedTokens == 1 ? "Available" : "Used");
+        if (guaranteedTokens == 0) {
             String nextSpecialTime = ClientTokenManager.formatNextSpecialResetTime();
             specialText += " - Resets: " + nextSpecialTime;
         }
@@ -903,6 +1099,14 @@ public class CollectionSelectionScreen extends Screen {
         if (shownHiddenRevision != ClientHiddenCollections.getRevision()) {
             loadCollections();
         }
+        // and when its World collections change, which can add, edit or archive one; a
+        // draw in progress keeps the figures it is showing until it ends
+        if (shownWorldRevision != ClientWorldCollections.revision() && !FigureDraw.isBusy()) {
+            shownWorldRevision = ClientWorldCollections.revision();
+            collections = collectionsOf(plush);
+            loadCollections();
+        }
+        FigureDraw.tick();
         // Update button states each tick to reflect token changes
         updateTokenButtonStates();
     }
@@ -934,6 +1138,9 @@ public class CollectionSelectionScreen extends Screen {
             mouseX = GuiScaleManager.transformMouseX(mouseX);
             mouseY = GuiScaleManager.transformMouseY(mouseY);
         }
+        if (blocksForDraw(mouseX, mouseY)) {
+            return true;
+        }
         return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), bpDouble);
     }
     *///? } else {
@@ -942,9 +1149,28 @@ public class CollectionSelectionScreen extends Screen {
             mouseX = GuiScaleManager.transformMouseX(mouseX);
             mouseY = GuiScaleManager.transformMouseY(mouseY);
         }
+        if (blocksForDraw(mouseX, mouseY)) {
+            return true;
+        }
         return super.mouseClicked(mouseX, mouseY, button);
     }
     //? }
+
+    // While a draw's light moves only Done is clickable. Once it shows its figure, any click puts
+    // the figure away; one on the figure list does only that, one elsewhere also does its own job
+    private boolean blocksForDraw(double mouseX, double mouseY) {
+        if (FigureDraw.result() != null) {
+            FigureDraw.dismissResult();
+            return isOverFigureList(mouseX, mouseY);
+        }
+        return FigureDraw.isBusy() && !(doneButton != null && doneButton.isMouseOver(mouseX, mouseY));
+    }
+
+    private boolean isOverFigureList(double mouseX, double mouseY) {
+        return figureListWidget != null
+                && mouseX >= figureListWidget.left() && mouseX < figureListWidget.right()
+                && mouseY >= figureListWidget.top() && mouseY < figureListWidget.bottom();
+    }
 
     @Override
     //? if >=26 {
@@ -1006,6 +1232,10 @@ public class CollectionSelectionScreen extends Screen {
             mouseX = GuiScaleManager.transformMouseX(mouseX);
             mouseY = GuiScaleManager.transformMouseY(mouseY);
         }
+        // The figure list holds still while a draw lights its figures or shows the one it drew
+        if (FigureDraw.isBusy() || (FigureDraw.result() != null && isOverFigureList(mouseX, mouseY))) {
+            return true;
+        }
         //? if >=1.21 {
         /*return super.mouseScrolled(mouseX, mouseY, horizontal, delta);
         *///? } else {
@@ -1033,18 +1263,26 @@ public class CollectionSelectionScreen extends Screen {
         int keyCode = bpEvent.key();
         int scanCode = bpEvent.scancode();
         int modifiers = bpEvent.modifiers();
-        // Allow ESC to close
+        // Allow ESC to close, after it has put away a figure a draw shows
         if (keyCode == com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE) {
-            this.onClose();
+            if (FigureDraw.result() != null) {
+                FigureDraw.dismissResult();
+            } else {
+                this.onClose();
+            }
             return true;
         }
         return super.keyPressed(bpEvent);
     }
     *///? } else {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // Allow ESC to close
+        // Allow ESC to close, after it has put away a figure a draw shows
         if (keyCode == com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE) {
-            this.onClose();
+            if (FigureDraw.result() != null) {
+                FigureDraw.dismissResult();
+            } else {
+                this.onClose();
+            }
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);

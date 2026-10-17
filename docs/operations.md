@@ -396,9 +396,12 @@ any writer, so `scripts/ci/pr_gate.py` reads the mode from the protected
 gate of a pull request into `master` as `delegated`: it reads no native Build
 run for it and `handle-pr-gate-result.yml` never writes that context.
 `build-gate.yml` therefore no longer runs on `pull_request_target` into `master`;
-its canonical `push` (which wakes release synchronization), its dispatches and
-pull requests into an enrolled release branch are unchanged, and so are both
-`Release sync / ...` contexts.
+its dispatches and pull requests into an enrolled release branch are unchanged,
+and so are both `Release sync / ...` contexts. It does not run on a push to
+`master` in any mode: every pull request into `master` was gated before it
+merged, release synchronization is woken by `reconcile-release-sync.yml`, and the
+release planner reads a Build gate run dispatched on the canonical head
+([Local lane release plan](release-architecture.md#local-lane-release-plan)).
 
 `Trusted PR / Packaged E2E gate` keeps all native admission: protected-path
 parity of an ordinary pull request, the exact-head `/controller-upgrade
@@ -443,6 +446,29 @@ no longer runs on `pull_request_target` into `master`; its nightly `schedule`
 an enrolled release branch are unchanged, and so are both `Release sync / ...`
 contexts.
 
+`sync-release-branches.yml` no longer dispatches `on-demand-e2e.yml` for each
+new `master` head: the managed callers already test every head (fully or by
+post-merge reuse), and that dispatch recompiled every lane serially and reran
+all twenty lanes, about 115 to 130 runner-minutes and 50 to 60 minutes per head,
+only to feed Pages. Its completion never woke a `workflow_run` consumer either, being
+dispatched with the workflow's own token, so it never reached the visual-review
+queue. The canonical `master` run that Pages, the visual-review reference
+anchor and the release planner read is now the nightly schedule (`17 3 * * *`)
+or an operator's dispatch, so the gallery of a new head follows the next
+nightly run and keeps the previous head's evidence until then. For a fresh
+gallery or a release plan of the current head, dispatch it:
+
+```sh
+gh workflow run on-demand-e2e.yml --ref master
+```
+
+The kit's route A (`docs/BUILD-E2E-DESIGN.md`, KQ9-3), a consumer workflow of
+the shared generation as the Pages source, would publish every head without a
+native run. It is not in place: the kit refuses a handoff of any workflow other
+than `site/mod-base.json` `source.workflow`, so the native `public-evidence`
+job, the visual-review reference anchor and the exact job graph that release
+planning reads would have to move with it.
+
 In this mode no native evaluation runs on a pull request into `master`. The
 owner's approval is kept by the kit's protected admission (mod-base v1.3.0 or
 later; the kit's `docs/BUILD-ADAPTER.md`, "Protected admission"). The admission
@@ -453,25 +479,28 @@ in the same pull request that enters this mode:
   its `FORBIDDEN_PATHS` (`.gradle`, `buildSrc`), the `build.gradle` and
   `src/e2e` of every loader, `release/release-matrix.json` and
   `gradle/verification-metadata.xml`.
-- `command` is `/controller-upgrade`, and the only approver entry is
+- `command` is `/controller-upgrade`, and the approver entries are
   `{"organization": "The-Plum-Team", "role": "member"}` (mod-base v1.6.0 or
   later): any current member of the `The-Plum-Team` organization may decide,
   its owners included (so `AkaNebur` still counts), and so does a future member
   with no further change. A private (concealed) membership counts too.
+  `{"association": "COLLABORATOR", "login": "Nanarng"}`: the outside
+  collaborator `Nanarng` decides as well, matched by login and the
+  `author_association` GitHub shows on their comments.
   `tests/test_mod_base_build_adapter.py` keeps `protected_paths` equal to the
-  native list and pins this approver entry.
+  native list and pins these approver entries.
 - Membership is proven by the gate App's member list (organization permission
   "Members: Read-only"), not by `author_association`. The managed
   `mod-base-gate-status.yml` runs its `members` job ("Read the organization
-  members") for that. An outside collaborator (for example `Nanarng`), a
-  former member or a billing manager never counts, whatever their repository
-  permission, and neither does a comment posted through a GitHub App.
+  members") for that. Any other outside collaborator, a former member or a
+  billing manager never counts, whatever their repository permission, and
+  neither does a comment posted through a GitHub App.
 - The kit's gate status reads the config from the protected `master` it runs
   as, never from the pull request. A pull request that changes this approver
   entry is therefore decided by the approvers already on `master`.
 - A pull request whose tested merge changes a protected path gets `failure`
   (`admission: ...`) on both contexts, unless the newest decision of a member
-  on its exact head is `/controller-upgrade approve <head sha>`. A new head needs
+  or of `Nanarng` on its exact head is `/controller-upgrade approve <head sha>`. A new head needs
   a new approval. An edited decision (also an older comment edited into one)
   is refused until it is deleted, so post a fresh comment instead of editing
   one. A decision posted while an evaluation was running is refused by that

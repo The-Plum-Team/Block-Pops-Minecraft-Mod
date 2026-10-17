@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "blockpops:item/gacha_machine_block"
+  }
+}

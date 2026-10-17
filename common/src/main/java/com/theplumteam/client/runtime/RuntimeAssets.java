@@ -6,6 +6,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.util.GeoAssets;
 import com.theplumteam.util.ResourceLocations;
+import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
@@ -32,6 +33,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  * render thread. A file whose id a bundled resource already has is refused, so loaded
  * content can never replace the mod's own or vanilla's. Results that land after
  * {@link #clear()} are dropped.
+ *
+ * <p>The registries also hold the assets of World collections, which a server sends by
+ * another route and {@code ClientWorldAssets} loads and releases. Their ids belong to
+ * {@link WorldContentIds}, and {@link #clear()} leaves them alone, so a Custom sync never
+ * takes a World collection's textures or models away.
  */
 public final class RuntimeAssets {
     private static final String ROOT = "assets/" + BlockPopsMod.MOD_ID + "/";
@@ -205,11 +211,14 @@ public final class RuntimeAssets {
         return null;
     }
 
-    /** Forgets everything loaded so far and drops what is still in flight. Render thread only. */
+    /**
+     * Forgets everything loaded so far and drops what is still in flight, except World
+     * content, which has its own owner. Render thread only.
+     */
     public static void clear() {
         GENERATION.incrementAndGet();
-        RuntimeGeo.clear();
-        RuntimeTextures.clear();
+        RuntimeGeo.clear(id -> !WorldContentIds.owns(id));
+        RuntimeTextures.clear(id -> !WorldContentIds.owns(id));
         FigureVariants.clear();
     }
 }

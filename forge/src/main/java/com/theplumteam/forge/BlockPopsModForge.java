@@ -91,6 +91,7 @@ public final class BlockPopsModForge {
                 if (player instanceof ServerPlayer) {
                     ServerPlayer serverPlayer = (ServerPlayer) player;
                     java.util.List<FigureCollection> allCollections = new java.util.ArrayList<>(CollectionRegistry.getAllCollections());
+                    allCollections.addAll(CollectionRegistry.getPlushCollections());
                     SyncDynamicCollectionsPacket.sendToPlayer(serverPlayer, allCollections);
                     BlockPopsMod.logDebug("Synced {} collections to joining player {}", allCollections.size(), player.getName().getString());
                 }
@@ -138,13 +139,13 @@ public final class BlockPopsModForge {
                             serverPlayer,
                             discovery.getRegularTokens(),
                             ticksUntilNext,
-                            !discovery.hasUsedTodaySpecialToken(),
+                            discovery.getGuaranteedTokens(),
                             millisUntilReset
                     );
-                    BlockPopsMod.logDebug("Synced token data to {}: {} regular tokens, special: {}",
+                    BlockPopsMod.logDebug("Synced token data to {}: {} regular tokens, {} guaranteed",
                             serverPlayer.getName().getString(),
                             discovery.getRegularTokens(),
-                            !discovery.hasUsedTodaySpecialToken() ? "available" : "used");
+                            discovery.getGuaranteedTokens());
 
                     // Check if favorite color needs to be chosen
                     if (!discovery.hasChosenFavoriteColor()) {

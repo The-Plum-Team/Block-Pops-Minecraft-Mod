@@ -1,6 +1,5 @@
 package com.theplumteam.network;
 
-import com.theplumteam.util.PlayerSounds;
 import com.theplumteam.util.ServerLevels;
 import com.mojang.authlib.GameProfile;
 import com.theplumteam.BlockPopsMod;
@@ -15,6 +14,7 @@ import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.registry.ModItems;
 import com.theplumteam.server.ServerTickHandler;
+import com.theplumteam.server.SpecialAccess;
 import com.theplumteam.util.AuthlibProfiles;
 import com.theplumteam.util.ResourceLocations;
 import dev.architectury.networking.NetworkManager;
@@ -25,8 +25,6 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -98,7 +96,7 @@ public class DropBoxPacket {
 
                 // Every World Players figure can be disabled, and an empty pool must not cost a token
                 if (CollectionRegistry.getCollection(packet.collectionId)
-                        .map(collection -> collection.getEnabledFigures().isEmpty()).orElse(true)) {
+                        .map(collection -> SpecialAccess.figuresFor(player, collection).isEmpty()).orElse(true)) {
                     player.sendSystemMessage(Component.literal("\u00A7cThis collection has no figures available."));
                     BlockPopsMod.logDebug("Collection {} has no available figures, token not consumed", packet.collectionId);
                     return;
@@ -153,10 +151,17 @@ public class DropBoxPacket {
 
     private static void processBoxDrop(ServerPlayer player, DropBoxPacket packet, IPlayerDiscovery discovery) {
         CollectionRegistry.getCollection(packet.collectionId).ifPresent(collection -> {
-            List<FigureDefinition> figures = collection.getEnabledFigures();
+            // A collection's specials are only in the pool of a player with special access
+            List<FigureDefinition> figures = SpecialAccess.figuresFor(player, collection);
             if (!figures.isEmpty()) {
                 FigureDefinition selectedFigure = selectFigure(figures, packet.tokenType,
                         discovery, packet.collectionId);
+
+                if (collection.isPlush()) {
+                    // A plush collection hands out the plush itself, not a box
+                    givePlush(player, packet.collectionId, selectedFigure, discovery);
+                    return;
+                }
 
                 ItemStack boxItem = null;
                 if (packet.collectionId.equals(PlayerCollectionHelper.WORLD_PLAYERS_COLLECTION_ID)) {
@@ -193,14 +198,14 @@ public class DropBoxPacket {
                         }
                     }
 
-                    if (!discovery.isDiscovered(uniqueFigureId)) {
+                    boolean isNew = !discovery.isDiscovered(uniqueFigureId);
+                    // Ahead of the unlock: the screen plays the draw out and sounds its result
+                    DrawResultPacket.sendToPlayer(player, packet.collectionId, selectedFigure.getId(), isNew);
+                    if (isNew) {
                         discovery.discover(uniqueFigureId);
                         // Use cross-platform networking - PASS QUICKSKIN ID TO CLIENT
                         UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, selectedFigure.getName(), skinSnapshot, quickSkinSnapshot);
                         BlockPopsMod.logDebug("Player {} discovered new figure: {} ({})", player.getName().getString(), selectedFigure.getName(), uniqueFigureId);
-                        PlayerSounds.notify(player, SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 1.0F, 1.0F);
-                    } else {
-                        PlayerSounds.notify(player, SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 1.0F, 1.0F);
                     }
 
                     CompoundTag blockEntityTag = new CompoundTag();
@@ -234,6 +239,24 @@ public class DropBoxPacket {
         });
     }
 
+    private static void givePlush(ServerPlayer player, String collectionId, FigureDefinition figure,
+                                  IPlayerDiscovery discovery) {
+        var plushItem = ModItems.PLUSH_ITEMS.get(figure.getId());
+        if (plushItem == null) {
+            LOGGER.warn("Plush collection {} names {}, which is not a registered plush", collectionId, figure.getId());
+            return;
+        }
+        String uniqueFigureId = collectionId + ":" + figure.getId();
+        boolean isNew = !discovery.isDiscovered(uniqueFigureId);
+        DrawResultPacket.sendToPlayer(player, collectionId, figure.getId(), isNew);
+        if (isNew) {
+            discovery.discover(uniqueFigureId);
+            UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, figure.getName(), null, null);
+        }
+        player.getInventory().add(new ItemStack(plushItem.get()));
+        PlayerDataManager.markDirty(player, discovery);
+    }
+
     private static boolean verifyAndConsumeToken(ServerPlayer player, IPlayerDiscovery discovery, TokenType tokenType) {
         if (tokenType == TokenType.REGULAR) {
             if (discovery.getRegularTokens() > 0) {
@@ -245,13 +268,18 @@ public class DropBoxPacket {
                 return true;
             }
         } else if (tokenType == TokenType.GUARANTEED) {
+            // Today's token goes first: it comes back at the daily reset, a ticket's does not
             if (!discovery.hasUsedTodaySpecialToken()) {
                 discovery.setUsedTodaySpecialToken(true);
-                BlockPopsMod.logDebug("Player {} used their guaranteed token",
-                        player.getName().getString());
-                syncTokenDataToClient(player, discovery);
-                return true;
+            } else if (discovery.getExtraGuaranteedTokens() > 0) {
+                discovery.setExtraGuaranteedTokens(discovery.getExtraGuaranteedTokens() - 1);
+            } else {
+                return false;
             }
+            BlockPopsMod.logDebug("Player {} used a guaranteed token. Remaining: {}",
+                    player.getName().getString(), discovery.getGuaranteedTokens());
+            syncTokenDataToClient(player, discovery);
+            return true;
         }
         return false;
     }
@@ -266,7 +294,7 @@ public class DropBoxPacket {
                 player,
                 discovery.getRegularTokens(),
                 ticksUntilNext,
-                !discovery.hasUsedTodaySpecialToken(),
+                discovery.getGuaranteedTokens(),
                 millisUntilReset
         );
     }

@@ -9,12 +9,11 @@ on:
     # shared-build-and-e2e): the mod-base Build caller is the
     # Build gate of every pull request into master and the kit's gate status App writes its
     # "Trusted PR / Build and verify" (pr_gate.py reports it delegated). Pull requests into an
-    # enrolled release branch, the canonical push that wakes release synchronization and the
-    # synchronization dispatches keep this native gate.
+    # enrolled release branch, the release-synchronization dispatches and the manual canonical
+    # dispatch that scripts/release/plan_release.py reads keep this native gate. A push to
+    # master runs nothing here: every pull request into master was gated before it merged, and
+    # release synchronization is woken by reconcile-release-sync.yml.
     branches-ignore:
-      - master
-  push:
-    branches:
       - master
   workflow_dispatch:
     inputs:
@@ -91,8 +90,6 @@ jobs:
     name: Resolve authoritative build matrix
     if: >-
       inputs.attest_run_id == '' &&
-      !(github.event_name == 'push' &&
-        startsWith(github.ref_name, 'automation/release-sync/')) &&
       !(github.event_name == 'pull_request_target' &&
         startsWith(github.event.pull_request.head.ref, 'automation/release-sync/'))
     runs-on: ubuntu-24.04
@@ -332,7 +329,7 @@ jobs:
           cache-read-only: true
 
       - name: Verify the controller-pinned mod-base kit
-        uses: The-Plum-Team/mod-base/actions/setup@65b541242543a49f6448a7d55d667d4cdd21ae04 # v1.6.0
+        uses: The-Plum-Team/mod-base/actions/setup@acb01ca4f625a5d27f1c1a709a416d9725bef64f # v1.7.0
         with:
           mod-root: controller
           install-imaging: "false"
@@ -552,8 +549,6 @@ jobs:
     needs: [identity, build]
     if: >-
       always() && inputs.attest_run_id == '' &&
-      !(github.event_name == 'push' &&
-        startsWith(github.ref_name, 'automation/release-sync/')) &&
       !(github.event_name == 'pull_request_target' &&
         startsWith(github.event.pull_request.head.ref, 'automation/release-sync/'))
     runs-on: ubuntu-24.04
