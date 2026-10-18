@@ -397,7 +397,7 @@ public class WorldFigureEditorScreen extends WorldCreatorScreen {
         this.previewEntry = collection != null ? new FigureEntry(collection.getFigures(), this.collectionId) : null;
         if (this.previewEntry != null) {
             // The camera of the machine screen's figure list
-            this.previewEntry.setConfiguration(1.0f, 0.0f, 150.0f, 0.0f, 14.0f, 15.0f, 0.0f);
+            this.previewEntry.setConfiguration(1.0f, 0.0f, 150.0f, 0.0f, 0.0f, 15.0f, 0.0f);
         }
 
         int buttonsY = this.panelY + this.panelHeight - 28;

@@ -3,6 +3,8 @@ package com.theplumteam.registry;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.figure.BuiltInCollections;
+import com.theplumteam.item.PlushBlockItem;
+import com.theplumteam.item.TicketItem;
 import com.theplumteam.platform.PlatformHelper;
 import com.theplumteam.plush.BuiltInPlushes;
 import dev.architectury.registry.registries.DeferredRegister;
@@ -75,30 +77,31 @@ public class ModItems {
         //? }
     );
 
-    public static final RegistrySupplier<Item> BLUE_TICKET = registerPlainItem("blue_ticket");
-    public static final RegistrySupplier<Item> GOLD_TICKET = registerPlainItem("gold_ticket");
+    public static final RegistrySupplier<Item> BLUE_TICKET = registerTicket("blue_ticket");
+    public static final RegistrySupplier<Item> GOLD_TICKET = registerTicket("gold_ticket");
 
-    // A plain item is drawn from its flat sprite and keeps the item.blockpops.<id> name.
-    private static RegistrySupplier<Item> registerPlainItem(String name) {
+    // A ticket is a plain item, drawn from its flat sprite, that keeps the item.blockpops.<id>
+    // name and says in its tooltip what it is for.
+    private static RegistrySupplier<Item> registerTicket(String name) {
         return ITEMS.register(
             name,
             //? if >=1.21.2 {
-            /*() -> new Item(plainItemProperties(name))
+            /*() -> new TicketItem(plainItemProperties(name), name)
             *///? } else {
-            () -> new Item(new Item.Properties())
+            () -> new TicketItem(new Item.Properties(), name)
             //? }
         );
     }
 
     static {
-        // Register one plain block item per plush; like the gacha machine, their items are vanilla models
+        // Register one block item per plush; like the gacha machine, their items are vanilla models
         for (String plushId : BuiltInPlushes.PLUSH_IDS) {
             PLUSH_ITEMS.put(plushId, ITEMS.register(
                 "plush_" + plushId,
                 //? if >=1.21.2 {
-                /*() -> new BlockItem(ModBlocks.PLUSH_BLOCKS.get(plushId).get(), itemProperties("plush_" + plushId))
+                /*() -> new PlushBlockItem(ModBlocks.PLUSH_BLOCKS.get(plushId).get(), itemProperties("plush_" + plushId))
                 *///? } else {
-                () -> new BlockItem(ModBlocks.PLUSH_BLOCKS.get(plushId).get(), new Item.Properties())
+                () -> new PlushBlockItem(ModBlocks.PLUSH_BLOCKS.get(plushId).get(), new Item.Properties())
                 //? }
             ));
         }

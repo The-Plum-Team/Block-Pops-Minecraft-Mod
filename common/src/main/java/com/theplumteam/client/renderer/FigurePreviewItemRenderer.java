@@ -44,18 +44,20 @@ public class FigurePreviewItemRenderer
     private static final String COLLECTION = "Collection";
     private static final String FIGURE = "Figure";
     private static final String GREYED = "Greyed";
+    private static final String HOLOGRAPHIC = "Holographic";
 
     private record Preview(BoxBlockEntity entity, boolean greyed) {
     }
 
-    // The stack a screen draws to show one figure, in black and white when asked.
-    public static ItemStack stack(String collectionId, String figureId, boolean greyed) {
+    // The stack a screen draws to show one figure, in black and white or holographic when asked.
+    public static ItemStack stack(String collectionId, String figureId, boolean greyed, boolean holographic) {
         ItemStack stack = new ItemStack(Items.PAPER);
         stack.set(DataComponents.ITEM_MODEL, MODEL);
         CompoundTag tag = new CompoundTag();
         tag.putString(COLLECTION, collectionId);
         tag.putString(FIGURE, figureId);
         tag.putBoolean(GREYED, greyed);
+        tag.putBoolean(HOLOGRAPHIC, holographic);
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
         return stack;
     }
@@ -70,14 +72,21 @@ public class FigurePreviewItemRenderer
         /^String collectionId = tag.getStringOr(COLLECTION, "");
         String figureId = tag.getStringOr(FIGURE, "");
         boolean greyed = tag.getBooleanOr(GREYED, false);
+        boolean holographic = tag.getBooleanOr(HOLOGRAPHIC, false);
         ^///? } else {
         String collectionId = tag.getString(COLLECTION);
         String figureId = tag.getString(FIGURE);
         boolean greyed = tag.getBoolean(GREYED);
+        boolean holographic = tag.getBoolean(HOLOGRAPHIC);
         //? }
         FigureDefinition figure = CollectionRegistry.getFigure(collectionId, figureId).orElse(null);
         BoxBlockEntity entity = FigureWidgetRenderer.getOrCreateRenderEntity(figure, collectionId);
-        return entity == null ? null : new Preview(entity, greyed);
+        if (entity == null) {
+            return null;
+        }
+        // One entity draws every preview of a figure, so each stack says how this one looks
+        entity.setHolographicForRendering(holographic && !greyed);
+        return new Preview(entity, greyed);
     }
 
     @Override

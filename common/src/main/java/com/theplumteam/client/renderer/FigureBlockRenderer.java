@@ -72,6 +72,10 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
     @Override
     public RenderType getRenderType(net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState renderState,
                                     ResourceLocation texture) {
+        if (((com.geckolib.renderer.base.GeoRenderState) renderState)
+                .getOrDefaultGeckolibData(HolographicRenderTypes.STATE, false)) {
+            return HolographicRenderTypes.entity(texture);
+        }
         return net.minecraft.client.renderer.rendertype.RenderTypes.entityCutout(texture);
     }
 

@@ -11,6 +11,7 @@ import com.theplumteam.client.renderer.FigurePreviewItemRenderer;
 import com.theplumteam.client.renderer.FigureBlockRenderer;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.client.renderer.GachaMachineBlockRenderer;
+import com.theplumteam.client.renderer.HolographicRenderTypes;
 import com.theplumteam.client.renderer.PlushBlockRenderer;
 import com.theplumteam.network.ModNetworking;
 import com.theplumteam.registry.ModBlockEntities;
@@ -22,6 +23,10 @@ import net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry;
 /*import net.minecraft.client.renderer.special.SpecialModelRenderers;
 *///? } else {
 import net.fabricmc.fabric.api.client.rendering.v1.BuiltinItemRendererRegistry;
+//? }
+//? if <1.21.2 {
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import net.fabricmc.fabric.api.client.rendering.v1.CoreShaderRegistrationCallback;
 //? }
 
 /**
@@ -36,6 +41,12 @@ public class BlockPopsFabricClient implements ClientModInitializer {
 
         // Initialize client-side networking
         ModNetworking.initClient();
+
+        //? if <1.21.2 {
+        // The shader holographic figures and plushes are drawn with
+        CoreShaderRegistrationCallback.EVENT.register(context -> context.register(
+                HolographicRenderTypes.SHADER, DefaultVertexFormat.NEW_ENTITY, HolographicRenderTypes::setShader));
+        //? }
 
         // Register disconnect event to clear render cache (prevents memory leaks)
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {

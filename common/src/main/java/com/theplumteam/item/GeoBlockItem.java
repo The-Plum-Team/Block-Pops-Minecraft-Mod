@@ -5,6 +5,7 @@ import com.theplumteam.block.FigureBlock;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.figure.Holographic;
 import com.theplumteam.util.TagReads;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
@@ -151,6 +152,10 @@ public class GeoBlockItem extends BlockItem {
 
         FigureCollection collection = CollectionRegistry.getCollection(collectionId).orElse(null);
         if (collection != null && figureId != null && !figureId.isEmpty()) {
+            if (Holographic.of(blockEntityTag)) {
+                lines.accept(Component.translatable("tooltip.blockpops.holographic")
+                        .withStyle(ChatFormatting.LIGHT_PURPLE));
+            }
             lines.accept(Component.literal(collection.getName()).withStyle(ChatFormatting.GRAY));
 
             FigureDefinition figure = collection.getFigure(figureId).orElse(null);

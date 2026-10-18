@@ -26,5 +26,16 @@ class BlockPopsGeoBlockRenderer<T extends BlockEntity & GeoAnimatable, R extends
             ((GeoRenderState) renderState).addGeckolibData(DataTickets.TICK, 0.0);
         }
     }
+
+    // GeckoLib 5.4 asks the renderer, not the model, for the render type: a figure or plush
+    // whose model marked its state holographic is drawn with the holographic shader
+    @Override
+    public net.minecraft.client.renderer.rendertype.RenderType getRenderType(R renderState,
+                                                                             net.minecraft.resources.Identifier texture) {
+        if (((GeoRenderState) renderState).getOrDefaultGeckolibData(HolographicRenderTypes.STATE, false)) {
+            return HolographicRenderTypes.entity(texture);
+        }
+        return super.getRenderType(renderState, texture);
+    }
 }
 *///? }

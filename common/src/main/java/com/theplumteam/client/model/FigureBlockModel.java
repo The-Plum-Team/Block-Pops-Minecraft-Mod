@@ -9,6 +9,7 @@ import com.theplumteam.blockentity.FigureBlockEntity;
 /*import com.theplumteam.client.ClientSkinRegistration;
 *///? }
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
+import com.theplumteam.client.renderer.HolographicRenderTypes;
 import com.theplumteam.client.runtime.FigureVariants;
 import com.theplumteam.client.runtime.RuntimeGeo;
 import com.theplumteam.client.runtime.RuntimeTextures;
@@ -126,6 +127,7 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
         renderState.addGeckolibData(FIGURE_MODEL, model != null ? model : FALLBACK_MODEL);
         ResourceLocation texture = drawnTexture(animatable);
         renderState.addGeckolibData(FIGURE_TEXTURE, texture != null ? texture : FALLBACK_TEXTURE);
+        renderState.addGeckolibData(HolographicRenderTypes.STATE, animatable.isHolographic());
     }
     *///? } elif >=1.21.2 {
     /*@Override
@@ -354,13 +356,20 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     *///? } elif >=1.21.5 {
     /*@Override
     public RenderType getRenderType(GeoRenderState renderState, ResourceLocation texture) {
-        return RenderType.entityCutoutNoCull(texture != null ? texture : FALLBACK_TEXTURE);
+        ResourceLocation drawn = texture != null ? texture : FALLBACK_TEXTURE;
+        if (renderState.getOrDefaultGeckolibData(HolographicRenderTypes.STATE, false)) {
+            return HolographicRenderTypes.entity(drawn);
+        }
+        return RenderType.entityCutoutNoCull(drawn);
     }
     *///? } else {
     @Override
     public RenderType getRenderType(FigureBlockEntity animatable, ResourceLocation texture) {
         ResourceLocation textureToUse = drawnTexture(animatable);
         if (textureToUse == null) textureToUse = FALLBACK_TEXTURE;
+        if (animatable.isHolographic()) {
+            return HolographicRenderTypes.entity(textureToUse);
+        }
         return RenderType.entityCutoutNoCull(textureToUse);
     }
     //? }

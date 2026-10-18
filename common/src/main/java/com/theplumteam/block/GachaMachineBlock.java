@@ -6,6 +6,7 @@ package com.theplumteam.block;
 import com.theplumteam.blockentity.GachaMachineBlockEntity;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
+import com.theplumteam.item.TokenTickets;
 import com.theplumteam.network.SyncSpecialAccessPacket;
 import com.theplumteam.network.SyncTokenDataPacket;
 import com.theplumteam.platform.PlatformHelper;
@@ -123,7 +124,13 @@ public class GachaMachineBlock extends BaseEntityBlock {
 
         BlockEntity blockEntity = level.getBlockEntity(lowerPos);
         if (blockEntity instanceof GachaMachineBlockEntity gachaMachineBlockEntity) {
-            if (level.isClientSide()) {
+            ItemStack heldItem = player.getItemInHand(hand);
+            if (TokenTickets.isTicket(heldItem)) {
+                // A ticket is fed to the machine instead of opening its menu, as on the claw machine
+                if (player instanceof ServerPlayer serverPlayer) {
+                    TokenTickets.redeem(serverPlayer, heldItem);
+                }
+            } else if (level.isClientSide()) {
                 PlatformHelper.openGachaMachineScreen(lowerPos, gachaMachineBlockEntity);
             } else {
                 // Server side: sync token data to ensure client UI shows correct state

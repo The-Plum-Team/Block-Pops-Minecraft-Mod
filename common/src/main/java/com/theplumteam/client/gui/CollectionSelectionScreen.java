@@ -70,6 +70,8 @@ public class CollectionSelectionScreen extends Screen {
     private String selectedCollectionId;
     // The selection the other tab keeps until it opens again
     private String otherTabSelection = "";
+    // Whether init has run once; later runs (a resize, a tab switch) keep the selection
+    private boolean opened;
     private List<FigureCollection> collections;
     // Revision of the server's hidden collections the list was last built from
     private int shownHiddenRevision;
@@ -200,6 +202,11 @@ public class CollectionSelectionScreen extends Screen {
         otherTabSelection = leaving;
         collections = collectionsOf(plush);
         rebuildWidgets();
+        selectFirstCollectionIfNone();
+    }
+
+    /** Selects the open tab's first collection, as a click on it would, when nothing is selected. */
+    private void selectFirstCollectionIfNone() {
         if ((selectedCollectionId == null || selectedCollectionId.isEmpty())
                 && collectionListWidget != null && !collectionListWidget.children().isEmpty()) {
             CollectionEntry first = collectionListWidget.children().get(0);
@@ -424,6 +431,12 @@ public class CollectionSelectionScreen extends Screen {
         this.addRenderableWidget(figuresTab);
         this.addRenderableWidget(plushesTab);
         selectedTab = plush ? plushesTab : figuresTab;
+
+        // A machine without a collection opens on the first one of its tab
+        if (!opened) {
+            opened = true;
+            selectFirstCollectionIfNone();
+        }
     }
 
     /**
@@ -573,7 +586,9 @@ public class CollectionSelectionScreen extends Screen {
         graphics.fill(left, top, right, bottom, 0xB0000000);
 
         String name = draw.winner().getName();
-        String label = draw.isNew() ? "NEW!" : "Already in your collection";
+        String label = draw.isHolographic()
+                ? (draw.isNew() ? "✦ NEW & HOLOGRAPHIC! ✦" : "✦ HOLOGRAPHIC! ✦")
+                : draw.isNew() ? "NEW!" : "Already in your collection";
         String hint = "Click or press Esc to close";
         int line = font.lineHeight + 4;
         int size = (int) Math.max(40, Math.min(120 * scale, bottom - top - 3 * line - 30));
@@ -581,15 +596,19 @@ public class CollectionSelectionScreen extends Screen {
         int cardHeight = size + 3 * line + 20;
         int cardX = (left + right - cardWidth) / 2;
         int cardY = (top + bottom - cardHeight) / 2;
-        int frameColor = draw.isNew() ? 0xFFFFD700 : 0xFFAAAAAA;
+        // A holographic figure's frame and label run through the rainbow
+        int holographicColor = 0xFF000000
+                | net.minecraft.util.Mth.hsvToRgb((System.currentTimeMillis() % 2000L) / 2000.0F, 0.55F, 1.0F);
+        int labelColor = draw.isHolographic() ? holographicColor : draw.isNew() ? 0xFFFFD700 : 0xFFAAAAAA;
+        int frameColor = labelColor;
         graphics.fill(cardX - 2, cardY - 2, cardX + cardWidth + 2, cardY + cardHeight + 2, frameColor);
         graphics.fill(cardX, cardY, cardX + cardWidth, cardY + cardHeight, 0xFF181818);
         GuiPose.flush(graphics);
 
         int textY = cardY + 8;
-        graphics.drawString(font, label, cardX + (cardWidth - font.width(label)) / 2, textY,
-                draw.isNew() ? 0xFFFFD700 : 0xFFAAAAAA, false);
-        row.renderPreview(graphics, draw.winner(), cardX + (cardWidth - size) / 2, textY + line, size, partialTick);
+        graphics.drawString(font, label, cardX + (cardWidth - font.width(label)) / 2, textY, labelColor, false);
+        row.renderPreview(graphics, draw.winner(), cardX + (cardWidth - size) / 2, textY + line, size, partialTick,
+                draw.isHolographic());
         textY += line + size + 4;
         graphics.drawString(font, name, cardX + (cardWidth - font.width(name)) / 2, textY, 0xFFFFFFFF, false);
         textY += line;
