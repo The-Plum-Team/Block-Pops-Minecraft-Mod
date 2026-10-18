@@ -53,21 +53,23 @@ public class TabButton extends Button {
                      this.getY() + this.height,
                      bgColor);
 
-        // Draw outline
+        // Draw outline. The sides stop short of the top and bottom lines, so a translucent
+        // outline is not drawn twice, and brighter, in the corners.
         // Top
         graphics.fill(this.getX(), this.getY(),
                      this.getX() + this.width, this.getY() + 1,
                      outlineColor);
+        // For selected tab, don't draw bottom border (connects to content area)
+        int sideBottom = this.getY() + this.height - (this.selected ? 0 : 1);
         // Left
-        graphics.fill(this.getX(), this.getY(),
-                     this.getX() + 1, this.getY() + this.height,
+        graphics.fill(this.getX(), this.getY() + 1,
+                     this.getX() + 1, sideBottom,
                      outlineColor);
         // Right
-        graphics.fill(this.getX() + this.width - 1, this.getY(),
-                     this.getX() + this.width, this.getY() + this.height,
+        graphics.fill(this.getX() + this.width - 1, this.getY() + 1,
+                     this.getX() + this.width, sideBottom,
                      outlineColor);
 
-        // For selected tab, don't draw bottom border (connects to content area)
         if (!this.selected) {
             graphics.fill(this.getX(), this.getY() + this.height - 1,
                          this.getX() + this.width, this.getY() + this.height,

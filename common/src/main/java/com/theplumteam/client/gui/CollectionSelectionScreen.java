@@ -70,6 +70,8 @@ public class CollectionSelectionScreen extends Screen {
     private String selectedCollectionId;
     // The selection the other tab keeps until it opens again
     private String otherTabSelection = "";
+    // Whether init has run once; later runs (a resize, a tab switch) keep the selection
+    private boolean opened;
     private List<FigureCollection> collections;
     // Revision of the server's hidden collections the list was last built from
     private int shownHiddenRevision;
@@ -200,6 +202,11 @@ public class CollectionSelectionScreen extends Screen {
         otherTabSelection = leaving;
         collections = collectionsOf(plush);
         rebuildWidgets();
+        selectFirstCollectionIfNone();
+    }
+
+    /** Selects the open tab's first collection, as a click on it would, when nothing is selected. */
+    private void selectFirstCollectionIfNone() {
         if ((selectedCollectionId == null || selectedCollectionId.isEmpty())
                 && collectionListWidget != null && !collectionListWidget.children().isEmpty()) {
             CollectionEntry first = collectionListWidget.children().get(0);
@@ -424,6 +431,12 @@ public class CollectionSelectionScreen extends Screen {
         this.addRenderableWidget(figuresTab);
         this.addRenderableWidget(plushesTab);
         selectedTab = plush ? plushesTab : figuresTab;
+
+        // A machine without a collection opens on the first one of its tab
+        if (!opened) {
+            opened = true;
+            selectFirstCollectionIfNone();
+        }
     }
 
     /**
