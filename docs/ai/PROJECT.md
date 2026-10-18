@@ -57,6 +57,20 @@ fourfold scale the widget cancels, because an item is the one way a model of thi
 the deferred interface of 1.21.6 and later. The preview entity stands on the box block: 1.21.1
 refuses a block entity on a block its type does not list.
 
+A drawn figure or plush comes out holographic one time in 25 (`figure.Holographic`; never in the
+packaged E2E). The `Holographic` flag travels in the block-entity data of the box, the figure
+taken out of it, the plush and every item they drop; tooltips, the draw result card and an
+announcement with its own sound show it. `HolographicRenderTypes` draws it with a shader on
+every lane, by era: 1.20.1 and 1.21.1 swap in the shader instance each loader registers, 1.21.4
+a shader program, and 1.21.5 onward a copy of vanilla's entity cutout pipeline, whose render
+type vanilla builds only through a factory reached by reflection. The shaders follow the GLSL
+eras too: `core/rendertype_holographic` (1.20.1 to 1.21.5), `_ubo` (1.21.6 to 1.21.8), `_330`
+(26.1, 26.2) and `_layout` (26.3); all but the first import `include/holographic.glsl`, whose
+effect the first repeats. Every lane ships every variant, and 1.21.2 to 26.2 resolve the
+`#moj_import`s of all of them when resources load, failing the whole reload on a missing one: a
+variant imports only vanilla includes that 1.21.2 already has and declares the rest itself. The
+effect follows the view, never the clock.
+
 `common/build.gradle` derives special-item definitions and base-model transforms for Minecraft
 1.21.4 onward with `scripts/release/item_resources.py`, from the authored entity models. Older
 lanes retain their original resources; generated modern resources are never authored or committed.

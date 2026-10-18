@@ -11,6 +11,7 @@ import com.theplumteam.client.renderer.FigureBlockItemRenderer;
 import com.theplumteam.client.renderer.FigurePreviewItemRenderer;
 import com.theplumteam.client.renderer.FigureBlockRenderer;
 import com.theplumteam.client.renderer.GachaMachineBlockRenderer;
+import com.theplumteam.client.renderer.HolographicRenderTypes;
 import com.theplumteam.client.renderer.PlushBlockRenderer;
 import com.theplumteam.network.ModNetworking;
 import com.theplumteam.registry.ModBlockEntities;
@@ -33,6 +34,13 @@ import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 //? }
 //? if <1.21.4 {
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
+//? }
+//? if <1.21.2 {
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import net.minecraft.client.renderer.ShaderInstance;
+import net.neoforged.neoforge.client.event.RegisterShadersEvent;
+
+import java.io.IOException;
 //? }
 
 import java.util.ArrayList;
@@ -91,6 +99,16 @@ public class BlockPopsModForgeClient {
                 //? }
         );
     }
+
+    //? if <1.21.2 {
+    // The shader holographic figures and plushes are drawn with; 1.21.2 replaced shader
+    // instances, and later versions draw them as any other
+    @SubscribeEvent
+    public static void registerShaders(RegisterShadersEvent event) throws IOException {
+        event.registerShader(new ShaderInstance(event.getResourceProvider(), HolographicRenderTypes.SHADER,
+                DefaultVertexFormat.NEW_ENTITY), HolographicRenderTypes::setShader);
+    }
+    //? }
 
     //? if >=1.21.4 {
     /*// 1.21.4 registers special model renderers through their own event instead of

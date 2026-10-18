@@ -10,6 +10,7 @@ import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
+import com.theplumteam.figure.Holographic;
 import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.registry.ModItems;
@@ -199,8 +200,9 @@ public class DropBoxPacket {
                     }
 
                     boolean isNew = !discovery.isDiscovered(uniqueFigureId);
+                    boolean holographic = Holographic.roll();
                     // Ahead of the unlock: the screen plays the draw out and sounds its result
-                    DrawResultPacket.sendToPlayer(player, packet.collectionId, selectedFigure.getId(), isNew);
+                    DrawResultPacket.sendToPlayer(player, packet.collectionId, selectedFigure.getId(), isNew, holographic);
                     if (isNew) {
                         discovery.discover(uniqueFigureId);
                         // Use cross-platform networking - PASS QUICKSKIN ID TO CLIENT
@@ -211,6 +213,9 @@ public class DropBoxPacket {
                     CompoundTag blockEntityTag = new CompoundTag();
                     blockEntityTag.putString("FigureId", selectedFigure.getId());
                     blockEntityTag.putString("CollectionId", packet.collectionId);
+                    if (holographic) {
+                        blockEntityTag.putBoolean(Holographic.KEY, true);
+                    }
 
                     if (packet.collectionId.equals(PlayerCollectionHelper.WORLD_PLAYERS_COLLECTION_ID)) {
                         PopBlockColor color = selectedFigure.getFavoriteColor();
@@ -248,12 +253,19 @@ public class DropBoxPacket {
         }
         String uniqueFigureId = collectionId + ":" + figure.getId();
         boolean isNew = !discovery.isDiscovered(uniqueFigureId);
-        DrawResultPacket.sendToPlayer(player, collectionId, figure.getId(), isNew);
+        boolean holographic = Holographic.roll();
+        DrawResultPacket.sendToPlayer(player, collectionId, figure.getId(), isNew, holographic);
         if (isNew) {
             discovery.discover(uniqueFigureId);
             UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, figure.getName(), null, null);
         }
-        player.getInventory().add(new ItemStack(plushItem.get()));
+        ItemStack plush = new ItemStack(plushItem.get());
+        if (holographic) {
+            CompoundTag plushTag = new CompoundTag();
+            plushTag.putBoolean(Holographic.KEY, true);
+            BlockEntityItemData.write(plush, plushTag, "blockpops:plush_" + figure.getId());
+        }
+        player.getInventory().add(plush);
         PlayerDataManager.markDirty(player, discovery);
     }
 

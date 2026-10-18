@@ -4,6 +4,7 @@ import com.theplumteam.util.E2EDeterminism;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.figure.Holographic;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.util.TagReads;
 import com.theplumteam.util.FieldSink;
@@ -108,6 +109,9 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     // Hide logo flag - used for UI displays like the color selection screen
     private boolean hideLogo = false;
+
+    // The figure in the box came out holographic; only written when it did, so plain boxes stack
+    private boolean holographic = false;
 
     public BoxBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.BOX_BLOCK.get(), pos, blockState);
@@ -379,6 +383,23 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         return isOpen;
     }
 
+    public boolean isHolographic() {
+        return holographic;
+    }
+
+    /** For a preview entity only: nothing is saved or sent. */
+    public void setHolographicForRendering(boolean holographic) {
+        this.holographic = holographic;
+    }
+
+    public void setHolographic(boolean holographic) {
+        this.holographic = holographic;
+        setChanged();
+        if (level != null && !level.isClientSide()) {
+            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        }
+    }
+
     public void toggleOpen() {
         if (level != null && !level.isClientSide()) {
             isOpen = !isOpen;
@@ -445,6 +466,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         if (logoScaleX != null) sink.putDouble("LogoScaleX", logoScaleX);
         if (logoScaleY != null) sink.putDouble("LogoScaleY", logoScaleY);
         sink.putBoolean("HideLogo", hideLogo);
+        if (holographic) sink.putBoolean(Holographic.KEY, true);
     }
 
     @Override
@@ -481,6 +503,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         this.alternativeSkinIndex = 0;
         this.poseIndex = 0;
         this.hideLogo = false;
+        this.holographic = false;
         this.collectionIdOverride = collectionId;
         this.colorOverride = color != null ? color.getSerializedName() : null;
     }
@@ -520,6 +543,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         this.logoScaleX = source.getDoubleOrNull("LogoScaleX");
         this.logoScaleY = source.getDoubleOrNull("LogoScaleY");
         this.hideLogo = source.getBoolean("HideLogo", this.hideLogo);
+        this.holographic = source.getBoolean(Holographic.KEY, false);
     }
 
     @Override

@@ -4,6 +4,8 @@ package com.theplumteam.block;
 /*import com.mojang.serialization.MapCodec;
 *///? }
 import com.theplumteam.blockentity.PlushBlockEntity;
+import com.theplumteam.figure.Holographic;
+import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.platform.PlatformHelper;
 import com.theplumteam.plush.BuiltInPlushes;
 import com.theplumteam.registry.ModBlockEntities;
@@ -11,6 +13,7 @@ import com.theplumteam.registry.ModBlocks;
 import com.theplumteam.server.SpecialAccess;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -169,7 +172,7 @@ public class PlushBlock extends BaseEntityBlock {
     }
 
     // A variant is a block of its own, so the plush is replaced where it stands, keeping its
-    // facing and whatever placement the adjustment screen gave it.
+    // facing, whether it is holographic and whatever placement the adjustment screen gave it.
     private static void becomeVariant(BlockState state, Level level, BlockPos pos, String variantId) {
         PlushBlockEntity previous = level.getBlockEntity(pos) instanceof PlushBlockEntity plush ? plush : null;
         BlockState variant = ModBlocks.PLUSH_BLOCKS.get(variantId).get().defaultBlockState()
@@ -179,6 +182,7 @@ public class PlushBlock extends BaseEntityBlock {
             current.setPlacement(previous.getOffsetX(), previous.getOffsetY(), previous.getOffsetZ(), previous.getScale(),
                     previous.getHitboxOffsetX(), previous.getHitboxOffsetY(), previous.getHitboxOffsetZ(),
                     previous.getHitboxScaleX(), previous.getHitboxScaleY(), previous.getHitboxScaleZ());
+            current.setHolographic(previous.isHolographic());
         }
         level.playSound(null, pos, SoundEvents.WOOL_PLACE, SoundSource.BLOCKS, 1.0F, 1.0F);
     }
@@ -205,7 +209,7 @@ public class PlushBlock extends BaseEntityBlock {
         return this.defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
     }
 
-    // No loot table: a plush broken outside creative drops itself.
+    // No loot table: a plush broken outside creative drops itself, still holographic if it was.
     @Override
     //? if >=1.21 {
     /*public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
@@ -213,7 +217,13 @@ public class PlushBlock extends BaseEntityBlock {
     public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
     //? }
         if (!level.isClientSide() && !player.isCreative()) {
-            popResource(level, pos, new ItemStack(this));
+            ItemStack drop = new ItemStack(this);
+            if (level.getBlockEntity(pos) instanceof PlushBlockEntity plush && plush.isHolographic()) {
+                CompoundTag tag = new CompoundTag();
+                tag.putBoolean(Holographic.KEY, true);
+                BlockEntityItemData.write(drop, tag, "blockpops:plush_" + plushId);
+            }
+            popResource(level, pos, drop);
         }
         //? if >=1.21 {
         /*return super.playerWillDestroy(level, pos, state, player);

@@ -13,6 +13,7 @@ import com.theplumteam.client.gui.GreyedTextures;
 import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.client.gui.util.GuiPose;
 import com.theplumteam.client.renderer.FigurePreviewItemRenderer;
+import com.theplumteam.client.renderer.HolographicRenderTypes;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.client.Minecraft;
@@ -90,11 +91,17 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
     /** Draws one figure of this row in colour at any size, placed as its cell places it. */
     public void renderPreview(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick) {
+        renderPreview(graphics, figure, x, y, size, partialTick, false);
+    }
+
+    /** As {@link #renderPreview(GuiGraphics, FigureDefinition, int, int, int, float)}, holographic if asked. */
+    public void renderPreview(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick,
+                              boolean holographic) {
         float cellXOffset = xOffset;
         float cellYOffset = yOffset;
         xOffset *= size / (float) FIGURE_SIZE;
         yOffset *= size / (float) FIGURE_SIZE;
-        render3DFigure(graphics, figure, x, y, size, partialTick, false);
+        render3DFigure(graphics, figure, x, y, size, partialTick, false, holographic);
         xOffset = cellXOffset;
         yOffset = cellYOffset;
     }
@@ -221,12 +228,12 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
             if (isDiscovered) {
                 // Render the 3D figure model for discovered figures
-                render3DFigure(graphics, figure, figureX, y, effectiveFigureSize, partialTick, false);
+                render3DFigure(graphics, figure, figureX, y, effectiveFigureSize, partialTick, false, false);
 
                 drawFigureName(graphics, figure, figureX, y, effectiveFigureSize, 0xFFFFFFFF);
             } else {
                 // The figure is there to see, in black and white until it is discovered
-                render3DFigure(graphics, figure, figureX, y, effectiveFigureSize, partialTick, true);
+                render3DFigure(graphics, figure, figureX, y, effectiveFigureSize, partialTick, true, false);
                 drawFigureName(graphics, figure, figureX, y, effectiveFigureSize, 0xFFC0C0C0);
             }
         }
@@ -238,9 +245,11 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     // 1.21.6 an item is also the one way a model reaches the deferred interface.
     private final java.util.Map<String, ItemStack> previewStacks = new java.util.HashMap<>();
 
-    private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick, boolean greyed) {
-        ItemStack stack = previewStacks.computeIfAbsent(figure.getId() + (greyed ? "|greyed" : ""),
-                key -> FigurePreviewItemRenderer.stack(collectionId, figure.getId(), greyed));
+    private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick,
+                                boolean greyed, boolean holographic) {
+        ItemStack stack = previewStacks.computeIfAbsent(
+                figure.getId() + (greyed ? "|greyed" : "") + (holographic ? "|holographic" : ""),
+                key -> FigurePreviewItemRenderer.stack(collectionId, figure.getId(), greyed, holographic));
         graphics.enableScissor(x, y, x + size, y + size);
         GuiPose.push(graphics);
         GuiPose.translate(graphics, x + size / 2.0f + xOffset, y + size * 0.6f + yOffset);
@@ -255,7 +264,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         graphics.disableScissor();
     }
     *///? } else {
-    private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick, boolean greyed) {
+    private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick,
+                                boolean greyed, boolean holographic) {
         PoseStack poseStack = graphics.pose();
         poseStack.pushPose();
 
@@ -338,9 +348,14 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
             // The model resolves its own texture again and ignores the one it is handed, so
             // the black-and-white copy gets its render type directly
-            RenderType renderType = greyed
-                    ? RenderType.entityCutoutNoCull(textureResource)
-                    : figureModel.getRenderType(renderEntity, textureResource);
+            RenderType renderType;
+            if (greyed) {
+                renderType = RenderType.entityCutoutNoCull(textureResource);
+            } else if (holographic) {
+                renderType = HolographicRenderTypes.entity(textureResource);
+            } else {
+                renderType = figureModel.getRenderType(renderEntity, textureResource);
+            }
             VertexConsumer buffer = bufferSource.getBuffer(renderType);
 
             figureRenderer.actuallyRender(

@@ -8,6 +8,7 @@ import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import org.jetbrains.annotations.Nullable;
@@ -67,6 +68,7 @@ public final class FigureDraw {
     private final FigureCollection collection;
     private final FigureDefinition winner;
     private final boolean isNew;
+    private final boolean holographic;
     private final FigureListWidget list;
     private final List<Stop> path;
     private Stop lit;
@@ -76,10 +78,11 @@ public final class FigureDraw {
     private int stoppedTicks = -1;
 
     private FigureDraw(FigureCollection collection, FigureDefinition winner, boolean isNew,
-                       FigureListWidget list, List<Stop> path) {
+                       boolean holographic, FigureListWidget list, List<Stop> path) {
         this.collection = collection;
         this.winner = winner;
         this.isNew = isNew;
+        this.holographic = holographic;
         this.list = list;
         this.path = path;
         this.lit = path.get(0);
@@ -94,8 +97,11 @@ public final class FigureDraw {
         awaitTicks = RESULT_TIMEOUT;
     }
 
-    /** Called with the server's draw. Without a screen waiting for it, only its sound plays. */
-    public static void onResult(String collectionId, String figureId, boolean isNew) {
+    /**
+     * Called with the server's draw. Without a screen waiting for it, only its sound plays, with
+     * the announcement of a holographic figure.
+     */
+    public static void onResult(String collectionId, String figureId, boolean isNew, boolean holographic) {
         boolean awaited = collectionId.equals(awaitedCollection);
         boolean guaranteed = awaitedGuaranteed;
         awaitedCollection = null;
@@ -106,11 +112,11 @@ public final class FigureDraw {
                 ? screen.figureList() : null;
         if (!awaited || winner == null || list == null || list.getCurrentCollection() == null
                 || !collectionId.equals(list.getCurrentCollection().getId())) {
-            playResultSound(isNew);
+            playResultSound(isNew, holographic, winner);
             return;
         }
         List<Stop> path = path(cells(list, collection, figureId, guaranteed), figureId, winner);
-        active = new FigureDraw(collection, winner, isNew, list, path);
+        active = new FigureDraw(collection, winner, isNew, holographic, list, path);
     }
 
     /** The cells of the figures the token could have given, where the list shows them. */
@@ -233,7 +239,7 @@ public final class FigureDraw {
         if (stoppedTicks >= 0) {
             stoppedTicks++;
             if (stoppedTicks == REVEAL_DELAY) {
-                playResultSound(isNew);
+                playResultSound(isNew, holographic, winner);
             } else if (stoppedTicks >= REVEAL_DELAY + RESULT_TICKS) {
                 finish();
             }
@@ -304,7 +310,7 @@ public final class FigureDraw {
     /** Forgets the draw when its screen closes, sounding a result the screen never got to show. */
     public static void reset() {
         if (active != null && active.stoppedTicks < REVEAL_DELAY) {
-            playResultSound(active.isNew);
+            playResultSound(active.isNew, active.holographic, active.winner);
         }
         finish();
         awaitedCollection = null;
@@ -330,8 +336,28 @@ public final class FigureDraw {
         return isNew;
     }
 
-    private static void playResultSound(boolean isNew) {
+    public boolean isHolographic() {
+        return holographic;
+    }
+
+    // A holographic figure rings out over the usual sound and is announced in shifting colours
+    private static void playResultSound(boolean isNew, boolean holographic, @Nullable FigureDefinition winner) {
         play(isNew ? SoundEvents.PLAYER_LEVELUP : SoundEvents.EXPERIENCE_ORB_PICKUP, 1.0F, 1.0F);
+        if (!holographic) {
+            return;
+        }
+        play(SoundEvents.AMETHYST_BLOCK_CHIME, 1.2F, 1.0F);
+        play(SoundEvents.AMETHYST_BLOCK_CHIME, 1.8F, 1.0F);
+        play(SoundEvents.PLAYER_LEVELUP, 1.6F, 0.6F);
+        Component message = winner == null
+                ? Component.translatable("blockpops.draw.holographic_unknown")
+                : Component.translatable("blockpops.draw.holographic", winner.getName());
+        Minecraft minecraft = Minecraft.getInstance();
+        //? if >=26.2 {
+        /*minecraft.gui.hud.setOverlayMessage(message, true);
+        *///? } else {
+        minecraft.gui.setOverlayMessage(message, true);
+        //? }
     }
 
     private static void play(SoundEvent sound, float pitch, float volume) {
