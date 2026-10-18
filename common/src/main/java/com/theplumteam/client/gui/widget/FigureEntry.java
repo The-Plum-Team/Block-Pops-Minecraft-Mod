@@ -204,14 +204,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             if (figure.isSpecial()) {
                 borderColor = isDiscovered ? SPECIAL_BORDER_COLOR : SPECIAL_BORDER_COLOR_UNDISCOVERED;
             }
-            // Top border
-            graphics.fill(figureX, y, figureX + effectiveFigureSize, y + 1, borderColor);
-            // Bottom border
-            graphics.fill(figureX, y + effectiveFigureSize - 1, figureX + effectiveFigureSize, y + effectiveFigureSize, borderColor);
-            // Left border
-            graphics.fill(figureX, y, figureX + 1, y + effectiveFigureSize, borderColor);
-            // Right border
-            graphics.fill(figureX + effectiveFigureSize - 1, y, figureX + effectiveFigureSize, y + effectiveFigureSize, borderColor);
+            // Each corner pixel is drawn once, so a translucent border does not brighten there
+            graphics.renderOutline(figureX, y, effectiveFigureSize, effectiveFigureSize, borderColor);
 
             if (FigureDraw.isLit(collectionId, figure.getId())) {
                 // The draw's light: a gold wash under the model and a thick gold frame
@@ -293,11 +287,12 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         poseStack.mulPose(Axis.YP.rotationDegrees(yRotation));
         poseStack.mulPose(Axis.XP.rotationDegrees(xRotation));
         poseStack.mulPose(Axis.ZP.rotationDegrees(zRotation));
-        //? if >=1.21 {
-        /*// GeckoLib 4.7 centres the block inside actuallyRender. From 4.8 that half-block
-        // step runs before it, in a hook this direct call never reaches.
-        poseStack.translate(0.5, 0, 0.5);
-        *///? }
+        // The figure stands on its own origin in the middle of the cell. GeckoLib 4.7 centres
+        // the block inside actuallyRender, half a block that grows with the figure's scale, so
+        // that step is undone here. From 4.8 it runs in a hook this direct call never reaches.
+        //? if <1.21 {
+        poseStack.translate(-0.5, 0, -0.5);
+        //? }
 
         MultiBufferSource.BufferSource bufferSource = mc.renderBuffers().bufferSource();
 
