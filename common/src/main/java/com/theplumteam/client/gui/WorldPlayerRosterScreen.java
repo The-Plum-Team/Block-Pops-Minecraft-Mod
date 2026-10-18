@@ -1,6 +1,9 @@
 package com.theplumteam.client.gui;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.theplumteam.client.config.ClientConfig;
+import com.theplumteam.client.gui.util.GuiPose;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
@@ -16,9 +19,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-//? if <1.21.2 {
-import com.mojang.blaze3d.systems.RenderSystem;
-//? }
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -29,17 +29,21 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Lists the players of the World Players collection in two columns, those in the collection
- * and those an operator took out of it, and moves a player between them. The server owns the
- * roster: a move only sends a request, and the columns follow the collection the server syncs
- * back.
+ * A modal over the settings that lists the players of the World Players collection in two
+ * columns, those in the collection and those an operator took out of it, and moves a player
+ * between them. The server owns the roster: a move only sends a request, and the columns
+ * follow the collection the server syncs back.
  */
 public class WorldPlayerRosterScreen extends Screen {
     private static final int ROW_HEIGHT = 22;
     private static final int HEADER_HEIGHT = 16;
     private static final int FACE_SIZE = 16;
-    private static final int IN_COLOR = 0xFF55C46A;
-    private static final int OUT_COLOR = 0xFFE0574A;
+
+    // The settings modal's styling
+    private static final int PANEL_OUTLINE = 0x60FFFFFF;
+    private static final int MODAL_BASE = 0xFF000000;
+    private static final int TEXT_COLOR = 0xFFFFFFFF;
+    private static final int SECONDARY_COLOR = 0xFFAAAAAA;
 
     // Skins are looked up once per player while the screen is open
     private static final Map<UUID, GameProfile> PROFILES = new HashMap<>();
@@ -82,12 +86,12 @@ public class WorldPlayerRosterScreen extends Screen {
         this.panelX = (this.width - this.panelWidth) / 2;
         this.panelY = (this.height - this.panelHeight) / 2;
         this.columnWidth = (this.panelWidth - 32 - 8) / 2;
-        this.columnsTop = this.panelY + 34;
+        this.columnsTop = this.panelY + 40;
         this.columnsBottom = this.panelY + this.panelHeight - 50;
 
         // The search box outlives rebuilds, so typing keeps its cursor and focus
         int searchWidth = Math.min(140, this.panelWidth / 3);
-        this.searchField = new EditBox(this.font, this.panelX + this.panelWidth - 16 - searchWidth, this.panelY + 8,
+        this.searchField = new EditBox(this.font, this.panelX + this.panelWidth - 16 - searchWidth, this.panelY + 12,
                 searchWidth, 18, Component.literal("Search"));
         this.searchField.setMaxLength(32);
         this.searchField.setHint(Component.literal("Search..."));
@@ -144,7 +148,7 @@ public class WorldPlayerRosterScreen extends Screen {
         addMoveButtons(this.inside, this.insideScroll, this.visibleInside, leftX + this.columnWidth - 24, "»", false);
         addMoveButtons(this.outside, this.outsideScroll, this.visibleOutside, rightX + 4, "«", true);
 
-        this.addRenderableWidget(Button.builder(Component.literal("Done"), button -> this.onClose())
+        this.addRenderableWidget(Button.builder(Component.literal("Close"), button -> this.onClose())
                 .bounds(this.panelX + (this.panelWidth - 100) / 2, this.panelY + this.panelHeight - 28, 100, 20)
                 .build());
     }
@@ -241,25 +245,48 @@ public class WorldPlayerRosterScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
-        // Opaque panel over a dimmed world
-        graphics.fill(0, 0, this.width, this.height, 0xD0000000);
-        graphics.fill(this.panelX, this.panelY, this.panelX + this.panelWidth, this.panelY + this.panelHeight, 0xFF151515);
+        // The settings stay underneath, as SettingsScreen keeps the machine screen under itself
+        if (this.parent != null) {
+            this.parent.render(graphics, -1, -1, partialTicks);
+        }
+        GuiPose.flush(graphics);
 
-        int leftX = this.panelX + 16;
-        int rightX = leftX + this.columnWidth + 8;
-        graphics.fill(leftX, this.columnsTop, leftX + this.columnWidth, this.columnsBottom, 0xFF0F1410);
-        graphics.fill(rightX, this.columnsTop, rightX + this.columnWidth, this.columnsBottom, 0xFF140F0F);
+        // Force the modal above the parent, the same way SettingsScreen does
+        //? if >=1.21.6 {
+        /*GuiPose.push(graphics);
+        *///? } elif >=1.21.5 {
+        /*graphics.pose().pushPose();
+        graphics.pose().translate(0, 0, 200);
+        *///? } elif >=1.21.2 {
+        /*RenderSystem.disableScissor();
+        RenderSystem.enableDepthTest();
+        RenderSystem.clear(256); // Clear depth buffer only
+        *///? } else {
+        RenderSystem.disableScissor();
+        RenderSystem.enableDepthTest();
+        RenderSystem.clear(256, false); // Clear depth buffer only
+        //? }
+
+        // The settings modal's panel: an opaque base, the themed translucent black and a subtle outline
+        graphics.fill(0, 0, this.width, this.height, 0x70000000);
+        graphics.fill(this.panelX, this.panelY, this.panelX + this.panelWidth, this.panelY + this.panelHeight, MODAL_BASE);
+        int alpha = (int) (ClientConfig.getInstance().panelOpacity * 255);
+        graphics.fill(this.panelX, this.panelY, this.panelX + this.panelWidth, this.panelY + this.panelHeight, alpha << 24);
+        graphics.renderOutline(this.panelX, this.panelY, this.panelWidth, this.panelHeight, PANEL_OUTLINE);
 
         super.render(graphics, mouseX, mouseY, partialTicks);
 
         // Labels are drawn after the widgets for the same reason as in SettingsScreen:
         // before 1.21.6 anything drawn earlier ends up under the screen background.
-        graphics.drawString(this.font, this.title, this.panelX + 16, this.panelY + 13, 0xFFFFFFFF);
+        int total = this.inside.size() + this.outside.size();
+        graphics.drawString(this.font, this.title, this.panelX + 16, this.panelY + 10, TEXT_COLOR);
+        graphics.drawString(this.font, total + (total == 1 ? " player, " : " players, ") + this.outside.size() + " out",
+                this.panelX + 16, this.panelY + 22, SECONDARY_COLOR);
 
-        renderColumn(graphics, leftX, "In collection (" + this.inside.size() + ")", IN_COLOR,
-                this.visibleInside, this.insideScroll, this.inside.size(), false);
-        renderColumn(graphics, rightX, "Out of collection (" + this.outside.size() + ")", OUT_COLOR,
-                this.visibleOutside, this.outsideScroll, this.outside.size(), true);
+        int leftX = this.panelX + 16;
+        int rightX = leftX + this.columnWidth + 8;
+        renderColumn(graphics, leftX, "In collection", this.visibleInside, this.insideScroll, this.inside.size(), false);
+        renderColumn(graphics, rightX, "Out of collection", this.visibleOutside, this.outsideScroll, this.outside.size(), true);
 
         if (this.inside.isEmpty()) {
             String empty = this.search.isEmpty() ? "No players have joined this world yet." : "No player matches.";
@@ -270,19 +297,22 @@ public class WorldPlayerRosterScreen extends Screen {
         }
 
         graphics.drawCenteredString(this.font, this.status, this.panelX + this.panelWidth / 2,
-                this.columnsBottom + 6, 0xFFAAAAAA);
+                this.columnsBottom + 6, SECONDARY_COLOR);
+
+        //? if >=1.21.5 {
+        /*GuiPose.pop(graphics);
+        *///? }
     }
 
-    private void renderColumn(GuiGraphics graphics, int x, String header, int color, List<FigureDefinition> players,
+    private void renderColumn(GuiGraphics graphics, int x, String header, List<FigureDefinition> players,
                               int scroll, int total, boolean out) {
         int right = x + this.columnWidth;
-        // One-pixel frame, each pixel drawn once
-        graphics.fill(x, this.columnsTop, right, this.columnsTop + 1, color);
-        graphics.fill(x, this.columnsBottom - 1, right, this.columnsBottom, color);
-        graphics.fill(x, this.columnsTop + 1, x + 1, this.columnsBottom - 1, color);
-        graphics.fill(right - 1, this.columnsTop + 1, right, this.columnsBottom - 1, color);
-        graphics.fill(x + 1, this.columnsTop + HEADER_HEIGHT, right - 1, this.columnsTop + HEADER_HEIGHT + 1, color);
-        graphics.drawString(this.font, header, x + 6, this.columnsTop + 4, color);
+        // The settings panel's outline, with a rule under the header as in the collection list
+        graphics.renderOutline(x, this.columnsTop, this.columnWidth, this.columnsBottom - this.columnsTop, PANEL_OUTLINE);
+        graphics.fill(x + 1, this.columnsTop + HEADER_HEIGHT, right - 1, this.columnsTop + HEADER_HEIGHT + 1, PANEL_OUTLINE);
+        graphics.drawString(this.font, header, x + 6, this.columnsTop + 4, TEXT_COLOR);
+        String count = String.valueOf(total);
+        graphics.drawString(this.font, count, right - 6 - this.font.width(count), this.columnsTop + 4, SECONDARY_COLOR);
 
         int faceX = out ? x + 30 : x + 6;
         int nameX = faceX + FACE_SIZE + 4;
@@ -295,7 +325,7 @@ public class WorldPlayerRosterScreen extends Screen {
                 graphics.fill(faceX, y + 2, faceX + FACE_SIZE, y + 2 + FACE_SIZE, 0xAA000000);
             }
             graphics.drawString(this.font, this.font.plainSubstrByWidth(player.getName(), nameWidth),
-                    nameX, y + 6, out ? 0xFFB0B0B0 : 0xFFFFFFFF);
+                    nameX, y + 6, out ? SECONDARY_COLOR : TEXT_COLOR);
         }
 
         // A scroll bar when the column holds more rows than it shows
@@ -306,14 +336,14 @@ public class WorldPlayerRosterScreen extends Screen {
             int barHeight = Math.max(8, trackHeight * rows / total);
             int barTop = trackTop + (trackHeight - barHeight) * scroll / (total - rows);
             int barX = out ? right - 4 : x + this.columnWidth - 30;
-            graphics.fill(barX, barTop, barX + 2, barTop + barHeight, 0xFF8A8A8A);
+            graphics.fill(barX, barTop, barX + 2, barTop + barHeight, SECONDARY_COLOR);
         }
     }
 
     private void drawWrappedHint(GuiGraphics graphics, String text, int x) {
         int y = this.columnsTop + HEADER_HEIGHT + 8;
         for (var line : this.font.split(Component.literal(text), this.columnWidth - 12)) {
-            graphics.drawString(this.font, line, x + 6, y, 0xFF8A8A8A);
+            graphics.drawString(this.font, line, x + 6, y, SECONDARY_COLOR);
             y += 10;
         }
     }
@@ -370,8 +400,34 @@ public class WorldPlayerRosterScreen extends Screen {
     }
 
     @Override
+    //? if >=26 {
+    /*public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent bpEvent, boolean bpDouble) {
+        // A click outside the panel closes the modal, as in SettingsScreen
+        if (isOutsidePanel(bpEvent.x(), bpEvent.y())) {
+            this.onClose();
+            return true;
+        }
+        return super.mouseClicked(bpEvent, bpDouble);
+    }
+    *///? } else {
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        // A click outside the panel closes the modal, as in SettingsScreen
+        if (isOutsidePanel(mouseX, mouseY)) {
+            this.onClose();
+            return true;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+    //? }
+
+    private boolean isOutsidePanel(double mouseX, double mouseY) {
+        return mouseX < this.panelX || mouseX > this.panelX + this.panelWidth
+                || mouseY < this.panelY || mouseY > this.panelY + this.panelHeight;
+    }
+
+    @Override
     public void onClose() {
-        // Return to parent screen
+        // Back to the settings, which stayed underneath
         this.minecraft.setScreen(this.parent);
     }
 
