@@ -287,11 +287,12 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         poseStack.mulPose(Axis.YP.rotationDegrees(yRotation));
         poseStack.mulPose(Axis.XP.rotationDegrees(xRotation));
         poseStack.mulPose(Axis.ZP.rotationDegrees(zRotation));
-        //? if >=1.21 {
-        /*// GeckoLib 4.7 centres the block inside actuallyRender. From 4.8 that half-block
-        // step runs before it, in a hook this direct call never reaches.
-        poseStack.translate(0.5, 0, 0.5);
-        *///? }
+        // The figure stands on its own origin in the middle of the cell. GeckoLib 4.7 centres
+        // the block inside actuallyRender, half a block that grows with the figure's scale, so
+        // that step is undone here. From 4.8 it runs in a hook this direct call never reaches.
+        //? if <1.21 {
+        poseStack.translate(-0.5, 0, -0.5);
+        //? }
 
         MultiBufferSource.BufferSource bufferSource = mc.renderBuffers().bufferSource();
 
