@@ -2,6 +2,7 @@ package com.theplumteam.client.model;
 
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.blockentity.PlushBlockEntity;
+import com.theplumteam.client.renderer.HolographicRenderTypes;
 import com.theplumteam.util.GeoAssets;
 import com.theplumteam.util.ResourceLocations;
 import net.minecraft.resources.ResourceLocation;
@@ -11,6 +12,9 @@ import software.bernie.geckolib.model.GeoModel;
 *///? } elif >=1.21.2 {
 /*import software.bernie.geckolib.renderer.GeoRenderer;
 *///? }
+//? if <1.21.9 {
+import net.minecraft.client.renderer.RenderType;
+//? }
 
 /** One instance per plush: every plush block entity type has its own renderer and model. */
 public class PlushBlockModel extends GeoModel<PlushBlockEntity> {
@@ -51,4 +55,36 @@ public class PlushBlockModel extends GeoModel<PlushBlockEntity> {
     public ResourceLocation getAnimationResource(PlushBlockEntity animatable) {
         return ANIMATION;
     }
+
+    //? if >=1.21.5 {
+    /*// GeckoLib 5 draws from a render state, which carries whether the plush is holographic
+    @Override
+    public void addAdditionalStateData(PlushBlockEntity animatable,
+                                       //? if >=1.21.9 {
+                                       /^Object relatedObject,
+                                       ^///? }
+                                       GeoRenderState renderState) {
+        super.addAdditionalStateData(animatable,
+                //? if >=1.21.9 {
+                /^relatedObject,
+                ^///? }
+                renderState);
+        renderState.addGeckolibData(HolographicRenderTypes.STATE, animatable.isHolographic());
+    }
+    *///? }
+
+    // A holographic plush is drawn with the holographic shader. From 1.21.9 the renderer, not
+    // the model, names the render type (see BlockPopsGeoBlockRenderer).
+    //? if >=1.21.5 && <1.21.9 {
+    /*@Override
+    public RenderType getRenderType(GeoRenderState renderState, ResourceLocation texture) {
+        return renderState.getOrDefaultGeckolibData(HolographicRenderTypes.STATE, false)
+                ? HolographicRenderTypes.entity(texture) : super.getRenderType(renderState, texture);
+    }
+    *///? } elif <1.21.5 {
+    @Override
+    public RenderType getRenderType(PlushBlockEntity animatable, ResourceLocation texture) {
+        return animatable.isHolographic() ? HolographicRenderTypes.entity(texture) : super.getRenderType(animatable, texture);
+    }
+    //? }
 }

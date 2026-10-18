@@ -1,5 +1,6 @@
 package com.theplumteam.blockentity;
 
+import com.theplumteam.figure.Holographic;
 import com.theplumteam.util.FieldSink;
 import com.theplumteam.util.FieldSource;
 import net.minecraft.core.BlockPos;
@@ -38,8 +39,9 @@ import software.bernie.geckolib.util.GeckoLibUtil;
 
 /**
  * Carries a plush's GeckoLib model. Each plush has its own block entity type, so the type
- * alone says which plush this is. The only state is the placement the dev-mode adjustment
- * screen edits: where the model sits, how large it is, and its hitbox.
+ * alone says which plush this is. Its state is whether it came out holographic, and the
+ * placement the dev-mode adjustment screen edits: where the model sits, how large it is, and
+ * its hitbox.
  */
 public class PlushBlockEntity extends BlockEntity implements GeoBlockEntity {
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
@@ -54,6 +56,8 @@ public class PlushBlockEntity extends BlockEntity implements GeoBlockEntity {
     private double hitboxScaleX = 1.0;
     private double hitboxScaleY = 1.0;
     private double hitboxScaleZ = 1.0;
+    // Came out holographic; only written when it did, so plain plushes stack
+    private boolean holographic = false;
     // Rebuilt whenever the hitbox changes; null while the hitbox is the block's own shape.
     @Nullable
     private VoxelShape adjustedShape;
@@ -81,6 +85,16 @@ public class PlushBlockEntity extends BlockEntity implements GeoBlockEntity {
     public double getHitboxScaleX() { return hitboxScaleX; }
     public double getHitboxScaleY() { return hitboxScaleY; }
     public double getHitboxScaleZ() { return hitboxScaleZ; }
+
+    public boolean isHolographic() { return holographic; }
+
+    public void setHolographic(boolean holographic) {
+        this.holographic = holographic;
+        setChanged();
+        if (level != null && !level.isClientSide()) {
+            level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
+        }
+    }
 
     /** The hitbox the adjustment screen set, or null while it is untouched. */
     @Nullable
@@ -153,6 +167,7 @@ public class PlushBlockEntity extends BlockEntity implements GeoBlockEntity {
         sink.putDouble("HitboxScaleX", hitboxScaleX);
         sink.putDouble("HitboxScaleY", hitboxScaleY);
         sink.putDouble("HitboxScaleZ", hitboxScaleZ);
+        if (holographic) sink.putBoolean(Holographic.KEY, true);
     }
 
     @Override
@@ -189,6 +204,7 @@ public class PlushBlockEntity extends BlockEntity implements GeoBlockEntity {
         this.hitboxScaleX = source.getDouble("HitboxScaleX", this.hitboxScaleX);
         this.hitboxScaleY = source.getDouble("HitboxScaleY", this.hitboxScaleY);
         this.hitboxScaleZ = source.getDouble("HitboxScaleZ", this.hitboxScaleZ);
+        this.holographic = source.getBoolean(Holographic.KEY, false);
         rebuildShape();
     }
 

@@ -3,6 +3,7 @@ package com.theplumteam.blockentity;
 import com.theplumteam.util.E2EDeterminism;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.figure.Holographic;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.util.TagReads;
 import com.theplumteam.util.FieldSink;
@@ -65,6 +66,8 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
     private double figureOffsetY = 0.01;
     private double figureOffsetZ = -0.55;
     private double figureScale = 1.0;
+    // Came out holographic; only written when it did, so plain figures stack
+    private boolean holographic = false;
 
     public FigureBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.FIGURE_BLOCK.get(), pos, blockState);
@@ -142,6 +145,8 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     public int getAlternativeSkinIndex() { return alternativeSkinIndex; }
 
+    public boolean isHolographic() { return holographic; }
+
     public String getSkinSnapshot() { return skinSnapshot; }
     public void setSkinSnapshot(String skinSnapshot) {
         this.skinSnapshot = skinSnapshot;
@@ -215,6 +220,7 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         sink.putDouble("FigureOffsetY", figureOffsetY);
         sink.putDouble("FigureOffsetZ", figureOffsetZ);
         sink.putDouble("FigureScale", figureScale);
+        if (holographic) sink.putBoolean(Holographic.KEY, true);
     }
 
     @Override
@@ -251,6 +257,8 @@ public class FigureBlockEntity extends BlockEntity implements GeoBlockEntity {
         this.figureOffsetY = source.getDouble("FigureOffsetY", this.figureOffsetY);
         this.figureOffsetZ = source.getDouble("FigureOffsetZ", this.figureOffsetZ);
         this.figureScale = source.getDouble("FigureScale", this.figureScale);
+        // Not the current value as fallback: the item renderer reuses one entity for every stack
+        this.holographic = source.getBoolean(Holographic.KEY, false);
     }
 
     @Override

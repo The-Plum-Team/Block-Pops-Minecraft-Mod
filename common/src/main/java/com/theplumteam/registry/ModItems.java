@@ -3,6 +3,7 @@ package com.theplumteam.registry;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.figure.BuiltInCollections;
+import com.theplumteam.item.PlushBlockItem;
 import com.theplumteam.platform.PlatformHelper;
 import com.theplumteam.plush.BuiltInPlushes;
 import dev.architectury.registry.registries.DeferredRegister;
@@ -91,14 +92,14 @@ public class ModItems {
     }
 
     static {
-        // Register one plain block item per plush; like the gacha machine, their items are vanilla models
+        // Register one block item per plush; like the gacha machine, their items are vanilla models
         for (String plushId : BuiltInPlushes.PLUSH_IDS) {
             PLUSH_ITEMS.put(plushId, ITEMS.register(
                 "plush_" + plushId,
                 //? if >=1.21.2 {
-                /*() -> new BlockItem(ModBlocks.PLUSH_BLOCKS.get(plushId).get(), itemProperties("plush_" + plushId))
+                /*() -> new PlushBlockItem(ModBlocks.PLUSH_BLOCKS.get(plushId).get(), itemProperties("plush_" + plushId))
                 *///? } else {
-                () -> new BlockItem(ModBlocks.PLUSH_BLOCKS.get(plushId).get(), new Item.Properties())
+                () -> new PlushBlockItem(ModBlocks.PLUSH_BLOCKS.get(plushId).get(), new Item.Properties())
                 //? }
             ));
         }

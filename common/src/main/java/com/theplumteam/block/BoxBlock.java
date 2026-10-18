@@ -6,6 +6,7 @@ package com.theplumteam.block;
 import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
+import com.theplumteam.figure.Holographic;
 import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.platform.PlatformHelper;
 import com.theplumteam.registry.ModBlockEntities;
@@ -247,6 +248,8 @@ public class BoxBlock extends BaseEntityBlock {
                             if (blockEntityTag.contains("SkinSnapshot")) {
                                 boxBlockEntity.setSkinSnapshot(TagReads.string(blockEntityTag, "SkinSnapshot", ""));
                             }
+                            // The box holds whichever figure went back in, holographic or not
+                            boxBlockEntity.setHolographic(Holographic.of(blockEntityTag));
 
                             boxBlockEntity.setFigureExtracted(false);
                             boxBlockEntity.toggleOpen();
@@ -269,6 +272,9 @@ public class BoxBlock extends BaseEntityBlock {
                     blockEntityTag.putDouble("FigureOffsetY", boxBlockEntity.getFigureOffsetY());
                     blockEntityTag.putDouble("FigureOffsetZ", boxBlockEntity.getFigureOffsetZ());
                     blockEntityTag.putDouble("FigureScale", boxBlockEntity.getFigureScale());
+                    if (boxBlockEntity.isHolographic()) {
+                        blockEntityTag.putBoolean(Holographic.KEY, true);
+                    }
 
                     FigureDefinition figureDef = boxBlockEntity.getFigureDefinition();
                     if (figureDef != null && figureDef.getType() == FigureType.PLAYER) {
