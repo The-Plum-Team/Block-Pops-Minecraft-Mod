@@ -447,23 +447,8 @@ public class SettingsScreen extends Screen {
                 contentPanelY + contentPanelHeight,
                 panelBgColor);
 
-        // Draw outline around content panel
-        // Top line
-        graphics.fill(this.panelX, contentPanelY,
-                this.panelX + this.panelWidth, contentPanelY + 1,
-                PANEL_OUTLINE);
-        // Bottom
-        graphics.fill(this.panelX, contentPanelY + contentPanelHeight - 1,
-                this.panelX + this.panelWidth, contentPanelY + contentPanelHeight,
-                PANEL_OUTLINE);
-        // Left
-        graphics.fill(this.panelX, contentPanelY,
-                this.panelX + 1, contentPanelY + contentPanelHeight,
-                PANEL_OUTLINE);
-        // Right
-        graphics.fill(this.panelX + this.panelWidth - 1, contentPanelY,
-                this.panelX + this.panelWidth, contentPanelY + contentPanelHeight,
-                PANEL_OUTLINE);
+        // Draw outline around content panel, each corner pixel once so it does not brighten there
+        graphics.renderOutline(this.panelX, contentPanelY, this.panelWidth, contentPanelHeight, PANEL_OUTLINE);
 
         // Render our modal buttons and widgets
         super.render(graphics, mouseX, mouseY, partialTicks);

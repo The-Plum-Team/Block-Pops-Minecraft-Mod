@@ -204,14 +204,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             if (figure.isSpecial()) {
                 borderColor = isDiscovered ? SPECIAL_BORDER_COLOR : SPECIAL_BORDER_COLOR_UNDISCOVERED;
             }
-            // Top border
-            graphics.fill(figureX, y, figureX + effectiveFigureSize, y + 1, borderColor);
-            // Bottom border
-            graphics.fill(figureX, y + effectiveFigureSize - 1, figureX + effectiveFigureSize, y + effectiveFigureSize, borderColor);
-            // Left border
-            graphics.fill(figureX, y, figureX + 1, y + effectiveFigureSize, borderColor);
-            // Right border
-            graphics.fill(figureX + effectiveFigureSize - 1, y, figureX + effectiveFigureSize, y + effectiveFigureSize, borderColor);
+            // Each corner pixel is drawn once, so a translucent border does not brighten there
+            graphics.renderOutline(figureX, y, effectiveFigureSize, effectiveFigureSize, borderColor);
 
             if (FigureDraw.isLit(collectionId, figure.getId())) {
                 // The draw's light: a gold wash under the model and a thick gold frame
