@@ -129,6 +129,10 @@ public class SettingsScreen extends Screen {
     // Panel opacity slider (Develop tab)
     private OpacitySlider panelOpacitySlider;
 
+    // The background colour the Develop tab turned black, given back when the tab or the
+    // screen closes; null while the tab is not open
+    private float[] backgroundBeforeDevelop;
+
     public SettingsScreen(Screen parent) {
         super(Component.literal("Settings"));
         this.parent = parent;
@@ -674,6 +678,42 @@ public class SettingsScreen extends Screen {
     }
 
     @Override
+    public void removed() {
+        super.removed();
+        // Whatever replaces this screen, the background leaves the Develop tab's black behind
+        restoreBackground();
+    }
+
+    /**
+     * The Develop tab tunes the background colour from black. The colour it replaces is kept,
+     * once, so a rebuild of the screen with the tab still open does not keep the black instead.
+     */
+    private void blackenBackgroundForDevelop() {
+        if (backgroundBeforeDevelop != null) {
+            return;
+        }
+        ClientConfig config = ClientConfig.getInstance();
+        backgroundBeforeDevelop = new float[] {config.backgroundColorR, config.backgroundColorG, config.backgroundColorB};
+        config.backgroundColorR = 0.0f;
+        config.backgroundColorG = 0.0f;
+        config.backgroundColorB = 0.0f;
+        this.bgRedSlider.setValue(0.0);
+        this.bgGreenSlider.setValue(0.0);
+        this.bgBlueSlider.setValue(0.0);
+    }
+
+    private void restoreBackground() {
+        if (backgroundBeforeDevelop == null) {
+            return;
+        }
+        ClientConfig config = ClientConfig.getInstance();
+        config.backgroundColorR = backgroundBeforeDevelop[0];
+        config.backgroundColorG = backgroundBeforeDevelop[1];
+        config.backgroundColorB = backgroundBeforeDevelop[2];
+        backgroundBeforeDevelop = null;
+    }
+
+    @Override
     public boolean shouldCloseOnEsc() {
         return true;
     }
@@ -875,11 +915,6 @@ public class SettingsScreen extends Screen {
      */
     private void createDevelopSettings() {
         ClientConfig config = ClientConfig.getInstance();
-
-        // Reset background color to black when opening settings
-        config.backgroundColorR = 0.0f;
-        config.backgroundColorG = 0.0f;
-        config.backgroundColorB = 0.0f;
 
         // Settings content area - 3 column layout
         int padding = 20;
@@ -1194,6 +1229,11 @@ public class SettingsScreen extends Screen {
      */
     private void switchTab(Tab tab) {
         activeTab = tab;
+        if (tab == Tab.DEVELOP) {
+            blackenBackgroundForDevelop();
+        } else {
+            restoreBackground();
+        }
 
         // Remove all setting widgets
         for (AbstractWidget widget : serverSettingWidgets) {
