@@ -2,8 +2,10 @@
 
 ## Status
 
-Accepted. It amends the rule in [`docs/ai/PROJECT.md`](../../ai/PROJECT.md) that Custom
-collections are the only path by which the game loads content that does not ship with it.
+Accepted. Partially superseded by
+[ADR 0004](0004-extend-world-collections-for-the-redesigned-creator.md). It amends the rule in
+[`docs/ai/PROJECT.md`](../../ai/PROJECT.md) that Custom collections are the only path by which the
+game loads content that does not ship with it.
 [ADR 0002](0002-load-custom-collections-at-runtime.md) remains in force for Custom collections.
 
 ## Context

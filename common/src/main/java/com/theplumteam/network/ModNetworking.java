@@ -265,6 +265,8 @@ public class ModNetworking {
             com.theplumteam.client.worldcontent.FilePicker.tick();
             com.theplumteam.client.worldcontent.ClientWorldUploads.tick();
         });
+        // The creator's client command, in a development environment only
+        com.theplumteam.client.CreatorCommand.register();
 
         BlockPopsMod.logDebug("BlockPops client networking initialized");
     }

@@ -226,7 +226,10 @@ public final class ClientWorldCollections {
         // on its own thread, so this client leaves that registry alone.
         boolean ownsRegistry = !Minecraft.getInstance().hasSingleplayerServer();
         if (ownsRegistry) {
-            for (FigureCollection collection : List.copyOf(CollectionRegistry.getAllCollections())) {
+            // A plush World collection is registered apart from the boxed ones, so both are swept
+            List<FigureCollection> registered = new ArrayList<>(CollectionRegistry.getAllCollections());
+            registered.addAll(CollectionRegistry.getPlushCollections());
+            for (FigureCollection collection : registered) {
                 String id = collection.getId();
                 if (WorldContentIds.isWorldCollectionId(id) && !REGISTERED.contains(id)) {
                     BlockPopsMod.LOGGER.warn("Removing World collection {} that this server did not send", id);
@@ -241,7 +244,8 @@ public final class ClientWorldCollections {
         }
         Set<String> coming = new LinkedHashSet<>();
         for (String sha : newReferenced) {
-            if (ASSETS.get(sha) != AssetState.LOADED) {
+            // A file the creator loaded from disk is the same file, so it keeps drawing until this copy lands
+            if (ASSETS.get(sha) != AssetState.LOADED && !ClientPreviewAssets.holds(sha)) {
                 coming.add(sha);
             }
         }
@@ -284,7 +288,8 @@ public final class ClientWorldCollections {
                 ASSETS.remove(sha);
                 dropAssembly(sha);
             }
-            ClientWorldAssets.release(released);
+            // A file the creator still shows stays loaded until the creator closes
+            ClientWorldAssets.release(ClientPreviewAssets.adopt(released));
         }
         synced = true;
         revision++;
@@ -407,13 +412,15 @@ public final class ClientWorldCollections {
 
     /**
      * Forgets everything the current server sent, unregisters the collections this client
-     * registered and releases every World asset. Runs when the client leaves or joins a
-     * server, and when a sync comes from another session.
+     * registered, releases every World asset and drops the creator's previews. Runs when the
+     * client leaves or joins a server, and when a sync comes from another session.
      */
     public static void forget() {
         REGISTERED.forEach(CollectionRegistry::unregisterDynamicCollection);
         REGISTERED.clear();
         ClientWorldAssets.forget();
+        ClientPreviewAssets.forget();
+        CreatorPreview.clearAll();
         RECORDS.clear();
         RECORD_BYTES.clear();
         blobs = Map.of();
@@ -443,10 +450,29 @@ public final class ClientWorldCollections {
         return revision;
     }
 
-    /** Whether the World collection is archived: still drawn where it stands, but offered nowhere. */
-    public static boolean isArchived(String collectionId) {
+    /** Whether the World collection is a draft: defined, but offered nowhere until it is published. */
+    public static boolean isDraft(String collectionId) {
         WorldCollectionRecord record = RECORDS.get(collectionId);
-        return record != null && record.archived();
+        return record != null && record.draft();
+    }
+
+    /**
+     * Whether a machine may offer the collection: every collection that is not a World
+     * collection, and a World collection the server sent that is neither archived nor a draft.
+     */
+    public static boolean isOffered(String collectionId) {
+        WorldCollectionRecord record = RECORDS.get(collectionId);
+        if (record == null) {
+            // In single player the integrated server registers drafts it sends only to operators
+            return !WorldContentIds.isWorldCollectionId(collectionId);
+        }
+        return !record.archived() && !record.draft();
+    }
+
+    /** When the World collection was last edited, in epoch seconds, or 0 when unknown. */
+    public static long editedAt(String collectionId) {
+        WorldCollectionRecord record = RECORDS.get(collectionId);
+        return record != null ? record.editedAt() : 0L;
     }
 
     /** The records of this server's World collections, in the order it sent them. */
@@ -477,6 +503,11 @@ public final class ClientWorldCollections {
         return Sha256.isValidHex(sha) ? blobs.get(sha) : null;
     }
 
+    /** The whole file table of the last applied sync, for forecasting a change against the budgets. */
+    public static Map<String, BlobInfo> blobs() {
+        return blobs;
+    }
+
     /** Whether the server has lost the file and waits for an operator to upload it again. */
     public static boolean isMissingOnServer(String sha) {
         return missingOnServer.contains(sha);
@@ -486,6 +517,11 @@ public final class ClientWorldCollections {
     public static boolean hasMissingFiles(String collectionId) {
         WorldCollectionRecord record = RECORDS.get(collectionId);
         return record != null && record.referencedShas().stream().anyMatch(missingOnServer::contains);
+    }
+
+    /** Whether the file arrived and is loaded, or was refused because a bundled resource has its id. */
+    public static boolean isLoaded(String sha) {
+        return ASSETS.get(sha) == AssetState.LOADED;
     }
 
     /** Whether the file arrived but could not be verified or loaded, so its fallback draws. */

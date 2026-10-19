@@ -1,12 +1,16 @@
 package com.theplumteam.client.gui;
 
 import com.theplumteam.client.ClientSpecialAccess;
-import com.theplumteam.client.discovery.ClientDiscoveryManager;
+import com.theplumteam.client.gui.util.GuiPose;
+import com.theplumteam.client.gui.util.GuiScaleManager;
+import com.theplumteam.client.gui.widget.FigureEntry;
 import com.theplumteam.client.gui.widget.FigureListWidget;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvent;
@@ -119,6 +123,20 @@ public final class FigureDraw {
         active = new FigureDraw(collection, winner, isNew, holographic, list, path);
     }
 
+    /**
+     * Plays a draw the client made up itself on a list, as the creator's test draw does: the
+     * light runs over the figures a token could give and stops on the winner, which is then
+     * shown as a real draw's is. No token is spent and nothing is awaited from the server, so a
+     * real draw the machine is waiting for is left alone; one already playing is ended. A
+     * holographic winner is shown and sounded as a real one is.
+     */
+    public static void preview(FigureListWidget list, FigureCollection collection, FigureDefinition winner,
+                               boolean isNew, boolean holographic) {
+        finish();
+        active = new FigureDraw(collection, winner, isNew, holographic, list,
+                path(cells(list, collection, winner.getId(), false), winner.getId(), winner));
+    }
+
     /** The cells of the figures the token could have given, where the list shows them. */
     private static List<Stop> cells(FigureListWidget list, FigureCollection collection,
                                     String winnerId, boolean guaranteed) {
@@ -126,7 +144,7 @@ public final class FigureDraw {
         if (guaranteed) {
             List<FigureDefinition> undiscovered = new ArrayList<>();
             for (FigureDefinition figure : pool) {
-                if (!ClientDiscoveryManager.isDiscovered(collection.getId() + ":" + figure.getId())) {
+                if (!list.isDiscovered(collection.getId() + ":" + figure.getId())) {
                     undiscovered.add(figure);
                 }
             }
@@ -294,10 +312,111 @@ public final class FigureDraw {
                 && active.collection.getId().equals(collectionId) && active.winner.getId().equals(figureId);
     }
 
+    /** True while a draw plays or shows its figure on this list. */
+    public static boolean playsOn(FigureListWidget list) {
+        return active != null && active.list == list;
+    }
+
     /** The draw whose figure is being shown, if any. */
     @Nullable
     public static FigureDraw result() {
         return active != null && active.stoppedTicks >= REVEAL_DELAY ? active : null;
+    }
+
+    /**
+     * Shows the figure a draw on this list stopped on, in a card above everything else on the
+     * screen, centred over the list, which it alone dims; the rest of the screen stays usable.
+     * Drawn in the list's own space, which is scaled up when the inverse GUI scale is in use.
+     * Nothing is drawn while no draw on this list, or on its collection, shows its figure.
+     *
+     * @param stamp a line under the card's text in a red frame, such as the creator's note that
+     *              a test draw spends nothing; null for none
+     */
+    public static void drawResultCard(GuiGraphics graphics, Font font, FigureListWidget list, float partialTick,
+                                      @Nullable Component stamp) {
+        FigureDraw draw = result();
+        // The machine makes its list again when the window is resized, so a draw is also shown on
+        // a list that shows its collection; a creator preview's collection is never on the machine
+        FigureCollection shown = list.getCurrentCollection();
+        if (draw == null || (draw.list != list
+                && (shown == null || !shown.getId().equals(draw.collection.getId())))) {
+            return;
+        }
+        FigureEntry row = list.rowOf(draw.winner().getId());
+        if (row == null) {
+            return;
+        }
+        // Everything drawn so far lands below the card: the list's models are drawn with depth,
+        // so the card is also lifted in front of them
+        GuiPose.flush(graphics);
+        GuiPose.nextStratum(graphics);
+        GuiPose.push(graphics);
+        GuiPose.lift(graphics, 400.0f);
+
+        float scale = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getRenderScaleFactor() : 1.0f;
+        int left = (int) (list.left() * scale);
+        int top = (int) (list.top() * scale);
+        int right = (int) (list.right() * scale);
+        int bottom = (int) (list.bottom() * scale);
+        graphics.fill(left, top, right, bottom, 0xB0000000);
+
+        String name = draw.winner().getName();
+        String label = draw.isHolographic()
+                ? (draw.isNew() ? "✦ NEW & HOLOGRAPHIC! ✦" : "✦ HOLOGRAPHIC! ✦")
+                : draw.isNew() ? "NEW!" : "Already in your collection";
+        String hint = "Click or press Esc to close";
+        String stampText = stamp != null ? stamp.getString() : null;
+        int line = font.lineHeight + 4;
+        int lines = stampText != null ? 4 : 3;
+        int size = (int) Math.max(40, Math.min(120 * scale, bottom - top - lines * line - 30));
+        int cardWidth = Math.max(Math.max(size, font.width(hint)), Math.max(font.width(name), font.width(label))) + 40;
+        if (stampText != null) {
+            cardWidth = Math.max(cardWidth, font.width(stampText) + 24);
+        }
+        int cardHeight = size + lines * line + 20;
+        int cardX = (left + right - cardWidth) / 2;
+        int cardY = (top + bottom - cardHeight) / 2;
+        // A holographic figure's frame and label run through the rainbow
+        int holographicColor = 0xFF000000
+                | net.minecraft.util.Mth.hsvToRgb((System.currentTimeMillis() % 2000L) / 2000.0F, 0.55F, 1.0F);
+        int labelColor = draw.isHolographic() ? holographicColor : draw.isNew() ? 0xFFFFD700 : 0xFFAAAAAA;
+        int frameColor = labelColor;
+        graphics.fill(cardX - 2, cardY - 2, cardX + cardWidth + 2, cardY + cardHeight + 2, frameColor);
+        graphics.fill(cardX, cardY, cardX + cardWidth, cardY + cardHeight, 0xFF181818);
+        GuiPose.flush(graphics);
+
+        int textY = cardY + 8;
+        graphics.drawString(font, label, cardX + (cardWidth - font.width(label)) / 2, textY, labelColor, false);
+        row.renderPreview(graphics, draw.winner(), cardX + (cardWidth - size) / 2, textY + line, size, partialTick,
+                false, draw.isHolographic());
+        textY += line + size + 4;
+        graphics.drawString(font, name, cardX + (cardWidth - font.width(name)) / 2, textY, 0xFFFFFFFF, false);
+        textY += line;
+        graphics.drawString(font, hint, cardX + (cardWidth - font.width(hint)) / 2, textY, 0xFF888888, false);
+        if (stampText != null) {
+            textY += line;
+            int stampWidth = font.width(stampText) + 8;
+            int stampX = cardX + (cardWidth - stampWidth) / 2;
+            int outline = 0xFFFF8A8A;
+            int stampTop = textY - 3;
+            int stampBottom = textY + font.lineHeight + 2;
+            graphics.fill(stampX, stampTop, stampX + stampWidth, stampTop + 1, outline);
+            graphics.fill(stampX, stampBottom - 1, stampX + stampWidth, stampBottom, outline);
+            graphics.fill(stampX, stampTop + 1, stampX + 1, stampBottom - 1, outline);
+            graphics.fill(stampX + stampWidth - 1, stampTop + 1, stampX + stampWidth, stampBottom - 1, outline);
+            graphics.drawString(font, stampText, stampX + 4, textY, outline, false);
+        }
+        GuiPose.pop(graphics);
+    }
+
+    /**
+     * Ends a draw on this list at once and without its result sound, as when the creator's
+     * preview it plays on goes away; a real draw the machine waits for is left alone.
+     */
+    public static void stopOn(FigureListWidget list) {
+        if (active != null && active.list == list) {
+            finish();
+        }
     }
 
     /** Puts the shown figure away. */

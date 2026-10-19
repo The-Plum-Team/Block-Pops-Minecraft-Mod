@@ -6,18 +6,32 @@ import com.theplumteam.BlockPopsMod;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 
 /**
  * Central registry for all figure collections.
  * Loads collection definitions from JSON files at startup.
+ *
+ * <p>The client's collection creator previews unsaved collections through an overlay: ids that
+ * start with {@link #PREVIEW_PREFIX} are looked up there first, but only on the thread the
+ * overlay names, so the integrated server sharing this registry never sees a preview. Previews
+ * are never listed.
  */
 public class CollectionRegistry {
+    /**
+     * Starts every preview id. The dot keeps it from ever being a World collection id, a slug or
+     * a Custom collection path.
+     */
+    public static final String PREVIEW_PREFIX = "creator_preview.";
+
     private static final Gson GSON = new Gson();
     private static final Map<String, FigureCollection> collections = new LinkedHashMap<>();
     private static final Map<String, FigureDefinition> figuresById = new HashMap<>();
@@ -25,6 +39,9 @@ public class CollectionRegistry {
     // Plush collections live apart: every listing of "the collections" means the boxed ones.
     private static final Map<String, FigureCollection> plushCollections = new LinkedHashMap<>();
     private static boolean initialized = false;
+    @Nullable
+    private static volatile Function<String, FigureCollection> previewOverlay;
+    private static volatile BooleanSupplier previewThread = () -> false;
 
     /**
      * Loads all collections from data/blockpops/collections/*.json
@@ -122,9 +139,34 @@ public class CollectionRegistry {
     }
 
     /**
+     * Installs the overlay that resolves preview ids, or removes it when null. The overlay is
+     * asked only on a thread for which {@code onPreviewThread} answers true.
+     */
+    public static void setPreviewOverlay(@Nullable Function<String, FigureCollection> overlay,
+                                         BooleanSupplier onPreviewThread) {
+        previewThread = onPreviewThread;
+        previewOverlay = overlay;
+    }
+
+    // The preview a preview id stands for, on the preview thread only
+    @Nullable
+    private static FigureCollection preview(String collectionId) {
+        Function<String, FigureCollection> overlay = previewOverlay;
+        if (overlay == null || collectionId == null || !collectionId.startsWith(PREVIEW_PREFIX)
+                || !previewThread.getAsBoolean()) {
+            return null;
+        }
+        return overlay.apply(collectionId);
+    }
+
+    /**
      * Gets a collection by ID, boxed or plush
      */
     public static Optional<FigureCollection> getCollection(String collectionId) {
+        FigureCollection preview = preview(collectionId);
+        if (preview != null) {
+            return Optional.of(preview);
+        }
         FigureCollection collection = collections.get(collectionId);
         return Optional.ofNullable(collection != null ? collection : plushCollections.get(collectionId));
     }
@@ -140,6 +182,10 @@ public class CollectionRegistry {
      * Gets a figure using the format "collectionId:figureId"
      */
     public static Optional<FigureDefinition> getFigure(String collectionId, String figureId) {
+        FigureCollection preview = preview(collectionId);
+        if (preview != null) {
+            return preview.getFigure(figureId);
+        }
         String fullId = collectionId + ":" + figureId;
         return Optional.ofNullable(figuresById.get(fullId));
     }
@@ -204,7 +250,9 @@ public class CollectionRegistry {
         if (collection == null) {
             return;
         }
+        // A World collection can be switched between boxed and plush, so it may be in either map
         collections.remove(collectionId);
+        plushCollections.remove(collectionId);
         for (FigureDefinition figure : collection.getFigures()) {
             figuresById.remove(collectionId + ":" + figure.getId());
         }
@@ -217,6 +265,8 @@ public class CollectionRegistry {
      * @param isDynamic Whether this is a dynamic collection
      */
     private static void registerCollectionInternal(FigureCollection collection, boolean isDynamic) {
+        // An id lives in one map only, even when the same id comes back as the other kind
+        (collection.isPlush() ? collections : plushCollections).remove(collection.getId());
         (collection.isPlush() ? plushCollections : collections).put(collection.getId(), collection);
 
         // Register all figures with collectionId:figureId key
