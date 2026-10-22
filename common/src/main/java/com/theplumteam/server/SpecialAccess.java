@@ -36,7 +36,8 @@ import java.util.concurrent.Executors;
 
 /**
  * Tells which players are supporters, who receive the special plushes. It asks the service the
- * BlockPops-Hytale project asks, by player name, and follows that project's rules:
+ * BlockPops-Hytale project asks, by Minecraft player name (the service keeps Minecraft and Hytale
+ * usernames apart), and follows that project's rules:
  * - Specials stay locked until the service says otherwise: an unset or unreachable service,
  *   or a player it has not answered for yet, gives no access.
  * - A kept answer that has expired is still used while the service is asked again.
@@ -120,7 +121,7 @@ public final class SpecialAccess {
         }
 
         String playerName = player.getScoreboardName();
-        String url = (apiUrl.endsWith("/") ? apiUrl : apiUrl + "/") + "api/check/"
+        String url = (apiUrl.endsWith("/") ? apiUrl : apiUrl + "/") + "api/check/minecraft/"
                 + URLEncoder.encode(playerName, StandardCharsets.UTF_8);
         long expiresAt = System.currentTimeMillis() + config.getSpecialAccessCacheMinutes() * 60_000L;
         MinecraftServer server = ServerLevels.serverOf(player);
