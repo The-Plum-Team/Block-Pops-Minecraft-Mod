@@ -35,6 +35,8 @@ public final class FigureWidgetRenderer {
     // Persistent cache for dummy entities used in UI rendering
     // Key format: "collectionId:figureId"
     private static final Map<String, BoxBlockEntity> renderEntityCache = new ConcurrentHashMap<>();
+    // Ends the cache key of a posed render entity; a figure id never holds a "|"
+    private static final String POSED = "|posed";
 
     // Initialization flag
     private static volatile boolean initialized = false;
@@ -100,11 +102,21 @@ public final class FigureWidgetRenderer {
      * @return The cached or newly created BoxBlockEntity, or null on error
      */
     public static BoxBlockEntity getOrCreateRenderEntity(FigureDefinition figure, String collectionId) {
+        return getOrCreateRenderEntity(figure, collectionId, false);
+    }
+
+    /**
+     * Gets or creates a cached render entity for the given figure, as above. A {@code posed} one
+     * is apart from the others: the creator's previews set its pose, so the lists drawing the
+     * same figure in the same frame keep theirs standing and no two draws fight over one entity.
+     */
+    public static BoxBlockEntity getOrCreateRenderEntity(FigureDefinition figure, String collectionId,
+                                                         boolean posed) {
         if (figure == null || collectionId == null) {
             return null;
         }
 
-        String cacheKey = collectionId + ":" + figure.getId();
+        String cacheKey = collectionId + ":" + figure.getId() + (posed ? POSED : "");
 
         return renderEntityCache.computeIfAbsent(cacheKey, key -> {
             try {
@@ -141,6 +153,18 @@ public final class FigureWidgetRenderer {
      */
     public static void clearCache() {
         renderEntityCache.clear();
+    }
+
+    /** Drops the render entities of one collection, as when a preview of it goes away. */
+    public static void clearCache(String collectionId) {
+        String prefix = collectionId + ":";
+        renderEntityCache.keySet().removeIf(key -> key.startsWith(prefix));
+    }
+
+    /** Drops the render entity of one figure, as when a preview changes its model or poses. */
+    public static void clearCache(String collectionId, String figureId) {
+        renderEntityCache.remove(collectionId + ":" + figureId);
+        renderEntityCache.remove(collectionId + ":" + figureId + POSED);
     }
 
     /**

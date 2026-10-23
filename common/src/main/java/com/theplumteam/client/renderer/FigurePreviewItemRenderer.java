@@ -45,8 +45,14 @@ public class FigurePreviewItemRenderer
     private static final String FIGURE = "Figure";
     private static final String GREYED = "Greyed";
     private static final String HOLOGRAPHIC = "Holographic";
+    // Set only by the creator's previews: a turn about the figure's upright axis, in degrees,
+    // and the pose of its cycle to show
+    private static final String PREVIEW_YAW = "PreviewYaw";
+    private static final String POSE = "Pose";
+    // Which of the figure's skins to show: 0 its own, 1 onwards its variants
+    private static final String SKIN_INDEX = "SkinIndex";
 
-    private record Preview(BoxBlockEntity entity, boolean greyed) {
+    private record Preview(BoxBlockEntity entity, boolean greyed, float yaw) {
     }
 
     // The stack a screen draws to show one figure, in black and white or holographic when asked.
@@ -62,6 +68,19 @@ public class FigurePreviewItemRenderer
         return stack;
     }
 
+    // Turns the figure a stack from stack() shows and picks its pose, on that same stack, so a
+    // preview dragged round keeps drawing one stack rather than one per angle. The pose counts
+    // from 0 (standing) and is kept within the figure's cycle when it is drawn, and the skin
+    // (0 its own, 1 onwards its variants) within those it has.
+    public static void setView(ItemStack stack, float yaw, int pose, int skin) {
+        CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        CompoundTag tag = data != null ? data.copyTag() : new CompoundTag();
+        tag.putFloat(PREVIEW_YAW, yaw);
+        tag.putInt(POSE, Math.max(0, pose));
+        tag.putInt(SKIN_INDEX, Math.max(0, skin));
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+    }
+
     private static Preview read(ItemStack stack) {
         CustomData data = stack.get(DataComponents.CUSTOM_DATA);
         if (data == null) {
@@ -73,20 +92,42 @@ public class FigurePreviewItemRenderer
         String figureId = tag.getStringOr(FIGURE, "");
         boolean greyed = tag.getBooleanOr(GREYED, false);
         boolean holographic = tag.getBooleanOr(HOLOGRAPHIC, false);
+        float yaw = tag.getFloatOr(PREVIEW_YAW, 0f);
+        int pose = tag.getIntOr(POSE, 0);
+        int skin = tag.getIntOr(SKIN_INDEX, 0);
         ^///? } else {
         String collectionId = tag.getString(COLLECTION);
         String figureId = tag.getString(FIGURE);
         boolean greyed = tag.getBoolean(GREYED);
         boolean holographic = tag.getBoolean(HOLOGRAPHIC);
+        float yaw = tag.getFloat(PREVIEW_YAW);
+        int pose = tag.getInt(POSE);
+        int skin = tag.getInt(SKIN_INDEX);
         //? }
         FigureDefinition figure = CollectionRegistry.getFigure(collectionId, figureId).orElse(null);
-        BoxBlockEntity entity = FigureWidgetRenderer.getOrCreateRenderEntity(figure, collectionId);
+        // A creator preview's stack names a pose and poses a render entity of its own, so the
+        // collection screen's stacks, which name none, keep theirs standing
+        boolean posed = tag.contains(POSE);
+        BoxBlockEntity entity = FigureWidgetRenderer.getOrCreateRenderEntity(figure, collectionId, posed);
         if (entity == null) {
             return null;
         }
         // One entity draws every preview of a figure, so each stack says how this one looks
         entity.setHolographicForRendering(holographic && !greyed);
-        return new Preview(entity, greyed);
+        if (posed) {
+            entity.setPoseIndex(pose);
+            // A preview that names no skin wears the figure's own
+            entity.setAlternativeSkinIndexForPreview(skin);
+        }
+        return new Preview(entity, greyed, yaw);
+    }
+
+    // Turns the model about its upright axis through the point the pose stack is at. A stack
+    // from elsewhere may carry any number, and one that is not finite would wreck the matrix.
+    private static void turn(PoseStack poseStack, float yaw) {
+        if (yaw != 0 && Float.isFinite(yaw)) {
+            poseStack.mulPose(new org.joml.Matrix4f().rotationY((float) Math.toRadians(yaw)));
+        }
     }
 
     @Override
@@ -161,8 +202,14 @@ public class FigurePreviewItemRenderer
             }
             FigureModel.overrideTexture(geoState, greyed);
         }
+        poseStack.pushPose();
+        // The renderer centres the block itself, so the turn goes round that centre
+        poseStack.translate(0.5, 0, 0.5);
+        turn(poseStack, preview.yaw());
+        poseStack.translate(-0.5, 0, -0.5);
         renderer.submit(renderState, poseStack, renderTasks,
                 new net.minecraft.client.renderer.state.level.CameraRenderState());
+        poseStack.popPose();
     }
     *///? } elif >=1.21.5 {
     /*@Override
@@ -192,6 +239,7 @@ public class FigurePreviewItemRenderer
         poseStack.pushPose();
         // The renderer centres the block in a hook this direct call never reaches.
         poseStack.translate(0.5, 0, 0.5);
+        turn(poseStack, preview.yaw());
         renderer.actuallyRender(renderState, poseStack, model.getBakedModel(model.getModelResource(renderState)),
                 renderType, bufferSource, bufferSource.getBuffer(renderType), false,
                 packedLight, packedOverlay, 0xFFFFFFFF);
@@ -240,6 +288,7 @@ public class FigurePreviewItemRenderer
         poseStack.pushPose();
         // The renderer centres the block in a hook this direct call never reaches.
         poseStack.translate(0.5, 0, 0.5);
+        turn(poseStack, preview.yaw());
         renderer.actuallyRender(poseStack, entity, model.getBakedModel(model.getModelResource(entity, null)),
                 renderType, bufferSource, bufferSource.getBuffer(renderType), false, partialTick,
                 packedLight, packedOverlay, 0xFFFFFFFF);

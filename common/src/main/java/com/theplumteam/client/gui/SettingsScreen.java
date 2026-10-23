@@ -5,6 +5,8 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.client.ClientServerSettings;
 import com.theplumteam.client.ClientHiddenCollections;
 import com.theplumteam.client.config.ClientConfig;
+import com.theplumteam.client.gui.creator.CreatorHomeScreen;
+import com.theplumteam.client.gui.creator.ui.UiQuotaMeter;
 import com.theplumteam.client.gui.util.ButtonFactory;
 import com.theplumteam.client.gui.widget.TabButton;
 import com.theplumteam.client.remote.ClientCustomCollections;
@@ -24,7 +26,9 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.Nullable;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -155,14 +159,14 @@ public class SettingsScreen extends Screen {
         collectionToggleButtons.clear();
         customWidgets.clear();
         shownCustomRevision = ClientCustomCollections.revision();
-        shownCreator = canUseCreator();
+        shownCreator = canOpenCreator();
         // The Collections tab goes away when the player may no longer manage collections
         collectionsTabButton = null;
         customTabButton = null;
         creatorTabButton = null;
         if ((activeTab == Tab.COLLECTIONS && !canManageCollections())
                 || (activeTab == Tab.CUSTOM && !canManageCustomCollections())
-                || (activeTab == Tab.CREATOR && !canUseCreator())) {
+                || (activeTab == Tab.CREATOR && !canOpenCreator())) {
             activeTab = Tab.SERVER;
         }
 
@@ -238,7 +242,7 @@ public class SettingsScreen extends Screen {
         }
 
         // Creator tab (for operators, on a server that syncs its World collections)
-        if (canUseCreator()) {
+        if (canOpenCreator()) {
             creatorTabButton = (TabButton) ButtonFactory.createTab(
                     nextTabX, tabY,
                     TAB_WIDTH, TAB_HEIGHT,
@@ -335,8 +339,8 @@ public class SettingsScreen extends Screen {
             new CustomCollectionRequestPacket(true, pendingCustomCode.trim()).sendToServer();
             customStatus = Component.translatable("blockpops.custom_collections.looking_up");
         } else if (activeTab == Tab.CREATOR) {
-            // The World collections list, which returns here when it closes
-            this.minecraft.setScreen(new WorldCollectionsScreen(this));
+            // The creator's overview, which returns here when it closes
+            openCreator(this, machinePosOf(this.parent));
         }
     }
 
@@ -385,7 +389,7 @@ public class SettingsScreen extends Screen {
         // The Creator tab comes and goes with operator status and a server that syncs World
         // collections; a sync alone changes nothing built here, and rebuilding would reset
         // the unsaved reset-hour slider
-        if (shownCreator != canUseCreator()) {
+        if (shownCreator != canOpenCreator()) {
             this.rebuildWidgets();
         }
     }
@@ -597,8 +601,8 @@ public class SettingsScreen extends Screen {
                     this.panelX + (this.panelWidth - this.font.width(explanation)) / 2,
                     this.panelY + TAB_HEIGHT + 30, 0xFFAAAAAA);
             String usage = ClientWorldCollections.records().size() + " collections \u00b7 "
-                    + WorldCollectionsScreen.mib(ClientWorldCollections.quotaUsedKiB()) + " of "
-                    + WorldCollectionsScreen.mib(ClientWorldCollections.quotaMaxKiB()) + " MiB stored";
+                    + UiQuotaMeter.text(ClientWorldCollections.quotaUsedKiB(), ClientWorldCollections.quotaMaxKiB()).getString()
+                    + " stored";
             graphics.drawString(this.font, usage,
                     this.panelX + (this.panelWidth - this.font.width(usage)) / 2,
                     this.panelY + TAB_HEIGHT + 46, 0xFFAAAAAA);
@@ -791,14 +795,38 @@ public class SettingsScreen extends Screen {
     }
 
     /**
-     * Check if the current player can make World collections for this world.
+     * Whether the current player can make World collections for this world. Every way into
+     * the creator asks this one check, and its screens close once it turns false.
      * Operators only: unlike the Cheats tab, development mode alone is not enough, because
      * the server refuses every change from a player below level 2. The server also has to
-     * be one that syncs its World collections. The tab is shown only in development mode
-     * while the creator is still being worked on; the commands stay available.
+     * be one that syncs its World collections. The creator opens only in development mode
+     * while it is still being worked on; the commands stay available.
      */
-    private boolean canUseCreator() {
-        return isDevelopmentMode() && isOperator() && ClientWorldCollections.isSynced();
+    public static boolean canOpenCreator() {
+        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        return isDevelopmentMode() && minecraft.player != null
+                && com.theplumteam.util.ServerLevels.hasCommandLevel(minecraft.player, 2)
+                && ClientWorldCollections.isSynced();
+    }
+
+    /**
+     * Opens the creator's overview of this world's World collections over a screen it goes back
+     * to when it closes, if {@link #canOpenCreator()} allows it.
+     *
+     * @param parent     the screen to go back to, or null to go back to the game
+     * @param machinePos the claw or gacha machine the creator was opened from, which its cards
+     *                   offer to put a collection in; null when there is none
+     */
+    public static void openCreator(@Nullable Screen parent, @Nullable BlockPos machinePos) {
+        if (canOpenCreator()) {
+            net.minecraft.client.Minecraft.getInstance().setScreen(new CreatorHomeScreen(parent, machinePos));
+        }
+    }
+
+    // The machine whose screen opened these settings, if they were opened from one
+    @Nullable
+    private static BlockPos machinePosOf(@Nullable Screen screen) {
+        return screen instanceof CollectionSelectionScreen machine ? machine.machinePos() : null;
     }
 
     /**

@@ -7,6 +7,7 @@ import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.util.GeoAssets;
 import com.theplumteam.util.ResourceLocations;
 import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,33 +50,58 @@ public final class WorldCollectionMaterializer {
 
     /**
      * Builds the collection of a record that passed {@link WorldCollectionRecord#parse}.
-     * An archived collection keeps every figure defined but enables none of them.
+     * An archived collection, or a draft, keeps every figure defined but enables none of them.
      */
     public static FigureCollection materialize(WorldCollectionRecord record, Map<String, BlobInfo> blobs) {
         List<FigureDefinition> figures = new ArrayList<>(record.figures().size());
+        boolean offered = !record.archived() && !record.draft();
         for (WorldCollectionRecord.Figure figure : record.figures()) {
-            figures.add(figure(figure, blobs, figure.enabled() && !record.archived()));
+            figures.add(figure(figure, blobs, figure.enabled() && offered, record.drawWeight(figure)));
         }
         ResourceLocation boxTexture = record.boxTexture() != null ? WorldContentIds.texture(record.boxTexture())
                 : record.boxColor() != null ? boxColorTexture(record.boxColor())
                 : null;
+        WorldCollectionRecord.LogoLayout layout = record.effectiveLogoLayout();
         FigureCollection.LogoConfig logo = record.logo() != null
-                ? FigureCollection.LogoConfig.automatic(WorldContentIds.texture(record.logo()), 1.0f, 0.0f, 0.0f)
+                ? FigureCollection.LogoConfig.automatic(WorldContentIds.texture(record.logo()), layout.scale(),
+                        layout.offsetXPixels(), layout.offsetYPixels())
                 : null;
         return new FigureCollection(record.id(), record.name(), record.author().isEmpty() ? "Unknown" : record.author(),
-                null, boxTexture, logo, figures, record.backgroundColor(), false, null);
+                record.authorUrl(), boxTexture, logo, figures, record.backgroundColor(), record.plush(), null);
+    }
+
+    /**
+     * The box-face region of a model figure, as {@link FigureDefinition.RenderOptions#boxFaceUv}
+     * takes it, or null when its record names none.
+     */
+    @Nullable
+    public static float[] boxFaceUv(WorldCollectionRecord.Figure figure, Map<String, BlobInfo> blobs) {
+        WorldCollectionRecord.BoxFace face = figure.boxFace();
+        BlobInfo texture = blobs.get(figure.texture());
+        if (figure.kind() != WorldCollectionRecord.Kind.MODEL || face == null || face.uv() == null || texture == null) {
+            return null;
+        }
+        WorldCollectionRecord.Uv uv = face.uv();
+        return new float[] {uv.u(), uv.v(), uv.w(), uv.h(), texture.width(), texture.height()};
     }
 
     private static FigureDefinition figure(WorldCollectionRecord.Figure figure, Map<String, BlobInfo> blobs,
-                                           boolean enabled) {
+                                           boolean enabled, int drawWeight) {
         float scale = figure.scale();
         ResourceLocation texture = WorldContentIds.texture(figure.texture());
+        // Variants are textures only: model, size, poses and box face come from the figure
+        List<FigureDefinition.AlternativeSkin> variants = new ArrayList<>(figure.variants().size());
+        for (WorldCollectionRecord.Variant variant : figure.variants()) {
+            variants.add(new FigureDefinition.AlternativeSkin(variant.name(), WorldContentIds.texture(variant.texture()),
+                    null, null, null, null, List.of()));
+        }
+        WorldCollectionRecord.BoxFace face = figure.boxFace();
         if (figure.kind() == WorldCollectionRecord.Kind.SKIN) {
-            return new FigureDefinition(figure.id(), figure.name(), FigureDefinition.DEFAULT_MODEL, texture,
-                    FIGURE_ANIMATION, List.of(),
-                    new FigureDefinition.RenderOptions(null, scale, scale, null, null, null, false, List.of(), List.of(),
-                            List.of()),
-                    false, enabled);
+            return FigureDefinition.weighted(figure.id(), figure.name(), FigureDefinition.DEFAULT_MODEL, texture,
+                    FIGURE_ANIMATION, variants,
+                    new FigureDefinition.RenderOptions(null, scale, scale, null, null,
+                            face != null ? face.show() : null, false, List.of(), List.of(), List.of()),
+                    false, enabled, figure.rarity(), drawWeight);
         }
         ResourceLocation poses = figure.animation() != null ? WorldContentIds.animation(figure.animation()) : null;
         BlobInfo animation = figure.animation() != null ? blobs.get(figure.animation()) : null;
@@ -88,12 +114,13 @@ public final class WorldCollectionMaterializer {
                 FIT_DEPTH / bounds.depth());
         float guiScale = scale * (float) fit(FIT_GUI_HEIGHT / bounds.height(), FIT_GUI_WIDTH / bounds.width(),
                 Double.POSITIVE_INFINITY);
-        return new FigureDefinition(figure.id(), figure.name(), WorldContentIds.model(figure.model()), texture,
-                FIGURE_ANIMATION, List.of(),
-                new FigureDefinition.RenderOptions(poses, fitted, guiScale, null,
-                        bounds.equals(ModelBounds.NONE) ? null : offset(bounds, fitted), false, poseLocked,
-                        List.of(), List.of(), List.of()),
-                false, enabled);
+        // A model's face is not where a skin's is, so it shows only where the record places it
+        return FigureDefinition.weighted(figure.id(), figure.name(), WorldContentIds.model(figure.model()), texture,
+                FIGURE_ANIMATION, variants,
+                new FigureDefinition.RenderOptions(poses, fitted, guiScale, boxFaceUv(figure, blobs),
+                        bounds.equals(ModelBounds.NONE) ? null : offset(bounds, fitted), face != null && face.show(),
+                        poseLocked, List.of(), List.of(), List.of()),
+                false, enabled, figure.rarity(), drawWeight);
     }
 
     /**

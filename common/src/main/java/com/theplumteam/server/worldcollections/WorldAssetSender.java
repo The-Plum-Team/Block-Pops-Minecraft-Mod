@@ -35,8 +35,9 @@ import java.util.concurrent.RejectedExecutionException;
  * so a slow client only slows itself.
  *
  * <p>A player may ask only after it received a sync, only for files a registered
- * collection names, and for each file once per connection, plus once more when it could
- * not verify the copy it received.
+ * collection of its view names (a draft's files only while it is an operator, though a
+ * copy already under way is finished), and for each file once per connection, plus once
+ * more when it could not verify the copy it received.
  *
  * <p>A file dropped before it was sent whole does not count against that: one no sync
  * names any more is sent after the next sync that names it again, and one that could not
@@ -98,7 +99,7 @@ public final class WorldAssetSender {
         if (session.dropped.isEmpty()) {
             return;
         }
-        Set<String> named = WorldCollections.sentShas();
+        Set<String> named = WorldCollections.sentShasFor(player);
         for (String sha : session.dropped) {
             if (named.contains(sha) && !WorldCollections.isMissing(sha) && !session.pending.contains(sha)) {
                 session.sends.merge(sha, 1, Integer::sum);
@@ -117,7 +118,7 @@ public final class WorldAssetSender {
                     player.getName().getString());
             return;
         }
-        Set<String> named = WorldCollections.sentShas();
+        Set<String> named = WorldCollections.sentShasFor(player);
         int foreign = 0;
         for (WorldAssetRequestPacket.Request request : requests) {
             String sha = request.sha();
@@ -194,7 +195,7 @@ public final class WorldAssetSender {
                             int budget) {
         int sentNow = 0;
         while (sentNow < budget) {
-            fill(session, store, executor);
+            fill(player, session, store, executor);
             Buffered head = session.buffered.peekFirst();
             if (head == null || !head.bytes.isDone()) {
                 break;
@@ -204,6 +205,14 @@ public final class WorldAssetSender {
                 session.resend.remove(head.sha);
                 forgo(session, head.sha);
                 WorldCollections.markLost(store, head.sha);
+                continue;
+            }
+            // A file read while the player could still see it, as a draft's before it was deopped,
+            // is not started once its view lost it; a copy already under way is finished
+            if (head.offset == 0 && !WorldCollections.sentShasFor(player).contains(head.sha)) {
+                session.buffered.pollFirst();
+                session.resend.remove(head.sha);
+                forgo(session, head.sha);
                 continue;
             }
             byte[] bytes = head.bytes.join();
@@ -231,12 +240,14 @@ public final class WorldAssetSender {
     }
 
     /** Starts reading the files at the head of the queue, while fewer than the maximum are held. */
-    private static void fill(Session session, WorldCollectionStore store, ExecutorService executor) {
+    private static void fill(ServerPlayer player, Session session, WorldCollectionStore store,
+                             ExecutorService executor) {
         while (session.buffered.size() < MAX_BUFFERED && !session.queue.isEmpty()) {
             String sha = session.queue.pollFirst();
             WorldCollectionStore.StoredBlob blob = store.state().blobs().get(sha);
-            // The file may have been dropped or lost since it was asked for
-            if (blob == null || store.isMissing(sha) || !WorldCollections.sentShas().contains(sha)) {
+            // The file may have been dropped or lost since it was asked for, or the player's
+            // view may have lost it, as a draft's files when the player stops being an operator
+            if (blob == null || store.isMissing(sha) || !WorldCollections.sentShasFor(player).contains(sha)) {
                 forgo(session, sha);
                 continue;
             }
