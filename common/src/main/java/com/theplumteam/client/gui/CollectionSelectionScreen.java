@@ -1,5 +1,6 @@
 package com.theplumteam.client.gui;
 
+import com.theplumteam.client.gui.style.DiamondTransition;
 import com.theplumteam.client.gui.style.MenuGuiScale;
 import com.theplumteam.client.gui.style.StyledButton;
 import com.theplumteam.client.gui.style.Surfaces;
@@ -72,8 +73,14 @@ import java.util.List;
  *
  * <p>The menu draws at its own GUI scale, chosen from the window size ({@link MenuGuiScale}), so
  * it looks the same whatever scale the player picked, and lays itself out from the canvas that
- * gives: the columns share the width, and the figure grid fits as many columns of cells as the
- * right column holds.
+ * gives: the two columns stand in a block centred on it, the figure column as wide as a grid of
+ * up to four cells needs.
+ *
+ * <p>It opens with a {@link DiamondTransition}: diamonds cover the world from the middle outward,
+ * the menu is laid out behind them at its own scale, and they uncover it the same way. Until they
+ * cover the world the window keeps the player's scale, so the hotbar under them does not jump;
+ * the menu takes its scale in a tick, which comes before the frame it draws, so no frame mixes
+ * the two scales.
  */
 public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Scaled {
     private static final Logger LOGGER = LoggerFactory.getLogger(CollectionSelectionScreen.class);
@@ -88,6 +95,9 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     private String otherTabSelection = "";
     // Whether init has run once; later runs (a resize, a tab switch) keep the selection
     private boolean opened;
+    // The diamonds the menu opens behind, and whether it has been laid out behind them yet
+    private final DiamondTransition opening = new DiamondTransition();
+    private boolean menuShown;
     private List<FigureCollection> collections;
     // Revision of the server's hidden collections the list was last built from
     private int shownHiddenRevision;
@@ -279,6 +289,13 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
 
     @Override
     protected void init() {
+        // Nothing of the menu exists until the opening diamonds cover the world; tick() lays it
+        // out then
+        if (!opening.covered()) {
+            return;
+        }
+        menuShown = true;
+        opening.uncover();
         // The menu draws at its own GUI scale, chosen from the window size, so it looks the same
         // whatever scale the player picked; a window resize runs init() again
         if (this.minecraft != null) {
@@ -456,16 +473,24 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         super.onClose();
     }
 
-    //? if >=1.21 && <1.21.6 {
+    //? if >=1.21 {
     /*@Override
     public void renderBackground(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // This screen draws its own opaque background before Screen.render, which on
-        // 1.21 to 1.21.5 calls this vanilla pass and would blur the screen on top of it.
+        // This screen draws its own opaque background, and the world stays sharp under the
+        // opening diamonds; vanilla's pass would blur it, from 1.21.6 before render() and on
+        // 1.21 to 1.21.5 from Screen.render, over this screen's own background.
     }
     *///? }
 
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // The opening diamonds grow over the world, and cover it until the menu is laid out
+        // behind them
+        if (!menuShown || opening.hidesMenu()) {
+            opening.draw(graphics, this.width, this.height);
+            return;
+        }
+
         // The machine's colour and its scrolling stars, then a backdrop under each column
         renderBackgroundEffects(graphics, partialTick);
         int backdropAlpha = (int) (ClientConfig.getInstance().panelOpacity * 200);
@@ -486,6 +511,8 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         super.render(graphics, mouseX, mouseY, partialTick);
 
         renderDrawResult(graphics, partialTick);
+        // The opening diamonds, shrinking away from the middle over everything
+        opening.draw(graphics, this.width, this.height);
     }
 
     /**
@@ -898,9 +925,14 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     @Override
     public void tick() {
         super.tick();
+        // Once the opening diamonds cover the world, the menu is laid out behind them at its own
+        // scale. A tick comes before the frame it draws, so that frame is all at the new scale.
+        if (!menuShown && opening.covered()) {
+            rebuildWidgets();
+        }
         // Another mod can put the player's scale back on the window after init(), as some do
         // whenever a screen opens; take the menu's scale back and lay the menu out again
-        if (this.minecraft != null && MenuGuiScale.reapply(this.minecraft, this)) {
+        if (menuShown && this.minecraft != null && MenuGuiScale.reapply(this.minecraft, this)) {
             rebuildWidgets();
         }
         // Rebuild the list when the server changes its hidden collections
@@ -955,14 +987,16 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     @Override
     //? if >=26 {
     /*public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent bpEvent, boolean bpDouble) {
-        if (blocksForDraw(bpEvent.x(), bpEvent.y())) {
+        // The menu takes no clicks while the opening diamonds still hide it
+        if (opening.hidesMenu() || blocksForDraw(bpEvent.x(), bpEvent.y())) {
             return true;
         }
         return super.mouseClicked(bpEvent, bpDouble);
     }
     *///? } else {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (blocksForDraw(mouseX, mouseY)) {
+        // The menu takes no clicks while the opening diamonds still hide it
+        if (opening.hidesMenu() || blocksForDraw(mouseX, mouseY)) {
             return true;
         }
         return super.mouseClicked(mouseX, mouseY, button);
@@ -991,8 +1025,10 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     *///? } else {
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
     //? }
-        // The figure list holds still while a draw lights its figures or shows the one it drew
-        if (FigureDraw.isBusy() || (FigureDraw.result() != null && isOverFigureList(mouseX, mouseY))) {
+        // The figure list holds still while a draw lights its figures or shows the one it drew,
+        // and the menu while the opening diamonds hide it
+        if (opening.hidesMenu() || FigureDraw.isBusy()
+                || (FigureDraw.result() != null && isOverFigureList(mouseX, mouseY))) {
             return true;
         }
         //? if >=1.21 {

@@ -51,6 +51,7 @@ the option changes or the display resizes under them.
 | A slider | extend `StyledSlider` |
 | A sidebar tab | `TabButton` with `setIcon(PixelIcon.X)` |
 | A title or a big label | `PixelFont` (upper-case blocky font, crisp sizes only) |
+| A menu's opening | `DiamondTransition` (dark diamonds cover the world from the middle outward, then uncover the menu) |
 | Text on a dark face | `UiText.draw`, `drawFitted` (cut with "..."), `wrap` (word-wrapped lines) |
 | A text field in the creator | `creator.ui.UiField`, an `EditBox` in a well |
 
@@ -59,6 +60,17 @@ to create or upload, `DANGER` (red) to delete, `COLLECTION` (purple) for collect
 
 Messages stay as written (for example "Done", "Use Regular Token"): the pixel font upper-cases only
 what it draws, and the packaged E2E scenario finds widgets by their message.
+
+## Opening transition
+
+The machine menu opens as a game changes screens: small dark diamonds with a grey rim grow from
+the middle of the screen until they cover the world, the menu is laid out behind them, and they
+shrink away in the same order to uncover it (about 0.7 s). A diamond is a square turned 45
+degrees (`GuiPose.rotate`), so the transition is plain fills on every version. The menu takes its
+own scale only once the diamonds cover the world, in `tick()`, which comes before the frame it
+draws: the hotbar under the diamonds keeps the player's scale and no frame mixes the two. The
+menu takes no clicks while the diamonds hide it, and the packaged E2E skips the transition
+(`E2EDeterminism.transitionMillis`).
 
 ## Versions
 
