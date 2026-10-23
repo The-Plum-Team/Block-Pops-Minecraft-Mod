@@ -1,0 +1,10 @@
+{
+  "oversized_in_gui": true,
+  "model": {
+    "type": "minecraft:special",
+    "base": "blockpops:item/creator_box",
+    "model": {
+      "type": "blockpops:creator_box"
+    }
+  }
+}

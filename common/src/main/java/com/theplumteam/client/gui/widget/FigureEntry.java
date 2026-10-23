@@ -30,6 +30,7 @@ import software.bernie.geckolib.cache.object.BakedGeoModel;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * Entry for displaying a row of up to 4 figures with 3D models
@@ -52,6 +53,19 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     // Written above this row, in the widened gap after the row before, to head a group of figures
     @org.jetbrains.annotations.Nullable
     private String heading;
+    // Set only by the creator's previews: a turn about each figure's upright axis, in degrees,
+    // and the pose of its cycle to show. Without a view a figure keeps its camera and pose.
+    private boolean hasView;
+    private float previewYaw;
+    private int previewPose;
+    // Which of a figure's skins the creator's previews show: 0 its own, 1 onwards its variants
+    private int previewSkin;
+    // Whether a figure counts as discovered, asked with "collection:figure"; the creator's
+    // previews set their own to show a collection as a new player or a collector would see it
+    private Predicate<String> discovered = DEFAULT_DISCOVERED;
+
+    /** Whether the player discovered a figure, asked with "collection:figure": the client's own record. */
+    public static final Predicate<String> DEFAULT_DISCOVERED = ClientDiscoveryManager::isDiscovered;
 
     private static final int FIGURE_SIZE = 80;
     private static final int GRID_SPACING = 4;
@@ -89,19 +103,66 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         this.heading = heading;
     }
 
+    /**
+     * Decides which figures this entry shows as discovered, asked with "collection:figure", in
+     * place of the client's own record; null goes back to that record.
+     */
+    public void setDiscovered(@org.jetbrains.annotations.Nullable Predicate<String> discovered) {
+        this.discovered = discovered != null ? discovered : DEFAULT_DISCOVERED;
+    }
+
+    /**
+     * Turns every figure this entry draws about its own upright axis, in degrees, on top of the
+     * camera, as the creator's previews do when dragged round.
+     */
+    public void setPreviewYaw(float yaw) {
+        this.previewYaw = yaw;
+        this.hasView = true;
+    }
+
+    /**
+     * Shows every figure this entry draws in one pose of its cycle, counted from 0 (standing) to
+     * the figure's pose count less one (sitting), as the creator's previews do.
+     */
+    public void setPreviewPose(int pose) {
+        this.previewPose = Math.max(0, pose);
+        this.hasView = true;
+    }
+
+    /**
+     * Shows every figure this entry draws wearing one of its skins: 0 its own, 1 onwards its
+     * variants, kept within those it has, as the creator's previews do.
+     */
+    public void setPreviewSkin(int skin) {
+        this.previewSkin = Math.max(0, skin);
+        this.hasView = true;
+    }
+
     /** Draws one figure of this row in colour at any size, placed as its cell places it. */
     public void renderPreview(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick) {
         renderPreview(graphics, figure, x, y, size, partialTick, false);
     }
 
-    /** As {@link #renderPreview(GuiGraphics, FigureDefinition, int, int, int, float)}, holographic if asked. */
+    /**
+     * Draws one figure of this row at any size, placed as its cell places it, in black and white
+     * when greyed, as an undiscovered figure is shown.
+     */
     public void renderPreview(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick,
-                              boolean holographic) {
+                              boolean greyed) {
+        renderPreview(graphics, figure, x, y, size, partialTick, greyed, false);
+    }
+
+    /**
+     * As {@link #renderPreview(GuiGraphics, FigureDefinition, int, int, int, float, boolean)},
+     * holographic if asked; a greyed figure is never shown holographic.
+     */
+    public void renderPreview(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick,
+                              boolean greyed, boolean holographic) {
         float cellXOffset = xOffset;
         float cellYOffset = yOffset;
         xOffset *= size / (float) FIGURE_SIZE;
         yOffset *= size / (float) FIGURE_SIZE;
-        render3DFigure(graphics, figure, x, y, size, partialTick, false, holographic);
+        render3DFigure(graphics, figure, x, y, size, partialTick, greyed, holographic && !greyed);
         xOffset = cellXOffset;
         yOffset = cellYOffset;
     }
@@ -184,7 +245,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             // Check if this figure has been discovered; a draw that unlocked it keeps it hidden
             // until the draw stops on it
             String uniqueFigureId = collectionId + ":" + figure.getId();
-            boolean isDiscovered = ClientDiscoveryManager.isDiscovered(uniqueFigureId)
+            boolean isDiscovered = discovered.test(uniqueFigureId)
                     && !FigureDraw.hides(collectionId, figure.getId());
 
             // Draw background (darker for undiscovered figures)
@@ -250,6 +311,9 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         ItemStack stack = previewStacks.computeIfAbsent(
                 figure.getId() + (greyed ? "|greyed" : "") + (holographic ? "|holographic" : ""),
                 key -> FigurePreviewItemRenderer.stack(collectionId, figure.getId(), greyed, holographic));
+        if (hasView) {
+            FigurePreviewItemRenderer.setView(stack, previewYaw, previewPose, previewSkin);
+        }
         graphics.enableScissor(x, y, x + size, y + size);
         GuiPose.push(graphics);
         GuiPose.translate(graphics, x + size / 2.0f + xOffset, y + size * 0.6f + yOffset);
@@ -269,7 +333,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         PoseStack poseStack = graphics.pose();
         poseStack.pushPose();
 
-        BoxBlockEntity renderEntity = FigureWidgetRenderer.getOrCreateRenderEntity(figure, collectionId);
+        // A preview with a view poses its own render entity, apart from the lists' standing one
+        BoxBlockEntity renderEntity = FigureWidgetRenderer.getOrCreateRenderEntity(figure, collectionId, hasView);
         if (renderEntity == null) {
             poseStack.popPose();
             return;
@@ -297,6 +362,12 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         poseStack.mulPose(Axis.YP.rotationDegrees(yRotation));
         poseStack.mulPose(Axis.XP.rotationDegrees(xRotation));
         poseStack.mulPose(Axis.ZP.rotationDegrees(zRotation));
+        if (hasView) {
+            // The figure stands on the origin, so a preview's turn goes round it
+            poseStack.mulPose(Axis.YP.rotationDegrees(previewYaw));
+            renderEntity.setPoseIndex(previewPose);
+            renderEntity.setAlternativeSkinIndexForPreview(previewSkin);
+        }
         // The figure stands on its own origin in the middle of the cell. GeckoLib 4.7 centres
         // the block inside actuallyRender, half a block that grows with the figure's scale, so
         // that step is undone here. From 4.8 it runs in a hook this direct call never reaches.
@@ -415,13 +486,13 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         } else if (figures.size() == 1) {
             FigureDefinition figure = figures.get(0);
             String uniqueFigureId = collectionId + ":" + figure.getId();
-            boolean isDiscovered = ClientDiscoveryManager.isDiscovered(uniqueFigureId);
+            boolean isDiscovered = discovered.test(uniqueFigureId);
             return Component.literal(isDiscovered ? figure.getName() : "Undiscovered Figure");
         } else {
             int discoveredCount = 0;
             for (FigureDefinition figure : figures) {
                 String uniqueFigureId = collectionId + ":" + figure.getId();
-                if (ClientDiscoveryManager.isDiscovered(uniqueFigureId)) {
+                if (discovered.test(uniqueFigureId)) {
                     discoveredCount++;
                 }
             }

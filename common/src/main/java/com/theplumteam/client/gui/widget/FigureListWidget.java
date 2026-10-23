@@ -9,6 +9,7 @@ import net.minecraft.client.gui.components.ObjectSelectionList;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * Scrollable list widget for displaying figures with 3D models
@@ -26,6 +27,9 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
     private long lastFollowNanos;
     // How fast the list closes on that scroll: the share left shrinks by e every 1/rate seconds
     private static final double FOLLOW_RATE = 12.0;
+
+    // Which figures count as discovered, asked with "collection:figure"
+    private Predicate<String> discovered = FigureEntry.DEFAULT_DISCOVERED;
 
     // Configuration values
     private float modelScale = 1.0f;
@@ -67,6 +71,7 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
                 FigureEntry entry = new FigureEntry(currentRow, collection.getId());
                 entry.setConfiguration(modelScale, xRotation, yRotation, zRotation, xOffset, yOffset, zOffset);
                 entry.setPreviewScale(collection.isPlush() ? PLUSH_PREVIEW_SCALE : 1.0f);
+                entry.setDiscovered(discovered);
                 if (heading != null) {
                     entry.setHeading(heading);
                     this.headingRow = this.children().size();
@@ -76,6 +81,23 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
                 currentRow = new java.util.ArrayList<>();
             }
         }
+    }
+
+    /**
+     * Decides which figures the list shows as discovered, asked with "collection:figure", in
+     * place of the client's own record, as the creator's machine replica shows a collection to a
+     * new player or a collector; null goes back to that record.
+     */
+    public void setDiscovered(@Nullable Predicate<String> discovered) {
+        this.discovered = discovered != null ? discovered : FigureEntry.DEFAULT_DISCOVERED;
+        for (FigureEntry entry : children()) {
+            entry.setDiscovered(this.discovered);
+        }
+    }
+
+    /** Whether the list shows a figure, named "collection:figure", as discovered. */
+    public boolean isDiscovered(String figureKey) {
+        return discovered.test(figureKey);
     }
 
     public void updateConfiguration(float modelScale, float xRotation, float yRotation, float zRotation,

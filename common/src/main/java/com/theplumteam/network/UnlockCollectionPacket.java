@@ -7,13 +7,18 @@ import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.item.BlockEntityItemData;
+import com.theplumteam.item.PlushPrizes;
 import com.theplumteam.registry.ModItems;
+import com.theplumteam.server.worldcollections.WorldCollections;
 import com.theplumteam.util.AuthlibProfiles;
 import com.theplumteam.util.ResourceLocations;
+import com.theplumteam.worldcontent.WorldCollectionRecord;
+import com.theplumteam.worldcontent.WorldContentIds;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.nbt.CompoundTag;
@@ -26,7 +31,10 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -77,7 +85,8 @@ public class UnlockCollectionPacket {
 
     private static void unlockEntireCollection(ServerPlayer player, String collectionId, IPlayerDiscovery discovery) {
         CollectionRegistry.getCollection(collectionId).ifPresent(collection -> {
-            List<FigureDefinition> figures = collection.getEnabledFigures();
+            List<FigureDefinition> figures = WorldContentIds.isWorldCollectionId(collectionId)
+                    ? figuresEnabledInRecord(collectionId, collection) : collection.getEnabledFigures();
 
             if (figures.isEmpty()) {
                 LOGGER.warn("Collection {} has no figures", collectionId);
@@ -98,6 +107,31 @@ public class UnlockCollectionPacket {
             BlockPopsMod.logDebug("Successfully unlocked all figures from collection {} for player {}",
                     collectionId, player.getName().getString());
         });
+    }
+
+    /**
+     * The figures of a World collection that its record does not retire. A draft or archived
+     * collection is registered with none of them enabled, yet an operator's unlock still gives
+     * them, so a draft can be tried out before it is published.
+     */
+    private static List<FigureDefinition> figuresEnabledInRecord(String collectionId, FigureCollection collection) {
+        WorldCollectionRecord record = WorldCollections.record(collectionId);
+        if (record == null) {
+            return List.of();
+        }
+        Set<String> enabled = new HashSet<>();
+        for (WorldCollectionRecord.Figure figure : record.figures()) {
+            if (figure.enabled()) {
+                enabled.add(figure.id());
+            }
+        }
+        List<FigureDefinition> figures = new ArrayList<>();
+        for (FigureDefinition figure : collection.getFigures()) {
+            if (enabled.contains(figure.getId())) {
+                figures.add(figure);
+            }
+        }
+        return figures;
     }
 
     @Nullable
@@ -123,7 +157,7 @@ public class UnlockCollectionPacket {
 
     private static void givePlush(ServerPlayer player, String collectionId, FigureDefinition figure,
                                   IPlayerDiscovery discovery) {
-        var plushItem = ModItems.PLUSH_ITEMS.get(figure.getId());
+        ItemStack plushItem = PlushPrizes.of(collectionId, figure);
         if (plushItem == null) {
             LOGGER.warn("Plush collection {} names {}, which is not a registered plush", collectionId, figure.getId());
             return;
@@ -139,7 +173,7 @@ public class UnlockCollectionPacket {
                 player.getX(),
                 player.getY() + 1.0,
                 player.getZ(),
-                new ItemStack(plushItem.get())
+                plushItem
         );
         itemEntity.setDeltaMovement(0, 0.2, 0);
         player.level().addFreshEntity(itemEntity);

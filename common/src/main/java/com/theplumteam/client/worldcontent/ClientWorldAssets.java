@@ -187,6 +187,16 @@ public final class ClientWorldAssets {
         return Minecraft.getInstance().getResourceManager().getResource(file).isPresent();
     }
 
+    /** Whether a bundled resource already has the id a file of this type is loaded as. */
+    static boolean isBundled(String sha, BlobType type) {
+        ResourceLocation id = id(sha, type);
+        return bundled(switch (type) {
+            case PNG -> id;
+            case GEO -> GeoAssets.modelFile(id);
+            case ANIMATION -> GeoAssets.animationFile(id);
+        });
+    }
+
     /**
      * Releases the files no collection names any more, with their greyed copies. Render
      * thread only.

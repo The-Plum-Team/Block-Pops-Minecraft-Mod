@@ -11,6 +11,7 @@ import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.figure.DrawOdds;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import com.theplumteam.figure.PlayerCollectionHelper;
@@ -239,13 +240,14 @@ public class GetBoxCommand {
                     undiscoveredFigures.add(figure);
                 }
             }
+            // Weighted among the figures still to find, as a machine's guaranteed token is
             if (!undiscoveredFigures.isEmpty()) {
-                return undiscoveredFigures.get(random.nextInt(undiscoveredFigures.size()));
+                return DrawOdds.pick(undiscoveredFigures, random);
             } else {
-                return figures.get(random.nextInt(figures.size()));
+                return DrawOdds.pick(figures, random);
             }
         } else {
-            return figures.get(random.nextInt(figures.size()));
+            return DrawOdds.pick(figures, random);
         }
     }
 }

@@ -4,6 +4,7 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.network.SyncWorldCollectionsPacket;
 import com.theplumteam.figure.FigureCollection;
+import com.theplumteam.util.ServerLevels;
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.BlobType;
 import com.theplumteam.worldcontent.Sha256;
@@ -46,15 +47,18 @@ import java.util.function.Consumer;
  * <p>Every change, whether an edit from the editor, an import or a command, builds the
  * next record, checks it, its budgets and its materialized collection exactly as clients
  * will, saves it and only then registers it again. A change that fails any step changes
- * nothing; one that changes nothing saves nothing.
+ * nothing; one that changes nothing saves nothing. A batch of edits is one change: its
+ * edits apply in order to a working copy of the state, and it is saved once or not at all.
+ *
+ * <p>Every player is sent the published and archived collections; operators are sent the
+ * drafts as well. A player whose operator status changes is sent the other view within
+ * {@link #SYNC_INTERVAL_TICKS}, since no event announces it.
  *
  * <p>The registry, the store's state and players are touched only on the server thread.
  * Checking, hashing and writing uploaded files runs on the "BlockPops World Content"
  * executor, which lives as long as the server.
  */
 public final class WorldCollections {
-    /** The background a new collection starts with. */
-    private static final int[] DEFAULT_BACKGROUND = {152, 48, 167};
     /** The fewest ticks between two syncs sent to every player. */
     private static final int SYNC_INTERVAL_TICKS = 20;
     /** The fewest ticks between two syncs to every player when the sync is larger than one part. */
@@ -68,17 +72,23 @@ public final class WorldCollections {
     /** Files being checked and written, which collection must not delete meanwhile. */
     private static final Set<String> IN_FLIGHT = new HashSet<>();
     private static final Map<UUID, Long> SESSION_NONCES = new HashMap<>();
+    /** Whether each player was last sent the operators' view, which includes the drafts. */
+    private static final Map<UUID, Boolean> SYNCED_AS_OPERATOR = new HashMap<>();
     private static boolean dirty;
     private static int revision;
     private static int lastSyncTick;
     private static int lastSyncId;
-    /** What a sync sends at {@link #revision}, built when first needed. */
+    /** What a sync sends operators at {@link #revision}, built when first needed. */
     @Nullable
-    private static SyncContent syncContent;
+    private static SyncContent operatorContent;
+    /** What a sync sends every other player at {@link #revision}, built when first needed. */
+    @Nullable
+    private static SyncContent publicContent;
 
     /**
-     * What every player is sent: the registered records, the files they name, and the
-     * stored-bytes quota. Only the sync id and session nonce differ between players.
+     * What one view of the collections sends: the registered records it shows, the files
+     * they name, and the stored-bytes quota. Every player of the same view gets the same
+     * content; only the sync id and session nonce differ between them.
      *
      * @param shas every file the records name, which are the only ones players may ask for
      */
@@ -149,12 +159,14 @@ public final class WorldCollections {
         store = null;
         IN_FLIGHT.clear();
         SESSION_NONCES.clear();
+        SYNCED_AS_OPERATOR.clear();
         WorldRateLimits.clear();
         WorldUploads.clear();
         WorldAssetSender.clear();
         dirty = false;
         lastSyncTick = 0;
-        syncContent = null;
+        operatorContent = null;
+        publicContent = null;
     }
 
     /** Starts a player's session: a fresh nonce, then a sync even when there is nothing to show. */
@@ -163,9 +175,10 @@ public final class WorldCollections {
         sendSync(player);
     }
 
-    /** Ends a player's session: its nonce, uploads, file queue and rate limits. */
+    /** Ends a player's session: its nonce, view, uploads, file queue and rate limits. */
     public static void onPlayerQuit(ServerPlayer player) {
         SESSION_NONCES.remove(player.getUUID());
+        SYNCED_AS_OPERATOR.remove(player.getUUID());
         WorldRateLimits.forget(player.getUUID());
         WorldUploads.dropPlayer(player.getUUID());
         WorldAssetSender.dropPlayer(player.getUUID());
@@ -174,7 +187,9 @@ public final class WorldCollections {
     /**
      * Drops stalled uploads, sends the files players asked for, and sends the latest state
      * to every player once a change has waited long enough: {@link #SYNC_INTERVAL_TICKS},
-     * or {@link #LARGE_SYNC_INTERVAL_TICKS} when the sync takes more than one part.
+     * or {@link #LARGE_SYNC_INTERVAL_TICKS} when the sync takes more than one part. Every
+     * {@link #SYNC_INTERVAL_TICKS} it also resyncs each player whose operator status no
+     * longer matches the view it was sent.
      */
     public static void onServerTick(MinecraftServer server) {
         if (store == null) {
@@ -182,11 +197,15 @@ public final class WorldCollections {
         }
         WorldUploads.sweep(server);
         WorldAssetSender.tick(server);
+        int tick = server.getTickCount();
+        if (tick % SYNC_INTERVAL_TICKS == 0) {
+            resyncChangedOperators(server);
+        }
         if (!dirty) {
             return;
         }
-        int tick = server.getTickCount();
-        int interval = syncContent().large() ? LARGE_SYNC_INTERVAL_TICKS : SYNC_INTERVAL_TICKS;
+        // The operators' view holds every record the other one does, so it bounds both
+        int interval = syncContent(true).large() ? LARGE_SYNC_INTERVAL_TICKS : SYNC_INTERVAL_TICKS;
         if (tick - lastSyncTick < interval && tick >= lastSyncTick) {
             return;
         }
@@ -195,12 +214,34 @@ public final class WorldCollections {
         server.getPlayerList().getPlayers().forEach(WorldCollections::sendSync);
     }
 
+    /**
+     * Sends the operators' view to a player who became an operator and the public one to a
+     * player who stopped being one. There is no event for either, so this polls; a change
+     * shows on the client within a second, and its drafts appear or vanish with that sync.
+     */
+    private static void resyncChangedOperators(MinecraftServer server) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            Boolean synced = SYNCED_AS_OPERATOR.get(player.getUUID());
+            if (synced != null && synced != isOperator(player)) {
+                sendSync(player);
+            }
+        }
+    }
+
+    /** Whether a player may see drafts: the level every World collection edit needs. */
+    private static boolean isOperator(ServerPlayer player) {
+        return ServerLevels.hasCommandLevel(player, 2);
+    }
+
     /** Sends the records and the file table to one player, in as many parts as they need. */
     private static void sendSync(ServerPlayer player) {
+        boolean operator = isOperator(player);
+        // Kept even for a player without the channel, so the operator poll does not retry it every second
+        SYNCED_AS_OPERATOR.put(player.getUUID(), operator);
         if (!SyncWorldCollectionsPacket.canReceive(player)) {
             return;
         }
-        SyncContent content = syncContent();
+        SyncContent content = syncContent(operator);
         lastSyncId = lastSyncId == Integer.MAX_VALUE ? 1 : lastSyncId + 1;
         List<SyncWorldCollectionsPacket> parts = SyncWorldCollectionsPacket.split(lastSyncId, sessionNonce(player),
                 content.quotaUsedKiB(), content.quotaMaxKiB(), content.records(), content.blobs());
@@ -214,9 +255,9 @@ public final class WorldCollections {
         WorldAssetSender.onSyncSent(player);
     }
 
-    /** What a sync sends now: built once per revision. */
-    private static SyncContent syncContent() {
-        SyncContent content = syncContent;
+    /** What a sync sends now to operators or to every other player: each built once per revision. */
+    private static SyncContent syncContent(boolean operator) {
+        SyncContent content = operator ? operatorContent : publicContent;
         if (content != null && content.revision() == revision) {
             return content;
         }
@@ -225,8 +266,9 @@ public final class WorldCollections {
         List<byte[]> records = new ArrayList<>();
         Set<String> shas = new LinkedHashSet<>();
         for (WorldCollectionRecord record : state.records()) {
-            // A record that failed its check at load is not registered, and clients would refuse the whole sync over it
-            if (REGISTERED.contains(record.id())) {
+            // A record that failed its check at load is not registered, and clients would refuse the whole sync over it.
+            // A draft is shown to operators alone, who are the only ones that can edit or publish it
+            if (REGISTERED.contains(record.id()) && (operator || !record.draft())) {
                 records.add(record.toUtf8());
                 shas.addAll(record.referencedShas());
             }
@@ -243,13 +285,25 @@ public final class WorldCollections {
         boolean large = SyncWorldCollectionsPacket.estimatedBytes(records, blobs) > SyncWorldCollectionsPacket.MAX_PART_BYTES;
         content = new SyncContent(revision, List.copyOf(records), List.copyOf(blobs), Set.copyOf(shas), usedKiB, maxKiB,
                 large);
-        syncContent = content;
+        if (operator) {
+            operatorContent = content;
+        } else {
+            publicContent = content;
+        }
         return content;
     }
 
-    /** Every file a sent record names, the only files players may ask for. */
-    public static Set<String> sentShas() {
-        return syncContent().shas();
+    /**
+     * Every file the records of a player's view name, the only files that player may ask
+     * for: none before its first sync, and the public view's alone once it is no longer an
+     * operator, even before the poll sends it that view.
+     */
+    public static Set<String> sentShasFor(ServerPlayer player) {
+        Boolean synced = SYNCED_AS_OPERATOR.get(player.getUUID());
+        if (synced == null) {
+            return Set.of();
+        }
+        return syncContent(synced && isOperator(player)).shas();
     }
 
     // Queries, server thread
@@ -439,32 +493,129 @@ public final class WorldCollections {
 
     // Edits
 
-    /** Applies an operator's edit. Server thread; the caller has checked the operator. */
+    /**
+     * The changes of one edit or batch, made to a working copy of the state. Nothing
+     * reaches the store or the registry until {@link #finish} has checked every changed
+     * record against the working state as a whole.
+     */
+    private static final class Txn {
+        private WorldCollectionStore.State working;
+        /** Each changed collection's record before the batch, or null for one the batch created. */
+        private final Map<String, WorldCollectionRecord> before = new HashMap<>();
+        /** The collection each duplicate was copied from, whose missing files the copy may keep naming. */
+        private final Map<String, WorldCollectionRecord> copiedFrom = new HashMap<>();
+        private final LinkedHashSet<String> changed = new LinkedHashSet<>();
+        /** The collection the last edit touched, whose name a successful answer carries. */
+        @Nullable
+        private String lastId;
+
+        private Txn(WorldCollectionStore.State start) {
+            this.working = start;
+        }
+
+        /** Puts the next record of an existing collection in the working state. */
+        private void change(WorldCollectionRecord record) {
+            WorldCollectionStore.StoredCollection stored = working.collections().get(record.id());
+            if (changed.add(record.id())) {
+                before.put(record.id(), stored.record());
+            }
+            working = working.withCollection(
+                    new WorldCollectionStore.StoredCollection(record, stored.createdBy(), stored.createdAt()));
+            lastId = record.id();
+        }
+
+        /** Adds a new collection to the working state. */
+        private void create(WorldCollectionRecord record, UUID by, long now) {
+            changed.add(record.id());
+            before.put(record.id(), null);
+            working = working.withCollection(new WorldCollectionStore.StoredCollection(record, by, now));
+            lastId = record.id();
+        }
+
+        /**
+         * The record a changed collection's files are checked against: a file marked missing
+         * may stay named only when this record named it already.
+         */
+        @Nullable
+        private WorldCollectionRecord filesBefore(String id) {
+            WorldCollectionRecord previous = before.get(id);
+            return previous != null ? previous : copiedFrom.get(id);
+        }
+    }
+
+    /**
+     * Applies an operator's edit, or every edit of a batch in order, and saves the result
+     * once. When any edit or any changed record is refused, nothing changes and the answer
+     * is the first refusal. A purge goes to {@link #purge}; an import needs the server's
+     * resources and goes to {@link #importPack} instead. Server thread; the caller has
+     * checked the operator.
+     */
     public static WorldContentStatus edit(WorldCollectionEdit edit, UUID by) {
         WorldCollectionStore current = store;
         if (current == null || current.isDegraded()) {
             return WorldContentStatus.of(Result.DEGRADED);
         }
+        if (edit instanceof WorldCollectionEdit.Purge purge) {
+            return purgeFromEditor(purge);
+        }
+        if (edit instanceof WorldCollectionEdit.ImportPack) {
+            return WorldContentStatus.of(Result.INVALID, "An import reads the server's datapacks and is not an edit");
+        }
+        List<WorldCollectionEdit> edits = edit instanceof WorldCollectionEdit.Batch batch ? batch.edits() : List.of(edit);
+        if (edits.isEmpty() || edits.size() > WorldCollectionEdit.MAX_BATCH) {
+            return WorldContentStatus.of(Result.INVALID, "A batch holds 1 to " + WorldCollectionEdit.MAX_BATCH + " edits");
+        }
+        if (edits.size() > 1 || edit instanceof WorldCollectionEdit.Batch) {
+            for (WorldCollectionEdit one : edits) {
+                if (WorldCollectionEdit.standsAlone(one)) {
+                    return WorldContentStatus.of(Result.INVALID, "A batch cannot hold " + one.action());
+                }
+            }
+        }
+        Txn txn = new Txn(current.state());
+        for (WorldCollectionEdit one : edits) {
+            WorldContentStatus refused = apply(txn, one, by);
+            if (refused != null) {
+                return refused;
+            }
+        }
+        return finish(current, txn);
+    }
+
+    /**
+     * Applies one edit to the working state. Every edit reads the working state, so an edit
+     * sees what the edits before it in the same batch did.
+     *
+     * @return null when it applies, or why not
+     */
+    @Nullable
+    private static WorldContentStatus apply(Txn txn, WorldCollectionEdit edit, UUID by) {
+        if (edit instanceof WorldCollectionEdit.Batch || edit instanceof WorldCollectionEdit.Purge
+                || edit instanceof WorldCollectionEdit.ImportPack) {
+            return WorldContentStatus.of(Result.INVALID, "A batch cannot hold " + edit.action());
+        }
         if (edit instanceof WorldCollectionEdit.Create create) {
-            return create(current, create, by);
+            return create(txn, create.slug(), create.name(), false, by);
+        }
+        if (edit instanceof WorldCollectionEdit.CreateDraft create) {
+            return create(txn, create.slug(), create.name(), true, by);
+        }
+        if (edit instanceof WorldCollectionEdit.Duplicate duplicate) {
+            return duplicate(txn, duplicate, by);
         }
         String id = editedId(edit);
-        WorldCollectionStore.StoredCollection stored = id != null ? current.state().collections().get(id) : null;
-        if (stored == null) {
+        WorldCollectionRecord previous = id != null ? txn.working.record(id) : null;
+        if (previous == null) {
             return WorldContentStatus.of(Result.UNKNOWN_COLLECTION, WorldContentException.excerpt(id));
         }
-        WorldCollectionRecord previous = stored.record();
-        WorldCollectionRecord next;
         try {
-            next = edited(previous, edit);
+            txn.change(edited(previous, edit));
         } catch (WorldContentException e) {
             return WorldContentStatus.invalid(e);
-        } catch (UnknownFigure e) {
-            return WorldContentStatus.of(Result.UNKNOWN_FIGURE, e.figure);
-        } catch (FullCollection e) {
-            return WorldContentStatus.of(Result.FULL, "A collection has at most " + WorldContentLimits.MAX_FIGURES + " figures");
+        } catch (Refused e) {
+            return e.status;
         }
-        return replace(current, stored, next, Map.of());
+        return null;
     }
 
     @Nullable
@@ -477,16 +628,66 @@ public final class WorldCollections {
             return put.id();
         } else if (edit instanceof WorldCollectionEdit.SetFigureEnabled set) {
             return set.id();
+        } else if (edit instanceof WorldCollectionEdit.Publish publish) {
+            return publish.id();
+        } else if (edit instanceof WorldCollectionEdit.ReorderFigures reorder) {
+            return reorder.id();
+        } else if (edit instanceof WorldCollectionEdit.RemoveFigure remove) {
+            return remove.id();
+        } else if (edit instanceof WorldCollectionEdit.SetCollectionExtras set) {
+            return set.id();
+        } else if (edit instanceof WorldCollectionEdit.SetFigureExtras set) {
+            return set.id();
         }
         return null;
     }
 
-    private static WorldContentStatus create(WorldCollectionStore current, WorldCollectionEdit.Create create, UUID by) {
-        if (!WorldContentIds.isSlug(create.slug())) {
+    /** Adds an empty collection with the slug, published or as a draft, to the working state. */
+    @Nullable
+    private static WorldContentStatus create(Txn txn, String slug, String name, boolean draft, UUID by) {
+        WorldContentStatus refused = refuseNew(txn.working, slug);
+        if (refused != null) {
+            return refused;
+        }
+        String id = WorldContentIds.collectionId(slug);
+        WorldCollectionRecord record = WorldCollectionRecord.created(id, name, draft);
+        txn.create(record, by, System.currentTimeMillis());
+        return null;
+    }
+
+    /**
+     * Adds a copy of a collection to the working state as a new draft with the slug and
+     * name: its figures, retired ones included, and every file and extra, at revision 0.
+     * The copy names the same stored files, so nothing is uploaded, and it may keep naming
+     * a file the source has lost.
+     */
+    @Nullable
+    private static WorldContentStatus duplicate(Txn txn, WorldCollectionEdit.Duplicate duplicate, UUID by) {
+        WorldCollectionRecord source = txn.working.record(duplicate.sourceId());
+        if (source == null) {
+            return WorldContentStatus.of(Result.UNKNOWN_COLLECTION, WorldContentException.excerpt(duplicate.sourceId()));
+        }
+        WorldContentStatus refused = refuseNew(txn.working, duplicate.slug());
+        if (refused != null) {
+            return refused;
+        }
+        String id = WorldContentIds.collectionId(duplicate.slug());
+        WorldCollectionRecord copy = new WorldCollectionRecord(id, duplicate.name(), source.author(), source.red(),
+                source.green(), source.blue(), source.boxTexture(), source.boxColor(), source.logo(), false, 0,
+                source.figures(), true, 0L, source.authorUrl(), source.logoLayout(), source.plush(),
+                source.rarityWeights());
+        txn.create(copy, by, System.currentTimeMillis());
+        txn.copiedFrom.put(id, source);
+        return null;
+    }
+
+    /** Why a new collection cannot take the slug in the state, or null when it can. */
+    @Nullable
+    private static WorldContentStatus refuseNew(WorldCollectionStore.State state, String slug) {
+        if (!WorldContentIds.isSlug(slug)) {
             return WorldContentStatus.of(Result.INVALID, "Slug must be 1 to 24 of a-z, 0-9 and _");
         }
-        String id = WorldContentIds.collectionId(create.slug());
-        WorldCollectionStore.State state = current.state();
+        String id = WorldContentIds.collectionId(slug);
         if (state.collections().containsKey(id) || state.retiredIds().contains(id)) {
             return WorldContentStatus.of(Result.ID_TAKEN, id);
         }
@@ -494,19 +695,68 @@ public final class WorldCollections {
             return WorldContentStatus.of(Result.FULL, "A world has at most " + WorldContentLimits.MAX_COLLECTIONS
                     + " World collections");
         }
-        WorldCollectionRecord record = new WorldCollectionRecord(id, create.name(), "", DEFAULT_BACKGROUND[0],
-                DEFAULT_BACKGROUND[1], DEFAULT_BACKGROUND[2], null, null, null, false, 0, List.of());
-        WorldContentStatus refused = check(current, record, null, state.blobInfos());
-        if (refused != null) {
-            return refused;
+        return null;
+    }
+
+    /** The time a collection changed now, as its {@code edited_at} holds it: whole seconds, in range. */
+    private static long editedNow() {
+        return Math.min(WorldCollectionRecord.MAX_EDITED_AT, Math.max(1L, System.currentTimeMillis() / 1000));
+    }
+
+    /**
+     * Saves what a transaction changed. A record that ends equal to the stored one is left
+     * as it is; every other one goes to the next revision (a new one stays at 0), is stamped
+     * with the time of this save, and is checked with the whole working state in place.
+     * Then the state is saved once, every changed collection is registered again and one
+     * sync is scheduled.
+     */
+    private static WorldContentStatus finish(WorldCollectionStore current, Txn txn) {
+        // Stamped after the equality test, so an edit that changes nothing still saves nothing
+        long editedAt = editedNow();
+        WorldCollectionStore.State next = txn.working;
+        List<WorldCollectionRecord> saved = new ArrayList<>();
+        for (String id : txn.changed) {
+            WorldCollectionStore.StoredCollection stored = next.collections().get(id);
+            WorldCollectionRecord previous = txn.before.get(id);
+            WorldCollectionRecord record = stored.record();
+            if (record.equals(previous)) {
+                continue;
+            }
+            if (previous != null) {
+                if (previous.revision() >= WorldContentLimits.MAX_REVISION) {
+                    return WorldContentStatus.of(Result.FULL, "This collection cannot be changed any more");
+                }
+                record = record.withRevision(previous.revision() + 1);
+            }
+            record = record.withEditedAt(editedAt);
+            next = next.withCollection(
+                    new WorldCollectionStore.StoredCollection(record, stored.createdBy(), stored.createdAt()));
+            saved.add(record);
         }
-        return commit(current, state.withCollection(
-                new WorldCollectionStore.StoredCollection(record, by, System.currentTimeMillis())), record);
+        String name = txn.lastId != null && next.record(txn.lastId) != null ? next.record(txn.lastId).name() : "";
+        if (saved.isEmpty()) {
+            return WorldContentStatus.of(Result.OK, name);
+        }
+        Map<String, BlobInfo> blobs = next.blobInfos();
+        for (WorldCollectionRecord record : saved) {
+            WorldContentStatus refused = check(current, next, record, txn.filesBefore(record.id()), blobs, Set.of());
+            if (refused != null) {
+                return refused;
+            }
+        }
+        if (!current.save(next)) {
+            return WorldContentStatus.of(Result.SAVE_FAILED);
+        }
+        for (WorldCollectionRecord record : saved) {
+            register(record, blobs);
+        }
+        markDirty();
+        return WorldContentStatus.of(Result.OK, name);
     }
 
     /** The record an edit of an existing collection makes, at the previous revision. */
     private static WorldCollectionRecord edited(WorldCollectionRecord previous, WorldCollectionEdit edit)
-            throws WorldContentException, UnknownFigure, FullCollection {
+            throws WorldContentException, Refused {
         if (edit instanceof WorldCollectionEdit.SetCollection set) {
             String boxTexture = null;
             String boxColor = null;
@@ -526,27 +776,157 @@ public final class WorldCollections {
             if (!inByteRange(set.red()) || !inByteRange(set.green()) || !inByteRange(set.blue())) {
                 throw new WorldContentException("Background colour values are 0 to 255");
             }
-            return new WorldCollectionRecord(previous.id(), set.name(), set.author(), set.red(), set.green(), set.blue(),
-                    boxTexture, boxColor, logo, previous.archived(), previous.revision(), previous.figures());
+            return previous.withIdentity(set.name(), set.author(), set.red(), set.green(), set.blue(), boxTexture,
+                    boxColor, logo);
         }
         if (edit instanceof WorldCollectionEdit.SetArchived set) {
-            return new WorldCollectionRecord(previous.id(), previous.name(), previous.author(), previous.red(),
-                    previous.green(), previous.blue(), previous.boxTexture(), previous.boxColor(), previous.logo(),
-                    set.archived(), previous.revision(), previous.figures());
+            if (previous.draft()) {
+                throw new Refused(WorldContentStatus.of(Result.NOT_DRAFT, "Drafts are not archived"));
+            }
+            return previous.withArchived(set.archived());
         }
         if (edit instanceof WorldCollectionEdit.PutFigure put) {
             return withFigure(previous, figure(put, previous));
         }
         if (edit instanceof WorldCollectionEdit.SetFigureEnabled set) {
-            WorldCollectionRecord.Figure figure = previous.figure(set.figure())
-                    .orElseThrow(() -> new UnknownFigure(set.figure()));
-            return withFigure(previous, new WorldCollectionRecord.Figure(figure.id(), figure.name(), figure.kind(),
-                    figure.texture(), figure.model(), figure.animation(), figure.scale(), set.enabled()));
+            return withFigure(previous, existingFigure(previous, set.figure()).withEnabled(set.enabled()));
+        }
+        if (edit instanceof WorldCollectionEdit.Publish) {
+            if (!previous.draft()) {
+                throw new Refused(WorldContentStatus.of(Result.NOT_DRAFT, "Only a draft can be published"));
+            }
+            if (previous.figures().stream().noneMatch(WorldCollectionRecord.Figure::enabled)) {
+                throw new Refused(WorldContentStatus.of(Result.EMPTY, previous.name()));
+            }
+            return previous.withDraft(false);
+        }
+        if (edit instanceof WorldCollectionEdit.ReorderFigures reorder) {
+            return reordered(previous, reorder.order());
+        }
+        if (edit instanceof WorldCollectionEdit.SetCollectionExtras set) {
+            return withCollectionExtras(previous, set);
+        }
+        if (edit instanceof WorldCollectionEdit.SetFigureExtras set) {
+            return withFigure(previous, figureExtras(existingFigure(previous, set.figure()), set));
+        }
+        if (edit instanceof WorldCollectionEdit.RemoveFigure remove) {
+            if (!previous.draft()) {
+                // Players' boxes may name a published figure, so it is only ever retired
+                throw new Refused(WorldContentStatus.of(Result.NOT_DRAFT,
+                        "Only a draft's figures can be deleted; retire this one instead"));
+            }
+            existingFigure(previous, remove.figure());
+            List<WorldCollectionRecord.Figure> figures = new ArrayList<>(previous.figures());
+            figures.removeIf(figure -> figure.id().equals(remove.figure()));
+            return previous.withFigures(figures);
         }
         throw new WorldContentException("Unknown edit");
     }
 
-    /** The figure a put describes; a figure that exists keeps whether it is retired. */
+    /**
+     * The record with the author link, logo placement, plush flag and rarity weights of
+     * the edit. The record's own check repeats every rule; these give the clearer reason.
+     */
+    private static WorldCollectionRecord withCollectionExtras(WorldCollectionRecord previous,
+                                                              WorldCollectionEdit.SetCollectionExtras set)
+            throws WorldContentException {
+        String authorUrl = set.authorUrl().isEmpty() ? null : set.authorUrl();
+        if (authorUrl != null && !WorldCollectionRecord.isValidAuthorUrl(authorUrl)) {
+            throw new WorldContentException("The author link must be an http or https link with a host, "
+                    + "at most " + WorldContentLimits.MAX_AUTHOR_URL_LENGTH + " characters, without spaces");
+        }
+        WorldCollectionRecord.LogoLayout layout = set.logoLayout();
+        if (layout != null) {
+            if (!WorldCollectionRecord.LogoLayout.isValid(layout.scalePct(), layout.offsetX(), layout.offsetY())) {
+                throw new WorldContentException("The logo's size is " + WorldCollectionRecord.LogoLayout.MIN_SCALE_PCT
+                        + " to " + WorldCollectionRecord.LogoLayout.MAX_SCALE_PCT + " % and it moves at most "
+                        + WorldCollectionRecord.LogoLayout.MAX_OFFSET + " tenths of a pixel each way");
+            }
+            if (previous.logo() == null && !WorldCollectionRecord.LogoLayout.DEFAULT.equals(layout)) {
+                throw new WorldContentException("The collection has no logo to place");
+            }
+        }
+        WorldCollectionRecord.RarityWeights weights = set.rarityWeights();
+        if (weights != null && !WorldCollectionRecord.RarityWeights.isValid(weights.common(), weights.rare(),
+                weights.epic(), weights.legendary())) {
+            throw new WorldContentException("Rarity weights are " + WorldCollectionRecord.RarityWeights.MIN_WEIGHT
+                    + " to " + WorldCollectionRecord.RarityWeights.MAX_WEIGHT);
+        }
+        return previous.withExtras(authorUrl, layout, set.plush(), weights);
+    }
+
+    /**
+     * The figure with the rarity, variants and box face of the edit. A face mode that asks
+     * for what the figure's kind shows anyway is stored as the default, so a figure always
+     * has one form for each look: a skin figure shows its face and a model figure does not
+     * unless told otherwise.
+     */
+    private static WorldCollectionRecord.Figure figureExtras(WorldCollectionRecord.Figure figure,
+                                                             WorldCollectionEdit.SetFigureExtras set)
+            throws WorldContentException {
+        if (set.variants().size() > WorldContentLimits.MAX_VARIANTS_PER_FIGURE) {
+            throw new WorldContentException("A figure has at most " + WorldContentLimits.MAX_VARIANTS_PER_FIGURE
+                    + " variants");
+        }
+        List<WorldCollectionRecord.Variant> variants = new ArrayList<>(set.variants().size());
+        for (WorldCollectionRecord.Variant variant : set.variants()) {
+            variants.add(new WorldCollectionRecord.Variant(variant.name(),
+                    Sha256.require(variant.texture(), "Variant texture")));
+        }
+        boolean skin = figure.kind() == WorldCollectionRecord.Kind.SKIN;
+        WorldCollectionRecord.BoxFace boxFace = switch (set.faceMode()) {
+            case WorldCollectionEdit.FACE_DEFAULT -> null;
+            case WorldCollectionEdit.FACE_SHOW -> {
+                if (!skin) {
+                    throw new WorldContentException("A model figure's face needs its region in the texture");
+                }
+                yield null;
+            }
+            case WorldCollectionEdit.FACE_HIDE -> skin ? new WorldCollectionRecord.BoxFace(false, null) : null;
+            case WorldCollectionEdit.FACE_SHOW_UV -> {
+                if (skin || set.faceUv() == null) {
+                    throw new WorldContentException(skin ? "A skin figure's face is its skin's and takes no region"
+                            : "A model figure's face needs its region in the texture");
+                }
+                yield new WorldCollectionRecord.BoxFace(true, set.faceUv());
+            }
+            default -> throw new WorldContentException("Unknown box face");
+        };
+        return figure.withExtras(set.rarity(), variants, boxFace);
+    }
+
+    private static WorldCollectionRecord.Figure existingFigure(WorldCollectionRecord record, String figureId)
+            throws Refused {
+        return record.figure(figureId).orElseThrow(() -> new Refused(
+                WorldContentStatus.of(Result.UNKNOWN_FIGURE, WorldContentException.excerpt(figureId))));
+    }
+
+    /** The record with its figures in the given order, which must name each of them exactly once. */
+    private static WorldCollectionRecord reordered(WorldCollectionRecord previous, List<String> order)
+            throws WorldContentException {
+        Map<String, WorldCollectionRecord.Figure> byId = new HashMap<>();
+        previous.figures().forEach(figure -> byId.put(figure.id(), figure));
+        WorldContentException wrong = new WorldContentException("A new order must name each of the "
+                + previous.figures().size() + " figures exactly once");
+        if (order.size() != byId.size()) {
+            throw wrong;
+        }
+        List<WorldCollectionRecord.Figure> figures = new ArrayList<>(order.size());
+        Set<String> seen = new HashSet<>();
+        for (String figureId : order) {
+            WorldCollectionRecord.Figure figure = byId.get(figureId);
+            if (figure == null || !seen.add(figureId)) {
+                throw wrong;
+            }
+            figures.add(figure);
+        }
+        return previous.withFigures(figures);
+    }
+
+    /**
+     * The figure a put describes. A figure that exists keeps whether it is retired and the
+     * extras a put does not carry: its rarity, variants and box face.
+     */
     private static WorldCollectionRecord.Figure figure(WorldCollectionEdit.PutFigure put, WorldCollectionRecord previous)
             throws WorldContentException {
         if (!WorldContentIds.isSlug(put.figure())) {
@@ -564,14 +944,16 @@ public final class WorldCollections {
             case WorldCollectionEdit.KIND_MODEL -> WorldCollectionRecord.Kind.MODEL;
             default -> throw new WorldContentException("Unknown figure type");
         };
-        boolean enabled = previous.figure(put.figure()).map(WorldCollectionRecord.Figure::enabled).orElse(true);
-        return new WorldCollectionRecord.Figure(put.figure(), put.name(), kind, texture, model, animation,
-                WorldCollectionRecord.SCALES.get(put.scaleIndex()), enabled);
+        float scale = WorldCollectionRecord.SCALES.get(put.scaleIndex());
+        return previous.figure(put.figure())
+                .map(existing -> existing.withBasics(put.name(), kind, texture, model, animation, scale))
+                .orElseGet(() -> new WorldCollectionRecord.Figure(put.figure(), put.name(), kind, texture, model,
+                        animation, scale, true));
     }
 
     /** The record with the figure replaced in its place, or added last. */
     private static WorldCollectionRecord withFigure(WorldCollectionRecord previous, WorldCollectionRecord.Figure figure)
-            throws FullCollection {
+            throws Refused {
         List<WorldCollectionRecord.Figure> figures = new ArrayList<>(previous.figures());
         boolean replaced = false;
         for (int i = 0; i < figures.size(); i++) {
@@ -582,18 +964,18 @@ public final class WorldCollections {
         }
         if (!replaced) {
             if (figures.size() >= WorldContentLimits.MAX_FIGURES) {
-                throw new FullCollection();
+                throw new Refused(WorldContentStatus.of(Result.FULL, "A collection has at most "
+                        + WorldContentLimits.MAX_FIGURES + " figures"));
             }
             figures.add(figure);
         }
-        return new WorldCollectionRecord(previous.id(), previous.name(), previous.author(), previous.red(),
-                previous.green(), previous.blue(), previous.boxTexture(), previous.boxColor(), previous.logo(),
-                previous.archived(), previous.revision(), figures);
+        return previous.withFigures(figures);
     }
 
     /**
-     * Saves a changed record at the next revision, with the files it adds, and registers
-     * it again. A record equal to the stored one changes nothing unless files are added.
+     * Saves a changed record at the next revision, stamped with the time of the save, with the
+     * files it adds, and registers it again. A record equal to the stored one changes nothing
+     * unless files are added.
      */
     private static WorldContentStatus replace(WorldCollectionStore current, WorldCollectionStore.StoredCollection stored,
                                               WorldCollectionRecord candidate,
@@ -608,13 +990,15 @@ public final class WorldCollections {
             if (previous.revision() >= WorldContentLimits.MAX_REVISION) {
                 return WorldContentStatus.of(Result.FULL, "This collection cannot be changed any more");
             }
-            next = withRevision(candidate, previous.revision() + 1);
+            // Stamped after the equality test, as an edit is, so an import that changes nothing
+            // keeps the time of the last change
+            next = candidate.withRevision(previous.revision() + 1).withEditedAt(editedNow());
         }
         Map<String, WorldCollectionStore.StoredBlob> blobs = new TreeMap<>(state.blobs());
         blobs.putAll(addedBlobs);
         Map<String, BlobInfo> infos = new HashMap<>();
         blobs.forEach((sha, blob) -> infos.put(sha, blob.info()));
-        WorldContentStatus refused = check(current, next, previous, infos, addedBlobs.keySet());
+        WorldContentStatus refused = check(current, state, next, previous, infos, addedBlobs.keySet());
         if (refused != null) {
             return refused;
         }
@@ -623,6 +1007,25 @@ public final class WorldCollections {
     }
 
     // Commands and imports
+
+    /**
+     * Purges a collection for an operator in the editor, who names it twice. Only an
+     * archived collection or a draft can go, so a collection still in the machines is never
+     * deleted by one mistaken click.
+     */
+    private static WorldContentStatus purgeFromEditor(WorldCollectionEdit.Purge purge) {
+        if (!purge.id().equals(purge.idAgain())) {
+            return WorldContentStatus.of(Result.INVALID, "The two ids of a purge differ");
+        }
+        WorldCollectionRecord record = record(purge.id());
+        if (record == null) {
+            return WorldContentStatus.of(Result.UNKNOWN_COLLECTION, WorldContentException.excerpt(purge.id()));
+        }
+        if (!record.archived() && !record.draft()) {
+            return WorldContentStatus.of(Result.STILL_LIVE, record.name());
+        }
+        return purge(purge.id());
+    }
 
     /** Purges a collection: it is unregistered, its id is never used again and its files are left to collection. */
     public static WorldContentStatus purge(String id) {
@@ -648,13 +1051,22 @@ public final class WorldCollections {
         return WorldContentStatus.of(Result.OK, record.name());
     }
 
+    /** Imports a pack as the command does: a collection it creates is published at once. */
+    public static WorldContentStatus importPack(ResourceManager resources, String slug, String namespace, String path,
+                                                UUID by) {
+        return importPack(resources, slug, namespace, path, by, false);
+    }
+
     /**
      * Imports the pack the server's datapacks ship at namespace:path as the collection with the slug,
      * creating or updating it. Figures the pack no longer lists are retired, never removed.
      * Server thread; the files are small and written synchronously.
+     *
+     * @param asDraft whether a collection the import creates is a draft; an existing one keeps
+     *                whether it is
      */
     public static WorldContentStatus importPack(ResourceManager resources, String slug, String namespace, String path,
-                                                UUID by) {
+                                                UUID by, boolean asDraft) {
         WorldCollectionStore current = store;
         if (current == null || current.isDegraded()) {
             return WorldContentStatus.of(Result.DEGRADED);
@@ -684,8 +1096,7 @@ public final class WorldCollections {
         if (stored != null) {
             for (WorldCollectionRecord.Figure figure : stored.record().figures()) {
                 if (!listed.contains(figure.id())) {
-                    figures.add(new WorldCollectionRecord.Figure(figure.id(), figure.name(), figure.kind(),
-                            figure.texture(), figure.model(), figure.animation(), figure.scale(), false));
+                    figures.add(figure.withEnabled(false));
                 }
             }
         }
@@ -693,10 +1104,18 @@ public final class WorldCollections {
             return WorldContentStatus.of(Result.FULL, "With the figures it retires the collection would have more than "
                     + WorldContentLimits.MAX_FIGURES);
         }
-        WorldCollectionRecord defined = pack.record();
-        WorldCollectionRecord candidate = new WorldCollectionRecord(id, defined.name(), defined.author(), defined.red(),
-                defined.green(), defined.blue(), defined.boxTexture(), defined.boxColor(), defined.logo(),
-                stored != null && stored.record().archived(), stored != null ? stored.record().revision() : 0, figures);
+        // The pack defines the collection and its extras; whether it is archived or a draft and
+        // its revision stay the world's own. A new collection is stamped with the time now, and an
+        // existing one keeps its time unless the import changes it (see replace), so the creator
+        // sorts imports among the recently edited
+        WorldCollectionRecord candidate = pack.record().withFigures(figures);
+        if (stored == null) {
+            candidate = candidate.withDraft(asDraft).withEditedAt(editedNow());
+        } else {
+            WorldCollectionRecord before = stored.record();
+            candidate = candidate.withArchived(before.archived()).withDraft(before.draft())
+                    .withRevision(before.revision()).withEditedAt(before.editedAt());
+        }
 
         // Write only the files the table lacks or has lost
         long now = System.currentTimeMillis();
@@ -730,7 +1149,7 @@ public final class WorldCollections {
             blobs.putAll(added);
             Map<String, BlobInfo> infos = new HashMap<>();
             blobs.forEach((sha, blob) -> infos.put(sha, blob.info()));
-            WorldContentStatus refused = check(current, candidate, null, infos, added.keySet());
+            WorldContentStatus refused = check(current, state, candidate, null, infos, added.keySet());
             if (refused != null) {
                 return refused;
             }
@@ -765,7 +1184,7 @@ public final class WorldCollections {
         blobs.putAll(added);
         Map<String, BlobInfo> infos = new HashMap<>();
         blobs.forEach((sha, blob) -> infos.put(sha, blob.info()));
-        return check(current, candidate, stored.record(), infos, added.keySet());
+        return check(current, current.state(), candidate, stored.record(), infos, added.keySet());
     }
 
     private static boolean write(WorldCollectionStore current, WorldCollectionImporter.Pack pack, Set<String> shas) {
@@ -825,23 +1244,21 @@ public final class WorldCollections {
 
     // Checks and registration
 
-    private static WorldContentStatus check(WorldCollectionStore current, WorldCollectionRecord candidate,
-                                            @Nullable WorldCollectionRecord previous, Map<String, BlobInfo> blobs) {
-        return check(current, candidate, previous, blobs, Set.of());
-    }
-
     /**
      * Checks a candidate record as clients will: its files are stored, its schema, the
-     * budgets of the whole store with it in place, and its materialized collection. A
+     * budgets of the whole state with it in place, and its materialized collection. A
      * file marked missing may stay referenced but not be newly referenced, unless it is
      * being written again.
      *
+     * @param state    the state whose other records count towards the budgets: the store's
+     *                 own, or the working state of a batch, which may change several records
+     * @param previous the record before the change, or null for a new collection
      * @return null when it passes, or why not
      */
     @Nullable
-    private static WorldContentStatus check(WorldCollectionStore current, WorldCollectionRecord candidate,
-                                            @Nullable WorldCollectionRecord previous, Map<String, BlobInfo> blobs,
-                                            Set<String> written) {
+    private static WorldContentStatus check(WorldCollectionStore current, WorldCollectionStore.State state,
+                                            WorldCollectionRecord candidate, @Nullable WorldCollectionRecord previous,
+                                            Map<String, BlobInfo> blobs, Set<String> written) {
         Set<String> before = previous != null ? previous.referencedShas() : Set.of();
         for (String sha : candidate.referencedShas()) {
             if (!blobs.containsKey(sha)) {
@@ -857,7 +1274,7 @@ public final class WorldCollections {
             return WorldContentStatus.invalid(e);
         }
         List<WorldCollectionRecord> all = new ArrayList<>();
-        for (WorldCollectionRecord record : current.state().records()) {
+        for (WorldCollectionRecord record : state.records()) {
             if (!record.id().equals(candidate.id())) {
                 all.add(record);
             }
@@ -896,12 +1313,6 @@ public final class WorldCollections {
         REGISTERED.add(record.id());
     }
 
-    private static WorldCollectionRecord withRevision(WorldCollectionRecord record, int revision) {
-        return new WorldCollectionRecord(record.id(), record.name(), record.author(), record.red(), record.green(),
-                record.blue(), record.boxTexture(), record.boxColor(), record.logo(), record.archived(), revision,
-                record.figures());
-    }
-
     private static boolean inByteRange(int value) {
         return value >= 0 && value <= 255;
     }
@@ -911,18 +1322,13 @@ public final class WorldCollections {
         return List.copyOf(REGISTERED);
     }
 
-    private static final class UnknownFigure extends Exception {
-        private final String figure;
+    /** An edit refused with a status of its own rather than as an invalid record. */
+    private static final class Refused extends Exception {
+        private final WorldContentStatus status;
 
-        UnknownFigure(String figure) {
+        Refused(WorldContentStatus status) {
             super(null, null, false, false);
-            this.figure = WorldContentException.excerpt(figure);
-        }
-    }
-
-    private static final class FullCollection extends Exception {
-        FullCollection() {
-            super(null, null, false, false);
+            this.status = status;
         }
     }
 }

@@ -4,6 +4,7 @@ import com.theplumteam.util.ServerLevels;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
+import com.theplumteam.figure.DrawRules;
 import com.theplumteam.network.SyncTokenDataPacket;
 import com.theplumteam.server.config.ServerConfig;
 import dev.architectury.event.events.common.TickEvent;
@@ -19,11 +20,9 @@ import java.time.ZonedDateTime;
  * Grants regular tokens every 3 hours (in-game time) and resets special tokens daily.
  */
 public class ServerTickHandler {
-    // Regular token cooldown: 3 hours of in-game time = 3 * 60 * 60 * 20 ticks
-    private static final long REGULAR_TOKEN_COOLDOWN_TICKS = 3 * 60 * 60 * 20;
-
-    // Maximum regular tokens a player can have
-    private static final int MAX_REGULAR_TOKENS = 3;
+    // The rules live in DrawRules, where client screens read the same numbers
+    private static final long REGULAR_TOKEN_COOLDOWN_TICKS = DrawRules.REGULAR_TOKEN_COOLDOWN_TICKS;
+    private static final int MAX_REGULAR_TOKENS = DrawRules.MAX_REGULAR_TOKENS;
 
     private static final int CHECK_INTERVAL = 20; // Check once per second (20 ticks)
 
