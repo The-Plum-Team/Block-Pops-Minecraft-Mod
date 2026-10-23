@@ -1,6 +1,7 @@
 package com.theplumteam.client.gui.creator.ui;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.theplumteam.client.gui.style.Surfaces;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -11,11 +12,12 @@ import org.jetbrains.annotations.Nullable;
 import java.util.function.IntConsumer;
 
 /**
- * A whole number between two limits, as a rarity's weight from 1 to 1000: a text field between a
- * minus and a plus button. The buttons step the number by one, or by ten with Shift, and so do
- * the up and down arrow keys while the field types. Typing a number in range changes it at once;
- * anything else outlines the field in red and changes nothing, and the field shows the last good
- * number again when it loses the keyboard. Enter and Escape both leave the field.
+ * A whole number between two limits, as a rarity's weight from 1 to 1000: a text field in the
+ * menus' sunk well between a small raised minus and plus button. The buttons step the number by
+ * one, or by ten with Shift, and so do the up and down arrow keys while the field types. Typing a
+ * number in range changes it at once; anything else outlines the field in red and changes
+ * nothing, and the field shows the last good number again when it loses the keyboard. Enter and
+ * Escape both leave the field.
  *
  * <p>The field is the node's own vanilla text field, which it draws and hands input to itself,
  * so it works inside a scrolling area. Only digits, and a minus sign when the limits allow one,
@@ -26,12 +28,12 @@ public class UiStepper extends UiNode.Box {
     public static final int HEIGHT = 20;
     private static final int BUTTON = 16;
     private static final int GAP = 2;
-    private static final int OFF_TEXT = 0xFF5A5A5A;
+    private static final int OFF_TEXT = 0xFF6A6A6A;
 
     private final int min;
     private final int max;
     private final IntConsumer onChange;
-    private final EditBox field;
+    private final UiField field;
     private int value;
     private boolean valid = true;
     // Set while the stepper writes the field itself, so its responder ignores the change
@@ -51,7 +53,7 @@ public class UiStepper extends UiNode.Box {
         this.onChange = onChange;
         this.height = HEIGHT;
         Font font = Minecraft.getInstance().font;
-        this.field = new EditBox(font, 0, 0, 40, 20, CreatorScreen.tr("stepper.range", this.min, this.max));
+        this.field = new UiField(font, 0, 0, 40, UiField.HEIGHT, CreatorScreen.tr("stepper.range", this.min, this.max));
         this.field.setMaxLength(Math.max(String.valueOf(this.min).length(), String.valueOf(this.max).length()));
         this.field.setValue(String.valueOf(this.value));
         this.field.setResponder(this::typedText);
@@ -88,9 +90,7 @@ public class UiStepper extends UiNode.Box {
     @Override
     public Box at(int x, int y, int width, int height) {
         super.at(x, y, width, height);
-        field.setX(x + BUTTON + GAP);
-        field.setY(y);
-        field.setWidth(Math.max(16, width - 2 * (BUTTON + GAP)));
+        field.place(x + BUTTON + GAP, y, Math.max(16, width - 2 * (BUTTON + GAP)));
         return this;
     }
 
@@ -138,7 +138,9 @@ public class UiStepper extends UiNode.Box {
         drawButton(graphics, font, plus(), "+", enabled && value < max, mouseX, mouseY);
         field.render(graphics, mouseX, mouseY, partialTick);
         if (!valid) {
-            Draw.outline(graphics, field.getX() - 1, field.getY() - 1, field.getWidth() + 2, 22, Theme.RED);
+            // The well's border in red
+            Draw.outline(graphics, field.wellX() + 1, field.getY() + 1, field.wellWidth() - 2, field.getHeight() - 2,
+                    Theme.RED);
         }
         if (hovered(mouseX, mouseY)) {
             if (!enabled) {
@@ -152,10 +154,11 @@ public class UiStepper extends UiNode.Box {
     private static void drawButton(GuiGraphics graphics, Font font, Rect at, String glyph, boolean usable,
                                    int mouseX, int mouseY) {
         boolean hovered = usable && at.contains(mouseX, mouseY);
-        Draw.panel(graphics, at.x(), at.y(), at.width(), at.height(), Theme.CONTROL,
-                hovered ? Theme.TEXT : Theme.CONTROL_OUTLINE);
-        graphics.drawString(font, glyph, at.centerX() - font.width(glyph) / 2 + 1, at.y() + (at.height() - 8) / 2 + 1,
-                usable ? Theme.TEXT : OFF_TEXT, false);
+        int border = !usable ? Surfaces.BORDER_DISABLED : hovered ? Surfaces.BORDER_HOVER : Surfaces.BORDER;
+        int face = !usable ? Surfaces.FACE_DISABLED : hovered ? Surfaces.FACE_HOVER : Surfaces.FACE;
+        int faceBottom = Draw.raised(graphics, at.x(), at.y(), at.width(), at.height(), border, face, 1);
+        Draw.string(graphics, font, glyph, at.centerX() - font.width(glyph) / 2 + 1,
+                at.y() + (faceBottom - at.y() - 8) / 2 + 1, usable ? Theme.TEXT : OFF_TEXT);
     }
 
     @Override

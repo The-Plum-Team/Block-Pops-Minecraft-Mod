@@ -1,6 +1,7 @@
 package com.theplumteam.client.gui.creator.ui;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.theplumteam.client.gui.style.Surfaces;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -10,7 +11,8 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Locale;
 
 /**
- * A square pad that moves something across and up, such as the logo on a box: the marker's
+ * A square pad that moves something across and up, such as the logo on a box, drawn as a sunk
+ * well with a blue marker: the marker's
  * place on the pad is the offset, with the middle meaning none, and the offset shows under the
  * pad in model pixels with one decimal. Offsets are whole tenths of a pixel from minus to plus a
  * maximum, upward positive as the box's logo layout keeps them. Clicking or dragging moves the
@@ -25,7 +27,9 @@ public class UiXYPad extends UiNode.Box {
     }
 
     private static final int MARKER = 5;
-    private static final int CROSS = 0xFF2E2E2E;
+    private static final int CROSS = 0xFF34353A;
+    /** The marker's face: the blue button's. */
+    private static final int MARKER_FACE = 0xFF3A70B8;
 
     private final int max;
     private final Moved onMove;
@@ -99,18 +103,21 @@ public class UiXYPad extends UiNode.Box {
         boolean enabled = disabledReason == null;
         boolean hovered = hovered(mouseX, mouseY);
         int side = side();
-        int outline = pressed ? Theme.GOLD : hovered && enabled ? Theme.FIELD_OUTLINE : Theme.CONTROL_OUTLINE;
-        Draw.panel(graphics, x, y, side, side, Theme.CONTROL, outline);
+        if (enabled) {
+            Draw.well(graphics, x, y, side, side, hovered, pressed);
+        } else {
+            Draw.well(graphics, x, y, side, side, Theme.CONTROL_OUTLINE);
+        }
         int middleX = x + side / 2;
         int middleY = y + side / 2;
-        graphics.fill(x + 1, middleY, x + side - 1, middleY + 1, CROSS);
-        graphics.fill(middleX, y + 1, middleX + 1, y + side - 1, CROSS);
+        graphics.fill(x + 2, middleY, x + side - 2, middleY + 1, CROSS);
+        graphics.fill(middleX, y + 2, middleX + 1, y + side - 2, CROSS);
 
         int reach = reach();
         int markX = middleX + Math.round(reach * offsetX / (float) max) - MARKER / 2;
         int markY = middleY - Math.round(reach * offsetY / (float) max) - MARKER / 2;
-        Draw.panel(graphics, markX, markY, MARKER, MARKER, enabled ? Theme.GOLD : Theme.CONTROL_OUTLINE,
-                0xFF000000);
+        Draw.raised(graphics, markX, markY, MARKER, MARKER, enabled ? Theme.SELECTED : Surfaces.BORDER_DISABLED,
+                enabled ? MARKER_FACE : Surfaces.FACE_DISABLED, 0);
 
         Component value = CreatorScreen.tr("xy.value", tenths(offsetX), tenths(offsetY));
         Draw.text(graphics, font, value.getString(), x, y + side + 3, Math.max(side, width), Theme.MUTED);

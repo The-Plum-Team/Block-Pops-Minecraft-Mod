@@ -12,6 +12,10 @@ import com.theplumteam.client.gui.creator.ui.UiInput;
 import com.theplumteam.client.gui.creator.ui.UiMachineReplica;
 import com.theplumteam.client.gui.creator.ui.UiSwatches;
 import com.theplumteam.client.gui.creator.ui.UiToast;
+import com.theplumteam.client.gui.style.DialogCloseButton;
+import com.theplumteam.client.gui.style.DialogFrame;
+import com.theplumteam.client.gui.style.PixelFont;
+import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.util.GuiPose;
 import com.theplumteam.client.worldcontent.ClientPreviewAssets;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
@@ -24,7 +28,6 @@ import com.theplumteam.client.worldcontent.Slugs;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldContentIds;
 import com.theplumteam.worldcontent.WorldContentLimits;
-import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -51,6 +54,10 @@ import java.util.List;
  * the next one. Once the server has synced the new collection, the collection editor
  * ({@link CreatorEditorScreen}) opens on its figures. Leaving while it is being sent stops
  * nothing already sent: the overview selects the collection when it arrives.
+ *
+ * <p>The card is drawn as the menus' dialogs are ({@link DialogFrame}), with the green header of a
+ * dialog that creates something, the steps of a new collection on the header's right and an X
+ * that leaves, as Escape and Cancel do.
  */
 public class CreatorWizardScreen extends CreatorScreen {
     // The mockup's 940 by 672 dialog at about half its pixel size, as every creator size is,
@@ -64,10 +71,10 @@ public class CreatorWizardScreen extends CreatorScreen {
     private static final int STATUS_GAP = 4;
     private static final int STATUS_ROOM = STATUS_GAP + 9;
     // The toast's height, which goes above the card where there is room for it
-    private static final int TOAST_ROOM = 20 + 4;
+    private static final int TOAST_ROOM = 25 + 4;
     private static final int PAD = 12;
     private static final int COLUMN_GAP = 14;
-    private static final int HEADER = 30;
+    private static final int HEADER = DialogFrame.HEADER_HEIGHT + 6;
     private static final int LABEL = 11;
     private static final int FIELD = 20;
     private static final int ROW_GAP = 4;
@@ -77,9 +84,13 @@ public class CreatorWizardScreen extends CreatorScreen {
     private static final int CREATE_WIDTH = 150;
     private static final int STEP_BOX = 11;
     private static final int STEP_LINE = 14;
-    private static final int SHADOW = 0x80000000;
-    private static final int LABEL_COLOUR = 0xFFE6E6E6;
-    private static final int HELP = 0xFFA8A8A8;
+    // The steps on the header's strip: the current one white, the others faded into the strip
+    private static final int STEP_OFF = 0xFFA8C8B0;
+    private static final int STEP_EDGE = 0x80FFFFFF;
+    // The room the header's X takes at its right end
+    private static final int CLOSE_ROOM = 6 + DialogCloseButton.SIZE + 8;
+    private static final int LABEL_COLOUR = Theme.TEXT_SOFT;
+    private static final int HELP = Theme.MUTED;
     // The colour the mockup starts on, the swatch named Orange
     private static final int START_COLOUR = 0xF08A24;
     // The creator's previews of this screen use this slot
@@ -160,7 +171,7 @@ public class CreatorWizardScreen extends CreatorScreen {
             rebuild();
         });
         this.cancelButton = new UiButton(tr("cancel"), UiButton.Style.SECONDARY, this::onClose);
-        this.createButton = new UiButton(tr("wizard.create"), UiButton.Style.GREEN, this::create);
+        this.createButton = new UiButton(tr("wizard.create"), UiButton.Style.PRIMARY, this::create);
         this.replica.setCompact(true);
         this.replica.setCollection(CreatorPreview.previewId(PREVIEW_SLOT));
         refreshPreview();
@@ -169,16 +180,9 @@ public class CreatorWizardScreen extends CreatorScreen {
     // Building
 
     @Override
-    protected void init() {
-        // Only the screen shown is told the window changed size, and the overview is drawn under this one
-        if (this.parent.width != this.width || this.parent.height != this.height) {
-            //? if >=26 {
-            /*this.parent.resize(this.width, this.height);
-            *///? } else {
-            this.parent.resize(this.minecraft, this.width, this.height);
-            //? }
-        }
-        super.init();
+    protected boolean drawsParentBelow() {
+        // The overview is drawn under this screen, so it is laid out again when the window changes size
+        return true;
     }
 
     @Override
@@ -191,7 +195,9 @@ public class CreatorWizardScreen extends CreatorScreen {
         this.leftWidth = Math.min(MAX_LEFT_WIDTH, Math.max(120, (inner - COLUMN_GAP) * 55 / 100));
         this.rightX = left + this.leftWidth + COLUMN_GAP;
         this.rightWidth = Math.max(0, right - this.rightX);
-        this.footerY = this.panelY + this.panelHeight - 8 - UiButton.HEIGHT;
+        this.footerY = DialogFrame.bodyBottom(this.panelY, this.panelHeight) - 8 - UiButton.HEIGHT;
+        addRenderableWidget(DialogCloseButton.forDialog(this.panelX, this.panelY, this.panelWidth, tr("cancel"),
+                button -> onClose()));
         int bodyTop = this.panelY + HEADER;
         int bodyBottom = this.footerY - 6;
 
@@ -267,7 +273,7 @@ public class CreatorWizardScreen extends CreatorScreen {
         // Footer: Cancel on the left, the create button on the right with its note before it
         this.cancelButton.at(left, this.footerY, Math.max(60, UiButton.widthFor(this.font, this.cancelButton.label(),
                 false)), UiButton.HEIGHT);
-        int createWidth = Math.max(CREATE_WIDTH, UiButton.widthFor(this.font, this.createButton.label(), false));
+        int createWidth = Math.min(inner / 2, Math.max(CREATE_WIDTH, this.createButton.naturalWidth()));
         this.createButton.at(right - createWidth, this.footerY, createWidth, UiButton.HEIGHT);
         this.createButton.disable(problem());
         addNode(this.cancelButton);
@@ -555,10 +561,9 @@ public class CreatorWizardScreen extends CreatorScreen {
 
     @Override
     protected void drawPanel(GuiGraphics graphics) {
-        graphics.fill(this.panelX + 4, this.panelY + this.panelHeight, this.panelX + this.panelWidth + 4,
-                this.panelY + this.panelHeight + 5, SHADOW);
-        Draw.panel(graphics, this.panelX, this.panelY, this.panelWidth, this.panelHeight, Theme.DIALOG,
-                Theme.DIALOG_OUTLINE);
+        // The title is drawn with the steps, which share the header with it
+        DialogFrame.draw(graphics, this.panelX, this.panelY, this.panelWidth, this.panelHeight,
+                DialogFrame.Accent.CREATE, PixelIcon.PLUS, Component.empty());
     }
 
     @Override
@@ -568,11 +573,11 @@ public class CreatorWizardScreen extends CreatorScreen {
         int width = this.leftWidth;
 
         // Name: its label, its length and whether it can be used
-        graphics.drawString(this.font, tr("wizard.name"), left, this.nameLabelY, LABEL_COLOUR, false);
+        Draw.string(graphics, this.font, tr("wizard.name"), left, this.nameLabelY, LABEL_COLOUR);
         String counter = this.name.length() + "/" + WorldContentLimits.MAX_NAME_LENGTH;
         int counterX = left + width - this.font.width(counter);
-        graphics.drawString(this.font, counter, counterX, this.nameLabelY,
-                this.name.length() >= WorldContentLimits.MAX_NAME_LENGTH ? Theme.AMBER : HELP, false);
+        Draw.string(graphics, this.font, counter, counterX, this.nameLabelY,
+                this.name.length() >= WorldContentLimits.MAX_NAME_LENGTH ? Theme.AMBER : HELP);
         Component nameProblem = nameProblem();
         Component nameStatus = nameProblem == null ? tr("wizard.name_ok") : nameProblem;
         int statusColour = nameProblem == null ? Theme.GREEN : this.name.isEmpty() ? HELP : Theme.RED;
@@ -586,7 +591,7 @@ public class CreatorWizardScreen extends CreatorScreen {
         }
 
         // Author
-        graphics.drawString(this.font, tr("wizard.author"), left, this.authorLabelY, LABEL_COLOUR, false);
+        Draw.string(graphics, this.font, tr("wizard.author"), left, this.authorLabelY, LABEL_COLOUR);
         if (!WorldCollectionRecord.isPlainText(this.author)) {
             int labelEnd = left + this.font.width(tr("wizard.author")) + 8;
             Draw.text(graphics, this.font, tr("wizard.author_rule").getString(), labelEnd, this.authorLabelY,
@@ -600,21 +605,21 @@ public class CreatorWizardScreen extends CreatorScreen {
         // Background colour, with the chosen one's name and hex on the right of its label
         String value = tr("wizard.colour_value", UiSwatches.nameOf(this.rgb), UiColourPicker.hex(this.rgb)).getString();
         int valueX = left + width - this.font.width(value);
-        graphics.drawString(this.font, value, valueX, this.colourLabelY, Theme.TEXT_SOFT, false);
+        Draw.string(graphics, this.font, value, valueX, this.colourLabelY, Theme.TEXT_SOFT);
         Component colourLabel = tr("wizard.colour");
-        graphics.drawString(this.font, colourLabel, left, this.colourLabelY, LABEL_COLOUR, false);
+        Draw.string(graphics, this.font, colourLabel, left, this.colourLabelY, LABEL_COLOUR);
         int helpX = left + this.font.width(colourLabel);
         String colourHelp = tr("wizard.colour_help").getString();
         if (helpX + this.font.width(colourHelp) <= valueX - 8) {
             // Whole or not at all: a cut "· the…" says nothing
-            graphics.drawString(this.font, colourHelp, helpX, this.colourLabelY, HELP, false);
+            Draw.string(graphics, this.font, colourHelp, helpX, this.colourLabelY, HELP);
         }
 
         // Advanced options: the id and what to know about it
         graphics.fill(this.advancedX, this.advancedButton.bounds().y() - 2, this.advancedX + this.advancedWidth,
                 this.advancedButton.bounds().y() - 1, Theme.SEPARATOR);
         if (this.idLabelY >= 0) {
-            graphics.drawString(this.font, tr("wizard.id"), this.advancedX, this.idLabelY, Theme.CONTROL_TEXT, false);
+            Draw.string(graphics, this.font, tr("wizard.id"), this.advancedX, this.idLabelY, Theme.CONTROL_TEXT);
             String slug = slug();
             if (this.typedSlug.isEmpty() || WorldContentIds.isSlug(slug) && !Slugs.isCollectionTaken(slug)) {
                 Draw.lines(graphics, this.font, tr("wizard.id_note").getString(), this.advancedX, this.idNoteY,
@@ -637,15 +642,15 @@ public class CreatorWizardScreen extends CreatorScreen {
         drawFooterNote(graphics);
     }
 
-    /** The title and the three steps, the first one current. */
+    /**
+     * The title in the header's strip, and on its right the three steps, the first one current,
+     * then how long it takes, as room allows.
+     */
     private void drawHeader(GuiGraphics graphics) {
-        int left = this.panelX + PAD;
-        int right = this.panelX + this.panelWidth - PAD;
-        int top = this.panelY + 10;
-        String title = this.title.getString();
-        graphics.drawString(this.font, Component.literal(title).withStyle(ChatFormatting.BOLD), left, top + 1,
-                Theme.TEXT, false);
-        int titleRight = left + this.font.width(Component.literal(title).withStyle(ChatFormatting.BOLD)) + 12;
+        int left = this.panelX + 10 + PixelIcon.width(PixelIcon.PLUS) + 6;
+        int right = this.panelX + this.panelWidth - CLOSE_ROOM;
+        int middle = (this.panelY + 2 + this.panelY + DialogFrame.HEADER_HEIGHT - 1) / 2;
+        int titleWidth = PixelFont.width(this.title, PixelFont.crispScale(1.0f));
 
         List<Component> steps = List.of(tr("wizard.step.look"), tr("wizard.step.figures"),
                 tr("wizard.step.publish"));
@@ -656,33 +661,40 @@ public class CreatorWizardScreen extends CreatorScreen {
         stepsWidth += (steps.size() - 1) * (STEP_LINE + 8);
         Component time = tr("wizard.time");
         int timeWidth = this.font.width(time) + 10;
-        // The estimate goes first when the header runs out of room
-        boolean withTime = right - titleRight >= stepsWidth + timeWidth;
+        // The estimate goes first when the header runs out of room, then the steps
+        boolean withTime = right - left - titleWidth - 12 >= stepsWidth + timeWidth;
+        boolean withSteps = right - left - titleWidth - 12 >= stepsWidth;
         int x = right - stepsWidth - (withTime ? timeWidth : 0);
-        if (x < titleRight) {
+        Draw.heading(graphics, this.title, left, middle + 0.5f, Math.max(0, (withSteps ? x - 12 : right) - left), 1.0f,
+                Theme.TEXT);
+        if (!withSteps) {
             return;
         }
+        int boxY = middle - STEP_BOX / 2;
         for (int i = 0; i < steps.size(); i++) {
             boolean current = i == 0;
-            int boxY = top;
             if (current) {
-                graphics.fill(x, boxY, x + STEP_BOX, boxY + STEP_BOX, Theme.GOLD);
+                graphics.fill(x, boxY, x + STEP_BOX, boxY + STEP_BOX, Theme.TEXT);
             } else {
-                Draw.outline(graphics, x, boxY, STEP_BOX, STEP_BOX, 0xFF666666);
+                Draw.outline(graphics, x, boxY, STEP_BOX, STEP_BOX, STEP_EDGE);
             }
             String number = String.valueOf(i + 1);
-            graphics.drawString(this.font, number, x + (STEP_BOX - this.font.width(number) + 1) / 2, boxY + 2,
-                    current ? 0xFF000000 : Theme.FAINT, false);
+            int numberX = x + (STEP_BOX - this.font.width(number) + 1) / 2;
+            if (current) {
+                graphics.drawString(this.font, number, numberX, boxY + 2, DialogFrame.Accent.CREATE.strip, false);
+            } else {
+                Draw.string(graphics, this.font, number, numberX, boxY + 2, STEP_OFF);
+            }
             x += STEP_BOX + 4;
-            graphics.drawString(this.font, steps.get(i), x, boxY + 2, current ? Theme.GOLD : Theme.FAINT, false);
+            Draw.string(graphics, this.font, steps.get(i).getString(), x, boxY + 2, current ? Theme.TEXT : STEP_OFF);
             x += this.font.width(steps.get(i));
             if (i < steps.size() - 1) {
-                graphics.fill(x + 4, boxY + 5, x + 4 + STEP_LINE, boxY + 6, 0xFF555555);
+                graphics.fill(x + 4, boxY + 5, x + 4 + STEP_LINE, boxY + 6, STEP_EDGE);
                 x += STEP_LINE + 8;
             }
         }
         if (withTime) {
-            graphics.drawString(this.font, time, x + 10, top + 2, Theme.FAINT, false);
+            Draw.string(graphics, this.font, time.getString(), x + 10, boxY + 2, STEP_OFF);
         }
     }
 
@@ -696,7 +708,7 @@ public class CreatorWizardScreen extends CreatorScreen {
             List<String> lines = Draw.fit(this.font, tr("wizard.note").getString(), room, 2);
             int y = this.footerY + (UiButton.HEIGHT - lines.size() * Theme.LINE_HEIGHT) / 2 + 1;
             for (String line : lines) {
-                graphics.drawString(this.font, line, noteRight - this.font.width(line), y, HELP, false);
+                Draw.string(graphics, this.font, line, noteRight - this.font.width(line), y, HELP);
                 y += Theme.LINE_HEIGHT;
             }
             return;

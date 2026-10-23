@@ -1,5 +1,6 @@
 package com.theplumteam.client.gui.creator.ui;
 
+import com.theplumteam.client.gui.style.Surfaces;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -12,8 +13,9 @@ import java.util.List;
 import java.util.function.IntConsumer;
 
 /**
- * A row of options of which exactly one is chosen, as the mockup's view and pose switches: the
- * chosen option is gold with black text, the others dark with a grey border. An option can be
+ * A row of options of which exactly one is chosen, as the view and pose switches: each option is
+ * a small raised button in the menus' style, and the chosen one stands on the slate of a selected
+ * tab inside Quick Skin's blue selection border. An option can be
  * disabled with a reason shown in its tooltip, such as Sit for a model that has no sitting pose.
  * When the row is given more width than its labels need, the options share it equally; given
  * less, they narrow in proportion and their labels are cut.
@@ -22,8 +24,7 @@ public class UiSegmented extends UiNode.Box {
     public static final int HEIGHT = 16;
     private static final int PADDING = 6;
     private static final int GAP = 3;
-    private static final int HOVER_OUTLINE = 0xFF777777;
-    private static final int OFF_TEXT = 0xFF5A5A5A;
+    private static final int OFF_TEXT = 0xFF6A6A6A;
 
     private final List<Component> options;
     private final List<Component> disabled = new ArrayList<>();
@@ -121,10 +122,14 @@ public class UiSegmented extends UiNode.Box {
             boolean on = i == selected;
             Component reason = disabled.get(i);
             boolean hovered = i == hoveredIndex;
-            int outline = on ? Theme.GOLD : hovered && reason == null ? HOVER_OUTLINE : Theme.CONTROL_OUTLINE;
-            Draw.panel(graphics, left, y, widths[i], height, on ? Theme.GOLD : Theme.CONTROL, outline);
-            int colour = on ? 0xFF000000 : reason != null ? OFF_TEXT : Theme.CONTROL_TEXT;
-            Draw.centred(graphics, font, options.get(i).getString(), left + widths[i] / 2, y + (height - 8) / 2 + 1,
+            boolean lit = hovered && reason == null && !on;
+            int border = on ? Theme.SELECTED : reason != null ? Surfaces.BORDER_DISABLED
+                    : lit ? Surfaces.BORDER_HOVER : Surfaces.BORDER;
+            int face = on ? Theme.HIGHLIGHT : reason != null ? Surfaces.FACE_DISABLED
+                    : lit ? Surfaces.FACE_HOVER : Surfaces.FACE;
+            Draw.raised(graphics, left, y, widths[i], height, border, face, 1);
+            int colour = on ? Theme.TEXT : reason != null ? OFF_TEXT : lit ? Theme.TEXT : Theme.CONTROL_TEXT;
+            Draw.centred(graphics, font, options.get(i).getString(), left + widths[i] / 2, y + (height - 9) / 2,
                     widths[i] - 4, colour);
             if (hovered && reason != null) {
                 UiTooltip.set(reason);

@@ -1,64 +1,79 @@
 package com.theplumteam.client.gui.creator.ui;
 
+import com.theplumteam.client.gui.style.DialogFrame;
+import com.theplumteam.client.gui.style.Surfaces;
+
 /**
- * The colours and spacing of the creator screens, taken from the approved mockup at half its
- * pixel size, which is the size of Minecraft's GUI units at the usual scale. Every colour
- * spells out its alpha byte, because from 1.21.6 a colour with alpha 0 draws nothing.
+ * The colours and spacing of the creator screens, in the dark-mode Bedrock look the mod's menus
+ * share with Quick Skin: the surfaces come from {@link Surfaces}, selection is its blue, and a
+ * selected tab or menu row is the slate of the settings dialog's sidebar. Every colour spells out
+ * its alpha byte, because from 1.21.6 a colour with alpha 0 draws nothing.
  */
 public final class Theme {
     private Theme() {
     }
 
-    // Panel, dimming and outlines, the same as SettingsScreen and the World collection screens
-    public static final int PANEL = 0xFF000000;
-    public static final int PANEL_OUTLINE = 0x60FFFFFF;
+    // Panel, dimming and outlines: a dialog's charcoal face on the dimmed starry background
+    public static final int PANEL = Surfaces.DIALOG_FACE;
+    public static final int PANEL_OUTLINE = Surfaces.BORDER;
     public static final int DIM = 0x70000000;
-    public static final int MODAL_DIM = 0xA0000000;
-    public static final int CARD = 0xFF121212;
-    public static final int CARD_OUTLINE = 0xFF3A3A3A;
-    public static final int DIALOG = 0xFF0C0C0C;
-    public static final int DIALOG_OUTLINE = 0xFF9A9A9A;
-    public static final int MENU = 0xFF181818;
-    public static final int MENU_OUTLINE = 0xFF8A8A8A;
-    public static final int MENU_HOVER = 0xFF2C2C2C;
-    public static final int SEPARATOR = 0xFF3A3A3A;
-    public static final int TOAST = 0xFF1B1B1B;
-    public static final int TOAST_OUTLINE = 0xFF6A6A6A;
-    public static final int TRACK = 0xFF333333;
+    public static final int MODAL_DIM = 0x80000000;
+    public static final int CARD = Surfaces.FACE;
+    public static final int CARD_OUTLINE = Surfaces.BORDER;
+    public static final int DIALOG = Surfaces.DIALOG_FACE;
+    public static final int DIALOG_OUTLINE = Surfaces.BORDER;
+    public static final int MENU = Surfaces.DIALOG_FACE;
+    public static final int MENU_OUTLINE = Surfaces.BORDER;
+    public static final int MENU_HOVER = 0xFF4E6078;
+    public static final int SEPARATOR = 0xFF46474A;
+    public static final int TOAST = Surfaces.DIALOG_FACE;
+    public static final int TOAST_OUTLINE = Surfaces.BORDER;
+    public static final int TRACK = Surfaces.WELL;
 
     // Text
-    public static final int TEXT = 0xFFFFFFFF;
+    public static final int TEXT = Surfaces.TEXT;
     public static final int TEXT_SOFT = 0xFFDDDDDD;
-    public static final int MUTED = 0xFFAAAAAA;
-    public static final int FAINT = 0xFF8F8F8F;
+    public static final int MUTED = Surfaces.TEXT_DIM;
+    public static final int FAINT = Surfaces.TEXT_MUTED;
 
-    // Accents
-    public static final int GOLD = 0xFFFFD84A;
-    public static final int GOLD_LIGHT = 0xFFFFF1A8;
-    public static final int GOLD_DARK = 0xFF211B05;
-    public static final int GREEN = 0xFF55FF55;
-    public static final int AMBER = 0xFFFFAA00;
+    // Selection and focus: Quick Skin's blue border, and the slate of a selected tab with its bar
+    public static final int SELECTED = Surfaces.SELECTED;
+    public static final int SELECTED_LIGHT = 0xFF9DC0FF;
+    public static final int HIGHLIGHT = 0xFF4E6078;
+    public static final int HIGHLIGHT_BAR = 0xFF6F8FB0;
+    /** The face of a plain row or tab under the mouse. */
+    public static final int HOVER = 0xFF444549;
+    /** A link's text, and under the mouse. */
+    public static final int LINK = 0xFF8FB4FF;
+    public static final int LINK_HOVER = 0xFFC6DAFF;
+
+    // Accents. Gold is the guaranteed token's colour, and marks what is favoured or set aside
+    public static final int GOLD = 0xFFFFD060;
+    public static final int GOLD_LIGHT = 0xFFFFE9A0;
+    public static final int GOLD_DARK = 0xFF4A3608;
+    public static final int GREEN = 0xFF6FCF6F;
+    public static final int AMBER = 0xFFFFB040;
     public static final int ORANGE = 0xFFFFB37A;
-    public static final int RED = 0xFFFF5555;
+    public static final int RED = 0xFFFF6B6B;
     public static final int PENDING = 0xFFFFFF80;
 
-    // Status badges: background, then text and border
-    public static final int BADGE_PUBLISHED_BG = 0xFF174D17;
-    public static final int BADGE_PUBLISHED_FG = 0xFFB9FFB0;
-    public static final int BADGE_DRAFT_BG = 0xFF4A3D00;
-    public static final int BADGE_DRAFT_FG = 0xFFFFE98A;
-    public static final int BADGE_ARCHIVED_BG = 0xFF2A2A2A;
-    public static final int BADGE_ARCHIVED_FG = 0xFFCFCFCF;
-    public static final int BADGE_MISSING_BG = 0xFF5A1414;
-    public static final int BADGE_MISSING_FG = 0xFFFFB3B3;
-    public static final int BADGE_SOON_BG = 0xFF262626;
-    public static final int BADGE_SOON_FG = 0xFFD0D0D0;
+    // Status badges: background, then text and border, in the dialog accents' colours
+    public static final int BADGE_PUBLISHED_BG = DialogFrame.Accent.CREATE.strip;
+    public static final int BADGE_PUBLISHED_FG = 0xFF9AE09A;
+    public static final int BADGE_DRAFT_BG = GOLD_DARK;
+    public static final int BADGE_DRAFT_FG = GOLD;
+    public static final int BADGE_ARCHIVED_BG = Surfaces.FACE_DISABLED;
+    public static final int BADGE_ARCHIVED_FG = Surfaces.TEXT_DIM;
+    public static final int BADGE_MISSING_BG = DialogFrame.Accent.DANGER.strip;
+    public static final int BADGE_MISSING_FG = 0xFFFF9090;
+    public static final int BADGE_SOON_BG = Surfaces.FACE_DISABLED;
+    public static final int BADGE_SOON_FG = Surfaces.TEXT_DIM;
 
-    // Controls: segmented options, flat tabs and check boxes
-    public static final int CONTROL = 0xFF141414;
-    public static final int CONTROL_OUTLINE = 0xFF444444;
-    public static final int CONTROL_TEXT = 0xFFCCCCCC;
-    public static final int FIELD_OUTLINE = 0xFFA0A0A0;
+    // Controls: the sunk well of fields, tracks and check boxes, and its borders
+    public static final int CONTROL = Surfaces.WELL;
+    public static final int CONTROL_OUTLINE = Surfaces.BORDER_DISABLED;
+    public static final int CONTROL_TEXT = Surfaces.TEXT_DIM;
+    public static final int FIELD_OUTLINE = Surfaces.BORDER_HOVER;
 
     // Spacing
     public static final int SPACE_S = 8;
@@ -68,4 +83,21 @@ public final class Theme {
 
     /** The height of a line of text with the gap below it. */
     public static final int LINE_HEIGHT = 11;
+
+    /** The pixel icons the creator adds to the menus' own ({@code PixelIcon}): rows of '#' and '.'. */
+    public static final String[] ICON_HELP = {
+            "..#####..", ".##...##.", ".......##", "......##.", "....##...",
+            "....##...", ".........", "....##...", "....##..."};
+    public static final String[] ICON_ARCHIVE = {
+            "#########", "#.......#", "#########", ".#.....#.", ".#.###.#.",
+            ".#.....#.", ".#.....#.", ".#.....#.", ".#######."};
+    public static final String[] ICON_SAVE = {
+            "########.", "#.#####.#", "#.#####.#", "#.......#", "#.......#",
+            "#.#####.#", "#.#...#.#", "#.#...#.#", "#########"};
+    public static final String[] ICON_UNDO = {
+            "..#......", ".##......", "#######..", ".##....#.", "..#.....#",
+            "........#", "........#", ".......#.", "..#####.."};
+    public static final String[] ICON_FILE = {
+            "#####....", "#...##...", "#...#.#..", "#...####.", "#......#.",
+            "#......#.", "#......#.", "#......#.", "########."};
 }

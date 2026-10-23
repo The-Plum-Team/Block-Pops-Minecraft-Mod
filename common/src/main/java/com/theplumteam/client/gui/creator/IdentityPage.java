@@ -16,6 +16,7 @@ import com.theplumteam.client.gui.creator.ui.UiScrollPane;
 import com.theplumteam.client.gui.creator.ui.UiSegmented;
 import com.theplumteam.client.gui.creator.ui.UiSwatches;
 import com.theplumteam.client.gui.creator.ui.UiXYPad;
+import com.theplumteam.client.gui.style.PixelFont;
 import com.theplumteam.client.gui.util.LinkOpening;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.client.worldcontent.CreatorDraft;
@@ -58,7 +59,8 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  * the draft, so every change shows before it is saved, files not yet uploaded included.
  *
  * <p>On the right, the text fields stay at the top and the other sections scroll under them,
- * each heading marked with an amber dot while it holds unsaved changes. The background colour
+ * each heading in the menus' pixel font and marked with an amber dot while it holds unsaved
+ * changes. The background colour
  * comes from the swatches, a custom colour or the logo's main colour. The box is a plain box of
  * one of the sixteen box colours, the collection's own 64×64 image, or the mod's usual box;
  * "Download box template" writes a template with its faces marked into the game folder and
@@ -74,6 +76,8 @@ final class IdentityPage implements EditorPage {
     private static final int MIN_VIEW_WIDTH = 140;
     private static final int COLUMN_GAP = 14;
     private static final int LABEL = 11;
+    // A section's heading, in the pixel font, whose capitals are taller than Minecraft's
+    private static final int HEADING = 13;
     private static final int FIELD = 20;
     private static final int SECTION_GAP = 12;
     private static final int PAD_SIDE = 46;
@@ -238,8 +242,8 @@ final class IdentityPage implements EditorPage {
         int y = top;
 
         // Background colour
-        this.colourHeading.at(x, y, width, LABEL);
-        y += LABEL;
+        this.colourHeading.at(x, y, width, HEADING);
+        y += HEADING;
         this.colourHelp.at(x, y, width, LABEL);
         y += LABEL;
         this.colours.select(draft.rgb());
@@ -254,8 +258,8 @@ final class IdentityPage implements EditorPage {
         addAll(this.colourHeading, this.colourHelp, this.colours, this.fromLogo, this.customColour);
 
         // Box: one of three kinds, each with what it needs below the switch
-        this.boxHeading.at(x, y, width, LABEL);
-        y += LABEL + 1;
+        this.boxHeading.at(x, y, width, HEADING);
+        y += HEADING + 1;
         this.boxModes.select(boxModeIndex(draft.boxMode()));
         this.boxModes.at(x, y, Math.min(width, this.boxModes.naturalWidth()), UiSegmented.HEIGHT);
         y += UiSegmented.HEIGHT + 5;
@@ -290,8 +294,8 @@ final class IdentityPage implements EditorPage {
         y += SECTION_GAP;
 
         // Logo, then its size and place on the box
-        this.logoHeading.at(x, y, width, LABEL);
-        y += LABEL;
+        this.logoHeading.at(x, y, width, HEADING);
+        y += HEADING;
         this.logoShown = showIn(this.logoZone, draft.logo(), this.logoShown);
         this.logoZone.at(x, y, width, UiDropZone.HEIGHT);
         y += UiDropZone.HEIGHT + 6;
@@ -505,8 +509,8 @@ final class IdentityPage implements EditorPage {
         String counter = draft.name().length() + "/" + WorldContentLimits.MAX_NAME_LENGTH;
         int counterX = x + this.half - font.width(counter);
         if (counterX > nameEnd + 4) {
-            graphics.drawString(font, counter, counterX, this.nameLabelY,
-                    draft.name().length() >= WorldContentLimits.MAX_NAME_LENGTH ? Theme.AMBER : HELP, false);
+            Draw.string(graphics, font, counter, counterX, this.nameLabelY,
+                    draft.name().length() >= WorldContentLimits.MAX_NAME_LENGTH ? Theme.AMBER : HELP);
         }
         Component nameProblem = draft.name().isBlank() ? tr("wizard.name_empty")
                 : !WorldCollectionRecord.isPlainText(draft.name()) ? tr("name_rule") : null;
@@ -533,7 +537,7 @@ final class IdentityPage implements EditorPage {
 
     // A field's label, with an amber dot after it while it holds unsaved changes; returns its end
     private static int drawLabel(GuiGraphics graphics, Font font, Component label, int x, int y, boolean changed) {
-        graphics.drawString(font, label, x, y, LABEL_COLOUR, false);
+        Draw.string(graphics, font, label, x, y, LABEL_COLOUR);
         int end = x + font.width(label);
         if (changed) {
             Draw.dot(graphics, end + 5, y + 4, 4, Theme.AMBER);
@@ -553,8 +557,9 @@ final class IdentityPage implements EditorPage {
     }
 
     /**
-     * A line of text in the scrolling sections: a heading with an amber dot while its section
-     * holds unsaved changes and a value on the right, or a grey note wrapped over its height.
+     * A line of text in the scrolling sections: a heading in the pixel font with an amber dot while
+     * its section holds unsaved changes and a value on the right, or a grey note wrapped over its
+     * height.
      */
     private static final class Label extends UiNode.Box {
         private final Supplier<Component> text;
@@ -586,21 +591,24 @@ final class IdentityPage implements EditorPage {
             }
             Font font = Minecraft.getInstance().font;
             int right = x + width;
-            if (this.value != null) {
-                // The heading keeps its room; the value is cut first
-                int room = Math.max(0, width - font.width(this.text.get()) - 20);
-                String shown = Draw.cut(font, this.value.get().getString(), room);
-                if (!shown.isEmpty()) {
-                    int valueX = right - font.width(shown);
-                    graphics.drawString(font, shown, valueX, y, this.valueColour, false);
-                    right = valueX - 8;
-                }
-            }
             if (this.changed != null) {
-                int end = x + Math.min(font.width(this.text.get()), Math.max(0, right - x - 9));
-                Draw.text(graphics, font, this.text.get().getString(), x, y, Math.max(0, right - x - 9), this.colour);
+                // A heading: the value on its right in Minecraft's font, level with the capitals
+                int headingWidth = PixelFont.width(this.text.get(), PixelFont.crispScale(1.0f));
+                int textY = y + (height - 8) / 2 + 1;
+                if (this.value != null) {
+                    // The heading keeps its room; the value is cut first
+                    int room = Math.max(0, width - headingWidth - 20);
+                    String shown = Draw.cut(font, this.value.get().getString(), room);
+                    if (!shown.isEmpty()) {
+                        int valueX = right - font.width(shown);
+                        Draw.string(graphics, font, shown, valueX, textY, this.valueColour);
+                        right = valueX - 8;
+                    }
+                }
+                int end = x + Draw.heading(graphics, this.text.get(), x, y + height / 2.0f, Math.max(0, right - x - 9),
+                        1.0f, this.colour);
                 if (this.changed.getAsBoolean()) {
-                    Draw.dot(graphics, end + 5, y + 4, 4, Theme.AMBER);
+                    Draw.dot(graphics, end + 5, y + height / 2, 4, Theme.AMBER);
                 }
                 return;
             }

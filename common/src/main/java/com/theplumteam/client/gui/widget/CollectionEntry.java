@@ -3,7 +3,9 @@ package com.theplumteam.client.gui.widget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.util.GuiPose;
-import com.theplumteam.client.gui.util.GuiScaleManager;
+import com.theplumteam.client.gui.style.PixelIcon;
+import com.theplumteam.client.gui.style.Surfaces;
+import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
@@ -11,7 +13,6 @@ import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.Minecraft;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 //? if >=1.21.2 {
@@ -20,6 +21,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
 import org.lwjgl.opengl.GL11;
 
 import java.util.Locale;
@@ -33,12 +35,23 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
     private final FigureCollection collection;
     private final CollectionListWidget parent;
     private static final int PADDING = 4;
-    private static final int TOP_PADDING = 12; // Extra padding at the top
-    private static final int LOGO_MAX_SIZE = 56; // Maximum size of the logo image
-    private static final int MONOGRAM_SIZE = 40; // The tile drawn in place of a missing logo
+    private static final int CARD_LIP_HEIGHT = 2;
+    /** The colour behind an unselected logo, and how strong the glow starts at the card's edge. */
+    private static final int IDLE_GLOW_COLOR = 0xFF8D8E93;
+    private static final int IDLE_GLOW = 0x30;
+    private static final int SELECTED_GLOW = 0x70;
+    private static final int GLOW_WIDTH = 70;
+    private static final int HAIRLINE = 0x38FFFFFF;
+    private static final int AUTHOR_COLOR = 0xFFFFC23A;
 
-    // Link button state
-    private static final int LINK_BUTTON_SIZE = 14; // Square button like the reference
+    // The author's link button, gold like Quick Skin's favourite star
+    private static final int LINK_BUTTON_SIZE = 13;
+    private static final int LINK_FACE = 0xFFB07C14;
+    private static final int LINK_FACE_HOVER = 0xFFC89018;
+    private static final int LINK_BORDER = 0xFFE0A830;
+    private static final int LINK_BORDER_HOVER = 0xFFFFD060;
+    private static final String[] ICON_LINK = {
+            "..###..", ".#.#.#.", "#..#..#", "#######", "#..#..#", ".#.#.#.", "..###.."};
     private int linkButtonX, linkButtonY;
     private boolean isLinkHovered;
 
@@ -68,49 +81,45 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         boolean isSelected = parent.getSelected() == this;
         drawCard(graphics, mc.font, collection, x, y, entryWidth, entryHeight, isSelected, isMouseOver);
 
-        // Where the card's highlight ends, which the link button sits inside
-        float scale = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getRenderScaleFactor() : 1.0f;
-        int effectiveLinkButtonSize = (int)(LINK_BUTTON_SIZE * scale);
-        int highlightRight = x + entryWidth - 10;
-        int highlightTop = y - (int)(2 * scale);
-
-        // Render link button on hover if author URL is available
+        // The author's link, near a hovered card's top-right corner, as Quick Skin's favourite star
         this.isLinkHovered = false;
         if (isMouseOver && collection.getAuthorUrl() != null && !collection.getAuthorUrl().isEmpty()) {
-            int margin = 4;
-            this.linkButtonX = highlightRight - effectiveLinkButtonSize - margin;
-            this.linkButtonY = highlightTop + margin;
-
-            boolean linkHovered = mouseX >= linkButtonX && mouseX < linkButtonX + effectiveLinkButtonSize &&
-                                 mouseY >= linkButtonY && mouseY < linkButtonY + effectiveLinkButtonSize;
-
-            // Draw button background (square) with shadow/depth - darker gold colored
-            graphics.fill(linkButtonX, linkButtonY,
-                linkButtonX + effectiveLinkButtonSize, linkButtonY + effectiveLinkButtonSize,
-                linkHovered ? 0xFFB8860B : 0xC0997000); // Darker gold colors
-
-            // Draw button outline for depth - darker gold
-            graphics.renderOutline(linkButtonX, linkButtonY, effectiveLinkButtonSize, effectiveLinkButtonSize,
-                linkHovered ? 0xFFDAA520 : 0xFFB8860B);
-
-            // Draw planet emoji centered
-            String planetEmoji = "\uD83C\uDF10";
-            int emojiWidth = mc.font.width(planetEmoji);
-            int emojiX = linkButtonX + (effectiveLinkButtonSize - emojiWidth) / 2; // Moved 1px left
-            int emojiY = linkButtonY + (effectiveLinkButtonSize - 8) / 2; // Moved 1px up (8 is approximate emoji height)
-            graphics.drawString(mc.font, planetEmoji, emojiX, emojiY, 0xFFFFFFFF, false);
-
+            this.linkButtonX = cardRight(x, entryWidth) - 3 - LINK_BUTTON_SIZE;
+            this.linkButtonY = cardTop(y) + 3;
+            boolean linkHovered = mouseX >= linkButtonX && mouseX < linkButtonX + LINK_BUTTON_SIZE
+                    && mouseY >= linkButtonY && mouseY < linkButtonY + LINK_BUTTON_SIZE;
+            Surfaces.raised(graphics, linkButtonX, linkButtonY, linkButtonX + LINK_BUTTON_SIZE,
+                    linkButtonY + LINK_BUTTON_SIZE,
+                    linkHovered ? LINK_BORDER_HOVER : LINK_BORDER, linkHovered ? LINK_FACE_HOVER : LINK_FACE,
+                    Surfaces.LIP, 2);
+            PixelIcon.draw(graphics, ICON_LINK, linkButtonX + (LINK_BUTTON_SIZE - 7) / 2,
+                    linkButtonY + (LINK_BUTTON_SIZE - 2 - 7) / 2, Surfaces.TEXT);
             this.isLinkHovered = linkHovered;
         }
     }
 
+    // The card spans the row, stopping short of the list's scroll bar, with a gap to the next one
+    private static int cardLeft(int x) {
+        return x - 2;
+    }
+
+    private static int cardRight(int x, int entryWidth) {
+        return x + entryWidth - 8;
+    }
+
+    private static int cardTop(int y) {
+        return y - 1;
+    }
+
     /**
-     * Draws a collection's card as the machine's collection list draws it: the selection or hover
-     * highlight, the logo or a monogram in its place, the name, the count of discovered figures
-     * and the author line. The creator's machine replica draws its cards through this too.
+     * Draws a collection's card as the machine's collection list draws it, a card of Quick Skin's
+     * skin list: a raised charcoal card with the logo (or a monogram in its place) on the left
+     * over a glow that is blue on the selected card, then the name over a hairline, the count of
+     * discovered figures and the author line. The creator's machine replica draws its cards
+     * through this too.
      *
-     * @param entryWidth  the row's width; the highlight stops 10 short of it, before the scroll bar
-     * @param entryHeight the row's height; the highlight reaches a little above and below it
+     * @param entryWidth  the row's width; the card stops 8 short of it, before the scroll bar
+     * @param entryHeight the row's height; the card reaches a pixel above and below it
      */
     public static void drawCard(GuiGraphics graphics, Font font, FigureCollection collection, int x, int y,
                                 int entryWidth, int entryHeight, boolean selected, boolean hovered) {
@@ -126,39 +135,32 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
     public static void drawCard(GuiGraphics graphics, Font font, FigureCollection collection, int x, int y,
                                 int entryWidth, int entryHeight, boolean selected, boolean hovered,
                                 Predicate<String> discovered) {
-        // Calculate effective sizes - scale when using inverse scale mode
-        float scale = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getRenderScaleFactor() : 1.0f;
-        int effectivePadding = (int)(PADDING * scale);
-        int effectiveTopPadding = (int)(TOP_PADDING * scale);
-        int effectiveLogoMaxSize = (int)(LOGO_MAX_SIZE * scale);
+        int left = cardLeft(x);
+        int right = cardRight(x, entryWidth);
+        int top = cardTop(y);
+        int bottom = y + entryHeight + 1;
+        int faceBottom = Surfaces.raised(graphics, left, top, right, bottom,
+                selected ? Surfaces.SELECTED : hovered ? Surfaces.BORDER_HOVER : Surfaces.BORDER,
+                hovered ? Surfaces.FACE_HOVER : Surfaces.FACE, Surfaces.LIP, CARD_LIP_HEIGHT);
 
-        // Selection and hover highlight with padding
-        int highlightPaddingH = (int)(4 * scale);
-        int highlightPaddingV = (int)(2 * scale);
-        int highlightLeft = x - highlightPaddingH;
-        int highlightRight = x + entryWidth - 10;
-        int highlightTop = y - highlightPaddingV;
-        int highlightBottom = y + entryHeight + highlightPaddingV;
-
-        if (selected) {
-            // Selected state - blue highlight with border
-            graphics.fill(highlightLeft, highlightTop, highlightRight, highlightBottom, 0x80308CC0);
-            graphics.renderOutline(highlightLeft, highlightTop, highlightRight - highlightLeft,
-                highlightBottom - highlightTop, 0xFF4080FF);
-        } else if (hovered) {
-            // Hover state - subtle white highlight
-            graphics.fill(highlightLeft, highlightTop, highlightRight, highlightBottom, 0x30FFFFFF);
+        // Colour behind the logo, fading toward the text: strong only on the selected card
+        int glowColor = selected ? Surfaces.SELECTED : IDLE_GLOW_COLOR;
+        int glow = selected ? SELECTED_GLOW : IDLE_GLOW;
+        int glowWidth = Math.min(GLOW_WIDTH, right - left - 4);
+        for (int k = 0; k < glowWidth; k++) {
+            int alpha = glow * (GLOW_WIDTH - k) / GLOW_WIDTH;
+            if (alpha > 0) {
+                graphics.fill(left + 2 + k, top + 2, left + 3 + k, faceBottom - 1, alpha << 24 | (glowColor & 0x00FFFFFF));
+            }
         }
 
-        // Draw logo on the left if available
-        // All logos get the same container width for alignment
-        int logoContainerX = x + effectivePadding;
-        int logoContainerWidth = effectiveLogoMaxSize; // Fixed container width
+        // The logo, or a monogram in its place, in a box on the left up to twice as wide as tall,
+        // so wide logos keep their size
+        int logoSize = Math.max(8, faceBottom - 1 - (top + 2) - 4);
+        int logoBoxWidth = Mth.clamp((right - left) / 4, logoSize, logoSize * 2);
+        int logoLeft = left + 2 + PADDING;
+        int logoTop = top + 2 + (faceBottom - 1 - (top + 2) - logoSize) / 2;
         ResourceLocation logoTexture = collection.getLogoTexture();
-
-        // Text always starts at the same position for all entries
-        int textStartX = logoContainerX + logoContainerWidth + effectivePadding;
-
         if (logoTexture != null) {
             // Logos keep their aspect ratio, so the drawn size comes from the texture's
             // own size. 1.21.5 exposes that on the uploaded texture; below it the size
@@ -196,24 +198,22 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             int logoWidth;
             int logoHeight;
 
-            // Use smaller size for World Players collection
-            int maxSize = "world_players".equals(collection.getId()) ? 40 : effectiveLogoMaxSize;
+            // The World Players logo is a little smaller, as it always was
+            int maxHeight = "world_players".equals(collection.getId()) ? logoSize * 5 / 7 : logoSize;
+            int maxWidth = Math.min(logoBoxWidth, maxHeight * 2);
 
-            if (aspectRatio > 1.0f) {
-                // Wider than tall - constrain width
-                logoWidth = maxSize;
-                logoHeight = (int) (maxSize / aspectRatio);
+            // As large as the box allows, keeping the logo's shape
+            if (aspectRatio > (float) maxWidth / maxHeight) {
+                logoWidth = maxWidth;
+                logoHeight = (int) (maxWidth / aspectRatio);
             } else {
-                // Taller than wide or square - constrain height
-                logoHeight = maxSize;
-                logoWidth = (int) (maxSize * aspectRatio);
+                logoHeight = maxHeight;
+                logoWidth = (int) (maxHeight * aspectRatio);
             }
 
-            // Center the logo horizontally within the container
-            int logoX = logoContainerX + (logoContainerWidth - logoWidth) / 2;
-
-            // Center the logo vertically
-            int logoY = y + (entryHeight - logoHeight) / 2;
+            // Centred in its box
+            int logoX = logoLeft + (logoBoxWidth - logoWidth) / 2;
+            int logoY = logoTop + (logoSize - logoHeight) / 2;
 
             // Draw the logo centered within its container
             //? if >=1.21.6 {
@@ -238,42 +238,34 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
                     textureWidth, textureHeight);
             //? }
         } else {
-            drawMonogram(graphics, font, collection, logoContainerX, y, logoContainerWidth, entryHeight, scale);
+            drawMonogram(graphics, font, collection, logoLeft + (logoBoxWidth - logoSize) / 2, logoTop, logoSize);
         }
 
-        // Draw collection name
-        int textX = textStartX;
-        int textY = y + effectiveTopPadding;
-        int textColor = selected ? 0xFFFFFFFF : 0xFFE0E0E0;
+        // The name over a hairline, the count of discovered figures, the author line
+        int textX = logoLeft + logoBoxWidth + PADDING + 2;
+        int room = right - 4 - textX;
+        int textY = top + 5;
+        UiText.drawFitted(graphics, font, collection.getName(), textX, textY, room,
+                selected ? Surfaces.TEXT : 0xFFE8E8E8);
+        graphics.fill(textX, textY + font.lineHeight + 1, right - 4, textY + font.lineHeight + 2, HAIRLINE);
 
-        graphics.drawString(font, collection.getName(), textX, textY, textColor, false);
+        int subTextY = textY + font.lineHeight + 4;
+        UiText.drawFitted(graphics, font, figureCountText(collection, discovered), textX, subTextY, room,
+                selected ? 0xFFC8C8C8 : Surfaces.TEXT_DIM);
 
-        // Draw figure count below the name (discovered/total)
-        String figureCount = figureCountText(collection, discovered);
-        int subTextY = textY + font.lineHeight + 2;
-        int subTextColor = selected ? 0xFFAAAAAA : 0xFF808080;
-        graphics.drawString(font, figureCount, textX, subTextY, subTextColor, false);
-
-        // Draw collection author below the figure count
         String author = collection.getAuthor();
-        Component authorText;
+        String authorText;
         if ("world_players".equals(collection.getId())) {
-            authorText = Component.literal("Auto-generated skins")
-                .withStyle(ChatFormatting.GOLD);
+            authorText = "Auto-generated skins";
         } else if (isUnsignedWorldCollection(collection)) {
             // An operator made it in this world and gave no author; "multiple creators" would be wrong
-            authorText = Component.translatable("blockpops.world_collections.created_in_world")
-                .withStyle(ChatFormatting.GOLD);
+            authorText = Component.translatable("blockpops.world_collections.created_in_world").getString();
         } else if (author.equals("Unknown")) {
-            authorText = Component.literal("Collection with multiple creators")
-                .withStyle(ChatFormatting.GOLD);
+            authorText = "Collection with multiple creators";
         } else {
-            authorText = Component.literal("Skin creator: ")
-                .withStyle(ChatFormatting.GOLD)
-                .append(Component.literal(author).withStyle(ChatFormatting.GOLD));
+            authorText = "Skin creator: " + author;
         }
-        int authorY = subTextY + font.lineHeight + 2;
-        graphics.drawString(font, authorText, textX, authorY, 0xFFFFFFFF, false);
+        UiText.drawFitted(graphics, font, authorText, textX, subTextY + font.lineHeight + 2, room, AUTHOR_COLOR);
     }
 
     @Override
@@ -377,17 +369,14 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
      * Draws a tile in the collection's own colour with its initials where its logo would be,
      * for a collection without one, as a World collection may be.
      */
-    private static void drawMonogram(GuiGraphics graphics, Font font, FigureCollection collection, int containerX,
-                                     int y, int containerWidth, int entryHeight, float scale) {
-        int size = Math.min(containerWidth, (int) (MONOGRAM_SIZE * scale));
-        int tileX = containerX + (containerWidth - size) / 2;
-        int tileY = y + (entryHeight - size) / 2;
+    private static void drawMonogram(GuiGraphics graphics, Font font, FigureCollection collection, int tileX,
+                                     int tileY, int size) {
         int[] rgb = collection.getBackgroundColor();
         int red = rgb != null && rgb.length == 3 ? rgb[0] & 0xFF : 0x40;
         int green = rgb != null && rgb.length == 3 ? rgb[1] & 0xFF : 0x40;
         int blue = rgb != null && rgb.length == 3 ? rgb[2] & 0xFF : 0x40;
         graphics.fill(tileX, tileY, tileX + size, tileY + size, 0xFF000000 | (red << 16) | (green << 8) | blue);
-        graphics.renderOutline(tileX, tileY, size, size, 0x60FFFFFF);
+        Surfaces.outline(graphics, tileX, tileY, size, size, 0x60FFFFFF);
 
         String initials = initials(collection.getName());
         if (initials.isEmpty()) {

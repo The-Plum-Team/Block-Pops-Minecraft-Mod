@@ -1,6 +1,7 @@
 package com.theplumteam.client.gui.creator.ui;
 
 import com.theplumteam.block.PopBlockColor;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.registry.ModItems;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.minecraft.client.gui.GuiGraphics;
@@ -15,12 +16,13 @@ import java.util.function.IntConsumer;
 
 /**
  * A row of colour tiles to pick from, wrapping onto more rows when it runs out of width. The
- * chosen tile wears a gold ring and every tile names its colour in a tooltip.
+ * chosen tile wears Quick Skin's blue selection ring and every tile names its colour in a
+ * tooltip.
  *
  * <p>It comes in two kinds. {@link #colours} offers the twelve named background colours of the
  * mockup, and when the chosen colour is none of them it adds a thirteenth tile showing that
  * custom colour. {@link #boxColours} offers the sixteen plain box colours, each tile showing that
- * box at three quarters of its size.
+ * box at three quarters of its size in a sunk well, as an inventory slot.
  */
 public class UiSwatches extends UiNode.Box {
     /** A named colour, with its name under {@code blockpops.world_creator.colour.<key>}. */
@@ -46,7 +48,6 @@ public class UiSwatches extends UiNode.Box {
     private static final int RING_OFFSET = 1;
     private static final int RING = 2;
     private static final int MARGIN = RING_OFFSET + RING;
-    private static final int BOX_BACKGROUND = 0xFF141414;
 
     private final boolean boxes;
     private final int tile;
@@ -170,22 +171,22 @@ public class UiSwatches extends UiNode.Box {
         for (int i = 0; i < count(); i++) {
             Rect cell = tileAt(i);
             if (boxes) {
-                Draw.panel(graphics, cell.x(), cell.y(), tile, tile, BOX_BACKGROUND, Theme.CONTROL_OUTLINE);
+                Draw.well(graphics, cell.x(), cell.y(), tile, tile, i == hovered && enabled, false);
                 int size = tile * 3 / 4;
                 Draw.item(graphics, boxStack(PopBlockColor.values()[i]), cell.x() + (tile - size) / 2,
                         cell.y() + (tile - size) / 2, size);
             } else {
                 int rgb = i < BACKGROUNDS.size() ? BACKGROUNDS.get(i).rgb() : selectedRgb;
-                Draw.panel(graphics, cell.x(), cell.y(), tile, tile, 0xFF000000 | rgb, 0xFF000000);
+                Draw.panel(graphics, cell.x(), cell.y(), tile, tile, 0xFF000000 | rgb, Surfaces.OUTLINE);
             }
             if (i == selected) {
                 int ring = RING_OFFSET + RING;
                 for (int r = 0; r < RING; r++) {
                     Draw.outline(graphics, cell.x() - ring + r, cell.y() - ring + r, tile + 2 * (ring - r),
-                            tile + 2 * (ring - r), Theme.GOLD);
+                            tile + 2 * (ring - r), Theme.SELECTED);
                 }
             } else if (i == hovered && enabled) {
-                Draw.outline(graphics, cell.x() - 1, cell.y() - 1, tile + 2, tile + 2, Theme.TEXT);
+                Draw.outline(graphics, cell.x() - 1, cell.y() - 1, tile + 2, tile + 2, Surfaces.BORDER_SELECTED);
             }
             if (!enabled) {
                 graphics.fill(cell.x(), cell.y(), cell.right(), cell.bottom(), 0x90000000);

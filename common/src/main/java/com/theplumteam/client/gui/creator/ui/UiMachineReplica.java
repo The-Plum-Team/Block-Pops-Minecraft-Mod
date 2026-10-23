@@ -1,6 +1,7 @@
 package com.theplumteam.client.gui.creator.ui;
 
 import com.theplumteam.client.gui.FigureDraw;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.widget.CollectionEntry;
 import com.theplumteam.client.gui.widget.FigureEntry;
 import com.theplumteam.client.gui.widget.FigureListWidget;
@@ -49,8 +50,9 @@ public class UiMachineReplica extends UiNode.Box {
     private static final int GAP = 6;
     private static final int HEADER = 30;
     private static final int MIN_LEFT = 150;
-    private static final int PANEL = 0xFF050505;
-    private static final int DIMMED = 0xA0050505;
+    // The menus' palette; the layout stays the machine screen's
+    private static final int PANEL = Surfaces.PANEL_FACE;
+    private static final int DIMMED = 0xA026272A;
     private static final int RULE = 0x40FFFFFF;
     private static final int TOKENS = 0xFF5599FF;
     // How many of the machine's real collections are shown above this one
@@ -230,7 +232,9 @@ public class UiMachineReplica extends UiNode.Box {
         int colour = UiViewport.collectionColour(collection, 0xFF3A3A3A);
         // The machine's background in the collection's colour, around its dark panel
         graphics.fill(x, y, x + width, y + height, colour);
-        Draw.panel(graphics, x + FRAME, y + FRAME, width - 2 * FRAME, height - 2 * FRAME, PANEL, Theme.PANEL_OUTLINE);
+        Draw.outline(graphics, x + FRAME - 1, y + FRAME - 1, width - 2 * FRAME + 2, height - 2 * FRAME + 2,
+                Surfaces.OUTLINE);
+        Draw.panel(graphics, x + FRAME, y + FRAME, width - 2 * FRAME, height - 2 * FRAME, PANEL, Surfaces.BORDER);
         drawCollections(graphics, font, collection, mouseX, mouseY);
         if (collection == null) {
             return;

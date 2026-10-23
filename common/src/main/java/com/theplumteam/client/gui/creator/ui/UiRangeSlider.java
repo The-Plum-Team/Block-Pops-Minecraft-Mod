@@ -1,6 +1,7 @@
 package com.theplumteam.client.gui.creator.ui;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.theplumteam.client.gui.style.Surfaces;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -12,7 +13,8 @@ import java.util.function.IntFunction;
 
 /**
  * A slider for a whole number between two ends, in fixed steps, such as the logo's size on the
- * box from 50 to 150 %: a track with a gold knob, and the value written on the right of it.
+ * box from 50 to 150 %: a sunk track, lit blue up to a raised knob, in the menus' style, and the
+ * value written on the right of it.
  * Clicking or dragging moves the knob to the nearest step; the left and right arrow keys move it
  * a step (a single unit with Shift) while the slider has the keyboard, and a double click puts it
  * back on its usual value. It can be disabled with a reason in its tooltip.
@@ -22,6 +24,10 @@ public class UiRangeSlider extends UiNode.Box {
     private static final int KNOB_WIDTH = 7;
     private static final int KNOB_HEIGHT = 11;
     private static final int VALUE_GAP = 6;
+    /** The sunk track's height. */
+    private static final int TRACK_HEIGHT = 6;
+    /** The lit part of the track, up to the knob: the blue button's face. */
+    private static final int LIT = 0xFF3A70B8;
 
     private final int min;
     private final int max;
@@ -106,20 +112,22 @@ public class UiRangeSlider extends UiNode.Box {
         Font font = Minecraft.getInstance().font;
         boolean enabled = disabledReason == null;
         boolean hovered = hovered(mouseX, mouseY);
-        int trackY = y + KNOB_HEIGHT / 2;
+        int trackTop = y + KNOB_HEIGHT / 2 + 1 - TRACK_HEIGHT / 2;
         int right = trackRight(font);
-        graphics.fill(trackLeft(), trackY, right + 1, trackY + 2, Theme.TRACK);
+        int wellLeft = trackLeft() - KNOB_WIDTH / 2;
+        Draw.well(graphics, wellLeft, trackTop, right + KNOB_WIDTH / 2 + 1 - wellLeft, TRACK_HEIGHT,
+                enabled ? Surfaces.BORDER : Theme.CONTROL_OUTLINE);
         int centre = knobCentre(font);
-        if (enabled) {
-            // The part up to the knob is lit, as the mockup's filled track
-            graphics.fill(trackLeft(), trackY, centre, trackY + 2, 0xFF8A7020);
+        if (enabled && centre > wellLeft + 2) {
+            // The part up to the knob is lit
+            graphics.fill(wellLeft + 2, trackTop + 2, centre, trackTop + TRACK_HEIGHT - 2, LIT);
         }
-        int knobOutline = pressed ? Theme.TEXT : hovered && enabled ? Theme.GOLD_LIGHT : 0xFF000000;
-        Draw.panel(graphics, centre - KNOB_WIDTH / 2, y, KNOB_WIDTH, KNOB_HEIGHT,
-                enabled ? Theme.GOLD : Theme.CONTROL_OUTLINE, knobOutline);
+        int border = !enabled ? Surfaces.BORDER_DISABLED : pressed ? Surfaces.BORDER_SELECTED
+                : hovered ? Surfaces.BORDER_HOVER : Surfaces.BORDER;
+        int face = !enabled ? Surfaces.FACE_DISABLED : hovered || pressed ? Surfaces.FACE_HOVER : Surfaces.FACE;
+        Draw.raised(graphics, centre - KNOB_WIDTH / 2, y, KNOB_WIDTH, KNOB_HEIGHT, border, face, 1);
         Component text = format.apply(value);
-        graphics.drawString(font, text, x + width - font.width(text), y + 2, enabled ? Theme.TEXT_SOFT : Theme.FAINT,
-                false);
+        Draw.string(graphics, font, text, x + width - font.width(text), y + 2, enabled ? Theme.TEXT_SOFT : Theme.FAINT);
         if (hovered && disabledReason != null) {
             UiTooltip.set(disabledReason);
         }

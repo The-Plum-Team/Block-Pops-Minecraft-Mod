@@ -1,6 +1,5 @@
 package com.theplumteam.client.gui.widget;
 
-import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.client.Minecraft;
@@ -28,6 +27,10 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
     // How fast the list closes on that scroll: the share left shrinks by e every 1/rate seconds
     private static final double FOLLOW_RATE = 12.0;
 
+    // The cells' size and how many make a row; the machine screen fits them to its width
+    private int cellSize = FigureEntry.FIGURE_SIZE;
+    private int columns = 4;
+
     // Which figures count as discovered, asked with "collection:figure"
     private Predicate<String> discovered = FigureEntry.DEFAULT_DISCOVERED;
 
@@ -42,6 +45,20 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
 
     public FigureListWidget(Minecraft mc, int width, int height, int y, int entryHeight) {
         super(mc, width, height, y, y + height, entryHeight);
+    }
+
+    /**
+     * The cells' size and how many make a row, for the next {@link #setCollection}. The list's
+     * entry height, given at construction, holds one row of cells and its gap.
+     */
+    public void setGrid(int cellSize, int columns) {
+        this.cellSize = cellSize;
+        this.columns = Math.max(1, columns);
+    }
+
+    /** The width a row of {@code columns} cells of {@code cellSize} takes. */
+    public static int rowWidth(int cellSize, int columns) {
+        return columns * cellSize + (columns - 1) * FigureEntry.GRID_SPACING;
     }
 
     public void setCollection(@Nullable FigureCollection collection) {
@@ -61,14 +78,15 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
 
     // The heading, if any, is written above the first of the rows
     private void addRows(FigureCollection collection, List<FigureDefinition> figures, @Nullable String heading) {
-        // Group figures into rows of 4
+        // Group figures into rows of the grid's columns
         List<FigureDefinition> currentRow = new java.util.ArrayList<>();
         for (int i = 0; i < figures.size(); i++) {
             currentRow.add(figures.get(i));
 
-            // When we have 4 figures or reached the end, create a row entry
-            if (currentRow.size() == 4 || i == figures.size() - 1) {
+            // When the row is full or the figures run out, create a row entry
+            if (currentRow.size() == columns || i == figures.size() - 1) {
                 FigureEntry entry = new FigureEntry(currentRow, collection.getId());
+                entry.setGrid(cellSize, columns);
                 entry.setConfiguration(modelScale, xRotation, yRotation, zRotation, xOffset, yOffset, zOffset);
                 entry.setPreviewScale(collection.isPlush() ? PLUSH_PREVIEW_SCALE : 1.0f);
                 entry.setDiscovered(discovered);
@@ -232,78 +250,16 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
     //? }
         easeTowardFollowTarget();
-        if (GuiScaleManager.isUsingInverseScale()) {
-            float scale = GuiScaleManager.getRenderScaleFactor();
-
-            // Store original values (virtual coordinates)
-            int origX0 = this.x0;
-            int origX1 = this.x1;
-            int origY0 = this.y0;
-            int origY1 = this.y1;
-            int origWidth = this.width;
-            int origHeight = this.height;
-            // Note: itemHeight is final, entries handle their own scaling
-
-            // Scale bounds for correct scissor positioning
-            this.x0 = (int)(origX0 * scale);
-            this.x1 = (int)(origX1 * scale);
-            this.y0 = (int)(origY0 * scale);
-            this.y1 = (int)(origY1 * scale);
-            this.width = (int)(origWidth * scale);
-            this.height = (int)(origHeight * scale);
-
-
-            // Transform mouse coordinates for hit detection
-            int scaledMouseX = (int)(mouseX * scale);
-            int scaledMouseY = (int)(mouseY * scale);
-
-            // Scale scroll amount for correct entry positioning
-            //? if >=1.21.2 {
-            /*double origScroll = this.scrollAmount();
-            *///? } else {
-            double origScroll = this.getScrollAmount();
-            //? }
-            this.setScrollAmount(origScroll * scale);
-
-            // Render with scaled values
-            //? if >=1.21 {
-            /*super.renderWidget(graphics, scaledMouseX, scaledMouseY, partialTick);
-            *///? } else {
-            super.render(graphics, scaledMouseX, scaledMouseY, partialTick);
-            //? }
-
-            // Restore original values
-            this.x0 = origX0;
-            this.x1 = origX1;
-            this.y0 = origY0;
-            this.y1 = origY1;
-            this.width = origWidth;
-            this.height = origHeight;
-
-            this.setScrollAmount(origScroll);
-        } else {
-            //? if >=1.21 {
-            /*super.renderWidget(graphics, mouseX, mouseY, partialTick);
-            *///? } else {
-            super.render(graphics, mouseX, mouseY, partialTick);
-            //? }
-        }
+        //? if >=1.21 {
+        /*super.renderWidget(graphics, mouseX, mouseY, partialTick);
+        *///? } else {
+        super.render(graphics, mouseX, mouseY, partialTick);
+        //? }
     }
 
     @Override
     public int getRowWidth() {
         return this.width - 8;
-    }
-
-    /**
-     * Get the scaled item height when inverse scale is active.
-     * This ensures entry spacing matches the scaled coordinate space.
-     */
-    private int getScaledItemHeight() {
-        if (GuiScaleManager.isUsingInverseScale()) {
-            return (int)(this.itemHeight * GuiScaleManager.getRenderScaleFactor());
-        }
-        return this.itemHeight;
     }
 
     @Override
@@ -312,21 +268,14 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
     *///? } else {
     protected int getRowTop(int index) {
     //? }
-        // Use scaled itemHeight for consistent spacing in scaled coordinate space
+        // The rows after a heading sit lower by the heading's room
         //? if >=1.21.2 {
-        /*return this.y0 + 4 - (int)this.scrollAmount() + index * getScaledItemHeight() + this.headerHeight
-                + (headingRow >= 0 && index >= headingRow ? getScaledHeadingSpace() : 0);
+        /*return this.y0 + 4 - (int)this.scrollAmount() + index * this.itemHeight + this.headerHeight
+                + (headingRow >= 0 && index >= headingRow ? FigureEntry.HEADING_SPACE : 0);
         *///? } else {
-        return this.y0 + 4 - (int)this.getScrollAmount() + index * getScaledItemHeight() + this.headerHeight
-                + (headingRow >= 0 && index >= headingRow ? getScaledHeadingSpace() : 0);
+        return this.y0 + 4 - (int)this.getScrollAmount() + index * this.itemHeight + this.headerHeight
+                + (headingRow >= 0 && index >= headingRow ? FigureEntry.HEADING_SPACE : 0);
         //? }
-    }
-
-    private int getScaledHeadingSpace() {
-        if (GuiScaleManager.isUsingInverseScale()) {
-            return (int)(FigureEntry.HEADING_SPACE * GuiScaleManager.getRenderScaleFactor());
-        }
-        return FigureEntry.HEADING_SPACE;
     }
 
     @Override
@@ -335,9 +284,8 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
     *///? } else {
     protected int getMaxPosition() {
     //? }
-        // Use scaled itemHeight for correct scroll limits
-        return this.headerHeight + this.getItemCount() * getScaledItemHeight()
-                + (headingRow >= 0 ? getScaledHeadingSpace() : 0);
+        return this.headerHeight + this.getItemCount() * this.itemHeight
+                + (headingRow >= 0 ? FigureEntry.HEADING_SPACE : 0);
     }
 
     @Override
@@ -360,14 +308,10 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
         double mouseX = bpEvent.x();
         double mouseY = bpEvent.y();
         int button = bpEvent.button();
-        // Use virtual coordinates directly - screen already transforms mouse coords
-        // Virtual bounds + virtual mouse + virtual itemHeight = correct entry detection
         return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), bpDouble);
     }
     *///? } else {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // Use virtual coordinates directly - screen already transforms mouse coords
-        // Virtual bounds + virtual mouse + virtual itemHeight = correct entry detection
         return super.mouseClicked(mouseX, mouseY, button);
     }
     //? }

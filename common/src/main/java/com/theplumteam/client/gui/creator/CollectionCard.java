@@ -11,6 +11,9 @@ import com.theplumteam.client.gui.creator.ui.UiQuotaMeter;
 import com.theplumteam.client.gui.creator.ui.UiScrollPane;
 import com.theplumteam.client.gui.creator.ui.UiTooltip;
 import com.theplumteam.client.gui.creator.ui.UiViewport;
+import com.theplumteam.client.gui.style.PixelFont;
+import com.theplumteam.client.gui.style.PixelIcon;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.util.GuiPose;
 import com.theplumteam.client.gui.widget.FigureEntry;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
@@ -27,7 +30,6 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -41,9 +43,11 @@ import java.util.function.Consumer;
  * many figures it has and how many of them are in the draw, and how much of a collection's file
  * space it uses. A badge says whether it is published, a draft, archived or missing files on the
  * server, and an archived card is greyed out. While the pointer is over a card it shows an
- * "Edit" button and a "..." button for the card's menu.
+ * "Edit" button and a "..." button for the card's menu. A card is raised as the menus' buttons
+ * are, lighter under the pointer and with Quick Skin's blue border while selected.
  *
- * <p>The first card of the overview is not a collection: it starts a new one.
+ * <p>The first card of the overview is not a collection: it starts a new one, and is drawn as
+ * Quick Skin's import zone, a dark backdrop with a bracket at each corner.
  *
  * <p>The models are drawn from the collection the client registered for the record, so a card
  * shows exactly what the machine shows; a collection that is not registered yet draws its band
@@ -67,13 +71,11 @@ public final class CollectionCard {
     // One turn of the box every twelve seconds
     private static final long SPIN_MS = 12_000L;
     private static final int GREYED = 0x99000000;
-    private static final int NEW_FILL = 0x10FFD84A;
+    private static final int NEW_BACKDROP = 0x90;
+    private static final int NEW_BACKDROP_HOVER = 0xC0;
     private static final int NEW_HINT = 0xFFC8C8C8;
-    private static final int NEW_KEY = 0xFF9A9A9A;
-    private static final int OFF_OUTLINE = 0xFF5A5A5A;
-    private static final int HOVER_OUTLINE = 0xFF6A6A6A;
-    private static final int ARCHIVED_NAME = 0xFF9A9A9A;
-    private static final int SIZE_TEXT = 0xFF9A9A9A;
+    private static final int ARCHIVED_NAME = Theme.FAINT;
+    private static final int SIZE_TEXT = Theme.FAINT;
 
     @Nullable
     private final WorldCollectionRecord record;
@@ -236,14 +238,15 @@ public final class CollectionCard {
         int width = card.width();
         int height = card.height();
         boolean archived = record.archived();
-        int outline = card.selected() ? Theme.GOLD : card.hovered() ? HOVER_OUTLINE : Theme.CARD_OUTLINE;
-        Draw.panel(graphics, x, y, width, height, Theme.CARD, outline);
+        Draw.card(graphics, x, y, width, height, card.hovered(), card.selected());
 
-        int bandX = x + 1;
-        int bandY = y + 1;
-        int bandRight = x + width - 1;
+        // The band fills the face's top, inside the card's border
+        int bandX = x + 2;
+        int bandY = y + 2;
+        int bandRight = x + width - 2;
         int bandBottom = bandY + BAND;
         graphics.fill(bandX, bandY, bandRight, bandBottom, bandColour(record));
+        graphics.fill(bandX, bandBottom - 1, bandRight, bandBottom, Surfaces.OUTLINE);
         drawModels(graphics, bandX, bandY, bandRight, bandBottom, withHeads, archived, partialTick);
         // The wash, the badge and the buttons go above the models: a later stratum from 1.21.6,
         // depth before it, where a model in the band would otherwise cover them
@@ -351,7 +354,7 @@ public final class CollectionCard {
                 bold = Component.literal(shown.stripTrailing() + "...").withStyle(ChatFormatting.BOLD);
             } while (!shown.isEmpty() && font.width(bold) > width);
         }
-        graphics.drawString(font, bold, x, y, colour, false);
+        Draw.string(graphics, font, bold, x, y, colour);
     }
 
     /** "8 figures · 7 in the draw · 1 retired", without the retired part if asked, or "9 figures · archived". */
@@ -413,26 +416,26 @@ public final class CollectionCard {
         int width = card.width();
         int height = card.height();
         boolean enabled = disabled == null;
-        if (enabled) {
-            graphics.fill(x, y, x + width, y + height, card.hovered() ? 0x20FFD84A : NEW_FILL);
+        boolean lit = enabled && (card.hovered() || card.selected());
+        Surfaces.backdrop(graphics, x, y, x + width, y + height, lit ? NEW_BACKDROP_HOVER : NEW_BACKDROP);
+        if (card.selected()) {
+            Draw.outline(graphics, x, y, width, height, Theme.SELECTED);
         }
-        int edge = !enabled ? OFF_OUTLINE : card.selected() || card.hovered() ? Theme.GOLD_LIGHT : Theme.GOLD;
-        Draw.dashed(graphics, x, y, width, height, edge);
         int centerX = x + width / 2;
-        int top = y + (height - (20 + 4 + 10 + 11 + 11)) / 2;
-        Draw.item(graphics, new ItemStack(Items.BLAZE_ROD), centerX - 10, top, 20);
-        top += 24;
-        // Cut a little short, since bold letters are wider than the plain ones Draw.cut measures
-        String titleText = Draw.cut(font, CreatorScreen.tr("home.new").getString(), width - 2 * PAD - 8);
-        Component shown = Component.literal(titleText).withStyle(ChatFormatting.BOLD);
-        graphics.drawString(font, shown, centerX - font.width(shown) / 2, top, enabled ? Theme.GOLD : Theme.FAINT,
-                false);
-        top += 12;
-        Draw.centred(graphics, font, CreatorScreen.tr("home.new_hint").getString(), centerX, top, width - 2 * PAD,
+        int top = y + (height - (9 + 8 + 14 + 11 + 11)) / 2;
+        PixelIcon.draw(graphics, PixelIcon.PLUS, centerX - PixelIcon.width(PixelIcon.PLUS) / 2, top,
+                enabled ? Theme.TEXT : Theme.FAINT);
+        top += 9 + 8;
+        Component title = CreatorScreen.tr("home.new");
+        int room = width - 2 * PAD;
+        int titleWidth = Math.min(room, PixelFont.width(title, PixelFont.crispScale(1.0f)));
+        Draw.heading(graphics, title, centerX - titleWidth / 2, top + 4, room, 1.0f,
+                enabled ? Theme.TEXT : Theme.FAINT);
+        top += 14;
+        Draw.centred(graphics, font, CreatorScreen.tr("home.new_hint").getString(), centerX, top, room,
                 enabled ? NEW_HINT : Theme.FAINT);
         top += Theme.LINE_HEIGHT;
-        Draw.centred(graphics, font, CreatorScreen.tr("home.new_key").getString(), centerX, top, width - 2 * PAD,
-                NEW_KEY);
+        Draw.centred(graphics, font, CreatorScreen.tr("home.new_key").getString(), centerX, top, room, Theme.FAINT);
         if (!enabled && card.hovered()) {
             UiTooltip.set(disabled);
         }

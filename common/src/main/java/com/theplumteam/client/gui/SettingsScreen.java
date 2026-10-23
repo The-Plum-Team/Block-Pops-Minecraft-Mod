@@ -1,13 +1,18 @@
 package com.theplumteam.client.gui;
 
-import com.theplumteam.client.gui.util.GuiPose;
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.client.ClientServerSettings;
 import com.theplumteam.client.ClientHiddenCollections;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.gui.creator.CreatorHomeScreen;
 import com.theplumteam.client.gui.creator.ui.UiQuotaMeter;
-import com.theplumteam.client.gui.util.ButtonFactory;
+import com.theplumteam.client.gui.style.DialogFrame;
+import com.theplumteam.client.gui.style.DialogScreen;
+import com.theplumteam.client.gui.style.PixelIcon;
+import com.theplumteam.client.gui.style.StyledButton;
+import com.theplumteam.client.gui.style.StyledSlider;
+import com.theplumteam.client.gui.style.Surfaces;
+import com.theplumteam.client.gui.style.ToggleRow;
+import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.gui.widget.TabButton;
 import com.theplumteam.client.remote.ClientCustomCollections;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
@@ -21,7 +26,6 @@ import com.theplumteam.network.UpdateGuaranteedResetHourPacket;
 import com.theplumteam.worldcontent.WorldContentIds;
 import dev.architectury.platform.Platform;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -34,47 +38,63 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 
 /**
- * Settings screen displayed as a modal overlay with tabbed interface
+ * The machine's settings, as Quick Skin's settings dialog: a {@link DialogFrame} with the slate
+ * header and the gear, the tabs in a sidebar on the left and the active tab's content beside them
+ * as rows (a label on the left, its control on the right and a hairline under it), with the tab's
+ * action in a footer under the rows. Content taller than the dialog scrolls a row at a time.
  */
-public class SettingsScreen extends Screen {
-    private final Screen parent;
+public class SettingsScreen extends DialogScreen {
+    // The sidebar and the content's face, in Quick Skin's settings colours
+    private static final int SIDEBAR_BG = 0xFF3A3B3E;
+    private static final int SIDEBAR_EDGE = 0xFF55565B;
+    private static final int CONTENT_FACE = Surfaces.PANEL_FACE;
+    private static final int SIDEBAR_MIN_WIDTH = 88;
+    private static final int SIDEBAR_MAX_WIDTH = 112;
+    private static final int INSET = 4;
+    private static final int TAB_HEIGHT = 22;
+    private static final int TAB_SPACING = 4;
 
-    // Panel styling
-    private static final int PANEL_BG = 0xB0000000;           // Darker semi-transparent background
-    private static final int PANEL_OUTLINE = 0x60FFFFFF;      // Subtle white outline
-    private static final int MODAL_BASE = 0xFF000000;         // Opaque base under the themed panel
-    private static final int TITLE_COLOR = 0xFFFFFFFF;          // White title
+    // The rows: room between the content and the dialog's edges, and the rows' sizes
+    private static final int CONTENT_MARGIN = 14;
+    private static final int ROW_OVERHANG = 6;
+    private static final int WIDGET_HEIGHT = 20;
+    private static final int WIDGET_ROW_HEIGHT = 28;
+    private static final int GRID_ROW_HEIGHT = 24;
+    private static final int HEADING_HEIGHT = 18;
+    private static final int LINE_HEIGHT = 10;
+    private static final int ROW_TEXT = 0xFFE0E0E0;
+    private static final int STATUS_COLOR = 0xFFFFFF80;
+    private static final int ACTION_WIDTH = 110;
+    private static final int SCROLL_BAR = 0xFF6E6F73;
 
-    // Tab dimensions
-    private static final int TAB_HEIGHT = 30;
-    private static final int TAB_WIDTH = 100;
-    private static final int TAB_SPACING = 2;
-
-    // Panel dimensions
-    private int panelWidth = 650;
-    private int panelHeight = 350;
-    private int panelX;
-    private int panelY;
+    // How long a collection toggle shows the player's choice while the server answers
+    private static final int VISIBILITY_ANSWER_TICKS = 40;
 
     // Tab system
     private enum Tab {
-        SERVER("Server"),
-        DEVELOP("Develop"),
-        CHEATS("Cheats"),
-        COLLECTIONS("Collections"),
-        CUSTOM("Custom"),
-        CREATOR("Creator");
+        SERVER("Server", PixelIcon.SERVER),
+        DEVELOP("Develop", PixelIcon.WRENCH),
+        CHEATS("Cheats", PixelIcon.KEY),
+        COLLECTIONS("Collections", PixelIcon.LIST),
+        CUSTOM("Custom", PixelIcon.STAR),
+        CREATOR("Creator", PixelIcon.PALETTE);
 
         private final String displayName;
+        private final String[] icon;
 
-        Tab(String displayName) {
+        Tab(String displayName, String[] icon) {
             this.displayName = displayName;
+            this.icon = icon;
         }
 
         public String getDisplayName() {
@@ -83,21 +103,27 @@ public class SettingsScreen extends Screen {
     }
 
     private Tab activeTab = Tab.SERVER;
-    private TabButton serverTabButton;
-    private TabButton developTabButton;
-    private TabButton cheatsTabButton;
-    private TabButton collectionsTabButton;
-    private TabButton customTabButton;
-    private TabButton creatorTabButton;
-    private final List<AbstractWidget> serverSettingWidgets = new ArrayList<>();
-    private final List<AbstractWidget> developSettingWidgets = new ArrayList<>();
-    private final List<AbstractWidget> cheatsSettingWidgets = new ArrayList<>();
-    // Hide/Show toggle of each collection (Collections tab)
-    private final Map<FigureCollection, Button> collectionToggleButtons = new LinkedHashMap<>();
+    private final Map<Tab, TabButton> tabButtons = new EnumMap<>(Tab.class);
+    // Each tab's rows, which own its widgets; only the active tab's widgets are on the screen
+    private final Map<Tab, List<Row>> rows = new EnumMap<>(Tab.class);
+    // The first row shown, and the last one it can be
+    private int scroll;
+    private int maxScroll;
 
-    // Custom tab: the access code field, a Remove button per enabled collection, and the
-    // server's last answer. The code survives a rebuild of the screen.
-    private final List<AbstractWidget> customWidgets = new ArrayList<>();
+    // Where the sidebar ends and the rows go
+    private int sidebarWidth;
+    private int contentX;
+    private int contentRight;
+    private int contentTop;
+
+    // Show/hide toggle of each collection (Collections tab), and the requests still unanswered,
+    // with the tick they were sent at, so a toggle keeps the player's choice until the answer
+    private final Map<FigureCollection, ToggleRow> collectionToggles = new LinkedHashMap<>();
+    private final Map<String, Integer> pendingVisibility = new HashMap<>();
+    private int ticks;
+
+    // Custom tab: the access code field and the server's last answer. The code survives a
+    // rebuild of the screen.
     private EditBox customCodeField;
     private String pendingCustomCode = "";
     private Component customStatus;
@@ -107,10 +133,9 @@ public class SettingsScreen extends Screen {
     // reads the World collections as it draws
     private boolean shownCreator;
 
-    // Buttons and sliders
-    private Button closeButton;
-    private Button actionButton; // Context-sensitive button (Reset Colors / Change Time)
-    private Button colorTransitionToggle;
+    // Context-sensitive button in the footer (Change time / Reset Colors / ...)
+    private StyledButton actionButton;
+    private ToggleRow colorTransitionToggle;
 
     // Server settings
     private HourSlider resetHourSlider;
@@ -138,14 +163,31 @@ public class SettingsScreen extends Screen {
     private float[] backgroundBeforeDevelop;
 
     public SettingsScreen(Screen parent) {
-        super(Component.literal("Settings"));
-        this.parent = parent;
+        super(Component.literal("Settings"), parent);
     }
 
     @Override
-    protected void init() {
-        super.init();
+    protected DialogFrame.Accent accent() {
+        return DialogFrame.Accent.SETTINGS;
+    }
 
+    @Override
+    protected String[] icon() {
+        return PixelIcon.GEAR;
+    }
+
+    @Override
+    protected int preferredWidth() {
+        return Math.min(480, this.width - 40);
+    }
+
+    @Override
+    protected int preferredHeight() {
+        return Math.min(280, this.height - 20);
+    }
+
+    @Override
+    protected void initDialog() {
         // Ask the server for its settings once per opened screen (init also runs on resize)
         if (!serverSettingsRequested) {
             serverSettingsRequested = true;
@@ -153,124 +195,40 @@ public class SettingsScreen extends Screen {
         }
 
         // Clear widget lists to prevent duplication on resize
-        serverSettingWidgets.clear();
-        developSettingWidgets.clear();
-        cheatsSettingWidgets.clear();
-        collectionToggleButtons.clear();
-        customWidgets.clear();
+        rows.clear();
+        tabButtons.clear();
+        collectionToggles.clear();
         shownCustomRevision = ClientCustomCollections.revision();
         shownCreator = canOpenCreator();
-        // The Collections tab goes away when the player may no longer manage collections
-        collectionsTabButton = null;
-        customTabButton = null;
-        creatorTabButton = null;
-        if ((activeTab == Tab.COLLECTIONS && !canManageCollections())
-                || (activeTab == Tab.CUSTOM && !canManageCustomCollections())
-                || (activeTab == Tab.CREATOR && !canOpenCreator())) {
+        // A tab goes away when the player may no longer use it
+        if (!isShown(activeTab)) {
             activeTab = Tab.SERVER;
         }
 
-        // Calculate centered panel position
-        this.panelX = (this.width - this.panelWidth) / 2;
-        this.panelY = (this.height - this.panelHeight) / 2;
+        sidebarWidth = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, dialogWidth / 4));
+        contentX = dialogX + sidebarWidth + CONTENT_MARGIN;
+        contentRight = dialogX + dialogWidth - CONTENT_MARGIN;
+        contentTop = bodyTop() + 6;
 
-        // Create tab buttons at the top of the panel
-        int tabY = this.panelY;
-        int tabStartX = this.panelX;
-
-        // Server tab (always shown)
-        serverTabButton = (TabButton) ButtonFactory.createTab(
-                tabStartX, tabY,
-                TAB_WIDTH, TAB_HEIGHT,
-                Component.literal(Tab.SERVER.getDisplayName()),
-                activeTab == Tab.SERVER,
-                btn -> switchTab(Tab.SERVER)
-        );
-        this.addRenderableWidget(serverTabButton);
-
-        // Develop tab (only in development mode)
-        int nextTabX = tabStartX + TAB_WIDTH + TAB_SPACING;
-        if (isDevelopmentMode()) {
-            developTabButton = (TabButton) ButtonFactory.createTab(
-                    nextTabX, tabY,
-                    TAB_WIDTH, TAB_HEIGHT,
-                    Component.literal(Tab.DEVELOP.getDisplayName()),
-                    activeTab == Tab.DEVELOP,
-                    btn -> switchTab(Tab.DEVELOP)
-            );
-            this.addRenderableWidget(developTabButton);
-            nextTabX += TAB_WIDTH + TAB_SPACING;
+        // The tabs in the sidebar, one under another, each shown only to who may use it
+        int tabX = dialogX + 2 + INSET;
+        int tabWidth = sidebarWidth - 2 - 2 * INSET;
+        int tabY = bodyTop() + INSET + 2;
+        for (Tab tab : Tab.values()) {
+            if (!isShown(tab)) {
+                continue;
+            }
+            TabButton button = new TabButton(tabX, tabY, tabWidth, TAB_HEIGHT,
+                    Component.literal(tab.getDisplayName()), activeTab == tab, btn -> selectTab(tab))
+                    .setIcon(tab.icon);
+            tabButtons.put(tab, button);
+            this.addRenderableWidget(button);
+            tabY += TAB_HEIGHT + TAB_SPACING;
         }
 
-        // Cheats tab (for admins and in development mode)
-        if (canAccessCheats()) {
-            cheatsTabButton = (TabButton) ButtonFactory.createTab(
-                    nextTabX, tabY,
-                    TAB_WIDTH, TAB_HEIGHT,
-                    Component.literal(Tab.CHEATS.getDisplayName()),
-                    activeTab == Tab.CHEATS,
-                    btn -> switchTab(Tab.CHEATS)
-            );
-            this.addRenderableWidget(cheatsTabButton);
-            nextTabX += TAB_WIDTH + TAB_SPACING;
-        }
-
-        // Collections tab (for admins, on a server that syncs its hidden collections)
-        if (canManageCollections()) {
-            collectionsTabButton = (TabButton) ButtonFactory.createTab(
-                    nextTabX, tabY,
-                    TAB_WIDTH, TAB_HEIGHT,
-                    Component.literal(Tab.COLLECTIONS.getDisplayName()),
-                    activeTab == Tab.COLLECTIONS,
-                    btn -> switchTab(Tab.COLLECTIONS)
-            );
-            this.addRenderableWidget(collectionsTabButton);
-            nextTabX += TAB_WIDTH + TAB_SPACING;
-        }
-
-        // Custom tab (for admins, on a server that offers Custom collections)
-        if (canManageCustomCollections()) {
-            customTabButton = (TabButton) ButtonFactory.createTab(
-                    nextTabX, tabY,
-                    TAB_WIDTH, TAB_HEIGHT,
-                    Component.literal(Tab.CUSTOM.getDisplayName()),
-                    activeTab == Tab.CUSTOM,
-                    btn -> switchTab(Tab.CUSTOM)
-            );
-            this.addRenderableWidget(customTabButton);
-            nextTabX += TAB_WIDTH + TAB_SPACING;
-        }
-
-        // Creator tab (for operators, on a server that syncs its World collections)
-        if (canOpenCreator()) {
-            creatorTabButton = (TabButton) ButtonFactory.createTab(
-                    nextTabX, tabY,
-                    TAB_WIDTH, TAB_HEIGHT,
-                    Component.literal(Tab.CREATOR.getDisplayName()),
-                    activeTab == Tab.CREATOR,
-                    btn -> switchTab(Tab.CREATOR)
-            );
-            this.addRenderableWidget(creatorTabButton);
-        }
-
-        // Create button instances
-        int buttonWidth = 100;
-        int buttonHeight = 20;
-        int buttonY = this.panelY + this.panelHeight - buttonHeight - 20;
-        int buttonSpacing = 10;
-        int totalButtonWidth = (buttonWidth * 2) + buttonSpacing;
-        int buttonsStartX = this.panelX + (this.panelWidth - totalButtonWidth) / 2;
-
-        // Close button (Left)
-        this.closeButton = Button.builder(Component.literal("Close"), button -> this.onClose())
-                .bounds(buttonsStartX, buttonY, buttonWidth, buttonHeight)
-                .build();
-        this.addRenderableWidget(this.closeButton);
-
-        // Action button (Right) - Text and behavior depend on tab
-        this.actionButton = Button.builder(Component.literal("Action"), button -> handleActionClick())
-                .bounds(buttonsStartX + buttonWidth + buttonSpacing, buttonY, buttonWidth, buttonHeight)
-                .build();
+        // The action button, at the right of the footer - text and behavior depend on tab
+        this.actionButton = DialogFrame.button(contentRight - ACTION_WIDTH, bodyBottom() - 6 - WIDGET_HEIGHT,
+                ACTION_WIDTH, WIDGET_HEIGHT, Component.literal("Action"), button -> handleActionClick());
         this.addRenderableWidget(this.actionButton);
 
         // Create settings for all tabs
@@ -292,8 +250,31 @@ public class SettingsScreen extends Screen {
             createCustomSettings();
         }
 
+        if (canOpenCreator()) {
+            createCreatorSettings();
+        }
+
         // Show initial tab and update action button state
         switchTab(activeTab);
+    }
+
+    /**
+     * Whether a tab is shown to this player
+     */
+    private boolean isShown(Tab tab) {
+        return switch (tab) {
+            case SERVER -> true;
+            // Develop: only in development mode
+            case DEVELOP -> isDevelopmentMode();
+            // Cheats: for admins and in development mode
+            case CHEATS -> canAccessCheats();
+            // Collections: for admins, on a server that syncs its hidden collections
+            case COLLECTIONS -> canManageCollections();
+            // Custom: for admins, on a server that offers Custom collections
+            case CUSTOM -> canManageCustomCollections();
+            // Creator: for operators, on a server that syncs its World collections
+            case CREATOR -> canOpenCreator();
+        };
     }
 
     /**
@@ -317,7 +298,8 @@ public class SettingsScreen extends Screen {
 
         } else if (activeTab == Tab.DEVELOP) {
             // "Reset Colors" logic
-            ClientConfig.getInstance().resetColors();
+            ClientConfig config = ClientConfig.getInstance();
+            config.resetColors();
             // Reset star color sliders
             this.starRedSlider.setValue(1.0);
             this.starGreenSlider.setValue(1.0);
@@ -330,7 +312,7 @@ public class SettingsScreen extends Screen {
             // Reset panel opacity slider
             this.panelOpacitySlider.setValue(0.90);
             // Reset color transition toggle
-            this.colorTransitionToggle.setMessage(Component.literal("Transition: ON"));
+            this.colorTransitionToggle.setValue(config.enableColorTransition);
         } else if (activeTab == Tab.CHEATS) {
             // "Progression" opens the per-player collection editor
             this.minecraft.setScreen(new AdminProgressionScreen(this));
@@ -348,6 +330,7 @@ public class SettingsScreen extends Screen {
      * Updates the text and active state of the action button based on current tab
      */
     private void updateActionButtonState() {
+        StyledButton.Tone tone = StyledButton.Tone.PRIMARY;
         if (activeTab == Tab.SERVER) {
             this.actionButton.setMessage(Component.literal("Change time"));
             // Locked until slider is moved to a different value
@@ -357,6 +340,7 @@ public class SettingsScreen extends Screen {
             this.actionButton.setMessage(Component.literal("Reset Colors"));
             this.actionButton.active = true;
             this.actionButton.visible = true;
+            tone = StyledButton.Tone.NEUTRAL;
         } else if (activeTab == Tab.CHEATS) {
             // Cheats tab: open the per-player progression editor
             this.actionButton.setMessage(Component.literal("Progression"));
@@ -375,11 +359,15 @@ public class SettingsScreen extends Screen {
             this.actionButton.active = false;
             this.actionButton.visible = false;
         }
+        this.actionButton.tone(tone);
+        // The footer comes and goes with the action, and the rows take its room
+        layoutRows();
     }
 
     @Override
     public void tick() {
         super.tick();
+        ticks++;
         // Follow the server's answers and permission changes while the screen is open
         refreshServerSettings();
         // A new Custom list, or a server that starts or stops offering them, rebuilds the tabs
@@ -392,293 +380,131 @@ public class SettingsScreen extends Screen {
         if (shownCreator != canOpenCreator()) {
             this.rebuildWidgets();
         }
+        refreshCollectionToggles();
+        // Text such as the Custom status may have changed its height
+        layoutRows();
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
-        // Render parent screen in background (but don't pass mouse coordinates to prevent interaction)
-        if (this.parent != null) {
-            this.parent.render(graphics, -1, -1, partialTicks);
-        }
+    protected void renderBody(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // The sidebar behind the tabs and the darker face of the content, from under the header
+        // to the lip
+        int top = bodyTop();
+        int bottom = bodyBottom();
+        graphics.fill(dialogX + 2, top, dialogX + sidebarWidth, bottom, SIDEBAR_BG);
+        graphics.fill(dialogX + sidebarWidth, top, dialogX + sidebarWidth + 1, bottom, SIDEBAR_EDGE);
+        graphics.fill(dialogX + sidebarWidth + 1, top, dialogX + dialogWidth - 2, bottom, CONTENT_FACE);
 
-        // Flush the parent screen rendering
-        GuiPose.flush(graphics);
-
-        // Force the modal above the parent. 1.21.5 removed the global scissor and
-        // depth state, so the modal is pushed forward in the pose instead; 1.21.6's
-        // pose is two-dimensional, so there it relies on draw order alone.
-        //? if >=1.21.6 {
-        /*GuiPose.push(graphics);
-        *///? } elif >=1.21.5 {
-        /*graphics.pose().pushPose();
-        graphics.pose().translate(0, 0, 200);
-        *///? } elif >=1.21.2 {
-        /*RenderSystem.disableScissor();
-        RenderSystem.enableDepthTest();
-        RenderSystem.clear(256); // Clear depth buffer only
-        *///? } else {
-        RenderSystem.disableScissor();
-        RenderSystem.enableDepthTest();
-        RenderSystem.clear(256, false); // Clear depth buffer only
-        //? }
-
-        // Draw overlay over entire screen
-        graphics.fill(0, 0, this.width, this.height, 0x70000000);
-
-        // Calculate content panel area (below tabs)
-        int contentPanelY = this.panelY + TAB_HEIGHT;
-        int contentPanelHeight = this.panelHeight - TAB_HEIGHT;
-
-        // A modal has to hide the screen it opens over. Through the themed translucent panel
-        // the claw-machine screen's labels stayed readable, and the tab row had no backing at
-        // all, so the Server tab sat on top of its collection header. An opaque base goes
-        // under both; the themed fills below still draw on top of it.
-        int tabsRight = this.panelX;
-        for (TabButton tab : new TabButton[] {serverTabButton, developTabButton, cheatsTabButton, collectionsTabButton, customTabButton, creatorTabButton}) {
-            if (tab != null && tab.visible) {
-                tabsRight = Math.max(tabsRight, tab.getX() + tab.getWidth());
+        for (Row row : rowsOf(activeTab)) {
+            if (!row.shown) {
+                continue;
+            }
+            if (row.line) {
+                int lineY = row.top + row.height - 1;
+                graphics.fill(contentX - ROW_OVERHANG, lineY, contentRight + ROW_OVERHANG, lineY + 1, Surfaces.ROW_LINE);
+            }
+            if (row.swatch != null) {
+                // A colour preview at the right end of a heading
+                int size = 10;
+                int x = contentRight - size;
+                int y = row.top + (row.height - size) / 2;
+                graphics.fill(x - 1, y - 1, x + size + 1, y + size + 1, Surfaces.BORDER);
+                graphics.fill(x, y, x + size, y + size, row.swatch.getAsInt());
             }
         }
-        graphics.fill(this.panelX, this.panelY, tabsRight, contentPanelY, MODAL_BASE);
-        graphics.fill(this.panelX, contentPanelY,
-                this.panelX + this.panelWidth,
-                contentPanelY + contentPanelHeight,
-                MODAL_BASE);
 
-        // Draw main content panel background with configurable opacity
-        ClientConfig config = ClientConfig.getInstance();
-        int alpha = (int)(config.panelOpacity * 255);
-        int panelBgColor = (alpha << 24) | 0x000000;  // Black with configurable alpha
-
-        graphics.fill(this.panelX, contentPanelY,
-                this.panelX + this.panelWidth,
-                contentPanelY + contentPanelHeight,
-                panelBgColor);
-
-        // Draw outline around content panel, each corner pixel once so it does not brighten there
-        graphics.renderOutline(this.panelX, contentPanelY, this.panelWidth, contentPanelHeight, PANEL_OUTLINE);
-
-        // Render our modal buttons and widgets
-        super.render(graphics, mouseX, mouseY, partialTicks);
-
-        // The modal's own labels are drawn in the same pass as its widgets: before
-        // 1.21.6 the panel fills that sit under them are composited after anything
-        // drawn earlier in this method, which left the labels at a quarter of their
-        // brightness while widget text beside them stayed readable.
-        drawTabContent(graphics);
-
-        //? if >=1.21.5 {
-        /*GuiPose.pop(graphics);
-        *///? }
+        // A scroll bar in the right margin while the rows do not all fit
+        if (maxScroll > 0) {
+            int trackTop = contentTop;
+            int trackHeight = contentBottom() - trackTop;
+            List<Row> tabRows = rowsOf(activeTab);
+            int barHeight = Math.max(12, trackHeight * (tabRows.size() - maxScroll) / tabRows.size());
+            int barTop = trackTop + (trackHeight - barHeight) * scroll / maxScroll;
+            int barX = contentRight + ROW_OVERHANG + 2;
+            graphics.fill(barX, barTop, barX + 2, barTop + barHeight, SCROLL_BAR);
+        }
     }
 
-    private void drawTabContent(GuiGraphics graphics) {
-        ClientConfig config = ClientConfig.getInstance();
-
-        // Draw column headers (only in Develop tab)
-        if (isDevelopmentMode() && activeTab == Tab.DEVELOP) {
-            int padding = 20;
-            int columnSpacing = 15;
-            int availableWidth = this.panelWidth - (padding * 2) - (columnSpacing * 2);
-            int columnWidth = availableWidth / 3;
-
-            int col1X = this.panelX + padding;
-            int col2X = col1X + columnWidth + columnSpacing;
-            int col3X = col2X + columnWidth + columnSpacing;
-            int headerY = this.panelY + TAB_HEIGHT + 5;
-
-            graphics.drawString(this.font, "Star Color",
-                    col1X,
-                    headerY,
-                    0xFFFFFFFF);
-
-            graphics.drawString(this.font, "Background Color",
-                    col2X,
-                    headerY,
-                    0xFFFFFFFF);
-
-            graphics.drawString(this.font, "Panel & Animation",
-                    col3X,
-                    headerY,
-                    0xFFFFFFFF);
-        }
-
-        // Draw server tab content
-        if (activeTab == Tab.SERVER) {
-            int headerY = this.panelY + TAB_HEIGHT + 10;
-            graphics.drawCenteredString(this.font, "Token Reset Settings",
-                    this.panelX + this.panelWidth / 2,
-                    headerY,
-                    0xFFFFFFFF);
-
-            // Draw explanation text
-            int explanationY = this.panelY + TAB_HEIGHT + 80;
-            String[] explanationLines = {
-                    "The guaranteed token grants an undiscovered figure from the collection.",
-                    "This token resets daily at the hour specified above (in your local time).",
-                    !isOperator() ? "Only server operators can change this hour (in single-player, enable cheats)."
-                            : canChangeResetHour() ? "Set this to a time that works best for your server's player base."
-                            : "The server has not reported its reset hour, so it cannot be changed from here."
-            };
-
-            for (int i = 0; i < explanationLines.length; i++) {
-                int lineWidth = this.font.width(explanationLines[i]);
-                graphics.drawString(this.font, explanationLines[i],
-                        this.panelX + (this.panelWidth - lineWidth) / 2,
-                        explanationY + (i * 12),
-                        0xFFAAAAAA);
+    @Override
+    protected void renderDialog(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // The rows' labels and text are drawn in the same pass as the widgets, after them:
+        // before 1.21.6 text drawn under the widgets' fills could end up behind them
+        int room = contentRight - contentX;
+        for (Row row : rowsOf(activeTab)) {
+            if (!row.shown) {
+                continue;
             }
-        }
-
-        // Draw cheats tab content (for admins)
-        if (activeTab == Tab.CHEATS) {
-            int headerY = this.panelY + TAB_HEIGHT + 10;
-            graphics.drawCenteredString(this.font, "Collection Cheats",
-                    this.panelX + this.panelWidth / 2,
-                    headerY,
-                    0xFFFFFFFF);
-
-            // Draw explanation text
-            int explanationY = this.panelY + TAB_HEIGHT + 30;
-            String[] explanationLines = {
-                    "Use the token reload buttons to restore your tokens.",
-                    "Click a collection button to unlock all figures and receive all boxes."
-            };
-            for (int i = 0; i < explanationLines.length; i++) {
-                int lineWidth = this.font.width(explanationLines[i]);
-                graphics.drawString(this.font, explanationLines[i],
-                        this.panelX + (this.panelWidth - lineWidth) / 2,
-                        explanationY + (i * 12),
-                        0xFFAAAAAA);
+            if (row.heading != null) {
+                UiText.draw(graphics, this.font, row.heading, contentX, row.top + (row.height - 8) / 2 + 1, Surfaces.TEXT_DIM);
             }
-        }
-
-        // Draw collections tab content (for admins)
-        if (activeTab == Tab.COLLECTIONS) {
-            // A toggle is answered with the server's new list, so the labels follow that list
-            collectionToggleButtons.forEach((collection, button) -> button.setMessage(collectionToggleLabel(collection)));
-
-            int headerY = this.panelY + TAB_HEIGHT + 10;
-            graphics.drawCenteredString(this.font, "Collection Visibility",
-                    this.panelX + this.panelWidth / 2,
-                    headerY,
-                    0xFFFFFFFF);
-
-            // Draw explanation text
-            String explanation = "A hidden collection is removed from every player's collection list on this server.";
-            graphics.drawString(this.font, explanation,
-                    this.panelX + (this.panelWidth - this.font.width(explanation)) / 2,
-                    this.panelY + TAB_HEIGHT + 30,
-                    0xFFAAAAAA);
-        }
-
-        // Draw Custom tab content (for admins)
-        if (activeTab == Tab.CUSTOM) {
-            int headerY = this.panelY + TAB_HEIGHT + 10;
-            graphics.drawCenteredString(this.font, "Custom Collections",
-                    this.panelX + this.panelWidth / 2, headerY, 0xFFFFFFFF);
-            String explanation = "Add a collection published for BlockPops by its access code. Every player downloads it on joining.";
-            graphics.drawString(this.font, explanation,
-                    this.panelX + (this.panelWidth - this.font.width(explanation)) / 2,
-                    this.panelY + TAB_HEIGHT + 26, 0xFFAAAAAA);
-            if (customStatus != null) {
-                graphics.drawCenteredString(this.font, customStatus,
-                        this.panelX + this.panelWidth / 2, this.panelY + TAB_HEIGHT + 76, 0xFFFFFF80);
+            for (int i = 0; i < row.lines.size(); i++) {
+                UiText.drawFitted(graphics, this.font, row.lines.get(i), contentX, row.top + 5 + i * LINE_HEIGHT,
+                        room, row.color);
             }
-            if (ClientCustomCollections.collections().isEmpty()) {
-                graphics.drawCenteredString(this.font, Component.translatable("blockpops.custom_collections.none"),
-                        this.panelX + this.panelWidth / 2, this.panelY + TAB_HEIGHT + 104, 0xFFAAAAAA);
+            if (row.label != null && !row.widgets.isEmpty()) {
+                // The label in the room left of the row's first control, centred on it
+                AbstractWidget control = row.widgets.get(0);
+                int textY = control.getY() + (control.getHeight() - 8) / 2;
+                UiText.drawFitted(graphics, this.font, row.label.get(), contentX, textY,
+                        control.getX() - 8 - contentX, ROW_TEXT);
             }
-        }
-
-        // Draw Creator tab content (for operators)
-        if (activeTab == Tab.CREATOR) {
-            int headerY = this.panelY + TAB_HEIGHT + 10;
-            graphics.drawCenteredString(this.font, "Creator",
-                    this.panelX + this.panelWidth / 2, headerY, 0xFFFFFFFF);
-            String explanation = "Make World collections for this world from your own skins, models, boxes and logos.";
-            graphics.drawString(this.font, explanation,
-                    this.panelX + (this.panelWidth - this.font.width(explanation)) / 2,
-                    this.panelY + TAB_HEIGHT + 30, 0xFFAAAAAA);
-            String usage = ClientWorldCollections.records().size() + " collections \u00b7 "
-                    + UiQuotaMeter.text(ClientWorldCollections.quotaUsedKiB(), ClientWorldCollections.quotaMaxKiB()).getString()
-                    + " stored";
-            graphics.drawString(this.font, usage,
-                    this.panelX + (this.panelWidth - this.font.width(usage)) / 2,
-                    this.panelY + TAB_HEIGHT + 46, 0xFFAAAAAA);
-        }
-
-        // Draw color preview boxes (only in Develop tab)
-        if (isDevelopmentMode() && activeTab == Tab.DEVELOP) {
-            int previewSize = 35;
-            int previewSpacing = 50;
-            int previewStartX = this.panelX + (this.panelWidth - (previewSize * 2 + previewSpacing)) / 2;
-            int previewY = this.panelY + 210;
-
-            // Star color preview
-            int starRed = (int)(config.starColorR * 255);
-            int starGreen = (int)(config.starColorG * 255);
-            int starBlue = (int)(config.starColorB * 255);
-            int starColor = 0xFF000000 | (starRed << 16) | (starGreen << 8) | starBlue;
-
-            graphics.fill(previewStartX - 1, previewY - 1, previewStartX + previewSize + 1, previewY + previewSize + 1, 0xFFFFFFFF);
-            graphics.fill(previewStartX, previewY, previewStartX + previewSize, previewY + previewSize, starColor);
-            graphics.drawCenteredString(this.font, "Stars",
-                    previewStartX + previewSize / 2,
-                    previewY + previewSize + 5,
-                    0xFFAAAAAA);
-
-            // Background color preview
-            int bgPreviewX = previewStartX + previewSize + previewSpacing;
-            int bgRed = (int)(config.backgroundColorR * 255);
-            int bgGreen = (int)(config.backgroundColorG * 255);
-            int bgBlue = (int)(config.backgroundColorB * 255);
-            int bgColor = 0xFF000000 | (bgRed << 16) | (bgGreen << 8) | bgBlue;
-
-            graphics.fill(bgPreviewX - 1, previewY - 1, bgPreviewX + previewSize + 1, previewY + previewSize + 1, 0xFFFFFFFF);
-            graphics.fill(bgPreviewX, previewY, bgPreviewX + previewSize, previewY + previewSize, bgColor);
-            graphics.drawCenteredString(this.font, "Background",
-                    bgPreviewX + previewSize / 2,
-                    previewY + previewSize + 5,
-                    0xFFAAAAAA);
         }
     }
 
     @Override
     //? if >=26 {
     /*public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent bpEvent, boolean bpDouble) {
-        double mouseX = bpEvent.x();
-        double mouseY = bpEvent.y();
-        int button = bpEvent.button();
-        // Check if click is outside the panel (including tabs)
-        if (mouseX < this.panelX || mouseX > this.panelX + this.panelWidth ||
-                mouseY < this.panelY || mouseY > this.panelY + this.panelHeight) {
-            // Click outside panel - close the modal
+        // Click outside the dialog - close the modal
+        if (isOutsideDialog(bpEvent.x(), bpEvent.y())) {
             this.onClose();
             return true;
         }
-        // Click inside panel - handle normally
-        return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), bpDouble);
+        // Click inside the dialog - handle normally
+        return super.mouseClicked(bpEvent, bpDouble);
     }
     *///? } else {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // Check if click is outside the panel (including tabs)
-        if (mouseX < this.panelX || mouseX > this.panelX + this.panelWidth ||
-                mouseY < this.panelY || mouseY > this.panelY + this.panelHeight) {
-            // Click outside panel - close the modal
+        // Click outside the dialog - close the modal
+        if (isOutsideDialog(mouseX, mouseY)) {
             this.onClose();
             return true;
         }
-        // Click inside panel - handle normally
+        // Click inside the dialog - handle normally
         return super.mouseClicked(mouseX, mouseY, button);
     }
     //? }
+
+    private boolean isOutsideDialog(double mouseX, double mouseY) {
+        return mouseX < dialogX || mouseX > dialogX + dialogWidth
+                || mouseY < dialogY || mouseY > dialogY + dialogHeight;
+    }
+
+    @Override
+    //? if >=1.21 {
+    /*public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double amount) {
+    *///? } else {
+    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
+    //? }
+        // The rows scroll one at a time while the mouse is over them
+        if (maxScroll > 0 && amount != 0
+                && mouseX >= contentX - ROW_OVERHANG && mouseX < dialogX + dialogWidth
+                && mouseY >= contentTop && mouseY < contentBottom()) {
+            scroll += amount > 0 ? -1 : 1;
+            layoutRows();
+            return true;
+        }
+        //? if >=1.21 {
+        /*return super.mouseScrolled(mouseX, mouseY, horizontalAmount, amount);
+        *///? } else {
+        return super.mouseScrolled(mouseX, mouseY, amount);
+        //? }
+    }
 
     @Override
     public void onClose() {
         ClientCustomCollections.setStatusListener(null);
         // Return to parent screen
-        this.minecraft.setScreen(this.parent);
+        super.onClose();
     }
 
     @Override
@@ -720,11 +546,6 @@ public class SettingsScreen extends Screen {
     @Override
     public boolean shouldCloseOnEsc() {
         return true;
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        return false;
     }
 
     /**
@@ -834,11 +655,12 @@ public class SettingsScreen extends Screen {
      */
     private void createCustomSettings() {
         ClientCustomCollections.setStatusListener(status -> customStatus = ClientCustomCollections.message(status));
+        List<Row> tabRows = rowsFor(Tab.CUSTOM);
+        tabRows.add(paragraph(() -> "Add a collection published for BlockPops by its access code. "
+                + "Every player downloads it on joining.", Surfaces.TEXT_DIM));
 
-        int fieldWidth = 240;
-        int fieldY = this.panelY + TAB_HEIGHT + 46;
-        customCodeField = new EditBox(this.font, this.panelX + (this.panelWidth - fieldWidth) / 2, fieldY,
-                fieldWidth, 20, Component.literal("Access code"));
+        customCodeField = new EditBox(this.font, contentX, 0, contentRight - contentX, WIDGET_HEIGHT,
+                Component.literal("Access code"));
         customCodeField.setMaxLength(64);
         customCodeField.setHint(Component.literal("Access code"));
         customCodeField.setValue(pendingCustomCode);
@@ -846,32 +668,43 @@ public class SettingsScreen extends Screen {
             pendingCustomCode = value;
             updateActionButtonState();
         });
-        customWidgets.add(customCodeField);
+        tabRows.add(widgetRow(null, customCodeField));
+        // The server's answer to the last Add or Remove, when there is one
+        tabRows.add(paragraph(() -> customStatus == null ? "" : customStatus.getString(), STATUS_COLOR));
 
-        int rowWidth = 300;
-        int rowX = this.panelX + (this.panelWidth - rowWidth) / 2;
-        int rowY = this.panelY + TAB_HEIGHT + 96;
-        int maxRows = 8;
         List<FigureCollection> collections = ClientCustomCollections.collections();
-        for (int i = 0; i < collections.size() && i < maxRows; i++) {
-            FigureCollection collection = collections.get(i);
-            customWidgets.add(Button.builder(Component.literal("Remove " + collection.getName()),
-                            button -> new CustomCollectionRequestPacket(false, collection.getId()).sendToServer())
-                    .bounds(rowX, rowY + i * 24, rowWidth, 20)
-                    .build());
+        if (collections.isEmpty()) {
+            tabRows.add(paragraph(() -> Component.translatable("blockpops.custom_collections.none").getString(),
+                    Surfaces.TEXT_DIM));
         }
+        int removeWidth = 70;
+        for (FigureCollection collection : collections) {
+            StyledButton remove = new StyledButton(contentRight - removeWidth, 0, removeWidth, WIDGET_HEIGHT,
+                    Component.literal("Remove"),
+                    button -> new CustomCollectionRequestPacket(false, collection.getId()).sendToServer())
+                    .tone(StyledButton.Tone.DANGER)
+                    .icon(PixelIcon.BIN);
+            tabRows.add(widgetRow(collection::getName, remove));
+        }
+    }
+
+    /**
+     * Create the Creator tab: what the creator makes and what this world stores
+     */
+    private void createCreatorSettings() {
+        List<Row> tabRows = rowsFor(Tab.CREATOR);
+        tabRows.add(paragraph(() -> "Make World collections for this world from your own skins, models, boxes and logos.",
+                Surfaces.TEXT_DIM));
+        tabRows.add(paragraph(() -> ClientWorldCollections.records().size() + " collections · "
+                + UiQuotaMeter.text(ClientWorldCollections.quotaUsedKiB(), ClientWorldCollections.quotaMaxKiB()).getString()
+                + " stored", ROW_TEXT));
     }
 
     /**
      * Create server settings widgets
      */
     private void createServerSettings() {
-        int sliderHeight = 20;
-        int sliderWidth = 400;
-
-        // Center the slider horizontally
-        int sliderX = this.panelX + (this.panelWidth - sliderWidth) / 2;
-        int startY = this.panelY + TAB_HEIGHT + 50;
+        List<Row> tabRows = rowsFor(Tab.SERVER);
 
         // Get local timezone
         ZoneId localZone = ZoneId.systemDefault();
@@ -885,10 +718,10 @@ public class SettingsScreen extends Screen {
         this.loadedServerHourLocal = localHour;
         this.pendingServerHourLocal = localHour;
 
-        // Reset hour slider (0-23 in local time)
+        // Reset hour slider (0-23 in local time), across the row
         this.resetHourSlider = new HourSlider(
-                sliderX, startY,
-                sliderWidth, sliderHeight,
+                contentX, 0,
+                contentRight - contentX, WIDGET_HEIGHT,
                 Component.literal("Guaranteed Token Reset Hour (" + timezoneName + "): "),
                 localHour,
                 localValue -> {
@@ -898,15 +731,23 @@ public class SettingsScreen extends Screen {
                     updateActionButtonState();
                 }
         );
-        serverSettingWidgets.add(this.resetHourSlider);
+        tabRows.add(widgetRow(null, this.resetHourSlider));
+        tabRows.add(paragraph(() -> "The guaranteed token grants an undiscovered figure from the collection. "
+                + "This token resets daily at the hour specified above (in your local time).", Surfaces.TEXT_DIM));
+        tabRows.add(paragraph(() -> !isOperator()
+                ? "Only server operators can change this hour (in single-player, enable cheats)."
+                : canChangeResetHour() ? "Set this to a time that works best for your server's player base."
+                : "The server has not reported its reset hour, so it cannot be changed from here.", Surfaces.TEXT_DIM));
         refreshServerSettings();
 
         // World Players roster (admins only, like the Cheats tab; the server checks again)
         if (canAccessCheats()) {
-            serverSettingWidgets.add(Button.builder(Component.literal("Manage World Players"),
-                            button -> this.minecraft.setScreen(new WorldPlayerRosterScreen(this)))
-                    .bounds(this.panelX + (this.panelWidth - 160) / 2, this.panelY + TAB_HEIGHT + 200, 160, 20)
-                    .build());
+            int manageWidth = 80;
+            StyledButton manage = new StyledButton(contentRight - manageWidth, 0, manageWidth, WIDGET_HEIGHT,
+                    Component.literal("Manage"),
+                    button -> this.minecraft.setScreen(new WorldPlayerRosterScreen(this)))
+                    .icon(PixelIcon.PLAYER);
+            tabRows.add(widgetRow(() -> "World Players", manage));
         }
     }
 
@@ -943,277 +784,152 @@ public class SettingsScreen extends Screen {
      */
     private void createDevelopSettings() {
         ClientConfig config = ClientConfig.getInstance();
+        List<Row> tabRows = rowsFor(Tab.DEVELOP);
 
-        // Settings content area - 3 column layout
-        int padding = 20;
-        int columnSpacing = 15;
-        int sliderHeight = 20;
-        int verticalSpacing = 28;
+        // Two sliders to a row
+        int leftWidth = halfWidth();
+        int rightX = contentX + leftWidth + 6;
+        int rightWidth = contentRight - rightX;
 
-        // Calculate column widths and positions
-        int availableWidth = this.panelWidth - (padding * 2) - (columnSpacing * 2);
-        int columnWidth = availableWidth / 3;
+        // === STAR COLOR ===
+        tabRows.add(heading("Star Color", () -> opaque(config.starColorR, config.starColorG, config.starColorB)));
+        this.starRedSlider = new ColorSlider(contentX, 0, leftWidth, WIDGET_HEIGHT,
+                Component.literal("Red: "), config.starColorR, value -> config.starColorR = value.floatValue());
+        this.starGreenSlider = new ColorSlider(rightX, 0, rightWidth, WIDGET_HEIGHT,
+                Component.literal("Green: "), config.starColorG, value -> config.starColorG = value.floatValue());
+        tabRows.add(gridRow(this.starRedSlider, this.starGreenSlider));
+        this.starBlueSlider = new ColorSlider(contentX, 0, leftWidth, WIDGET_HEIGHT,
+                Component.literal("Blue: "), config.starColorB, value -> config.starColorB = value.floatValue());
+        this.starOpacitySlider = new OpacitySlider(rightX, 0, rightWidth, WIDGET_HEIGHT,
+                Component.literal("Opacity: "), config.starOpacity, value -> config.starOpacity = value.floatValue());
+        tabRows.add(gridRow(this.starBlueSlider, this.starOpacitySlider));
 
-        int col1X = this.panelX + padding;
-        int col2X = col1X + columnWidth + columnSpacing;
-        int col3X = col2X + columnWidth + columnSpacing;
+        // === BACKGROUND COLOR ===
+        tabRows.add(heading("Background Color",
+                () -> opaque(config.backgroundColorR, config.backgroundColorG, config.backgroundColorB)));
+        this.bgRedSlider = new ColorSlider(contentX, 0, leftWidth, WIDGET_HEIGHT,
+                Component.literal("Red: "), config.backgroundColorR, value -> config.backgroundColorR = value.floatValue());
+        this.bgGreenSlider = new ColorSlider(rightX, 0, rightWidth, WIDGET_HEIGHT,
+                Component.literal("Green: "), config.backgroundColorG, value -> config.backgroundColorG = value.floatValue());
+        tabRows.add(gridRow(this.bgRedSlider, this.bgGreenSlider));
+        this.bgBlueSlider = new ColorSlider(contentX, 0, leftWidth, WIDGET_HEIGHT,
+                Component.literal("Blue: "), config.backgroundColorB, value -> config.backgroundColorB = value.floatValue());
+        tabRows.add(gridRow(this.bgBlueSlider));
 
-        // Start Y should account for tabs if in dev mode
-        int startY = this.panelY + (isDevelopmentMode() ? TAB_HEIGHT + 20 : 50);
-
-        // === COLUMN 1: STAR COLOR ===
-        int col1Y = startY;
-
-        this.starRedSlider = new ColorSlider(
-                col1X, col1Y,
-                columnWidth, sliderHeight,
-                Component.literal("Red: "),
-                config.starColorR,
-                value -> config.starColorR = value.floatValue()
-        );
-        developSettingWidgets.add(this.starRedSlider);
-        col1Y += verticalSpacing;
-
-        this.starGreenSlider = new ColorSlider(
-                col1X, col1Y,
-                columnWidth, sliderHeight,
-                Component.literal("Green: "),
-                config.starColorG,
-                value -> config.starColorG = value.floatValue()
-        );
-        developSettingWidgets.add(this.starGreenSlider);
-        col1Y += verticalSpacing;
-
-        this.starBlueSlider = new ColorSlider(
-                col1X, col1Y,
-                columnWidth, sliderHeight,
-                Component.literal("Blue: "),
-                config.starColorB,
-                value -> config.starColorB = value.floatValue()
-        );
-        developSettingWidgets.add(this.starBlueSlider);
-        col1Y += verticalSpacing;
-
-        this.starOpacitySlider = new OpacitySlider(
-                col1X, col1Y,
-                columnWidth, sliderHeight,
-                Component.literal("Opacity: "),
-                config.starOpacity,
-                value -> config.starOpacity = value.floatValue()
-        );
-        developSettingWidgets.add(this.starOpacitySlider);
-
-        // === COLUMN 2: BACKGROUND COLOR ===
-        int col2Y = startY;
-
-        this.bgRedSlider = new ColorSlider(
-                col2X, col2Y,
-                columnWidth, sliderHeight,
-                Component.literal("Red: "),
-                config.backgroundColorR,
-                value -> config.backgroundColorR = value.floatValue()
-        );
-        developSettingWidgets.add(this.bgRedSlider);
-        col2Y += verticalSpacing;
-
-        this.bgGreenSlider = new ColorSlider(
-                col2X, col2Y,
-                columnWidth, sliderHeight,
-                Component.literal("Green: "),
-                config.backgroundColorG,
-                value -> config.backgroundColorG = value.floatValue()
-        );
-        developSettingWidgets.add(this.bgGreenSlider);
-        col2Y += verticalSpacing;
-
-        this.bgBlueSlider = new ColorSlider(
-                col2X, col2Y,
-                columnWidth, sliderHeight,
-                Component.literal("Blue: "),
-                config.backgroundColorB,
-                value -> config.backgroundColorB = value.floatValue()
-        );
-        developSettingWidgets.add(this.bgBlueSlider);
-
-        // === COLUMN 3: PANEL & ANIMATION ===
-        int col3Y = startY;
-
-        this.panelOpacitySlider = new OpacitySlider(
-                col3X, col3Y,
-                columnWidth, sliderHeight,
-                Component.literal("Panel Opacity: "),
-                config.panelOpacity,
-                value -> config.panelOpacity = value.floatValue()
-        );
-        developSettingWidgets.add(this.panelOpacitySlider);
-        col3Y += verticalSpacing;
-
-        this.colorTransitionToggle = Button.builder(
-                        Component.literal("Transition: " + (config.enableColorTransition ? "ON" : "OFF")),
-                        button -> {
-                            config.enableColorTransition = !config.enableColorTransition;
-                            button.setMessage(Component.literal("Transition: " + (config.enableColorTransition ? "ON" : "OFF")));
-                        }
-                )
-                .bounds(col3X, col3Y, columnWidth, sliderHeight)
-                .build();
-        developSettingWidgets.add(this.colorTransitionToggle);
+        // === PANEL & ANIMATION ===
+        tabRows.add(heading("Panel & Animation", null));
+        this.panelOpacitySlider = new OpacitySlider(contentX, 0, contentRight - contentX, WIDGET_HEIGHT,
+                Component.literal("Panel Opacity: "), config.panelOpacity, value -> config.panelOpacity = value.floatValue());
+        tabRows.add(gridRow(this.panelOpacitySlider));
+        this.colorTransitionToggle = new ToggleRow(contentX - ROW_OVERHANG, 0, contentRight - contentX + 2 * ROW_OVERHANG,
+                Component.literal("Color transition"), config.enableColorTransition,
+                value -> config.enableColorTransition = value);
+        tabRows.add(toggleRow(this.colorTransitionToggle));
     }
 
     /**
-     * Create cheats settings widgets (collection unlock buttons)
+     * Create cheats settings widgets (token reloads and collection unlock buttons)
      */
     private void createCheatsSettings() {
-        int padding = 20;
-        int buttonWidth = 180;
-        int buttonHeight = 24;
-        int verticalSpacing = 30;
-        int horizontalSpacing = 15;
-        int buttonsPerRow = 3;
+        List<Row> tabRows = rowsFor(Tab.CHEATS);
+        int leftWidth = halfWidth();
+        int rightX = contentX + leftWidth + 6;
+        int rightWidth = contentRight - rightX;
 
-        int startY = this.panelY + TAB_HEIGHT + 50;
-        int startX = this.panelX + padding;
-
-        // Add token reload buttons at the top
-        int tokenButtonWidth = 200;
-        int tokenButtonSpacing = 15;
-        int tokenButtonsStartX = this.panelX + (this.panelWidth - (tokenButtonWidth * 2 + tokenButtonSpacing)) / 2;
-        int tokenButtonY = startY;
+        tabRows.add(paragraph(() -> "Use the token reload buttons to restore your tokens.", Surfaces.TEXT_DIM));
 
         // Reload Regular Tokens button
-        Button reloadRegularButton = Button.builder(
-                        Component.literal("Reload Regular Tokens"),
-                        button -> {
-                            // Send packet to server to reload regular tokens
-                            ReloadTokensPacket packet = new ReloadTokensPacket(true, false);
-                            packet.sendToServer();
+        StyledButton reloadRegularButton = new StyledButton(contentX, 0, leftWidth, WIDGET_HEIGHT,
+                Component.literal("Reload Regular Tokens"),
+                button -> {
+                    // Send packet to server to reload regular tokens
+                    ReloadTokensPacket packet = new ReloadTokensPacket(true, false);
+                    packet.sendToServer();
 
-                            // Provide visual feedback
-                            button.setMessage(Component.literal("Reloading..."));
-                            button.active = false;
-
-                            // Re-enable button after a short delay
-                            new Thread(() -> {
-                                try {
-                                    Thread.sleep(500);
-                                    this.minecraft.execute(() -> {
-                                        button.setMessage(Component.literal("Reload Regular Tokens"));
-                                        button.active = true;
-                                    });
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                }
-                            }).start();
-                        }
-                )
-                .bounds(tokenButtonsStartX, tokenButtonY, tokenButtonWidth, buttonHeight)
-                .build();
-        cheatsSettingWidgets.add(reloadRegularButton);
+                    // Provide visual feedback, re-enabled after a short delay
+                    showBusy(button, "Reloading...", "Reload Regular Tokens", 500);
+                });
 
         // Reload Guaranteed Token button
-        Button reloadGuaranteedButton = Button.builder(
-                        Component.literal("Reload Guaranteed Token"),
-                        button -> {
-                            // Send packet to server to reload guaranteed token
-                            ReloadTokensPacket packet = new ReloadTokensPacket(false, true);
-                            packet.sendToServer();
+        StyledButton reloadGuaranteedButton = new StyledButton(rightX, 0, rightWidth, WIDGET_HEIGHT,
+                Component.literal("Reload Guaranteed Token"),
+                button -> {
+                    // Send packet to server to reload guaranteed token
+                    ReloadTokensPacket packet = new ReloadTokensPacket(false, true);
+                    packet.sendToServer();
 
-                            // Provide visual feedback
-                            button.setMessage(Component.literal("Reloading..."));
-                            button.active = false;
+                    // Provide visual feedback, re-enabled after a short delay
+                    showBusy(button, "Reloading...", "Reload Guaranteed Token", 500);
+                });
+        tabRows.add(gridRow(reloadRegularButton, reloadGuaranteedButton));
 
-                            // Re-enable button after a short delay
-                            new Thread(() -> {
-                                try {
-                                    Thread.sleep(500);
-                                    this.minecraft.execute(() -> {
-                                        button.setMessage(Component.literal("Reload Guaranteed Token"));
-                                        button.active = true;
-                                    });
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                }
-                            }).start();
-                        }
-                )
-                .bounds(tokenButtonsStartX + tokenButtonWidth + tokenButtonSpacing, tokenButtonY, tokenButtonWidth, buttonHeight)
-                .build();
-        cheatsSettingWidgets.add(reloadGuaranteedButton);
-
-        // Adjust startY for collection unlock buttons to be below token buttons
-        startY += verticalSpacing + 20;
+        tabRows.add(paragraph(() -> "Click a collection button to unlock all figures and receive all boxes.",
+                Surfaces.TEXT_DIM));
 
         // Get all collections
         java.util.Collection<FigureCollection> collections = CollectionRegistry.getAllCollections();
 
         // Filter out the default collection if it exists, and World collections, which the
-        // Creator tab unlocks one by one: one more row here would overlap the footer
+        // Creator tab unlocks one by one
         java.util.List<FigureCollection> filteredCollections = collections.stream()
                 .filter(collection -> !collection.getId().equals("default"))
                 .filter(collection -> !WorldContentIds.isWorldCollectionId(collection.getId()))
                 .collect(java.util.stream.Collectors.toList());
 
-        int row = 0;
-        int col = 0;
-
+        // Two unlock buttons to a row
+        List<AbstractWidget> pair = new ArrayList<>();
         for (FigureCollection collection : filteredCollections) {
-            int buttonX = startX + (col * (buttonWidth + horizontalSpacing));
-            int buttonY = startY + (row * verticalSpacing);
+            boolean left = pair.isEmpty();
+            String label = "Unlock " + collection.getName();
+            StyledButton unlockButton = new StyledButton(left ? contentX : rightX, 0, left ? leftWidth : rightWidth,
+                    WIDGET_HEIGHT, Component.literal(label),
+                    button -> {
+                        // Send packet to server to unlock this collection
+                        UnlockCollectionPacket packet = new UnlockCollectionPacket(collection.getId());
+                        packet.sendToServer();
 
-            Button unlockButton = Button.builder(
-                            Component.literal("Unlock " + collection.getName()),
-                            button -> {
-                                // Send packet to server to unlock this collection
-                                UnlockCollectionPacket packet = new UnlockCollectionPacket(collection.getId());
-                                packet.sendToServer();
-
-                                // Provide visual feedback
-                                button.setMessage(Component.literal("Unlocking..."));
-                                button.active = false;
-
-                                // Re-enable button after a short delay
-                                new Thread(() -> {
-                                    try {
-                                        Thread.sleep(1000);
-                                        this.minecraft.execute(() -> {
-                                            button.setMessage(Component.literal("Unlock " + collection.getName()));
-                                            button.active = true;
-                                        });
-                                    } catch (InterruptedException e) {
-                                        e.printStackTrace();
-                                    }
-                                }).start();
-                            }
-                    )
-                    .bounds(buttonX, buttonY, buttonWidth, buttonHeight)
-                    .build();
-
-            cheatsSettingWidgets.add(unlockButton);
-
-            col++;
-            if (col >= buttonsPerRow) {
-                col = 0;
-                row++;
+                        // Provide visual feedback, re-enabled after a short delay
+                        showBusy(button, "Unlocking...", label, 1000);
+                    });
+            pair.add(unlockButton);
+            if (pair.size() == 2) {
+                tabRows.add(gridRow(pair.toArray(new AbstractWidget[0])));
+                pair.clear();
             }
+        }
+        if (!pair.isEmpty()) {
+            tabRows.add(gridRow(pair.toArray(new AbstractWidget[0])));
         }
     }
 
     /**
-     * Create collections settings widgets (one hide/show toggle per collection)
+     * Shows a button as busy for a moment after it sent its request, then puts its label back
+     */
+    private void showBusy(Button button, String busyLabel, String label, long millis) {
+        button.setMessage(Component.literal(busyLabel));
+        button.active = false;
+
+        // Re-enable button after a short delay
+        new Thread(() -> {
+            try {
+                Thread.sleep(millis);
+                this.minecraft.execute(() -> {
+                    button.setMessage(Component.literal(label));
+                    button.active = true;
+                });
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    /**
+     * Create collections settings widgets (one show/hide toggle per collection)
      */
     private void createCollectionsSettings() {
-        int padding = 20;
-        int buttonWidth = 180;
-        int buttonHeight = 24;
-        int verticalSpacing = 30;
-        int horizontalSpacing = 15;
-        int buttonsPerRow = 3;
-
-        int startY = this.panelY + TAB_HEIGHT + 50;
-        int startX = this.panelX + padding;
-
-        int row = 0;
-        int col = 0;
+        List<Row> tabRows = rowsFor(Tab.COLLECTIONS);
+        tabRows.add(paragraph(() -> "A collection switched off is hidden: it is removed from every player's "
+                + "collection list on this server.", Surfaces.TEXT_DIM));
 
         for (FigureCollection collection : CollectionRegistry.getAllCollections()) {
             // The default collection is never listed, so there is nothing to hide. A World
@@ -1222,34 +938,43 @@ public class SettingsScreen extends Screen {
                 continue;
             }
 
-            int buttonX = startX + (col * (buttonWidth + horizontalSpacing));
-            int buttonY = startY + (row * verticalSpacing);
-
-            Button toggleButton = Button.builder(
-                            collectionToggleLabel(collection),
-                            // Send packet to server to hide or show this collection for every player
-                            button -> new SetCollectionHiddenPacket(collection.getId(),
-                                    !ClientHiddenCollections.isHidden(collection.getId())).sendToServer()
-                    )
-                    .bounds(buttonX, buttonY, buttonWidth, buttonHeight)
-                    .build();
-
-            collectionToggleButtons.put(collection, toggleButton);
-
-            col++;
-            if (col >= buttonsPerRow) {
-                col = 0;
-                row++;
-            }
+            ToggleRow toggle = new ToggleRow(contentX - ROW_OVERHANG, 0, contentRight - contentX + 2 * ROW_OVERHANG,
+                    Component.literal(collection.getName()),
+                    !ClientHiddenCollections.isHidden(collection.getId()),
+                    shown -> {
+                        // Send packet to server to hide or show this collection for every player
+                        pendingVisibility.put(collection.getId(), ticks);
+                        new SetCollectionHiddenPacket(collection.getId(), !shown).sendToServer();
+                    });
+            collectionToggles.put(collection, toggle);
+            tabRows.add(toggleRow(toggle));
         }
     }
 
     /**
-     * Label of a collection toggle: the action a click asks the server for
+     * Shows each collection's toggle as the server's list has it. A toggle the player just
+     * flipped keeps their choice until the server's list agrees, or gives up after a moment.
      */
-    private static Component collectionToggleLabel(FigureCollection collection) {
-        return Component.literal(
-                (ClientHiddenCollections.isHidden(collection.getId()) ? "Show " : "Hide ") + collection.getName());
+    private void refreshCollectionToggles() {
+        collectionToggles.forEach((collection, toggle) -> {
+            boolean shown = !ClientHiddenCollections.isHidden(collection.getId());
+            Integer sent = pendingVisibility.get(collection.getId());
+            if (sent != null) {
+                if (shown != toggle.value() && ticks - sent <= VISIBILITY_ANSWER_TICKS) {
+                    return;
+                }
+                pendingVisibility.remove(collection.getId());
+            }
+            toggle.setValue(shown);
+        });
+    }
+
+    /**
+     * Opens a tab from its button, at the top of its rows
+     */
+    private void selectTab(Tab tab) {
+        scroll = 0;
+        switchTab(tab);
     }
 
     /**
@@ -1263,69 +988,173 @@ public class SettingsScreen extends Screen {
             restoreBackground();
         }
 
-        // Remove all setting widgets
-        for (AbstractWidget widget : serverSettingWidgets) {
-            this.removeWidget(widget);
+        // Remove all setting widgets, then add the active tab's
+        for (List<Row> tabRows : rows.values()) {
+            for (Row row : tabRows) {
+                row.widgets.forEach(this::removeWidget);
+            }
         }
-        for (AbstractWidget widget : developSettingWidgets) {
-            this.removeWidget(widget);
-        }
-        for (AbstractWidget widget : cheatsSettingWidgets) {
-            this.removeWidget(widget);
-        }
-        for (AbstractWidget widget : collectionToggleButtons.values()) {
-            this.removeWidget(widget);
-        }
-        for (AbstractWidget widget : customWidgets) {
-            this.removeWidget(widget);
-        }
-
-        // Add widgets for active tab
-        List<AbstractWidget> activeWidgets;
-        if (tab == Tab.SERVER) {
-            activeWidgets = serverSettingWidgets;
-        } else if (tab == Tab.DEVELOP) {
-            activeWidgets = developSettingWidgets;
-        } else if (tab == Tab.CHEATS) {
-            activeWidgets = cheatsSettingWidgets;
-        } else if (tab == Tab.COLLECTIONS) {
-            activeWidgets = new ArrayList<>(collectionToggleButtons.values());
-        } else if (tab == Tab.CUSTOM) {
-            activeWidgets = customWidgets;
-        } else {
-            activeWidgets = new ArrayList<>();
-        }
-
-        for (AbstractWidget widget : activeWidgets) {
-            this.addRenderableWidget(widget);
+        for (Row row : rowsOf(tab)) {
+            row.widgets.forEach(this::addRenderableWidget);
         }
 
         // Update tab button selected states (visual feedback)
-        serverTabButton.setSelected(tab == Tab.SERVER);
-        if (developTabButton != null) {
-            developTabButton.setSelected(tab == Tab.DEVELOP);
-        }
-        if (cheatsTabButton != null) {
-            cheatsTabButton.setSelected(tab == Tab.CHEATS);
-        }
-        if (collectionsTabButton != null) {
-            collectionsTabButton.setSelected(tab == Tab.COLLECTIONS);
-        }
-        if (customTabButton != null) {
-            customTabButton.setSelected(tab == Tab.CUSTOM);
-        }
-        if (creatorTabButton != null) {
-            creatorTabButton.setSelected(tab == Tab.CREATOR);
+        tabButtons.forEach((buttonTab, button) -> button.setSelected(buttonTab == tab));
+
+        // Update action button text/state/visibility based on new tab, which lays the rows out
+        updateActionButtonState();
+    }
+
+    private List<Row> rowsFor(Tab tab) {
+        return rows.computeIfAbsent(tab, key -> new ArrayList<>());
+    }
+
+    private List<Row> rowsOf(Tab tab) {
+        return rows.getOrDefault(tab, List.of());
+    }
+
+    /** The bottom of the rows: above the footer while the tab has an action. */
+    private int contentBottom() {
+        return actionButton != null && actionButton.visible ? actionButton.getY() - 6 : bodyBottom() - 6;
+    }
+
+    /** The width of the left one of two controls side by side. */
+    private int halfWidth() {
+        return (contentRight - contentX - 6) / 2;
+    }
+
+    /**
+     * Places the active tab's rows from the first one shown, and shows only the widgets of the
+     * rows that fit whole above the footer.
+     */
+    private void layoutRows() {
+        List<Row> tabRows = rowsOf(activeTab);
+        int bottom = contentBottom();
+        for (Row row : tabRows) {
+            measure(row);
         }
 
-        // Update action button text/state/visibility based on new tab
-        updateActionButtonState();
+        // The scroll ends where the last rows fill the room
+        int room = bottom - contentTop;
+        int first = tabRows.size();
+        int used = 0;
+        while (first > 0 && used + tabRows.get(first - 1).height <= room) {
+            used += tabRows.get(first - 1).height;
+            first--;
+        }
+        maxScroll = Math.max(0, Math.min(first, tabRows.size() - 1));
+        scroll = Math.max(0, Math.min(scroll, maxScroll));
+
+        int y = contentTop;
+        for (int i = 0; i < tabRows.size(); i++) {
+            Row row = tabRows.get(i);
+            row.top = y;
+            row.shown = i >= scroll && y + row.height <= bottom;
+            if (i >= scroll) {
+                y += row.height;
+            }
+            for (int w = 0; w < row.widgets.size(); w++) {
+                AbstractWidget widget = row.widgets.get(w);
+                widget.setY(row.top + row.offsets.get(w));
+                widget.visible = row.shown;
+            }
+        }
+    }
+
+    /** Sets a row's height, wrapping its paragraph to the content's width. */
+    private void measure(Row row) {
+        if (row.paragraph == null) {
+            return;
+        }
+        row.lines = UiText.wrap(this.font, row.paragraph.get(), contentRight - contentX);
+        row.height = row.lines.isEmpty() ? 0 : row.lines.size() * LINE_HEIGHT + 8;
+    }
+
+    private static int opaque(float red, float green, float blue) {
+        return 0xFF000000 | (int) (red * 255) << 16 | (int) (green * 255) << 8 | (int) (blue * 255);
+    }
+
+    /** A row of controls, with an optional label on its left and a hairline under it. */
+    private static Row widgetRow(@Nullable Supplier<String> label, AbstractWidget... widgets) {
+        Row row = new Row(WIDGET_ROW_HEIGHT);
+        row.label = label;
+        row.line = true;
+        for (AbstractWidget widget : widgets) {
+            row.add(widget, (WIDGET_ROW_HEIGHT - 1 - WIDGET_HEIGHT) / 2);
+        }
+        return row;
+    }
+
+    /** A row of a grid of controls, which leaves out the hairline. */
+    private static Row gridRow(AbstractWidget... widgets) {
+        Row row = new Row(GRID_ROW_HEIGHT);
+        for (AbstractWidget widget : widgets) {
+            row.add(widget, (GRID_ROW_HEIGHT - WIDGET_HEIGHT) / 2);
+        }
+        return row;
+    }
+
+    /** A row that is a toggle, which draws its own label and hairline. */
+    private static Row toggleRow(ToggleRow toggle) {
+        Row row = new Row(toggle.getHeight());
+        row.add(toggle, 0);
+        return row;
+    }
+
+    /** Wrapped text across the content, as tall as its lines. */
+    private static Row paragraph(Supplier<String> text, int color) {
+        Row row = new Row(0);
+        row.paragraph = text;
+        row.color = color;
+        return row;
+    }
+
+    /** The title of a group of rows, with a colour preview at its right end when given one. */
+    private static Row heading(String text, @Nullable IntSupplier swatch) {
+        Row row = new Row(HEADING_HEIGHT);
+        row.heading = text;
+        row.swatch = swatch;
+        return row;
+    }
+
+    /**
+     * A row of a tab's content: controls with an optional label on their left, wrapped text, or a
+     * heading. Its widgets keep their x; the layout gives them their y below the row's top.
+     */
+    private static final class Row {
+        private final List<AbstractWidget> widgets = new ArrayList<>();
+        private final List<Integer> offsets = new ArrayList<>();
+        @Nullable
+        private Supplier<String> label;
+        @Nullable
+        private Supplier<String> paragraph;
+        @Nullable
+        private String heading;
+        @Nullable
+        private IntSupplier swatch;
+        private int color = ROW_TEXT;
+        private boolean line;
+
+        // Laid out by layoutRows()
+        private List<String> lines = List.of();
+        private int height;
+        private int top;
+        private boolean shown;
+
+        private Row(int height) {
+            this.height = height;
+        }
+
+        private void add(AbstractWidget widget, int offset) {
+            widgets.add(widget);
+            offsets.add(offset);
+        }
     }
 
     /**
      * Custom slider for color values (0.0 - 1.0)
      */
-    private static class ColorSlider extends AbstractSliderButton {
+    private static class ColorSlider extends StyledSlider {
         private final Component prefix;
         private final java.util.function.Consumer<Double> onValueChange;
 
@@ -1357,7 +1186,7 @@ public class SettingsScreen extends Screen {
     /**
      * Custom slider for opacity values (0.0 - 1.0)
      */
-    private static class OpacitySlider extends AbstractSliderButton {
+    private static class OpacitySlider extends StyledSlider {
         private final Component prefix;
         private final java.util.function.Consumer<Double> onValueChange;
 
@@ -1389,7 +1218,7 @@ public class SettingsScreen extends Screen {
     /**
      * Custom slider for hour values (0-23)
      */
-    private static class HourSlider extends AbstractSliderButton {
+    private static class HourSlider extends StyledSlider {
         private final Component prefix;
         private final java.util.function.Consumer<Integer> onValueChange;
 

@@ -1,7 +1,6 @@
 package com.theplumteam.client.gui.widget;
 
 import com.theplumteam.client.gui.CollectionSelectionScreen;
-import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.figure.FigureCollection;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -63,70 +62,6 @@ public class CollectionListWidget extends BoundedSelectionList<CollectionEntry> 
     }
 
     @Override
-    //? if >=1.21 {
-    /*public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-    *///? } else {
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-    //? }
-        if (GuiScaleManager.isUsingInverseScale()) {
-            float scale = GuiScaleManager.getRenderScaleFactor();
-
-            // Store original values (virtual coordinates)
-            int origX0 = this.x0;
-            int origX1 = this.x1;
-            int origY0 = this.y0;
-            int origY1 = this.y1;
-            int origWidth = this.width;
-            int origHeight = this.height;
-            // Note: itemHeight is final, entries handle their own scaling
-
-            // Scale bounds for correct scissor positioning
-            this.x0 = (int)(origX0 * scale);
-            this.x1 = (int)(origX1 * scale);
-            this.y0 = (int)(origY0 * scale);
-            this.y1 = (int)(origY1 * scale);
-            this.width = (int)(origWidth * scale);
-            this.height = (int)(origHeight * scale);
-
-
-            // Transform mouse coordinates for hit detection
-            int scaledMouseX = (int)(mouseX * scale);
-            int scaledMouseY = (int)(mouseY * scale);
-
-            // Scale scroll amount for correct entry positioning
-            //? if >=1.21.2 {
-            /*double origScroll = this.scrollAmount();
-            *///? } else {
-            double origScroll = this.getScrollAmount();
-            //? }
-            this.setScrollAmount(origScroll * scale);
-
-            // Render with scaled values
-            //? if >=1.21 {
-            /*super.renderWidget(graphics, scaledMouseX, scaledMouseY, partialTick);
-            *///? } else {
-            super.render(graphics, scaledMouseX, scaledMouseY, partialTick);
-            //? }
-
-            // Restore original values
-            this.x0 = origX0;
-            this.x1 = origX1;
-            this.y0 = origY0;
-            this.y1 = origY1;
-            this.width = origWidth;
-            this.height = origHeight;
-
-            this.setScrollAmount(origScroll);
-        } else {
-            //? if >=1.21 {
-            /*super.renderWidget(graphics, mouseX, mouseY, partialTick);
-            *///? } else {
-            super.render(graphics, mouseX, mouseY, partialTick);
-            //? }
-        }
-    }
-
-    @Override
     public int getRowWidth() {
         return this.width - 8;
     }
@@ -146,72 +81,6 @@ public class CollectionListWidget extends BoundedSelectionList<CollectionEntry> 
     }
 
     @Override
-    //? if >=26 {
-    /*public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent bpEvent, boolean bpDouble) {
-        double mouseX = bpEvent.x();
-        double mouseY = bpEvent.y();
-        int button = bpEvent.button();
-        if (GuiScaleManager.isUsingInverseScale()) {
-            float scale = GuiScaleManager.getRenderScaleFactor();
-
-            int origX0 = this.x0, origX1 = this.x1, origY0 = this.y0, origY1 = this.y1;
-            int origWidth = this.width, origHeight = this.height;
-            //? if >=1.21.2 {
-            /^double origScroll = this.scrollAmount();
-            ^///? } else {
-            double origScroll = this.getScrollAmount();
-            //? }
-
-            this.x0 = (int)(origX0 * scale);
-            this.x1 = (int)(origX1 * scale);
-            this.y0 = (int)(origY0 * scale);
-            this.y1 = (int)(origY1 * scale);
-            this.width = (int)(origWidth * scale);
-            this.height = (int)(origHeight * scale);
-            this.setScrollAmount(origScroll * scale);
-
-            boolean result = super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), bpDouble);
-
-            this.x0 = origX0; this.x1 = origX1; this.y0 = origY0; this.y1 = origY1;
-            this.width = origWidth; this.height = origHeight;
-            this.setScrollAmount(origScroll);
-            return result;
-        }
-        return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), bpDouble);
-    }
-    *///? } else {
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (GuiScaleManager.isUsingInverseScale()) {
-            float scale = GuiScaleManager.getRenderScaleFactor();
-
-            int origX0 = this.x0, origX1 = this.x1, origY0 = this.y0, origY1 = this.y1;
-            int origWidth = this.width, origHeight = this.height;
-            //? if >=1.21.2 {
-            /*double origScroll = this.scrollAmount();
-            *///? } else {
-            double origScroll = this.getScrollAmount();
-            //? }
-
-            this.x0 = (int)(origX0 * scale);
-            this.x1 = (int)(origX1 * scale);
-            this.y0 = (int)(origY0 * scale);
-            this.y1 = (int)(origY1 * scale);
-            this.width = (int)(origWidth * scale);
-            this.height = (int)(origHeight * scale);
-            this.setScrollAmount(origScroll * scale);
-
-            boolean result = super.mouseClicked(mouseX * scale, mouseY * scale, button);
-
-            this.x0 = origX0; this.x1 = origX1; this.y0 = origY0; this.y1 = origY1;
-            this.width = origWidth; this.height = origHeight;
-            this.setScrollAmount(origScroll);
-            return result;
-        }
-        return super.mouseClicked(mouseX, mouseY, button);
-    }
-    //? }
-
-    @Override
     //? if >=1.21 {
     /*public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double amount) {
     *///? } else {
@@ -226,72 +95,6 @@ public class CollectionListWidget extends BoundedSelectionList<CollectionEntry> 
         //? }
         return true;
     }
-
-    @Override
-    //? if >=26 {
-    /*public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent bpEvent, double dragX, double dragY) {
-        double mouseX = bpEvent.x();
-        double mouseY = bpEvent.y();
-        int button = bpEvent.button();
-        if (GuiScaleManager.isUsingInverseScale()) {
-            float scale = GuiScaleManager.getRenderScaleFactor();
-
-            int origX0 = this.x0, origX1 = this.x1, origY0 = this.y0, origY1 = this.y1;
-            int origWidth = this.width, origHeight = this.height;
-            //? if >=1.21.2 {
-            /^double origScroll = this.scrollAmount();
-            ^///? } else {
-            double origScroll = this.getScrollAmount();
-            //? }
-
-            this.x0 = (int)(origX0 * scale);
-            this.x1 = (int)(origX1 * scale);
-            this.y0 = (int)(origY0 * scale);
-            this.y1 = (int)(origY1 * scale);
-            this.width = (int)(origWidth * scale);
-            this.height = (int)(origHeight * scale);
-            this.setScrollAmount(origScroll * scale);
-
-            boolean result = super.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), dragX, dragY);
-
-            this.x0 = origX0; this.x1 = origX1; this.y0 = origY0; this.y1 = origY1;
-            this.width = origWidth; this.height = origHeight;
-            this.setScrollAmount(origScroll);
-            return result;
-        }
-        return super.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), dragX, dragY);
-    }
-    *///? } else {
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (GuiScaleManager.isUsingInverseScale()) {
-            float scale = GuiScaleManager.getRenderScaleFactor();
-
-            int origX0 = this.x0, origX1 = this.x1, origY0 = this.y0, origY1 = this.y1;
-            int origWidth = this.width, origHeight = this.height;
-            //? if >=1.21.2 {
-            /*double origScroll = this.scrollAmount();
-            *///? } else {
-            double origScroll = this.getScrollAmount();
-            //? }
-
-            this.x0 = (int)(origX0 * scale);
-            this.x1 = (int)(origX1 * scale);
-            this.y0 = (int)(origY0 * scale);
-            this.y1 = (int)(origY1 * scale);
-            this.width = (int)(origWidth * scale);
-            this.height = (int)(origHeight * scale);
-            this.setScrollAmount(origScroll * scale);
-
-            boolean result = super.mouseDragged(mouseX * scale, mouseY * scale, button, dragX * scale, dragY * scale);
-
-            this.x0 = origX0; this.x1 = origX1; this.y0 = origY0; this.y1 = origY1;
-            this.width = origWidth; this.height = origHeight;
-            this.setScrollAmount(origScroll);
-            return result;
-        }
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
-    }
-    //? }
 
     @Override
     //? if >=26 {

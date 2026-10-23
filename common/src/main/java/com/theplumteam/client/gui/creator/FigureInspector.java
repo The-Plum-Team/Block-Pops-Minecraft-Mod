@@ -5,12 +5,15 @@ import com.theplumteam.client.gui.creator.ui.FileChecks;
 import com.theplumteam.client.gui.creator.ui.Theme;
 import com.theplumteam.client.gui.creator.ui.UiButton;
 import com.theplumteam.client.gui.creator.ui.UiDropZone;
+import com.theplumteam.client.gui.creator.ui.UiField;
 import com.theplumteam.client.gui.creator.ui.UiFigureView;
 import com.theplumteam.client.gui.creator.ui.UiInput;
 import com.theplumteam.client.gui.creator.ui.UiNode;
 import com.theplumteam.client.gui.creator.ui.UiScrollPane;
 import com.theplumteam.client.gui.creator.ui.UiSizeSlider;
 import com.theplumteam.client.gui.creator.ui.UiTooltip;
+import com.theplumteam.client.gui.style.PixelFont;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.client.worldcontent.CreatorDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FigureDraft;
@@ -68,11 +71,14 @@ final class FigureInspector {
     private static final int FIELD = 20;
     private static final int ROW_GAP = 5;
     private static final int MIN_VIEW = 72;
+    // A short panel, as on the smallest canvas, lets the view shrink to this, a quarter of its height
+    private static final int SMALLEST_VIEW = 44;
     private static final int MAX_VIEW = 150;
     // The room under the view kept for the sections: the size and the type, and a first file
     private static final int MIN_SECTIONS = 88;
-    private static final int PANEL_FILL = 0xFF0D0D0D;
-    private static final int PANEL_OUTLINE = 0xFF2A2A2A;
+    // The darker face of a dialog's sidebar, as Quick Skin's settings draw it
+    private static final int PANEL_FILL = Surfaces.PANEL_FACE;
+    private static final int PANEL_OUTLINE = Surfaces.BORDER_DISABLED;
     private static final int LABEL_COLOUR = 0xFFE6E6E6;
     private static final int HELP = 0xFFA8A8A8;
 
@@ -148,7 +154,7 @@ final class FigureInspector {
         this.sizeLabel = new Label(() -> tr("inspector.size"), () -> changed("scale"));
         this.size = new UiSizeSlider(WorldCollectionRecord.scaleIndex(1.0f), this::resize);
         this.typeLabel = new Label(() -> tr("inspector.type"), () -> changed("kind"));
-        this.filesLabel = new Label(() -> tr("inspector.files"),
+        this.filesLabel = Label.heading(() -> tr("inspector.files"),
                 () -> changed("texture") || changed("model") || changed("animation"));
         this.ownSkin = new UiButton(tr("inspector.use_my_skin"), UiButton.Style.SECONDARY, this::useOwnSkin);
         this.ownSkin.setTooltip(tr("inspector.use_my_skin_tip"));
@@ -191,7 +197,8 @@ final class FigureInspector {
         // need a row of links above its buttons
         int fixed = (y - panel.y()) + ROW_GAP + FIELD + ROW_GAP
                 + ROW_GAP + 10 + ROW_GAP + UiButton.SMALL_HEIGHT + PAD;
-        int viewHeight = Math.max(MIN_VIEW, Math.min(MAX_VIEW, panel.height() - fixed - MIN_SECTIONS));
+        int minView = Math.max(SMALLEST_VIEW, Math.min(MIN_VIEW, panel.height() / 4));
+        int viewHeight = Math.max(minView, Math.min(MAX_VIEW, panel.height() - fixed - MIN_SECTIONS));
         this.view.at(left, y, width, viewHeight);
         y += viewHeight + ROW_GAP;
 
@@ -644,8 +651,13 @@ final class FigureInspector {
         // Footer: the buttons on the right, the links on their left, or on a row above them
         int buttonsY = panel.bottom() - PAD - UiButton.SMALL_HEIGHT;
         int saveWidth = UiButton.widthFor(font, this.save.label(), false);
-        this.save.at(right - saveWidth, buttonsY, saveWidth, UiButton.SMALL_HEIGHT);
         int duplicateWidth = UiButton.widthFor(font, this.duplicate.label(), false);
+        if (saveWidth + 4 + duplicateWidth > right - left) {
+            // A narrow panel shares its row between the two, which cut their labels
+            saveWidth = Math.max(0, (right - left - 4) / 2);
+            duplicateWidth = saveWidth;
+        }
+        this.save.at(right - saveWidth, buttonsY, saveWidth, UiButton.SMALL_HEIGHT);
         this.duplicate.at(this.save.bounds().x() - 4 - duplicateWidth, buttonsY, duplicateWidth,
                 UiButton.SMALL_HEIGHT);
         List<UiButton> links = new ArrayList<>();
@@ -695,8 +707,8 @@ final class FigureInspector {
         this.typeLabel.at(x, y + 8, column, LABEL);
         this.kinds.at(x + column, y, Math.max(0, width - column), KindCards.HEIGHT);
         y += KindCards.HEIGHT + ROW_GAP + 1;
-        this.filesLabel.at(x, y, width, LABEL);
-        y += LABEL + 1;
+        this.filesLabel.at(x, y, width, Label.HEADING);
+        y += Label.HEADING + 1;
         for (UiNode node : List.of(this.sizeLabel, this.size, this.typeLabel, this.kinds, this.filesLabel)) {
             this.sections.add(node);
         }
@@ -739,7 +751,15 @@ final class FigureInspector {
                     : tr("figures.several", this.selectedCount).getString();
             String hint = tr(this.selectedCount == 0 ? "figures.select_hint" : "figures.several_hint").getString();
             int top = box.centerY() - 16;
-            Draw.centred(graphics, font, heading, box.centerX(), top, width, Theme.TEXT);
+            float crisp = PixelFont.crispScale(1.0f);
+            Component title = Component.literal(heading);
+            if (PixelFont.width(title, crisp) <= width) {
+                // The heading in the menus' pixel font, centred, while it fits
+                int titleWidth = PixelFont.width(title, crisp);
+                Draw.heading(graphics, title, box.centerX() - titleWidth / 2, top + 3.5f, width, 1.0f, Theme.TEXT);
+            } else {
+                Draw.centred(graphics, font, heading, box.centerX(), top, width, Theme.TEXT);
+            }
             for (String line : Draw.fit(font, hint, width, 4)) {
                 top += Theme.LINE_HEIGHT;
                 Draw.centred(graphics, font, line, box.centerX(), top, width, Theme.MUTED);
@@ -751,7 +771,7 @@ final class FigureInspector {
         // where its card is between the arrows
         int headerY = box.y() + PAD;
         String counter = tr("inspector.position", this.position + 1, this.count).getString();
-        graphics.drawString(font, counter, this.previous.bounds().right() + 4, headerY + 4, Theme.TEXT_SOFT, false);
+        Draw.string(graphics, font, counter, this.previous.bounds().right() + 4, headerY + 4, Theme.TEXT_SOFT);
         Component problem = shown.name().isBlank() ? tr("inspector.name_empty")
                 : !WorldCollectionRecord.isPlainText(shown.name()) ? tr("name_rule") : null;
         Component idLine = tr(shown.isNew() ? "figures.id_new" : "figures.id", shown.id());
@@ -761,7 +781,7 @@ final class FigureInspector {
         // The name's label left of its field, with an amber dot while the name is not saved
         Component label = tr("inspector.name");
         int labelY = this.fieldY + 6;
-        graphics.drawString(font, label, x, labelY, LABEL_COLOUR, false);
+        Draw.string(graphics, font, label, x, labelY, LABEL_COLOUR);
         if (changed("name") || shown.isNew()) {
             Draw.dot(graphics, x + font.width(label) + 5, labelY + 4, 4, Theme.AMBER);
         }
@@ -772,11 +792,13 @@ final class FigureInspector {
         if (field == null) {
             graphics.fill(box.x(), box.y(), box.right(), box.bottom(), PANEL_FILL);
         } else {
-            // The field draws its border a unit outside its own bounds
-            int left = field.getX() - 1;
-            int right = field.getX() + field.getWidth() + 1;
-            int top = field.getY() - 1;
-            int bottom = field.getY() + field.getHeight() + 1;
+            // The creator's field draws its well around its text area; a vanilla one its border a unit outside it
+            int left = field instanceof UiField well ? well.wellX() : field.getX() - 1;
+            int right = field instanceof UiField well ? well.wellX() + well.wellWidth()
+                    : field.getX() + field.getWidth() + 1;
+            int top = field instanceof UiField ? field.getY() : field.getY() - 1;
+            int bottom = field instanceof UiField ? field.getY() + field.getHeight()
+                    : field.getY() + field.getHeight() + 1;
             graphics.fill(box.x(), box.y(), box.right(), top, PANEL_FILL);
             graphics.fill(box.x(), bottom, box.right(), box.bottom(), PANEL_FILL);
             graphics.fill(box.x(), top, left, bottom, PANEL_FILL);
@@ -785,14 +807,29 @@ final class FigureInspector {
         Draw.outline(graphics, box.x(), box.y(), box.width(), box.height(), PANEL_OUTLINE);
     }
 
-    /** A heading in the scrolling sections, with an amber dot while its section holds unsaved changes. */
+    /**
+     * A label in the scrolling sections, with an amber dot while its section holds unsaved changes:
+     * a row's name in Minecraft's font, or a section's heading in the menus' pixel font, which
+     * falls back to Minecraft's narrower font where the panel is too narrow for it.
+     */
     static final class Label extends UiNode.Box {
+        /** The height of a heading's row, for the pixel font's taller capitals. */
+        static final int HEADING = 13;
+
         private final Supplier<Component> text;
         private final BooleanSupplier changed;
+        private boolean heading;
 
         Label(Supplier<Component> text, BooleanSupplier changed) {
             this.text = text;
             this.changed = changed;
+        }
+
+        /** A section's heading, in the pixel font where it fits. */
+        static Label heading(Supplier<Component> text, BooleanSupplier changed) {
+            Label made = new Label(text, changed);
+            made.heading = true;
+            return made;
         }
 
         @Override
@@ -801,17 +838,30 @@ final class FigureInspector {
                 return;
             }
             Font font = Minecraft.getInstance().font;
-            String shown = Draw.cut(font, this.text.get().getString(), Math.max(0, width - 9));
-            graphics.drawString(font, shown, x, y, LABEL_COLOUR, false);
+            Component label = this.text.get();
+            int room = Math.max(0, width - 9);
+            int end;
+            int middle = y + Math.min(height, HEADING) / 2;
+            if (this.heading && PixelFont.width(label, PixelFont.crispScale(1.0f)) <= room) {
+                end = x + Draw.heading(graphics, label, x, y + Math.min(height, HEADING) / 2.0f, room, 1.0f,
+                        Theme.TEXT);
+            } else {
+                int textY = this.heading ? middle - 4 : y;
+                String shown = Draw.cut(font, label.getString(), room);
+                Draw.string(graphics, font, shown, x, textY, this.heading ? Theme.TEXT : LABEL_COLOUR);
+                end = x + font.width(shown);
+                middle = textY + 4;
+            }
             if (this.changed.getAsBoolean()) {
-                Draw.dot(graphics, x + font.width(shown) + 5, y + 4, 4, Theme.AMBER);
+                Draw.dot(graphics, end + 5, middle, 4, Theme.AMBER);
             }
         }
     }
 
     /**
      * The two kinds a figure can be, as two cards side by side: a Minecraft skin, which uses the
-     * standard figure, and a Blockbench model. The figure's own kind is outlined in gold.
+     * standard figure, and a Blockbench model. Each is a small raised card; the figure's own kind
+     * stands on the slate of a selected tab inside the blue selection border.
      */
     private final class KindCards extends UiNode.Box {
         static final int HEIGHT = 24;
@@ -834,14 +884,16 @@ final class FigureInspector {
                 int left = x + i * (cardWidth + CARD_GAP);
                 boolean on = shown.kind() == order[i];
                 boolean over = mouseX >= left && mouseX < left + cardWidth && mouseY >= y && mouseY < y + height;
-                graphics.fill(left, y, left + cardWidth, y + height, Theme.CONTROL);
-                Draw.outline(graphics, left, y, cardWidth, height, on ? Theme.GOLD : over ? 0xFF777777 : 0xFF333333);
+                boolean lit = over && !on;
+                Draw.raised(graphics, left, y, cardWidth, height,
+                        on ? Theme.SELECTED : lit ? Surfaces.BORDER_HOVER : Surfaces.BORDER,
+                        on ? Theme.HIGHLIGHT : lit ? Surfaces.FACE_HOVER : Surfaces.FACE, 1);
                 boolean skin = order[i] == Kind.SKIN;
                 Draw.text(graphics, font, tr(skin ? "figures.kind_skin" : "figures.kind_model").getString(), left + 5,
-                        y + 3, cardWidth - 10, on ? Theme.TEXT : Theme.TEXT_SOFT);
+                        y + 3, cardWidth - 10, on || lit ? Theme.TEXT : Theme.TEXT_SOFT);
                 Component note = tr(skin ? "inspector.kind_skin_note" : "inspector.kind_model_note");
                 String noteText = Draw.cut(font, note.getString(), cardWidth - 10);
-                graphics.drawString(font, noteText, left + 5, y + 13, HELP, false);
+                Draw.string(graphics, font, noteText, left + 5, y + 13, on ? Theme.TEXT_SOFT : HELP);
                 if (over && !noteText.equals(note.getString())) {
                     UiTooltip.set(note);
                 }
@@ -874,8 +926,8 @@ final class FigureInspector {
                 return;
             }
             Font font = Minecraft.getInstance().font;
-            graphics.fill(x, y, x + width, y + height, 0xFF111111);
-            Draw.dashed(graphics, x, y, width, height, 0xFF3D3D3D);
+            // A quiet well, as a zone with nothing to choose
+            Draw.well(graphics, x, y, width, height, Surfaces.BORDER_DISABLED);
             int textY = y + (height - 8) / 2;
             int left = x + 5;
             Draw.text(graphics, font, tr("inspector.poses").getString(), left, textY, slotLabelWidth - 4,

@@ -20,6 +20,9 @@ import com.theplumteam.client.gui.creator.ui.UiStepper;
 import com.theplumteam.client.gui.creator.ui.UiSwatches;
 import com.theplumteam.client.gui.creator.ui.UiInput;
 import com.theplumteam.client.gui.creator.ui.UiTooltip;
+import com.theplumteam.client.gui.style.DialogFrame;
+import com.theplumteam.client.gui.style.PixelIcon;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.client.worldcontent.ClientWorldUploads;
 import com.theplumteam.client.worldcontent.CreatorDraft;
@@ -40,7 +43,6 @@ import com.theplumteam.worldcontent.WorldCollectionRecord.Kind;
 import com.theplumteam.worldcontent.WorldCollectionRecord.Rarity;
 import com.theplumteam.worldcontent.WorldCollectionRecord.RarityWeights;
 import com.theplumteam.worldcontent.WorldContentLimits;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -89,6 +91,8 @@ final class PublishPage implements EditorPage {
     private static final int GAP = 6;
     private static final int COLUMN_GAP = 12;
     private static final int LABEL = 11;
+    // A section's heading, in the pixel font, whose capitals are taller than Minecraft's
+    private static final int HEADING_ROW = 13;
     private static final int SECTION_GAP = 12;
     private static final int BAR_HEIGHT = 12;
     private static final int STEPPER_WIDTH = 64;
@@ -160,7 +164,7 @@ final class PublishPage implements EditorPage {
                 () -> editor.selectTab(CreatorEditorScreen.Tab.FIGURES));
         this.saveDraftButton = new UiButton(tr("publish.save_draft"), UiButton.Style.SECONDARY,
                 () -> editor.save(false, false));
-        this.publishButton = new UiButton(tr("publish.publish"), UiButton.Style.GREEN, this::publishOrSave);
+        this.publishButton = new UiButton(tr("publish.publish"), UiButton.Style.PRIMARY, this::publishOrSave);
 
         this.checklistHeading = Text.heading(() -> tr("publish.checklist"), null);
         this.drawHeading = Text.heading(() -> tr("publish.draw"), null);
@@ -251,7 +255,7 @@ final class PublishPage implements EditorPage {
 
     // Places a button left of a point, as wide as its label needs; returns its left edge
     private static int placeLeftOf(UiButton button, int rightEdge, int y, int gap, Font font) {
-        int width = UiButton.widthFor(font, button.label(), false);
+        int width = CreatorEditorScreen.buttonWidth(font, button);
         int buttonX = rightEdge - gap - width;
         button.at(buttonX, y, width, UiButton.HEIGHT);
         return buttonX;
@@ -261,7 +265,7 @@ final class PublishPage implements EditorPage {
         // The test draws and who the grid is shown to, on the right of the view switch
         int rowRight = bodyArea.right();
         int pullsWidth = UiButton.widthFor(font, this.pullsButton.label(), false);
-        int testWidth = UiButton.widthFor(font, this.testPullButton.label(), false);
+        int testWidth = CreatorEditorScreen.buttonWidth(font, this.testPullButton);
         int whoLeft = this.views.bounds().right() + 2 * GAP;
         int whoWidth = Math.max(0, Math.min(this.who.naturalWidth(), rowRight - whoLeft - pullsWidth - testWidth - 3 * GAP));
         this.who.select(this.collector ? 1 : 0);
@@ -308,11 +312,11 @@ final class PublishPage implements EditorPage {
         int x = this.left.bounds().x();
         int width = this.left.contentWidth();
         int y = this.left.bounds().y();
-        y = place(this.checklistHeading, x, y, width, LABEL) + 2;
+        y = place(this.checklistHeading, x, y, width, HEADING_ROW) + 2;
         int checklistHeight = this.checklist.heightFor(width);
         this.checklist.at(x, y, width, checklistHeight);
         y += checklistHeight + SECTION_GAP;
-        y = place(this.drawHeading, x, y, width, LABEL) + 2;
+        y = place(this.drawHeading, x, y, width, HEADING_ROW) + 2;
         y = place(this.chanceLine, x, y, width, this.chanceLine.heightFor(width)) + 3;
         this.shareBar.setVisible(!this.shareBar.isEmpty());
         if (this.shareBar.visible()) {
@@ -327,7 +331,7 @@ final class PublishPage implements EditorPage {
         x = this.right.bounds().x();
         width = this.right.contentWidth();
         y = this.right.bounds().y();
-        y = place(this.rarityHeading, x, y, width, LABEL);
+        y = place(this.rarityHeading, x, y, width, HEADING_ROW);
         y = place(this.rarityHelp, x, y, width, this.rarityHelp.heightFor(width)) + 4;
         // Two weights a row, each its name above its number
         int half = (width - COLUMN_GAP) / 2;
@@ -338,11 +342,11 @@ final class PublishPage implements EditorPage {
             this.steppers[i].at(cellX, cellY + LABEL, Math.min(half, STEPPER_WIDTH), UiStepper.HEIGHT);
         }
         y += 2 * (LABEL + UiStepper.HEIGHT + 4) + SECTION_GAP - 4;
-        y = place(this.typeHeading, x, y, width, LABEL) + 1;
+        y = place(this.typeHeading, x, y, width, HEADING_ROW) + 1;
         this.types.at(x, y, Math.min(width, this.types.naturalWidth()), UiSegmented.HEIGHT);
         y += UiSegmented.HEIGHT + 3;
         y = place(this.typeNote, x, y, width, this.typeNote.heightFor(width)) + SECTION_GAP;
-        y = place(this.visibilityHeading, x, y, width, LABEL) + 2;
+        y = place(this.visibilityHeading, x, y, width, HEADING_ROW) + 2;
         int radioHeight = this.visibility.heightFor(width);
         this.visibility.at(x, y, width, radioHeight);
         y += radioHeight + 2;
@@ -379,7 +383,7 @@ final class PublishPage implements EditorPage {
     private void refreshFooterLabels() {
         boolean isDraft = draft().isDraftCollection();
         this.publishButton.setLabel(tr(isDraft ? "publish.publish" : "publish.save"));
-        this.publishButton.setStyle(UiButton.Style.GREEN);
+        this.publishButton.setStyle(UiButton.Style.PRIMARY);
     }
 
     private void refreshFooter() {
@@ -760,7 +764,8 @@ final class PublishPage implements EditorPage {
                     SHARE_COLOURS[i % SHARE_COLOURS.length]));
         }
         UiModal dialog = new UiModal(tr("publish.pulls_title", TEST_PULLS),
-                tr("publish.pulls_body", distinct, pool.size())).width(360);
+                tr("publish.pulls_body", distinct, pool.size())).width(360)
+                .accent(DialogFrame.Accent.COLLECTION, PixelIcon.STAR);
         dialog.node(new Histogram(bars, TEST_PULLS), HISTOGRAM_HEIGHT);
         dialog.cancelButton(tr("publish.close"));
         this.editor.openModal(dialog);
@@ -775,7 +780,8 @@ final class PublishPage implements EditorPage {
     void published(String name) {
         String id = draft().collectionId();
         BlockPos machinePos = this.editor.machinePos();
-        UiModal dialog = new UiModal(tr("editor.published", name), tr("publish.done.body")).width(280);
+        UiModal dialog = new UiModal(tr("editor.published", name), tr("publish.done.body")).width(280)
+                .accent(DialogFrame.Accent.CREATE, PixelIcon.CHECK);
         if (machinePos != null) {
             UiButton put = action(dialog, tr("home.menu.put"), UiButton.Style.PRIMARY, () -> {
                 new ClawMachineCollectionPacket(machinePos, id).sendToServer();
@@ -852,7 +858,7 @@ final class PublishPage implements EditorPage {
         int to = this.saveDraftButton.bounds().x() - 10;
         String shown = Draw.cut(font, tr("publish.afterwards").getString(), Math.max(0, to - from));
         if (font.width(shown) >= 80) {
-            graphics.drawString(font, shown, to - font.width(shown), this.footerY + 6, HELP, false);
+            Draw.string(graphics, font, shown, to - font.width(shown), this.footerY + 6, HELP);
         }
     }
 
@@ -952,7 +958,7 @@ final class PublishPage implements EditorPage {
             for (Bar bar : this.bars) {
                 most = Math.max(most, Math.max(bar.count(), (int) Math.ceil(bar.chance() * this.pulls)));
             }
-            graphics.drawString(font, tr("publish.pulls_axis", most).getString(), x, y, HELP, false);
+            Draw.string(graphics, font, tr("publish.pulls_axis", most).getString(), x, y, HELP);
             graphics.fill(x, bottom, x + width, bottom + 1, Theme.SEPARATOR);
             int slot = Math.max(1, width / this.bars.size());
             int gap = slot >= 6 ? Math.max(1, slot / 5) : 0;
@@ -1045,8 +1051,9 @@ final class PublishPage implements EditorPage {
             for (int i = 0; i < this.options.size(); i++) {
                 Option option = this.options.get(i);
                 boolean on = i == this.selected;
-                int ring = on ? Theme.GOLD : i == hovered ? Theme.TEXT : Theme.CONTROL_OUTLINE;
-                // A round mark drawn from rows: a ring, filled gold while chosen
+                int ring = on ? Theme.SELECTED : i == hovered ? Theme.TEXT : Surfaces.BORDER;
+                // A round mark drawn from rows: a sunk ring, filled with the selection's blue while chosen
+                graphics.fill(x + 1, top + 1, x + MARK - 1, top + MARK - 1, Surfaces.WELL);
                 graphics.fill(x + 2, top, x + MARK - 2, top + 1, ring);
                 graphics.fill(x + 2, top + MARK - 1, x + MARK - 2, top + MARK, ring);
                 graphics.fill(x, top + 2, x + 1, top + MARK - 2, ring);
@@ -1056,7 +1063,7 @@ final class PublishPage implements EditorPage {
                 graphics.fill(x + 1, top + MARK - 2, x + 2, top + MARK - 1, ring);
                 graphics.fill(x + MARK - 2, top + MARK - 2, x + MARK - 1, top + MARK - 1, ring);
                 if (on) {
-                    graphics.fill(x + 2, top + 2, x + MARK - 2, top + MARK - 2, Theme.GOLD);
+                    graphics.fill(x + 2, top + 2, x + MARK - 2, top + MARK - 2, Theme.SELECTED);
                 }
                 Draw.text(graphics, font, option.title().getString(), x + TEXT_X, top + 1, width - TEXT_X,
                         on ? Theme.TEXT : Theme.TEXT_SOFT);
@@ -1084,9 +1091,9 @@ final class PublishPage implements EditorPage {
     }
 
     /**
-     * A line or a few lines of text in the review's columns: a heading, with an amber dot while
-     * its section holds unsaved changes, or text wrapped over its height, after a coloured square
-     * when it is one of the token rules.
+     * A line or a few lines of text in the review's columns: a heading in the menus' pixel font,
+     * with an amber dot while its section holds unsaved changes, or text wrapped over its height,
+     * after a coloured square when it is one of the token rules.
      */
     private static final class Text extends UiNode.Box {
         private final Supplier<Component> text;
@@ -1137,11 +1144,10 @@ final class PublishPage implements EditorPage {
             Font font = Minecraft.getInstance().font;
             String shown = this.text.get().getString();
             if (this.heading) {
-                Component bold = Component.literal(Draw.cut(font, shown, Math.max(0, width - 20)))
-                        .withStyle(ChatFormatting.BOLD);
-                graphics.drawString(font, bold, x, y, this.colour.getAsInt(), false);
+                int end = x + Draw.heading(graphics, this.text.get(), x, y + height / 2.0f, Math.max(0, width - 20),
+                        1.0f, this.colour.getAsInt());
                 if (this.changed != null && this.changed.getAsBoolean()) {
-                    Draw.dot(graphics, x + font.width(bold) + 5, y + 4, 4, Theme.AMBER);
+                    Draw.dot(graphics, end + 5, y + height / 2, 4, Theme.AMBER);
                 }
                 return;
             }

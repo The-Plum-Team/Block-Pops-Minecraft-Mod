@@ -1,5 +1,8 @@
 package com.theplumteam.client.gui.creator.ui;
 
+import com.theplumteam.client.gui.style.PixelFont;
+import com.theplumteam.client.gui.style.Surfaces;
+import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.gui.util.GuiPose;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -12,9 +15,11 @@ import java.util.List;
 
 /**
  * Drawing helpers for the creator screens, made only of fills, text and items so they look the
- * same on every version: panels, outlines, dashed edges, badges, progress bars, and text cut or
- * wrapped to a width. Lines are drawn as one-pixel fills because the line helpers of
- * {@link GuiGraphics} were renamed in 26.1.
+ * same on every version: the menus' raised faces and sunk wells ({@link Surfaces}), panels,
+ * outlines, dashed edges, badges, progress bars, pixel-font headings, and text cut or wrapped to a
+ * width. Light text gets the menus' dark drop shadow ({@link UiText}), which stays visible on
+ * their dark faces where vanilla's does not. Lines are drawn as one-pixel fills because the line
+ * helpers of {@link GuiGraphics} were renamed in 26.1.
  */
 public final class Draw {
     private static final String ELLIPSIS = "...";
@@ -26,6 +31,110 @@ public final class Draw {
     public static void panel(GuiGraphics graphics, int x, int y, int width, int height, int fill, int outline) {
         graphics.fill(x, y, x + width, y + height, fill);
         outline(graphics, x, y, width, height, outline);
+    }
+
+    /**
+     * A raised face, as the menus' buttons and cards: a black outline, the border, the face and a
+     * darker lip along the bottom.
+     *
+     * @return the bottom edge of the face, above the lip
+     */
+    public static int raised(GuiGraphics graphics, int x, int y, int width, int height, int border, int face) {
+        return raised(graphics, x, y, width, height, border, face, Surfaces.LIP_HEIGHT);
+    }
+
+    /** A raised face with a lip of its own height, thinner on a small node. */
+    public static int raised(GuiGraphics graphics, int x, int y, int width, int height, int border, int face,
+                             int lipHeight) {
+        if (width <= 0 || height <= 0) {
+            return y;
+        }
+        int lip = Math.max(0, Math.min(lipHeight, height - 5));
+        return Surfaces.raised(graphics, x, y, x + width, y + height, border, face, Surfaces.LIP, lip);
+    }
+
+    /**
+     * A card or tile: a raised face that lightens under the mouse and has Quick Skin's blue
+     * border while selected.
+     *
+     * @return the bottom edge of the face, above the lip
+     */
+    public static int card(GuiGraphics graphics, int x, int y, int width, int height, boolean hovered,
+                           boolean selected) {
+        int border = selected ? Theme.SELECTED : hovered ? Surfaces.BORDER_HOVER : Surfaces.BORDER;
+        return raised(graphics, x, y, width, height, border, hovered ? Surfaces.FACE_HOVER : Surfaces.FACE);
+    }
+
+    /**
+     * A sunk well, as the menus' text fields and slider tracks: its border lightens under the
+     * mouse and is brighter still while it has the keyboard or is being dragged.
+     */
+    public static void well(GuiGraphics graphics, int x, int y, int width, int height, boolean hovered,
+                            boolean focused) {
+        int border = focused ? Surfaces.BORDER_SELECTED : hovered ? Surfaces.BORDER_HOVER : Surfaces.BORDER;
+        well(graphics, x, y, width, height, border);
+    }
+
+    /** A sunk well with a border of its own colour, such as a disabled or a selected one. */
+    public static void well(GuiGraphics graphics, int x, int y, int width, int height, int border) {
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+        Surfaces.well(graphics, x, y, x + width, y + height, border, Surfaces.WELL);
+    }
+
+    /**
+     * A heading in the menus' blocky pixel font, in upper case, its capitals centred on a height
+     * and cut with "..." to a width. It is drawn at a crisp size near {@code scale} GUI units per
+     * font pixel.
+     *
+     * @return the heading's width
+     */
+    public static int heading(GuiGraphics graphics, Component text, int x, float middleY, int width, float scale,
+                              int colour) {
+        float crisp = PixelFont.crispScale(scale);
+        String shown = text.getString();
+        if (PixelFont.width(text, crisp) > width) {
+            // Cut a letter at a time: the pixel font is wider than Minecraft's, so its own width decides
+            int end = shown.length();
+            while (end > 0 && PixelFont.width(Component.literal(shown.substring(0, end).stripTrailing() + ELLIPSIS),
+                    crisp) > width) {
+                end--;
+            }
+            shown = end > 0 ? shown.substring(0, end).stripTrailing() + ELLIPSIS : "";
+        }
+        if (shown.isEmpty()) {
+            return 0;
+        }
+        Component pixel = PixelFont.text(shown);
+        float y = Math.round(middleY - PixelFont.CAPITALS_MIDDLE * crisp);
+        PixelFont.draw(graphics, pixel, x, y, crisp, colour, true);
+        return PixelFont.width(Component.literal(shown), crisp);
+    }
+
+    /**
+     * Text with the menus' drop shadow when it is light enough to need one; dark text, as on a
+     * bright badge, is drawn without.
+     */
+    public static void string(GuiGraphics graphics, Font font, String text, int x, int y, int colour) {
+        if (isLight(colour)) {
+            UiText.draw(graphics, font, text, x, y, colour);
+        } else {
+            graphics.drawString(font, text, x, y, colour, false);
+        }
+    }
+
+    public static void string(GuiGraphics graphics, Font font, Component text, int x, int y, int colour) {
+        if (isLight(colour)) {
+            UiText.draw(graphics, font, text, x, y, colour);
+        } else {
+            graphics.drawString(font, text, x, y, colour, false);
+        }
+    }
+
+    private static boolean isLight(int colour) {
+        int brightest = Math.max((colour >> 16) & 0xFF, Math.max((colour >> 8) & 0xFF, colour & 0xFF));
+        return brightest >= 0x80;
     }
 
     /** A one-pixel frame. */
@@ -68,7 +177,7 @@ public final class Draw {
                             int foreground) {
         int width = badgeWidth(font, text);
         panel(graphics, x, y, width, 12, background, foreground);
-        graphics.drawString(font, text, x + 4, y + 2, foreground, false);
+        string(graphics, font, text, x + 4, y + 2, foreground);
         return width;
     }
 
@@ -87,11 +196,11 @@ public final class Draw {
         graphics.fill(x + 1, y, x + width - 1, y + 12, background);
         graphics.fill(x, y + 1, x + 1, y + 11, background);
         graphics.fill(x + width - 1, y + 1, x + width, y + 11, background);
-        graphics.drawString(font, text, x + 4, y + 2, foreground, false);
+        string(graphics, font, text, x + 4, y + 2, foreground);
         return width;
     }
 
-    /** A bar filled from the left by a fraction from 0 to 1. */
+    /** A bar filled from the left by a fraction from 0 to 1, flat, for a thin bar. */
     public static void progressBar(GuiGraphics graphics, int x, int y, int width, int height, float fraction,
                                    int track, int fill) {
         graphics.fill(x, y, x + width, y + height, track);
@@ -153,14 +262,14 @@ public final class Draw {
 
     /** Text on one line, cut to a width as {@link #cut} cuts it. */
     public static void text(GuiGraphics graphics, Font font, String text, int x, int y, int width, int colour) {
-        graphics.drawString(font, cut(font, text, width), x, y, colour, false);
+        string(graphics, font, cut(font, text, width), x, y, colour);
     }
 
     /** Text centred on a point, cut to a width as {@link #cut} cuts it. */
     public static void centred(GuiGraphics graphics, Font font, String text, int centerX, int y, int width,
                                int colour) {
         String shown = cut(font, text, width);
-        graphics.drawString(font, shown, centerX - font.width(shown) / 2, y, colour, false);
+        string(graphics, font, shown, centerX - font.width(shown) / 2, y, colour);
     }
 
     /**
@@ -172,7 +281,7 @@ public final class Draw {
     public static int lines(GuiGraphics graphics, Font font, String text, int x, int y, int width, int maxLines,
                             int colour) {
         for (String line : fit(font, text, width, maxLines)) {
-            graphics.drawString(font, line, x, y, colour, false);
+            string(graphics, font, line, x, y, colour);
             y += Theme.LINE_HEIGHT;
         }
         return y;

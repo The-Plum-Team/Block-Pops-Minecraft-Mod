@@ -6,6 +6,7 @@ import com.theplumteam.client.gui.creator.ui.Theme;
 import com.theplumteam.client.gui.creator.ui.UiCardGrid;
 import com.theplumteam.client.gui.creator.ui.UiTooltip;
 import com.theplumteam.client.gui.creator.ui.UiViewport;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.util.GuiPose;
 import com.theplumteam.client.gui.widget.FigureEntry;
 import com.theplumteam.client.worldcontent.CreatorDraft.FigureDraft;
@@ -31,7 +32,8 @@ import java.util.Locale;
  * marks a figure with unsaved changes, and a red "!" in the corner one with a problem (a file
  * still to choose, lost on the server, that could not be loaded or that breaks a rule), which
  * its tooltip names. A figure that misses a file has nothing to preview yet and shows a "?".
- * The selected card has a gold frame.
+ * Each card is a raised face in the menus' style, lighter under the mouse, and the selected card
+ * has Quick Skin's blue border.
  */
 final class FigureCard {
     /** The height of every card. */
@@ -39,7 +41,9 @@ final class FigureCard {
     // The figure's cell: inset from the card's sides, under the kind and size tags
     private static final int CELL_SIDE = 2;
     private static final int CELL_TOP = 6;
-    private static final int NAME_FROM_BOTTOM = 11;
+    // The name sits on the face, above the card's lip
+    private static final int NAME_FROM_BOTTOM = 13;
+    private static final int LIP = 2;
     // The machine screen's camera, as the figure grid draws figures
     private static final float CAMERA_YAW = 150.0f;
     private static final float CAMERA_X = 0.0f;
@@ -49,13 +53,12 @@ final class FigureCard {
     // The tags are drawn at half size, as small as the mockup's
     private static final float TAG_SCALE = 0.5f;
     private static final int TAG_TEXT = 0xFFBBBBBB;
-    private static final int TAG_FILL = 0xFF2A2A2A;
-    private static final int HOVER_OUTLINE = 0xFF6A6A6A;
-    private static final int RIBBON = 0xFFA01818;
+    private static final int TAG_FILL = Surfaces.WELL;
+    private static final int RIBBON = 0xFFB83030;
     private static final int RETIRED_WASH = 0x66000000;
     private static final int DRAGGED_WASH = 0x80000000;
     private static final int RETIRED_NAME = 0xFF9A9A9A;
-    private static final int PROBLEM = 0xFFE03C3C;
+    private static final int PROBLEM = 0xFFE04040;
     private static final int CELL_EDGE = 0x30FFFFFF;
 
     // Draws the figures; made again for another collection, since it names its collection
@@ -80,12 +83,9 @@ final class FigureCard {
         int width = card.width();
         int height = card.height();
         boolean retired = !figure.enabled();
-        int outline = card.selected() ? Theme.GOLD : card.hovered() ? HOVER_OUTLINE : 0xFF2C2C2C;
-        Draw.panel(graphics, x, y, width, height, 0xFF151515, outline);
-        if (card.selected()) {
-            // Two units thick, as the mockup frames the selected card
-            Draw.outline(graphics, x + 1, y + 1, width - 2, height - 2, Theme.GOLD);
-        }
+        boolean hovered = card.hovered();
+        int border = card.selected() ? Theme.SELECTED : hovered ? Surfaces.BORDER_HOVER : Surfaces.BORDER;
+        Draw.raised(graphics, x, y, width, height, border, hovered ? Surfaces.FACE_HOVER : Surfaces.FACE, LIP);
 
         int cell = Math.max(8, Math.min(width - 2 * CELL_SIDE, height - CELL_TOP - NAME_FROM_BOTTOM - 1));
         int cellX = x + (width - cell) / 2;
@@ -121,13 +121,13 @@ final class FigureCard {
             int nameRoom = width - 2 * 6;
             String name = figure.name().isBlank() ? figure.id() : figure.name();
             String cut = Draw.cut(font, name, nameRoom);
-            graphics.drawString(font, cut, x + (width - font.width(cut)) / 2, nameY,
-                    retired ? RETIRED_NAME : Theme.TEXT, false);
+            Draw.string(graphics, font, cut, x + (width - font.width(cut)) / 2, nameY,
+                    retired ? RETIRED_NAME : Theme.TEXT);
             if (!cut.equals(name) && within(card, x, nameY - 1, width, 10)) {
                 UiTooltip.set(Component.literal(name));
             }
             if (dirty) {
-                Draw.dot(graphics, x + width - 4, y + height - 4, 3, Theme.AMBER);
+                Draw.dot(graphics, x + width - 5, y + height - LIP - 5, 3, Theme.AMBER);
             }
             if (!problems.isEmpty()) {
                 drawProblem(graphics, font, card, problems, x + 2, cellY + cell - 10);
@@ -153,19 +153,19 @@ final class FigureCard {
     private static void drawTags(GuiGraphics graphics, Font font, FigureDraft figure, int x, int y, int width) {
         String kind = CreatorScreen.tr(figure.kind() == Kind.SKIN ? "figures.tag_skin" : "figures.tag_model")
                 .getString();
-        smallText(graphics, font, kind, x + 3, y + 2, TAG_TEXT);
+        smallText(graphics, font, kind, x + 4, y + 3, TAG_TEXT);
         String size = scaleText(figure.scale());
         int sizeWidth = Math.round(font.width(size) * TAG_SCALE) + 4;
-        int sizeX = x + width - 2 - sizeWidth;
-        graphics.fill(sizeX, y + 1, sizeX + sizeWidth, y + 7, TAG_FILL);
-        smallText(graphics, font, size, sizeX + 2, y + 2, Theme.TEXT_SOFT);
+        int sizeX = x + width - 3 - sizeWidth;
+        graphics.fill(sizeX, y + 2, sizeX + sizeWidth, y + 8, TAG_FILL);
+        smallText(graphics, font, size, sizeX + 2, y + 3, Theme.TEXT_SOFT);
     }
 
     // A red "!" square whose tooltip lists the figure's problems
     private static void drawProblem(GuiGraphics graphics, Font font, UiCardGrid.Card card, List<Component> problems,
                                     int left, int top) {
         graphics.fill(left, top, left + 9, top + 9, PROBLEM);
-        graphics.drawString(font, "!", left + 4 - font.width("!") / 2 + 1, top + 1, Theme.TEXT, false);
+        Draw.string(graphics, font, "!", left + 4 - font.width("!") / 2 + 1, top + 1, Theme.TEXT);
         if (within(card, left, top, 9, 9)) {
             UiTooltip.set(problems);
         }

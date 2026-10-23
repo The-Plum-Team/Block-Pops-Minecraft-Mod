@@ -10,12 +10,15 @@ import java.util.function.Consumer;
 
 /**
  * A box that is ticked or not, with its label beside it; clicking the box or the label toggles
- * it. Ticked boxes are gold, as the mockup's. It can be disabled with a reason in its tooltip.
+ * it. The box is a small sunk well, as the menus' fields are, filled with the settings toggles'
+ * green while ticked. It can be disabled with a reason in its tooltip.
  */
 public class UiCheckbox extends UiNode.Box {
     public static final int BOX = 10;
     private static final int GAP = 5;
     private static final int OFF_TEXT = 0xFF707070;
+    private static final int TICKED = 0xFF48A048;
+    private static final int TICKED_LIGHT = 0xFF6FCF6F;
 
     private final Component label;
     private final Consumer<Boolean> onChange;
@@ -59,10 +62,14 @@ public class UiCheckbox extends UiNode.Box {
         Font font = Minecraft.getInstance().font;
         boolean hovered = hovered(mouseX, mouseY);
         int boxY = y + (height - BOX) / 2;
-        int outline = !enabled ? Theme.CONTROL_OUTLINE : hovered ? Theme.TEXT : Theme.FIELD_OUTLINE;
-        Draw.panel(graphics, x, boxY, BOX, BOX, 0xFF000000, outline);
+        if (enabled) {
+            Draw.well(graphics, x, boxY, BOX, BOX, hovered, false);
+        } else {
+            Draw.well(graphics, x, boxY, BOX, BOX, Theme.CONTROL_OUTLINE);
+        }
         if (checked) {
-            graphics.fill(x + 2, boxY + 2, x + BOX - 2, boxY + BOX - 2, enabled ? Theme.GOLD : Theme.CONTROL_OUTLINE);
+            graphics.fill(x + 2, boxY + 2, x + BOX - 2, boxY + BOX - 2, enabled ? TICKED : Theme.CONTROL_OUTLINE);
+            graphics.fill(x + 2, boxY + 2, x + BOX - 2, boxY + 3, enabled ? TICKED_LIGHT : Theme.CONTROL_OUTLINE);
         }
         Draw.text(graphics, font, label.getString(), x + BOX + GAP, y + (height - 8) / 2 + 1,
                 Math.max(0, width - BOX - GAP), enabled ? Theme.TEXT_SOFT : OFF_TEXT);

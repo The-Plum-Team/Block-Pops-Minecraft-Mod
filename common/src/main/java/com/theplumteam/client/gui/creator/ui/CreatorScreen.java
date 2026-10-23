@@ -4,6 +4,8 @@ import com.mojang.blaze3d.platform.InputConstants;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.gui.CollectionSelectionScreen;
 import com.theplumteam.client.gui.SettingsScreen;
+import com.theplumteam.client.gui.style.MenuGuiScale;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.util.GuiPose;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import net.minecraft.Util;
@@ -25,11 +27,17 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
- * The base of every creator screen. It draws the look the mod's other screens share (the
- * machine screen's colour and scrolling stars, dimmed, under an opaque black panel with a thin
- * outline) and hosts the screen's toolkit nodes: it draws them, hands them input, and draws the
- * menu, toast, dialog and tooltip above them. Drawn under another screen, as the overview is
- * under the new-collection wizard, it leaves those overlays to the screen on top.
+ * The base of every creator screen. It draws the look the mod's menus share with Quick Skin (the
+ * machine screen's colour and scrolling stars, dimmed, under a raised charcoal panel in the
+ * menus' grey border and black outline) and hosts the screen's toolkit nodes: it draws them,
+ * hands them input, and draws the menu, toast, dialog and tooltip above them. Drawn under another
+ * screen, as the overview is under the new-collection wizard, it leaves those overlays to the
+ * screen on top.
+ *
+ * <p>Like the other menus, the creator is drawn at a GUI scale of its own, chosen from the window
+ * size ({@link MenuGuiScale}), so its canvas is between about 400x300 and 860x520 GUI units
+ * whatever GUI Scale the player picked; the player's option is never written. Every screen lays
+ * itself out from {@code width} and {@code height} within that canvas.
  *
  * <p>This is the only creator class that overrides Minecraft's input hooks, whose shapes differ
  * before 1.21, from 1.21 to 1.21.8, and from 1.21.9 (26.x here). Each override turns its event
@@ -42,8 +50,11 @@ import java.util.function.Consumer;
  * the screen it came from once {@link SettingsScreen#canOpenCreator()} turns false. The server
  * checks every request again; these screens only ask.
  */
-public abstract class CreatorScreen extends Screen {
+public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scaled {
     public static final String KEY = "blockpops.world_creator.";
+    // Below this canvas the panel leaves a narrow margin, so the smallest canvas keeps its room
+    private static final int ROOMY_WIDTH = 520;
+    private static final int ROOMY_HEIGHT = 340;
     // Below 1.21.9 the screen finds double clicks itself, with vanilla's limits
     private static final long DOUBLE_CLICK_MS = 250;
     private static final double DOUBLE_CLICK_DISTANCE = 4.0;
@@ -105,7 +116,17 @@ public abstract class CreatorScreen extends Screen {
 
     @Override
     protected void init() {
+        MenuGuiScale.enter(this.minecraft, this);
         super.init();
+        if (drawsParentBelow() && this.parent != null
+                && (this.parent.width != this.width || this.parent.height != this.height)) {
+            // Only the screen shown is told the window changed size, and the parent is drawn under this one
+            //? if >=26 {
+            /*this.parent.resize(this.width, this.height);
+            *///? } else {
+            this.parent.resize(this.minecraft, this.width, this.height);
+            //? }
+        }
         int margin = panelMargin();
         this.panelX = margin;
         this.panelY = margin;
@@ -124,9 +145,17 @@ public abstract class CreatorScreen extends Screen {
         }
     }
 
-    /** The gap between the screen's edge and the panel. */
+    /** The gap between the screen's edge and the panel: narrow on a small canvas. */
     protected int panelMargin() {
-        return Theme.SPACE_XL;
+        return this.width < ROOMY_WIDTH || this.height < ROOMY_HEIGHT ? Theme.SPACE_S : Theme.SPACE_XL;
+    }
+
+    /**
+     * Whether this screen draws its parent under itself, as the new-collection wizard draws the
+     * overview; the parent is then laid out again whenever this screen's size changes.
+     */
+    protected boolean drawsParentBelow() {
+        return false;
     }
 
     /** Adds this screen's nodes and widgets; runs on every rebuild, so it reads the screen's own state. */
@@ -164,7 +193,7 @@ public abstract class CreatorScreen extends Screen {
      */
     protected final EditBox textField(String name, int x, int y, int width, int maxLength, Component hint,
                                       String value, Consumer<String> responder) {
-        EditBox field = new EditBox(this.font, x, y, width, 20, hint);
+        EditBox field = new UiField(this.font, x, y, width, UiField.HEIGHT, hint);
         field.setMaxLength(maxLength);
         field.setHint(hint);
         field.setValue(value);
@@ -357,6 +386,10 @@ public abstract class CreatorScreen extends Screen {
             leave();
             return;
         }
+        if (MenuGuiScale.reapply(this.minecraft, this)) {
+            // Another mod put the player's scale back on the window after init()
+            rebuild();
+        }
         if (ClientWorldCollections.revision() != this.shownRevision) {
             this.shownRevision = ClientWorldCollections.revision();
             onSync();
@@ -463,10 +496,10 @@ public abstract class CreatorScreen extends Screen {
         GuiPose.nextStratum(graphics);
     }
 
-    /** The opaque panel with its thin outline. */
+    /** The panel: a dialog's charcoal face in the menus' border and outline, on its lip. */
     protected void drawPanel(GuiGraphics graphics) {
-        Draw.panel(graphics, this.panelX, this.panelY, this.panelWidth, this.panelHeight, Theme.PANEL,
-                Theme.PANEL_OUTLINE);
+        Draw.raised(graphics, this.panelX, this.panelY, this.panelWidth, this.panelHeight, Surfaces.BORDER,
+                Theme.PANEL);
     }
 
     // Input
@@ -815,6 +848,13 @@ public abstract class CreatorScreen extends Screen {
     @Override
     public void onClose() {
         leave();
+    }
+
+    @Override
+    public void removed() {
+        super.removed();
+        // A creator screen opened next takes the menus' scale again in its own init()
+        MenuGuiScale.restore(this.minecraft);
     }
 
     @Override

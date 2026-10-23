@@ -17,6 +17,9 @@ import com.theplumteam.client.gui.creator.ui.UiNode;
 import com.theplumteam.client.gui.creator.ui.UiQuotaMeter;
 import com.theplumteam.client.gui.creator.ui.UiScrollPane;
 import com.theplumteam.client.gui.creator.ui.UiTabs;
+import com.theplumteam.client.gui.style.DialogFrame;
+import com.theplumteam.client.gui.style.PixelFont;
+import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.client.worldcontent.ClientWorldUploads;
 import com.theplumteam.client.worldcontent.CreatorSave;
@@ -29,7 +32,6 @@ import com.theplumteam.worldcontent.WorldCollectionEdit;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldContentIds;
 import com.theplumteam.worldcontent.WorldContentLimits;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -78,10 +80,13 @@ public class CreatorHomeScreen extends CreatorScreen {
     private static final int QUOTA_WIDTH = 110;
     private static final int SEARCH_WIDTH = 120;
     private static final int MIN_SEARCH_WIDTH = 60;
+    private static final int MIN_SORT_WIDTH = 70;
+    // The title's pixel font, larger when the header has the room
+    private static final float TITLE_SCALE = 1.5f;
     // From 1.21.6 every figure preview is drawn into a render target of its own
     private static final int MAX_CARDS_WITH_HEADS = 15;
-    private static final int SUBTITLE = 0xFFB5B5B5;
-    private static final int HINT = 0xFF9A9A9A;
+    private static final int SUBTITLE = Theme.MUTED;
+    private static final int HINT = Theme.FAINT;
     // The longest namespace:path WorldCollectionImporter accepts
     private static final int MAX_PACK_SOURCE = 64 + 1 + 32;
 
@@ -159,11 +164,12 @@ public class CreatorHomeScreen extends CreatorScreen {
                     lastSort = this.sort;
                     refreshCards();
                 });
-        this.helpButton = new UiButton(Component.literal("?"), UiButton.Style.SECONDARY, this::openHelp);
+        this.helpButton = new UiButton(Component.empty(), UiButton.Style.SECONDARY, this::openHelp);
+        this.helpButton.setGlyph(Theme.ICON_HELP);
         this.helpButton.setTooltip(tr("home.help_title"));
         this.importButton = new UiButton(tr("home.import"), UiButton.Style.SECONDARY, this::openImport);
-        this.doneButton = new UiButton(tr("done"), UiButton.Style.SECONDARY, this::onClose);
-        this.emptyCreateButton = new UiButton(tr("home.empty_create"), UiButton.Style.GREEN, this::newCollection);
+        this.doneButton = new UiButton(tr("done"), UiButton.Style.PRIMARY, this::onClose);
+        this.emptyCreateButton = new UiButton(tr("home.empty_create"), UiButton.Style.PRIMARY, this::newCollection);
     }
 
     // Building
@@ -192,15 +198,17 @@ public class CreatorHomeScreen extends CreatorScreen {
                 tab("home.filter.drafts", records, Filter.DRAFTS),
                 tab("home.filter.archived", records, Filter.ARCHIVED)));
         this.tabs.select(this.filter.ordinal());
-        this.tabs.at(left, barY, this.tabs.contentWidth(), UiTabs.FLAT_HEIGHT);
+        int tabsWidth = this.tabs.contentWidth();
         int sortWidth = this.sortDropdown.naturalWidth();
-        int searchWidth = Math.min(SEARCH_WIDTH, right - sortWidth - 6 - (this.tabs.bounds().right() + GAP));
+        int searchWidth = Math.min(SEARCH_WIDTH, right - sortWidth - 6 - (left + tabsWidth + GAP));
         if (searchWidth < MIN_SEARCH_WIDTH) {
-            // A narrow screen narrows the sort order first, which cuts its label
-            sortWidth = Math.max(70, sortWidth - (MIN_SEARCH_WIDTH - searchWidth));
+            // A narrow screen narrows the sort order first, which cuts its label, then the tabs
+            sortWidth = Math.max(MIN_SORT_WIDTH, sortWidth - (MIN_SEARCH_WIDTH - searchWidth));
             searchWidth = Math.max(MIN_SEARCH_WIDTH,
-                    Math.min(SEARCH_WIDTH, right - sortWidth - 6 - (this.tabs.bounds().right() + GAP)));
+                    Math.min(SEARCH_WIDTH, right - sortWidth - 6 - (left + tabsWidth + GAP)));
+            tabsWidth = Math.min(tabsWidth, right - sortWidth - 6 - searchWidth - GAP - left);
         }
+        this.tabs.at(left, barY, Math.max(0, tabsWidth), UiTabs.FLAT_HEIGHT);
         this.sortDropdown.at(right - sortWidth, barY + 2, sortWidth, UiDropdown.HEIGHT);
         this.sortDropdown.select(this.sort.ordinal());
         this.searchBox = textField("search", right - sortWidth - 6 - searchWidth, barY, searchWidth,
@@ -215,7 +223,8 @@ public class CreatorHomeScreen extends CreatorScreen {
         int footerY = footerTop();
         this.importButton.at(left, footerY, UiButton.widthFor(this.font, this.importButton.label(), false),
                 UiButton.HEIGHT);
-        this.doneButton.at(right - 100, footerY, 100, UiButton.HEIGHT);
+        int doneWidth = Math.max(100, this.doneButton.naturalWidth());
+        this.doneButton.at(right - doneWidth, footerY, doneWidth, UiButton.HEIGHT);
         addNode(this.importButton);
         addNode(this.doneButton);
 
@@ -226,7 +235,7 @@ public class CreatorHomeScreen extends CreatorScreen {
         }
         Component newReason = newCollectionReason();
         if (records.isEmpty()) {
-            int buttonWidth = Math.max(180, UiButton.widthFor(this.font, this.emptyCreateButton.label(), false));
+            int buttonWidth = Math.min(this.panelWidth - 2 * PAD, Math.max(180, this.emptyCreateButton.naturalWidth()));
             this.emptyCreateButton.at(this.panelX + (this.panelWidth - buttonWidth) / 2, emptyTop() + 64 + 30,
                     buttonWidth, 24);
             this.emptyCreateButton.disable(newReason);
@@ -410,10 +419,10 @@ public class CreatorHomeScreen extends CreatorScreen {
                 ClientWorldCollections.records().size(), WorldContentLimits.MAX_COLLECTIONS).getString());
         int textRight = Math.min(this.quota.bounds().x(), this.quota.bounds().right() - quotaText) - GAP;
         int textWidth = Math.max(0, textRight - textX);
-        String title = Draw.cut(this.font, this.title.getString(), Math.max(0, textWidth - 12));
-        graphics.drawString(this.font, Component.literal(title).withStyle(ChatFormatting.BOLD), textX, top + 3,
-                Theme.TEXT, true);
-        Draw.text(graphics, this.font, tr("home.subtitle").getString(), textX, top + 16, textWidth, SUBTITLE);
+        // The title in the pixel font, smaller when the header is narrow
+        float scale = PixelFont.width(this.title, PixelFont.crispScale(TITLE_SCALE)) <= textWidth ? TITLE_SCALE : 1.0f;
+        Draw.heading(graphics, this.title, textX, top + 7, textWidth, scale, Theme.TEXT);
+        Draw.text(graphics, this.font, tr("home.subtitle").getString(), textX, top + 17, textWidth, SUBTITLE);
 
         int footerY = footerTop();
         int hintLeft = this.importButton.bounds().right() + GAP;
@@ -621,7 +630,8 @@ public class CreatorHomeScreen extends CreatorScreen {
     }
 
     private void confirmArchive(WorldCollectionRecord record) {
-        UiModal dialog = new UiModal(tr("home.archive_title", record.name()), tr("home.archive_body"));
+        UiModal dialog = new UiModal(tr("home.archive_title", record.name()), tr("home.archive_body"))
+                .accent(DialogFrame.Accent.DANGER, Theme.ICON_ARCHIVE);
         dialog.cancelButton(tr("cancel"));
         dialog.button(tr("home.archive_button"), UiButton.Style.DANGER, () -> setArchived(record, true));
         openModal(dialog);
@@ -639,7 +649,8 @@ public class CreatorHomeScreen extends CreatorScreen {
 
     private void confirmPurge(WorldCollectionRecord record) {
         String name = record.name();
-        UiModal dialog = new UiModal(tr("home.purge_title", name), tr("home.purge_body"));
+        UiModal dialog = new UiModal(tr("home.purge_title", name), tr("home.purge_body"))
+                .accent(DialogFrame.Accent.DANGER, PixelIcon.BIN);
         UiButton[] confirm = new UiButton[1];
         dialog.field(tr("home.purge_field", name), WorldContentLimits.MAX_NAME_LENGTH, "", Component.literal(name),
                 value -> confirm[0].disable(value.strip().equals(name.strip()) ? null : tr("home.purge_rule")));
@@ -652,7 +663,8 @@ public class CreatorHomeScreen extends CreatorScreen {
     }
 
     private void openHelp() {
-        UiModal dialog = new UiModal(tr("home.help_title"), tr("home.help_body")).width(320);
+        UiModal dialog = new UiModal(tr("home.help_title"), tr("home.help_body")).width(320)
+                .accent(DialogFrame.Accent.SETTINGS, Theme.ICON_HELP);
         dialog.cancelButton(tr("home.help_close"));
         openModal(dialog);
     }
@@ -706,7 +718,8 @@ public class CreatorHomeScreen extends CreatorScreen {
         private UiButton confirm;
 
         void open() {
-            UiModal dialog = new UiModal(tr("home.import_title"), tr("home.import_body")).width(340);
+            UiModal dialog = new UiModal(tr("home.import_title"), tr("home.import_body")).width(340)
+                    .accent(DialogFrame.Accent.CREATE, PixelIcon.PLUS);
             dialog.field(tr("home.import_source"), MAX_PACK_SOURCE, "", tr("home.import_source_hint"), value -> {
                 this.source = value.strip();
                 if (!this.slugTyped && this.slugBox != null) {

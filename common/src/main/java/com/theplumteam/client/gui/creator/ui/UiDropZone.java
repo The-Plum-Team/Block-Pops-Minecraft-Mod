@@ -1,5 +1,7 @@
 package com.theplumteam.client.gui.creator.ui;
 
+import com.theplumteam.client.gui.style.DialogFrame;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.runtime.RuntimeTextures;
 import com.theplumteam.client.worldcontent.FilePicker;
 import com.theplumteam.worldcontent.BlobInfo;
@@ -25,18 +27,19 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * A place to put a file: a dashed box that says what it accepts ("Skin (PNG 64×64)", "Model
- * (.geo.json)"), takes a file dropped onto it, and opens the file dialog when clicked. Once
- * filled it shows a thumbnail, the file's name and a chip for each check (see
- * {@link FileChecks}), with "Change" and "Remove" links; a refused file shows why in red, keeping
- * the file it had. Where no file dialog can be shown, a click asks for the file's path instead.
+ * A place to put a file: a sunk well, as the menus' fields, with a dashed edge inside it, that
+ * says what it accepts ("Skin (PNG 64×64)", "Model (.geo.json)"), takes a file dropped onto it,
+ * and opens the file dialog when clicked. Once filled it shows a thumbnail, the file's name and a
+ * chip for each check (see {@link FileChecks}), with "Change" and "Remove" links; a refused file
+ * shows why in red, keeping the file it had. Where no file dialog can be shown, a click asks for
+ * the file's path instead.
  *
  * <p>A zone fills one slot, or, made with {@link #many}, takes any number of files and folders
  * at once for the bulk add. {@link CreatorScreen} routes a file dropped anywhere on the window:
  * to the zone under the pointer, else to the only zone that takes that kind of file, else it
  * asks which slot. A zone lights up while the pointer is over it, which on platforms that report
  * the pointer during a drag from the file manager includes the drag, and flashes when a file
- * lands.
+ * lands, in Quick Skin's selection blue.
  *
  * <p>A picked file reaches the screen through the zone's receiver even when the screen was
  * built again meanwhile, so the screen keeps the file in its own state and shows it again with
@@ -52,11 +55,12 @@ public class UiDropZone extends UiNode.Box {
     private static final int PADDING = 5;
     private static final int CHIP_HEIGHT = 11;
     private static final long FLASH_MS = 450;
-    private static final int BACKGROUND = 0xFF111111;
-    private static final int THUMB_BACKGROUND = 0xFF1D1D1D;
-    private static final int EDGE = 0xFF6A6A6A;
-    private static final int EDGE_MANY = 0xFF8A7A3A;
+    private static final int THUMB_BACKGROUND = Surfaces.WELL_HOVER;
+    private static final int EDGE = 0xFF55565A;
+    private static final int EDGE_MANY = 0xFF5A6E8A;
     private static final int EDGE_ERROR = 0xFFB34A4A;
+    // The dashed edge's distance inside the well's border
+    private static final int DASH_INSET = 3;
     private static final int REMOVE = 0xFFFF9A9A;
     private static final int REMOVE_HOVER = 0xFFFFC8C8;
     private static final int ERROR_TEXT = 0xFFFF8080;
@@ -285,7 +289,8 @@ public class UiDropZone extends UiNode.Box {
 
     /** A dialog with a path field, for systems with no file dialog; dropping always works too. */
     private void askForPath() {
-        UiModal dialog = new UiModal(CreatorScreen.tr("drop.path_title"), Component.literal(FilePicker.NO_DIALOG_HINT));
+        UiModal dialog = new UiModal(CreatorScreen.tr("drop.path_title"), Component.literal(FilePicker.NO_DIALOG_HINT))
+                .accent(DialogFrame.Accent.CREATE, Theme.ICON_FILE);
         EditBox field = dialog.field(CreatorScreen.tr("path_hint"), FilePicker.MAX_TYPED_PATH, "",
                 CreatorScreen.tr("path_hint"), text -> { });
         dialog.cancelButton(CommonComponents.GUI_CANCEL);
@@ -380,14 +385,17 @@ public class UiDropZone extends UiNode.Box {
         boolean hovered = hovered(mouseX, mouseY);
         boolean flashing = Util.getMillis() < flashUntil;
         boolean usable = disabledReason == null;
-        graphics.fill(x, y, x + width, y + height, BACKGROUND);
-        if (flashing || (hovered && usable)) {
-            graphics.fill(x, y, x + width, y + height, flashing ? 0x40FFD84A : 0x18FFD84A);
+        boolean lit = (hovered && usable) || flashing;
+        int border = error != null ? EDGE_ERROR : lit ? Theme.SELECTED : Surfaces.BORDER;
+        Draw.well(graphics, x, y, width, height, border);
+        if (lit) {
+            graphics.fill(x + 2, y + 2, x + width - 2, y + height - 2, flashing ? 0x406FA0FF : 0x186FA0FF);
         }
-        int edge = error != null ? EDGE_ERROR
-                : (hovered && usable) || flashing ? Theme.GOLD
-                : slot == null ? EDGE_MANY : EDGE;
-        Draw.dashed(graphics, x, y, width, height, edge);
+        if (!compact()) {
+            int edge = error != null ? EDGE_ERROR : lit ? Theme.SELECTED : slot == null ? EDGE_MANY : EDGE;
+            Draw.dashed(graphics, x + DASH_INSET, y + DASH_INSET, width - 2 * DASH_INSET, height - 2 * DASH_INSET,
+                    edge);
+        }
 
         List<Component> tooltip = new ArrayList<>();
         if (compact()) {
@@ -419,7 +427,7 @@ public class UiDropZone extends UiNode.Box {
             Rect change = changeLink(font);
             Rect remove = removeLink(font);
             drawLink(graphics, font, CreatorScreen.tr("drop.change"), change, change.contains(mouseX, mouseY),
-                    Theme.GOLD, Theme.GOLD_LIGHT);
+                    Theme.LINK, Theme.LINK_HOVER);
             if (remove != null) {
                 drawLink(graphics, font, CreatorScreen.tr("drop.remove"), remove, remove.contains(mouseX, mouseY),
                         REMOVE, REMOVE_HOVER);
@@ -429,7 +437,7 @@ public class UiDropZone extends UiNode.Box {
         int room = Math.max(10, right - textX);
         int line = y + PADDING;
         if (info == null) {
-            graphics.drawString(font, Draw.cut(font, label.getString(), room), textX, line, Theme.TEXT, false);
+            Draw.text(graphics, font, label.getString(), textX, line, room, Theme.TEXT);
             if (error != null) {
                 Draw.lines(graphics, font, error.getString(), textX, line + 12, room, 2, ERROR_TEXT);
                 tooltip.add(error);
@@ -438,7 +446,7 @@ public class UiDropZone extends UiNode.Box {
             }
             return;
         }
-        graphics.drawString(font, Draw.cut(font, fileName, room), textX, line, Theme.TEXT, false);
+        Draw.text(graphics, font, fileName, textX, line, room, Theme.TEXT);
         if (error != null) {
             Draw.text(graphics, font, error.getString(), textX, line + 13, room, ERROR_TEXT);
             tooltip.add(error);
@@ -454,7 +462,7 @@ public class UiDropZone extends UiNode.Box {
         int textY = y + (height - 8) / 2;
         int left = x + PADDING;
         int column = labelWidth >= 0 ? labelWidth : font.width(label) + 8;
-        graphics.drawString(font, Draw.cut(font, label.getString(), column - 4), left, textY, Theme.CONTROL_TEXT, false);
+        Draw.text(graphics, font, label.getString(), left, textY, column - 4, Theme.CONTROL_TEXT);
         left += column;
         int right = x + width - PADDING;
         if (info != null && onRemove != null) {
@@ -510,7 +518,7 @@ public class UiDropZone extends UiNode.Box {
             return;
         }
         if (info == null) {
-            Draw.centred(graphics, font, "+", left + size / 2, top + (size - 8) / 2, size, Theme.GOLD);
+            Draw.centred(graphics, font, "+", left + size / 2, top + (size - 8) / 2, size, Theme.SELECTED_LIGHT);
             return;
         }
         ResourceLocation texture = info.type() == BlobType.PNG && sha != null ? WorldContentIds.texture(sha) : null;
@@ -529,7 +537,7 @@ public class UiDropZone extends UiNode.Box {
         Draw.centred(graphics, font, kind, left + size / 2, top + (size - 8) / 2, size, Theme.MUTED);
     }
 
-    /** The folder of the mockup's bulk zone, 17 by 14, in gold. */
+    /** The folder of the mockup's bulk zone, 17 by 14, in a folder's yellow. */
     private static void drawFolder(GuiGraphics graphics, int left, int top) {
         graphics.fill(left, top + 2, left + 6, top + 4, Theme.GOLD);
         graphics.fill(left + 6, top + 3, left + 8, top + 4, Theme.GOLD);
@@ -573,7 +581,7 @@ public class UiDropZone extends UiNode.Box {
     public static int drawCheck(GuiGraphics graphics, Font font, FileChecks.Check check, int left, int top) {
         int chip = chipWidth(font, check);
         Draw.outline(graphics, left, top, chip, CHIP_HEIGHT, check.mark().border());
-        graphics.drawString(font, check.label(), left + 3, top + 2, check.mark().text(), false);
+        Draw.string(graphics, font, check.label(), left + 3, top + 2, check.mark().text());
         return chip;
     }
 
@@ -595,7 +603,7 @@ public class UiDropZone extends UiNode.Box {
     private static void drawLink(GuiGraphics graphics, Font font, Component text, Rect at, boolean hovered,
                                  int colour, int hoverColour) {
         int shown = hovered ? hoverColour : colour;
-        graphics.drawString(font, text, at.x(), at.y(), shown, false);
+        Draw.string(graphics, font, text, at.x(), at.y(), shown);
         graphics.fill(at.x(), at.y() + 9, at.right(), at.y() + 10, shown);
     }
 

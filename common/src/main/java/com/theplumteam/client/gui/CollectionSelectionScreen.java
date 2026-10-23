@@ -1,5 +1,9 @@
 package com.theplumteam.client.gui;
 
+import com.theplumteam.client.gui.style.MenuGuiScale;
+import com.theplumteam.client.gui.style.StyledButton;
+import com.theplumteam.client.gui.style.Surfaces;
+import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.gui.util.GuiPose;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -22,9 +26,9 @@ import com.theplumteam.client.ClientHiddenCollections;
 import com.theplumteam.client.ClientSpecialAccess;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
-import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.client.gui.widget.CollectionEntry;
 import com.theplumteam.client.gui.widget.CollectionListWidget;
+import com.theplumteam.client.gui.widget.FigureEntry;
 import com.theplumteam.client.gui.widget.FigureListWidget;
 import com.theplumteam.client.gui.widget.TabButton;
 import com.theplumteam.client.gui.widget.LinkButton;
@@ -60,10 +64,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Polished collection selection screen for the Claw Machine
- * Inspired by modern UI design with panel-based layout
+ * The claw and gacha machines' menu, laid out as Quick Skin's menus are: no panel, but groups of
+ * controls standing on the machine's starry background. The figure and plush tabs and the link
+ * buttons share the top row; under them the collections and the selected collection's figures
+ * stand in two columns, each on a translucent backdrop; the token buttons and Done run along the
+ * bottom, with the token counts above their buttons.
+ *
+ * <p>The menu draws at its own GUI scale, chosen from the window size ({@link MenuGuiScale}), so
+ * it looks the same whatever scale the player picked, and lays itself out from the canvas that
+ * gives: the columns share the width, and the figure grid fits as many columns of cells as the
+ * right column holds.
  */
-public class CollectionSelectionScreen extends Screen {
+public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Scaled {
     private static final Logger LOGGER = LoggerFactory.getLogger(CollectionSelectionScreen.class);
 
     private final BlockPos blockPos;
@@ -92,19 +104,37 @@ public class CollectionSelectionScreen extends Screen {
     private Button useRegularButton;
     private Button useSpecialButton;
     private Button doneButton;
-    @Nullable
-    private TabButton.Folder selectedTab;
 
-    // Panel dimensions
-    private int panelX;
-    private int panelY;
-    private int panelWidth;
-    private int panelHeight;
+    // The layout, from the canvas: the two columns between the top row and the token row
+    private int bodyTop;
+    private int bodyBottom;
+    private int leftX;
+    private int leftWidth;
+    private int rightX;
+    private int rightWidth;
+    private int tokenInfoY;
+    private int regularCenterX;
+    private int specialCenterX;
+    private int tokenButtonWidth;
 
-    // Constants
-    private static final int MIN_PANEL_WIDTH = 500;
-    private static final int MAX_PANEL_WIDTH = 1200;
-    private static final int MIN_PANEL_HEIGHT = 400;
+    private static final int MARGIN = 8;
+    private static final int GAP = 6;
+    // A column's header: its title over a line of detail, then a hairline
+    private static final int COLUMN_HEADER = 30;
+    private static final int LINK_SIZE = 24;
+    private static final int LINK_SPACING = 3;
+    private static final float BUTTON_HEIGHT_SHARE = 0.075f;
+    private static final int MIN_BUTTON_HEIGHT = 22;
+    private static final int MAX_BUTTON_HEIGHT = 28;
+    // The collection cards, as Quick Skin's skin cards: the card and the gap under it
+    private static final int COLLECTION_ROW = 48;
+    // The figure cells: four columns of the usual size, shrinking in a narrow window to keep
+    // four, or three, columns
+    private static final int MIN_CELL_FOR_FOUR = 60;
+    // Room the figure list takes beside its cells: the row's inset and the scroll bar
+    private static final int GRID_CHROME = 24;
+    private static final int MIN_CELL_FOR_THREE = 56;
+    private static final int ROW_GAP = 10;
 
     // Color transition fields
     private float currentColorR;
@@ -117,21 +147,18 @@ public class CollectionSelectionScreen extends Screen {
     private static final float COLOR_TRANSITION_SPEED = 0.05f; // Higher = faster transition
     private static final float COLOR_SNAP_THRESHOLD = 0.95f; // Snap to target when progress >= this value
 
-    // GUI scale management
-    private boolean guiScaleForced = false;
-    private boolean isClosing = false;
-
     // Icon textures
     private static final ResourceLocation DISCORD_ICON = ResourceLocations.of("blockpops", "textures/gui/discord_icon.png");
     private static final ResourceLocation CURSEFORGE_ICON = ResourceLocations.of("blockpops", "textures/gui/curseforge_icon.png");
     private static final ResourceLocation MODRINTH_ICON = ResourceLocations.of("blockpops", "textures/gui/modrinth_icon.png");
-
-    // Icon textures
     private static final ResourceLocation SETTINGS_ICON = ResourceLocations.of("blockpops", "textures/gui/settings_icon.png");
     private static final ResourceLocation KOFI_ICON = ResourceLocations.of("blockpops", "textures/gui/kofi_icon.png");
 
     // The purple the BlockPops-Hytale project gives its specials
     private static final int SPECIAL_COLOR = 0xFFBB8FCE;
+    private static final int REGULAR_TOKEN_COLOR = 0xFF6FA0FF;
+    private static final int GUARANTEED_TOKEN_COLOR = 0xFFFFC23A;
+    private static final int HAIRLINE = 0x30FFFFFF;
 
     // URLs
     private static final String DISCORD_URL = "https://discord.gg/yGxdvA7qej";
@@ -252,6 +279,11 @@ public class CollectionSelectionScreen extends Screen {
 
     @Override
     protected void init() {
+        // The menu draws at its own GUI scale, chosen from the window size, so it looks the same
+        // whatever scale the player picked; a window resize runs init() again
+        if (this.minecraft != null) {
+            MenuGuiScale.enter(this.minecraft, this);
+        }
         if (shownWorldRevision != ClientWorldCollections.revision() && !FigureDraw.isBusy()) {
             // Back from the creator, straight or through the settings: it may have published,
             // archived or edited a collection, and the machine may now hold a new one
@@ -262,77 +294,92 @@ public class CollectionSelectionScreen extends Screen {
         // Pre-initialize the shared figure renderer to avoid lag on first render
         FigureWidgetRenderer.ensureInitialized();
 
-        // Force GUI scale for consistent appearance
-        if (!guiScaleForced && !isClosing) {
-            guiScaleForced = true;
-            int optimalScale = GuiScaleManager.getOptimalMenuScale();
-            if (GuiScaleManager.setMenuGuiScale(optimalScale)) {
-                // Scale was changed and resizeDisplay() was called, which will trigger init() again
-                return;
-            }
-        }
-
         super.init();
         clearWidgets();
 
-        // Calculate panel dimensions
-        calculatePanelDimensions();
+        // The menu is a block centred on the canvas: the collections column, and the figures
+        // column as wide as its grid of up to four cells of the usual size needs
+        int available = this.width - 2 * MARGIN;
+        leftWidth = Mth.clamp(Math.round((available - GAP) * 0.40f), 170, 280);
+        int gridRoom = available - leftWidth - GAP - GRID_CHROME;
+        int columns = 4;
+        int cell = Math.min(FigureEntry.FIGURE_SIZE, (gridRoom - 3 * FigureEntry.GRID_SPACING) / 4);
+        if (cell < MIN_CELL_FOR_FOUR) {
+            columns = 3;
+            cell = Math.min(FigureEntry.FIGURE_SIZE, (gridRoom - 2 * FigureEntry.GRID_SPACING) / 3);
+            if (cell < MIN_CELL_FOR_THREE) {
+                columns = 2;
+                cell = Math.min(FigureEntry.FIGURE_SIZE, (gridRoom - FigureEntry.GRID_SPACING) / 2);
+            }
+        }
+        rightWidth = Math.min(available - leftWidth - GAP, FigureListWidget.rowWidth(cell, columns) + GRID_CHROME);
+        int contentWidth = leftWidth + GAP + rightWidth;
+        int contentLeft = (this.width - contentWidth) / 2;
+        int contentRight = contentLeft + contentWidth;
+        leftX = contentLeft;
+        rightX = leftX + leftWidth + GAP;
 
-        int scaledPadding = 10;
-        int scaledSpacing = 6;
-        int scaledComponentHeight = 20;
+        // The bottom row: the token buttons, then the creator's button for an operator in a
+        // development game, then Done; the token counts stand on a line above their buttons
+        int buttonHeight = Mth.clamp(Math.round(this.height * BUTTON_HEIGHT_SHARE), MIN_BUTTON_HEIGHT, MAX_BUTTON_HEIGHT);
+        int footTop = this.height - MARGIN - buttonHeight;
+        tokenInfoY = footTop - 4 - font.lineHeight;
+        shownCreator = SettingsScreen.canOpenCreator();
+        int doneWidth = Mth.clamp(Math.round(contentWidth * 0.16f), 70, 110);
+        int creatorWidth = shownCreator ? Mth.clamp(Math.round(contentWidth * 0.15f), 70, 100) : 0;
+        int tokensWidth = contentWidth - doneWidth - GAP - (shownCreator ? creatorWidth + GAP : 0);
+        tokenButtonWidth = (tokensWidth - GAP) / 2;
 
-        // Calculate layout
-        int leftPanelWidth = (int) (panelWidth * 0.45f);
-        int rightPanelWidth = (int) (panelWidth * 0.50f);
+        useRegularButton = new StyledButton(contentLeft, footTop, tokenButtonWidth, buttonHeight,
+                Component.literal("Use Regular Token"), button -> useToken(TokenType.REGULAR)).pixelLabel();
+        this.addRenderableWidget(useRegularButton);
+        int specialX = contentLeft + tokenButtonWidth + GAP;
+        useSpecialButton = new StyledButton(specialX, footTop, tokenButtonWidth, buttonHeight,
+                Component.literal("Use Guaranteed Token"), button -> useToken(TokenType.GUARANTEED)).pixelLabel();
+        this.addRenderableWidget(useSpecialButton);
+        regularCenterX = contentLeft + tokenButtonWidth / 2;
+        specialCenterX = specialX + tokenButtonWidth / 2;
 
-        int componentX = panelX + scaledPadding;
-        int yPos = panelY + scaledPadding + scaledComponentHeight + scaledPadding;
+        int doneX = contentRight - doneWidth;
+        if (shownCreator) {
+            this.addRenderableWidget(new StyledButton(doneX - GAP - creatorWidth, footTop, creatorWidth, buttonHeight,
+                    Component.translatable("blockpops.world_creator.machine_button"),
+                    button -> SettingsScreen.openCreator(this, blockPos)));
+        }
+        doneButton = new StyledButton(doneX, footTop, doneWidth, buttonHeight, Component.literal("Done"),
+                button -> onClose()).tone(StyledButton.Tone.PRIMARY).pixelLabel();
+        this.addRenderableWidget(doneButton);
+        updateTokenButtonStates();
 
-        // Calculate heights
-        int topSectionHeight = scaledPadding + scaledComponentHeight + scaledPadding;
-        // Bottom section: token info text + spacing + token buttons + spacing + done button + padding
-        int tokenInfoHeight = font.lineHeight + scaledSpacing; // Space for token info text above buttons
-        int extraBottomSpacing = 5; // Additional spacing between lists and token info
-        int bottomSectionHeight = tokenInfoHeight + (scaledComponentHeight * 2) + scaledSpacing + scaledPadding + extraBottomSpacing;
-        int listHeight = panelHeight - topSectionHeight - bottomSectionHeight;
+        // The top row: the figure and plush tabs on the left, the link buttons on the right
+        TabButton.Folder figuresTab = new TabButton.Folder(contentLeft, MARGIN, Component.literal("Figures"),
+                new ItemStack(ModItems.CLAW_MACHINE_BLOCK_ITEM.get()), !plush, button -> switchTab(false));
+        TabButton.Folder plushesTab = new TabButton.Folder(figuresTab.right() + GAP, MARGIN, Component.literal("Plushes"),
+                new ItemStack(ModItems.GACHA_MACHINE_BLOCK_ITEM.get()), plush, button -> switchTab(true));
+        this.addRenderableWidget(figuresTab);
+        this.addRenderableWidget(plushesTab);
+        addLinkButtons(contentRight, MARGIN + (TabButton.Folder.HEIGHT - LINK_SIZE) / 2);
 
-        // Create collection list on the left (full height - header will render on top)
-        int collectionHeaderHeight = 30; // Space for "Collections" header (for rendering only)
-        collectionListWidget = new CollectionListWidget(
-                this,
-                this.minecraft,
-                leftPanelWidth,
-                listHeight, // Full height - allow scrolling under header
-                yPos, // Start at same Y as before
-                55 // Entry height - adjusted for optimal spacing
-        );
-        collectionListWidget.setLeftPos(componentX);
+        // The two columns between the rows: the collections, then the figures
+        bodyTop = MARGIN + TabButton.Folder.HEIGHT + GAP;
+        bodyBottom = tokenInfoY - GAP;
+        int listTop = bodyTop + COLUMN_HEADER;
+        int listHeight = Math.max(COLLECTION_ROW, bodyBottom - 2 - listTop);
+
+        collectionListWidget = new CollectionListWidget(this, this.minecraft, leftWidth - 4, listHeight, listTop,
+                COLLECTION_ROW);
+        collectionListWidget.setLeftPos(leftX + 2);
         collectionListWidget.setRenderBackground(false);
         collectionListWidget.setRenderTopAndBottom(false);
-        // Add for input handling only - we'll render manually outside the scaled pose
+        // Added for input only: the screen draws the lists between its backdrops and its widgets
         this.addWidget(collectionListWidget);
-
-        // Load collections
         loadCollections();
 
-        // Create figure list on the right (full height - header will render on top)
-        int previewX = panelX + panelWidth - rightPanelWidth - scaledPadding;
-        int headerHeight = 50; // Space for collection name, count, and separator (for rendering only)
-        int figureListY = yPos; // Start at same Y as collection list
-        int figureListHeight = listHeight; // Full height - allow scrolling under header
-
-        figureListWidget = new FigureListWidget(
-                this.minecraft,
-                rightPanelWidth,
-                figureListHeight,
-                figureListY,
-                90 // Entry height for figure cells
-        );
-        figureListWidget.setLeftPos(previewX);
+        figureListWidget = new FigureListWidget(this.minecraft, rightWidth - 4, listHeight, listTop, cell + ROW_GAP);
+        figureListWidget.setLeftPos(rightX + 2);
+        figureListWidget.setGrid(cell, columns);
         figureListWidget.setRenderBackground(false);
         figureListWidget.setRenderTopAndBottom(false);
-        // Add for input handling only - we'll render manually outside the scaled pose
         this.addWidget(figureListWidget);
 
         // Update preview if there's a selected collection
@@ -344,75 +391,19 @@ public class CollectionSelectionScreen extends Screen {
             });
         }
 
-        // Bottom buttons
-        int bottomY = panelY + panelHeight - scaledPadding;
-        int fullWidthX = panelX + scaledPadding;
-        int fullComponentWidth = panelWidth - (scaledPadding * 2);
-
-        // Done button (bottom-most), sharing its row with the creator's button for an operator
-        // in a development game; for everyone else the row is as it always was
-        bottomY -= scaledComponentHeight;
-        shownCreator = SettingsScreen.canOpenCreator();
-        int creatorWidth = shownCreator ? Math.min(100, fullComponentWidth / 3) : 0;
-        int doneWidth = shownCreator ? fullComponentWidth - creatorWidth - scaledSpacing : fullComponentWidth;
-        doneButton = Button.builder(Component.literal("Done"), button -> onClose())
-                .bounds(fullWidthX, bottomY, doneWidth, scaledComponentHeight)
-                .build();
-        this.addRenderableWidget(doneButton);
-        if (shownCreator) {
-            this.addRenderableWidget(Button.builder(Component.translatable("blockpops.world_creator.machine_button"),
-                            button -> SettingsScreen.openCreator(this, blockPos))
-                    .bounds(fullWidthX + doneWidth + scaledSpacing, bottomY, creatorWidth, scaledComponentHeight)
-                    .build());
+        // A machine without a collection opens on the first one of its tab
+        if (!opened) {
+            opened = true;
+            selectFirstCollectionIfNone();
         }
+    }
 
-        // Token buttons (side by side)
-        bottomY -= (scaledComponentHeight + scaledSpacing);
-        int buttonWidth = (fullComponentWidth - scaledSpacing) / 2;
-
-        // Use Regular Token button (left)
-        useRegularButton = Button.builder(Component.literal("Use Regular Token"), button -> {
-            if (selectedCollectionId != null && !selectedCollectionId.isEmpty()) {
-                BlockPopsMod.logDebug("Using regular token for collection: {}", selectedCollectionId);
-                DropBoxPacket packet = new DropBoxPacket(blockPos, selectedCollectionId, TokenType.REGULAR);
-                packet.sendToServer();
-                // The screen stays open to play the draw out
-                FigureDraw.await(selectedCollectionId, false);
-                updateTokenButtonStates();
-            }
-        }).bounds(fullWidthX, bottomY, buttonWidth, scaledComponentHeight).build();
-        this.addRenderableWidget(useRegularButton);
-
-        // Use Guaranteed Token button (right)
-        useSpecialButton = Button.builder(Component.literal("Use Guaranteed Token"), button -> {
-            if (selectedCollectionId != null && !selectedCollectionId.isEmpty()) {
-                BlockPopsMod.logDebug("Using guaranteed token for collection: {}", selectedCollectionId);
-                DropBoxPacket packet = new DropBoxPacket(blockPos, selectedCollectionId, TokenType.GUARANTEED);
-                packet.sendToServer();
-                // The screen stays open to play the draw out
-                FigureDraw.await(selectedCollectionId, true);
-                updateTokenButtonStates();
-            }
-        }).bounds(fullWidthX + buttonWidth + scaledSpacing, bottomY, buttonWidth, scaledComponentHeight).build();
-        this.addRenderableWidget(useSpecialButton);
-
-        updateTokenButtonStates();
-
-        // --- Top-Right Link Buttons (Settings, Discord, CurseForge, Modrinth) ---
-        int buttonSize = 24; // Larger button size (previously scaledComponentHeight which was 20)
-        int linkButtonY = panelY + scaledPadding;
-
-        // Settings button (far right)
-        int settingsButtonX = panelX + panelWidth - buttonSize - scaledPadding;
-        this.addRenderableWidget(new LinkButton(
-                settingsButtonX,
-                linkButtonY,
-                buttonSize,
-                buttonSize,
-                SETTINGS_ICON,
-                null, // No URL, will be handled differently
-                Component.literal("Settings")
-        ) {
+    // Settings at the right edge, then Discord, CurseForge and Modrinth, and Ko-fi on the plush tab
+    private void addLinkButtons(int right, int y) {
+        int x = right - LINK_SIZE;
+        this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, SETTINGS_ICON,
+                null, // No URL: it opens the settings
+                Component.literal("Settings")) {
             @Override
             //? if >=26 {
             /*public void onPress(net.minecraft.client.input.InputWithModifiers bpInput) {
@@ -422,189 +413,77 @@ public class CollectionSelectionScreen extends Screen {
                 openSettingsScreen();
             }
         });
-
-        // Discord button (left of Settings)
-        int discordButtonX = settingsButtonX - buttonSize - scaledSpacing;
-        this.addRenderableWidget(new LinkButton(
-                discordButtonX,
-                linkButtonY,
-                buttonSize,
-                buttonSize,
-                DISCORD_ICON,
-                DISCORD_URL,
-                Component.literal("Join our Discord!")
-        ));
-
-        // CurseForge button (left of Discord)
-        int curseforgeButtonX = discordButtonX - buttonSize - scaledSpacing;
-        this.addRenderableWidget(new LinkButton(
-                curseforgeButtonX,
-                linkButtonY,
-                buttonSize,
-                buttonSize,
-                CURSEFORGE_ICON,
-                CURSEFORGE_URL,
-                Component.literal("Visit our CurseForge page")
-        ));
-
-        // Modrinth button (left of CurseForge)
-        int modrinthButtonX = curseforgeButtonX - buttonSize - scaledSpacing;
-        this.addRenderableWidget(new LinkButton(
-                modrinthButtonX,
-                linkButtonY,
-                buttonSize,
-                buttonSize,
-                MODRINTH_ICON,
-                MODRINTH_URL,
-                Component.literal("Visit our Modrinth page")
-        ));
-
+        x -= LINK_SIZE + LINK_SPACING;
+        this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, DISCORD_ICON, DISCORD_URL,
+                Component.literal("Join our Discord!")));
+        x -= LINK_SIZE + LINK_SPACING;
+        this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, CURSEFORGE_ICON, CURSEFORGE_URL,
+                Component.literal("Visit our CurseForge page")));
+        x -= LINK_SIZE + LINK_SPACING;
+        this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, MODRINTH_ICON, MODRINTH_URL,
+                Component.literal("Visit our Modrinth page")));
         if (plush) {
-            // Ko-fi button (left of Modrinth): the special plushes are for supporters
-            int kofiButtonX = modrinthButtonX - buttonSize - scaledSpacing;
-            this.addRenderableWidget(new LinkButton(
-                    kofiButtonX,
-                    linkButtonY,
-                    buttonSize,
-                    buttonSize,
-                    KOFI_ICON,
-                    SpecialAccess.SUPPORT_URL,
-                    Component.literal("Support us on Ko-fi to get the special plushes")
-            ));
-        }
-
-        // Folder tabs on the panel's top edge: the figure collections and the plush ones
-        int panelBg = panelBackgroundColor();
-        Component figuresLabel = Component.literal("Figures");
-        TabButton.Folder figuresTab = new TabButton.Folder(panelX + scaledPadding, panelY, figuresLabel,
-                new ItemStack(ModItems.CLAW_MACHINE_BLOCK_ITEM.get()), !plush, panelBg, button -> switchTab(false));
-        TabButton.Folder plushesTab = new TabButton.Folder(figuresTab.right() + 2, panelY, Component.literal("Plushes"),
-                new ItemStack(ModItems.GACHA_MACHINE_BLOCK_ITEM.get()), plush, panelBg, button -> switchTab(true));
-        this.addRenderableWidget(figuresTab);
-        this.addRenderableWidget(plushesTab);
-        selectedTab = plush ? plushesTab : figuresTab;
-
-        // A machine without a collection opens on the first one of its tab
-        if (!opened) {
-            opened = true;
-            selectFirstCollectionIfNone();
+            // The special plushes are for supporters
+            x -= LINK_SIZE + LINK_SPACING;
+            this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, KOFI_ICON, SpecialAccess.SUPPORT_URL,
+                    Component.literal("Support us on Ko-fi to get the special plushes")));
         }
     }
 
-    /**
-     * Calculate panel dimensions based on screen size.
-     * Uses virtual dimensions when inverse scale is active (shaders).
-     */
-    private void calculatePanelDimensions() {
-        // Use virtual dimensions when shaders are active for consistent layout
-        int screenWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
-        int screenHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
-
-        int desiredWidth = (int)(screenWidth * 0.8f);
-        int desiredHeight = (int)(screenHeight * 0.85f);
-
-        panelWidth = Mth.clamp(
-                desiredWidth,
-                MIN_PANEL_WIDTH,
-                Math.min(MAX_PANEL_WIDTH, screenWidth - 60)
-        );
-
-        panelHeight = Mth.clamp(
-                desiredHeight,
-                MIN_PANEL_HEIGHT,
-                screenHeight - 60
-        );
-
-        // Center the panel
-        panelX = (screenWidth - panelWidth) / 2;
-        panelY = (screenHeight - panelHeight) / 2;
+    // Spends a token on the selected collection; the screen stays open to play the draw out
+    private void useToken(TokenType type) {
+        if (selectedCollectionId == null || selectedCollectionId.isEmpty()) {
+            return;
+        }
+        BlockPopsMod.logDebug("Using {} token for collection: {}", type, selectedCollectionId);
+        new DropBoxPacket(blockPos, selectedCollectionId, type).sendToServer();
+        FigureDraw.await(selectedCollectionId, type == TokenType.GUARANTEED);
+        updateTokenButtonStates();
     }
 
     @Override
     public void removed() {
         super.removed();
-        // Only restore GUI scale if we are actually closing (not just opening a modal)
-        if (isClosing) {
-            restoreGuiScaleIfNeeded();
+        // The next screen, a dialog or the world opens at the player's own scale
+        if (this.minecraft != null) {
+            MenuGuiScale.restore(this.minecraft);
         }
     }
 
     @Override
     public void onClose() {
-        // Mark that we are truly closing (not just opening a modal)
-        isClosing = true;
         FigureDraw.reset();
-        // Restore GUI scale before closing
-        restoreGuiScaleIfNeeded();
         super.onClose();
-    }
-
-    /**
-     * Restore the original GUI scale if it was forced by this screen.
-     */
-    private void restoreGuiScaleIfNeeded() {
-        if (guiScaleForced) {
-            guiScaleForced = false;
-            GuiScaleManager.restoreOriginalGuiScale();
-        }
     }
 
     //? if >=1.21 && <1.21.6 {
     /*@Override
     public void renderBackground(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         // This screen draws its own opaque background before Screen.render, which on
-        // 1.21 to 1.21.5 calls this vanilla pass and would blur the panel on top of it.
+        // 1.21 to 1.21.5 calls this vanilla pass and would blur the screen on top of it.
     }
     *///? }
 
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // Transform mouse coordinates if using inverse scale (shaders active)
-        int adjustedMouseX = mouseX;
-        int adjustedMouseY = mouseY;
-        if (GuiScaleManager.isUsingInverseScale()) {
-            adjustedMouseX = (int) GuiScaleManager.transformMouseX(mouseX);
-            adjustedMouseY = (int) GuiScaleManager.transformMouseY(mouseY);
-        }
-
-        // Apply inverse scale transformation if shaders are active
-        if (GuiScaleManager.isUsingInverseScale()) {
-            GuiPose.push(graphics);
-            float scale = GuiScaleManager.getRenderScaleFactor();
-            GuiPose.scale(graphics, scale, scale);
-        }
-
-        // Render animated starry background
+        // The machine's colour and its scrolling stars, then a backdrop under each column
         renderBackgroundEffects(graphics, partialTick);
+        int backdropAlpha = (int) (ClientConfig.getInstance().panelOpacity * 200);
+        Surfaces.backdrop(graphics, leftX, bodyTop, leftX + leftWidth, bodyBottom, backdropAlpha);
+        Surfaces.backdrop(graphics, rightX, bodyTop, rightX + rightWidth, bodyBottom, backdropAlpha);
 
-        // Render panel background (frosted glass effect)
-        renderPanel(graphics);
-
-        // Render widgets (buttons, etc. - lists are rendered separately)
-        super.render(graphics, adjustedMouseX, adjustedMouseY, partialTick);
-
-        // Render token information header (replacing title)
-        renderTokenInfo(graphics);
-
-        // Render collection list header (after widgets so it appears on top of scrollable content)
-        renderCollectionListHeader(graphics);
-
-        // Render figure panel header (after widgets so it appears on top of scrollable content)
-        renderFigurePanelHeader(graphics);
-
-        // Pop the inverse scale transformation before rendering lists
-        if (GuiScaleManager.isUsingInverseScale()) {
-            GuiPose.pop(graphics);
-        }
-
-        // Render lists OUTSIDE the scaled pose - they handle their own scaling
-        // Pass virtual mouse coordinates (same as mouseClicked) for consistency
         if (collectionListWidget != null) {
-            collectionListWidget.render(graphics, adjustedMouseX, adjustedMouseY, partialTick);
+            collectionListWidget.render(graphics, mouseX, mouseY, partialTick);
         }
         if (figureListWidget != null) {
-            figureListWidget.render(graphics, adjustedMouseX, adjustedMouseY, partialTick);
+            figureListWidget.render(graphics, mouseX, mouseY, partialTick);
         }
+        renderCollectionListHeader(graphics);
+        renderFigurePanelHeader(graphics);
+        renderTokenInfo(graphics);
+
+        // The buttons, tabs and links
+        super.render(graphics, mouseX, mouseY, partialTick);
 
         renderDrawResult(graphics, partialTick);
     }
@@ -625,84 +504,48 @@ public class CollectionSelectionScreen extends Screen {
         return figureListWidget;
     }
 
-    /**
-     * Render the header for the collection list panel
-     */
+    /** The collections column's header: its title, how many there are, and a hairline. */
     private void renderCollectionListHeader(GuiGraphics graphics) {
         if (collectionListWidget == null) {
             return;
         }
-
-        int scaledPadding = 10;
-        int scaledComponentHeight = 20;
-        int leftPanelWidth = (int) (panelWidth * 0.45f);
-        int componentX = panelX + scaledPadding;
-
-        // Header starts at the top of the panel
-        int headerStartY = panelY + scaledPadding;
-        int headerHeight = scaledComponentHeight + scaledPadding; // Full top section height
-
-        int currentY = headerStartY + 4;
-
-        // Collection list title
-        graphics.drawString(this.font, "Collections",
-                componentX + 8, currentY, 0xFFFFFFFF, false);
-        currentY += font.lineHeight + 4;
-
-        // Collection count
-        String collectionCount = collectionListWidget.children().size() + " collections available";
-        graphics.drawString(this.font, collectionCount,
-                componentX + 8, currentY, 0xFFAAAAAA, false);
-
-        // Separator line (below the collection count)
-        currentY += font.lineHeight + 4;
-        graphics.fill(componentX + 8, currentY, componentX + leftPanelWidth - 8, currentY + 1, 0x40FFFFFF);
+        int x = leftX + 8;
+        int y = bodyTop + 6;
+        int room = leftWidth - 16;
+        UiText.drawFitted(graphics, this.font, "Collections", x, y, room, Surfaces.TEXT);
+        UiText.drawFitted(graphics, this.font, collectionListWidget.children().size() + " collections available",
+                x, y + font.lineHeight + 2, room, Surfaces.TEXT_DIM);
+        graphics.fill(x, bodyTop + COLUMN_HEADER - 3, leftX + leftWidth - 8, bodyTop + COLUMN_HEADER - 2, HAIRLINE);
     }
 
-    /**
-     * Render the header for the figure preview panel
-     */
+    /** The figures column's header: the collection's name, its figure count, and a hairline. */
     private void renderFigurePanelHeader(GuiGraphics graphics) {
         if (figureListWidget == null) {
             return;
         }
-
         FigureCollection collection = figureListWidget.getCurrentCollection();
         if (collection == null) {
             return;
         }
+        int x = rightX + 8;
+        int y = bodyTop + 6;
+        int room = rightWidth - 16;
+        UiText.drawFitted(graphics, this.font, collection.getName(), x, y, room, Surfaces.TEXT);
 
-        int scaledPadding = 10;
-        int scaledComponentHeight = 20;
-        int rightPanelWidth = (int) (panelWidth * 0.50f);
-        int previewX = panelX + panelWidth - rightPanelWidth - scaledPadding;
-
-        // Header starts at the top of the panel
-        int headerStartY = panelY + scaledPadding;
-
-        int currentY = headerStartY + 4;
-
-        // Collection name
-        graphics.drawString(this.font, collection.getName(),
-                previewX + 8, currentY, 0xFFFFFFFF, false);
-        currentY += font.lineHeight + 4;
-
-        // Figure count
         String figureCount = collection.getRegularFigures().size() + " figures"
                 + (collection.hasSpecials() ? " and " + collection.getSpecialFigures().size() + " specials" : "")
                 + " in this collection";
-        graphics.drawString(this.font, figureCount,
-                previewX + 8, currentY, 0xFFAAAAAA, false);
-
         // Tell a player the server gives this collection's specials to
-        if (collection.hasSpecials() && ClientSpecialAccess.has(collection.getId())) {
-            graphics.drawString(this.font, "Special access",
-                    previewX + 8 + font.width(figureCount) + 8, currentY, SPECIAL_COLOR, false);
+        boolean specialAccess = collection.hasSpecials() && ClientSpecialAccess.has(collection.getId());
+        String access = "Special access";
+        int countRoom = specialAccess ? room - font.width(access) - 8 : room;
+        String shownCount = UiText.fit(this.font, figureCount, countRoom);
+        UiText.draw(graphics, this.font, shownCount, x, y + font.lineHeight + 2, Surfaces.TEXT_DIM);
+        if (specialAccess) {
+            UiText.draw(graphics, this.font, access, x + font.width(shownCount) + 8, y + font.lineHeight + 2,
+                    SPECIAL_COLOR);
         }
-
-        // Separator line (full width - will render on top of buttons)
-        currentY += font.lineHeight + 4;
-        graphics.fill(previewX + 8, currentY, previewX + rightPanelWidth - 8, currentY + 1, 0x40FFFFFF);
+        graphics.fill(x, bodyTop + COLUMN_HEADER - 3, rightX + rightWidth - 8, bodyTop + COLUMN_HEADER - 2, HAIRLINE);
     }
 
     /**
@@ -748,9 +591,7 @@ public class CollectionSelectionScreen extends Screen {
         int bgGreen = (int)(lerpedG * 255);
         int bgBlue = (int)(lerpedB * 255);
         int bgColor = 0xFF000000 | (bgRed << 16) | (bgGreen << 8) | bgBlue;
-        int bgWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
-        int bgHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
-        graphics.fill(0, 0, bgWidth, bgHeight, bgColor);
+        graphics.fill(0, 0, this.width, this.height, bgColor);
 
         //? if <1.21.5 {
         // Finish buffered base fills before the immediate textured quad draws.
@@ -758,19 +599,10 @@ public class CollectionSelectionScreen extends Screen {
         //? }
 
         // 2. Render the moving star pattern
-        renderStarPattern(graphics, partialTick);
+        drawStarPattern(graphics, this.width, this.height, partialTick);
 
-        // Close the background layer so the panel and its text draw above it
+        // Close the background layer so the columns and their text draw above it
         GuiPose.nextStratum(graphics);
-    }
-
-    /**
-     * Render the animated star pattern (OPTIMIZED - pre-tiled texture cache, 1 draw call)
-     */
-    private void renderStarPattern(GuiGraphics graphics, float partialTick) {
-        int starWidth = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualWidth() : this.width;
-        int starHeight = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getVirtualHeight() : this.height;
-        drawStarPattern(graphics, starWidth, starHeight, partialTick);
     }
 
     /**
@@ -897,35 +729,6 @@ public class CollectionSelectionScreen extends Screen {
         RenderSystem.disableBlend();
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         //? }
-    }
-
-    /**
-     * Render the main panel with frosted glass effect
-     */
-    private void renderPanel(GuiGraphics graphics) {
-        // Panel background (dark semi-transparent with configurable opacity)
-        graphics.fill(
-                panelX, panelY,
-                panelX + panelWidth, panelY + panelHeight,
-                panelBackgroundColor()
-        );
-
-        // Panel outline (subtle white), open under the selected tab
-        if (selectedTab != null) {
-            graphics.fill(panelX, panelY, selectedTab.left() + 1, panelY + 1, 0x60FFFFFF);
-            graphics.fill(selectedTab.right() - 1, panelY, panelX + panelWidth, panelY + 1, 0x60FFFFFF);
-        } else {
-            graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 1, 0x60FFFFFF);
-        }
-        graphics.fill(panelX, panelY + panelHeight - 1, panelX + panelWidth, panelY + panelHeight, 0x60FFFFFF);
-        graphics.fill(panelX, panelY + 1, panelX + 1, panelY + panelHeight - 1, 0x60FFFFFF);
-        graphics.fill(panelX + panelWidth - 1, panelY + 1, panelX + panelWidth, panelY + panelHeight - 1, 0x60FFFFFF);
-    }
-
-    /** Black with the configured panel opacity. */
-    private static int panelBackgroundColor() {
-        int alpha = (int) (ClientConfig.getInstance().panelOpacity * 255);
-        return alpha << 24;
     }
 
     /**
@@ -1064,59 +867,42 @@ public class CollectionSelectionScreen extends Screen {
      * Render token information centered above each respective button
      */
     private void renderTokenInfo(GuiGraphics graphics) {
-        int scaledPadding = 10;
-        int scaledSpacing = 6;
-        int scaledComponentHeight = 20;
-
-        // Calculate position to be above the token buttons
-        int bottomY = panelY + panelHeight - scaledPadding;
-        bottomY -= scaledComponentHeight; // Done button
-        bottomY -= (scaledComponentHeight + scaledSpacing); // Token buttons
-        int tokenInfoY = bottomY - font.lineHeight - scaledSpacing; // Above the token buttons
-
-        // Colors
-        int blueColor = 0xFF5599FF;  // Blue for regular tokens
-        int goldColor = 0xFFFFD700;  // Gold for guaranteed tokens
-
-        // Calculate button positions (same as in init())
-        int fullWidthX = panelX + scaledPadding;
-        int fullComponentWidth = panelWidth - (scaledPadding * 2);
-        int buttonWidth = (fullComponentWidth - scaledSpacing) / 2;
-
-        // Regular token section (centered above left button)
+        // Regular tokens, above their button. Blue tickets can take the count past the 3 the
+        // server grants on its own
         int regularTokens = ClientTokenManager.getRegularTokens();
-        // Blue tickets can take the count past the 3 the server grants on its own
         String regularText = "Regular Tokens: " + regularTokens + (regularTokens <= 3 ? "/3" : "");
         if (regularTokens < 3) {
-            String nextRegularTime = ClientTokenManager.formatNextRegularTime();
-            regularText += " - Next: " + nextRegularTime;
+            regularText += " - Next: " + ClientTokenManager.formatNextRegularTime();
         }
+        drawTokenLine(graphics, regularText, regularCenterX, REGULAR_TOKEN_COLOR);
 
-        // Center text above regular button
-        int regularButtonCenterX = fullWidthX + (buttonWidth / 2);
-        int regularTextWidth = font.width(regularText);
-        int regularTextX = regularButtonCenterX - (regularTextWidth / 2);
-        graphics.drawString(this.font, regularText, regularTextX, tokenInfoY, blueColor, false);
-
-        // Guaranteed token section (centered above right button)
+        // The guaranteed token, above its button
         int guaranteedTokens = ClientTokenManager.getGuaranteedTokens();
         String specialText = guaranteedTokens > 1 ? "Guaranteed Tokens: " + guaranteedTokens
                 : "Guaranteed Token: " + (guaranteedTokens == 1 ? "Available" : "Used");
         if (guaranteedTokens == 0) {
-            String nextSpecialTime = ClientTokenManager.formatNextSpecialResetTime();
-            specialText += " - Resets: " + nextSpecialTime;
+            specialText += " - Resets: " + ClientTokenManager.formatNextSpecialResetTime();
         }
+        drawTokenLine(graphics, specialText, specialCenterX, GUARANTEED_TOKEN_COLOR);
+    }
 
-        // Center text above guaranteed button
-        int specialButtonCenterX = fullWidthX + buttonWidth + scaledSpacing + (buttonWidth / 2);
-        int specialTextWidth = font.width(specialText);
-        int specialTextX = specialButtonCenterX - (specialTextWidth / 2);
-        graphics.drawString(this.font, specialText, specialTextX, tokenInfoY, goldColor, false);
+    // A token count centred above its button, on a dark strip so it reads on any collection colour
+    private void drawTokenLine(GuiGraphics graphics, String text, int centerX, int color) {
+        String shown = UiText.fit(this.font, text, tokenButtonWidth - 8);
+        int halfWidth = font.width(shown) / 2 + 4;
+        graphics.fill(centerX - halfWidth, tokenInfoY - 2, centerX + halfWidth, tokenInfoY + font.lineHeight + 1,
+                (int) (ClientConfig.getInstance().panelOpacity * 200) << 24 | 0x101012);
+        UiText.drawCentered(graphics, this.font, shown, centerX, tokenInfoY, color);
     }
 
     @Override
     public void tick() {
         super.tick();
+        // Another mod can put the player's scale back on the window after init(), as some do
+        // whenever a screen opens; take the menu's scale back and lay the menu out again
+        if (this.minecraft != null && MenuGuiScale.reapply(this.minecraft, this)) {
+            rebuildWidgets();
+        }
         // Rebuild the list when the server changes its hidden collections
         if (shownHiddenRevision != ClientHiddenCollections.getRevision()) {
             loadCollections();
@@ -1169,24 +955,13 @@ public class CollectionSelectionScreen extends Screen {
     @Override
     //? if >=26 {
     /*public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent bpEvent, boolean bpDouble) {
-        double mouseX = bpEvent.x();
-        double mouseY = bpEvent.y();
-        int button = bpEvent.button();
-        if (GuiScaleManager.isUsingInverseScale()) {
-            mouseX = GuiScaleManager.transformMouseX(mouseX);
-            mouseY = GuiScaleManager.transformMouseY(mouseY);
-        }
-        if (blocksForDraw(mouseX, mouseY)) {
+        if (blocksForDraw(bpEvent.x(), bpEvent.y())) {
             return true;
         }
-        return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), bpDouble);
+        return super.mouseClicked(bpEvent, bpDouble);
     }
     *///? } else {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (GuiScaleManager.isUsingInverseScale()) {
-            mouseX = GuiScaleManager.transformMouseX(mouseX);
-            mouseY = GuiScaleManager.transformMouseY(mouseY);
-        }
         if (blocksForDraw(mouseX, mouseY)) {
             return true;
         }
@@ -1211,65 +986,11 @@ public class CollectionSelectionScreen extends Screen {
     }
 
     @Override
-    //? if >=26 {
-    /*public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent bpEvent) {
-        double mouseX = bpEvent.x();
-        double mouseY = bpEvent.y();
-        int button = bpEvent.button();
-        if (GuiScaleManager.isUsingInverseScale()) {
-            mouseX = GuiScaleManager.transformMouseX(mouseX);
-            mouseY = GuiScaleManager.transformMouseY(mouseY);
-        }
-        return super.mouseReleased(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()));
-    }
-    *///? } else {
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (GuiScaleManager.isUsingInverseScale()) {
-            mouseX = GuiScaleManager.transformMouseX(mouseX);
-            mouseY = GuiScaleManager.transformMouseY(mouseY);
-        }
-        return super.mouseReleased(mouseX, mouseY, button);
-    }
-    //? }
-
-    @Override
-    //? if >=26 {
-    /*public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent bpEvent, double dragX, double dragY) {
-        double mouseX = bpEvent.x();
-        double mouseY = bpEvent.y();
-        int button = bpEvent.button();
-        if (GuiScaleManager.isUsingInverseScale()) {
-            mouseX = GuiScaleManager.transformMouseX(mouseX);
-            mouseY = GuiScaleManager.transformMouseY(mouseY);
-            float scale = GuiScaleManager.getMouseScaleFactor();
-            dragX = dragX * scale;
-            dragY = dragY * scale;
-        }
-        return super.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), dragX, dragY);
-    }
-    *///? } else {
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (GuiScaleManager.isUsingInverseScale()) {
-            mouseX = GuiScaleManager.transformMouseX(mouseX);
-            mouseY = GuiScaleManager.transformMouseY(mouseY);
-            float scale = GuiScaleManager.getMouseScaleFactor();
-            dragX = dragX * scale;
-            dragY = dragY * scale;
-        }
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
-    }
-    //? }
-
-    @Override
     //? if >=1.21 {
     /*public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double delta) {
     *///? } else {
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
     //? }
-        if (GuiScaleManager.isUsingInverseScale()) {
-            mouseX = GuiScaleManager.transformMouseX(mouseX);
-            mouseY = GuiScaleManager.transformMouseY(mouseY);
-        }
         // The figure list holds still while a draw lights its figures or shows the one it drew
         if (FigureDraw.isBusy() || (FigureDraw.result() != null && isOverFigureList(mouseX, mouseY))) {
             return true;
@@ -1279,15 +1000,6 @@ public class CollectionSelectionScreen extends Screen {
         *///? } else {
         return super.mouseScrolled(mouseX, mouseY, delta);
         //? }
-    }
-
-    @Override
-    public void mouseMoved(double mouseX, double mouseY) {
-        if (GuiScaleManager.isUsingInverseScale()) {
-            mouseX = GuiScaleManager.transformMouseX(mouseX);
-            mouseY = GuiScaleManager.transformMouseY(mouseY);
-        }
-        super.mouseMoved(mouseX, mouseY);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.theplumteam.client.gui.creator.ui;
 
 import com.theplumteam.block.PopBlockColor;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.util.GuiPose;
 import com.theplumteam.client.gui.widget.FigureEntry;
 import com.theplumteam.client.renderer.BoxBlockItemRenderer;
@@ -38,8 +39,8 @@ import java.util.List;
 public abstract class UiViewport extends UiNode.Box {
     /** The wash over the models at night. */
     public static final int NIGHT = 0x80101840;
-    protected static final int BACKGROUND = 0xFF0A0A0A;
-    protected static final int OUTLINE = 0xFF2A2A2A;
+    protected static final int BACKGROUND = Surfaces.WELL;
+    protected static final int OUTLINE = Surfaces.OUTLINE;
     /** The gap between the view's edge and its controls. */
     protected static final int INSET = 6;
     // How far a drag turns the models, in degrees per GUI unit
@@ -171,7 +172,9 @@ public abstract class UiViewport extends UiNode.Box {
         } finally {
             graphics.disableScissor();
         }
+        // Framed as the menus' wells are: a grey border inside a black outline
         Draw.outline(graphics, x, y, width, height, OUTLINE);
+        Draw.outline(graphics, x + 1, y + 1, width - 2, height - 2, Surfaces.BORDER);
     }
 
     /** Draws the background and the models; the pointer is off the view while over a control. */
@@ -457,6 +460,6 @@ public abstract class UiViewport extends UiNode.Box {
     protected static void label(GuiGraphics graphics, Font font, Component text, int x, int y, int colour) {
         int width = font.width(text);
         graphics.fill(x - 2, y - 2, x + width + 2, y + 9, 0xA0000000);
-        graphics.drawString(font, text, x, y, colour, false);
+        Draw.string(graphics, font, text, x, y, colour);
     }
 }

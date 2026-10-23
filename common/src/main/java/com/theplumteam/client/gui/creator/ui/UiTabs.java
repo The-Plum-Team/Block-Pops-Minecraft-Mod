@@ -1,5 +1,6 @@
 package com.theplumteam.client.gui.creator.ui;
 
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.util.GuiPose;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -15,8 +16,10 @@ import java.util.function.IntConsumer;
  * A row of tabs. Folder tabs stand on a panel's top edge with an item icon before each label,
  * in the look of the machine screen's tabs: the selected one is filled like the panel and leaves
  * its bottom open, and the panel leaves its own edge out under it (see {@link #selectedLeft()}).
- * Flat tabs are the bordered filter buttons of the mockup, gold when selected. A label may carry a
- * count, as "Drafts (2)", and a green tick for a finished step.
+ * Flat tabs are Quick Skin's settings tabs laid side by side: plain labels that lighten under the
+ * mouse, the selected one on a slate highlight with a brighter bar along its bottom. A label may
+ * carry a count, as "Drafts (2)", and a green tick for a finished step. Given less width than
+ * they need, the tabs narrow in proportion and cut their labels.
  */
 public class UiTabs extends UiNode.Box {
     /** How the tabs look. */
@@ -40,12 +43,13 @@ public class UiTabs extends UiNode.Box {
     private static final int GAP = 4;
     private static final String TICK = "✔ ";
 
-    private static final int FOLDER_OUTLINE = 0x60FFFFFF;
-    private static final int UNSELECTED_BG = 0xFF1C1C1C;
-    private static final int HOVERED_BG = 0xFF2A2A2A;
-    private static final int UNSELECTED_TEXT = 0xFFA0A0A0;
+    private static final int FOLDER_OUTLINE = Surfaces.BORDER;
+    private static final int UNSELECTED_BG = Surfaces.FACE_DISABLED;
+    private static final int HOVERED_BG = Surfaces.FACE;
+    private static final int UNSELECTED_TEXT = Surfaces.TEXT_DIM;
     private static final int HOVERED_TEXT = 0xFFCCCCCC;
-    private static final int FLAT_HOVER_OUTLINE = 0xFF777777;
+    /** The bar along a selected flat tab's bottom edge. */
+    private static final int BAR_HEIGHT = 2;
 
     private final Style style;
     private final IntConsumer onSelect;
@@ -100,20 +104,33 @@ public class UiTabs extends UiNode.Box {
         return total;
     }
 
+    // The tabs' widths: as their labels need, or, given less room than that, narrowed in proportion
+    private int[] widths(Font font) {
+        int[] widths = new int[tabs.size()];
+        int natural = contentWidth();
+        int gaps = GAP * Math.max(0, tabs.size() - 1);
+        boolean shrink = width > gaps && width < natural;
+        for (int i = 0; i < tabs.size(); i++) {
+            int own = tabWidth(font, tabs.get(i));
+            widths[i] = shrink ? Math.max(1, own * (width - gaps) / Math.max(1, natural - gaps)) : own;
+        }
+        return widths;
+    }
+
     /** Where the selected tab starts, so the panel below can leave its top edge out. */
     public int selectedLeft() {
         return tabLeft(selected);
     }
 
     public int selectedRight() {
-        return tabs.isEmpty() ? x : tabLeft(selected) + tabWidth(Minecraft.getInstance().font, tabs.get(selected));
+        return tabs.isEmpty() ? x : tabLeft(selected) + widths(Minecraft.getInstance().font)[selected];
     }
 
     private int tabLeft(int index) {
-        Font font = Minecraft.getInstance().font;
+        int[] widths = widths(Minecraft.getInstance().font);
         int left = x;
         for (int i = 0; i < index && i < tabs.size(); i++) {
-            left += tabWidth(font, tabs.get(i)) + GAP;
+            left += widths[i] + GAP;
         }
         return left;
     }
@@ -135,14 +152,13 @@ public class UiTabs extends UiNode.Box {
         if (!isMouseOver(mouseX, mouseY)) {
             return -1;
         }
-        Font font = Minecraft.getInstance().font;
+        int[] widths = widths(Minecraft.getInstance().font);
         int left = x;
         for (int i = 0; i < tabs.size(); i++) {
-            int width = tabWidth(font, tabs.get(i));
-            if (mouseX >= left && mouseX < left + width) {
+            if (mouseX >= left && mouseX < left + widths[i]) {
                 return i;
             }
-            left += width + GAP;
+            left += widths[i] + GAP;
         }
         return -1;
     }
@@ -154,10 +170,11 @@ public class UiTabs extends UiNode.Box {
         }
         Font font = Minecraft.getInstance().font;
         int hoveredIndex = indexAt(mouseX, mouseY);
+        int[] widths = widths(font);
         int left = x;
         for (int i = 0; i < tabs.size(); i++) {
             Tab tab = tabs.get(i);
-            int width = tabWidth(font, tab);
+            int width = widths[i];
             if (style == Style.FOLDER) {
                 drawFolder(graphics, font, tab, left, width, i == selected, i == hoveredIndex);
             } else {
@@ -195,24 +212,29 @@ public class UiTabs extends UiNode.Box {
             textX += ICON_SIZE + 4;
         }
         int colour = isSelected ? Theme.TEXT : hovered ? HOVERED_TEXT : UNSELECTED_TEXT;
-        drawLabel(graphics, font, tab, textX, top + (tabHeight - 8) / 2 + 1, colour, true);
+        drawLabel(graphics, font, tab, textX, top + (tabHeight - 8) / 2 + 1, left + width - PADDING - textX, colour);
     }
 
     private void drawFlat(GuiGraphics graphics, Font font, Tab tab, int left, int width, boolean isSelected,
                           boolean hovered) {
-        int outline = isSelected ? Theme.GOLD : hovered ? FLAT_HOVER_OUTLINE : Theme.CONTROL_OUTLINE;
-        Draw.panel(graphics, left, y, width, height, isSelected ? Theme.GOLD_DARK : Theme.CONTROL, outline);
-        int colour = isSelected ? Theme.GOLD : hovered ? Theme.TEXT : Theme.TEXT_SOFT;
-        drawLabel(graphics, font, tab, left + FLAT_PADDING, y + (height - 8) / 2 + 1, colour, false);
+        if (isSelected) {
+            graphics.fill(left, y, left + width, y + height, Theme.HIGHLIGHT);
+            graphics.fill(left, y + height - BAR_HEIGHT, left + width, y + height, Theme.HIGHLIGHT_BAR);
+        } else if (hovered) {
+            graphics.fill(left, y, left + width, y + height, Theme.HOVER);
+        }
+        int colour = isSelected ? Theme.TEXT : hovered ? HOVERED_TEXT : UNSELECTED_TEXT;
+        int pad = Math.min(FLAT_PADDING, Math.max(2, (width - font.width(text(tab))) / 2));
+        drawLabel(graphics, font, tab, left + pad, y + (height - BAR_HEIGHT - 8) / 2 + 1, width - 2 * pad, colour);
     }
 
-    private void drawLabel(GuiGraphics graphics, Font font, Tab tab, int textX, int textY, int colour,
-                           boolean shadow) {
-        if (tab.done()) {
-            graphics.drawString(font, TICK, textX, textY, Theme.GREEN, shadow);
+    private void drawLabel(GuiGraphics graphics, Font font, Tab tab, int textX, int textY, int room, int colour) {
+        if (tab.done() && font.width(TICK) < room) {
+            Draw.string(graphics, font, TICK, textX, textY, Theme.GREEN);
             textX += font.width(TICK);
+            room -= font.width(TICK);
         }
-        graphics.drawString(font, text(tab), textX, textY, colour, shadow);
+        Draw.text(graphics, font, text(tab), textX, textY, Math.max(0, room), colour);
     }
 
     @Override

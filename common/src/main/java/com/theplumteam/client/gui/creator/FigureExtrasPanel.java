@@ -8,12 +8,14 @@ import com.theplumteam.client.gui.creator.ui.Theme;
 import com.theplumteam.client.gui.creator.ui.UiButton;
 import com.theplumteam.client.gui.creator.ui.UiCheckbox;
 import com.theplumteam.client.gui.creator.ui.UiDropZone;
+import com.theplumteam.client.gui.creator.ui.UiField;
 import com.theplumteam.client.gui.creator.ui.UiFigureView;
 import com.theplumteam.client.gui.creator.ui.UiInput;
 import com.theplumteam.client.gui.creator.ui.UiNode;
 import com.theplumteam.client.gui.creator.ui.UiScrollPane;
 import com.theplumteam.client.gui.creator.ui.UiSegmented;
 import com.theplumteam.client.gui.creator.ui.UiTooltip;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.runtime.RuntimeTextures;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.client.worldcontent.CreatorDraft;
@@ -34,7 +36,6 @@ import com.theplumteam.worldcontent.WorldContentLimits;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
@@ -72,7 +73,6 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  * taken: its field shows red and goes back to the name the draft keeps when it loses the keyboard.
  */
 final class FigureExtrasPanel {
-    private static final int LABEL = 11;
     private static final int ROW_GAP = 5;
     private static final int NOTE = 20;
     private static final int HELP = 0xFFA8A8A8;
@@ -111,11 +111,11 @@ final class FigureExtrasPanel {
         this.editor = editor;
         this.inspector = inspector;
         this.view = view;
-        this.rarityLabel = new FigureInspector.Label(() -> tr("extras.rarity"), () -> changed("rarity"));
+        this.rarityLabel = FigureInspector.Label.heading(() -> tr("extras.rarity"), () -> changed("rarity"));
         this.rarity = new UiSegmented(0, this::setRarity, tr("extras.rarity.common"), tr("extras.rarity.rare"),
                 tr("extras.rarity.epic"), tr("extras.rarity.legendary"));
-        this.variantsLabel = new FigureInspector.Label(() -> tr("extras.variants"), () -> changed("variants"));
-        this.faceLabel = new FigureInspector.Label(() -> tr("extras.face"), () -> changed("box_face"));
+        this.variantsLabel = FigureInspector.Label.heading(() -> tr("extras.variants"), () -> changed("variants"));
+        this.faceLabel = FigureInspector.Label.heading(() -> tr("extras.face"), () -> changed("box_face"));
         this.face = new UiCheckbox(tr("extras.face_show"), false, this::setFaceShown);
     }
 
@@ -265,8 +265,8 @@ final class FigureExtrasPanel {
         this.zoneLabelWidth = slotLabelWidth;
         Font font = Minecraft.getInstance().font;
         int y = top + ROW_GAP;
-        this.rarityLabel.at(x, y, width, LABEL);
-        y += LABEL + 1;
+        this.rarityLabel.at(x, y, width, FigureInspector.Label.HEADING);
+        y += FigureInspector.Label.HEADING + 1;
         this.rarity.at(x, y, width, UiSegmented.HEIGHT);
         y += UiSegmented.HEIGHT + 3;
         this.chance.at(x, y, width, NOTE);
@@ -275,8 +275,8 @@ final class FigureExtrasPanel {
             sections.add(node);
         }
 
-        this.variantsLabel.at(x, y, width, LABEL);
-        y += LABEL + 1;
+        this.variantsLabel.at(x, y, width, FigureInspector.Label.HEADING);
+        y += FigureInspector.Label.HEADING + 1;
         this.variantsCount.at(x, y, width, NOTE);
         y += NOTE + 2;
         sections.add(this.variantsLabel);
@@ -292,8 +292,8 @@ final class FigureExtrasPanel {
             y += UiDropZone.COMPACT_HEIGHT + ROW_GAP;
         }
 
-        this.faceLabel.at(x, y, width, LABEL);
-        y += LABEL + 1;
+        this.faceLabel.at(x, y, width, FigureInspector.Label.HEADING);
+        y += FigureInspector.Label.HEADING + 1;
         this.face.at(x, y, Math.min(width, UiCheckbox.widthFor(font, tr("extras.face_show"))), UiCheckbox.BOX + 2);
         y += UiCheckbox.BOX + 5;
         sections.add(this.faceLabel);
@@ -541,7 +541,7 @@ final class FigureExtrasPanel {
             List<String> lines = Draw.fit(font, full, width, this.maxLines);
             int lineY = y;
             for (String line : lines) {
-                graphics.drawString(font, line, x, lineY, this.colour, false);
+                Draw.string(graphics, font, line, x, lineY, this.colour);
                 lineY += Theme.LINE_HEIGHT - 1;
             }
             if (hovered(mouseX, mouseY) && !String.join(" ", lines).equals(full)) {
@@ -553,13 +553,14 @@ final class FigureExtrasPanel {
     /**
      * A variant's name: the node's own vanilla text field, which it draws and hands input to
      * itself so it works inside the scrolling sections, as {@code UiStepper} does with its number.
-     * A name the receiver refuses outlines the field in red, and the field shows the name the
+     * It is the creator's well ({@link UiField}). A name the receiver refuses turns the well's
+     * border red, and the field shows the name the
      * draft keeps again when it loses the keyboard. Enter and Escape leave the field.
      */
     private static final class NameField extends UiNode.Box {
         static final int HEIGHT = 20;
 
-        private final EditBox field;
+        private final UiField field;
         // Told each typed name; answers whether it was taken
         private final Function<String, Boolean> onName;
         private final Runnable onStart;
@@ -574,7 +575,7 @@ final class FigureExtrasPanel {
             this.onStart = onStart;
             this.height = HEIGHT;
             Font font = Minecraft.getInstance().font;
-            this.field = new EditBox(font, 0, 0, 40, 20, tr("extras.variant_name_hint"));
+            this.field = new UiField(font, 0, 0, 40, HEIGHT, tr("extras.variant_name_hint"));
             this.field.setMaxLength(WorldContentLimits.MAX_NAME_LENGTH);
             this.field.setValue("");
             this.field.setResponder(this::typedText);
@@ -598,19 +599,16 @@ final class FigureExtrasPanel {
         @Override
         public Box at(int x, int y, int width, int height) {
             super.at(x, y, width, height);
-            this.field.setX(x);
-            this.field.setY(y);
             int fieldWidth = Math.max(16, width);
-            if (fieldWidth != this.field.getWidth()) {
-                this.field.setWidth(fieldWidth);
-                if (!this.typing) {
-                    // The field scrolled its text for the width it had; showing it again from
-                    // empty starts it at its first letter
-                    this.syncing = true;
-                    this.field.setValue("");
-                    this.syncing = false;
-                    showKept();
-                }
+            boolean resized = fieldWidth != this.field.wellWidth();
+            this.field.place(x, y, fieldWidth);
+            if (resized && !this.typing) {
+                // The field scrolled its text for the width it had; showing it again from
+                // empty starts it at its first letter
+                this.syncing = true;
+                this.field.setValue("");
+                this.syncing = false;
+                showKept();
             }
             return this;
         }
@@ -643,8 +641,9 @@ final class FigureExtrasPanel {
             followKeyboard();
             this.field.render(graphics, mouseX, mouseY, partialTick);
             if (!this.valid) {
-                Draw.outline(graphics, this.field.getX() - 1, this.field.getY() - 1, this.field.getWidth() + 2, 22,
-                        Theme.RED);
+                // Over the well's own border
+                Draw.outline(graphics, this.field.wellX() + 1, this.field.getY() + 1, this.field.wellWidth() - 2,
+                        HEIGHT - 2, Theme.RED);
                 if (hovered(mouseX, mouseY)) {
                     UiTooltip.set(tr("extras.variant_name_rule"));
                 }
@@ -773,7 +772,7 @@ final class FigureExtrasPanel {
                 return;
             }
             Rect image = image();
-            graphics.fill(image.x(), image.y(), image.right(), image.bottom(), 0xFF1D1D1D);
+            graphics.fill(image.x(), image.y(), image.right(), image.bottom(), Surfaces.WELL);
             ResourceLocation id = WorldContentIds.texture(ref.sha());
             if (!RuntimeTextures.isPending(id)) {
                 Draw.texture(graphics, id, image.x(), image.y(), image.width(), image.height(), textureInfo.width(),
@@ -791,7 +790,7 @@ final class FigureExtrasPanel {
                 graphics.fill(image.x(), top, left, bottom, 0x90000000);
                 graphics.fill(right, top, image.right(), bottom, 0x90000000);
                 Draw.outline(graphics, left - 1, top - 1, Math.max(1, right - left) + 2, Math.max(1, bottom - top) + 2,
-                        Theme.GOLD);
+                        Theme.SELECTED);
             }
             Draw.outline(graphics, image.x() - 1, image.y() - 1, image.width() + 2, image.height() + 2,
                     Theme.CONTROL_OUTLINE);

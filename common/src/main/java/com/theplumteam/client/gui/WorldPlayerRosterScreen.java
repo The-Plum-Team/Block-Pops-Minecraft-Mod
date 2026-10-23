@@ -2,8 +2,12 @@ package com.theplumteam.client.gui;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.theplumteam.client.config.ClientConfig;
-import com.theplumteam.client.gui.util.GuiPose;
+import com.theplumteam.client.gui.style.DialogFrame;
+import com.theplumteam.client.gui.style.DialogScreen;
+import com.theplumteam.client.gui.style.PixelIcon;
+import com.theplumteam.client.gui.style.StyledButton;
+import com.theplumteam.client.gui.style.Surfaces;
+import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
@@ -13,7 +17,7 @@ import com.theplumteam.util.PlayerSkins;
 import com.theplumteam.util.ServerLevels;
 import dev.architectury.networking.NetworkManager;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -29,30 +33,35 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * A modal over the settings that lists the players of the World Players collection in two
+ * A dialog over the settings that lists the players of the World Players collection in two
  * columns, those in the collection and those an operator took out of it, and moves a player
  * between them. The server owns the roster: a move only sends a request, and the columns
  * follow the collection the server syncs back.
+ *
+ * <p>Each column is a sunk well with a header and a row per player, in the settings' row style:
+ * the face and name, a hairline under the row and a small button that moves the player across.
  */
-public class WorldPlayerRosterScreen extends Screen {
+public class WorldPlayerRosterScreen extends DialogScreen {
     private static final int ROW_HEIGHT = 22;
-    private static final int HEADER_HEIGHT = 16;
+    private static final int HEADER_HEIGHT = 18;
     private static final int FACE_SIZE = 16;
+    private static final int MOVE_WIDTH = 20;
+    private static final int MOVE_HEIGHT = 18;
+    private static final int COLUMN_GAP = 8;
 
-    // The settings modal's styling
-    private static final int PANEL_OUTLINE = 0x60FFFFFF;
-    private static final int MODAL_BASE = 0xFF000000;
-    private static final int TEXT_COLOR = 0xFFFFFFFF;
-    private static final int SECONDARY_COLOR = 0xFFAAAAAA;
+    private static final int HEADER_BG = 0xFF2A2B2E;
+    private static final int HEADER_LINE = 0xFF46474A;
+    private static final int SCROLL_BAR = 0xFF6E6F73;
 
     // Skins are looked up once per player while the screen is open
     private static final Map<UUID, GameProfile> PROFILES = new HashMap<>();
 
-    private final Screen parent;
     private final List<FigureDefinition> inside = new ArrayList<>();
     private final List<FigureDefinition> outside = new ArrayList<>();
     private final List<FigureDefinition> visibleInside = new ArrayList<>();
     private final List<FigureDefinition> visibleOutside = new ArrayList<>();
+    // The move buttons of the rows shown, replaced on every rebuild
+    private final List<AbstractWidget> moveButtons = new ArrayList<>();
 
     // What the widgets were built from, to rebuild when either changes
     private FigureCollection shownCollection;
@@ -64,35 +73,43 @@ public class WorldPlayerRosterScreen extends Screen {
     private int insideScroll;
     private int outsideScroll;
 
-    private int panelX;
-    private int panelY;
-    private int panelWidth;
-    private int panelHeight;
     private int columnWidth;
+    private int leftX;
+    private int rightX;
     private int columnsTop;
     private int columnsBottom;
 
     public WorldPlayerRosterScreen(Screen parent) {
-        super(Component.literal("World Players"));
-        this.parent = parent;
+        super(Component.literal("World Players"), parent);
     }
 
     @Override
-    protected void init() {
-        super.init();
+    protected DialogFrame.Accent accent() {
+        return DialogFrame.Accent.COLLECTION;
+    }
 
-        this.panelWidth = Math.min(440, this.width - 24);
-        this.panelHeight = Math.min(300, this.height - 24);
-        this.panelX = (this.width - this.panelWidth) / 2;
-        this.panelY = (this.height - this.panelHeight) / 2;
-        this.columnWidth = (this.panelWidth - 32 - 8) / 2;
-        this.columnsTop = this.panelY + 40;
-        this.columnsBottom = this.panelY + this.panelHeight - 50;
+    @Override
+    protected String[] icon() {
+        return PixelIcon.PLAYER;
+    }
+
+    @Override
+    protected int preferredHeight() {
+        return 300;
+    }
+
+    @Override
+    protected void initDialog() {
+        this.leftX = this.dialogX + DialogFrame.PADDING;
+        this.columnWidth = (this.dialogWidth - 2 * DialogFrame.PADDING - COLUMN_GAP) / 2;
+        this.rightX = this.leftX + this.columnWidth + COLUMN_GAP;
+        this.columnsTop = bodyTop() + 28;
+        this.columnsBottom = bodyBottom() - 20;
 
         // The search box outlives rebuilds, so typing keeps its cursor and focus
-        int searchWidth = Math.min(140, this.panelWidth / 3);
-        this.searchField = new EditBox(this.font, this.panelX + this.panelWidth - 16 - searchWidth, this.panelY + 12,
-                searchWidth, 18, Component.literal("Search"));
+        int searchWidth = Math.min(140, this.dialogWidth / 3);
+        this.searchField = new EditBox(this.font, this.dialogX + this.dialogWidth - DialogFrame.PADDING - searchWidth,
+                bodyTop() + 5, searchWidth, 16, Component.literal("Search"));
         this.searchField.setMaxLength(32);
         this.searchField.setHint(Component.literal("Search..."));
         this.searchField.setValue(this.search);
@@ -104,12 +121,14 @@ public class WorldPlayerRosterScreen extends Screen {
                 rebuild();
             }
         });
+        this.addRenderableWidget(this.searchField);
 
         rebuild();
     }
 
     private void rebuild() {
-        this.clearWidgets();
+        this.moveButtons.forEach(this::removeWidget);
+        this.moveButtons.clear();
         this.shownCollection = CollectionRegistry.getCollection(PlayerCollectionHelper.WORLD_PLAYERS_COLLECTION_ID).orElse(null);
         this.shownCanEdit = canEdit();
 
@@ -138,19 +157,12 @@ public class WorldPlayerRosterScreen extends Screen {
             this.status = "Only operators can change the World Players roster.";
         }
 
-        this.addRenderableWidget(this.searchField);
-
         int rows = visibleRows();
         this.insideScroll = clampScroll(this.insideScroll, this.inside.size(), rows);
         this.outsideScroll = clampScroll(this.outsideScroll, this.outside.size(), rows);
-        int leftX = this.panelX + 16;
-        int rightX = leftX + this.columnWidth + 8;
-        addMoveButtons(this.inside, this.insideScroll, this.visibleInside, leftX + this.columnWidth - 24, "»", false);
-        addMoveButtons(this.outside, this.outsideScroll, this.visibleOutside, rightX + 4, "«", true);
-
-        this.addRenderableWidget(Button.builder(Component.literal("Close"), button -> this.onClose())
-                .bounds(this.panelX + (this.panelWidth - 100) / 2, this.panelY + this.panelHeight - 28, 100, 20)
-                .build());
+        addMoveButtons(this.inside, this.insideScroll, this.visibleInside,
+                this.leftX + this.columnWidth - 4 - MOVE_WIDTH, "»", false);
+        addMoveButtons(this.outside, this.outsideScroll, this.visibleOutside, this.rightX + 4, "«", true);
     }
 
     private void addMoveButtons(List<FigureDefinition> players, int scroll, List<FigureDefinition> visible,
@@ -160,21 +172,22 @@ public class WorldPlayerRosterScreen extends Screen {
         for (int i = scroll; i < Math.min(scroll + rows, players.size()); i++) {
             FigureDefinition player = players.get(i);
             visible.add(player);
-            Button move = Button.builder(Component.literal(arrow),
-                            button -> new SetWorldPlayerEnabledPacket(player.getPlayerUUID(), enable).sendToServer())
-                    .bounds(buttonX, rowY(i - scroll), 20, 20)
-                    .build();
+            StyledButton move = new StyledButton(buttonX, rowY(i - scroll) + (ROW_HEIGHT - 1 - MOVE_HEIGHT) / 2,
+                    MOVE_WIDTH, MOVE_HEIGHT, Component.literal(arrow),
+                    button -> new SetWorldPlayerEnabledPacket(player.getPlayerUUID(), enable).sendToServer())
+                    .lipHeight(2);
             move.active = this.shownCanEdit;
+            this.moveButtons.add(move);
             this.addRenderableWidget(move);
         }
     }
 
     private int visibleRows() {
-        return Math.max(1, (this.columnsBottom - this.columnsTop - HEADER_HEIGHT - 4) / ROW_HEIGHT);
+        return Math.max(1, (this.columnsBottom - 2 - rowY(0)) / ROW_HEIGHT);
     }
 
     private int rowY(int row) {
-        return this.columnsTop + HEADER_HEIGHT + 3 + row * ROW_HEIGHT;
+        return this.columnsTop + HEADER_HEIGHT + 2 + row * ROW_HEIGHT;
     }
 
     private static int clampScroll(int scroll, int size, int rows) {
@@ -223,14 +236,12 @@ public class WorldPlayerRosterScreen extends Screen {
     //? }
         if (mouseY >= this.columnsTop && mouseY < this.columnsBottom && amount != 0) {
             int step = amount > 0 ? -1 : 1;
-            int leftX = this.panelX + 16;
-            if (mouseX >= leftX && mouseX < leftX + this.columnWidth) {
+            if (mouseX >= this.leftX && mouseX < this.leftX + this.columnWidth) {
                 this.insideScroll += step;
                 rebuild();
                 return true;
             }
-            int rightX = leftX + this.columnWidth + 8;
-            if (mouseX >= rightX && mouseX < rightX + this.columnWidth) {
+            if (mouseX >= this.rightX && mouseX < this.rightX + this.columnWidth) {
                 this.outsideScroll += step;
                 rebuild();
                 return true;
@@ -244,106 +255,91 @@ public class WorldPlayerRosterScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
-        // The settings stay underneath, as SettingsScreen keeps the machine screen under itself
-        if (this.parent != null) {
-            this.parent.render(graphics, -1, -1, partialTicks);
+    protected void renderBody(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        renderColumnBody(graphics, this.leftX, this.visibleInside.size(), this.insideScroll, this.inside.size(), false);
+        renderColumnBody(graphics, this.rightX, this.visibleOutside.size(), this.outsideScroll, this.outside.size(), true);
+    }
+
+    /** A column's well, its header band and the hairlines under its rows, under the move buttons. */
+    private void renderColumnBody(GuiGraphics graphics, int x, int shownRows, int scroll, int total, boolean out) {
+        int right = x + this.columnWidth;
+        Surfaces.well(graphics, x, this.columnsTop, right, this.columnsBottom, Surfaces.BORDER, Surfaces.WELL);
+        int headerBottom = this.columnsTop + HEADER_HEIGHT;
+        graphics.fill(x + 2, this.columnsTop + 2, right - 2, headerBottom - 1, HEADER_BG);
+        graphics.fill(x + 2, headerBottom - 1, right - 2, headerBottom, HEADER_LINE);
+        for (int i = 0; i < shownRows; i++) {
+            int lineY = rowY(i) + ROW_HEIGHT - 1;
+            graphics.fill(x + 2, lineY, right - 2, lineY + 1, Surfaces.ROW_LINE);
         }
-        GuiPose.flush(graphics);
 
-        // Force the modal above the parent, the same way SettingsScreen does
-        //? if >=1.21.6 {
-        /*GuiPose.push(graphics);
-        *///? } elif >=1.21.5 {
-        /*graphics.pose().pushPose();
-        graphics.pose().translate(0, 0, 200);
-        *///? } elif >=1.21.2 {
-        /*RenderSystem.disableScissor();
-        RenderSystem.enableDepthTest();
-        RenderSystem.clear(256); // Clear depth buffer only
-        *///? } else {
-        RenderSystem.disableScissor();
-        RenderSystem.enableDepthTest();
-        RenderSystem.clear(256, false); // Clear depth buffer only
-        //? }
+        // A scroll bar when the column holds more rows than it shows, clear of the move buttons
+        int rows = visibleRows();
+        if (total > rows) {
+            int trackTop = headerBottom + 2;
+            int trackHeight = this.columnsBottom - 3 - trackTop;
+            int barHeight = Math.max(8, trackHeight * rows / total);
+            int barTop = trackTop + (trackHeight - barHeight) * scroll / (total - rows);
+            int barX = out ? right - 5 : right - 4 - MOVE_WIDTH - 5;
+            graphics.fill(barX, barTop, barX + 2, barTop + barHeight, SCROLL_BAR);
+        }
+    }
 
-        // The settings modal's panel: an opaque base, the themed translucent black and a subtle outline
-        graphics.fill(0, 0, this.width, this.height, 0x70000000);
-        graphics.fill(this.panelX, this.panelY, this.panelX + this.panelWidth, this.panelY + this.panelHeight, MODAL_BASE);
-        int alpha = (int) (ClientConfig.getInstance().panelOpacity * 255);
-        graphics.fill(this.panelX, this.panelY, this.panelX + this.panelWidth, this.panelY + this.panelHeight, alpha << 24);
-        graphics.renderOutline(this.panelX, this.panelY, this.panelWidth, this.panelHeight, PANEL_OUTLINE);
-
-        super.render(graphics, mouseX, mouseY, partialTicks);
-
-        // Labels are drawn after the widgets for the same reason as in SettingsScreen:
-        // before 1.21.6 anything drawn earlier ends up under the screen background.
+    @Override
+    protected void renderDialog(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // Labels are drawn after the widgets: before 1.21.6 anything drawn earlier ends up
+        // under the widgets' fills
         int total = this.inside.size() + this.outside.size();
-        graphics.drawString(this.font, this.title, this.panelX + 16, this.panelY + 10, TEXT_COLOR);
-        graphics.drawString(this.font, total + (total == 1 ? " player, " : " players, ") + this.outside.size() + " out",
-                this.panelX + 16, this.panelY + 22, SECONDARY_COLOR);
+        String summary = total + (total == 1 ? " player, " : " players, ") + this.outside.size() + " out";
+        UiText.drawFitted(graphics, this.font, summary, this.leftX, bodyTop() + 9,
+                this.searchField.getX() - 8 - this.leftX, Surfaces.TEXT_DIM);
 
-        int leftX = this.panelX + 16;
-        int rightX = leftX + this.columnWidth + 8;
-        renderColumn(graphics, leftX, "In collection", this.visibleInside, this.insideScroll, this.inside.size(), false);
-        renderColumn(graphics, rightX, "Out of collection", this.visibleOutside, this.outsideScroll, this.outside.size(), true);
+        renderColumn(graphics, this.leftX, "In collection", this.visibleInside, this.inside.size(), false);
+        renderColumn(graphics, this.rightX, "Out of collection", this.visibleOutside, this.outside.size(), true);
 
         if (this.inside.isEmpty()) {
             String empty = this.search.isEmpty() ? "No players have joined this world yet." : "No player matches.";
-            drawWrappedHint(graphics, empty, leftX);
+            drawWrappedHint(graphics, empty, this.leftX);
         }
         if (this.outside.isEmpty()) {
-            drawWrappedHint(graphics, this.search.isEmpty() ? "Nobody is out. Press » to take a player out." : "No player matches.", rightX);
+            drawWrappedHint(graphics, this.search.isEmpty() ? "Nobody is out. Press » to take a player out." : "No player matches.",
+                    this.rightX);
         }
 
-        graphics.drawCenteredString(this.font, this.status, this.panelX + this.panelWidth / 2,
-                this.columnsBottom + 6, SECONDARY_COLOR);
-
-        //? if >=1.21.5 {
-        /*GuiPose.pop(graphics);
-        *///? }
+        String fitted = UiText.fit(this.font, this.status, this.dialogWidth - 2 * DialogFrame.PADDING);
+        UiText.drawCentered(graphics, this.font, fitted, this.dialogX + this.dialogWidth / 2,
+                this.columnsBottom + 6, Surfaces.TEXT_DIM);
     }
 
     private void renderColumn(GuiGraphics graphics, int x, String header, List<FigureDefinition> players,
-                              int scroll, int total, boolean out) {
+                              int total, boolean out) {
         int right = x + this.columnWidth;
-        // The settings panel's outline, with a rule under the header as in the collection list
-        graphics.renderOutline(x, this.columnsTop, this.columnWidth, this.columnsBottom - this.columnsTop, PANEL_OUTLINE);
-        graphics.fill(x + 1, this.columnsTop + HEADER_HEIGHT, right - 1, this.columnsTop + HEADER_HEIGHT + 1, PANEL_OUTLINE);
-        graphics.drawString(this.font, header, x + 6, this.columnsTop + 4, TEXT_COLOR);
         String count = String.valueOf(total);
-        graphics.drawString(this.font, count, right - 6 - this.font.width(count), this.columnsTop + 4, SECONDARY_COLOR);
+        int headerY = this.columnsTop + (HEADER_HEIGHT - 8) / 2 + 1;
+        UiText.drawFitted(graphics, this.font, header, x + 6, headerY,
+                this.columnWidth - 18 - this.font.width(count), Surfaces.TEXT);
+        UiText.draw(graphics, this.font, count, right - 6 - this.font.width(count), headerY, Surfaces.TEXT_DIM);
 
-        int faceX = out ? x + 30 : x + 6;
+        int faceX = out ? x + 4 + MOVE_WIDTH + 6 : x + 6;
         int nameX = faceX + FACE_SIZE + 4;
-        int nameWidth = this.columnWidth - FACE_SIZE - 40;
+        int nameWidth = this.columnWidth - FACE_SIZE - MOVE_WIDTH - 24;
         for (int i = 0; i < players.size(); i++) {
             FigureDefinition player = players.get(i);
             int y = rowY(i);
-            drawFace(graphics, skinOf(player), faceX, y + 2);
+            int faceY = y + (ROW_HEIGHT - 1 - FACE_SIZE) / 2;
+            drawFace(graphics, skinOf(player), faceX, faceY);
             if (out) {
-                graphics.fill(faceX, y + 2, faceX + FACE_SIZE, y + 2 + FACE_SIZE, 0xAA000000);
+                graphics.fill(faceX, faceY, faceX + FACE_SIZE, faceY + FACE_SIZE, 0xAA000000);
             }
-            graphics.drawString(this.font, this.font.plainSubstrByWidth(player.getName(), nameWidth),
-                    nameX, y + 6, out ? SECONDARY_COLOR : TEXT_COLOR);
-        }
-
-        // A scroll bar when the column holds more rows than it shows
-        int rows = visibleRows();
-        if (total > rows) {
-            int trackTop = this.columnsTop + HEADER_HEIGHT + 2;
-            int trackHeight = this.columnsBottom - 2 - trackTop;
-            int barHeight = Math.max(8, trackHeight * rows / total);
-            int barTop = trackTop + (trackHeight - barHeight) * scroll / (total - rows);
-            int barX = out ? right - 4 : x + this.columnWidth - 30;
-            graphics.fill(barX, barTop, barX + 2, barTop + barHeight, SECONDARY_COLOR);
+            UiText.drawFitted(graphics, this.font, player.getName(), nameX, y + (ROW_HEIGHT - 1 - 8) / 2,
+                    nameWidth, out ? Surfaces.TEXT_DIM : Surfaces.TEXT);
         }
     }
 
     private void drawWrappedHint(GuiGraphics graphics, String text, int x) {
-        int y = this.columnsTop + HEADER_HEIGHT + 8;
-        for (var line : this.font.split(Component.literal(text), this.columnWidth - 12)) {
-            graphics.drawString(this.font, line, x + 6, y, SECONDARY_COLOR);
+        int y = rowY(0) + 6;
+        int room = this.columnWidth - 12;
+        for (String line : UiText.wrap(this.font, text, room)) {
+            UiText.drawFitted(graphics, this.font, line, x + 6, y, room, Surfaces.TEXT_MUTED);
             y += 10;
         }
     }
@@ -402,8 +398,8 @@ public class WorldPlayerRosterScreen extends Screen {
     @Override
     //? if >=26 {
     /*public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent bpEvent, boolean bpDouble) {
-        // A click outside the panel closes the modal, as in SettingsScreen
-        if (isOutsidePanel(bpEvent.x(), bpEvent.y())) {
+        // A click outside the dialog closes it, as in SettingsScreen
+        if (isOutsideDialog(bpEvent.x(), bpEvent.y())) {
             this.onClose();
             return true;
         }
@@ -411,8 +407,8 @@ public class WorldPlayerRosterScreen extends Screen {
     }
     *///? } else {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // A click outside the panel closes the modal, as in SettingsScreen
-        if (isOutsidePanel(mouseX, mouseY)) {
+        // A click outside the dialog closes it, as in SettingsScreen
+        if (isOutsideDialog(mouseX, mouseY)) {
             this.onClose();
             return true;
         }
@@ -420,19 +416,8 @@ public class WorldPlayerRosterScreen extends Screen {
     }
     //? }
 
-    private boolean isOutsidePanel(double mouseX, double mouseY) {
-        return mouseX < this.panelX || mouseX > this.panelX + this.panelWidth
-                || mouseY < this.panelY || mouseY > this.panelY + this.panelHeight;
-    }
-
-    @Override
-    public void onClose() {
-        // Back to the settings, which stayed underneath
-        this.minecraft.setScreen(this.parent);
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        return false;
+    private boolean isOutsideDialog(double mouseX, double mouseY) {
+        return mouseX < this.dialogX || mouseX > this.dialogX + this.dialogWidth
+                || mouseY < this.dialogY || mouseY > this.dialogY + this.dialogHeight;
     }
 }

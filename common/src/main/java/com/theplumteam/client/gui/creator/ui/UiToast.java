@@ -1,5 +1,8 @@
 package com.theplumteam.client.gui.creator.ui;
 
+import com.theplumteam.client.gui.style.PixelIcon;
+import com.theplumteam.client.gui.style.Surfaces;
+import com.theplumteam.client.gui.style.UiText;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -9,16 +12,25 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * A short message at the bottom centre of the creator screens, with an optional action such as
- * "Undo" and a bar that counts down its six seconds. One shows at a time: a new message replaces
- * the one before. It belongs to the creator rather than to one screen, so a message about a save
- * stays on screen when the creator moves to another screen, and it goes away when the creator
- * closes.
+ * "Undo", drawn as Quick Skin's toasts are: a card in the buttons' style on a one-pixel lip, with
+ * a blue strip on its left holding an "i". It fades in, shows for six seconds and fades out. One
+ * shows at a time: a new message replaces the one before. It belongs to the creator rather than
+ * to one screen, so a message about a save stays on screen when the creator moves to another
+ * screen, and it goes away when the creator closes.
  */
 public final class UiToast {
     private static final long LIFETIME_MS = 6000;
-    private static final int PADDING = 8;
-    private static final int MIN_WIDTH = 210;
-    private static final int HEIGHT = 20;
+    private static final long FADE_IN_MS = 300;
+    private static final long FADE_OUT_MS = 500;
+    private static final int PADDING = 6;
+    private static final int MIN_WIDTH = 200;
+    private static final int HEIGHT = 25;
+    private static final int LIP_HEIGHT = 1;
+    /** The coloured strip on the left, holding the icon. */
+    private static final int STRIP_WIDTH = 18;
+    private static final int STRIP = 0xFF1F3A6E;
+    private static final String[] ICON = {
+            "...#...", ".......", "..##...", "...#...", "...#...", "...#...", "..###.."};
 
     @Nullable
     private static UiToast current;
@@ -61,9 +73,9 @@ public final class UiToast {
     }
 
     private UiNode.Rect bounds(Font font, int screenWidth, int bottom) {
-        int width = font.width(text) + 2 * PADDING;
+        int width = 4 + STRIP_WIDTH + font.width(text) + 2 * PADDING;
         if (action != null) {
-            width += 16 + font.width(action);
+            width += 12 + font.width(action);
         }
         width = Math.min(Math.max(width, MIN_WIDTH), screenWidth - 16);
         return new UiNode.Rect((screenWidth - width) / 2, bottom - HEIGHT, width, HEIGHT);
@@ -74,7 +86,7 @@ public final class UiToast {
             return UiNode.Rect.EMPTY;
         }
         int actionWidth = font.width(action);
-        return new UiNode.Rect(box.right() - PADDING - actionWidth, box.y() + 2, actionWidth, HEIGHT - 6);
+        return new UiNode.Rect(box.right() - 2 - PADDING - actionWidth, box.y() + 2, actionWidth, HEIGHT - 6);
     }
 
     /** Whether the message sits under the pointer, so what is below it ignores the pointer. */
@@ -86,20 +98,41 @@ public final class UiToast {
     void draw(GuiGraphics graphics, int screenWidth, int bottom, int mouseX, int mouseY) {
         Font font = Minecraft.getInstance().font;
         UiNode.Rect box = bounds(font, screenWidth, bottom);
-        Draw.panel(graphics, box.x(), box.y(), box.width(), box.height(), Theme.TOAST, Theme.TOAST_OUTLINE);
-        int textY = box.y() + 5;
+        long elapsed = Util.getMillis() - shownAt;
+        float alpha = elapsed < FADE_IN_MS ? elapsed / (float) FADE_IN_MS
+                : elapsed > LIFETIME_MS - FADE_OUT_MS ? (LIFETIME_MS - elapsed) / (float) FADE_OUT_MS : 1.0f;
+        // Never quite clear, since from 1.21.6 a colour with alpha 0 draws nothing at all
+        alpha = Math.max(0.05f, Math.min(1.0f, alpha));
+
+        int left = box.x();
+        int top = box.y();
+        int right = box.right();
+        int faceBottom = box.bottom() - 1 - LIP_HEIGHT;
+        graphics.fill(left, top, right, box.bottom(), fade(Surfaces.OUTLINE, alpha));
+        graphics.fill(left + 1, faceBottom, right - 1, box.bottom() - 1, fade(Surfaces.LIP, alpha));
+        graphics.fill(left + 1, top + 1, right - 1, faceBottom, fade(Theme.TOAST_OUTLINE, alpha));
+        graphics.fill(left + 2, top + 2, right - 2, faceBottom - 1, fade(Theme.TOAST, alpha));
+        graphics.fill(left + 2, top + 2, left + 2 + STRIP_WIDTH, faceBottom - 1, fade(STRIP, alpha));
+        PixelIcon.draw(graphics, ICON, left + 2 + (STRIP_WIDTH - PixelIcon.width(ICON)) / 2,
+                top + 2 + (faceBottom - 1 - top - 2 - ICON.length) / 2, fade(Theme.TEXT, alpha));
+
+        int textX = left + 2 + STRIP_WIDTH + PADDING;
+        int textY = top + 2 + (faceBottom - 1 - top - 2 - 7) / 2;
         UiNode.Rect actionBox = actionBounds(font, box);
-        int textRoom = (action != null ? actionBox.x() - 12 : box.right() - PADDING) - (box.x() + PADDING);
-        Draw.text(graphics, font, text.getString(), box.x() + PADDING, textY, textRoom, Theme.TEXT);
+        int textRoom = (action != null ? actionBox.x() - 12 : right - 2 - PADDING) - textX;
+        UiText.draw(graphics, font, Draw.cut(font, text.getString(), Math.max(0, textRoom)), textX, textY,
+                fade(Theme.TEXT, alpha));
         if (action != null) {
             boolean hovered = actionBox.contains(mouseX, mouseY);
-            int colour = hovered ? Theme.GOLD_LIGHT : Theme.GOLD;
-            graphics.drawString(font, action, actionBox.x(), textY, colour, false);
+            int colour = fade(hovered ? Theme.LINK_HOVER : Theme.LINK, alpha);
+            UiText.draw(graphics, font, action, actionBox.x(), textY, colour);
             graphics.fill(actionBox.x(), textY + 9, actionBox.right(), textY + 10, colour);
         }
-        // The time left, as a bar that shrinks along the bottom edge
-        float left = 1.0f - (Util.getMillis() - shownAt) / (float) LIFETIME_MS;
-        Draw.progressBar(graphics, box.x() + 1, box.bottom() - 3, box.width() - 2, 2, left, Theme.TRACK, Theme.GOLD);
+    }
+
+    private static int fade(int argb, float alpha) {
+        int a = Math.max(1, Math.round((argb >>> 24) * alpha));
+        return a << 24 | (argb & 0x00FFFFFF);
     }
 
     /** Runs the action when the click lands on it; a click anywhere on the message is taken. */
