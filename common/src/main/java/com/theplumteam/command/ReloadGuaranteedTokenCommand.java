@@ -2,7 +2,6 @@ package com.theplumteam.command;
 
 import com.theplumteam.util.ServerLevels;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.context.CommandContext;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
@@ -10,31 +9,32 @@ import com.theplumteam.network.SyncTokenDataPacket;
 import com.theplumteam.server.ServerTickHandler;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Command to reload guaranteed token for a player.
- * Usage: /blockpops reloadguaranteed
+ * Command to reload guaranteed token for a player: the one running it, or the one named.
+ * Usage: /blockpops reloadguaranteedtoken [player]
  */
 public class ReloadGuaranteedTokenCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(ReloadGuaranteedTokenCommand.class);
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("blockpops")
-                .then(Commands.literal("reloadguaranteed")
+                .then(Commands.literal("reloadguaranteedtoken")
                         .requires(source -> ServerLevels.hasCommandLevel(source, 2))
-                        .executes(ReloadGuaranteedTokenCommand::executeCommand)
+                        .executes(context -> reload(context.getSource(), context.getSource().getPlayerOrException()))
+                        .then(Commands.argument("player", EntityArgument.player())
+                                .executes(context -> reload(context.getSource(), EntityArgument.getPlayer(context, "player"))))
                 )
         );
     }
 
-    private static int executeCommand(CommandContext<CommandSourceStack> context) {
-        CommandSourceStack source = context.getSource();
+    private static int reload(CommandSourceStack source, ServerPlayer player) {
         try {
-            ServerPlayer player = source.getPlayerOrException();
             IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(player);
 
             // Reload guaranteed token
@@ -59,11 +59,11 @@ public class ReloadGuaranteedTokenCommand {
                     millisUntilReset
             );
 
-            source.sendSuccess(() -> Component.literal("Reloaded guaranteed token"), true);
+            source.sendSuccess(() -> Component.literal("Reloaded guaranteed token for " + player.getName().getString()), true);
             return 1;
         } catch (Exception e) {
-            source.sendFailure(Component.literal("This command can only be executed by a player"));
-            LOGGER.error("Error executing reloadguaranteed command", e);
+            source.sendFailure(Component.literal("Could not reload the guaranteed token of " + player.getName().getString()));
+            LOGGER.error("Error executing reloadguaranteedtoken command", e);
             return 0;
         }
     }
