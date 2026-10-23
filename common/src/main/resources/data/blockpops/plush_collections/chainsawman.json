@@ -25,7 +25,14 @@
       "name": "Power",
       "model": "blockpops:geo/plush/power.geo.json",
       "texture": "blockpops:textures/item/plush_power.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Blood Fiend",
+          "model": "blockpops:geo/plush/blood_fiend.geo.json",
+          "texture": "blockpops:textures/item/plush_blood_fiend.png"
+        }
+      ]
     },
     {
       "id": "makima",
@@ -47,7 +54,14 @@
       "model": "blockpops:geo/plush/kishibe.geo.json",
       "texture": "blockpops:textures/item/plush_kishibe.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-      "special": true
+      "special": true,
+      "alternatives": [
+        {
+          "name": "Mad Dog",
+          "model": "blockpops:geo/plush/mad_dog.geo.json",
+          "texture": "blockpops:textures/item/plush_mad_dog.png"
+        }
+      ]
     },
     {
       "id": "kobeni",
@@ -70,7 +84,14 @@
       "model": "blockpops:geo/plush/reze.geo.json",
       "texture": "blockpops:textures/item/plush_reze.png",
       "animation": "blockpops:animations/figure/box_figure_default.animation.json",
-      "special": true
+      "special": true,
+      "alternatives": [
+        {
+          "name": "Bomb Girl",
+          "model": "blockpops:geo/plush/bomb_girl.geo.json",
+          "texture": "blockpops:textures/item/plush_bomb_girl.png"
+        }
+      ]
     },
     {
       "id": "angel",

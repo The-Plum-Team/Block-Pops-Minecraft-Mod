@@ -64,7 +64,10 @@ before. Through 1.21.1 it draws the model straight into the screen. From 1.21.4 
 bound to `FigurePreviewItemRenderer`, whose `figure_preview` model bakes that same camera and a
 fourfold scale the widget cancels, because an item is the one way a model of this mod reaches
 the deferred interface of 1.21.6 and later. The preview entity stands on the box block: 1.21.1
-refuses a block entity on a block its type does not list.
+refuses a block entity on a block its type does not list. A cell of a figure with alternative
+skins, or of a plush with variants, says which version it shows ("1/3") and shows the next when
+clicked; a plush collection lists a base plush's variants as its alternatives, in step with
+`BuiltInPlushes.VARIANT_GROUPS`.
 
 A drawn figure or plush comes out holographic one time in 25 (`figure.Holographic`; never in the
 packaged E2E). The `Holographic` flag travels in the block-entity data of the box, the figure

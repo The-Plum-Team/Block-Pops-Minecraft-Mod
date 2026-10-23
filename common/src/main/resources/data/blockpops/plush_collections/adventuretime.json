@@ -17,14 +17,28 @@
       "name": "Finn",
       "model": "blockpops:geo/plush/finn.geo.json",
       "texture": "blockpops:textures/item/plush_finn.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Fionna",
+          "model": "blockpops:geo/plush/fionna.geo.json",
+          "texture": "blockpops:textures/item/plush_fionna.png"
+        }
+      ]
     },
     {
       "id": "jake",
       "name": "Jake",
       "model": "blockpops:geo/plush/jake.geo.json",
       "texture": "blockpops:textures/item/plush_jake.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Cake",
+          "model": "blockpops:geo/plush/cake.geo.json",
+          "texture": "blockpops:textures/item/plush_cake.png"
+        }
+      ]
     },
     {
       "id": "bubblegum_princess",
@@ -45,7 +59,14 @@
       "name": "Ice King",
       "model": "blockpops:geo/plush/ice_king.geo.json",
       "texture": "blockpops:textures/item/plush_ice_king.png",
-      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "alternatives": [
+        {
+          "name": "Simon",
+          "model": "blockpops:geo/plush/simon.geo.json",
+          "texture": "blockpops:textures/item/plush_simon.png"
+        }
+      ]
     }
   ]
 }

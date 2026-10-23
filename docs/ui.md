@@ -51,7 +51,7 @@ the option changes or the display resizes under them.
 | A slider | extend `StyledSlider` |
 | A sidebar tab | `TabButton` with `setIcon(PixelIcon.X)` |
 | A title or a big label | `PixelFont` (upper-case blocky font, crisp sizes only) |
-| A menu's opening | `DiamondTransition` (dark diamonds cover the world from the middle outward, then uncover the menu) |
+| A menu's opening | `HalftoneTransition` (a ring of black halftone dots travels from the middle outward, the world beyond it and the menu inside it) |
 | Text on a dark face | `UiText.draw`, `drawFitted` (cut with "..."), `wrap` (word-wrapped lines) |
 | A text field in the creator | `creator.ui.UiField`, an `EditBox` in a well |
 
@@ -63,14 +63,36 @@ what it draws, and the packaged E2E scenario finds widgets by their message.
 
 ## Opening transition
 
-The machine menu opens as a game changes screens: small dark diamonds with a grey rim grow from
-the middle of the screen until they cover the world, the menu is laid out behind them, and they
-shrink away in the same order to uncover it (about 0.7 s). A diamond is a square turned 45
-degrees (`GuiPose.rotate`), so the transition is plain fills on every version. The menu takes its
-own scale only once the diamonds cover the world, in `tick()`, which comes before the frame it
-draws: the hotbar under the diamonds keeps the player's scale and no frame mixes the two. The
-menu takes no clicks while the diamonds hide it, and the packaged E2E skips the transition
-(`E2EDeterminism.transitionMillis`).
+The machine menu opens with a comic halftone: black dots on a grid of 10 GUI units grow over the
+world from the middle of the screen outward, and before they reach the corners the dots in the
+middle already shrink away to show the menu, so a ring of black travels outward with the world
+beyond it and the menu inside it (about 1.3 s).
+
+- **Timing.** Every dot grows (380 ms), holds (80 ms) and shrinks (380 ms) on the same sine
+  ease-in-out curve; only its start is delayed, by its distance from the middle (up to 500 ms to
+  the corners), so the front moves at an even speed. The dot's area follows the curve.
+- **The world beyond the ring** is the frame the game showed when the menu opened, captured as F2
+  captures a screenshot (read back from the GPU a frame or two later from 1.21.5). The menu, at
+  its own scale from the start, is drawn under it, so the hotbar never changes size on screen.
+- **Drawing.** The dots are drawn at the window's real pixels from sprites with anti-aliased edges,
+  one per half pixel of radius, and grown dots as whole black cells, all in one batch (through the
+  text render type before 1.21.2, which batches GUI blits from then on).
+- The menu takes no clicks until the first dots shrink, and the packaged E2E plays no transition.
+
+## A figure's versions in the grid
+
+A figure with alternative skins, or a plush with variants, has several versions. Its cell in the
+machine menu says which one it shows in a dark chip in its top right corner ("1/3", the pixel
+font at about half a GUI unit per font pixel, crisp), and a click anywhere on the cell shows the
+next one, back to the figure's own after the last, with a button's click. The chip turns gold
+under the mouse, and the cell's name follows the version.
+
+- The menu keeps the versions shown while it is open, through a resize or a tab switch; it opens
+  again on every figure's own. The draw's result card always shows the figure's own.
+- A plush variant is a block of its own, so the base plush's entry in its plush collection lists
+  the others as `alternatives` with their own models, in step with `BuiltInPlushes.VARIANT_GROUPS`
+  (what a right-click on a placed plush turns it into). A supporter's secret plush is not listed.
+- The creator's previews show the skin they are told and no chip.
 
 ## Versions
 

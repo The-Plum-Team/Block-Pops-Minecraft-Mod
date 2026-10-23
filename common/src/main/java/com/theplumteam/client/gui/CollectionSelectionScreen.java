@@ -1,6 +1,6 @@
 package com.theplumteam.client.gui;
 
-import com.theplumteam.client.gui.style.DiamondTransition;
+import com.theplumteam.client.gui.style.HalftoneTransition;
 import com.theplumteam.client.gui.style.MenuGuiScale;
 import com.theplumteam.client.gui.style.StyledButton;
 import com.theplumteam.client.gui.style.Surfaces;
@@ -62,7 +62,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The claw and gacha machines' menu, laid out as Quick Skin's menus are: no panel, but groups of
@@ -76,11 +78,12 @@ import java.util.List;
  * gives: the two columns stand in a block centred on it, the figure column as wide as a grid of
  * up to four cells needs.
  *
- * <p>It opens with a {@link DiamondTransition}: diamonds cover the world from the middle outward,
- * the menu is laid out behind them at its own scale, and they uncover it the same way. Until they
- * cover the world the window keeps the player's scale, so the hotbar under them does not jump;
- * the menu takes its scale in a tick, which comes before the frame it draws, so no frame mixes
- * the two scales.
+ * <p>It opens with a {@link HalftoneTransition}: a ring of black halftone dots travels from the
+ * middle outward, with the world the menu opened over beyond it and the menu inside it. The world there
+ * is the frame captured when the menu opened, so the menu takes its own scale at once under it
+ * and the hotbar never changes size on screen. Where that frame is read back from the GPU, from
+ * 1.21.5, the menu is laid out a frame or two later, in a tick, which comes before the frame it
+ * draws.
  */
 public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Scaled {
     private static final Logger LOGGER = LoggerFactory.getLogger(CollectionSelectionScreen.class);
@@ -95,9 +98,12 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     private String otherTabSelection = "";
     // Whether init has run once; later runs (a resize, a tab switch) keep the selection
     private boolean opened;
-    // The diamonds the menu opens behind, and whether it has been laid out behind them yet
-    private final DiamondTransition opening = new DiamondTransition();
+    // The black the menu opens behind, and whether it has been laid out behind it yet
+    private final HalftoneTransition opening = new HalftoneTransition();
     private boolean menuShown;
+    // Which version each figure's cell shows, by "collection:figure", kept while the menu is open
+    // so a resize or a tab switch, which make the figure list again, leaves them as they were
+    private final Map<String, Integer> shownSkins = new HashMap<>();
     private List<FigureCollection> collections;
     // Revision of the server's hidden collections the list was last built from
     private int shownHiddenRevision;
@@ -289,13 +295,13 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
 
     @Override
     protected void init() {
-        // Nothing of the menu exists until the opening diamonds cover the world; tick() lays it
+        // Nothing of the menu exists until the frame it opens over is captured; tick() lays it
         // out then
-        if (!opening.covered()) {
+        if (!opening.ready()) {
             return;
         }
         menuShown = true;
-        opening.uncover();
+        opening.begin();
         // The menu draws at its own GUI scale, chosen from the window size, so it looks the same
         // whatever scale the player picked; a window resize runs init() again
         if (this.minecraft != null) {
@@ -336,8 +342,9 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         leftX = contentLeft;
         rightX = leftX + leftWidth + GAP;
 
-        // The bottom row: the token buttons, then the creator's button for an operator in a
-        // development game, then Done; the token counts stand on a line above their buttons
+        // The bottom row: the token buttons, blue and gold as their counts, then the creator's
+        // button for an operator in a development game, then Done; the token counts stand on a
+        // line above their buttons
         int buttonHeight = Mth.clamp(Math.round(this.height * BUTTON_HEIGHT_SHARE), MIN_BUTTON_HEIGHT, MAX_BUTTON_HEIGHT);
         int footTop = this.height - MARGIN - buttonHeight;
         tokenInfoY = footTop - 4 - font.lineHeight;
@@ -348,11 +355,13 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         tokenButtonWidth = (tokensWidth - GAP) / 2;
 
         useRegularButton = new StyledButton(contentLeft, footTop, tokenButtonWidth, buttonHeight,
-                Component.literal("Use Regular Token"), button -> useToken(TokenType.REGULAR)).pixelLabel();
+                Component.literal("Use Regular Token"), button -> useToken(TokenType.REGULAR))
+                .tone(StyledButton.Tone.BLUE).pixelLabel();
         this.addRenderableWidget(useRegularButton);
         int specialX = contentLeft + tokenButtonWidth + GAP;
         useSpecialButton = new StyledButton(specialX, footTop, tokenButtonWidth, buttonHeight,
-                Component.literal("Use Guaranteed Token"), button -> useToken(TokenType.GUARANTEED)).pixelLabel();
+                Component.literal("Use Guaranteed Token"), button -> useToken(TokenType.GUARANTEED))
+                .tone(StyledButton.Tone.GOLD).pixelLabel();
         this.addRenderableWidget(useSpecialButton);
         regularCenterX = contentLeft + tokenButtonWidth / 2;
         specialCenterX = specialX + tokenButtonWidth / 2;
@@ -395,6 +404,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         figureListWidget = new FigureListWidget(this.minecraft, rightWidth - 4, listHeight, listTop, cell + ROW_GAP);
         figureListWidget.setLeftPos(rightX + 2);
         figureListWidget.setGrid(cell, columns);
+        figureListWidget.setShownSkins(shownSkins);
         figureListWidget.setRenderBackground(false);
         figureListWidget.setRenderTopAndBottom(false);
         this.addWidget(figureListWidget);
@@ -461,6 +471,8 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     @Override
     public void removed() {
         super.removed();
+        // A menu closed during its opening lets go of the frame it captured
+        opening.close();
         // The next screen, a dialog or the world opens at the player's own scale
         if (this.minecraft != null) {
             MenuGuiScale.restore(this.minecraft);
@@ -477,17 +489,17 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     /*@Override
     public void renderBackground(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         // This screen draws its own opaque background, and the world stays sharp under the
-        // opening diamonds; vanilla's pass would blur it, from 1.21.6 before render() and on
+        // opening dots; vanilla's pass would blur it, from 1.21.6 before render() and on
         // 1.21 to 1.21.5 from Screen.render, over this screen's own background.
     }
     *///? }
 
     @Override
     public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // The opening diamonds grow over the world, and cover it until the menu is laid out
-        // behind them
+        // The world shows until the menu is laid out; then the opening dots spread over the frame
+        // captured of it, and cover everything until the first of them shrink
         if (!menuShown || opening.hidesMenu()) {
-            opening.draw(graphics, this.width, this.height);
+            opening.draw(graphics);
             return;
         }
 
@@ -511,8 +523,8 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         super.render(graphics, mouseX, mouseY, partialTick);
 
         renderDrawResult(graphics, partialTick);
-        // The opening diamonds, shrinking away from the middle over everything
-        opening.draw(graphics, this.width, this.height);
+        // The opening ring of dots, with the world beyond it, over everything
+        opening.draw(graphics);
     }
 
     /**
@@ -925,9 +937,9 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     @Override
     public void tick() {
         super.tick();
-        // Once the opening diamonds cover the world, the menu is laid out behind them at its own
+        // Once the frame the menu opens over is captured, the menu is laid out under it at its own
         // scale. A tick comes before the frame it draws, so that frame is all at the new scale.
-        if (!menuShown && opening.covered()) {
+        if (!menuShown && opening.ready()) {
             rebuildWidgets();
         }
         // Another mod can put the player's scale back on the window after init(), as some do
@@ -987,7 +999,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     @Override
     //? if >=26 {
     /*public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent bpEvent, boolean bpDouble) {
-        // The menu takes no clicks while the opening diamonds still hide it
+        // The menu takes no clicks while the opening dots still hide it
         if (opening.hidesMenu() || blocksForDraw(bpEvent.x(), bpEvent.y())) {
             return true;
         }
@@ -995,7 +1007,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     }
     *///? } else {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // The menu takes no clicks while the opening diamonds still hide it
+        // The menu takes no clicks while the opening dots still hide it
         if (opening.hidesMenu() || blocksForDraw(mouseX, mouseY)) {
             return true;
         }
@@ -1026,7 +1038,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
     //? }
         // The figure list holds still while a draw lights its figures or shows the one it drew,
-        // and the menu while the opening diamonds hide it
+        // and the menu while the opening dots hide it
         if (opening.hidesMenu() || FigureDraw.isBusy()
                 || (FigureDraw.result() != null && isOverFigureList(mouseX, mouseY))) {
             return true;

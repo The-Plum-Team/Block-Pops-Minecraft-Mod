@@ -29,11 +29,6 @@ public final class E2EDeterminism {
         return ENABLED ? 0.0 : liveTick;
     }
 
-    /** How long a menu's opening transition has run, in ms: over at once in the packaged E2E. */
-    public static long transitionMillis(long liveMillis) {
-        return ENABLED ? Long.MAX_VALUE : liveMillis;
-    }
-
     /** The source of a claw-machine draw: seeded in the packaged E2E, otherwise fresh. */
     public static Random random() {
         return ENABLED ? new Random(SEED) : new Random();
