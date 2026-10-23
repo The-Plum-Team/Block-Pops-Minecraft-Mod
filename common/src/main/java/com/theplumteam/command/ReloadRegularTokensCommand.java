@@ -2,7 +2,6 @@ package com.theplumteam.command;
 
 import com.theplumteam.util.ServerLevels;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.context.CommandContext;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
@@ -10,31 +9,32 @@ import com.theplumteam.network.SyncTokenDataPacket;
 import com.theplumteam.server.ServerTickHandler;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Command to reload regular tokens for a player.
- * Usage: /blockpops reloadregular
+ * Command to reload regular tokens for a player: the one running it, or the one named.
+ * Usage: /blockpops reloadregulartokens [player]
  */
 public class ReloadRegularTokensCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(ReloadRegularTokensCommand.class);
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("blockpops")
-                .then(Commands.literal("reloadregular")
+                .then(Commands.literal("reloadregulartokens")
                         .requires(source -> ServerLevels.hasCommandLevel(source, 2))
-                        .executes(ReloadRegularTokensCommand::executeCommand)
+                        .executes(context -> reload(context.getSource(), context.getSource().getPlayerOrException()))
+                        .then(Commands.argument("player", EntityArgument.player())
+                                .executes(context -> reload(context.getSource(), EntityArgument.getPlayer(context, "player"))))
                 )
         );
     }
 
-    private static int executeCommand(CommandContext<CommandSourceStack> context) {
-        CommandSourceStack source = context.getSource();
+    private static int reload(CommandSourceStack source, ServerPlayer player) {
         try {
-            ServerPlayer player = source.getPlayerOrException();
             IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(player);
 
             // Reload regular tokens
@@ -60,11 +60,11 @@ public class ReloadRegularTokensCommand {
                     millisUntilReset
             );
 
-            source.sendSuccess(() -> Component.literal("Reloaded regular tokens to 3"), true);
+            source.sendSuccess(() -> Component.literal("Reloaded regular tokens to 3 for " + player.getName().getString()), true);
             return 1;
         } catch (Exception e) {
-            source.sendFailure(Component.literal("This command can only be executed by a player"));
-            LOGGER.error("Error executing reloadregular command", e);
+            source.sendFailure(Component.literal("Could not reload the regular tokens of " + player.getName().getString()));
+            LOGGER.error("Error executing reloadregulartokens command", e);
             return 0;
         }
     }
