@@ -1,6 +1,7 @@
 package com.theplumteam.client.gui.creator.ui;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -15,7 +16,8 @@ import java.util.function.IntConsumer;
 /**
  * A slider for a figure's size that stops only at the sizes a World collection allows,
  * {@link WorldCollectionRecord#SCALES}: a notch for each, labelled "Mini 0.5x", "0.75x", "1x",
- * "1.25x", "1.5x" and "Giant 2x" under the track. Clicking or dragging moves the knob to the
+ * "1.25x", "1.5x" and "Giant 2x" under the track, a sunk well with a raised knob in the menus'
+ * style. Clicking or dragging moves the knob to the
  * nearest notch, and the left and right arrow keys step it while the slider has the keyboard.
  * When the labels do not fit side by side, only the chosen one shows. It can be disabled with a
  * reason in its tooltip.
@@ -25,7 +27,9 @@ public class UiSizeSlider extends UiNode.Box {
     private static final int KNOB_WIDTH = 7;
     private static final int KNOB_HEIGHT = 11;
     private static final int LABEL_GAP = 4;
-    private static final int NOTCH = 0xFF6A6A6A;
+    private static final int NOTCH = Surfaces.BORDER;
+    /** The sunk track's height, around the line the notches stand on. */
+    private static final int TRACK_HEIGHT = 6;
 
     private final IntConsumer onChange;
     private int selected;
@@ -121,15 +125,17 @@ public class UiSizeSlider extends UiNode.Box {
         boolean hovered = hovered(mouseX, mouseY);
         int trackY = y + KNOB_HEIGHT / 2;
         int count = scales().size();
-        graphics.fill(notchX(0), trackY, notchX(count - 1) + 1, trackY + 2, Theme.TRACK);
+        int trackTop = trackY + 1 - TRACK_HEIGHT / 2;
+        Draw.well(graphics, x, trackTop, width, TRACK_HEIGHT, enabled ? Surfaces.BORDER : Theme.CONTROL_OUTLINE);
         for (int i = 0; i < count; i++) {
             int notchX = notchX(i);
-            graphics.fill(notchX, trackY - 2, notchX + 1, trackY + 4, NOTCH);
+            graphics.fill(notchX, trackTop + 2, notchX + 1, trackTop + TRACK_HEIGHT - 2, NOTCH);
         }
         int knobX = notchX(selected) - KNOB_WIDTH / 2;
-        int knobOutline = pressed ? Theme.TEXT : hovered && enabled ? Theme.GOLD_LIGHT : 0xFF000000;
-        Draw.panel(graphics, knobX, y, KNOB_WIDTH, KNOB_HEIGHT, enabled ? Theme.GOLD : Theme.CONTROL_OUTLINE,
-                knobOutline);
+        int border = !enabled ? Surfaces.BORDER_DISABLED : pressed ? Surfaces.BORDER_SELECTED
+                : hovered ? Surfaces.BORDER_HOVER : Surfaces.BORDER;
+        int face = !enabled ? Surfaces.FACE_DISABLED : hovered || pressed ? Surfaces.FACE_HOVER : Surfaces.FACE;
+        Draw.raised(graphics, knobX, y, KNOB_WIDTH, KNOB_HEIGHT, border, face, 1);
         drawLabels(graphics, font, enabled);
         if (hovered && disabledReason != null) {
             UiTooltip.set(disabledReason);
@@ -153,8 +159,8 @@ public class UiSizeSlider extends UiNode.Box {
             if (!fits && i != selected) {
                 continue;
             }
-            int colour = !enabled ? Theme.FAINT : i == selected ? Theme.GOLD : Theme.MUTED;
-            graphics.drawString(font, label(i), lefts[i], labelY, colour, false);
+            int colour = !enabled ? Theme.FAINT : i == selected ? Theme.SELECTED_LIGHT : Theme.MUTED;
+            Draw.string(graphics, font, label(i), lefts[i], labelY, colour);
         }
     }
 

@@ -9,6 +9,7 @@ import com.theplumteam.client.gui.creator.ui.UiButton;
 import com.theplumteam.client.gui.creator.ui.UiCheckbox;
 import com.theplumteam.client.gui.creator.ui.UiDropZone;
 import com.theplumteam.client.gui.creator.ui.UiDropdown;
+import com.theplumteam.client.gui.creator.ui.UiField;
 import com.theplumteam.client.gui.creator.ui.UiInput;
 import com.theplumteam.client.gui.creator.ui.UiMenu;
 import com.theplumteam.client.gui.creator.ui.UiNode;
@@ -18,6 +19,10 @@ import com.theplumteam.client.gui.creator.ui.UiSizeSlider;
 import com.theplumteam.client.gui.creator.ui.UiToast;
 import com.theplumteam.client.gui.creator.ui.UiTooltip;
 import com.theplumteam.client.gui.creator.ui.UiViewport;
+import com.theplumteam.client.gui.style.DialogCloseButton;
+import com.theplumteam.client.gui.style.DialogFrame;
+import com.theplumteam.client.gui.style.PixelIcon;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.util.GuiPose;
 import com.theplumteam.client.gui.widget.FigureEntry;
 import com.theplumteam.client.worldcontent.BulkPlan;
@@ -38,12 +43,10 @@ import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldCollectionRecord.Kind;
 import com.theplumteam.worldcontent.WorldContentLimits;
 import com.theplumteam.worldcontent.WorldContentStatus;
-import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
@@ -76,6 +79,10 @@ import java.util.Set;
  * answers that it is busy, as it does once the player's upload or edit limit is used up, the
  * rest goes on by itself a little later. Hiding the card leaves the
  * upload going, and the editor's status row shows how far it is.
+ *
+ * <p>The card is drawn as the menus' dialogs are ({@link DialogFrame}), with the green header of a
+ * dialog that adds something and an X that does what Escape does; the table is a sunk well whose
+ * name and size cells are wells of their own.
  */
 public class BulkAddScreen extends CreatorScreen {
     /** The preview slot the rows are drawn through: a collection holding one figure per row. */
@@ -87,14 +94,15 @@ public class BulkAddScreen extends CreatorScreen {
     private static final int STATUS_GAP = 4;
     private static final int STATUS_ROOM = STATUS_GAP + 9;
     private static final int PAD = 12;
-    private static final int HEADER = 24;
+    private static final int HEADER = DialogFrame.HEADER_HEIGHT + 6;
+    // The room the header's X takes at its right end
+    private static final int CLOSE_ROOM = 6 + DialogCloseButton.SIZE + 8;
     private static final int ZONE_HEIGHT = 40;
     private static final int GAP = 6;
     private static final int TABLE_HEAD = 12;
     private static final int CAPACITY_BAR = 4;
-    private static final int SHADOW = 0x80000000;
-    private static final int HEAD_TEXT = 0xFF9A9A9A;
-    private static final int TABLE_EDGE = 0xFF232323;
+    private static final int HEAD_TEXT = Theme.FAINT;
+    private static final int TICKED = 0xFF48A048;
     // How long to wait before going on when the server was busy, and how often in a row
     private static final long RETRY_MS = 15_000;
     private static final int MAX_RETRIES = 8;
@@ -196,7 +204,7 @@ public class BulkAddScreen extends CreatorScreen {
             rowsChanged(true);
         });
         this.cancelButton = new UiButton(tr("cancel"), UiButton.Style.SECONDARY, this::leave);
-        this.addButton = new UiButton(tr("bulk.add_none"), UiButton.Style.GREEN, this::add);
+        this.addButton = new UiButton(tr("bulk.add_none"), UiButton.Style.PRIMARY, this::add);
         this.pauseButton = new UiButton(tr("bulk.pause"), UiButton.Style.LINK, this::togglePause);
         this.stopButton = new UiButton(tr("bulk.stop"), UiButton.Style.DANGER_TEXT, this::stopRest);
         this.hideButton = new UiButton(tr("bulk.hide"), UiButton.Style.SECONDARY, this::hide);
@@ -210,16 +218,9 @@ public class BulkAddScreen extends CreatorScreen {
     // Building
 
     @Override
-    protected void init() {
-        // Only the screen shown is told the window changed size, and the editor is drawn under this one
-        if (this.parent.width != this.width || this.parent.height != this.height) {
-            //? if >=26 {
-            /*this.parent.resize(this.width, this.height);
-            *///? } else {
-            this.parent.resize(this.minecraft, this.width, this.height);
-            //? }
-        }
-        super.init();
+    protected boolean drawsParentBelow() {
+        // The editor is drawn under this screen, so it is laid out again when the window changes size
+        return true;
     }
 
     @Override
@@ -254,13 +255,16 @@ public class BulkAddScreen extends CreatorScreen {
         addNode(this.pairBox);
         y += UiDropdown.HEIGHT + GAP;
 
-        this.footerY = this.panelY + this.panelHeight - 8 - UiButton.HEIGHT;
+        this.footerY = DialogFrame.bodyBottom(this.panelY, this.panelHeight) - 8 - UiButton.HEIGHT;
         int tableTop = y + TABLE_HEAD;
         this.table.at(left, tableTop, width, Math.max(0, this.footerY - GAP - tableTop));
         this.table.layout();
         addNode(this.table);
 
         buildFooter(left, right);
+        addRenderableWidget(DialogCloseButton.forDialog(this.panelX, this.panelY, this.panelWidth,
+                tr(this.phase == Phase.SENDING || this.phase == Phase.WAITING ? "bulk.hide" : "bulk.close"),
+                button -> onClose()));
     }
 
     // The buttons of the footer, which change with the phase, from the right edge
@@ -291,7 +295,7 @@ public class BulkAddScreen extends CreatorScreen {
         for (UiButton button : shown) {
             boolean text = button == this.pauseButton || button == this.stopButton;
             int buttonWidth = text ? this.font.width(button.label())
-                    : Math.max(button == this.addButton ? 110 : 60, UiButton.widthFor(this.font, button.label(), false));
+                    : Math.max(button == this.addButton ? 110 : 60, button.naturalWidth());
             x -= buttonWidth;
             button.at(x, text ? this.footerY + 6 : this.footerY, buttonWidth, text ? 10 : UiButton.HEIGHT);
             addNode(button);
@@ -724,10 +728,9 @@ public class BulkAddScreen extends CreatorScreen {
 
     @Override
     protected void drawPanel(GuiGraphics graphics) {
-        graphics.fill(this.panelX + 4, this.panelY + this.panelHeight, this.panelX + this.panelWidth + 4,
-                this.panelY + this.panelHeight + 5, SHADOW);
-        Draw.panel(graphics, this.panelX, this.panelY, this.panelWidth, this.panelHeight, Theme.DIALOG,
-                Theme.DIALOG_OUTLINE);
+        // The title is cut to the header's room in drawContents()
+        DialogFrame.draw(graphics, this.panelX, this.panelY, this.panelWidth, this.panelHeight,
+                DialogFrame.Accent.CREATE, PixelIcon.UPLOAD, Component.empty());
     }
 
     @Override
@@ -735,10 +738,10 @@ public class BulkAddScreen extends CreatorScreen {
         int left = this.panelX + PAD;
         int right = this.panelX + this.panelWidth - PAD;
         String name = this.editor.draft().name().isBlank() ? tr("home.new").getString() : this.editor.draft().name();
-        // Bold letters are wider, so the title is cut with room to spare
-        String title = Draw.cut(this.font, tr("bulk.title", name).getString(), Math.max(0, right - left - 12));
-        graphics.drawString(this.font, Component.literal(title).withStyle(ChatFormatting.BOLD), left, this.panelY + 9,
-                Theme.TEXT, false);
+        int titleX = this.panelX + 10 + PixelIcon.width(PixelIcon.UPLOAD) + 6;
+        int middle = (this.panelY + 2 + this.panelY + DialogFrame.HEADER_HEIGHT - 1) / 2;
+        Draw.heading(graphics, tr("bulk.title", name), titleX, middle + 0.5f,
+                Math.max(0, this.panelX + this.panelWidth - CLOSE_ROOM - titleX), 1.0f, Theme.TEXT);
 
         this.table.drawHead(graphics);
         switch (this.phase) {
@@ -795,7 +798,7 @@ public class BulkAddScreen extends CreatorScreen {
         graphics.fill(left, barY, left + barWidth, barY + CAPACITY_BAR, Theme.TRACK);
         int currentWidth = Math.round(barWidth * Math.min(1.0f, this.currentShare));
         int newWidth = Math.round(barWidth * Math.min(1.0f, this.currentShare + this.newShare)) - currentWidth;
-        graphics.fill(left, barY, left + currentWidth, barY + CAPACITY_BAR, 0xFF8A8A8A);
+        graphics.fill(left, barY, left + currentWidth, barY + CAPACITY_BAR, Theme.FAINT);
         if (newWidth > 0) {
             graphics.fill(left + currentWidth, barY, left + currentWidth + newWidth, barY + CAPACITY_BAR,
                     this.overCapacity ? Theme.RED : Theme.GREEN);
@@ -947,11 +950,11 @@ public class BulkAddScreen extends CreatorScreen {
         private static final float CAMERA_X = 0.0f;
         private static final float CAMERA_Y = 15.0f;
         private static final float PLUSH_SCALE = 0.6f;
-        private static final int ROW_ERROR = 0xFF1C0F0F;
-        private static final int ROW_WARNING = 0xFF1B170C;
-        private static final int ROW_HOVER = 0xFF181818;
-        private static final int ROW_LINE = 0xFF1F1F1F;
-        private static final int FIELD_EDGE = 0xFF7A7A7A;
+        private static final int ROW_ERROR = 0xFF3A1E1E;
+        private static final int ROW_WARNING = 0xFF3A3218;
+        private static final int ROW_HOVER = Surfaces.WELL_HOVER;
+        private static final int ROW_LINE = 0xFF2A2B2E;
+        private static final int CELL_GROUND = 0xFF151617;
         private static final int STATUS_READY = 0xFF9CFF8A;
         private static final int STATUS_WARNING = 0xFFFFCC66;
         private static final int STATUS_ERROR = 0xFFFF8A8A;
@@ -1013,6 +1016,8 @@ public class BulkAddScreen extends CreatorScreen {
         // The column titles above the table, with its outline
         void drawHead(GuiGraphics graphics) {
             Font font = BulkAddScreen.this.font;
+            // The table is a well: the column titles and the rows, sunk into the card
+            Draw.well(graphics, x - 2, y - TABLE_HEAD - 3, width + 4, height + TABLE_HEAD + 5, Surfaces.BORDER);
             int headY = y - TABLE_HEAD + 2;
             String[] keys = {"", "bulk.column.view", "bulk.column.files", "bulk.column.name", "bulk.column.type",
                     "bulk.column.size", "bulk.column.status"};
@@ -1020,8 +1025,7 @@ public class BulkAddScreen extends CreatorScreen {
                 Draw.text(graphics, font, tr(keys[i]).getString(), this.columnX[i], headY, this.columnWidth[i],
                         HEAD_TEXT);
             }
-            graphics.fill(x, y - 1, x + width, y, 0xFF2C2C2C);
-            Draw.outline(graphics, x - 1, y - TABLE_HEAD - 2, width + 2, height + TABLE_HEAD + 3, TABLE_EDGE);
+            graphics.fill(x, y - 1, x + width, y, Surfaces.BORDER_DISABLED);
             if (BulkAddScreen.this.plan.isEmpty()) {
                 int lineY = y + Math.max(4, height / 2 - 10);
                 for (String line : Draw.fit(font, tr("bulk.empty").getString(), width - 20, 2)) {
@@ -1105,7 +1109,7 @@ public class BulkAddScreen extends CreatorScreen {
                 graphics.fill(x, top, right, top + ROW_HEIGHT, ground);
             }
             graphics.fill(x, top + ROW_HEIGHT - 1, right, top + ROW_HEIGHT, ROW_LINE);
-            graphics.fill(this.columnX[1], top + 2, this.columnX[1] + CELL, top + 2 + CELL, 0xFF161616);
+            graphics.fill(this.columnX[1], top + 2, this.columnX[1] + CELL, top + 2 + CELL, CELL_GROUND);
         }
 
         private void drawText(GuiGraphics graphics, Font font, Row row, int top, boolean hovered, int mouseX,
@@ -1117,11 +1121,11 @@ public class BulkAddScreen extends CreatorScreen {
             int boxX = this.columnX[0] + 1;
             int boxY = top + (ROW_HEIGHT - UiCheckbox.BOX) / 2;
             boolean ticked = row.adds() || sent(row);
-            Draw.panel(graphics, boxX, boxY, UiCheckbox.BOX, UiCheckbox.BOX, 0xFF000000,
-                    editable ? Theme.FIELD_OUTLINE : Theme.CONTROL_OUTLINE);
+            Draw.well(graphics, boxX, boxY, UiCheckbox.BOX, UiCheckbox.BOX,
+                    editable ? Surfaces.BORDER : Theme.CONTROL_OUTLINE);
             if (ticked) {
                 graphics.fill(boxX + 2, boxY + 2, boxX + UiCheckbox.BOX - 2, boxY + UiCheckbox.BOX - 2,
-                        editable ? Theme.GOLD : Theme.CONTROL_OUTLINE);
+                        editable ? TICKED : Theme.CONTROL_OUTLINE);
             }
             if (inside(mouseX, mouseY, boxX - 1, top, CHECK + 2, ROW_HEIGHT)) {
                 UiTooltip.set(row.usable() ? tr("bulk.include_tip") : row.status());
@@ -1133,7 +1137,7 @@ public class BulkAddScreen extends CreatorScreen {
             // The files, cut, with every name in the tooltip
             String files = row.files();
             String cutFiles = Draw.cut(font, files, this.columnWidth[2]);
-            graphics.drawString(font, cutFiles, this.columnX[2], textY, 0xFFC8C8C8, false);
+            Draw.string(graphics, font, cutFiles, this.columnX[2], textY, 0xFFC8C8C8);
             if (!cutFiles.equals(files) && inside(mouseX, mouseY, this.columnX[2], top, this.columnWidth[2], ROW_HEIGHT)) {
                 UiTooltip.set(Component.literal(files));
             }
@@ -1143,35 +1147,37 @@ public class BulkAddScreen extends CreatorScreen {
             int nameWidth = this.columnWidth[3];
             if (row != this.typing) {
                 if (row.usable()) {
-                    Draw.panel(graphics, nameX, top + 3, nameWidth, ROW_HEIGHT - 6, 0xFF000000,
-                            editable && inside(mouseX, mouseY, nameX, top, nameWidth, ROW_HEIGHT) ? Theme.TEXT
-                                    : FIELD_EDGE);
-                    Draw.text(graphics, font, row.name(), nameX + 4, textY, nameWidth - 8,
-                            editable ? Theme.TEXT : Theme.MUTED);
+                    Draw.well(graphics, nameX, top + 2, nameWidth, ROW_HEIGHT - 4,
+                            editable && inside(mouseX, mouseY, nameX, top, nameWidth, ROW_HEIGHT), false);
+                    Draw.text(graphics, font, row.name(), nameX + UiField.TEXT_PADDING, textY + 1,
+                            nameWidth - 2 * UiField.TEXT_PADDING, editable ? Theme.TEXT : Theme.MUTED);
                 } else {
-                    graphics.drawString(font, "—", nameX + 4, textY, Theme.FAINT, false);
+                    Draw.string(graphics, font, "—", nameX + 4, textY, Theme.FAINT);
                 }
             }
 
             // The kind, and the size with its arrow
             Kind kind = row.kind();
             String type = kind == null ? "—" : tr(kind == Kind.SKIN ? "bulk.type.skin" : "bulk.type.model").getString();
-            Draw.text(graphics, font, type, this.columnX[4], textY, this.columnWidth[4], 0xFFDDDDDD);
+            Draw.text(graphics, font, type, this.columnX[4], textY, this.columnWidth[4], Theme.TEXT_SOFT);
             int sizeX = this.columnX[5];
             int sizeWidth = this.columnWidth[5];
             if (row.usable()) {
                 boolean focused = row == this.sizeFocus;
                 boolean over = editable && inside(mouseX, mouseY, sizeX, top, sizeWidth, ROW_HEIGHT);
-                Draw.panel(graphics, sizeX, top + 4, sizeWidth, ROW_HEIGHT - 8, Theme.CONTROL,
-                        focused ? Theme.GOLD : over ? 0xFF777777 : Theme.CONTROL_OUTLINE);
+                if (focused) {
+                    Draw.well(graphics, sizeX, top + 2, sizeWidth, ROW_HEIGHT - 4, Theme.SELECTED);
+                } else {
+                    Draw.well(graphics, sizeX, top + 2, sizeWidth, ROW_HEIGHT - 4, over, false);
+                }
                 String size = FigureCard.scaleText(row.scale());
-                graphics.drawString(font, size, sizeX + 4, textY, editable ? Theme.CONTROL_TEXT : Theme.MUTED, false);
+                Draw.string(graphics, font, size, sizeX + 4, textY + 1, editable ? Theme.CONTROL_TEXT : Theme.MUTED);
                 int arrowX = sizeX + sizeWidth - 4 - font.width("▾");
                 if (editable && sizeX + 4 + font.width(size) + 2 <= arrowX) {
-                    graphics.drawString(font, "▾", arrowX, textY, Theme.CONTROL_TEXT, false);
+                    Draw.string(graphics, font, "▾", arrowX, textY + 1, Theme.CONTROL_TEXT);
                 }
             } else {
-                graphics.drawString(font, "—", sizeX + 4, textY, Theme.FAINT, false);
+                Draw.string(graphics, font, "—", sizeX + 4, textY, Theme.FAINT);
             }
 
             // The state, with "Remove" over its end under the pointer
@@ -1183,14 +1189,14 @@ public class BulkAddScreen extends CreatorScreen {
             int statusRoom = withRemove ? statusWidth - removeWidth : statusWidth;
             String statusText = status.getString();
             String cutStatus = Draw.cut(font, statusText, statusRoom);
-            graphics.drawString(font, cutStatus, statusX, textY, statusColour(row), false);
+            Draw.string(graphics, font, cutStatus, statusX, textY, statusColour(row));
             if (!cutStatus.equals(statusText) && inside(mouseX, mouseY, statusX, top, statusRoom, ROW_HEIGHT)) {
                 UiTooltip.set(status);
             }
             if (withRemove) {
                 int removeX = statusX + statusWidth - removeWidth + 6;
                 boolean over = inside(mouseX, mouseY, removeX - 3, top, removeWidth, ROW_HEIGHT);
-                graphics.drawString(font, tr("bulk.remove"), removeX, textY, over ? 0xFFFFC8C8 : 0xFFFF9A9A, false);
+                Draw.string(graphics, font, tr("bulk.remove"), removeX, textY, over ? 0xFFFFC8C8 : 0xFFFF9A9A);
                 if (over) {
                     graphics.fill(removeX, textY + 9, removeX + removeWidth - 6, textY + 10, 0xFFFFC8C8);
                 }
@@ -1422,13 +1428,14 @@ public class BulkAddScreen extends CreatorScreen {
          */
         private final class NameCell extends UiNode.Box {
             static final int HEIGHT = 20;
-            final EditBox field;
+            final UiField field;
             private boolean syncing;
             private boolean pressed;
 
             NameCell() {
                 this.height = HEIGHT;
-                this.field = new EditBox(Minecraft.getInstance().font, 0, 0, 40, 20, tr("bulk.column.name"));
+                this.field = new UiField(Minecraft.getInstance().font, 0, 0, 40, UiField.HEIGHT,
+                        tr("bulk.column.name"));
                 this.field.setMaxLength(WorldContentLimits.MAX_NAME_LENGTH);
                 this.field.setValue("");
                 this.field.setResponder(this::changed);
@@ -1457,9 +1464,7 @@ public class BulkAddScreen extends CreatorScreen {
             @Override
             public Box at(int x, int y, int width, int height) {
                 super.at(x, y, width, height);
-                this.field.setX(x);
-                this.field.setY(y);
-                this.field.setWidth(Math.max(16, width));
+                this.field.place(x, y, Math.max(16, width));
                 return this;
             }
 

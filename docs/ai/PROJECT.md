@@ -19,8 +19,9 @@ follow-up pull request (#11). `site/mod-base.json` no longer defers it or any ot
 - [`docs/release-architecture.md`](../release-architecture.md) owns the trust zones, branch
   lifecycle and release planning; [`docs/operations.md`](../operations.md) owns owner
   configuration, the controller-upgrade procedure and recovery;
-  [`docs/e2e.md`](../e2e.md) owns the packaged scenarios; and
-  [`docs/visual-review.md`](../visual-review.md) owns the advisory AI review.
+  [`docs/e2e.md`](../e2e.md) owns the packaged scenarios;
+  [`docs/visual-review.md`](../visual-review.md) owns the advisory AI review; and
+  [`docs/ui.md`](../ui.md) owns the screens' shared style and their own GUI scale.
 - `docs/architecture/decisions/` records evidence-backed architectural decisions;
   [ADR 0001](../architecture/decisions/0001-adopt-mod-base-public-evidence.md) records the
   adoption of mod-base public evidence,
@@ -51,6 +52,12 @@ rotated GUI bounds cannot clip the model. The 26.x preview retains the legacy GU
 rotation and lift. Background quads explicitly select the version’s textured
 shader rather than inheriting the program bound by a preceding GUI fill. Finish queued base
 fills before immediate background drawing on the earlier GUI path.
+
+The screens share Quick Skin's look and its menu scale ([`docs/ui.md`](../ui.md)). No screen
+writes the player's GUI Scale option or calls `resizeDisplay()`: a menu sets only the window's
+scale while it is shown (`MenuGuiScale`), chosen from the window size, and puts the player's scale
+back in `removed()`; a dialog over a menu follows the menu's scale. Layouts derive from the
+canvas that scale gives, from about 400x300 up.
 
 A collection screen shows each figure or plush in colour once discovered and in black and white
 before. Through 1.21.1 it draws the model straight into the screen. From 1.21.4 it draws an item

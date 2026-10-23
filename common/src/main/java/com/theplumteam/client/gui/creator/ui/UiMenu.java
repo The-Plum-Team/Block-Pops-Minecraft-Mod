@@ -1,6 +1,7 @@
 package com.theplumteam.client.gui.creator.ui;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.theplumteam.client.gui.style.Surfaces;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -14,7 +15,9 @@ import java.util.List;
  * A popup list of actions under the node that opened it, as a card's "..." menu or a dropdown's
  * choices. An item can be shown in a warning colour, carry a grey hint after its label, be
  * disabled with a reason in its tooltip, or be locked behind a "SOON" badge. Separators group
- * items. {@link CreatorScreen#openMenu} shows it above everything but a modal; any click outside
+ * items. It is drawn as the menus' dialogs are, a charcoal face in a grey border and a black
+ * outline, and the row under the mouse or the arrow keys is on the slate of a selected tab.
+ * {@link CreatorScreen#openMenu} shows it above everything but a modal; any click outside
  * it closes it, and so do Escape and choosing an item. A menu taller than the screen, such as a
  * dropdown of many choices, is cut to the screen and scrolls with the wheel and the arrow keys.
  */
@@ -23,6 +26,8 @@ public class UiMenu implements UiNode {
     private static final int SEPARATOR = 5;
     private static final int PADDING = 6;
     private static final int MIN_WIDTH = 100;
+    // The outline and the border around the rows
+    private static final int EDGE = 2;
     private static final int LOCK = 0xFF9A9A9A;
 
     private record Item(Component label, @Nullable Component hint, int colour, @Nullable Runnable action,
@@ -100,7 +105,7 @@ public class UiMenu implements UiNode {
     public void place(Rect anchor, int screenWidth, int screenHeight) {
         Font font = Minecraft.getInstance().font;
         int widest = MIN_WIDTH;
-        int total = 2;
+        int total = 2 * EDGE;
         for (Item item : items) {
             total += item.separator() ? SEPARATOR : ROW;
             int itemWidth = font.width(item.label()) + 2 * PADDING;
@@ -114,7 +119,7 @@ public class UiMenu implements UiNode {
         }
         this.width = Math.min(widest, screenWidth - 8);
         this.contentHeight = total;
-        this.height = Math.min(total, Math.max(ROW + 2, screenHeight - 8));
+        this.height = Math.min(total, Math.max(ROW + 2 * EDGE, screenHeight - 8));
         this.scroll = 0;
         revealHighlighted();
         this.x = Math.max(4, Math.min(anchor.x(), screenWidth - width - 4));
@@ -128,10 +133,10 @@ public class UiMenu implements UiNode {
     }
 
     private int indexAt(double mouseX, double mouseY) {
-        if (!bounds().contains(mouseX, mouseY) || mouseY < y + 1 || mouseY >= y + height - 1) {
+        if (!bounds().contains(mouseX, mouseY) || mouseY < y + EDGE || mouseY >= y + height - EDGE) {
             return -1;
         }
-        int top = y + 1 - scroll;
+        int top = y + EDGE - scroll;
         for (int i = 0; i < items.size(); i++) {
             int rowHeight = items.get(i).separator() ? SEPARATOR : ROW;
             if (mouseY >= top && mouseY < top + rowHeight) {
@@ -158,7 +163,9 @@ public class UiMenu implements UiNode {
     @Override
     public void draw(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         Font font = Minecraft.getInstance().font;
-        Draw.panel(graphics, x, y, width, height, Theme.MENU, Theme.MENU_OUTLINE);
+        graphics.fill(x, y, x + width, y + height, Surfaces.OUTLINE);
+        graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, Theme.MENU_OUTLINE);
+        graphics.fill(x + EDGE, y + EDGE, x + width - EDGE, y + height - EDGE, Theme.MENU);
         int hoveredIndex = indexAt(mouseX, mouseY);
         if (hoveredIndex >= 0) {
             highlighted = hoveredIndex;
@@ -166,18 +173,19 @@ public class UiMenu implements UiNode {
         boolean scrolls = contentHeight > height;
         if (scrolls) {
             // The menu is drawn unmoved over everything, so the clip is in screen units
-            graphics.enableScissor(x + 1, y + 1, x + width - 1, y + height - 1);
+            graphics.enableScissor(x + EDGE, y + EDGE, x + width - EDGE, y + height - EDGE);
         }
-        int top = y + 1 - scroll;
+        int top = y + EDGE - scroll;
         for (int i = 0; i < items.size(); i++) {
             Item item = items.get(i);
             if (item.separator()) {
-                graphics.fill(x + 1, top + 2, x + width - 1, top + 3, Theme.SEPARATOR);
+                graphics.fill(x + EDGE + 3, top + 2, x + width - EDGE - 3, top + 3, Theme.SEPARATOR);
                 top += SEPARATOR;
                 continue;
             }
             if (i == highlighted && item.usable()) {
-                graphics.fill(x + 1, top, x + width - 1, top + ROW, Theme.MENU_HOVER);
+                graphics.fill(x + EDGE, top, x + width - EDGE, top + ROW, Theme.MENU_HOVER);
+                graphics.fill(x + EDGE, top, x + EDGE + 2, top + ROW, Theme.HIGHLIGHT_BAR);
             }
             int textY = top + (ROW - 8) / 2;
             int right = x + width - PADDING;
@@ -188,7 +196,7 @@ public class UiMenu implements UiNode {
             }
             if (item.hint() != null) {
                 int hintWidth = font.width(item.hint());
-                graphics.drawString(font, item.hint(), right - hintWidth, textY, Theme.FAINT, false);
+                Draw.string(graphics, font, item.hint(), right - hintWidth, textY, Theme.FAINT);
                 right -= hintWidth + 8;
             }
             Draw.text(graphics, font, item.label().getString(), x + PADDING, textY, Math.max(0, right - x - PADDING),
@@ -200,10 +208,10 @@ public class UiMenu implements UiNode {
         }
         if (scrolls) {
             graphics.disableScissor();
-            int track = height - 2;
+            int track = height - 2 * EDGE;
             int thumb = Math.max(8, track * track / contentHeight);
-            int thumbY = y + 1 + (track - thumb) * scroll / Math.max(1, contentHeight - height);
-            graphics.fill(x + width - 3, thumbY, x + width - 1, thumbY + thumb, Theme.MENU_OUTLINE);
+            int thumbY = y + EDGE + (track - thumb) * scroll / Math.max(1, contentHeight - height);
+            graphics.fill(x + width - EDGE - 2, thumbY, x + width - EDGE, thumbY + thumb, Theme.MENU_OUTLINE);
         }
     }
 
@@ -229,7 +237,7 @@ public class UiMenu implements UiNode {
         for (int i = 0; i < highlighted; i++) {
             top += items.get(i).separator() ? SEPARATOR : ROW;
         }
-        int room = height - 2;
+        int room = height - 2 * EDGE;
         if (top < scroll) {
             scrollTo(top);
         } else if (top + ROW > scroll + room) {
@@ -248,14 +256,14 @@ public class UiMenu implements UiNode {
     /** A padlock made of fills and the word "SOON", in the mockup's small grey badge. */
     private static void drawLockBadge(GuiGraphics graphics, Font font, int left, int top) {
         int width = lockBadgeWidth(font);
-        Draw.panel(graphics, left, top, width, 11, Theme.BADGE_SOON_BG, 0xFF5A5A5A);
+        Draw.panel(graphics, left, top, width, 11, Theme.BADGE_SOON_BG, Surfaces.BORDER_DISABLED);
         int lockX = left + 3;
         // Shackle, then body
         graphics.fill(lockX + 1, top + 2, lockX + 4, top + 3, LOCK);
         graphics.fill(lockX, top + 3, lockX + 1, top + 5, LOCK);
         graphics.fill(lockX + 4, top + 3, lockX + 5, top + 5, LOCK);
         graphics.fill(lockX - 1, top + 5, lockX + 6, top + 9, LOCK);
-        graphics.drawString(font, soon(), lockX + 7 + 3 - 1, top + 2, Theme.BADGE_SOON_FG, false);
+        Draw.string(graphics, font, soon(), lockX + 7 + 3 - 1, top + 2, Theme.BADGE_SOON_FG);
     }
 
     @Override

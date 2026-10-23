@@ -10,7 +10,7 @@ import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.FigureDraw;
 import com.theplumteam.client.gui.GreyedTextures;
-import com.theplumteam.client.gui.util.GuiScaleManager;
+import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.gui.util.GuiPose;
 import com.theplumteam.client.renderer.FigurePreviewItemRenderer;
 import com.theplumteam.client.renderer.HolographicRenderTypes;
@@ -33,11 +33,11 @@ import java.util.List;
 import java.util.function.Predicate;
 
 /**
- * Entry for displaying a row of up to 4 figures with 3D models
+ * Entry for displaying a row of figures with 3D models, as many as the list's columns
  */
 public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     private final Minecraft mc;
-    private final List<FigureDefinition> figures; // Up to 4 figures per row
+    private final List<FigureDefinition> figures; // Up to the list's columns per row
     private final String collectionId;
 
     // Configuration from parent widget
@@ -67,8 +67,9 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     /** Whether the player discovered a figure, asked with "collection:figure": the client's own record. */
     public static final Predicate<String> DEFAULT_DISCOVERED = ClientDiscoveryManager::isDiscovered;
 
-    private static final int FIGURE_SIZE = 80;
-    private static final int GRID_SPACING = 4;
+    /** A cell's usual size, which the models' offsets are tuned for. */
+    public static final int FIGURE_SIZE = 80;
+    public static final int GRID_SPACING = 4;
     // The gap the list leaves between two rows, and what it adds above a row with a heading
     private static final int ROW_GAP = 10;
     static final int HEADING_SPACE = 16;
@@ -77,6 +78,18 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     private static final int SPECIAL_BORDER_COLOR_UNDISCOVERED = 0x80BB8FCE;
     // The light of a token's draw, without alpha
     private static final int DRAW_LIGHT_COLOR = 0xFFD700;
+    // The cells are Quick Skin's skin tiles: a dark translucent square in a light outline that
+    // brightens under the mouse; a figure not yet discovered is dimmer
+    private static final int CELL = 0x80000000;
+    private static final int CELL_UNDISCOVERED = 0xA0000000;
+    private static final int CELL_HOVER = 0x20FFFFFF;
+    private static final int BORDER = 0x60FFFFFF;
+    private static final int BORDER_UNDISCOVERED = 0x30FFFFFF;
+    private static final int BORDER_HOVER = 0xC0FFFFFF;
+
+    // The size of this row's cells and how many a full row holds, which the list sets
+    private int cellSize = FIGURE_SIZE;
+    private int columns = 4;
 
     public FigureEntry(List<FigureDefinition> figures, String collectionId) {
         this.mc = Minecraft.getInstance();
@@ -93,6 +106,12 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         this.xOffset = xOffset;
         this.yOffset = yOffset;
         this.zOffset = zOffset;
+    }
+
+    /** The size of this row's cells and how many cells a full row of the list holds. */
+    public void setGrid(int cellSize, int columns) {
+        this.cellSize = cellSize;
+        this.columns = columns;
     }
 
     public void setPreviewScale(float previewScale) {
@@ -169,23 +188,10 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
     private void drawFigureName(GuiGraphics graphics, FigureDefinition figure, int figureX, int y,
                                 int effectiveFigureSize, int color) {
-        // Draw figure name only if GUI scale is less than 3
-        int guiScale = mc.options.guiScale().get();
-        if (guiScale < 3) {
-            Component figureName = Component.literal(figure.getName());
-            int nameWidth = mc.font.width(figureName);
-            if (nameWidth > effectiveFigureSize - 4) {
-                String truncated = figure.getName();
-                while (mc.font.width(truncated + "...") > effectiveFigureSize - 4 && truncated.length() > 0) {
-                    truncated = truncated.substring(0, truncated.length() - 1);
-                }
-                figureName = Component.literal(truncated + "...");
-            }
-
-            int nameX = figureX + (effectiveFigureSize - mc.font.width(figureName)) / 2;
-            int nameY = y + effectiveFigureSize - mc.font.lineHeight - 2;
-            graphics.drawString(mc.font, figureName, nameX, nameY, color, true);
-        }
+        String name = UiText.fit(mc.font, figure.getName(), effectiveFigureSize - 4);
+        int nameX = figureX + (effectiveFigureSize - mc.font.width(name)) / 2;
+        int nameY = y + effectiveFigureSize - mc.font.lineHeight - 2;
+        UiText.draw(graphics, mc.font, name, nameX, nameY, color);
     }
 
     //? if >=26 {
@@ -205,14 +211,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                       int entryHeight, int mouseX, int mouseY, boolean isMouseOver, float partialTick) {
     //? }
 
-        // Calculate effective figure size - scale when using inverse scale mode
-        int effectiveFigureSize = FIGURE_SIZE;
+        int effectiveFigureSize = cellSize;
         int effectiveSpacing = GRID_SPACING;
-        if (GuiScaleManager.isUsingInverseScale()) {
-            float scale = GuiScaleManager.getRenderScaleFactor();
-            effectiveFigureSize = (int)(FIGURE_SIZE * scale);
-            effectiveSpacing = (int)(GRID_SPACING * scale);
-        }
 
         // Calculate total width of all figures in this row
         int totalFiguresWidth = figures.size() * effectiveFigureSize + (figures.size() - 1) * effectiveSpacing;
@@ -222,22 +222,19 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
         if (heading != null) {
             // Centred over the row, between two rules as wide as a full row
-            int fullRowWidth = 4 * effectiveFigureSize + 3 * effectiveSpacing;
+            int fullRowWidth = columns * effectiveFigureSize + (columns - 1) * effectiveSpacing;
             int rowLeft = x + (entryWidth - fullRowWidth) / 2;
             int headingWidth = mc.font.width(heading);
             int headingX = x + (entryWidth - headingWidth) / 2;
             int headingGap = ROW_GAP + HEADING_SPACE;
-            if (GuiScaleManager.isUsingInverseScale()) {
-                headingGap = (int)(headingGap * GuiScaleManager.getRenderScaleFactor());
-            }
             int headingY = y - (headingGap + mc.font.lineHeight) / 2;
             int ruleY = headingY + mc.font.lineHeight / 2 - 1;
             graphics.fill(rowLeft, ruleY, headingX - 6, ruleY + 1, SPECIAL_BORDER_COLOR_UNDISCOVERED);
             graphics.fill(headingX + headingWidth + 6, ruleY, rowLeft + fullRowWidth, ruleY + 1, SPECIAL_BORDER_COLOR_UNDISCOVERED);
-            graphics.drawString(mc.font, heading, headingX, headingY, SPECIAL_BORDER_COLOR, false);
+            UiText.draw(graphics, mc.font, heading, headingX, headingY, SPECIAL_BORDER_COLOR);
         }
 
-        // Render each figure in this row (up to 4)
+        // Render each figure in this row
         for (int i = 0; i < figures.size(); i++) {
             FigureDefinition figure = figures.get(i);
             int figureX = startX + i * (effectiveFigureSize + effectiveSpacing);
@@ -248,27 +245,20 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             boolean isDiscovered = discovered.test(uniqueFigureId)
                     && !FigureDraw.hides(collectionId, figure.getId());
 
-            // Draw background (darker for undiscovered figures)
-            if (isDiscovered) {
-                graphics.fill(figureX, y, figureX + effectiveFigureSize, y + effectiveFigureSize, 0x30FFFFFF);
-            } else {
-                graphics.fill(figureX, y, figureX + effectiveFigureSize, y + effectiveFigureSize, 0x50000000);
-            }
+            // The tile, darker for an undiscovered figure
+            graphics.fill(figureX, y, figureX + effectiveFigureSize, y + effectiveFigureSize,
+                    isDiscovered ? CELL : CELL_UNDISCOVERED);
 
             // Check if mouse is hovering over this specific figure
             boolean isFigureHovered = mouseX >= figureX && mouseX < figureX + effectiveFigureSize &&
                                      mouseY >= y && mouseY < y + effectiveFigureSize;
 
             if (isFigureHovered) {
-                if (isDiscovered) {
-                    graphics.fill(figureX, y, figureX + effectiveFigureSize, y + effectiveFigureSize, 0x40FFFFFF);
-                } else {
-                    graphics.fill(figureX, y, figureX + effectiveFigureSize, y + effectiveFigureSize, 0x60000000);
-                }
+                graphics.fill(figureX, y, figureX + effectiveFigureSize, y + effectiveFigureSize, CELL_HOVER);
             }
 
-            // Draw border around each figure
-            int borderColor = isDiscovered ? 0x80FFFFFF : 0x60808080; // White for discovered, gray for undiscovered
+            // Its outline: light, brighter under the mouse, purple for a special
+            int borderColor = isFigureHovered ? BORDER_HOVER : isDiscovered ? BORDER : BORDER_UNDISCOVERED;
             if (figure.isSpecial()) {
                 borderColor = isDiscovered ? SPECIAL_BORDER_COLOR : SPECIAL_BORDER_COLOR_UNDISCOVERED;
             }
@@ -289,13 +279,13 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
             if (isDiscovered) {
                 // Render the 3D figure model for discovered figures
-                render3DFigure(graphics, figure, figureX, y, effectiveFigureSize, partialTick, false, false);
+                renderPreview(graphics, figure, figureX, y, effectiveFigureSize, partialTick, false, false);
 
                 drawFigureName(graphics, figure, figureX, y, effectiveFigureSize, 0xFFFFFFFF);
             } else {
                 // The figure is there to see, in black and white until it is discovered
-                render3DFigure(graphics, figure, figureX, y, effectiveFigureSize, partialTick, true, false);
-                drawFigureName(graphics, figure, figureX, y, effectiveFigureSize, 0xFFC0C0C0);
+                renderPreview(graphics, figure, figureX, y, effectiveFigureSize, partialTick, true, false);
+                drawFigureName(graphics, figure, figureX, y, effectiveFigureSize, 0xFFB0B0B0);
             }
         }
     }

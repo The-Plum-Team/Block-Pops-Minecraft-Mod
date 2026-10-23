@@ -2,7 +2,9 @@ package com.theplumteam.client.gui.widget;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.client.gui.style.Surfaces;
 import net.minecraft.Util;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 //? if >=1.21.2 {
 /*import net.minecraft.client.renderer.RenderType;
@@ -13,10 +15,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
 public class LinkButton extends Button {
-
-    //? if >=1.21 {
-    /*private static final ResourceLocation NORMAL_BUTTON = ResourceLocation.withDefaultNamespace("widget/button");
-    *///? }
 
     private final ResourceLocation texture;
     private final int textureWidth;
@@ -40,17 +38,15 @@ public class LinkButton extends Button {
 
     @Override
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
-        // Use the standard button background for the rounded shape.
-        // We always use the "normal" (not hovered) state texture. The V-offset for this is 46 + 1 * 20 = 66.
-        //? if >=1.21.6 {
-        /*graphics.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, NORMAL_BUTTON, this.getX(), this.getY(), this.getWidth(), this.getHeight());
-        *///? } elif >=1.21.2 {
-        /*graphics.blitSprite(RenderType::guiTextured, NORMAL_BUTTON, this.getX(), this.getY(), this.getWidth(), this.getHeight());
-        *///? } elif >=1.21 {
-        /*graphics.blitSprite(NORMAL_BUTTON, this.getX(), this.getY(), this.getWidth(), this.getHeight());
-        *///? } else {
-        graphics.blitNineSliced(WIDGETS_LOCATION, this.getX(), this.getY(), this.getWidth(), this.getHeight(), 20, 4, 200, 20, 0, 46 + 1 * 20);
-        //? }
+        // Drawn flat in a well, as Quick Skin's link buttons are: the logo fills the well inside
+        // the border, so the border frames it and lightens under the mouse
+        boolean hovered = this.active && this.isHovered();
+        boolean pressed = hovered && Minecraft.getInstance().mouseHandler.isLeftPressed();
+        int border = !this.active ? Surfaces.BORDER_DISABLED
+                : pressed ? Surfaces.BORDER_SELECTED
+                : hovered ? Surfaces.BORDER_HOVER : Surfaces.BORDER;
+        Surfaces.well(graphics, this.getX(), this.getY(), this.getX() + this.width, this.getY() + this.height,
+                border, hovered ? Surfaces.WELL_HOVER : Surfaces.WELL);
 
         // Enable blending for the transparent logo. From 1.21.5 the GUI render
         // type owns blending and depth, so there is no global state to set.
@@ -66,7 +62,7 @@ public class LinkButton extends Button {
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, this.alpha);
         //? }
 
-        // Draw the logo texture on top, inset slightly to fit within the rounded border.
+        // The logo inside the outline and the border
         int padding = 2;
         //? if >=1.21.6 {
         /*graphics.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, this.texture,

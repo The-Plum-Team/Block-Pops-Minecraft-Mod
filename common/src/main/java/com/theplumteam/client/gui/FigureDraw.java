@@ -2,7 +2,9 @@ package com.theplumteam.client.gui;
 
 import com.theplumteam.client.ClientSpecialAccess;
 import com.theplumteam.client.gui.util.GuiPose;
-import com.theplumteam.client.gui.util.GuiScaleManager;
+import com.theplumteam.client.gui.style.PixelFont;
+import com.theplumteam.client.gui.style.Surfaces;
+import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.gui.widget.FigureEntry;
 import com.theplumteam.client.gui.widget.FigureListWidget;
 import com.theplumteam.figure.CollectionRegistry;
@@ -326,7 +328,6 @@ public final class FigureDraw {
     /**
      * Shows the figure a draw on this list stopped on, in a card above everything else on the
      * screen, centred over the list, which it alone dims; the rest of the screen stays usable.
-     * Drawn in the list's own space, which is scaled up when the inverse GUI scale is in use.
      * Nothing is drawn while no draw on this list, or on its collection, shows its figure.
      *
      * @param stamp a line under the card's text in a red frame, such as the creator's note that
@@ -353,11 +354,10 @@ public final class FigureDraw {
         GuiPose.push(graphics);
         GuiPose.lift(graphics, 400.0f);
 
-        float scale = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getRenderScaleFactor() : 1.0f;
-        int left = (int) (list.left() * scale);
-        int top = (int) (list.top() * scale);
-        int right = (int) (list.right() * scale);
-        int bottom = (int) (list.bottom() * scale);
+        int left = list.left();
+        int top = list.top();
+        int right = list.right();
+        int bottom = list.bottom();
         graphics.fill(left, top, right, bottom, 0xB0000000);
 
         String name = draw.winner().getName();
@@ -368,7 +368,7 @@ public final class FigureDraw {
         String stampText = stamp != null ? stamp.getString() : null;
         int line = font.lineHeight + 4;
         int lines = stampText != null ? 4 : 3;
-        int size = (int) Math.max(40, Math.min(120 * scale, bottom - top - lines * line - 30));
+        int size = Math.max(40, Math.min(120, bottom - top - lines * line - 30));
         int cardWidth = Math.max(Math.max(size, font.width(hint)), Math.max(font.width(name), font.width(label))) + 40;
         if (stampText != null) {
             cardWidth = Math.max(cardWidth, font.width(stampText) + 24);
@@ -380,19 +380,20 @@ public final class FigureDraw {
         int holographicColor = 0xFF000000
                 | net.minecraft.util.Mth.hsvToRgb((System.currentTimeMillis() % 2000L) / 2000.0F, 0.55F, 1.0F);
         int labelColor = draw.isHolographic() ? holographicColor : draw.isNew() ? 0xFFFFD700 : 0xFFAAAAAA;
-        int frameColor = labelColor;
-        graphics.fill(cardX - 2, cardY - 2, cardX + cardWidth + 2, cardY + cardHeight + 2, frameColor);
-        graphics.fill(cardX, cardY, cardX + cardWidth, cardY + cardHeight, 0xFF181818);
+        // A raised card in the menus' style, its border in the label's colour
+        Surfaces.raised(graphics, cardX - 2, cardY - 2, cardX + cardWidth + 2, cardY + cardHeight + 2,
+                labelColor, Surfaces.DIALOG_FACE);
         GuiPose.flush(graphics);
 
         int textY = cardY + 8;
-        graphics.drawString(font, label, cardX + (cardWidth - font.width(label)) / 2, textY, labelColor, false);
+        PixelFont.drawCentered(graphics, Component.literal(label), cardX + cardWidth / 2,
+                textY + 3.5f, cardWidth - 8, 1.0f, labelColor, true);
         row.renderPreview(graphics, draw.winner(), cardX + (cardWidth - size) / 2, textY + line, size, partialTick,
                 false, draw.isHolographic());
         textY += line + size + 4;
-        graphics.drawString(font, name, cardX + (cardWidth - font.width(name)) / 2, textY, 0xFFFFFFFF, false);
+        UiText.drawCentered(graphics, font, name, cardX + cardWidth / 2, textY, Surfaces.TEXT);
         textY += line;
-        graphics.drawString(font, hint, cardX + (cardWidth - font.width(hint)) / 2, textY, 0xFF888888, false);
+        UiText.drawCentered(graphics, font, hint, cardX + cardWidth / 2, textY, Surfaces.TEXT_MUTED);
         if (stampText != null) {
             textY += line;
             int stampWidth = font.width(stampText) + 8;

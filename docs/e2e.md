@@ -41,9 +41,10 @@ claw-machine draw is seeded, and toasts are cleared before each capture, so an
 unchanged view is byte-identical from run to run.
 
 Each step asserts production class/container identity and records a semantic
-capture. Screenshots are exactly 1600×900 at GUI scale 2. Generic image checks,
-BlockPops-specific text/background probes, and localized change comparisons are
-deterministic.
+capture. Screenshots are exactly 1600×900 at GUI scale 2, which is also the scale
+the menus choose for themselves at that size ([`docs/ui.md`](ui.md)): an 800×450
+canvas. Generic image checks, BlockPops-specific text/background probes, and
+localized change comparisons are deterministic.
 
 The protected fan-in fully decodes every PNG and independently recomputes pixel
 hashes, blank-frame metrics, and each contracted regional comparison. A client

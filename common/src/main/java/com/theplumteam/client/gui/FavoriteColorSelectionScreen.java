@@ -1,32 +1,20 @@
 package com.theplumteam.client.gui;
 
 import com.theplumteam.client.gui.util.GuiPose;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferBuilder;
-//? if >=1.21.5 {
-/*import net.minecraft.client.renderer.RenderType;
-*///? } elif >=1.21 {
-/*import com.mojang.blaze3d.vertex.BufferUploader;
-*///? }
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-//? if <26.2 {
-import com.mojang.blaze3d.vertex.Tesselator;
-//? }
-//? if <26.3 {
-import com.mojang.blaze3d.vertex.VertexFormat;
-//? }
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
-import com.theplumteam.client.config.ClientConfig;
-import com.theplumteam.client.gui.util.GuiScaleManager;
+import com.theplumteam.client.gui.style.MenuGuiScale;
+import com.theplumteam.client.gui.style.PixelFont;
+import com.theplumteam.client.gui.style.PixelIcon;
+import com.theplumteam.client.gui.style.StyledButton;
+import com.theplumteam.client.gui.style.Surfaces;
+import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.gui.widget.ColorSelectionButton;
 import com.theplumteam.network.SetFavoriteColorPacket;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -40,9 +28,31 @@ import java.util.List;
  * Screen displayed when a player joins a world for the first time.
  * Allows them to choose their favorite color which will be used for their figure box
  * in the World Players collection.
+ *
+ * <p>A full-screen menu in Quick Skin's style on the machine screen's scrolling stars: the title
+ * in the pixel font, the explanation under it, the 16 colours as raised tiles on a dark backdrop,
+ * and the Figure toggle beside the green Done button. It has its own GUI scale
+ * ({@link MenuGuiScale}) and lays itself out from the canvas, between about 400x300 and 860x520.
  */
-public class FavoriteColorSelectionScreen extends Screen {
+public class FavoriteColorSelectionScreen extends Screen implements MenuGuiScale.Scaled {
     private static final Logger LOGGER = LoggerFactory.getLogger(FavoriteColorSelectionScreen.class);
+
+    private static final String DESCRIPTION_1 = "This color will be used for your figure box";
+    private static final String DESCRIPTION_2 = "in the World Players collection.";
+
+    private static final int GRID_COLUMNS = 4; // 4x4 grid
+    private static final int GRID_ROWS = 4;
+    private static final int MAX_TILE_SIZE = 88;
+    private static final int MIN_TILE_SIZE = 16;
+    /** Room between the backdrop's edge and the tiles. */
+    private static final int BACKDROP_PADDING = 8;
+    private static final int BACKDROP_ALPHA = 0xB0;
+    /** Room between the title, the description, the backdrop and the buttons. */
+    private static final int SECTION_GAP = 8;
+    private static final int BUTTON_GAP = 6;
+    private static final int MIN_TOGGLE_WIDTH = 96;
+    /** The tile size the preview offsets below were tuned at. */
+    private static final int PREVIEW_TUNED_SIZE = 72;
 
     @Nullable
     private PopBlockColor selectedColor = null;
@@ -51,16 +61,14 @@ public class FavoriteColorSelectionScreen extends Screen {
     private boolean showFigureInBox = true;
     private final List<ColorSelectionButton> colorButtons = new ArrayList<>();
 
-    // Panel dimensions
-    private int panelX;
-    private int panelY;
-    private int panelWidth;
-    private int panelHeight;
-
-    // Constants
-    private static final int MIN_PANEL_WIDTH = 400;
-    private static final int MAX_PANEL_WIDTH = 600;
-    private static final int MIN_PANEL_HEIGHT = 450;
+    // Layout, from the canvas size
+    private float titleScale = 1.0f;
+    private float titleMiddleY;
+    private int descriptionY;
+    private int backdropLeft;
+    private int backdropTop;
+    private int backdropRight;
+    private int backdropBottom;
 
     // Transformation values for box rendering
     private float rotationX = 342.3f;  // Default rotation
@@ -71,16 +79,9 @@ public class FavoriteColorSelectionScreen extends Screen {
     private float offsetY = -134.0f;
     private float offsetZ = 0.0f;
 
-    // Box container scale (scales the grid area only, not the entire panel)
-    private float containerScale = 1.2f;
-    // How far the fitted preview shrank from the preferred one. The preview offsets were tuned
-    // at the preferred cell size and must shrink with it to keep each box inside its tile.
+    // How far the fitted preview shrank from the tuned one. The preview offsets were tuned
+    // at that tile size and must shrink with it to keep each box inside its tile.
     private float previewFit = 1.0f;
-
-    // Track if we forced GUI scale change
-    private boolean guiScaleForced = false;
-    // Track if the screen is in the process of closing (to prevent init() from re-applying scale)
-    private boolean isClosing = false;
 
     public FavoriteColorSelectionScreen() {
         super(Component.literal("Choose Your Favorite Color"));
@@ -89,90 +90,82 @@ public class FavoriteColorSelectionScreen extends Screen {
 
     @Override
     protected void init() {
-        // Don't change scale if we're in the process of closing
-        // (resizeDisplay() during restore triggers init() again)
-        if (isClosing) {
-            super.init();
-            return;
+        if (this.minecraft != null) {
+            MenuGuiScale.enter(this.minecraft, this);
         }
-
-        // Enforce GUI Scale - Force it even if shaders are detected (true parameter)
-        // Only attempt to change scale once per screen instance
-        if (!guiScaleForced) {
-            if (GuiScaleManager.setMenuGuiScale(GuiScaleManager.getOptimalMenuScale(), true)) {
-                guiScaleForced = true;
-                // If scale changed, the screen will be re-initialized by the engine
-                return;
-            }
-        }
-
         super.init();
-        clearWidgets();
         colorButtons.clear();
 
-        // Calculate panel dimensions
-        calculatePanelDimensions();
+        int margin = Math.max(8, this.height / 36);
+        int spacing = Math.max(4, this.height / 60);
+        int buttonHeight = Mth.clamp(this.height / 14, 20, 30);
 
-        int scaledPadding = 20;
-        int scaledSpacing = 10;
-        int scaledComponentHeight = 24;
+        // The title's capitals, then the two lines of the description
+        this.titleScale = Mth.clamp(this.height / 250.0f, 1.0f, 2.0f);
+        int titleHeight = Math.round(PixelFont.CAPITALS_HEIGHT * PixelFont.crispScale(this.titleScale));
+        int descriptionHeight = 2 * this.font.lineHeight + 2;
+        int headerHeight = titleHeight + SECTION_GAP + descriptionHeight;
 
-        // Title and description
-        int titleY = panelY + scaledPadding;
+        // The tiles take what the header and the buttons leave, never more than the width allows
+        int availableHeight = this.height - 2 * margin - headerHeight - buttonHeight
+                - 2 * SECTION_GAP - 2 * BACKDROP_PADDING;
+        int availableWidth = this.width - 2 * margin - 2 * BACKDROP_PADDING;
+        int tileSize = Math.min((availableHeight - (GRID_ROWS - 1) * spacing) / GRID_ROWS,
+                (availableWidth - (GRID_COLUMNS - 1) * spacing) / GRID_COLUMNS);
+        tileSize = Mth.clamp(tileSize, MIN_TILE_SIZE, MAX_TILE_SIZE);
+        // Each tile draws its preview at 60% of its size; the offsets scale by the same ratio.
+        this.previewFit = (int) (tileSize * 0.6f) / (float) (int) (PREVIEW_TUNED_SIZE * 0.6f);
+        int gridWidth = GRID_COLUMNS * tileSize + (GRID_COLUMNS - 1) * spacing;
+        int gridHeight = GRID_ROWS * tileSize + (GRID_ROWS - 1) * spacing;
 
-        // Position grid below title and description
-        int descriptionHeight = font.lineHeight * 3; // Title + description (2 lines)
-        int gridStartY = titleY + descriptionHeight + scaledPadding;
-        int doneButtonY = panelY + panelHeight - scaledPadding - scaledComponentHeight;
-
-        // Color grid setup - scale button size with container scale, but never past the space
-        // between the description and the Figure/Done row. On a short window (800x450 at GUI
-        // scale 2, for one) the preferred size ran the last row over those buttons.
-        int gridCols = 4; // 4x4 grid
-        int gridRows = 4;
-        int preferredSize = (int)(60 * containerScale);
-        int fittingHeight = (doneButtonY - scaledSpacing - gridStartY - (gridRows - 1) * scaledSpacing) / gridRows;
-        int fittingWidth = (panelWidth - 2 * scaledPadding - (gridCols - 1) * scaledSpacing) / gridCols;
-        int buttonSize = Math.max(16, Math.min(preferredSize, Math.min(fittingHeight, fittingWidth)));
-        // Each cell draws its preview at 60% of its size; the offsets scale by the same ratio.
-        previewFit = (int) (buttonSize * 0.6f) / (float) (int) (preferredSize * 0.6f);
-        int gridWidth = (gridCols * buttonSize) + ((gridCols - 1) * scaledSpacing);
-
-        // Center the grid horizontally
-        int gridStartX = panelX + (panelWidth - gridWidth) / 2;
+        // Everything centred on the canvas when the tiles leave room to spare
+        int contentHeight = headerHeight + SECTION_GAP + gridHeight + 2 * BACKDROP_PADDING + SECTION_GAP + buttonHeight;
+        int top = Math.max(margin, (this.height - contentHeight) / 2);
+        this.titleMiddleY = top + titleHeight / 2.0f;
+        this.descriptionY = top + titleHeight + SECTION_GAP;
+        int gridX = (this.width - gridWidth) / 2;
+        int gridY = top + headerHeight + SECTION_GAP + BACKDROP_PADDING;
+        this.backdropLeft = gridX - BACKDROP_PADDING;
+        this.backdropTop = gridY - BACKDROP_PADDING;
+        this.backdropRight = gridX + gridWidth + BACKDROP_PADDING;
+        this.backdropBottom = gridY + gridHeight + BACKDROP_PADDING;
 
         // Create 4x4 grid of color buttons
         PopBlockColor[] colors = PopBlockColor.values();
         for (int i = 0; i < colors.length; i++) {
             PopBlockColor color = colors[i];
-            int row = i / gridCols;
-            int col = i % gridCols;
-            int x = gridStartX + (col * (buttonSize + scaledSpacing));
-            int y = gridStartY + (row * (buttonSize + scaledSpacing));
+            int row = i / GRID_COLUMNS;
+            int col = i % GRID_COLUMNS;
+            int x = gridX + (col * (tileSize + spacing));
+            int y = gridY + (row * (tileSize + spacing));
 
-            ColorSelectionButton colorButton = new ColorSelectionButton(x, y, buttonSize, color, this);
+            ColorSelectionButton colorButton = new ColorSelectionButton(x, y, tileSize, color, this);
+            colorButton.setSelected(color == selectedColor);
             this.addRenderableWidget(colorButton);
             colorButtons.add(colorButton);
         }
 
-        // Bottom buttons - Toggle Figure button on left, Done button on right
-        int buttonWidth = 200;
-        int toggleButtonWidth = 120;
-        int buttonSpacing = 10;
-        int totalButtonWidth = buttonWidth + toggleButtonWidth + buttonSpacing;
-        int buttonsStartX = panelX + (panelWidth - totalButtonWidth) / 2;
+        // Bottom buttons, as wide as the backdrop: Toggle Figure on the left, Done on the right
+        int rowWidth = Math.min(this.width - 2 * margin, Math.max(200, backdropRight - backdropLeft));
+        int rowX = (this.width - rowWidth) / 2;
+        int buttonsY = backdropBottom + SECTION_GAP;
+        int toggleButtonWidth = Math.max(MIN_TOGGLE_WIDTH, (int) (rowWidth * 0.38f));
 
-        // Toggle Figure button (left of Done)
-        toggleFigureButton = Button.builder(Component.literal(showFigureInBox ? "Figure: ON" : "Figure: OFF"), button -> {
+        StyledButton toggle = new StyledButton(rowX, buttonsY, toggleButtonWidth, buttonHeight,
+                Component.literal(showFigureInBox ? "Figure: ON" : "Figure: OFF"), button -> {
             showFigureInBox = !showFigureInBox;
             button.setMessage(Component.literal(showFigureInBox ? "Figure: ON" : "Figure: OFF"));
+            ((StyledButton) button).setSelected(showFigureInBox);
             updateFigureVisibility();
-        }).bounds(buttonsStartX, doneButtonY, toggleButtonWidth, scaledComponentHeight).build();
+        }).icon(PixelIcon.PLAYER);
+        // The bright border marks the figure as shown
+        toggle.setSelected(showFigureInBox);
+        toggleFigureButton = toggle;
         this.addRenderableWidget(toggleFigureButton);
 
-        // Done button (right of Toggle)
-        int doneButtonX = buttonsStartX + toggleButtonWidth + buttonSpacing;
-        doneButton = Button.builder(Component.literal("Done"), button -> {
+        int doneButtonX = rowX + toggleButtonWidth + BUTTON_GAP;
+        doneButton = new StyledButton(doneButtonX, buttonsY, rowX + rowWidth - doneButtonX, buttonHeight,
+                Component.literal("Done"), button -> {
             if (selectedColor != null) {
                 BlockPopsMod.logDebug("Player confirmed favorite color choice: {}", selectedColor.getSerializedName());
                 // Send packet to server using cross-platform networking
@@ -180,13 +173,25 @@ public class FavoriteColorSelectionScreen extends Screen {
                 packet.sendToServer();
                 this.onClose();
             }
-        }).bounds(doneButtonX, doneButtonY, buttonWidth, scaledComponentHeight).build();
+        }).tone(StyledButton.Tone.PRIMARY).pixelLabel();
 
-        doneButton.active = false; // Initially disabled
+        // Disabled until a colour is chosen; a rebuild keeps the choice
+        doneButton.active = selectedColor != null;
         this.addRenderableWidget(doneButton);
 
         // Initialize button transforms
         updateButtonTransforms();
+        if (!showFigureInBox) {
+            updateFigureVisibility();
+        }
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (this.minecraft != null && MenuGuiScale.reapply(this.minecraft, this)) {
+            rebuildWidgets();
+        }
     }
 
     /**
@@ -209,30 +214,6 @@ public class FavoriteColorSelectionScreen extends Screen {
     }
 
     /**
-     * Calculate panel dimensions based on screen size
-     */
-    private void calculatePanelDimensions() {
-        int desiredWidth = (int)(this.width * 0.5f);
-        int desiredHeight = (int)(this.height * 0.7f);
-
-        panelWidth = Mth.clamp(
-                desiredWidth,
-                MIN_PANEL_WIDTH,
-                Math.min(MAX_PANEL_WIDTH, this.width - 60)
-        );
-
-        panelHeight = Mth.clamp(
-                desiredHeight,
-                MIN_PANEL_HEIGHT,
-                this.height - 60
-        );
-
-        // Center the panel
-        panelX = (this.width - panelWidth) / 2;
-        panelY = (this.height - panelHeight) / 2;
-    }
-
-    /**
      * Called when a color is selected
      */
     public void setSelectedColor(PopBlockColor color) {
@@ -248,28 +229,11 @@ public class FavoriteColorSelectionScreen extends Screen {
     }
 
     @Override
-    public void onClose() {
-        // Mark as closing to prevent init() from re-applying scale during resizeDisplay()
-        isClosing = true;
-        // Restore original GUI scale when screen is closed
-        restoreGuiScaleIfNeeded();
-        super.onClose();
-    }
-
-    @Override
     public void removed() {
-        // Mark as closing in case removed() is called directly
-        isClosing = true;
-        // Also restore here as a fallback
-        restoreGuiScaleIfNeeded();
         super.removed();
-    }
-
-    private void restoreGuiScaleIfNeeded() {
-        if (guiScaleForced) {
-            guiScaleForced = false;
-            GuiScaleManager.restoreOriginalGuiScale();
-            BlockPopsMod.logDebug("Restored original GUI scale");
+        // Put back the scale of the player's options
+        if (this.minecraft != null) {
+            MenuGuiScale.restore(this.minecraft);
         }
     }
 
@@ -286,8 +250,8 @@ public class FavoriteColorSelectionScreen extends Screen {
         // Render animated starry background
         renderBackgroundEffects(graphics, partialTick);
 
-        // Render panel background (frosted glass effect)
-        renderPanel(graphics);
+        // The dark backdrop behind the tiles, as Quick Skin's import zone
+        Surfaces.backdrop(graphics, backdropLeft, backdropTop, backdropRight, backdropBottom, BACKDROP_ALPHA);
 
         // Render widgets (buttons)
         super.render(graphics, mouseX, mouseY, partialTick);
@@ -311,186 +275,25 @@ public class FavoriteColorSelectionScreen extends Screen {
         GuiPose.flush(graphics);
         //? }
 
-        // 2. Render the moving star pattern
-        renderStarPattern(graphics, partialTick);
+        // 2. Render the moving star pattern, in the star colour and opacity of the client config
+        CollectionSelectionScreen.drawStarPattern(graphics, this.width, this.height, partialTick);
 
         // 3. Close the background layer so the panel and its text draw above it
         GuiPose.nextStratum(graphics);
     }
 
     /**
-     * Render the animated star pattern (OPTIMIZED - pre-tiled texture cache, 1 draw call)
-     */
-    private void renderStarPattern(GuiGraphics graphics, float partialTick) {
-        double pixelsPerSecond = 5.0;
-        int tileSize = StarPatternCache.getTileSize();
-
-        // Calculate smooth scrolling offset
-        //? if >=26.2 {
-        /*// 26.2 dropped the GUI tick counter; wall time drives the same scroll.
-        double smoothTime = net.minecraft.util.Util.getMillis() / 1000.0;
-        *///? } else {
-        int tickCount = this.minecraft != null ? this.minecraft.gui.getGuiTicks() : 0;
-        double smoothTime = (tickCount + partialTick) / 20.0;
-        //? }
-        double offsetX = (com.theplumteam.util.E2EDeterminism.scrollSeconds(smoothTime) * pixelsPerSecond) % tileSize;
-
-        // Apply star color tint and opacity from config
-        ClientConfig config = ClientConfig.getInstance();
-
-        // Use the pre-tiled cached texture
-        StarPatternCache.ensureSmoothFiltering();
-        ResourceLocation cacheTexture = StarPatternCache.getTextureLocation();
-        int cacheWidth = StarPatternCache.getTextureWidth();
-        int cacheHeight = StarPatternCache.getTextureHeight();
-        int starWidth = this.width;
-        int starHeight = this.height;
-
-        //? if >=1.21.6 {
-        /*// 1.21.6 selects the GUI shader by render pipeline rather than render type.
-        int argb = ((int) (config.starOpacity * 255) << 24)
-                | ((int) (config.starColorR * 255) << 16)
-                | ((int) (config.starColorG * 255) << 8)
-                | (int) (config.starColorB * 255);
-        graphics.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, cacheTexture,
-                0, 0, (float) offsetX, 0.0f, starWidth, starHeight, cacheWidth, cacheHeight, argb);
-        *///? } elif >=1.21.5 {
-        /*// 1.21.5 tints and blends inside the GUI render type, so the scrolling quad is
-        // one blit with a packed colour instead of a hand-built buffer.
-        int argb = ((int) (config.starOpacity * 255) << 24)
-                | ((int) (config.starColorR * 255) << 16)
-                | ((int) (config.starColorG * 255) << 8)
-                | (int) (config.starColorB * 255);
-        graphics.blit(RenderType::guiTextured, cacheTexture, 0, 0, (float) offsetX, 0.0f,
-                starWidth, starHeight, cacheWidth, cacheHeight, argb);
-        *///? } elif >=1.21.2 {
-        /*float u0 = (float) offsetX / (float) cacheWidth;
-        float v0 = 0.0f;
-        float u1 = u0 + ((float) starWidth / (float) cacheWidth);
-        float v1 = (float) starHeight / (float) cacheHeight;
-
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.setShaderColor(config.starColorR, config.starColorG, config.starColorB, config.starOpacity);
-
-        var pose = graphics.pose();
-        pose.pushPose();
-        RenderSystem.setShaderTexture(0, cacheTexture);
-        // GUI fills leave a different program bound; select the textured 1.21.4 shader.
-        RenderSystem.setShader(net.minecraft.client.renderer.CoreShaders.POSITION_TEX);
-
-        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        bufferBuilder.addVertex(pose.last().pose(), 0, starHeight, 0).setUv(u0, v1);
-        bufferBuilder.addVertex(pose.last().pose(), starWidth, starHeight, 0).setUv(u1, v1);
-        bufferBuilder.addVertex(pose.last().pose(), starWidth, 0, 0).setUv(u1, v0);
-        bufferBuilder.addVertex(pose.last().pose(), 0, 0, 0).setUv(u0, v0);
-        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
-
-        pose.popPose();
-        RenderSystem.disableBlend();
-        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-        *///? } elif >=1.21 {
-        /*float u0 = (float) offsetX / (float) cacheWidth;
-        float v0 = 0.0f;
-        float u1 = u0 + ((float) starWidth / (float) cacheWidth);
-        float v1 = (float) starHeight / (float) cacheHeight;
-
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.setShaderColor(config.starColorR, config.starColorG, config.starColorB, config.starOpacity);
-
-        var pose = graphics.pose();
-        pose.pushPose();
-        RenderSystem.setShaderTexture(0, cacheTexture);
-        RenderSystem.setShader(GameRenderer::getPositionTexShader);
-
-        BufferBuilder bufferBuilder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        bufferBuilder.addVertex(pose.last().pose(), 0, starHeight, 0).setUv(u0, v1);
-        bufferBuilder.addVertex(pose.last().pose(), starWidth, starHeight, 0).setUv(u1, v1);
-        bufferBuilder.addVertex(pose.last().pose(), starWidth, 0, 0).setUv(u1, v0);
-        bufferBuilder.addVertex(pose.last().pose(), 0, 0, 0).setUv(u0, v0);
-        BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
-
-        pose.popPose();
-        RenderSystem.disableBlend();
-        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-        *///? } else {
-        float u0 = (float) offsetX / (float) cacheWidth;
-        float v0 = 0.0f;
-        float u1 = u0 + ((float) starWidth / (float) cacheWidth);
-        float v1 = (float) starHeight / (float) cacheHeight;
-
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.setShaderColor(config.starColorR, config.starColorG, config.starColorB, config.starOpacity);
-
-        var pose = graphics.pose();
-        pose.pushPose();
-        RenderSystem.setShaderTexture(0, cacheTexture);
-        RenderSystem.setShader(GameRenderer::getPositionTexShader);
-
-        Tesselator tesselator = Tesselator.getInstance();
-        BufferBuilder bufferBuilder = tesselator.getBuilder();
-        bufferBuilder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        bufferBuilder.vertex(pose.last().pose(), 0, starHeight, 0).uv(u0, v1).endVertex();
-        bufferBuilder.vertex(pose.last().pose(), starWidth, starHeight, 0).uv(u1, v1).endVertex();
-        bufferBuilder.vertex(pose.last().pose(), starWidth, 0, 0).uv(u1, v0).endVertex();
-        bufferBuilder.vertex(pose.last().pose(), 0, 0, 0).uv(u0, v0).endVertex();
-        tesselator.end();
-
-        pose.popPose();
-        RenderSystem.disableBlend();
-        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-        //? }
-    }
-
-    /**
-     * Render the main panel with frosted glass effect
-     */
-    private void renderPanel(GuiGraphics graphics) {
-        // Panel background (dark semi-transparent with configurable opacity)
-        ClientConfig config = ClientConfig.getInstance();
-        int alpha = (int)(config.panelOpacity * 255);
-        int panelBgColor = (alpha << 24) | 0x000000;  // Black with configurable alpha
-
-        graphics.fill(
-                panelX, panelY,
-                panelX + panelWidth, panelY + panelHeight,
-                panelBgColor
-        );
-
-        // Panel outline (subtle white)
-        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + 1, 0x60FFFFFF);
-        graphics.fill(panelX, panelY + panelHeight - 1, panelX + panelWidth, panelY + panelHeight, 0x60FFFFFF);
-        graphics.fill(panelX, panelY + 1, panelX + 1, panelY + panelHeight - 1, 0x60FFFFFF);
-        graphics.fill(panelX + panelWidth - 1, panelY + 1, panelX + panelWidth, panelY + panelHeight - 1, 0x60FFFFFF);
-    }
-
-    /**
      * Render the title and description text
      */
     private void renderTitleAndDescription(GuiGraphics graphics) {
-        int scaledPadding = 20;
-        int titleY = panelY + scaledPadding;
-
-        // Title
-        String title = "Choose Your Favorite Color";
-        int titleWidth = font.width(title);
-        int titleX = panelX + (panelWidth - titleWidth) / 2;
-        graphics.drawString(this.font, title, titleX, titleY, 0xFFFFFFFF, false);
+        int centerX = this.width / 2;
+        PixelFont.drawCentered(graphics, this.title, centerX, titleMiddleY, this.width - 16,
+                titleScale, Surfaces.TEXT, true);
 
         // Description (2 lines)
-        titleY += font.lineHeight + 8;
-        String desc1 = "This color will be used for your figure box";
-        int desc1Width = font.width(desc1);
-        int desc1X = panelX + (panelWidth - desc1Width) / 2;
-        graphics.drawString(this.font, desc1, desc1X, titleY, 0xFFAAAAAA, false);
-
-        titleY += font.lineHeight + 2;
-        String desc2 = "in the World Players collection.";
-        int desc2Width = font.width(desc2);
-        int desc2X = panelX + (panelWidth - desc2Width) / 2;
-        graphics.drawString(this.font, desc2, desc2X, titleY, 0xFFAAAAAA, false);
+        UiText.drawCentered(graphics, this.font, DESCRIPTION_1, centerX, descriptionY, Surfaces.TEXT_DIM);
+        UiText.drawCentered(graphics, this.font, DESCRIPTION_2, centerX,
+                descriptionY + this.font.lineHeight + 2, Surfaces.TEXT_DIM);
     }
 
     @Override

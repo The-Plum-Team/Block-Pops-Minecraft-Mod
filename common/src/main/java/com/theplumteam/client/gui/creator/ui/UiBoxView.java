@@ -39,8 +39,8 @@ public class UiBoxView extends UiViewport {
         BOX, WORLD, SCREEN
     }
 
-    private static final int BOX_TOP = 0xFF2B2B33;
-    private static final int BOX_BOTTOM = 0xFF0B0B0E;
+    private static final int BOX_TOP = 0xFF34353A;
+    private static final int BOX_BOTTOM = 0xFF151617;
     private static final int SKY_TOP = 0xFF8FB6FF;
     private static final int SKY_BOTTOM = 0xFFB9D2FF;
     // A box on a block at the slot angle, against the size they are drawn at, and how far the

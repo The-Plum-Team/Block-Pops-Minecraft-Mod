@@ -25,7 +25,7 @@
               "capture": {
                 "title": "Organic first-join favorite-color prompt",
                 "review_tier": "key",
-                "expectation": "The production server-triggered Choose Your Favorite Color modal is opaque and centered; its 4 by 4 color grid, Figure ON control, disabled Done control, text, and figure preview are crisp and unclipped.",
+                "expectation": "The production server-triggered Choose Your Favorite Color menu stands centered on the starry background in the Quick Skin style: a pixel-font title, its description, the 4 by 4 color tiles on a dark backdrop, the Figure ON control and a disabled green Done button, all crisp and unclipped.",
                 "probes": [
                   {
                     "kind": "opaque-stars-background",
@@ -43,10 +43,10 @@
                     "kind": "required-gui-text",
                     "label": "favorite-color title and description",
                     "box": [
-                      670,
-                      145,
-                      930,
-                      205
+                      520,
+                      25,
+                      1080,
+                      125
                     ],
                     "minimum_luma_exclusive": 143,
                     "minimum_pixels": 400
@@ -60,7 +60,7 @@
               "capture": {
                 "title": "Favorite color selected state",
                 "review_tier": "key",
-                "expectation": "The same favorite-color modal visibly marks purple as selected and enables Done without text bleeding, transparency, blur, or layout movement.",
+                "expectation": "The same favorite-color menu marks purple as selected with a blue double border and enables the green Done button without text bleeding, transparency, blur, or layout movement.",
                 "probes": [
                   {
                     "kind": "opaque-stars-background",
@@ -78,10 +78,10 @@
                     "kind": "required-gui-text",
                     "label": "selected favorite-color title and description",
                     "box": [
-                      670,
-                      145,
-                      930,
-                      205
+                      520,
+                      25,
+                      1080,
+                      125
                     ],
                     "minimum_luma_exclusive": 143,
                     "minimum_pixels": 400
@@ -105,16 +105,16 @@
               "capture": {
                 "title": "Claw machine collection screen",
                 "review_tier": "key",
-                "expectation": "The Claw Machine Configuration screen shows the real packaged One Piece selection, collection and figure grids, token controls, and footer; labels and controls are not clipped or overlapped.",
+                "expectation": "The Claw Machine Configuration screen, in the Quick Skin style, shows the Figures and Plushes tabs and the link buttons along the top, the collection cards with the real packaged One Piece selection highlighted in blue and its figure grid in two columns on dark backdrops, and the token counts over the pixel-font token buttons and the green Done button; labels and controls are not clipped or overlapped.",
                 "probes": [
                   {
                     "kind": "required-gui-text",
                     "label": "collections header",
                     "box": [
-                      205,
-                      75,
+                      24,
+                      80,
                       600,
-                      110
+                      126
                     ],
                     "minimum_luma_exclusive": 143,
                     "minimum_pixels": 200
@@ -123,10 +123,10 @@
                     "kind": "required-gui-text",
                     "label": "selected collection and figure header",
                     "box": [
-                      790,
-                      75,
-                      1200,
-                      110
+                      636,
+                      80,
+                      1180,
+                      126
                     ],
                     "minimum_luma_exclusive": 143,
                     "minimum_pixels": 300
@@ -135,10 +135,10 @@
                     "kind": "required-gui-text",
                     "label": "token availability status",
                     "box": [
-                      400,
-                      745,
-                      1200,
-                      775
+                      24,
+                      796,
+                      1376,
+                      824
                     ],
                     "minimum_luma_exclusive": 143,
                     "minimum_pixels": 250
@@ -152,16 +152,16 @@
               "capture": {
                 "title": "Claw machine collection screen, Plushes tab",
                 "review_tier": "key",
-                "expectation": "After the real Plushes tab is pressed, the same screen shows the Plushes folder tab raised and joined to the panel, the plush collections in the left list with the first one selected and its plushes in the right grid, and the token controls and footer; labels, tabs and controls are not clipped or overlapped.",
+                "expectation": "After the real Plushes tab is pressed, the same screen shows the Plushes tab selected with a blue border, the plush collections in the left column with the first one selected and its plushes in the right grid, and the token counts, token buttons and Done button; labels, tabs and controls are not clipped or overlapped.",
                 "probes": [
                   {
                     "kind": "required-gui-text",
                     "label": "collections header",
                     "box": [
-                      205,
-                      75,
+                      24,
+                      80,
                       600,
-                      110
+                      126
                     ],
                     "minimum_luma_exclusive": 143,
                     "minimum_pixels": 200
@@ -170,10 +170,10 @@
                     "kind": "required-gui-text",
                     "label": "selected collection and figure header",
                     "box": [
-                      790,
-                      75,
-                      1200,
-                      110
+                      636,
+                      80,
+                      1180,
+                      126
                     ],
                     "minimum_luma_exclusive": 143,
                     "minimum_pixels": 300
@@ -182,10 +182,10 @@
                     "kind": "required-gui-text",
                     "label": "token availability status",
                     "box": [
-                      400,
-                      745,
-                      1200,
-                      775
+                      24,
+                      796,
+                      1376,
+                      824
                     ],
                     "minimum_luma_exclusive": 143,
                     "minimum_pixels": 250
@@ -199,28 +199,28 @@
               "capture": {
                 "title": "Claw machine settings modal",
                 "review_tier": "key",
-                "expectation": "The production Settings modal is opaque, centered over the claw-machine screen, and its server tab, sliders, buttons, and labels remain readable without token-button text bleeding through.",
+                "expectation": "The production Settings dialog, in the Quick Skin style, is opaque and centered over the claw-machine screen under a dark veil: a slate header with the gear icon, the pixel-font title and a close X, the Server tab selected in the sidebar, and the reset-hour slider, its explanation and the Change Time button readable without the screen behind bleeding through.",
                 "probes": [
                   {
                     "kind": "opaque-stars-background",
                     "region": [
-                      0.31,
-                      0.5,
-                      0.39,
-                      0.61
+                      0.4,
+                      0.55,
+                      0.7,
+                      0.7
                     ],
-                    "maximum_mean_luma": 8.0,
-                    "bright_luma": 32,
+                    "maximum_mean_luma": 48.0,
+                    "bright_luma": 96,
                     "maximum_bright_fraction": 0.01
                   },
                   {
                     "kind": "required-gui-text",
                     "label": "settings server title",
                     "box": [
-                      720,
-                      305,
-                      900,
-                      335
+                      340,
+                      180,
+                      540,
+                      270
                     ],
                     "minimum_luma_exclusive": 159,
                     "minimum_pixels": 150
@@ -229,10 +229,10 @@
                     "kind": "required-gui-text",
                     "label": "settings slider and explanation",
                     "box": [
-                      580,
-                      345,
-                      1020,
-                      425
+                      570,
+                      240,
+                      1250,
+                      420
                     ],
                     "minimum_luma_exclusive": 143,
                     "minimum_pixels": 1200

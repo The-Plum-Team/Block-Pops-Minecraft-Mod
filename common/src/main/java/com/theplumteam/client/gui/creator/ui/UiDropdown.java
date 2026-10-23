@@ -1,6 +1,7 @@
 package com.theplumteam.client.gui.creator.ui;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.theplumteam.client.gui.style.Surfaces;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -12,7 +13,8 @@ import java.util.List;
 import java.util.function.IntConsumer;
 
 /**
- * A control that shows "Label: value ▾" and opens a menu of the choices under itself, such as
+ * A control that shows "Label: value ▾" on a small raised face in the menus' button style, and
+ * opens a menu of the choices under itself, such as
  * the overview's sort order or the default size of a bulk add. The menu ticks the chosen value
  * and opens with it highlighted; a long list scrolls. With the keyboard, Enter or Space opens it.
  * It can be disabled with a reason in its tooltip. It does not belong in a dialog: the screen
@@ -22,8 +24,7 @@ public class UiDropdown extends UiNode.Box {
     public static final int HEIGHT = 16;
     private static final int PADDING = 6;
     private static final String ARROW = "▾";
-    private static final int HOVER_OUTLINE = 0xFF777777;
-    private static final int OFF_TEXT = 0xFF5A5A5A;
+    private static final int OFF_TEXT = 0xFF6A6A6A;
 
     private final Component label;
     private final List<Component> options;
@@ -83,12 +84,14 @@ public class UiDropdown extends UiNode.Box {
         Font font = Minecraft.getInstance().font;
         boolean hovered = hovered(mouseX, mouseY);
         boolean enabled = disabledReason == null;
-        int outline = hovered && enabled ? HOVER_OUTLINE : Theme.CONTROL_OUTLINE;
-        Draw.panel(graphics, x, y, width, height, Theme.CONTROL, outline);
-        int textY = y + (height - 8) / 2 + 1;
+        boolean lit = hovered && enabled;
+        int border = !enabled ? Surfaces.BORDER_DISABLED : lit ? Surfaces.BORDER_HOVER : Surfaces.BORDER;
+        int face = !enabled ? Surfaces.FACE_DISABLED : lit ? Surfaces.FACE_HOVER : Surfaces.FACE;
+        int faceBottom = Draw.raised(graphics, x, y, width, height, border, face, 1);
+        int textY = y + (faceBottom - y - 8) / 2 + 1;
         int arrowWidth = font.width(ARROW);
-        int colour = enabled ? Theme.CONTROL_TEXT : OFF_TEXT;
-        graphics.drawString(font, ARROW, x + width - PADDING - arrowWidth, textY, colour, false);
+        int colour = !enabled ? OFF_TEXT : lit ? Theme.TEXT : Theme.CONTROL_TEXT;
+        Draw.string(graphics, font, ARROW, x + width - PADDING - arrowWidth, textY, colour);
         Draw.text(graphics, font, text(selected).getString(), x + PADDING, textY,
                 Math.max(0, width - 3 * PADDING - arrowWidth), colour);
         if (hovered && disabledReason != null) {

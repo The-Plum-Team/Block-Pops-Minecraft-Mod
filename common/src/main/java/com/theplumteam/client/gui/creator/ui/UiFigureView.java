@@ -1,5 +1,6 @@
 package com.theplumteam.client.gui.creator.ui;
 
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.widget.FigureEntry;
 import com.theplumteam.client.worldcontent.CreatorPreview;
 import com.theplumteam.figure.CollectionRegistry;
@@ -334,7 +335,7 @@ public class UiFigureView extends UiViewport {
             drawFigure(graphics, figures, reference, referenceCenter - cell / 2, cellY, cell, partialTick, true);
             Font font = Minecraft.getInstance().font;
             String label = CreatorScreen.tr("preview.reference").getString();
-            graphics.drawString(font, label, referenceCenter - font.width(label) / 2, feetY + 7, Theme.MUTED, false);
+            Draw.string(graphics, font, label, referenceCenter - font.width(label) / 2, feetY + 7, Theme.MUTED);
         }
         figures.setPreviewPose(pose(figure));
         figures.setPreviewSkin(skinIndex);
@@ -423,16 +424,19 @@ public class UiFigureView extends UiViewport {
                 return;
             }
             Font font = Minecraft.getInstance().font;
-            graphics.fill(x, y, x + width, y + height, 0xC0000000);
-            Draw.outline(graphics, x, y, width, height, Theme.CONTROL_OUTLINE);
+            // A dark see-through strip in the menus' border and outline, over the scene
             boolean over = hovered(mouseX, mouseY);
+            graphics.fill(x, y, x + width, y + height, Surfaces.OUTLINE);
+            graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, over ? Surfaces.BORDER_HOVER : Surfaces.BORDER);
+            graphics.fill(x + 2, y + 2, x + width - 2, y + height - 2, Surfaces.WELL);
             boolean overLeft = over && mouseX < x + ARROW;
             boolean overRight = over && mouseX >= x + width - ARROW;
             int textY = y + (height - 8) / 2 + 1;
-            graphics.drawString(font, "‹", x + 4, textY, overLeft ? Theme.GOLD : Theme.TEXT, false);
-            graphics.drawString(font, "›", x + width - ARROW + 3, textY, overRight ? Theme.GOLD : Theme.TEXT, false);
+            Draw.string(graphics, font, "‹", x + 4, textY, overLeft ? Theme.SELECTED_LIGHT : Theme.TEXT);
+            Draw.string(graphics, font, "›", x + width - ARROW + 3, textY,
+                    overRight ? Theme.SELECTED_LIGHT : Theme.TEXT);
             Draw.centred(graphics, font, current().getString(), x + width / 2, textY, width - 2 * ARROW,
-                    skinIndex == 0 ? Theme.TEXT_SOFT : Theme.GOLD_LIGHT);
+                    skinIndex == 0 ? Theme.TEXT_SOFT : Theme.SELECTED_LIGHT);
             if (over) {
                 UiTooltip.set(CreatorScreen.tr("preview.variant_tip", variants.size()));
             }

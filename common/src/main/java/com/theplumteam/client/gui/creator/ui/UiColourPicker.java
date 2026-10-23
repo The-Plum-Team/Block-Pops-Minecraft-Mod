@@ -1,9 +1,11 @@
 package com.theplumteam.client.gui.creator.ui;
 
+import com.theplumteam.client.gui.style.DialogFrame;
+import com.theplumteam.client.gui.style.PixelIcon;
+import com.theplumteam.client.gui.style.Surfaces;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
@@ -32,7 +34,8 @@ public class UiColourPicker extends UiNode.Box {
     private static final int SWATCH_WIDTH = 44;
     private static final int HEX_WIDTH = 64;
     private static final int[] HUES = {0xFF0000, 0xFFFF00, 0x00FF00, 0x00FFFF, 0x0000FF, 0xFF00FF, 0xFF0000};
-    // The dialog's frame around the picker: title, padding, row gap and button row
+    // The dialog's frame around the picker: its header strip and lip (31), padding (20), row gap
+    // (6) and button row (30), with a little to spare
     private static final int DIALOG_CHROME = 90;
     // The dialog's padding on both sides of its rows
     private static final int DIALOG_SIDES = 20;
@@ -40,7 +43,7 @@ public class UiColourPicker extends UiNode.Box {
     private enum Part { NONE, SQUARE, HUE }
 
     private final int original;
-    private final EditBox hexBox;
+    private final UiField hexBox;
     private float hue;
     private float saturation;
     private float brightness;
@@ -52,7 +55,7 @@ public class UiColourPicker extends UiNode.Box {
     public UiColourPicker(int rgb) {
         this.original = rgb & 0xFFFFFF;
         Font font = Minecraft.getInstance().font;
-        this.hexBox = new EditBox(font, 0, 0, HEX_WIDTH, 20, CreatorScreen.tr("colour.hex"));
+        this.hexBox = new UiField(font, 0, 0, HEX_WIDTH, UiField.HEIGHT, CreatorScreen.tr("colour.hex"));
         this.hexBox.setMaxLength(7);
         this.hexBox.setValue(hex(original));
         this.hexBox.setResponder(this::hexTyped);
@@ -65,7 +68,8 @@ public class UiColourPicker extends UiNode.Box {
      * @param onPick receives the colour as 0xRRGGBB when the operator confirms it
      */
     public static UiColourPicker open(CreatorScreen screen, int rgb, IntConsumer onPick) {
-        UiModal dialog = new UiModal(CreatorScreen.tr("colour.title"), Component.empty());
+        UiModal dialog = new UiModal(CreatorScreen.tr("colour.title"), Component.empty())
+                .accent(DialogFrame.Accent.EDIT, PixelIcon.PALETTE);
         UiColourPicker picker = new UiColourPicker(rgb);
         int beside = GAP + HUE_WIDTH + 2 * GAP + Math.max(SWATCH_WIDTH, HEX_WIDTH) + DIALOG_SIDES;
         // The card never grows past the screen, so on a narrow one the square shrinks instead
@@ -88,9 +92,7 @@ public class UiColourPicker extends UiNode.Box {
     @Override
     public Box at(int x, int y, int width, int height) {
         super.at(x, y, width, height);
-        hexBox.setX(columnX());
-        hexBox.setY(y + 54);
-        hexBox.setWidth(Math.max(40, Math.min(HEX_WIDTH, x + width - columnX())));
+        hexBox.place(columnX(), y + 54, Math.max(40, Math.min(HEX_WIDTH, x + width - columnX())));
         return this;
     }
 
@@ -122,8 +124,11 @@ public class UiColourPicker extends UiNode.Box {
             int to = y + (i + 1) * side / 6;
             graphics.fillGradient(hueX, from, hueX + HUE_WIDTH, to, 0xFF000000 | HUES[i], 0xFF000000 | HUES[i + 1]);
         }
-        Draw.outline(graphics, x - 1, y - 1, side + 2, side + 2, Theme.CONTROL_OUTLINE);
-        Draw.outline(graphics, hueX - 1, y - 1, HUE_WIDTH + 2, side + 2, Theme.CONTROL_OUTLINE);
+        // Framed as the menus' wells are: a grey border inside a black outline
+        Draw.outline(graphics, x - 2, y - 2, side + 4, side + 4, Surfaces.OUTLINE);
+        Draw.outline(graphics, x - 1, y - 1, side + 2, side + 2, Surfaces.BORDER);
+        Draw.outline(graphics, hueX - 2, y - 2, HUE_WIDTH + 4, side + 4, Surfaces.OUTLINE);
+        Draw.outline(graphics, hueX - 1, y - 1, HUE_WIDTH + 2, side + 2, Surfaces.BORDER);
 
         // A hollow square on the colour, and a line across the bar at the hue
         int markX = x + Math.round(saturation * (side - 1));
@@ -136,16 +141,18 @@ public class UiColourPicker extends UiNode.Box {
         graphics.fill(hueX, hueY, hueX + HUE_WIDTH, hueY + 1, 0xFF000000 | hsvToRgb(hue, 1.0f, 1.0f));
 
         int columnX = columnX();
-        graphics.drawString(font, CreatorScreen.tr("colour.new"), columnX, y, Theme.MUTED, false);
-        Draw.panel(graphics, columnX, y + 10, SWATCH_WIDTH, 16, 0xFF000000 | rgb(), 0xFF000000);
-        Draw.panel(graphics, columnX, y + 26, SWATCH_WIDTH, 12, 0xFF000000 | original, 0xFF000000);
+        Draw.string(graphics, font, CreatorScreen.tr("colour.new"), columnX, y, Theme.MUTED);
+        Draw.panel(graphics, columnX, y + 10, SWATCH_WIDTH, 16, 0xFF000000 | rgb(), Surfaces.OUTLINE);
+        Draw.panel(graphics, columnX, y + 26, SWATCH_WIDTH, 12, 0xFF000000 | original, Surfaces.OUTLINE);
         if (oldSwatch().contains(mouseX, mouseY)) {
             UiTooltip.set(CreatorScreen.tr("colour.old", hex(original)));
         }
-        graphics.drawString(font, CreatorScreen.tr("colour.hex"), columnX, y + 44, Theme.MUTED, false);
+        Draw.string(graphics, font, CreatorScreen.tr("colour.hex"), columnX, y + 44, Theme.MUTED);
         hexBox.render(graphics, mouseX, mouseY, partialTick);
         if (!hexValid) {
-            Draw.outline(graphics, hexBox.getX() - 1, hexBox.getY() - 1, hexBox.getWidth() + 2, 22, Theme.RED);
+            // The well's border in red
+            Draw.outline(graphics, hexBox.wellX() + 1, hexBox.getY() + 1, hexBox.wellWidth() - 2,
+                    hexBox.getHeight() - 2, Theme.RED);
             Draw.lines(graphics, font, CreatorScreen.tr("colour.hex_rule").getString(), columnX, hexBox.getY() + 24,
                     Math.max(20, x + width - columnX), 3, Theme.RED);
         }

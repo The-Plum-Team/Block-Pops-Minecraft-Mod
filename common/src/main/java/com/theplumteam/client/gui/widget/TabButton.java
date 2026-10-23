@@ -1,25 +1,36 @@
 package com.theplumteam.client.gui.widget;
 
+import com.theplumteam.client.gui.style.PixelFont;
+import com.theplumteam.client.gui.style.PixelIcon;
+import com.theplumteam.client.gui.style.Surfaces;
+import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.gui.util.GuiPose;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.Nullable;
 
 /**
- * Custom tab button widget for tabbed interfaces
- * Features selected/unselected states with hover effects
+ * A tab of a dialog's sidebar, as Quick Skin's settings draw theirs: a row with an optional pixel
+ * icon and the tab's name, left-aligned. The selected tab has a slate highlight with a brighter bar
+ * along its left edge, matching the dialog's header; an unselected tab is plain, lightening under
+ * the mouse.
  */
 public class TabButton extends Button {
     private boolean selected;
+    @Nullable
+    private String[] icon;
 
-    // Tab styling - matches the frosted glass theme
-    private static final int SELECTED_BG = 0xB0000000;      // Darker semi-transparent background
-    private static final int UNSELECTED_BG = 0x60000000;    // Lighter semi-transparent background
-    private static final int SELECTED_OUTLINE = 0xFFFFFFFF; // White outline for selected
-    private static final int UNSELECTED_OUTLINE = 0x40FFFFFF; // Faint outline for unselected
-    private static final int SELECTED_TEXT = 0xFFFFFFFF;      // White text
-    private static final int UNSELECTED_TEXT = 0xFF999999;    // Gray text
+    private static final int SELECTED_BG = 0xFF4E6078;
+    private static final int HOVER_BG = 0xFF444549;
+    private static final int SELECTED_BAR = 0xFF6F8FB0;
+    private static final int SELECTED_TEXT = 0xFFFFFFFF;
+    private static final int HOVER_TEXT = 0xFFCCCCCC;
+    private static final int UNSELECTED_TEXT = 0xFFB0B0B0;
+    private static final int BAR_WIDTH = 2;
 
     public TabButton(int x, int y, int width, int height, Component label, boolean selected, OnPress onPress) {
         super(x, y, width, height, label, onPress, DEFAULT_NARRATION);
@@ -34,56 +45,33 @@ public class TabButton extends Button {
         return this.selected;
     }
 
+    /** The pixel icon before the name, as rows of {@code '#'} and {@code '.'}. */
+    public TabButton setIcon(@Nullable String[] icon) {
+        this.icon = icon;
+        return this;
+    }
+
     @Override
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
-        // Determine colors based on selected state
-        int bgColor = this.selected ? SELECTED_BG : UNSELECTED_BG;
-        int outlineColor = this.selected ? SELECTED_OUTLINE : UNSELECTED_OUTLINE;
-        int textColor = this.selected ? SELECTED_TEXT : UNSELECTED_TEXT;
-
-        // Add hover effect for unselected tabs
-        if (!this.selected && this.isHovered()) {
-            bgColor = 0x80000000; // Slightly darker on hover
-            textColor = 0xFFCCCCCC;  // Slightly brighter text on hover
+        int x = this.getX();
+        int y = this.getY();
+        boolean hovered = !this.selected && this.active && this.isHovered();
+        if (this.selected) {
+            graphics.fill(x, y, x + this.width, y + this.height, SELECTED_BG);
+            graphics.fill(x, y, x + BAR_WIDTH, y + this.height, SELECTED_BAR);
+        } else if (hovered) {
+            graphics.fill(x, y, x + this.width, y + this.height, HOVER_BG);
         }
+        int color = this.selected ? SELECTED_TEXT : hovered ? HOVER_TEXT : UNSELECTED_TEXT;
 
-        // Draw tab background
-        graphics.fill(this.getX(), this.getY(),
-                     this.getX() + this.width,
-                     this.getY() + this.height,
-                     bgColor);
-
-        // Draw outline. The sides stop short of the top and bottom lines, so a translucent
-        // outline is not drawn twice, and brighter, in the corners.
-        // Top
-        graphics.fill(this.getX(), this.getY(),
-                     this.getX() + this.width, this.getY() + 1,
-                     outlineColor);
-        // For selected tab, don't draw bottom border (connects to content area)
-        int sideBottom = this.getY() + this.height - (this.selected ? 0 : 1);
-        // Left
-        graphics.fill(this.getX(), this.getY() + 1,
-                     this.getX() + 1, sideBottom,
-                     outlineColor);
-        // Right
-        graphics.fill(this.getX() + this.width - 1, this.getY() + 1,
-                     this.getX() + this.width, sideBottom,
-                     outlineColor);
-
-        if (!this.selected) {
-            graphics.fill(this.getX(), this.getY() + this.height - 1,
-                         this.getX() + this.width, this.getY() + this.height,
-                         outlineColor);
+        int textX = x + 8;
+        if (icon != null && icon.length > 0) {
+            PixelIcon.draw(graphics, icon, textX, y + (this.height - icon.length) / 2, color);
+            textX += PixelIcon.width(icon) + 5;
         }
-
-        // Draw centered text
-        graphics.drawCenteredString(
-            net.minecraft.client.Minecraft.getInstance().font,
-            this.getMessage(),
-            this.getX() + this.width / 2,
-            this.getY() + (this.height - 8) / 2,
-            textColor
-        );
+        Font font = Minecraft.getInstance().font;
+        UiText.drawFitted(graphics, font, getMessage().getString(), textX, y + (this.height - 8) / 2,
+                x + this.width - 4 - textX, color);
     }
 
     @Override
@@ -98,42 +86,32 @@ public class TabButton extends Button {
     }
 
     /**
-     * A folder tab standing on a panel's top edge, with an item icon before its label. The selected
-     * tab is filled like the panel and leaves its bottom open, so it reads as part of the panel; the
-     * panel leaves its own top edge out under it (see {@link #left()} and {@link #right()}).
+     * A tab of the machine menu's top bar, choosing the kind of collection it lists: a raised
+     * button in the menus' style with an item icon before its label in the pixel font. The
+     * selected tab keeps the blue border of a selection and a lighter face, so the two read as a
+     * segmented switch.
      */
     public static class Folder extends TabButton {
-        public static final int HEIGHT = 20;
-        // An unselected tab sits lower, behind the panel
-        private static final int UNSELECTED_DROP = 3;
+        public static final int HEIGHT = 28;
         private static final int ICON_SIZE = 16;
-        private static final float UNSELECTED_ICON_SCALE = 0.75f;
-        private static final int PADDING = 5;
+        private static final float UNSELECTED_ICON_SCALE = 0.85f;
+        private static final int PADDING = 10;
+        private static final int ICON_GAP = 6;
+        private static final int LIP = 3;
 
-        private static final int OUTLINE = 0x60FFFFFF;
-        private static final int UNSELECTED_BG = 0xFF1C1C1C;
-        private static final int HOVERED_BG = 0xFF2A2A2A;
         private static final int SELECTED_TEXT = 0xFFFFFFFF;
-        private static final int UNSELECTED_TEXT = 0xFFA0A0A0;
-        private static final int HOVERED_TEXT = 0xFFCCCCCC;
+        private static final int UNSELECTED_TEXT = 0xFFB0B0B0;
+        private static final int HOVERED_TEXT = 0xFFDDDDDD;
 
         private final ItemStack icon;
-        private final int selectedBg;
 
-        /**
-         * @param panelTop   the panel's top edge, which the tab stands on
-         * @param selectedBg the panel's background colour, which the selected tab continues
-         */
-        public Folder(int x, int panelTop, Component label, ItemStack icon, boolean selected,
-                      int selectedBg, OnPress onPress) {
-            super(x, panelTop - HEIGHT + (selected ? 0 : UNSELECTED_DROP), widthOf(label),
-                    HEIGHT - (selected ? 0 : UNSELECTED_DROP), label, selected, onPress);
+        public Folder(int x, int y, Component label, ItemStack icon, boolean selected, OnPress onPress) {
+            super(x, y, widthOf(label), HEIGHT, label, selected, onPress);
             this.icon = icon;
-            this.selectedBg = selectedBg;
         }
 
         public static int widthOf(Component label) {
-            return PADDING + ICON_SIZE + 4 + net.minecraft.client.Minecraft.getInstance().font.width(label) + PADDING + 2;
+            return PADDING + ICON_SIZE + ICON_GAP + PixelFont.width(label, 1.0f) + PADDING;
         }
 
         public int left() {
@@ -148,33 +126,27 @@ public class TabButton extends Button {
         public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks) {
             int x = getX();
             int y = getY();
-            int bottom = y + height;
             boolean selected = isSelected();
             boolean hovered = !selected && isHovered();
-
-            graphics.fill(x, y, x + width, bottom, selected ? selectedBg : hovered ? HOVERED_BG : UNSELECTED_BG);
-            graphics.fill(x, y, x + width, y + 1, OUTLINE);
-            // The selected tab's sides run on into the panel's own border
-            graphics.fill(x, y + 1, x + 1, bottom + (selected ? 1 : 0), OUTLINE);
-            graphics.fill(x + width - 1, y + 1, x + width, bottom + (selected ? 1 : 0), OUTLINE);
-            if (!selected) {
-                graphics.fill(x + 1, bottom - 1, x + width - 1, bottom, OUTLINE);
-            }
+            int faceBottom = Surfaces.raised(graphics, x, y, x + width, y + height,
+                    selected ? Surfaces.SELECTED : hovered ? Surfaces.BORDER_HOVER : Surfaces.BORDER,
+                    selected || hovered ? Surfaces.FACE_HOVER : Surfaces.FACE, Surfaces.LIP, LIP);
+            int middle = (y + 1 + faceBottom) / 2;
 
             int iconX = x + PADDING;
-            int iconY = y + (height - ICON_SIZE) / 2;
             // An unselected tab's icon is drawn a little smaller, centred where the full one sits
             float iconScale = selected ? 1.0f : UNSELECTED_ICON_SCALE;
             GuiPose.push(graphics);
-            GuiPose.translate(graphics, iconX + ICON_SIZE / 2.0f, iconY + ICON_SIZE / 2.0f);
+            GuiPose.translate(graphics, iconX + ICON_SIZE / 2.0f, middle);
             GuiPose.scale(graphics, iconScale, iconScale);
             GuiPose.translate(graphics, -ICON_SIZE / 2.0f, -ICON_SIZE / 2.0f);
             graphics.renderItem(icon, 0, 0);
             GuiPose.pop(graphics);
 
-            net.minecraft.client.gui.Font font = net.minecraft.client.Minecraft.getInstance().font;
             int textColor = selected ? SELECTED_TEXT : hovered ? HOVERED_TEXT : UNSELECTED_TEXT;
-            graphics.drawString(font, getMessage(), iconX + ICON_SIZE + 4, y + (height - 8) / 2 + 1, textColor, true);
+            Component text = PixelFont.text(getMessage());
+            PixelFont.draw(graphics, text, iconX + ICON_SIZE + ICON_GAP,
+                    Math.round(middle + 0.5f - PixelFont.CAPITALS_MIDDLE), 1.0f, textColor, true);
         }
     }
 }

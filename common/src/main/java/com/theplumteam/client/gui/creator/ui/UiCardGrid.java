@@ -24,7 +24,7 @@ import java.util.function.Function;
  * apart across a rebuild by {@link #keys}, so the selection survives the screen building its
  * cards again.
  *
- * <p>With {@link #onReorder} set, dragging a card more than 6 units shows a gold line where it
+ * <p>With {@link #onReorder} set, dragging a card more than 6 units shows a blue line where it
  * would land, and letting go there moves it; dragging near the top or bottom edge scrolls. An
  * optional last cell, such as a drop zone for more files, fills the rest of the last row.
  *
@@ -380,9 +380,9 @@ public class UiCardGrid<T> extends UiScrollPane {
         }
         int lineX = x + column * (cardWidth + gap) - gap / 2 - 1;
         int lineY = y + row * (cardHeight + gap);
-        graphics.fill(lineX, lineY - 2, lineX + 2, lineY + cardHeight + 2, Theme.GOLD);
-        graphics.fill(lineX - 2, lineY - 2, lineX + 4, lineY, Theme.GOLD);
-        graphics.fill(lineX - 2, lineY + cardHeight, lineX + 4, lineY + cardHeight + 2, Theme.GOLD);
+        graphics.fill(lineX, lineY - 2, lineX + 2, lineY + cardHeight + 2, Theme.SELECTED);
+        graphics.fill(lineX - 2, lineY - 2, lineX + 4, lineY, Theme.SELECTED);
+        graphics.fill(lineX - 2, lineY + cardHeight, lineX + 4, lineY + cardHeight + 2, Theme.SELECTED);
     }
 
     // Input

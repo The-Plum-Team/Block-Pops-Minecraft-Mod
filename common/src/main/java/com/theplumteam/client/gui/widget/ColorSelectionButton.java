@@ -4,6 +4,7 @@ import com.theplumteam.client.gui.util.GuiPose;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.registry.ModItems;
 //? if >=1.21.4 {
@@ -20,9 +21,13 @@ import org.joml.Quaternionf;
 
 /**
  * Custom button widget that displays a colored box item and allows the player to select it.
- * Used in the FavoriteColorSelectionScreen to present the 16 color options in a grid.
+ * Used in the FavoriteColorSelectionScreen to present the 16 color options in a grid, as tiles
+ * in the menus' raised style ({@link Surfaces}).
  */
 public class ColorSelectionButton extends Button {
+    /** The selected tile's face, tinted with the blue of its border. */
+    private static final int SELECTED_TINT = 0x50308CC0;
+
     private final PopBlockColor color;
     private final FavoriteColorSelectionScreen parentScreen;
     private final ItemStack boxItem;
@@ -138,48 +143,26 @@ public class ColorSelectionButton extends Button {
 
     @Override
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        Minecraft minecraft = Minecraft.getInstance();
-
-        // Determine colors based on state
-        int backgroundColor;
-        int borderColor;
-
+        // A raised tile, as Quick Skin's skin tiles: lighter under the mouse, and the selected
+        // one framed by a double blue border over a blue tint
+        boolean hovered = isHoveredOrFocused();
+        int left = getX();
+        int top = getY();
+        int right = left + width;
+        int bottom = top + height;
+        int border = isSelected ? Surfaces.SELECTED : hovered ? Surfaces.BORDER_HOVER : Surfaces.BORDER;
+        int face = hovered ? Surfaces.FACE_HOVER : Surfaces.FACE;
+        int faceBottom = Surfaces.raised(graphics, left, top, right, bottom, border, face,
+                Surfaces.LIP, Surfaces.LIP_HEIGHT);
         if (isSelected) {
-            // Bright highlight for selected
-            backgroundColor = 0x80FFFFFF;
-            borderColor = 0xFFFFFFFF;
-        } else if (isHoveredOrFocused()) {
-            // Subtle highlight for hover
-            backgroundColor = 0x60FFFFFF;
-            borderColor = 0x80FFFFFF;
-        } else {
-            // Normal state
-            backgroundColor = 0x40FFFFFF;
-            borderColor = 0x60FFFFFF;
+            Surfaces.outline(graphics, left + 2, top + 2, width - 4, faceBottom - 1 - (top + 2), Surfaces.SELECTED);
+            graphics.fill(left + 3, top + 3, right - 3, faceBottom - 2, SELECTED_TINT);
         }
 
-        // Draw background
-        graphics.fill(getX(), getY(), getX() + width, getY() + height, backgroundColor);
-
-        // Draw border (thicker for selected)
-        if (isSelected) {
-            // Double border for selected
-            graphics.fill(getX(), getY(), getX() + width, getY() + 2, borderColor);
-            graphics.fill(getX(), getY() + height - 2, getX() + width, getY() + height, borderColor);
-            graphics.fill(getX(), getY() + 2, getX() + 2, getY() + height - 2, borderColor);
-            graphics.fill(getX() + width - 2, getY() + 2, getX() + width, getY() + height - 2, borderColor);
-        } else {
-            // Single border for normal/hovered
-            graphics.fill(getX(), getY(), getX() + width, getY() + 1, borderColor);
-            graphics.fill(getX(), getY() + height - 1, getX() + width, getY() + height, borderColor);
-            graphics.fill(getX(), getY() + 1, getX() + 1, getY() + height - 1, borderColor);
-            graphics.fill(getX() + width - 1, getY() + 1, getX() + width, getY() + height - 1, borderColor);
-        }
-
-        // Draw the box item in the center with transformations
+        // Draw the box item in the middle of the face, above the lip
         int itemSize = (int) (width * 0.6f); // Item is 60% of button size
-        int itemX = getX() + (width - itemSize) / 2;
-        int itemY = getY() + (height - itemSize) / 2;
+        int itemX = left + (width - itemSize) / 2;
+        int itemY = (top + 2 + faceBottom - 1 - itemSize) / 2;
 
         // Apply transformations and render the item.
         float finalScale = (itemSize / 16f) * this.scale;

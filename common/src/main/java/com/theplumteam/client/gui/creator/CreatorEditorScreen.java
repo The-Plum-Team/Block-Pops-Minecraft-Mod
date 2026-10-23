@@ -12,6 +12,9 @@ import com.theplumteam.client.gui.creator.ui.UiNode;
 import com.theplumteam.client.gui.creator.ui.UiTabs;
 import com.theplumteam.client.gui.creator.ui.UiToast;
 import com.theplumteam.client.gui.creator.ui.UiTooltip;
+import com.theplumteam.client.gui.style.DialogFrame;
+import com.theplumteam.client.gui.style.PixelFont;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.worldcontent.ClientPreviewAssets;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.client.worldcontent.ClientWorldUploads;
@@ -20,8 +23,8 @@ import com.theplumteam.client.worldcontent.CreatorPreview;
 import com.theplumteam.client.worldcontent.CreatorSave;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldContentLimits;
-import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
@@ -69,13 +72,15 @@ public class CreatorEditorScreen extends CreatorScreen {
     private static final int MAX_PANEL_HEIGHT = 400;
     private static final int PAD = 12;
     private static final int GAP = 6;
-    private static final int STEPS_HEIGHT = 14;
+    private static final int STEPS_HEIGHT = 15;
     // How long a saved change may take to come back in a sync before Save is offered again
     private static final long SYNC_TIMEOUT_MS = 10_000;
-    private static final int PILL = 0xFFFFAA00;
     private static final int CRUMB = 0xFF9A9A9A;
+    // How large a main action's pixel label is drawn, as UiButton draws it
     private static final int PROGRESS_WIDTH = 100;
     private static final int SHORT_SCREEN = 400;
+    // The room the collection's name, badge and count need after the way back
+    private static final int MIN_CRUMB = 140;
 
     // Folded or not for the rest of the session, as the operator left it
     private static boolean stepsFolded;
@@ -231,11 +236,19 @@ public class CreatorEditorScreen extends CreatorScreen {
         // Top bar: the way back on the left, the actions on the right
         this.backButton.at(left, this.barY + 6, this.font.width(this.backButton.label()), 10);
         addNode(this.backButton);
-        int x = right;
-        x = place(this.reviewButton, x, 0);
-        x = place(this.saveButton, x, GAP);
-        x = place(this.undoButton, x, 4);
         this.crumbX = this.backButton.bounds().right() + 4;
+        // The way to the review is the bar's main action, in the pixel font while that leaves the
+        // crumb its room, and in Minecraft's narrower font on a narrow panel
+        int x = 0;
+        for (UiButton.Style style : List.of(UiButton.Style.PRIMARY, UiButton.Style.GREEN)) {
+            this.reviewButton.setStyle(style);
+            x = place(this.reviewButton, right, 0);
+            x = place(this.saveButton, x, GAP);
+            x = place(this.undoButton, x, 4);
+            if (x - 8 - this.crumbX >= MIN_CRUMB) {
+                break;
+            }
+        }
         this.crumbRight = x - 8;
         addNode(this.undoButton);
         addNode(this.saveButton);
@@ -267,10 +280,18 @@ public class CreatorEditorScreen extends CreatorScreen {
 
     // Places a button left of a point, as wide as its label needs; returns its left edge
     private int place(UiButton button, int rightEdge, int gap) {
-        int width = UiButton.widthFor(this.font, button.label(), false);
+        int width = buttonWidth(this.font, button);
         int buttonX = rightEdge - gap - width;
         button.at(buttonX, this.barY, width, UiButton.HEIGHT);
         return buttonX;
+    }
+
+    /**
+     * The width a button needs for its label: a main action's label is in the pixel font, which
+     * is wider than Minecraft's, so it is measured in that font.
+     */
+    static int buttonWidth(Font font, UiButton button) {
+        return button.naturalWidth();
     }
 
     @Override
@@ -651,25 +672,31 @@ public class CreatorEditorScreen extends CreatorScreen {
             }
             int textRoom = Math.max(0, right - left - PROGRESS_WIDTH - 8);
             String shown = Draw.cut(this.font, text.getString(), textRoom);
-            graphics.drawString(this.font, shown, left, y, Theme.TEXT_SOFT, false);
+            Draw.string(graphics, this.font, shown, left, y, Theme.TEXT_SOFT);
             int barX = left + this.font.width(shown) + 8;
-            Draw.progressBar(graphics, barX, y + 2, Math.min(PROGRESS_WIDTH, Math.max(0, right - barX)), 4, fraction,
-                    Theme.TRACK, Theme.GREEN);
+            int barWidth = Math.min(PROGRESS_WIDTH, Math.max(0, right - barX));
+            // A thin well with the sent part filled in green, as the settings toggles are
+            Draw.well(graphics, barX, y, barWidth, 8, Surfaces.BORDER_DISABLED);
+            Draw.progressBar(graphics, barX + 2, y + 2, Math.max(0, barWidth - 4), 4, fraction, Theme.TRACK,
+                    Theme.GREEN);
             left = barX + PROGRESS_WIDTH + 12;
         }
         if (!hasStatus() && page().takesFiles()) {
             String hint = Draw.cut(this.font, tr("editor.drop_hint").getString(), Math.max(0, right - left));
             if (this.font.width(hint) >= 60) {
-                graphics.drawString(this.font, hint, right - this.font.width(hint), y, Theme.FAINT, false);
+                Draw.string(graphics, this.font, hint, right - this.font.width(hint), y, Theme.FAINT);
             }
         }
     }
 
-    /** After the way back: "/ name", the state badge and the unsaved count, as room allows. */
+    /**
+     * After the way back: "/ name", the name in the menus' pixel font as a title, then the state
+     * badge and the unsaved count, as room allows.
+     */
     private void drawCrumb(GuiGraphics graphics, int mouseX, int mouseY) {
         int textY = this.barY + 6;
         int x = this.crumbX;
-        graphics.drawString(this.font, "/", x, textY, CRUMB, false);
+        Draw.string(graphics, this.font, "/", x, textY, CRUMB);
         x += this.font.width("/") + 4;
 
         Component pill = this.changes.isEmpty() ? null : this.changes.size() == 1 ? tr("editor.unsaved_one")
@@ -695,9 +722,10 @@ public class CreatorEditorScreen extends CreatorScreen {
             background = Theme.BADGE_PUBLISHED_BG;
             foreground = Theme.BADGE_PUBLISHED_FG;
         }
+        float titleScale = PixelFont.crispScale(1.0f);
         if (this.draft.isDraftCollection() && !this.draft.archived()
-                && this.font.width(this.draft.name()) + Draw.badgeWidth(this.font, badge) + pillWidth + 14
-                > this.crumbRight - x) {
+                && PixelFont.width(Component.literal(this.draft.name()), titleScale) + Draw.badgeWidth(this.font, badge)
+                + pillWidth + 14 > this.crumbRight - x) {
             // A narrow bar says only DRAFT, with the rest in its tooltip
             badge = tr("card.badge.draft");
         }
@@ -712,10 +740,8 @@ public class CreatorEditorScreen extends CreatorScreen {
             nameRoom += pillWidth;
         }
         String name = this.draft.name().isBlank() ? tr("home.new").getString() : this.draft.name();
-        String shown = Draw.cut(this.font, name, Math.max(0, nameRoom - 6));
-        Component bold = Component.literal(shown).withStyle(ChatFormatting.BOLD);
-        graphics.drawString(this.font, bold, x, textY, Theme.TEXT, false);
-        x += this.font.width(bold) + 6;
+        x += Draw.heading(graphics, Component.literal(name), x, this.barY + UiButton.HEIGHT / 2.0f,
+                Math.max(0, nameRoom - 6), 1.0f, Theme.TEXT) + 6;
         if (withBadge) {
             int width = Draw.badge(graphics, this.font, badge, x, textY - 2, background, foreground);
             if (badgeTip != null && mouseX >= x && mouseX < x + width && mouseY >= textY - 2 && mouseY < textY + 10) {
@@ -724,7 +750,7 @@ public class CreatorEditorScreen extends CreatorScreen {
             x += width + 6;
         }
         if (withPill) {
-            Draw.pill(graphics, this.font, pill, x, textY - 2, PILL, 0xFF000000);
+            Draw.pill(graphics, this.font, pill, x, textY - 2, Theme.BADGE_DRAFT_BG, Theme.AMBER);
         }
     }
 
@@ -732,12 +758,12 @@ public class CreatorEditorScreen extends CreatorScreen {
     private void drawSteps(GuiGraphics graphics) {
         int left = this.panelX + PAD;
         int right = this.panelX + this.panelWidth - PAD;
-        graphics.fill(left, this.stepsY, right, this.stepsY + STEPS_HEIGHT, 0xFF151515);
-        Draw.outline(graphics, left, this.stepsY, right - left, STEPS_HEIGHT, Theme.SEPARATOR);
-        int textY = this.stepsY + 3;
+        // A sunk strip, as the menus' wells
+        Draw.well(graphics, left, this.stepsY, right - left, STEPS_HEIGHT, Surfaces.BORDER_DISABLED);
+        int textY = this.stepsY + 4;
         int x = left + 6;
         Component heading = tr("editor.steps_heading");
-        graphics.drawString(this.font, heading, x, textY, Theme.TEXT_SOFT, false);
+        Draw.string(graphics, this.font, heading, x, textY, Theme.TEXT_SOFT);
         x += this.font.width(heading) + 6;
 
         int figuresInDraw = 0;
@@ -765,7 +791,7 @@ public class CreatorEditorScreen extends CreatorScreen {
                         step.done() ? Theme.GREEN : Theme.MUTED);
                 return;
             }
-            graphics.drawString(this.font, text, x, textY, step.done() ? Theme.GREEN : Theme.MUTED, false);
+            Draw.string(graphics, this.font, text, x, textY, step.done() ? Theme.GREEN : Theme.MUTED);
             x += width + 5;
         }
     }
@@ -808,7 +834,8 @@ public class CreatorEditorScreen extends CreatorScreen {
             return;
         }
         UiModal dialog = new UiModal(tr("editor.leave_title"),
-                this.changes.size() == 1 ? tr("editor.leave_body_one") : tr("editor.leave_body", this.changes.size()));
+                this.changes.size() == 1 ? tr("editor.leave_body_one") : tr("editor.leave_body", this.changes.size()))
+                .accent(DialogFrame.Accent.DANGER, Theme.ICON_SAVE);
         dialog.cancelButton(tr("cancel"));
         dialog.button(tr("editor.discard"), UiButton.Style.DANGER, this::leaveEditor);
         UiButton saveAndLeave = dialog.button(tr("save"), UiButton.Style.GREEN, () -> save(false, true));

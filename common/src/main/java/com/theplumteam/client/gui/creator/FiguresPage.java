@@ -14,6 +14,8 @@ import com.theplumteam.client.gui.creator.ui.UiQuotaMeter;
 import com.theplumteam.client.gui.creator.ui.UiScrollPane;
 import com.theplumteam.client.gui.creator.ui.UiSizeSlider;
 import com.theplumteam.client.gui.creator.ui.UiTooltip;
+import com.theplumteam.client.gui.style.PixelIcon;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.client.worldcontent.CreatorDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FigureDraft;
@@ -69,8 +71,9 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
 final class FiguresPage implements EditorPage {
     // The grid takes the mockup's 676 of 1244 units; the panel beside it the rest
     private static final int GRID_SHARE = 54;
-    private static final int MIN_GRID_WIDTH = 220;
-    private static final int MIN_PANEL_WIDTH = 120;
+    // On a narrow panel the inspector keeps room for its fields, and the grid narrows to four cards
+    private static final int MIN_GRID_WIDTH = 200;
+    private static final int MIN_PANEL_WIDTH = 140;
     private static final int GAP = 4;
     private static final int COLUMN_GAP = 9;
     private static final int ROW_GAP = 6;
@@ -125,7 +128,7 @@ final class FiguresPage implements EditorPage {
 
     FiguresPage(CreatorEditorScreen editor) {
         this.editor = editor;
-        this.addButton = new UiButton(tr("figures.add"), UiButton.Style.GREEN, this::addFigure);
+        this.addButton = new UiButton(tr("figures.add"), UiButton.Style.PRIMARY, this::addFigure);
         this.dropZone = UiDropZone.many(editor, tr("figures.drop"), this::openBulkAdd).help(tr("figures.drop_help"));
         this.dropCell = new DropCell(this.dropZone);
         this.severalButton = new UiButton(tr("figures.add_several"), UiButton.Style.SECONDARY,
@@ -164,7 +167,7 @@ final class FiguresPage implements EditorPage {
         int y = area.y();
 
         // Toolbar: the two ways to add, then the search filling the rest
-        int addWidth = UiButton.widthFor(font, this.addButton.label(), false);
+        int addWidth = CreatorEditorScreen.buttonWidth(font, this.addButton);
         this.addButton.at(left, y, addWidth, UiButton.HEIGHT);
         int severalWidth = UiButton.widthFor(font, this.severalButton.label(), false);
         this.severalButton.at(left + addWidth + GAP, y, severalWidth, UiButton.HEIGHT);
@@ -679,17 +682,17 @@ final class FiguresPage implements EditorPage {
         List<FigureDraft> chosen = selected();
         int bottomRight = this.gridArea.right();
         if (besideChips) {
-            graphics.drawString(font, counter, this.gridArea.right() - counterWidth, this.chipsY + 4, HINT, false);
+            Draw.string(graphics, font, counter, this.gridArea.right() - counterWidth, this.chipsY + 4, HINT);
         } else if (chosen.size() < 2) {
             // The selection bar takes the whole row while it shows
-            graphics.drawString(font, counter, bottomRight - counterWidth, this.bottomY + 4, HINT, false);
+            Draw.string(graphics, font, counter, bottomRight - counterWidth, this.bottomY + 4, HINT);
             bottomRight -= counterWidth + 8;
         }
 
         int textY = this.bottomY + 4;
         if (chosen.size() >= 2) {
-            graphics.drawString(font, tr("figures.selected", chosen.size()), this.gridArea.x(), textY, Theme.GOLD,
-                    false);
+            Draw.string(graphics, font, tr("figures.selected", chosen.size()), this.gridArea.x(), textY,
+                    Theme.SELECTED);
         } else {
             boolean whole = this.filter == Filter.ALL && this.search.strip().isEmpty();
             Draw.text(graphics, font, tr(whole ? "figures.hint" : "figures.hint_filtered").getString(),
@@ -721,8 +724,9 @@ final class FiguresPage implements EditorPage {
     }
 
     /**
-     * The chips that pick which figures the grid shows: dark boxes, the chosen one outlined and
-     * written in gold. Given less room than their labels need, they share it and cut them.
+     * The chips that pick which figures the grid shows, drawn as the editor's switches are: small
+     * raised buttons, the chosen one on the slate of a selected tab inside the blue selection
+     * border. Given less room than their labels need, they share it and cut them.
      */
     private static final class FilterChips extends UiNode.Box {
         static final int HEIGHT = 16;
@@ -781,12 +785,13 @@ final class FiguresPage implements EditorPage {
             for (int i = 0; i < shown.size(); i++) {
                 boolean on = i == selected;
                 boolean over = mouseX >= left && mouseX < left + widths[i] && mouseY >= y && mouseY < y + height;
-                graphics.fill(left, y, left + widths[i], y + height, Theme.CONTROL);
-                Draw.outline(graphics, left, y, widths[i], height,
-                        on ? Theme.GOLD : over ? 0xFF777777 : Theme.CONTROL_OUTLINE);
+                boolean lit = over && !on;
+                Draw.raised(graphics, left, y, widths[i], height,
+                        on ? Theme.SELECTED : lit ? Surfaces.BORDER_HOVER : Surfaces.BORDER,
+                        on ? Theme.HIGHLIGHT : lit ? Surfaces.FACE_HOVER : Surfaces.FACE, 1);
                 String text = Draw.cut(font, shown.get(i).getString(), widths[i] - 6);
-                graphics.drawString(font, text, left + (widths[i] - font.width(text)) / 2, y + 4,
-                        on ? Theme.GOLD : Theme.CONTROL_TEXT, false);
+                Draw.string(graphics, font, text, left + (widths[i] - font.width(text)) / 2, y + (height - 9) / 2,
+                        on || lit ? Theme.TEXT : Theme.CONTROL_TEXT);
                 if (over && !text.equals(shown.get(i).getString())) {
                     UiTooltip.set(shown.get(i));
                 }
@@ -841,13 +846,15 @@ final class FiguresPage implements EditorPage {
             }
             Font font = Minecraft.getInstance().font;
             boolean over = hovered(mouseX, mouseY);
-            graphics.fill(x, y, x + width, y + height, over ? 0x18FFD84A : 0x0DFFD84A);
-            Draw.dashed(graphics, x, y, width, height, over ? Theme.GOLD : 0xFF8A7A3A);
-            Draw.centred(graphics, font, "+", x + width / 2, y + height / 2 - 14, width - 4, Theme.GOLD);
+            // A sunk well, as the menus' drop zones, with a dashed edge inside its border
+            Draw.well(graphics, x, y, width, height, over, false);
+            Draw.dashed(graphics, x + 3, y + 3, width - 6, height - 6, over ? Theme.SELECTED : Theme.CONTROL_OUTLINE);
+            PixelIcon.draw(graphics, PixelIcon.UPLOAD, x + (width - PixelIcon.width(PixelIcon.UPLOAD)) / 2,
+                    y + height / 2 - 16, over ? Theme.SELECTED_LIGHT : Theme.TEXT_SOFT);
             String text = tr(FilePicker.isReading() ? "drop.reading_many" : "figures.drop_short").getString();
             int top = y + height / 2 - 2;
-            for (String line : Draw.fit(font, text, width - 6, 3)) {
-                Draw.centred(graphics, font, line, x + width / 2, top, width - 4, 0xFFE8D9A0);
+            for (String line : Draw.fit(font, text, width - 8, 3)) {
+                Draw.centred(graphics, font, line, x + width / 2, top, width - 6, Theme.TEXT_SOFT);
                 top += Theme.LINE_HEIGHT;
             }
             if (over) {

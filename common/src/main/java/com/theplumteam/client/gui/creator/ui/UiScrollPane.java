@@ -1,6 +1,7 @@
 package com.theplumteam.client.gui.creator.ui;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.util.GuiPose;
 import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
@@ -31,9 +32,11 @@ public class UiScrollPane extends UiNode.Box {
     public static final int BAR = 4;
     private static final int BAR_GAP = 2;
     private static final int MIN_THUMB = 12;
-    private static final int THUMB = 0xFF7A7A7A;
-    private static final int THUMB_HOVER = 0xFFBBBBBB;
-    private static final int TRACK = 0xFF1E1E1E;
+    // The bar in the menus' colours: a sunk track and a thumb in a button's border greys
+    private static final int THUMB = Surfaces.BORDER;
+    private static final int THUMB_HOVER = Surfaces.BORDER_HOVER;
+    private static final int THUMB_DRAGGED = Surfaces.BORDER_SELECTED;
+    private static final int TRACK = Surfaces.WELL;
     // Where the pointer is for children when it is outside the pane, so none of them looks hovered
     private static final int AWAY = -100000;
     // How quickly the shown position catches up with the wanted one, per second
@@ -245,10 +248,12 @@ public class UiScrollPane extends UiNode.Box {
             return;
         }
         int barX = x + width - BAR;
-        graphics.fill(barX, y, barX + BAR, y + height, TRACK);
+        graphics.fill(barX, y, barX + BAR, y + height, Surfaces.OUTLINE);
+        graphics.fill(barX + 1, y + 1, barX + BAR - 1, y + height - 1, TRACK);
         int thumbY = thumbY();
-        boolean lit = draggingThumb || overBar(mouseX, mouseY);
-        graphics.fill(barX, thumbY, barX + BAR, thumbY + thumbHeight(), lit ? THUMB_HOVER : THUMB);
+        int thumb = draggingThumb ? THUMB_DRAGGED : overBar(mouseX, mouseY) ? THUMB_HOVER : THUMB;
+        graphics.fill(barX, thumbY, barX + BAR, thumbY + thumbHeight(), Surfaces.OUTLINE);
+        graphics.fill(barX + 1, thumbY + 1, barX + BAR - 1, thumbY + thumbHeight() - 1, thumb);
     }
 
     // Input

@@ -121,21 +121,21 @@ public class UiChecklist extends UiNode.Box {
         int textX = x + MARK_WIDTH;
         for (Placed placed : layout(font, x, y, width)) {
             int colour = placed.row().mark().colour;
-            graphics.drawString(font, placed.row().mark().glyph, x, placed.top(), colour, false);
+            Draw.string(graphics, font, placed.row().mark().glyph, x, placed.top(), colour);
             int lineY = placed.top();
             for (String line : placed.lines()) {
-                graphics.drawString(font, line, textX, lineY, colour, false);
+                Draw.string(graphics, font, line, textX, lineY, colour);
                 lineY += Theme.LINE_HEIGHT;
             }
             Rect link = placed.link();
             if (link != null) {
                 if (link.x() > textX) {
                     String last = placed.lines().get(placed.lines().size() - 1);
-                    graphics.drawString(font, SEPARATOR, textX + font.width(last), link.y(), colour, false);
+                    Draw.string(graphics, font, SEPARATOR, textX + font.width(last), link.y(), colour);
                 }
                 boolean hovered = link.contains(mouseX, mouseY);
-                int linkColour = hovered ? Theme.GOLD_LIGHT : Theme.GOLD;
-                graphics.drawString(font, placed.row().link(), link.x(), link.y(), linkColour, false);
+                int linkColour = hovered ? Theme.LINK_HOVER : Theme.LINK;
+                Draw.string(graphics, font, placed.row().link(), link.x(), link.y(), linkColour);
                 graphics.fill(link.x(), link.y() + 9, link.right(), link.y() + 10, linkColour);
             }
         }
