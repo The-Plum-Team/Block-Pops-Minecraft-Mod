@@ -336,8 +336,9 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         leftX = contentLeft;
         rightX = leftX + leftWidth + GAP;
 
-        // The bottom row: the token buttons, then the creator's button for an operator in a
-        // development game, then Done; the token counts stand on a line above their buttons
+        // The bottom row: the token buttons, blue and gold as their counts, then the creator's
+        // button for an operator in a development game, then Done; the token counts stand on a
+        // line above their buttons
         int buttonHeight = Mth.clamp(Math.round(this.height * BUTTON_HEIGHT_SHARE), MIN_BUTTON_HEIGHT, MAX_BUTTON_HEIGHT);
         int footTop = this.height - MARGIN - buttonHeight;
         tokenInfoY = footTop - 4 - font.lineHeight;
@@ -348,11 +349,13 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         tokenButtonWidth = (tokensWidth - GAP) / 2;
 
         useRegularButton = new StyledButton(contentLeft, footTop, tokenButtonWidth, buttonHeight,
-                Component.literal("Use Regular Token"), button -> useToken(TokenType.REGULAR)).pixelLabel();
+                Component.literal("Use Regular Token"), button -> useToken(TokenType.REGULAR))
+                .tone(StyledButton.Tone.BLUE).pixelLabel();
         this.addRenderableWidget(useRegularButton);
         int specialX = contentLeft + tokenButtonWidth + GAP;
         useSpecialButton = new StyledButton(specialX, footTop, tokenButtonWidth, buttonHeight,
-                Component.literal("Use Guaranteed Token"), button -> useToken(TokenType.GUARANTEED)).pixelLabel();
+                Component.literal("Use Guaranteed Token"), button -> useToken(TokenType.GUARANTEED))
+                .tone(StyledButton.Tone.GOLD).pixelLabel();
         this.addRenderableWidget(useSpecialButton);
         regularCenterX = contentLeft + tokenButtonWidth / 2;
         specialCenterX = specialX + tokenButtonWidth / 2;
