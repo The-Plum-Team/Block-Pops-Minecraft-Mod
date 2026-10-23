@@ -66,8 +66,24 @@ public final class WorldContentLimits {
     /** Characters of a collection or figure name, and of an author. */
     public static final int MAX_NAME_LENGTH = 48;
     public static final int MAX_AUTHOR_LENGTH = 48;
+    /** Characters of an author link, which is only ever shown and opened by the player's browser. */
+    public static final int MAX_AUTHOR_URL_LENGTH = 256;
+    /** Skin variants of one figure, besides its own texture. */
+    public static final int MAX_VARIANTS_PER_FIGURE = 4;
+    /** Skin variants of every figure of one collection together. */
+    public static final int MAX_VARIANTS = 128;
     /** The highest revision a record can reach. */
     public static final int MAX_REVISION = Integer.MAX_VALUE;
+
+    /**
+     * Uploads one player may begin per minute. Only an upload the server accepts counts: a
+     * file it already has, and a refused one, are free.
+     */
+    public static final int UPLOAD_BEGINS_PER_MINUTE = 120;
+    /** Bytes one player may begin uploading per minute, counted as uploads begin. */
+    public static final long UPLOAD_BYTES_PER_MINUTE = 32L * MIB;
+    /** Datapack imports one player may start from the editor per minute. */
+    public static final int IMPORTS_PER_MINUTE = 2;
 
     private WorldContentLimits() {
     }

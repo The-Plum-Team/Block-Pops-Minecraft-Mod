@@ -12,9 +12,19 @@ public record WorldContentStatus(Result result, String detail) {
     /** The longest detail, which is what the status packet carries. */
     public static final int MAX_DETAIL = 128;
 
+    /**
+     * The outcomes. They travel by ordinal, so a new one is only ever added at the end, and
+     * each has the lang key {@code blockpops.world_collections.<name in lower case>}.
+     */
     public enum Result {
         OK, READY, STORED, ALREADY_STORED, NOT_ALLOWED, INVALID, TOO_LARGE, QUOTA, BUSY, TIMED_OUT,
-        UNKNOWN_COLLECTION, UNKNOWN_FIGURE, ID_TAKEN, FULL, MISSING_ASSET, DEGRADED, SAVE_FAILED
+        UNKNOWN_COLLECTION, UNKNOWN_FIGURE, ID_TAKEN, FULL, MISSING_ASSET, DEGRADED, SAVE_FAILED,
+        /** Only a draft allows that, or a draft does not. */
+        NOT_DRAFT,
+        /** A draft has no figure in the draw, so there is nothing to publish. */
+        EMPTY,
+        /** A collection still in the machines cannot be deleted; archive it first. */
+        STILL_LIVE
     }
 
     public WorldContentStatus {

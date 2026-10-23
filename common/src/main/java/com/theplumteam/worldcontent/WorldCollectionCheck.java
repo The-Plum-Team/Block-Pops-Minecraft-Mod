@@ -10,6 +10,8 @@ import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -17,6 +19,8 @@ import java.util.Set;
  * on the client, as {@link com.theplumteam.figure.CustomCollectionCheck} does for Custom
  * collections: every model, texture, animation and logo it names must be one of its own
  * files in the role the record gives it, or one of the shared assets every figure may use.
+ * Whatever else it carries (plush, author link, logo placement, rarity and draw weight,
+ * skin variants and box face) must be exactly what its record says.
  */
 public final class WorldCollectionCheck {
     private static final Set<ResourceLocation> SHARED_ANIMATIONS = Set.of(
@@ -32,8 +36,9 @@ public final class WorldCollectionCheck {
         if (!WorldContentIds.isWorldCollectionId(collection.getId()) || !collection.getId().equals(record.id())) {
             return "declares id " + collection.getId();
         }
-        if (collection.isPlush() || collection.getSpecialsReleasedAt() != null || collection.getAuthorUrl() != null) {
-            return "is not a plain collection";
+        if (collection.isPlush() != record.plush() || collection.getSpecialsReleasedAt() != null
+                || !Objects.equals(collection.getAuthorUrl(), record.authorUrl())) {
+            return "is plush, linked or special apart from its record";
         }
         if (collection.getFigures().size() != record.figures().size()
                 || collection.getFigures().size() > WorldContentLimits.MAX_FIGURES) {
@@ -54,9 +59,18 @@ public final class WorldCollectionCheck {
                 || !WorldContentIds.texture(record.logo()).equals(logo.getTexture()))) {
             return "names logo " + logo.getTexture();
         }
+        WorldCollectionRecord.LogoLayout layout = record.effectiveLogoLayout();
+        if (logo != null && (logo.getScale() != layout.scale() || logo.getOffsetX() != layout.offsetXPixels()
+                || logo.getOffsetY() != layout.offsetYPixels())) {
+            return "places its logo apart from its record";
+        }
         for (int i = 0; i < record.figures().size(); i++) {
             FigureDefinition figure = collection.getFigures().get(i);
-            String problem = problem(figure, record.figures().get(i));
+            WorldCollectionRecord.Figure source = record.figures().get(i);
+            if (figure.getRarity() != source.rarity() || figure.getDrawWeight() != record.drawWeight(source)) {
+                return "figure " + figure.getId() + " is drawn apart from its record";
+            }
+            String problem = problem(figure, source);
             if (problem != null) {
                 return "figure " + figure.getId() + " " + problem;
             }
@@ -70,10 +84,28 @@ public final class WorldCollectionCheck {
                 || !figure.getId().equals(source.id())) {
             return "is not a plain figure";
         }
-        if (figure.hasAlternatives() || figure.isSpecial()
+        if (figure.isSpecial()
                 || !figure.getRenderOptions().hiddenBones().isEmpty()
                 || !figure.getRenderOptions().extraTextures().isEmpty()) {
-            return "has alternatives, hidden bones, extra textures or a special flag";
+            return "has hidden bones, extra textures or a special flag";
+        }
+        // Alternatives may only be the record's own variants: a texture each, in order
+        List<FigureDefinition.AlternativeSkin> alternatives = figure.getAlternatives();
+        if (alternatives.size() != source.variants().size()) {
+            return "has " + alternatives.size() + " alternatives";
+        }
+        for (int i = 0; i < alternatives.size(); i++) {
+            FigureDefinition.AlternativeSkin alternative = alternatives.get(i);
+            WorldCollectionRecord.Variant variant = source.variants().get(i);
+            if (!alternative.name().equals(variant.name())
+                    || !WorldContentIds.texture(variant.texture()).equals(alternative.texture())
+                    || alternative.model() != null || alternative.scale() != null || alternative.showBoxFace() != null
+                    || alternative.boxFaceUv() != null || !alternative.hiddenBones().isEmpty()) {
+                return "names alternative " + alternative.texture();
+            }
+        }
+        if (!sameBoxFace(figure.getRenderOptions(), source)) {
+            return "shows its box face apart from its record";
         }
         ResourceLocation model = source.model() != null ? WorldContentIds.model(source.model()) : null;
         if (!figure.getModelPath().equals(FigureDefinition.DEFAULT_MODEL) && !figure.getModelPath().equals(model)) {
@@ -91,5 +123,28 @@ public final class WorldCollectionCheck {
             return "names texture " + figure.getTexturePath();
         }
         return null;
+    }
+
+    /**
+     * Whether the face the box shows is the record's: a skin figure decides only whether it
+     * shows, and a model figure shows exactly the region its record names.
+     */
+    private static boolean sameBoxFace(FigureDefinition.RenderOptions options, WorldCollectionRecord.Figure source) {
+        WorldCollectionRecord.BoxFace face = source.boxFace();
+        float[] uv = options.boxFaceUv();
+        if (source.kind() == WorldCollectionRecord.Kind.SKIN) {
+            return uv == null && Objects.equals(options.showBoxFace(), face != null ? face.show() : null);
+        }
+        if (!Boolean.valueOf(face != null && face.show()).equals(options.showBoxFace())) {
+            return false;
+        }
+        if (face == null || face.uv() == null) {
+            return uv == null;
+        }
+        WorldCollectionRecord.Uv expected = face.uv();
+        // The last two values are the texture's size, which the materializer reads from the blob table
+        return uv != null && uv.length == 6 && uv[0] == expected.u() && uv[1] == expected.v()
+                && uv[2] == expected.w() && uv[3] == expected.h() && uv[4] >= expected.u() + expected.w()
+                && uv[5] >= expected.v() + expected.h();
     }
 }

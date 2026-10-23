@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.util.GeoAssets;
+import com.theplumteam.worldcontent.WorldCollectionRecord.Rarity;
 import net.minecraft.resources.ResourceLocation;
 
 import org.jetbrains.annotations.Nullable;
@@ -249,6 +250,10 @@ public class FigureDefinition {
     private final boolean enabled; // False once an operator disables a World Players figure
     private final boolean special; // A plush only players with special access receive
     private final RenderOptions renderOptions;
+    // Only World collections set these; bundled and Custom figures are drawn alike
+    @Nullable
+    private final Rarity rarity;
+    private final int drawWeight;
 
     public FigureDefinition(String id, String name, ResourceLocation modelPath,
                            ResourceLocation texturePath, ResourceLocation animationPath) {
@@ -291,6 +296,13 @@ public class FigureDefinition {
                            ResourceLocation texturePath, ResourceLocation animationPath,
                            List<AlternativeSkin> alternatives, RenderOptions renderOptions,
                            boolean special, boolean enabled) {
+        this(id, name, modelPath, texturePath, animationPath, alternatives, renderOptions, special, enabled, null, 1);
+    }
+
+    private FigureDefinition(String id, String name, ResourceLocation modelPath,
+                             ResourceLocation texturePath, ResourceLocation animationPath,
+                             List<AlternativeSkin> alternatives, RenderOptions renderOptions,
+                             boolean special, boolean enabled, @Nullable Rarity rarity, int drawWeight) {
         this.id = id;
         this.name = name;
         this.modelPath = modelPath;
@@ -303,6 +315,21 @@ public class FigureDefinition {
         this.enabled = enabled;
         this.special = special;
         this.renderOptions = renderOptions;
+        this.rarity = rarity;
+        this.drawWeight = drawWeight;
+    }
+
+    /**
+     * A static figure with a rarity and the weight the draw gives it, as World collection
+     * figures have. The weight is at least 1.
+     */
+    public static FigureDefinition weighted(String id, String name, ResourceLocation modelPath,
+                                            ResourceLocation texturePath, ResourceLocation animationPath,
+                                            List<AlternativeSkin> alternatives, RenderOptions renderOptions,
+                                            boolean special, boolean enabled, @Nullable Rarity rarity,
+                                            int drawWeight) {
+        return new FigureDefinition(id, name, modelPath, texturePath, animationPath, alternatives, renderOptions,
+                special, enabled, rarity, Math.max(1, drawWeight));
     }
 
     /**
@@ -331,6 +358,8 @@ public class FigureDefinition {
         this.enabled = enabled;
         this.special = false;
         this.renderOptions = RenderOptions.DEFAULT;
+        this.rarity = null;
+        this.drawWeight = 1;
     }
 
     /**
@@ -515,6 +544,17 @@ public class FigureDefinition {
      */
     public boolean isSpecial() {
         return special;
+    }
+
+    /** How rare the figure is: always set for a World collection figure, null for a bundled or Custom one. */
+    @Nullable
+    public Rarity getRarity() {
+        return rarity;
+    }
+
+    /** How many times as likely as a weight-1 figure the draw is to give this one; at least 1. */
+    public int getDrawWeight() {
+        return drawWeight;
     }
 
     /**

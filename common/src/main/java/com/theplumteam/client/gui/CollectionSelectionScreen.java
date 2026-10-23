@@ -16,6 +16,8 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 //? }
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.blockentity.ClawMachineBlockEntity;
+import com.theplumteam.blockentity.GachaMachineBlockEntity;
 import com.theplumteam.client.ClientHiddenCollections;
 import com.theplumteam.client.ClientSpecialAccess;
 import com.theplumteam.client.config.ClientConfig;
@@ -23,7 +25,6 @@ import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.util.GuiScaleManager;
 import com.theplumteam.client.gui.widget.CollectionEntry;
 import com.theplumteam.client.gui.widget.CollectionListWidget;
-import com.theplumteam.client.gui.widget.FigureEntry;
 import com.theplumteam.client.gui.widget.FigureListWidget;
 import com.theplumteam.client.gui.widget.TabButton;
 import com.theplumteam.client.gui.widget.LinkButton;
@@ -49,6 +50,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -68,6 +70,8 @@ public class CollectionSelectionScreen extends Screen {
     // Which tab is open: the plush collections or the figure ones. Either machine shows both.
     private boolean plush;
     private String selectedCollectionId;
+    // The collection the machine itself was last known to hold
+    private String machineCollectionId;
     // The selection the other tab keeps until it opens again
     private String otherTabSelection = "";
     // Whether init has run once; later runs (a resize, a tab switch) keep the selection
@@ -77,6 +81,8 @@ public class CollectionSelectionScreen extends Screen {
     private int shownHiddenRevision;
     // Revision of the server's World collections the list was last built from
     private int shownWorldRevision = ClientWorldCollections.revision();
+    // Whether the creator's button was shown, to rebuild only when it comes or goes
+    private boolean shownCreator;
 
     // Widgets
     @Nullable
@@ -146,6 +152,7 @@ public class CollectionSelectionScreen extends Screen {
         this.plush = currentCollectionId == null ? plush
                 : CollectionRegistry.getCollection(currentCollectionId).map(FigureCollection::isPlush).orElse(plush);
         this.selectedCollectionId = currentCollectionId;
+        this.machineCollectionId = currentCollectionId;
         this.collections = collectionsOf(this.plush);
 
         // Initialize color transition with current background color
@@ -167,12 +174,12 @@ public class CollectionSelectionScreen extends Screen {
 
     /**
      * One tab's collections, the World Players one first and this world's own collections
-     * last in the server's order, without the default collection or an archived one.
+     * last in the server's order, without the default collection or one that is archived or a draft.
      */
     private static List<FigureCollection> collectionsOf(boolean plush) {
         List<FigureCollection> list = (plush ? CollectionRegistry.getPlushCollections() : CollectionRegistry.getAllCollections()).stream()
                 .filter(c -> !"default".equals(c.getId()))
-                .filter(c -> !ClientWorldCollections.isArchived(c.getId()))
+                .filter(c -> ClientWorldCollections.isOffered(c.getId()))
                 .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         // A stable sort: the other collections keep their order
         list.sort((c1, c2) -> Integer.compare(sortKey(c1.getId()), sortKey(c2.getId())));
@@ -215,8 +222,43 @@ public class CollectionSelectionScreen extends Screen {
         }
     }
 
+    /**
+     * Selects the collection the machine holds now when someone else set it while this screen
+     * waited under another, as the creator's "Put in this machine" does, so a token is not spent
+     * on the collection the screen showed before. The tab follows the collection's kind.
+     */
+    private void followMachine() {
+        if (this.minecraft == null || this.minecraft.level == null || FigureDraw.isBusy()) {
+            return;
+        }
+        BlockEntity entity = this.minecraft.level.getBlockEntity(blockPos);
+        String held = entity instanceof ClawMachineBlockEntity claw ? claw.getCollectionId()
+                : entity instanceof GachaMachineBlockEntity gacha ? gacha.getCollectionId() : null;
+        if (held == null || held.isEmpty() || held.equals(machineCollectionId)) {
+            return;
+        }
+        machineCollectionId = held;
+        FigureCollection collection = CollectionRegistry.getCollection(held).orElse(null);
+        if (collection == null || held.equals(selectedCollectionId)) {
+            return;
+        }
+        if (collection.isPlush() != plush) {
+            otherTabSelection = selectedCollectionId == null ? "" : selectedCollectionId;
+            plush = collection.isPlush();
+            collections = collectionsOf(plush);
+        }
+        selectedCollectionId = held;
+    }
+
     @Override
     protected void init() {
+        if (shownWorldRevision != ClientWorldCollections.revision() && !FigureDraw.isBusy()) {
+            // Back from the creator, straight or through the settings: it may have published,
+            // archived or edited a collection, and the machine may now hold a new one
+            shownWorldRevision = ClientWorldCollections.revision();
+            collections = collectionsOf(plush);
+        }
+        followMachine();
         // Pre-initialize the shared figure renderer to avoid lag on first render
         FigureWidgetRenderer.ensureInitialized();
 
@@ -307,12 +349,22 @@ public class CollectionSelectionScreen extends Screen {
         int fullWidthX = panelX + scaledPadding;
         int fullComponentWidth = panelWidth - (scaledPadding * 2);
 
-        // Done button (bottom-most)
+        // Done button (bottom-most), sharing its row with the creator's button for an operator
+        // in a development game; for everyone else the row is as it always was
         bottomY -= scaledComponentHeight;
+        shownCreator = SettingsScreen.canOpenCreator();
+        int creatorWidth = shownCreator ? Math.min(100, fullComponentWidth / 3) : 0;
+        int doneWidth = shownCreator ? fullComponentWidth - creatorWidth - scaledSpacing : fullComponentWidth;
         doneButton = Button.builder(Component.literal("Done"), button -> onClose())
-                .bounds(fullWidthX, bottomY, fullComponentWidth, scaledComponentHeight)
+                .bounds(fullWidthX, bottomY, doneWidth, scaledComponentHeight)
                 .build();
         this.addRenderableWidget(doneButton);
+        if (shownCreator) {
+            this.addRenderableWidget(Button.builder(Component.translatable("blockpops.world_creator.machine_button"),
+                            button -> SettingsScreen.openCreator(this, blockPos))
+                    .bounds(fullWidthX + doneWidth + scaledSpacing, bottomY, creatorWidth, scaledComponentHeight)
+                    .build());
+        }
 
         // Token buttons (side by side)
         bottomY -= (scaledComponentHeight + scaledSpacing);
@@ -559,61 +611,12 @@ public class CollectionSelectionScreen extends Screen {
 
     /**
      * Shows the figure a draw stopped on, in a card above everything else on the screen, centred
-     * over the figure list, which it alone dims; the rest of the screen stays usable. Drawn in the
-     * list's own space, which is scaled up when the inverse GUI scale is in use.
+     * over the figure list (see {@link FigureDraw#drawResultCard}).
      */
     private void renderDrawResult(GuiGraphics graphics, float partialTick) {
-        FigureDraw draw = FigureDraw.result();
-        if (draw == null || figureListWidget == null) {
-            return;
+        if (figureListWidget != null) {
+            FigureDraw.drawResultCard(graphics, font, figureListWidget, partialTick, null);
         }
-        FigureEntry row = figureListWidget.rowOf(draw.winner().getId());
-        if (row == null) {
-            return;
-        }
-        // Everything drawn so far lands below the card: the list's models are drawn with depth,
-        // so the card is also lifted in front of them
-        GuiPose.flush(graphics);
-        GuiPose.nextStratum(graphics);
-        GuiPose.push(graphics);
-        GuiPose.lift(graphics, 400.0f);
-
-        float scale = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getRenderScaleFactor() : 1.0f;
-        int left = (int) (figureListWidget.left() * scale);
-        int top = (int) (figureListWidget.top() * scale);
-        int right = (int) (figureListWidget.right() * scale);
-        int bottom = (int) (figureListWidget.bottom() * scale);
-        graphics.fill(left, top, right, bottom, 0xB0000000);
-
-        String name = draw.winner().getName();
-        String label = draw.isHolographic()
-                ? (draw.isNew() ? "✦ NEW & HOLOGRAPHIC! ✦" : "✦ HOLOGRAPHIC! ✦")
-                : draw.isNew() ? "NEW!" : "Already in your collection";
-        String hint = "Click or press Esc to close";
-        int line = font.lineHeight + 4;
-        int size = (int) Math.max(40, Math.min(120 * scale, bottom - top - 3 * line - 30));
-        int cardWidth = Math.max(Math.max(size, font.width(hint)), Math.max(font.width(name), font.width(label))) + 40;
-        int cardHeight = size + 3 * line + 20;
-        int cardX = (left + right - cardWidth) / 2;
-        int cardY = (top + bottom - cardHeight) / 2;
-        // A holographic figure's frame and label run through the rainbow
-        int holographicColor = 0xFF000000
-                | net.minecraft.util.Mth.hsvToRgb((System.currentTimeMillis() % 2000L) / 2000.0F, 0.55F, 1.0F);
-        int labelColor = draw.isHolographic() ? holographicColor : draw.isNew() ? 0xFFFFD700 : 0xFFAAAAAA;
-        int frameColor = labelColor;
-        graphics.fill(cardX - 2, cardY - 2, cardX + cardWidth + 2, cardY + cardHeight + 2, frameColor);
-        graphics.fill(cardX, cardY, cardX + cardWidth, cardY + cardHeight, 0xFF181818);
-        GuiPose.flush(graphics);
-
-        int textY = cardY + 8;
-        graphics.drawString(font, label, cardX + (cardWidth - font.width(label)) / 2, textY, labelColor, false);
-        row.renderPreview(graphics, draw.winner(), cardX + (cardWidth - size) / 2, textY + line, size, partialTick,
-                draw.isHolographic());
-        textY += line + size + 4;
-        graphics.drawString(font, name, cardX + (cardWidth - font.width(name)) / 2, textY, 0xFFFFFFFF, false);
-        textY += line;
-        graphics.drawString(font, hint, cardX + (cardWidth - font.width(hint)) / 2, textY, 0xFF888888, false);
-        GuiPose.pop(graphics);
     }
 
     /** The figure list, which a draw lights up. */
@@ -774,7 +777,7 @@ public class CollectionSelectionScreen extends Screen {
      * Draws the scrolling star pattern over an area from the top left corner, in the star
      * colour and opacity of the client config. The World collection screens draw it too.
      */
-    static void drawStarPattern(GuiGraphics graphics, int starWidth, int starHeight, float partialTick) {
+    public static void drawStarPattern(GuiGraphics graphics, int starWidth, int starHeight, float partialTick) {
         double pixelsPerSecond = 5.0;
         int tileSize = StarPatternCache.getTileSize();
 
@@ -944,10 +947,10 @@ public class CollectionSelectionScreen extends Screen {
             }
         }
 
-        // A hidden or archived collection is not offered, so it cannot stay this machine's
+        // A hidden, archived or draft collection is not offered, so it cannot stay this machine's
         // selection, and neither can a World collection that was removed
         if (selectedCollectionId != null && (ClientHiddenCollections.isHidden(selectedCollectionId)
-                || ClientWorldCollections.isArchived(selectedCollectionId)
+                || !ClientWorldCollections.isOffered(selectedCollectionId)
                 || (WorldContentIds.isWorldCollectionId(selectedCollectionId)
                         && CollectionRegistry.getCollection(selectedCollectionId).isEmpty()))) {
             selectedCollectionId = "";
@@ -1125,6 +1128,11 @@ public class CollectionSelectionScreen extends Screen {
             collections = collectionsOf(plush);
             loadCollections();
         }
+        // The creator's button comes and goes with operator status and a server that syncs
+        // World collections; a draw keeps its screen as it is until it ends
+        if (shownCreator != SettingsScreen.canOpenCreator() && !FigureDraw.isBusy()) {
+            rebuildWidgets();
+        }
         FigureDraw.tick();
         // Update button states each tick to reflect token changes
         updateTokenButtonStates();
@@ -1136,8 +1144,19 @@ public class CollectionSelectionScreen extends Screen {
     private void sendUpdate() {
         BlockPopsMod.logDebug("Sending collection update - Position: {}, Collection ID: {}",
                 blockPos, selectedCollectionId);
+        // The machine's own update follows; until then this screen is not told to follow it
+        machineCollectionId = selectedCollectionId;
         ClawMachineCollectionPacket packet = new ClawMachineCollectionPacket(blockPos, selectedCollectionId);
         packet.sendToServer();
+    }
+
+    /**
+     * The claw or gacha machine this screen configures, which the creator screens opened from
+     * here offer as the place to try a collection. Null when the screen was opened without one.
+     */
+    @Nullable
+    public BlockPos machinePos() {
+        return this.blockPos;
     }
 
     /**

@@ -20,6 +20,10 @@ final class WorldPacketFields {
     static final int MAX_SHA = 64;
     static final int MAX_COLOR = 16;
     static final int MAX_DETAIL = WorldContentStatus.MAX_DETAIL;
+    static final int MAX_AUTHOR_URL = WorldContentLimits.MAX_AUTHOR_URL_LENGTH;
+    /** A datapack namespace and pack path, as {@code WorldCollectionImporter} accepts them. */
+    static final int MAX_NAMESPACE = 64;
+    static final int MAX_PACK_PATH = 32;
 
     private WorldPacketFields() {
     }

@@ -9,6 +9,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -17,7 +18,8 @@ import java.util.UUID;
 /**
  * Operator screen for viewing an online player's collection progress and re-locking or
  * unlocking whole collections. The server owns every check and every change; this screen
- * only sends requests and draws the last answer.
+ * only sends requests and draws the last answer. Opened from the World collection creator, it
+ * lists only the collection just published.
  */
 public class AdminProgressionScreen extends Screen {
     private static final int ROW_HEIGHT = 22;
@@ -27,6 +29,9 @@ public class AdminProgressionScreen extends Screen {
     private static final int COUNT_WIDTH = 44;
 
     private final Screen parent;
+    // The one collection listed, or null for every collection
+    @Nullable
+    private final String onlyCollectionId;
     private final List<FigureCollection> collections = new ArrayList<>();
     private int rowsPerColumn = 1;
     private int columnWidth = MAX_COLUMN_WIDTH;
@@ -41,8 +46,17 @@ public class AdminProgressionScreen extends Screen {
     private boolean unsupported;
 
     public AdminProgressionScreen(Screen parent) {
+        this(parent, null);
+    }
+
+    /**
+     * @param onlyCollectionId the one collection to list, such as a World collection the
+     *                         creator just published; null lists every collection
+     */
+    public AdminProgressionScreen(Screen parent, @Nullable String onlyCollectionId) {
         super(Component.literal("Player Progression"));
         this.parent = parent;
+        this.onlyCollectionId = onlyCollectionId;
         // Never show what an earlier session or server answered.
         AdminProgressionSyncPacket.clearLatest();
     }
@@ -55,10 +69,15 @@ public class AdminProgressionScreen extends Screen {
         this.armedLock = null;
 
         collections.clear();
-        for (FigureCollection collection : CollectionRegistry.getAllCollections()) {
-            // Filter out the default collection, as the Cheats tab does
-            if (!collection.getId().equals("default")) {
-                collections.add(collection);
+        if (this.onlyCollectionId != null) {
+            // Looked up by id, so a plush collection, which the figure list leaves out, is found too
+            CollectionRegistry.getCollection(this.onlyCollectionId).ifPresent(collections::add);
+        } else {
+            for (FigureCollection collection : CollectionRegistry.getAllCollections()) {
+                // Filter out the default collection, as the Cheats tab does
+                if (!collection.getId().equals("default")) {
+                    collections.add(collection);
+                }
             }
         }
 

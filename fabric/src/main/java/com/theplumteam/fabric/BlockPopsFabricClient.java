@@ -108,6 +108,7 @@ public class BlockPopsFabricClient implements ClientModInitializer {
     // now bound to item models through the vanilla id mapper instead.
     private void registerItemRenderers() {
         SpecialModelRenderers.ID_MAPPER.put(BoxBlockItemRenderer.ID, BoxBlockItemRenderer.Unbaked.MAP_CODEC);
+        SpecialModelRenderers.ID_MAPPER.put(BoxBlockItemRenderer.PREVIEW_ID, BoxBlockItemRenderer.PreviewUnbaked.MAP_CODEC);
         SpecialModelRenderers.ID_MAPPER.put(FigureBlockItemRenderer.ID, FigureBlockItemRenderer.Unbaked.MAP_CODEC);
         SpecialModelRenderers.ID_MAPPER.put(ClawMachineBlockItemRenderer.ID, ClawMachineBlockItemRenderer.Unbaked.MAP_CODEC);
         SpecialModelRenderers.ID_MAPPER.put(FigurePreviewItemRenderer.ID, FigurePreviewItemRenderer.Unbaked.MAP_CODEC);
