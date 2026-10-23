@@ -10,6 +10,8 @@ import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.FigureDraw;
 import com.theplumteam.client.gui.GreyedTextures;
+import com.theplumteam.client.gui.style.PixelFont;
+import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.gui.util.GuiPose;
 import com.theplumteam.client.renderer.FigurePreviewItemRenderer;
@@ -23,13 +25,17 @@ import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.client.renderer.MultiBufferSource;
 //? }
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.item.ItemStack;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 
 /**
@@ -63,6 +69,14 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     // Whether a figure counts as discovered, asked with "collection:figure"; the creator's
     // previews set their own to show a collection as a new player or a collector would see it
     private Predicate<String> discovered = DEFAULT_DISCOVERED;
+    // Which version each figure's cell shows, by "collection:figure": 0 the figure's own, 1
+    // onwards its alternatives. The list shares one map with its rows, and the machine menu keeps
+    // it while it is open.
+    private Map<String, Integer> shownSkins = new HashMap<>();
+    // Where this row last drew its first cell, as clicks come without the row's place; unknown
+    // until the row is drawn, and again before every draw of the list
+    private int cellsLeft;
+    private int cellsTop = Integer.MIN_VALUE;
 
     /** Whether the player discovered a figure, asked with "collection:figure": the client's own record. */
     public static final Predicate<String> DEFAULT_DISCOVERED = ClientDiscoveryManager::isDiscovered;
@@ -86,6 +100,11 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     private static final int BORDER = 0x60FFFFFF;
     private static final int BORDER_UNDISCOVERED = 0x30FFFFFF;
     private static final int BORDER_HOVER = 0xC0FFFFFF;
+    // A cell of a figure with versions says which one it shows, "1/3", in a dark chip in its top
+    // right corner, gold under the mouse because a click on the cell shows the next
+    private static final int COUNTER = 0xD0101012;
+    private static final int COUNTER_BORDER = 0x80FFFFFF;
+    private static final int COUNTER_HOVER = 0xFFFFD700;
 
     // The size of this row's cells and how many a full row holds, which the list sets
     private int cellSize = FIGURE_SIZE;
@@ -157,6 +176,58 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         this.hasView = true;
     }
 
+    /**
+     * Shares the map of which version each figure's cell shows, by "collection:figure", so the
+     * rows of a list, and a list a screen makes again, show the same ones.
+     */
+    public void setShownSkins(Map<String, Integer> shownSkins) {
+        this.shownSkins = shownSkins;
+    }
+
+    // How many versions a cell can show: the figure's own and its alternatives. The creator's
+    // previews show the skin their view names and none of this.
+    private int versions(FigureDefinition figure) {
+        return hasView ? 1 : 1 + figure.getAlternatives().size();
+    }
+
+    // The version a figure's cell shows, kept within those it has
+    private int shownSkin(FigureDefinition figure) {
+        int skin = shownSkins.getOrDefault(collectionId + ":" + figure.getId(), 0);
+        return skin < versions(figure) ? Math.max(0, skin) : 0;
+    }
+
+    private static String nameOf(FigureDefinition figure, int skin) {
+        return skin > 0 ? figure.getAlternatives().get(skin - 1).name() : figure.getName();
+    }
+
+    /** Forgets where its cells are, as the list has every row do before it draws them. */
+    void forgetCells() {
+        cellsTop = Integer.MIN_VALUE;
+    }
+
+    /**
+     * Shows the next version of the figure whose cell holds the point, back to its own after the
+     * last, with a button's click; false when the point is on no cell of a figure with versions.
+     */
+    boolean showNextVersion(double mouseX, double mouseY) {
+        if (cellsTop == Integer.MIN_VALUE || mouseY < cellsTop || mouseY >= cellsTop + cellSize) {
+            return false;
+        }
+        int pitch = cellSize + GRID_SPACING;
+        int column = (int) Math.floor((mouseX - cellsLeft) / pitch);
+        if (column < 0 || column >= figures.size() || mouseX - cellsLeft - column * pitch >= cellSize) {
+            return false;
+        }
+        FigureDefinition figure = figures.get(column);
+        int versions = versions(figure);
+        if (versions < 2) {
+            return false;
+        }
+        shownSkins.put(collectionId + ":" + figure.getId(), (shownSkin(figure) + 1) % versions);
+        mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0f));
+        return true;
+    }
+
     /** Draws one figure of this row in colour at any size, placed as its cell places it. */
     public void renderPreview(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick) {
         renderPreview(graphics, figure, x, y, size, partialTick, false);
@@ -177,21 +248,46 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
      */
     public void renderPreview(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick,
                               boolean greyed, boolean holographic) {
+        renderPreview(graphics, figure, x, y, size, partialTick, greyed, holographic, 0);
+    }
+
+    // As above, wearing one of the figure's skins, 0 its own; a creator's preview wears the one
+    // its view names
+    private void renderPreview(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick,
+                               boolean greyed, boolean holographic, int skin) {
         float cellXOffset = xOffset;
         float cellYOffset = yOffset;
         xOffset *= size / (float) FIGURE_SIZE;
         yOffset *= size / (float) FIGURE_SIZE;
-        render3DFigure(graphics, figure, x, y, size, partialTick, greyed, holographic && !greyed);
+        render3DFigure(graphics, figure, x, y, size, partialTick, greyed, holographic && !greyed, skin);
         xOffset = cellXOffset;
         yOffset = cellYOffset;
     }
 
-    private void drawFigureName(GuiGraphics graphics, FigureDefinition figure, int figureX, int y,
+    private void drawFigureName(GuiGraphics graphics, String figureName, int figureX, int y,
                                 int effectiveFigureSize, int color) {
-        String name = UiText.fit(mc.font, figure.getName(), effectiveFigureSize - 4);
+        String name = UiText.fit(mc.font, figureName, effectiveFigureSize - 4);
         int nameX = figureX + (effectiveFigureSize - mc.font.width(name)) / 2;
         int nameY = y + effectiveFigureSize - mc.font.lineHeight - 2;
         UiText.draw(graphics, mc.font, name, nameX, nameY, color);
+    }
+
+    // The chip in a cell's top right corner that says which of its versions it shows, in the
+    // pixel font at about half a GUI unit per font pixel, crisp
+    private void drawVersionCounter(GuiGraphics graphics, int cellX, int cellY, int size, int skin, int versions,
+                                    boolean hovered) {
+        Component label = PixelFont.text((skin + 1) + "/" + versions);
+        float scale = PixelFont.crispScale(0.5f);
+        int width = (int) Math.ceil(mc.font.width(label) * scale) + 6;
+        int height = Math.round(PixelFont.CAPITALS_HEIGHT * scale) + 4;
+        int right = cellX + size - 3;
+        int left = right - width;
+        int top = cellY + 3;
+        int color = hovered ? COUNTER_HOVER : 0xFFFFFFFF;
+        graphics.fill(left, top, right, top + height, COUNTER);
+        Surfaces.outline(graphics, left, top, width, height, hovered ? COUNTER_HOVER : COUNTER_BORDER);
+        // The capitals start 3 font pixels above the text's origin
+        PixelFont.draw(graphics, label, left + 3, top + 2 + 3 * scale, scale, color, true);
     }
 
     //? if >=26 {
@@ -219,6 +315,8 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
         // Calculate starting X position to center the figures
         int startX = x + (entryWidth - totalFiguresWidth) / 2;
+        cellsLeft = startX;
+        cellsTop = y;
 
         if (heading != null) {
             // Centred over the row, between two rules as wide as a full row
@@ -277,15 +375,21 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 graphics.fill(figureX + effectiveFigureSize - frame, y, figureX + effectiveFigureSize, y + effectiveFigureSize, frameColor);
             }
 
+            // The version the cell shows: the figure's own until a click on it shows another
+            int skin = shownSkin(figure);
             if (isDiscovered) {
                 // Render the 3D figure model for discovered figures
-                renderPreview(graphics, figure, figureX, y, effectiveFigureSize, partialTick, false, false);
+                renderPreview(graphics, figure, figureX, y, effectiveFigureSize, partialTick, false, false, skin);
 
-                drawFigureName(graphics, figure, figureX, y, effectiveFigureSize, 0xFFFFFFFF);
+                drawFigureName(graphics, nameOf(figure, skin), figureX, y, effectiveFigureSize, 0xFFFFFFFF);
             } else {
                 // The figure is there to see, in black and white until it is discovered
-                renderPreview(graphics, figure, figureX, y, effectiveFigureSize, partialTick, true, false);
-                drawFigureName(graphics, figure, figureX, y, effectiveFigureSize, 0xFFB0B0B0);
+                renderPreview(graphics, figure, figureX, y, effectiveFigureSize, partialTick, true, false, skin);
+                drawFigureName(graphics, nameOf(figure, skin), figureX, y, effectiveFigureSize, 0xFFB0B0B0);
+            }
+            int versions = versions(figure);
+            if (versions > 1) {
+                drawVersionCounter(graphics, figureX, y, effectiveFigureSize, skin, versions, isFigureHovered);
             }
         }
     }
@@ -297,10 +401,11 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     private final java.util.Map<String, ItemStack> previewStacks = new java.util.HashMap<>();
 
     private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick,
-                                boolean greyed, boolean holographic) {
+                                boolean greyed, boolean holographic, int skin) {
         ItemStack stack = previewStacks.computeIfAbsent(
-                figure.getId() + (greyed ? "|greyed" : "") + (holographic ? "|holographic" : ""),
-                key -> FigurePreviewItemRenderer.stack(collectionId, figure.getId(), greyed, holographic));
+                figure.getId() + (greyed ? "|greyed" : "") + (holographic ? "|holographic" : "")
+                        + (skin > 0 ? "|skin" + skin : ""),
+                key -> FigurePreviewItemRenderer.stack(collectionId, figure.getId(), greyed, holographic, skin));
         if (hasView) {
             FigurePreviewItemRenderer.setView(stack, previewYaw, previewPose, previewSkin);
         }
@@ -319,7 +424,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     }
     *///? } else {
     private void render3DFigure(GuiGraphics graphics, FigureDefinition figure, int x, int y, int size, float partialTick,
-                                boolean greyed, boolean holographic) {
+                                boolean greyed, boolean holographic, int skin) {
         PoseStack poseStack = graphics.pose();
         poseStack.pushPose();
 
@@ -357,6 +462,9 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             poseStack.mulPose(Axis.YP.rotationDegrees(previewYaw));
             renderEntity.setPoseIndex(previewPose);
             renderEntity.setAlternativeSkinIndexForPreview(previewSkin);
+        } else {
+            // Every draw of the figure shares this entity, so each says which skin it wears
+            renderEntity.setAlternativeSkinIndexForPreview(skin);
         }
         // The figure stands on its own origin in the middle of the cell. GeckoLib 4.7 centres
         // the block inside actuallyRender, half a block that grows with the figure's scale, so

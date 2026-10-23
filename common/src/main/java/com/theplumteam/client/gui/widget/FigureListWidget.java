@@ -7,7 +7,9 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ObjectSelectionList;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 
 /**
@@ -33,6 +35,8 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
 
     // Which figures count as discovered, asked with "collection:figure"
     private Predicate<String> discovered = FigureEntry.DEFAULT_DISCOVERED;
+    // Which version each figure's cell shows, by "collection:figure", shared with every row
+    private Map<String, Integer> shownSkins = new HashMap<>();
 
     // Configuration values
     private float modelScale = 1.0f;
@@ -90,6 +94,7 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
                 entry.setConfiguration(modelScale, xRotation, yRotation, zRotation, xOffset, yOffset, zOffset);
                 entry.setPreviewScale(collection.isPlush() ? PLUSH_PREVIEW_SCALE : 1.0f);
                 entry.setDiscovered(discovered);
+                entry.setShownSkins(shownSkins);
                 if (heading != null) {
                     entry.setHeading(heading);
                     this.headingRow = this.children().size();
@@ -110,6 +115,17 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
         this.discovered = discovered != null ? discovered : FigureEntry.DEFAULT_DISCOVERED;
         for (FigureEntry entry : children()) {
             entry.setDiscovered(this.discovered);
+        }
+    }
+
+    /**
+     * Shares a map of which version each figure's cell shows, by "collection:figure", as the
+     * machine menu does so its cells keep their versions when it makes the list again.
+     */
+    public void setShownSkins(Map<String, Integer> shownSkins) {
+        this.shownSkins = shownSkins;
+        for (FigureEntry entry : children()) {
+            entry.setShownSkins(shownSkins);
         }
     }
 
@@ -250,6 +266,10 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
     //? }
         easeTowardFollowTarget();
+        // Only the rows drawn now take clicks on their cells
+        for (FigureEntry row : children()) {
+            row.forgetCells();
+        }
         //? if >=1.21 {
         /*super.renderWidget(graphics, mouseX, mouseY, partialTick);
         *///? } else {
@@ -308,13 +328,33 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
         double mouseX = bpEvent.x();
         double mouseY = bpEvent.y();
         int button = bpEvent.button();
+        if (button == 0 && showNextVersion(mouseX, mouseY)) {
+            return true;
+        }
         return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mouseX, mouseY, bpEvent.buttonInfo()), bpDouble);
     }
     *///? } else {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0 && showNextVersion(mouseX, mouseY)) {
+            return true;
+        }
         return super.mouseClicked(mouseX, mouseY, button);
     }
     //? }
+
+    // A click on the cell of a figure with versions shows its next one. The rows say where their
+    // cells were drawn, since a row after the heading sits lower than the list's own reckoning.
+    private boolean showNextVersion(double mouseX, double mouseY) {
+        if (!isMouseOver(mouseX, mouseY)) {
+            return false;
+        }
+        for (FigureEntry row : children()) {
+            if (row.showNextVersion(mouseX, mouseY)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     @Override
     //? if >=1.21 {

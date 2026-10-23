@@ -321,7 +321,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     /**
      * Shows one of the figure's skins, 0 for its own and 1 onwards for its alternatives, kept
-     * within the ones it has. Only for the render entities of the creator's previews: the box is
+     * within the ones it has. Only for the render entities of the screens' previews: the box is
      * not marked changed and nothing is sent.
      */
     public void setAlternativeSkinIndexForPreview(int index) {

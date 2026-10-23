@@ -79,6 +79,21 @@ beyond it and the menu inside it (about 1.3 s).
   text render type before 1.21.2, which batches GUI blits from then on).
 - The menu takes no clicks until the first dots shrink, and the packaged E2E plays no transition.
 
+## A figure's versions in the grid
+
+A figure with alternative skins, or a plush with variants, has several versions. Its cell in the
+machine menu says which one it shows in a dark chip in its top right corner ("1/3", the pixel
+font at about half a GUI unit per font pixel, crisp), and a click anywhere on the cell shows the
+next one, back to the figure's own after the last, with a button's click. The chip turns gold
+under the mouse, and the cell's name follows the version.
+
+- The menu keeps the versions shown while it is open, through a resize or a tab switch; it opens
+  again on every figure's own. The draw's result card always shows the figure's own.
+- A plush variant is a block of its own, so the base plush's entry in its plush collection lists
+  the others as `alternatives` with their own models, in step with `BuiltInPlushes.VARIANT_GROUPS`
+  (what a right-click on a placed plush turns it into). A supporter's secret plush is not listed.
+- The creator's previews show the skin they are told and no chip.
+
 ## Versions
 
 New widgets override the hook of each era themselves, because the build's rename table

@@ -62,7 +62,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The claw and gacha machines' menu, laid out as Quick Skin's menus are: no panel, but groups of
@@ -99,6 +101,9 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     // The black the menu opens behind, and whether it has been laid out behind it yet
     private final HalftoneTransition opening = new HalftoneTransition();
     private boolean menuShown;
+    // Which version each figure's cell shows, by "collection:figure", kept while the menu is open
+    // so a resize or a tab switch, which make the figure list again, leaves them as they were
+    private final Map<String, Integer> shownSkins = new HashMap<>();
     private List<FigureCollection> collections;
     // Revision of the server's hidden collections the list was last built from
     private int shownHiddenRevision;
@@ -399,6 +404,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         figureListWidget = new FigureListWidget(this.minecraft, rightWidth - 4, listHeight, listTop, cell + ROW_GAP);
         figureListWidget.setLeftPos(rightX + 2);
         figureListWidget.setGrid(cell, columns);
+        figureListWidget.setShownSkins(shownSkins);
         figureListWidget.setRenderBackground(false);
         figureListWidget.setRenderTopAndBottom(false);
         this.addWidget(figureListWidget);

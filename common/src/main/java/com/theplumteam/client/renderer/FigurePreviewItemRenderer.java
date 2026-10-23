@@ -57,6 +57,13 @@ public class FigurePreviewItemRenderer
 
     // The stack a screen draws to show one figure, in black and white or holographic when asked.
     public static ItemStack stack(String collectionId, String figureId, boolean greyed, boolean holographic) {
+        return stack(collectionId, figureId, greyed, holographic, 0);
+    }
+
+    // As above, wearing one of the figure's skins: 0 its own, 1 onwards its variants, as a cell
+    // of the machine menu shows the version clicked to.
+    public static ItemStack stack(String collectionId, String figureId, boolean greyed, boolean holographic,
+                                  int skin) {
         ItemStack stack = new ItemStack(Items.PAPER);
         stack.set(DataComponents.ITEM_MODEL, MODEL);
         CompoundTag tag = new CompoundTag();
@@ -64,6 +71,9 @@ public class FigurePreviewItemRenderer
         tag.putString(FIGURE, figureId);
         tag.putBoolean(GREYED, greyed);
         tag.putBoolean(HOLOGRAPHIC, holographic);
+        if (skin > 0) {
+            tag.putInt(SKIN_INDEX, skin);
+        }
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
         return stack;
     }
@@ -116,9 +126,9 @@ public class FigurePreviewItemRenderer
         entity.setHolographicForRendering(holographic && !greyed);
         if (posed) {
             entity.setPoseIndex(pose);
-            // A preview that names no skin wears the figure's own
-            entity.setAlternativeSkinIndexForPreview(skin);
         }
+        // A stack that names no skin wears the figure's own
+        entity.setAlternativeSkinIndexForPreview(skin);
         return new Preview(entity, greyed, yaw);
     }
 

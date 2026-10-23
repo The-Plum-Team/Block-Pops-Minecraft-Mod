@@ -76,7 +76,9 @@ public class BuiltInPlushes {
     );
 
     // Plushes that are variants of one another, the base plush first. A gacha machine hands out
-    // the base; right-clicking a placed plush turns it into the next one of its group.
+    // the base; right-clicking a placed plush turns it into the next one of its group. The base's
+    // entry in its plush collection lists the others as alternatives, with their own models, so
+    // the machine menu can show them: keep the two in step.
     public static final List<List<String>> VARIANT_GROUPS = List.of(
         List.of("finn", "fionna"),
         List.of("jake", "cake"),
