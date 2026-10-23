@@ -29,10 +29,11 @@ import java.util.UUID;
 import java.util.function.Function;
 
 /**
- * Manages the World collections of this world without the editor.
+ * Manages the World collections of this world without the editor. A collection created
+ * here is published at once; publish makes a draft from the editor published.
  * Usage: /blockpops worldcollections list | quota | gc | create &lt;slug&gt; &lt;name&gt;
  * | rename &lt;id&gt; &lt;name&gt; | author &lt;id&gt; &lt;author&gt; | color &lt;id&gt; &lt;r&gt; &lt;g&gt; &lt;b&gt;
- * | boxcolor &lt;id&gt; &lt;color|none&gt; | archive &lt;id&gt; | restore &lt;id&gt;
+ * | boxcolor &lt;id&gt; &lt;color|none&gt; | archive &lt;id&gt; | restore &lt;id&gt; | publish &lt;id&gt;
  * | figure retire|restore &lt;id&gt; &lt;figure&gt; | importpack &lt;slug&gt; "&lt;namespace&gt;:&lt;path&gt;"
  * | purge &lt;id&gt; &lt;id-again&gt;
  */
@@ -94,6 +95,9 @@ public class WorldCollectionsCommand {
                 .then(Commands.literal("restore")
                     .then(Commands.argument("id", StringArgumentType.word()).suggests(IDS)
                         .executes(context -> setArchived(context, false))))
+                .then(Commands.literal("publish")
+                    .then(Commands.argument("id", StringArgumentType.word()).suggests(IDS)
+                        .executes(WorldCollectionsCommand::publish)))
                 .then(Commands.literal("figure")
                     .then(Commands.literal("retire")
                         .then(Commands.argument("id", StringArgumentType.word()).suggests(IDS)
@@ -124,6 +128,7 @@ public class WorldCollectionsCommand {
         for (WorldCollectionRecord record : records) {
             long enabled = record.figures().stream().filter(WorldCollectionRecord.Figure::enabled).count();
             String key = record.archived() ? "list_entry_archived"
+                    : record.draft() ? "list_entry_draft"
                     : WorldCollections.hasMissingFiles(record) ? "list_entry_missing" : "list_entry";
             source.sendSuccess(() -> Component.translatable(KEY + key, record.name(), record.id(),
                     Long.toString(enabled), Integer.toString(record.figures().size())), false);
@@ -185,6 +190,15 @@ public class WorldCollectionsCommand {
         }
         return applied(context, record, WorldCollections.edit(new WorldCollectionEdit.SetArchived(record.id(), archived),
                 author(context.getSource())), archived ? "archived" : "restored");
+    }
+
+    private static int publish(CommandContext<CommandSourceStack> context) {
+        WorldCollectionRecord record = existing(context);
+        if (record == null) {
+            return 0;
+        }
+        return reply(context.getSource(), WorldCollections.edit(new WorldCollectionEdit.Publish(record.id()),
+                author(context.getSource())), "published");
     }
 
     private static int setFigureEnabled(CommandContext<CommandSourceStack> context, boolean enabled) {

@@ -5,12 +5,11 @@ import com.mojang.math.Axis;
 import com.theplumteam.block.BoxBlock;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
+import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.item.BoxBlockItem;
 import com.theplumteam.item.GeoBlockItem;
 import com.theplumteam.worldcontent.WorldContentIds;
-//? if >=1.21 {
-/*import com.theplumteam.item.BlockEntityItemData;
-*///? }
 import net.minecraft.client.Minecraft;
 //? if >=1.21.4 {
 /*import com.mojang.serialization.MapCodec;
@@ -32,6 +31,11 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
+/**
+ * Draws box items: the block entity a stack stands for, with the transforms each place it is
+ * held or shown in asks for. The collection creator's previews may also turn a box to any angle
+ * about its upright centre line and pick the pose of the figure inside (see {@link #setView}).
+ */
 public class BoxBlockItemRenderer
     //? if >=1.21.4 {
     /*implements SpecialModelRenderer<ItemStack>
@@ -39,8 +43,15 @@ public class BoxBlockItemRenderer
     extends BlockEntityWithoutLevelRenderer
     //? }
 {
+    // Written only by the creator's previews: the box's turn, in degrees
+    private static final String PREVIEW_YAW = "PreviewYaw";
+    // How far a box turned to any angle reaches from its centre line: half a diagonal, rounded up
+    private static final float TURN_REACH = 0.7072f;
+
     private BoxBlockRenderer renderer;
     private BoxBlockEntity renderEntity;
+    // Whether this renderer draws the creator's previews, whose boxes may be turned to any angle
+    private final boolean preview;
 
     // One entity draws every box stack, so each stack starts from a new box of its own item:
     // the collection or color the item stands for, whether or not the stack's tag repeats it
@@ -55,19 +66,55 @@ public class BoxBlockItemRenderer
     // A drawn box of a World collection is the plain default box item with the collection in
     // its tag. Unless the tag names a color itself, it shows the collection's box art, as the
     // same box placed in the world does. Custom and built-in boxes keep their item's color.
+    // The creator's preview of a collection is drawn the same way.
     private void useCollectionBoxArt(GeoBlockItem item, @Nullable CompoundTag blockEntityTag) {
+        String collectionId = renderEntity.getCollectionId();
         if (item instanceof BoxBlockItem boxItem && boxItem.getCollectionId() == null
                 && boxItem.getColor() == PopBlockColor.ORIGINAL
                 && (blockEntityTag == null || !blockEntityTag.contains("Color"))
-                && WorldContentIds.isWorldCollectionId(renderEntity.getCollectionId())) {
+                && (WorldContentIds.isWorldCollectionId(collectionId)
+                        || collectionId.startsWith(CollectionRegistry.PREVIEW_PREFIX))) {
             renderEntity.clearColorForItemRendering();
         }
     }
 
+    // The turn a creator preview asks of a box, in degrees, or 0 for every other stack. A stack
+    // from elsewhere may carry any number, and one that is not finite would wreck the matrix.
+    private static float previewYaw(@Nullable CompoundTag blockEntityTag) {
+        if (blockEntityTag == null) {
+            return 0;
+        }
+        //? if >=1.21.5 {
+        /*float yaw = blockEntityTag.getFloatOr(PREVIEW_YAW, 0f);
+        *///? } else {
+        float yaw = blockEntityTag.getFloat(PREVIEW_YAW);
+        //? }
+        return Float.isFinite(yaw) ? yaw : 0;
+    }
+
+    /**
+     * Turns a box stack about its upright centre line, in degrees, and picks the pose of the
+     * figure inside it, counted from 0 (standing) to the figure's pose count less one (sitting).
+     * The stack's block entity data is rewritten in place, so a preview dragged round keeps
+     * drawing one stack rather than one per angle. Only the creator's previews call this.
+     */
+    public static void setView(ItemStack stack, float yaw, int pose) {
+        CompoundTag tag = BlockEntityItemData.read(stack);
+        tag = tag != null ? tag.copy() : new CompoundTag();
+        tag.putFloat(PREVIEW_YAW, yaw);
+        tag.putInt("PoseIndex", Math.max(0, pose));
+        BlockEntityItemData.write(stack, tag, "blockpops:box_block");
+    }
+
     public BoxBlockItemRenderer() {
+        this(false);
+    }
+
+    private BoxBlockItemRenderer(boolean preview) {
         //? if <1.21.4 {
         super(Minecraft.getInstance().getBlockEntityRenderDispatcher(), Minecraft.getInstance().getEntityModels());
         //? }
+        this.preview = preview;
         //? if <26 {
         this.renderer = new BoxBlockRenderer();
         //? }
@@ -135,6 +182,14 @@ public class BoxBlockItemRenderer
             // Apply transformations for item rendering
             poseStack.pushPose();
 
+            // A creator preview turns the box about its upright centre line
+            float yaw = previewYaw(blockEntityTag);
+            if (yaw != 0) {
+                poseStack.translate(0.5, 0, 0.5);
+                poseStack.mulPose(Axis.YP.rotationDegrees(yaw));
+                poseStack.translate(-0.5, 0, -0.5);
+            }
+
             // Legacy entity models lack the modern shulker template's held transform.
             // Apply it around the item center, including the mirrored left-hand rotation.
             //? if <1.21.4 {
@@ -198,6 +253,17 @@ public class BoxBlockItemRenderer
             ResourceLocations.of(BlockPopsMod.MOD_ID, "box_block");
     public static final ResourceLocation FAVORITE_COLOR_MODEL =
             ResourceLocations.of(BlockPopsMod.MOD_ID, "favorite_color_box");
+    // The renderer of the creator's previews: this one, with room in the GUI for any turn
+    public static final ResourceLocation PREVIEW_ID =
+            ResourceLocations.of(BlockPopsMod.MOD_ID, "creator_box");
+    // The creator's box seen from the front, at the favorite color screen's angle
+    public static final ResourceLocation CREATOR_BOX_MODEL =
+            ResourceLocations.of(BlockPopsMod.MOD_ID, "creator_box");
+    // The creator's box as it stands in the world: at the vanilla block GUI angle once the box's
+    // own half turn is added, and baked at four times the vanilla block GUI scale, so a stack
+    // drawn at a quarter of that size lines up with a block item drawn at the same size
+    public static final ResourceLocation CREATOR_BOX_WORLD_MODEL =
+            ResourceLocations.of(BlockPopsMod.MOD_ID, "creator_box_world");
 
     // 1.21.4 binds a special renderer to an item model through this unbaked codec.
     //? if >=26 {
@@ -225,6 +291,33 @@ public class BoxBlockItemRenderer
             return new BoxBlockItemRenderer();
         }
     }
+
+    // Binds the creator's preview renderer, PREVIEW_ID, to an item model
+    //? if >=26 {
+    /^public record PreviewUnbaked() implements SpecialModelRenderer.Unbaked<ItemStack> {
+    ^///? } else {
+    public record PreviewUnbaked() implements SpecialModelRenderer.Unbaked {
+    //? }
+        public static final MapCodec<PreviewUnbaked> MAP_CODEC = MapCodec.unit(PreviewUnbaked::new);
+
+        @Override
+        //? if >=26 {
+        /^public MapCodec<? extends SpecialModelRenderer.Unbaked<ItemStack>> type() {
+        ^///? } else {
+        public MapCodec<? extends SpecialModelRenderer.Unbaked> type() {
+        //? }
+            return MAP_CODEC;
+        }
+
+        @Override
+        //? if >=26 {
+        /^public SpecialModelRenderer<ItemStack> bake(SpecialModelRenderer.BakingContext bakingContext) {
+        ^///? } else {
+        public SpecialModelRenderer<?> bake(EntityModelSet modelSet) {
+        //? }
+            return new BoxBlockItemRenderer(true);
+        }
+    }
     *///? }
 
     //? if >=26 {
@@ -232,9 +325,12 @@ public class BoxBlockItemRenderer
     public void getExtents(java.util.function.Consumer<org.joml.Vector3fc> extents) {
         // Minecraft transforms each vertex before computing the GUI bounds.
         // Opposite corners alone lose the width/depth of a rotated cube.
-        for (int x = 0; x <= 1; x++) {
-            for (int y = 0; y <= 1; y++) {
-                for (int z = 0; z <= 1; z++) {
+        // A preview may be turned to any angle and is lifted a pixel, so it reserves more.
+        float low = preview ? 0.5f - TURN_REACH : 0;
+        float high = preview ? 0.5f + TURN_REACH : 1;
+        for (float x : new float[] {low, high}) {
+            for (float y : new float[] {0, preview ? 1.0625f : 1}) {
+                for (float z : new float[] {low, high}) {
                     extents.accept(new org.joml.Vector3f(x, y, z));
                 }
             }
@@ -286,7 +382,14 @@ public class BoxBlockItemRenderer
         // a stack is lit by whatever holds it instead.
         renderState.lightCoords = packedLight;
         poseStack.pushPose();
-        if (FAVORITE_COLOR_MODEL.equals(stack.get(DataComponents.ITEM_MODEL))) {
+        float yaw = previewYaw(BlockEntityItemData.read(stack));
+        if (yaw != 0) {
+            // A creator preview turns the box about its upright centre line
+            poseStack.translate(0.5, 0, 0.5);
+            poseStack.mulPose(new org.joml.Matrix4f().rotationY((float) Math.toRadians(yaw)));
+            poseStack.translate(-0.5, 0, -0.5);
+        }
+        if (preview || FAVORITE_COLOR_MODEL.equals(stack.get(DataComponents.ITEM_MODEL))) {
             // Preserve the legacy GUI-facing side and one-pixel lift for this preview.
             poseStack.translate(0.5, 0.5, 0.5);
             poseStack.mulPose(new org.joml.Matrix4f().rotationY((float) Math.PI));
@@ -300,9 +403,12 @@ public class BoxBlockItemRenderer
     /*@Override
     public void getExtents(java.util.Set<org.joml.Vector3f> extents) {
         // Include all corners so the rotated GUI bounds enclose every face.
-        for (int x = 0; x <= 1; x++) {
-            for (int y = 0; y <= 1; y++) {
-                for (int z = 0; z <= 1; z++) {
+        // A preview may be turned to any angle and is lifted a pixel, so it reserves more.
+        float low = preview ? 0.5f - TURN_REACH : 0;
+        float high = preview ? 0.5f + TURN_REACH : 1;
+        for (float x : new float[] {low, high}) {
+            for (float y : new float[] {0, preview ? 1.0625f : 1}) {
+                for (float z : new float[] {low, high}) {
                     extents.add(new org.joml.Vector3f(x, y, z));
                 }
             }

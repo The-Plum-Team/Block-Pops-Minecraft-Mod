@@ -230,6 +230,16 @@ public class FigureCollection {
                 : new FigureCollection(id, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor, true, specialsReleasedAt);
     }
 
+    /** This collection under another id, as the creator's previews register a draft. */
+    public FigureCollection withId(String nextId) {
+        return new FigureCollection(nextId, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor, plush, specialsReleasedAt);
+    }
+
+    /** This collection with another list of figures. */
+    public FigureCollection withFigures(List<FigureDefinition> nextFigures) {
+        return new FigureCollection(id, name, author, authorUrl, boxTexture, logoConfig, nextFigures, backgroundColor, plush, specialsReleasedAt);
+    }
+
     public String getId() {
         return id;
     }

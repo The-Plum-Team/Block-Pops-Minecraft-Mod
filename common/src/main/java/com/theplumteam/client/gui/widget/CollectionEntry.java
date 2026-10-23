@@ -12,6 +12,7 @@ import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 //? if >=1.21.2 {
 /*import net.minecraft.client.renderer.RenderType;
@@ -22,6 +23,7 @@ import net.minecraft.resources.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 
 import java.util.Locale;
+import java.util.function.Predicate;
 
 /**
  * Individual entry in the collection list widget
@@ -62,15 +64,73 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
     public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth,
                       int entryHeight, int mouseX, int mouseY, boolean isMouseOver, float partialTick) {
     //? }
+        // Check if this entry is selected
+        boolean isSelected = parent.getSelected() == this;
+        drawCard(graphics, mc.font, collection, x, y, entryWidth, entryHeight, isSelected, isMouseOver);
+
+        // Where the card's highlight ends, which the link button sits inside
+        float scale = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getRenderScaleFactor() : 1.0f;
+        int effectiveLinkButtonSize = (int)(LINK_BUTTON_SIZE * scale);
+        int highlightRight = x + entryWidth - 10;
+        int highlightTop = y - (int)(2 * scale);
+
+        // Render link button on hover if author URL is available
+        this.isLinkHovered = false;
+        if (isMouseOver && collection.getAuthorUrl() != null && !collection.getAuthorUrl().isEmpty()) {
+            int margin = 4;
+            this.linkButtonX = highlightRight - effectiveLinkButtonSize - margin;
+            this.linkButtonY = highlightTop + margin;
+
+            boolean linkHovered = mouseX >= linkButtonX && mouseX < linkButtonX + effectiveLinkButtonSize &&
+                                 mouseY >= linkButtonY && mouseY < linkButtonY + effectiveLinkButtonSize;
+
+            // Draw button background (square) with shadow/depth - darker gold colored
+            graphics.fill(linkButtonX, linkButtonY,
+                linkButtonX + effectiveLinkButtonSize, linkButtonY + effectiveLinkButtonSize,
+                linkHovered ? 0xFFB8860B : 0xC0997000); // Darker gold colors
+
+            // Draw button outline for depth - darker gold
+            graphics.renderOutline(linkButtonX, linkButtonY, effectiveLinkButtonSize, effectiveLinkButtonSize,
+                linkHovered ? 0xFFDAA520 : 0xFFB8860B);
+
+            // Draw planet emoji centered
+            String planetEmoji = "\uD83C\uDF10";
+            int emojiWidth = mc.font.width(planetEmoji);
+            int emojiX = linkButtonX + (effectiveLinkButtonSize - emojiWidth) / 2; // Moved 1px left
+            int emojiY = linkButtonY + (effectiveLinkButtonSize - 8) / 2; // Moved 1px up (8 is approximate emoji height)
+            graphics.drawString(mc.font, planetEmoji, emojiX, emojiY, 0xFFFFFFFF, false);
+
+            this.isLinkHovered = linkHovered;
+        }
+    }
+
+    /**
+     * Draws a collection's card as the machine's collection list draws it: the selection or hover
+     * highlight, the logo or a monogram in its place, the name, the count of discovered figures
+     * and the author line. The creator's machine replica draws its cards through this too.
+     *
+     * @param entryWidth  the row's width; the highlight stops 10 short of it, before the scroll bar
+     * @param entryHeight the row's height; the highlight reaches a little above and below it
+     */
+    public static void drawCard(GuiGraphics graphics, Font font, FigureCollection collection, int x, int y,
+                                int entryWidth, int entryHeight, boolean selected, boolean hovered) {
+        drawCard(graphics, font, collection, x, y, entryWidth, entryHeight, selected, hovered,
+                ClientDiscoveryManager::isDiscovered);
+    }
+
+    /**
+     * Draws a collection's card as above, counting as discovered the figures a predicate names,
+     * asked with "collection:figure", as the creator's replica shows a collection to a new player
+     * or a collector.
+     */
+    public static void drawCard(GuiGraphics graphics, Font font, FigureCollection collection, int x, int y,
+                                int entryWidth, int entryHeight, boolean selected, boolean hovered,
+                                Predicate<String> discovered) {
         // Calculate effective sizes - scale when using inverse scale mode
         float scale = GuiScaleManager.isUsingInverseScale() ? GuiScaleManager.getRenderScaleFactor() : 1.0f;
         int effectivePadding = (int)(PADDING * scale);
         int effectiveTopPadding = (int)(TOP_PADDING * scale);
         int effectiveLogoMaxSize = (int)(LOGO_MAX_SIZE * scale);
-        int effectiveLinkButtonSize = (int)(LINK_BUTTON_SIZE * scale);
-
-        // Check if this entry is selected
-        boolean isSelected = parent.getSelected() == this;
 
         // Selection and hover highlight with padding
         int highlightPaddingH = (int)(4 * scale);
@@ -80,12 +140,12 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         int highlightTop = y - highlightPaddingV;
         int highlightBottom = y + entryHeight + highlightPaddingV;
 
-        if (isSelected) {
+        if (selected) {
             // Selected state - blue highlight with border
             graphics.fill(highlightLeft, highlightTop, highlightRight, highlightBottom, 0x80308CC0);
             graphics.renderOutline(highlightLeft, highlightTop, highlightRight - highlightLeft,
                 highlightBottom - highlightTop, 0xFF4080FF);
-        } else if (isMouseOver) {
+        } else if (hovered) {
             // Hover state - subtle white highlight
             graphics.fill(highlightLeft, highlightTop, highlightRight, highlightBottom, 0x30FFFFFF);
         }
@@ -105,7 +165,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             // is only reachable through the raw GL object.
             //? if >=1.21.5 {
             /*com.mojang.blaze3d.textures.GpuTexture logoGpuTexture =
-                    mc.getTextureManager().getTexture(logoTexture).getTexture();
+                    Minecraft.getInstance().getTextureManager().getTexture(logoTexture).getTexture();
             int textureWidth = logoGpuTexture.getWidth(0) > 0 ? logoGpuTexture.getWidth(0) : 256;
             int textureHeight = logoGpuTexture.getHeight(0) > 0 ? logoGpuTexture.getHeight(0) : 256;
             *///? } else {
@@ -178,21 +238,21 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
                     textureWidth, textureHeight);
             //? }
         } else {
-            drawMonogram(graphics, logoContainerX, y, logoContainerWidth, entryHeight, scale);
+            drawMonogram(graphics, font, collection, logoContainerX, y, logoContainerWidth, entryHeight, scale);
         }
 
         // Draw collection name
         int textX = textStartX;
         int textY = y + effectiveTopPadding;
-        int textColor = isSelected ? 0xFFFFFFFF : 0xFFE0E0E0;
+        int textColor = selected ? 0xFFFFFFFF : 0xFFE0E0E0;
 
-        graphics.drawString(mc.font, collection.getName(), textX, textY, textColor, false);
+        graphics.drawString(font, collection.getName(), textX, textY, textColor, false);
 
         // Draw figure count below the name (discovered/total)
-        String figureCount = figureCountText();
-        int subTextY = textY + mc.font.lineHeight + 2;
-        int subTextColor = isSelected ? 0xFFAAAAAA : 0xFF808080;
-        graphics.drawString(mc.font, figureCount, textX, subTextY, subTextColor, false);
+        String figureCount = figureCountText(collection, discovered);
+        int subTextY = textY + font.lineHeight + 2;
+        int subTextColor = selected ? 0xFFAAAAAA : 0xFF808080;
+        graphics.drawString(font, figureCount, textX, subTextY, subTextColor, false);
 
         // Draw collection author below the figure count
         String author = collection.getAuthor();
@@ -200,7 +260,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         if ("world_players".equals(collection.getId())) {
             authorText = Component.literal("Auto-generated skins")
                 .withStyle(ChatFormatting.GOLD);
-        } else if (isUnsignedWorldCollection()) {
+        } else if (isUnsignedWorldCollection(collection)) {
             // An operator made it in this world and gave no author; "multiple creators" would be wrong
             authorText = Component.translatable("blockpops.world_collections.created_in_world")
                 .withStyle(ChatFormatting.GOLD);
@@ -212,37 +272,8 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
                 .withStyle(ChatFormatting.GOLD)
                 .append(Component.literal(author).withStyle(ChatFormatting.GOLD));
         }
-        int authorY = subTextY + mc.font.lineHeight + 2;
-        graphics.drawString(mc.font, authorText, textX, authorY, 0xFFFFFFFF, false);
-
-        // Render link button on hover if author URL is available
-        this.isLinkHovered = false;
-        if (isMouseOver && collection.getAuthorUrl() != null && !collection.getAuthorUrl().isEmpty()) {
-            int margin = 4;
-            this.linkButtonX = highlightRight - effectiveLinkButtonSize - margin;
-            this.linkButtonY = highlightTop + margin;
-
-            boolean linkHovered = mouseX >= linkButtonX && mouseX < linkButtonX + effectiveLinkButtonSize &&
-                                 mouseY >= linkButtonY && mouseY < linkButtonY + effectiveLinkButtonSize;
-
-            // Draw button background (square) with shadow/depth - darker gold colored
-            graphics.fill(linkButtonX, linkButtonY,
-                linkButtonX + effectiveLinkButtonSize, linkButtonY + effectiveLinkButtonSize,
-                linkHovered ? 0xFFB8860B : 0xC0997000); // Darker gold colors
-
-            // Draw button outline for depth - darker gold
-            graphics.renderOutline(linkButtonX, linkButtonY, effectiveLinkButtonSize, effectiveLinkButtonSize,
-                linkHovered ? 0xFFDAA520 : 0xFFB8860B);
-
-            // Draw planet emoji centered
-            String planetEmoji = "\uD83C\uDF10";
-            int emojiWidth = mc.font.width(planetEmoji);
-            int emojiX = linkButtonX + (effectiveLinkButtonSize - emojiWidth) / 2; // Moved 1px left
-            int emojiY = linkButtonY + (effectiveLinkButtonSize - 8) / 2; // Moved 1px up (8 is approximate emoji height)
-            graphics.drawString(mc.font, planetEmoji, emojiX, emojiY, 0xFFFFFFFF, false);
-
-            this.isLinkHovered = linkHovered;
-        }
+        int authorY = subTextY + font.lineHeight + 2;
+        graphics.drawString(font, authorText, textX, authorY, 0xFFFFFFFF, false);
     }
 
     @Override
@@ -346,8 +377,8 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
      * Draws a tile in the collection's own colour with its initials where its logo would be,
      * for a collection without one, as a World collection may be.
      */
-    private void drawMonogram(GuiGraphics graphics, int containerX, int y, int containerWidth, int entryHeight,
-                              float scale) {
+    private static void drawMonogram(GuiGraphics graphics, Font font, FigureCollection collection, int containerX,
+                                     int y, int containerWidth, int entryHeight, float scale) {
         int size = Math.min(containerWidth, (int) (MONOGRAM_SIZE * scale));
         int tileX = containerX + (containerWidth - size) / 2;
         int tileY = y + (entryHeight - size) / 2;
@@ -368,7 +399,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         GuiPose.push(graphics);
         GuiPose.translate(graphics, tileX + size / 2.0f, tileY + size / 2.0f);
         GuiPose.scale(graphics, textScale, textScale);
-        graphics.drawString(mc.font, initials, -mc.font.width(initials) / 2, -4,
+        graphics.drawString(font, initials, -font.width(initials) / 2, -4,
                 light ? 0xFF202020 : 0xFFFFFFFF, !light);
         GuiPose.pop(graphics);
     }
@@ -389,8 +420,10 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
     }
 
     /** Whether this is a World collection whose operator left the author empty. */
-    private boolean isUnsignedWorldCollection() {
-        if (!WorldContentIds.isWorldCollectionId(collection.getId())) {
+    private static boolean isUnsignedWorldCollection(FigureCollection collection) {
+        // The creator's preview of a World collection reads as the collection will
+        if (!WorldContentIds.isWorldCollectionId(collection.getId())
+                && !collection.getId().startsWith(CollectionRegistry.PREVIEW_PREFIX)) {
             return false;
         }
         // The collection stands in for an empty author with "Unknown"; the record says what was typed
@@ -400,24 +433,30 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
 
     @Override
     public Component getNarration() {
-        return Component.literal(collection.getName() + " - " + figureCountText());
+        return Component.literal(collection.getName() + " - "
+                + figureCountText(collection, ClientDiscoveryManager::isDiscovered));
     }
 
-    // A collection's specials are counted apart from its regular figures: "3/5 | 0/7 figures"
-    private String figureCountText() {
-        FigureCollection current = getCollection();
-        String count = discoveredCount(current.getRegularFigures()) + "/" + current.getRegularFigures().size();
+    // A collection's specials are counted apart from its regular figures: "3/5 | 0/7 figures".
+    // The figures are read from the registry, which holds the current ones of a re-synced
+    // collection (see getCollection).
+    private static String figureCountText(FigureCollection collection, Predicate<String> discovered) {
+        FigureCollection current = CollectionRegistry.getCollection(collection.getId()).orElse(collection);
+        String count = discoveredCount(collection, current.getRegularFigures(), discovered) + "/"
+                + current.getRegularFigures().size();
         if (current.hasSpecials()) {
-            count += " | " + discoveredCount(current.getSpecialFigures()) + "/" + current.getSpecialFigures().size();
+            count += " | " + discoveredCount(collection, current.getSpecialFigures(), discovered) + "/"
+                    + current.getSpecialFigures().size();
         }
         return count + " figures";
     }
 
-    private int discoveredCount(java.util.List<FigureDefinition> figures) {
+    private static int discoveredCount(FigureCollection collection, java.util.List<FigureDefinition> figures,
+                                       Predicate<String> discovered) {
         int discoveredCount = 0;
         for (FigureDefinition figure : figures) {
             String figureId = collection.getId() + ":" + figure.getId();
-            if (ClientDiscoveryManager.isDiscovered(figureId)) {
+            if (discovered.test(figureId)) {
                 discoveredCount++;
             }
         }

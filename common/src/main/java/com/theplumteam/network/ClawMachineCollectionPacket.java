@@ -4,6 +4,10 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
 import com.theplumteam.blockentity.GachaMachineBlockEntity;
+import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.server.worldcollections.WorldCollections;
+import com.theplumteam.worldcontent.WorldCollectionRecord;
+import com.theplumteam.worldcontent.WorldContentIds;
 import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
@@ -14,7 +18,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Packet sent from client to server to set the collection ID on a claw machine.
+ * Packet sent from client to server to set the collection ID on a claw or gacha machine.
+ * Anyone may configure a machine, but only with a collection the server offers, and only one
+ * in a loaded chunk.
  */
 public class ClawMachineCollectionPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(ClawMachineCollectionPacket.class);
@@ -57,12 +63,23 @@ public class ClawMachineCollectionPacket {
 
         context.queue(() -> {
             if (context.getPlayer() instanceof ServerPlayer player) {
-                BlockEntity blockEntity = player.level().getBlockEntity(packet.pos);
+                // Reading a block entity loads its chunk, and a player only configures a machine they see
+                if (!player.level().isLoaded(packet.pos)) {
+                    LOGGER.warn("Player {} tried to configure a machine at unloaded {}",
+                            player.getName().getString(), packet.pos);
+                    return;
+                }
                 if (ServerConfig.getInstance().getHiddenCollections().contains(packet.collectionId)) {
                     LOGGER.warn("Player {} tried to select hidden collection {}",
                             player.getName().getString(), packet.collectionId);
                     return;
                 }
+                if (!isOffered(packet.collectionId)) {
+                    LOGGER.warn("Player {} tried to select collection {}, which no machine offers",
+                            player.getName().getString(), packet.collectionId);
+                    return;
+                }
+                BlockEntity blockEntity = player.level().getBlockEntity(packet.pos);
                 if (blockEntity instanceof ClawMachineBlockEntity clawMachineBlockEntity) {
                     BlockPopsMod.logDebug("Setting collection ID on ClawMachineBlockEntity");
                     clawMachineBlockEntity.setCollectionId(packet.collectionId);
@@ -82,6 +99,22 @@ public class ClawMachineCollectionPacket {
                 }
             }
         });
+    }
+
+    /**
+     * Whether a machine may be set to the collection: the server must know it, and a World
+     * collection must be neither a draft nor archived. The screen offers no other, so only an
+     * outdated or modified client names one.
+     */
+    private static boolean isOffered(String collectionId) {
+        if (CollectionRegistry.getCollection(collectionId).isEmpty()) {
+            return false;
+        }
+        if (WorldContentIds.isWorldCollectionId(collectionId)) {
+            WorldCollectionRecord record = WorldCollections.record(collectionId);
+            return record != null && !record.archived() && !record.draft();
+        }
+        return true;
     }
 
     /**

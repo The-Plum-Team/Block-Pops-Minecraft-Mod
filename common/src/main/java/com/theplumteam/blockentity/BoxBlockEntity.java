@@ -319,6 +319,17 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
         return alternativeSkinIndex;
     }
 
+    /**
+     * Shows one of the figure's skins, 0 for its own and 1 onwards for its alternatives, kept
+     * within the ones it has. Only for the render entities of the creator's previews: the box is
+     * not marked changed and nothing is sent.
+     */
+    public void setAlternativeSkinIndexForPreview(int index) {
+        FigureDefinition def = getFigureDefinition();
+        int alternatives = def != null ? def.getAlternatives().size() : 0;
+        this.alternativeSkinIndex = Math.max(0, Math.min(index, alternatives));
+    }
+
     public String getSkinSnapshot() {
         return skinSnapshot;
     }
@@ -363,6 +374,14 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     public int getPoseIndex() {
         return poseIndex;
+    }
+
+    /**
+     * Shows one pose of the figure's cycle, kept within it, as the creator's previews do. For a
+     * render entity only: the box is not marked changed and nothing is sent.
+     */
+    public void setPoseIndex(int index) {
+        this.poseIndex = Math.max(0, Math.min(index, poseOptions().poseCount() - 1));
     }
 
     public void cyclePose() {

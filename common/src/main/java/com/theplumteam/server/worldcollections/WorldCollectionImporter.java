@@ -36,11 +36,16 @@ import java.util.regex.Pattern;
  * editor and for packaged tests:
  *
  * <pre>
- * collection.json   {name, author, background_color, box_color?, figures: [{id, name, kind, scale?}]}
+ * collection.json   {name, author, background_color, box_color?, author_url?, logo_layout?, plush?,
+ *                    rarity_weights?, figures: [{id, name, kind, scale?, rarity?, variants?, box_face?}]}
  * box.png, logo.png (optional)
  * figures/&lt;id&gt;/texture.png
+ * figures/&lt;id&gt;/variant_&lt;n&gt;.png, for the nth entry of variants (n = 1 to 4)
  * figures/&lt;id&gt;/model.geo.json, figures/&lt;id&gt;/animation.animation.json (optional), for a model figure
  * </pre>
+ *
+ * The optional keys have the record's form; a variant names only its name here, and its
+ * texture is the variant file of the same number.
  *
  * Each file is opened by its exact name, never by listing a directory, and checked as an
  * upload is. {@link WorldCollections#importPack} stores the result.
@@ -51,9 +56,11 @@ public final class WorldCollectionImporter {
     private static final Pattern PATH = Pattern.compile("[a-z0-9_]{1,32}");
     private static final int COLLECTION_JSON_BYTES = 64 * 1024;
     private static final Set<String> KEYS = Set.of("name", "author", "background_color", "figures");
-    private static final Set<String> OPTIONAL_KEYS = Set.of("box_color");
+    private static final Set<String> OPTIONAL_KEYS = Set.of("box_color", "author_url", "logo_layout", "plush",
+            "rarity_weights");
     private static final Set<String> FIGURE_KEYS = Set.of("id", "name", "kind");
-    private static final Set<String> FIGURE_OPTIONAL_KEYS = Set.of("scale");
+    private static final Set<String> FIGURE_OPTIONAL_KEYS = Set.of("scale", "rarity", "variants", "box_face");
+    private static final Set<String> VARIANT_KEYS = Set.of("name");
 
     /** A file of the pack that passed its check, in the form it is stored. */
     public record PackFile(String sha, BlobInfo info, byte[] bytes) {
@@ -131,6 +138,7 @@ public final class WorldCollectionImporter {
         }
         List<WorldCollectionRecord.Figure> figures = new ArrayList<>(array.size());
         Set<String> figureIds = new HashSet<>();
+        int variantCount = 0;
         for (JsonElement element : array) {
             JsonObject figure = JsonFields.object(element, "figure");
             JsonFields.keys(figure, "figure", FIGURE_KEYS, FIGURE_OPTIONAL_KEYS);
@@ -154,26 +162,67 @@ public final class WorldCollectionImporter {
                 scale = WorldCollectionRecord.SCALES.get(index);
             }
             String figureBase = base + "figures/" + id + "/";
-            String texture;
+            PngValidator.Role textureRole = kind == WorldCollectionRecord.Kind.SKIN
+                    ? PngValidator.Role.SKIN : PngValidator.Role.MODEL_TEXTURE;
+            String texture = required(png(resources, namespace, figureBase + "texture.png", textureRole, files),
+                    figureBase + "texture.png").sha();
             String model = null;
             String animation = null;
-            if (kind == WorldCollectionRecord.Kind.SKIN) {
-                texture = required(png(resources, namespace, figureBase + "texture.png", PngValidator.Role.SKIN, files),
-                        figureBase + "texture.png").sha();
-            } else {
-                texture = required(png(resources, namespace, figureBase + "texture.png",
-                        PngValidator.Role.MODEL_TEXTURE, files), figureBase + "texture.png").sha();
+            if (kind == WorldCollectionRecord.Kind.MODEL) {
                 model = required(json(resources, namespace, figureBase + "model.geo.json", true, files),
                         figureBase + "model.geo.json").sha();
                 PackFile poses = json(resources, namespace, figureBase + "animation.animation.json", false, files);
                 animation = poses != null ? poses.sha() : null;
             }
-            figures.add(new WorldCollectionRecord.Figure(id, name, kind, texture, model, animation, scale, true));
+            WorldCollectionRecord.Rarity rarity = figure.has("rarity")
+                    ? WorldCollectionRecord.Rarity.fromJson(figure.get("rarity"), "figure " + id + " rarity")
+                    : WorldCollectionRecord.Rarity.COMMON;
+            List<WorldCollectionRecord.Variant> variants = new ArrayList<>();
+            if (figure.has("variants")) {
+                JsonArray entries = JsonFields.array(figure.get("variants"), "figure " + id + " variants");
+                if (entries.size() > WorldContentLimits.MAX_VARIANTS_PER_FIGURE) {
+                    throw new WorldContentException("Figure " + id + " has more than "
+                            + WorldContentLimits.MAX_VARIANTS_PER_FIGURE + " variants");
+                }
+                // Counted before any variant file is read, so a pack never holds more of them in memory
+                variantCount += entries.size();
+                if (variantCount > WorldContentLimits.MAX_VARIANTS) {
+                    throw new WorldContentException("A pack has at most " + WorldContentLimits.MAX_VARIANTS
+                            + " variants");
+                }
+                for (int i = 0; i < entries.size(); i++) {
+                    JsonObject entry = JsonFields.object(entries.get(i), "figure " + id + " variant");
+                    JsonFields.keys(entry, "figure " + id + " variant", VARIANT_KEYS, Set.of());
+                    String variantName = JsonFields.string(entry.get("name"), "figure " + id + " variant name",
+                            WorldContentLimits.MAX_NAME_LENGTH);
+                    // Opened by its exact numbered name, as every other pack file is
+                    String file = figureBase + "variant_" + (i + 1) + ".png";
+                    variants.add(new WorldCollectionRecord.Variant(variantName,
+                            required(png(resources, namespace, file, textureRole, files), file).sha()));
+                }
+            }
+            WorldCollectionRecord.BoxFace boxFace = figure.has("box_face")
+                    ? WorldCollectionRecord.BoxFace.fromJson(figure.get("box_face"), "figure " + id + " box_face")
+                    : null;
+            figures.add(new WorldCollectionRecord.Figure(id, name, kind, texture, model, animation, scale, true,
+                    rarity, variants, boxFace));
         }
         String name = JsonFields.string(json.get("name"), "name", WorldContentLimits.MAX_NAME_LENGTH);
         String author = JsonFields.string(json.get("author"), "author", WorldContentLimits.MAX_AUTHOR_LENGTH);
+        // Whatever depends on the files (variant proportions, the face region, a layout without a
+        // logo) is checked when the record is validated against the blob table before it is stored
+        String authorUrl = json.has("author_url") ? WorldCollectionRecord.authorUrl(json.get("author_url")) : null;
+        WorldCollectionRecord.LogoLayout logoLayout = json.has("logo_layout")
+                ? WorldCollectionRecord.LogoLayout.fromJson(json.get("logo_layout")) : null;
+        if (logoLayout != null && logo == null) {
+            throw new WorldContentException("logo_layout places a logo.png the pack does not have");
+        }
+        boolean plush = json.has("plush") && JsonFields.bool(json.get("plush"), "plush");
+        WorldCollectionRecord.RarityWeights rarityWeights = json.has("rarity_weights")
+                ? WorldCollectionRecord.RarityWeights.fromJson(json.get("rarity_weights")) : null;
         WorldCollectionRecord record = new WorldCollectionRecord(WorldContentIds.collectionId(slug), name, author,
-                rgb[0], rgb[1], rgb[2], boxTexture, boxColor, logo != null ? logo.sha() : null, false, 0, figures);
+                rgb[0], rgb[1], rgb[2], boxTexture, boxColor, logo != null ? logo.sha() : null, false, 0, figures,
+                false, 0L, authorUrl, logoLayout, plush, rarityWeights);
         return new Pack(record, files);
     }
 
