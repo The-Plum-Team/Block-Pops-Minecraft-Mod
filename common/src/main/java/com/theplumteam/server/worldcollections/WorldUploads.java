@@ -3,6 +3,7 @@ package com.theplumteam.server.worldcollections;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.network.WorldCollectionStatusPacket;
 import com.theplumteam.worldcontent.BlobType;
+import com.theplumteam.worldcontent.WorldContentLimits;
 import com.theplumteam.worldcontent.WorldContentStatus;
 import com.theplumteam.worldcontent.WorldContentStatus.Result;
 import net.minecraft.server.MinecraftServer;
@@ -67,13 +68,13 @@ public final class WorldUploads {
     private WorldUploads() {
     }
 
-    /** Starts an upload, or answers why not, or that the server already has the file. */
+    /**
+     * Starts an upload, or answers why not, or that the server already has the file. Only
+     * an upload that starts counts towards the player's upload limits, so asking about a
+     * file the server already stores costs nothing.
+     */
     public static void begin(ServerPlayer player, int requestId, @Nullable BlobType type, int size, String sha) {
         UUID owner = player.getUUID();
-        if (!WorldRateLimits.tryUploadBegin(owner)) {
-            reply(player, requestId, 0, sha, WorldContentStatus.of(Result.BUSY, "Too many uploads started; wait a minute"));
-            return;
-        }
         WorldContentStatus refused = WorldCollections.checkUpload(sha, type, size);
         if (refused != null) {
             reply(player, requestId, 0, sha, refused);
@@ -81,6 +82,12 @@ public final class WorldUploads {
         }
         if (countOwnedBy(owner) >= MAX_PER_PLAYER || UPLOADS.size() >= MAX_PER_SERVER) {
             reply(player, requestId, 0, sha, WorldContentStatus.of(Result.BUSY, "Another upload is in progress"));
+            return;
+        }
+        if (!WorldRateLimits.tryUploadBegin(owner, size)) {
+            reply(player, requestId, 0, sha, WorldContentStatus.of(Result.BUSY, "At most "
+                    + WorldContentLimits.UPLOAD_BEGINS_PER_MINUTE + " files or "
+                    + WorldContentLimits.UPLOAD_BYTES_PER_MINUTE / (1024 * 1024) + " MiB a minute; wait a moment"));
             return;
         }
         int id = nextId();

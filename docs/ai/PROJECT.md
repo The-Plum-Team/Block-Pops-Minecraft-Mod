@@ -25,9 +25,11 @@ follow-up pull request (#11). `site/mod-base.json` no longer defers it or any ot
   [ADR 0001](../architecture/decisions/0001-adopt-mod-base-public-evidence.md) records the
   adoption of mod-base public evidence,
   [ADR 0002](../architecture/decisions/0002-load-custom-collections-at-runtime.md) runtime Custom
-  collections and
+  collections,
   [ADR 0003](../architecture/decisions/0003-accept-operator-uploaded-world-collections.md)
-  operator-uploaded World collections.
+  operator-uploaded World collections and
+  [ADR 0004](../architecture/decisions/0004-extend-world-collections-for-the-redesigned-creator.md)
+  their extensions for the redesigned creator.
 - `site/mod-base.json` and `scripts/pages/mod_base_adapter.py` connect this repository to the
   mod-base public-evidence kit; `scripts/ci/mod_base_kit.py` finds the pinned kit.
 
@@ -123,10 +125,39 @@ alone applies the per-player rate limits in `server.worldcollections.WorldRateLi
 upload concurrency caps and timeouts in `WorldUploads`. They are stored content-addressed under
 `<world>/data/blockpops-world-collections/` and travel only in `SyncWorldCollectionsPacket` and
 `WorldAssetChunkPacket`, never in the shared collection sync, the Custom packet or
-`blockpops-cache/`. Their ids are `w-<slug>`, and the shared sync refuses them on both sides. Their
-assets are served only by the runtime registries in `client.runtime` under ids `WorldContentIds`
+`blockpops-cache/`. Their ids are `w-<slug>`, and the shared sync refuses them on both sides.
+Their assets are served only by the runtime registries in `client.runtime` under ids `WorldContentIds`
 owns, are never written into GeckoLib's caches, are refused when a bundled resource has the same
-id, and are left alone by `RuntimeAssets.clear()`.
+id, and are left alone by `RuntimeAssets.clear()`. Since
+[ADR 0004](../architecture/decisions/0004-extend-world-collections-for-the-redesigned-creator.md)
+a record may carry optional keys (draft, author link, logo placement, plush, rarity, texture-only
+skin variants, box face), each left out while it holds its default so older records keep their
+bytes; the store stays at format 1, and client and server must run the same BlockPops version. A
+draft is synced only to operators, whose status the server polls, and is offered by no machine. The
+author link is display-only: `http` or `https`, printable ASCII, never fetched by the game, and
+handed to the player's browser only through the game's own link handling and its confirmation
+screen. A plush World collection is listed in the gacha machine and handed out as figure blocks,
+since plush blocks are registered at start-up; a holographic one carries the flag in that figure
+block's data. Every operator request, from a batch of edits to a
+duplicate, a purge or a datapack import started in the editor, is an action of
+`WorldCollectionEditPacket` answered by `WorldCollectionStatusPacket`; an editor import reads only
+the server's own datapacks by exact name, as the command does.
+
+The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: a
+development environment, an operator, and World collections synced. Its entry points are the
+machine screen's **Creator** button, the Settings **Creator** tab and the client command
+`/blockpopscreator`, which is registered only in a development environment. Packaged E2E players
+run production code and are not operators, so no entry point may bypass that check. The creator
+previews files that are not sent yet: it decodes them under the same content-addressed ids a synced
+copy gets, and materializes the draft into a client-only overlay of the collection registry under
+the reserved id `creator_preview.<slot>`. That overlay answers only on the client thread, appears
+in no collection list, and is cleared when the creator closes; nothing of a preview is sent or
+stored. "Use my skin" contacts no network: it reads the player's own skin from the game's local
+skin cache (`skins/<first two>/<name>` under the assets directory, where the name is the SHA-1 of
+the texture hash in the player's own textures property), only as a regular file of at most 64 KiB
+and never through a link. The bytes pass the same 64×64 PNG checks as a picked skin, and the
+default skin resource is used otherwise. "Download box template" writes two bundled images to
+`blockpops/templates/` in the game folder and opens that folder; it takes no path from the user.
 
 ## Trust model
 

@@ -116,6 +116,7 @@ public class BlockPopsModForgeClient {
     @SubscribeEvent
     public static void registerSpecialModelRenderers(RegisterSpecialModelRendererEvent event) {
         event.register(BoxBlockItemRenderer.ID, BoxBlockItemRenderer.Unbaked.MAP_CODEC);
+        event.register(BoxBlockItemRenderer.PREVIEW_ID, BoxBlockItemRenderer.PreviewUnbaked.MAP_CODEC);
         event.register(FigureBlockItemRenderer.ID, FigureBlockItemRenderer.Unbaked.MAP_CODEC);
         event.register(ClawMachineBlockItemRenderer.ID, ClawMachineBlockItemRenderer.Unbaked.MAP_CODEC);
         event.register(FigurePreviewItemRenderer.ID, FigurePreviewItemRenderer.Unbaked.MAP_CODEC);

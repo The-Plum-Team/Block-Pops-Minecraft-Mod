@@ -61,15 +61,22 @@ ask nobody; the special plushes then stay locked for everyone.
 Operators (permission level 2) can make collections for one world from their
 own skins, box textures, logos and Blockbench models with
 `/blockpops worldcollections`, importing the files from a datapack. The
-**Creator** tab of the claw machine's Settings, which uploads them from your
-computer, is still in progress and appears only in a development environment
-for now. The server
-checks every file, stores it with the world under
+in-game creator, which uploads them from your computer, is still in progress
+and appears only in a development environment for now: there it opens from the
+**Creator** button of a machine, the **Creator** tab of its Settings or
+`/blockpopscreator`. It keeps a collection as a draft, out of the machines and
+seen only by operators, until it is published; gives figures a rarity and up to
+four skin variants; places the logo on the box; makes plush collections for the
+gacha machine; adds many figures at once from dropped files or a folder; and
+duplicates, imports from a datapack or deletes a collection for good. The
+server checks every file, stores it with the world under
 `data/blockpops-world-collections/` and sends it to each player who joins;
 nothing is published anywhere else. A datapack can ship one for `importpack`.
 See [World Collections](COLLECTIONS_GUIDE.md#world-collections) for the file
 rules, limits and commands, and
 [ADR 0003](docs/architecture/decisions/0003-accept-operator-uploaded-world-collections.md)
+and
+[ADR 0004](docs/architecture/decisions/0004-extend-world-collections-for-the-redesigned-creator.md)
 for the design.
 
 ## Local verification

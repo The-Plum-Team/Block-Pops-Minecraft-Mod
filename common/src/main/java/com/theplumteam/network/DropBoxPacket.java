@@ -8,11 +8,14 @@ import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.figure.DrawOdds;
+import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.FigureType;
 import com.theplumteam.figure.Holographic;
 import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.item.BlockEntityItemData;
+import com.theplumteam.item.PlushPrizes;
 import com.theplumteam.registry.ModItems;
 import com.theplumteam.server.ServerTickHandler;
 import com.theplumteam.server.SpecialAccess;
@@ -96,10 +99,20 @@ public class DropBoxPacket {
                 }
 
                 // Every World Players figure can be disabled, and an empty pool must not cost a token
-                if (CollectionRegistry.getCollection(packet.collectionId)
-                        .map(collection -> SpecialAccess.figuresFor(player, collection).isEmpty()).orElse(true)) {
+                FigureCollection collection = CollectionRegistry.getCollection(packet.collectionId).orElse(null);
+                List<FigureDefinition> pool = collection != null
+                        ? SpecialAccess.figuresFor(player, collection) : List.of();
+                if (pool.isEmpty()) {
                     player.sendSystemMessage(Component.literal("\u00A7cThis collection has no figures available."));
                     BlockPopsMod.logDebug("Collection {} has no available figures, token not consumed", packet.collectionId);
+                    return;
+                }
+
+                // A plush with nothing to hand out is refused here, while the token is still unspent
+                if (collection.isPlush() && !PlushPrizes.canGiveAll(packet.collectionId, pool)) {
+                    player.sendSystemMessage(Component.literal("\u00A7cThis collection is not available."));
+                    LOGGER.warn("Plush collection {} names a figure that is not a registered plush, token not consumed",
+                            packet.collectionId);
                     return;
                 }
 
@@ -246,26 +259,21 @@ public class DropBoxPacket {
 
     private static void givePlush(ServerPlayer player, String collectionId, FigureDefinition figure,
                                   IPlayerDiscovery discovery) {
-        var plushItem = ModItems.PLUSH_ITEMS.get(figure.getId());
+        boolean holographic = Holographic.roll();
+        ItemStack plushItem = PlushPrizes.of(collectionId, figure, holographic);
+        // The pool was checked before the token was spent, so this is only a guard
         if (plushItem == null) {
             LOGGER.warn("Plush collection {} names {}, which is not a registered plush", collectionId, figure.getId());
             return;
         }
         String uniqueFigureId = collectionId + ":" + figure.getId();
         boolean isNew = !discovery.isDiscovered(uniqueFigureId);
-        boolean holographic = Holographic.roll();
         DrawResultPacket.sendToPlayer(player, collectionId, figure.getId(), isNew, holographic);
         if (isNew) {
             discovery.discover(uniqueFigureId);
             UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, figure.getName(), null, null);
         }
-        ItemStack plush = new ItemStack(plushItem.get());
-        if (holographic) {
-            CompoundTag plushTag = new CompoundTag();
-            plushTag.putBoolean(Holographic.KEY, true);
-            BlockEntityItemData.write(plush, plushTag, "blockpops:plush_" + figure.getId());
-        }
-        player.getInventory().add(plush);
+        player.getInventory().add(plushItem);
         PlayerDataManager.markDirty(player, discovery);
     }
 
@@ -325,16 +333,17 @@ public class DropBoxPacket {
                 }
             }
 
+            // Weighted among the figures still to find, so a guaranteed token keeps a legendary rare
             if (!undiscoveredFigures.isEmpty()) {
-                FigureDefinition selected = undiscoveredFigures.get(random.nextInt(undiscoveredFigures.size()));
+                FigureDefinition selected = DrawOdds.pick(undiscoveredFigures, random);
                 BlockPopsMod.logDebug("Guaranteed token logic: Selected undiscovered figure '{}'", selected.getId());
                 return selected;
             } else {
                 BlockPopsMod.logDebug("Guaranteed token logic: Collection complete, giving random duplicate");
-                return figures.get(random.nextInt(figures.size()));
+                return DrawOdds.pick(figures, random);
             }
         } else {
-            return figures.get(random.nextInt(figures.size()));
+            return DrawOdds.pick(figures, random);
         }
     }
 
