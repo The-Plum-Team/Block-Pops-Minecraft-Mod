@@ -52,6 +52,7 @@ the option changes or the display resizes under them.
 | A sidebar tab | `TabButton` with `setIcon(PixelIcon.X)` |
 | A title or a big label | `PixelFont` (upper-case blocky font, crisp sizes only) |
 | A small label in a corner | `Chip` (dark, the pixel font at half size, an optional icon, gold under the mouse) |
+| A mark over something not ready | `Stamp` (a rubber stamp in red ink, turned a little; Settings' Custom tab says IN DEVELOPMENT) |
 | A menu's opening | `HalftoneTransition` (a ring of black halftone dots travels from the middle outward, the world beyond it and the menu inside it) |
 | Text on a dark face | `UiText.draw`, `drawFitted` (cut with "..."), `wrap` (word-wrapped lines) |
 | A text field in the creator | `creator.ui.UiField`, an `EditBox` in a well |
