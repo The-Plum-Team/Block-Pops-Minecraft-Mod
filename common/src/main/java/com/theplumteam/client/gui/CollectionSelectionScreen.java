@@ -173,6 +173,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     private static final ResourceLocation DISCORD_ICON = ResourceLocations.of("blockpops", "textures/gui/discord_icon.png");
     private static final ResourceLocation CURSEFORGE_ICON = ResourceLocations.of("blockpops", "textures/gui/curseforge_icon.png");
     private static final ResourceLocation MODRINTH_ICON = ResourceLocations.of("blockpops", "textures/gui/modrinth_icon.png");
+    private static final ResourceLocation PALETTE_ICON = ResourceLocations.of("blockpops", "textures/gui/palette_icon.png");
     private static final ResourceLocation SETTINGS_ICON = ResourceLocations.of("blockpops", "textures/gui/settings_icon.png");
     private static final ResourceLocation KOFI_ICON = ResourceLocations.of("blockpops", "textures/gui/kofi_icon.png");
 
@@ -444,7 +445,8 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         }
     }
 
-    // Settings at the right edge, then Discord, CurseForge and Modrinth, and Ko-fi on the plush tab
+    // Settings at the right edge, then Discord, CurseForge and Modrinth, Ko-fi on the plush tab,
+    // and the player's favourite colour
     private void addLinkButtons(int right, int y) {
         int x = right - LINK_SIZE;
         this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, SETTINGS_ICON,
@@ -474,6 +476,19 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
             this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, KOFI_ICON, SpecialAccess.SUPPORT_URL,
                     Component.literal("Support us on Ko-fi to get the special plushes")));
         }
+        x -= LINK_SIZE + LINK_SPACING;
+        this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, PALETTE_ICON,
+                null, // No URL: it opens the favourite colour's screen, which comes back here
+                Component.literal("Change Favorite Color")) {
+            @Override
+            //? if >=26 {
+            /*public void onPress(net.minecraft.client.input.InputWithModifiers bpInput) {
+            *///? } else {
+            public void onPress() {
+            //? }
+                CollectionSelectionScreen.this.minecraft.setScreen(new FavoriteColorSelectionScreen(CollectionSelectionScreen.this));
+            }
+        });
     }
 
     // Spends a token on the selected collection; the screen stays open to play the draw out

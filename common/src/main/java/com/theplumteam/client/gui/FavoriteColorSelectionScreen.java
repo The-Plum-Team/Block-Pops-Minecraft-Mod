@@ -83,9 +83,28 @@ public class FavoriteColorSelectionScreen extends Screen implements MenuGuiScale
     // at that tile size and must shrink with it to keep each box inside its tile.
     private float previewFit = 1.0f;
 
+    // The screen to go back to on closing: the machine menu that opened this one, or none when
+    // the command did
+    @Nullable
+    private final Screen parent;
+
     public FavoriteColorSelectionScreen() {
+        this(null);
+    }
+
+    public FavoriteColorSelectionScreen(@Nullable Screen parent) {
         super(Component.literal("Choose Your Favorite Color"));
+        this.parent = parent;
         BlockPopsMod.logDebug("FavoriteColorSelectionScreen created");
+    }
+
+    @Override
+    public void onClose() {
+        if (this.minecraft != null && this.parent != null) {
+            this.minecraft.setScreen(this.parent);
+        } else {
+            super.onClose();
+        }
     }
 
     @Override
