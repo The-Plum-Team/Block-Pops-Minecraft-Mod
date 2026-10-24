@@ -1,0 +1,51 @@
+{
+  "ui.menu_open": {
+    "sounds": ["blockpops:ui/menu_open"]
+  },
+  "ui.click": {
+    "sounds": ["blockpops:ui/click"]
+  },
+  "ui.tab": {
+    "sounds": ["blockpops:ui/switch"]
+  },
+  "ui.collection": {
+    "sounds": ["blockpops:ui/switch"]
+  },
+  "ui.version": {
+    "sounds": ["blockpops:ui/snap"]
+  },
+  "draw.ticket": {
+    "sounds": ["blockpops:draw/coin"]
+  },
+  "draw.step": {
+    "sounds": ["blockpops:draw/tick"]
+  },
+  "draw.stop": {
+    "sounds": ["blockpops:draw/ding"]
+  },
+  "draw.new": {
+    "sounds": ["blockpops:draw/capsule"]
+  },
+  "draw.duplicate": {
+    "sounds": ["blockpops:draw/plop"]
+  },
+  "draw.holographic": {
+    "sounds": ["blockpops:draw/holographic"]
+  },
+  "box.insert": {
+    "subtitle": "subtitles.blockpops.box.insert",
+    "sounds": ["blockpops:world/insert"]
+  },
+  "box.remove": {
+    "subtitle": "subtitles.blockpops.box.remove",
+    "sounds": ["blockpops:world/seal"]
+  },
+  "box.open": {
+    "subtitle": "subtitles.blockpops.box.open",
+    "sounds": ["blockpops:world/film"]
+  },
+  "plush.change": {
+    "subtitle": "subtitles.blockpops.plush.change",
+    "sounds": ["blockpops:world/seal"]
+  }
+}

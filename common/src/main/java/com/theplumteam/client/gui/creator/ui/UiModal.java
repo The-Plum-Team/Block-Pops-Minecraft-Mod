@@ -4,14 +4,14 @@ import com.theplumteam.client.gui.style.DialogCloseButton;
 import com.theplumteam.client.gui.style.DialogFrame;
 import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.style.Surfaces;
+import com.theplumteam.client.gui.util.UiSounds;
+import com.theplumteam.registry.ModSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.sounds.SoundEvents;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -322,8 +322,7 @@ public class UiModal implements UiNode {
             return true;
         }
         if (closeButton != null && click.left() && closeButton.isMouseOver(click.x(), click.y())) {
-            Minecraft.getInstance().getSoundManager()
-                    .play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0f));
+            UiSounds.play(ModSounds.CLICK);
             cancel();
             return true;
         }

@@ -3,13 +3,16 @@ package com.theplumteam.client.gui.widget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.util.GuiPose;
-import com.theplumteam.client.gui.style.PixelIcon;
+import com.theplumteam.client.gui.util.UiSounds;
+import com.theplumteam.client.gui.style.Chip;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.style.UiText;
+import com.theplumteam.client.renderer.LogoLayout;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.registry.ModSounds;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.Minecraft;
@@ -22,7 +25,6 @@ import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
-import org.lwjgl.opengl.GL11;
 
 import java.util.Locale;
 import java.util.function.Predicate;
@@ -44,15 +46,9 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
     private static final int HAIRLINE = 0x38FFFFFF;
     private static final int AUTHOR_COLOR = 0xFFFFC23A;
 
-    // The author's link button, gold like Quick Skin's favourite star
-    private static final int LINK_BUTTON_SIZE = 13;
-    private static final int LINK_FACE = 0xFFB07C14;
-    private static final int LINK_FACE_HOVER = 0xFFC89018;
-    private static final int LINK_BORDER = 0xFFE0A830;
-    private static final int LINK_BORDER_HOVER = 0xFFFFD060;
-    private static final String[] ICON_LINK = {
-            "..###..", ".#.#.#.", "#..#..#", "#######", "#..#..#", ".#.#.#.", "..###.."};
-    private int linkButtonX, linkButtonY;
+    // The author's link, a chip like the figures' version counter
+    private static final String LINK_LABEL = "Web";
+    private static final int LINK_INSET = 4;
     private boolean isLinkHovered;
 
     public CollectionEntry(CollectionListWidget parent, FigureCollection collection) {
@@ -79,21 +75,20 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
     //? }
         // Check if this entry is selected
         boolean isSelected = parent.getSelected() == this;
-        drawCard(graphics, mc.font, collection, x, y, entryWidth, entryHeight, isSelected, isMouseOver);
+        boolean linkShown = isMouseOver && collection.getAuthorUrl() != null && !collection.getAuthorUrl().isEmpty();
+        int linkWidth = Chip.width(LINK_LABEL, Chip.ARROW_OUT);
+        // The name stops short of the link
+        drawCard(graphics, mc.font, collection, x, y, entryWidth, entryHeight, isSelected, isMouseOver,
+                ClientDiscoveryManager::isDiscovered, linkShown ? linkWidth + 3 : 0);
 
-        // The author's link, near a hovered card's top-right corner, as Quick Skin's favourite star
+        // The author's link, in a hovered card's top-right corner, gold under the mouse
         this.isLinkHovered = false;
-        if (isMouseOver && collection.getAuthorUrl() != null && !collection.getAuthorUrl().isEmpty()) {
-            this.linkButtonX = cardRight(x, entryWidth) - 3 - LINK_BUTTON_SIZE;
-            this.linkButtonY = cardTop(y) + 3;
-            boolean linkHovered = mouseX >= linkButtonX && mouseX < linkButtonX + LINK_BUTTON_SIZE
-                    && mouseY >= linkButtonY && mouseY < linkButtonY + LINK_BUTTON_SIZE;
-            Surfaces.raised(graphics, linkButtonX, linkButtonY, linkButtonX + LINK_BUTTON_SIZE,
-                    linkButtonY + LINK_BUTTON_SIZE,
-                    linkHovered ? LINK_BORDER_HOVER : LINK_BORDER, linkHovered ? LINK_FACE_HOVER : LINK_FACE,
-                    Surfaces.LIP, 2);
-            PixelIcon.draw(graphics, ICON_LINK, linkButtonX + (LINK_BUTTON_SIZE - 7) / 2,
-                    linkButtonY + (LINK_BUTTON_SIZE - 2 - 7) / 2, Surfaces.TEXT);
+        if (linkShown) {
+            int linkRight = cardRight(x, entryWidth) - LINK_INSET;
+            int linkTop = cardTop(y) + LINK_INSET;
+            boolean linkHovered = mouseX >= linkRight - linkWidth && mouseX < linkRight
+                    && mouseY >= linkTop && mouseY < linkTop + Chip.height();
+            Chip.draw(graphics, LINK_LABEL, Chip.ARROW_OUT, linkRight, linkTop, linkHovered);
             this.isLinkHovered = linkHovered;
         }
     }
@@ -116,25 +111,22 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
      * skin list: a raised charcoal card with the logo (or a monogram in its place) on the left
      * over a glow that is blue on the selected card, then the name over a hairline, the count of
      * discovered figures and the author line. The creator's machine replica draws its cards
-     * through this too.
+     * through this too, counting as discovered the figures a predicate names, asked with
+     * "collection:figure", as it shows a collection to a new player or a collector.
      *
      * @param entryWidth  the row's width; the card stops 8 short of it, before the scroll bar
      * @param entryHeight the row's height; the card reaches a pixel above and below it
      */
     public static void drawCard(GuiGraphics graphics, Font font, FigureCollection collection, int x, int y,
-                                int entryWidth, int entryHeight, boolean selected, boolean hovered) {
-        drawCard(graphics, font, collection, x, y, entryWidth, entryHeight, selected, hovered,
-                ClientDiscoveryManager::isDiscovered);
-    }
-
-    /**
-     * Draws a collection's card as above, counting as discovered the figures a predicate names,
-     * asked with "collection:figure", as the creator's replica shows a collection to a new player
-     * or a collector.
-     */
-    public static void drawCard(GuiGraphics graphics, Font font, FigureCollection collection, int x, int y,
                                 int entryWidth, int entryHeight, boolean selected, boolean hovered,
                                 Predicate<String> discovered) {
+        drawCard(graphics, font, collection, x, y, entryWidth, entryHeight, selected, hovered, discovered, 0);
+    }
+
+    // As above, with the name kept clear of the top-right corner by the given width
+    private static void drawCard(GuiGraphics graphics, Font font, FigureCollection collection, int x, int y,
+                                 int entryWidth, int entryHeight, boolean selected, boolean hovered,
+                                 Predicate<String> discovered, int nameReserve) {
         int left = cardLeft(x);
         int right = cardRight(x, entryWidth);
         int top = cardTop(y);
@@ -162,53 +154,34 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         int logoTop = top + 2 + (faceBottom - 1 - (top + 2) - logoSize) / 2;
         ResourceLocation logoTexture = collection.getLogoTexture();
         if (logoTexture != null) {
-            // Logos keep their aspect ratio, so the drawn size comes from the texture's
-            // own size. 1.21.5 exposes that on the uploaded texture; below it the size
-            // is only reachable through the raw GL object.
-            //? if >=1.21.5 {
-            /*com.mojang.blaze3d.textures.GpuTexture logoGpuTexture =
-                    Minecraft.getInstance().getTextureManager().getTexture(logoTexture).getTexture();
-            int textureWidth = logoGpuTexture.getWidth(0) > 0 ? logoGpuTexture.getWidth(0) : 256;
-            int textureHeight = logoGpuTexture.getHeight(0) > 0 ? logoGpuTexture.getHeight(0) : 256;
-            *///? } else {
+            // Only the drawn part of the logo counts, as on the box, so transparent margins
+            // in the file do not shrink it; it keeps that part's aspect ratio.
+            int[] bounds = LogoLayout.bounds(logoTexture);
+            int textureWidth = bounds[0];
+            int textureHeight = bounds[1];
+            int drawnWidth = bounds[4] - bounds[2];
+            int drawnHeight = bounds[5] - bounds[3];
+            //? if <1.21.5 {
             // Enable blending for transparent logos
             RenderSystem.enableBlend();
             RenderSystem.defaultBlendFunc();
             RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-
-            // Bind texture first to ensure it's loaded
-            RenderSystem.setShaderTexture(0, logoTexture);
-
-            // Get actual texture dimensions from OpenGL
-            int textureId = RenderSystem.getShaderTexture(0);
-            int[] width = new int[1];
-            int[] height = new int[1];
-
-            // Bind and query texture dimensions
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
-            GL11.glGetTexLevelParameteriv(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH, width);
-            GL11.glGetTexLevelParameteriv(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT, height);
-
-            int textureWidth = width[0] > 0 ? width[0] : 256;
-            int textureHeight = height[0] > 0 ? height[0] : 256;
             //? }
 
             // Calculate scaled dimensions preserving aspect ratio
-            float aspectRatio = (float) textureWidth / textureHeight;
+            float aspectRatio = (float) drawnWidth / drawnHeight;
             int logoWidth;
             int logoHeight;
 
-            // The World Players logo is a little smaller, as it always was
-            int maxHeight = "world_players".equals(collection.getId()) ? logoSize * 5 / 7 : logoSize;
-            int maxWidth = Math.min(logoBoxWidth, maxHeight * 2);
+            int maxWidth = Math.min(logoBoxWidth, logoSize * 2);
 
             // As large as the box allows, keeping the logo's shape
-            if (aspectRatio > (float) maxWidth / maxHeight) {
+            if (aspectRatio > (float) maxWidth / logoSize) {
                 logoWidth = maxWidth;
                 logoHeight = (int) (maxWidth / aspectRatio);
             } else {
-                logoHeight = maxHeight;
-                logoWidth = (int) (maxHeight * aspectRatio);
+                logoHeight = logoSize;
+                logoWidth = (int) (logoSize * aspectRatio);
             }
 
             // Centred in its box
@@ -219,22 +192,22 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             //? if >=1.21.6 {
             /*graphics.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, logoTexture,
                     logoX, logoY,
-                    0.0f, 0.0f,
+                    bounds[2], bounds[3],
                     logoWidth, logoHeight,
-                    textureWidth, textureHeight,
+                    drawnWidth, drawnHeight,
                     textureWidth, textureHeight);
             *///? } elif >=1.21.2 {
             /*graphics.blit(RenderType::guiTextured, logoTexture,
                     logoX, logoY,
-                    0.0f, 0.0f,
+                    bounds[2], bounds[3],
                     logoWidth, logoHeight,
-                    textureWidth, textureHeight,
+                    drawnWidth, drawnHeight,
                     textureWidth, textureHeight);
             *///? } else {
             graphics.blit(logoTexture,
                     logoX, logoY, logoWidth, logoHeight,
-                    0.0f, 0.0f,
-                    textureWidth, textureHeight,
+                    bounds[2], bounds[3],
+                    drawnWidth, drawnHeight,
                     textureWidth, textureHeight);
             //? }
         } else {
@@ -245,7 +218,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         int textX = logoLeft + logoBoxWidth + PADDING + 2;
         int room = right - 4 - textX;
         int textY = top + 5;
-        UiText.drawFitted(graphics, font, collection.getName(), textX, textY, room,
+        UiText.drawFitted(graphics, font, collection.getName(), textX, textY, room - nameReserve,
                 selected ? Surfaces.TEXT : 0xFFE8E8E8);
         graphics.fill(textX, textY + font.lineHeight + 1, right - 4, textY + font.lineHeight + 2, HAIRLINE);
 
@@ -266,6 +239,15 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             authorText = "Skin creator: " + author;
         }
         UiText.drawFitted(graphics, font, authorText, textX, subTextY + font.lineHeight + 2, room, AUTHOR_COLOR);
+    }
+
+    // Selects this card, with its sound when that changes the selected collection
+    private void select() {
+        if (parent.getSelected() != this) {
+            UiSounds.play(ModSounds.COLLECTION);
+        }
+        parent.setSelected(this);
+        parent.onCollectionSelected(this);
     }
 
     @Override
@@ -316,8 +298,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             }
 
             // Otherwise select this entry
-            parent.setSelected(this);
-            parent.onCollectionSelected(this);
+            select();
             return true;
         }
         return false;
@@ -357,8 +338,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             }
 
             // Otherwise select this entry
-            parent.setSelected(this);
-            parent.onCollectionSelected(this);
+            select();
             return true;
         }
         return false;

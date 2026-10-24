@@ -11,6 +11,7 @@ import com.theplumteam.network.SyncSpecialAccessPacket;
 import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.util.E2EDeterminism;
 import com.theplumteam.util.ServerLevels;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.jetbrains.annotations.Nullable;
@@ -31,30 +32,35 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Tells which players are supporters, who receive the special plushes. It asks the service the
  * BlockPops-Hytale project asks, by Minecraft player name (the service keeps Minecraft and Hytale
- * usernames apart), and follows that project's rules:
+ * usernames apart) and, on an online-mode server, by UUID too: the name finds a Ko-fi supporter,
+ * the UUID one who subscribed through PayNow ({@link SupportCheckout}). It follows that
+ * project's rules:
  * - Specials stay locked until the service says otherwise: an unset or unreachable service,
  *   or a player it has not answered for yet, gives no access.
  * - A kept answer that has expired is still used while the service is asked again.
  * - A supporter whose subscription lapsed keeps the specials released while it was running.
  */
 public final class SpecialAccess {
-    /** Where a player becomes a supporter. */
-    public static final String SUPPORT_URL = "https://ko-fi.com/theplumteam";
-
     private static final Gson GSON = new Gson();
     // How long a payment keeps a subscription running
     private static final int SUBSCRIPTION_DAYS = 35;
     private static final int MAX_ANSWER_BYTES = 8192;
+    // A player who has just got a checkout is asked about this often, for this long, so the
+    // specials unlock soon after paying rather than when the kept answer runs out
+    private static final long WATCH_INTERVAL_SECONDS = 20;
+    private static final long WATCH_MILLIS = 15 * 60_000L;
 
     private static final Map<UUID, Answer> ANSWERS = new ConcurrentHashMap<>();
     private static final Set<UUID> ASKING = ConcurrentHashMap.newKeySet();
-    private static final ExecutorService IO = Executors.newSingleThreadExecutor(runnable -> {
+    private static final Map<UUID, Long> WATCHING = new ConcurrentHashMap<>();
+    private static final ScheduledExecutorService IO = Executors.newSingleThreadScheduledExecutor(runnable -> {
         Thread thread = new Thread(runnable, "BlockPops-SpecialAccess-IO");
         thread.setDaemon(true);
         return thread;
@@ -121,10 +127,12 @@ public final class SpecialAccess {
         }
 
         String playerName = player.getScoreboardName();
-        String url = (apiUrl.endsWith("/") ? apiUrl : apiUrl + "/") + "api/check/minecraft/"
-                + URLEncoder.encode(playerName, StandardCharsets.UTF_8);
-        long expiresAt = System.currentTimeMillis() + config.getSpecialAccessCacheMinutes() * 60_000L;
         MinecraftServer server = ServerLevels.serverOf(player);
+        // Only an online-mode server knows the player's real UUID
+        String url = (apiUrl.endsWith("/") ? apiUrl : apiUrl + "/") + "api/check/minecraft/"
+                + URLEncoder.encode(playerName, StandardCharsets.UTF_8)
+                + (server.usesAuthentication() ? "?uuid=" + playerId : "");
+        long expiresAt = System.currentTimeMillis() + config.getSpecialAccessCacheMinutes() * 60_000L;
 
         IO.execute(() -> {
             Answer answer;
@@ -142,13 +150,46 @@ public final class SpecialAccess {
             if (previous == null || previous.authorized() != answer.authorized()) {
                 BlockPopsMod.LOGGER.info(describe(playerName, answer));
             }
+            // A player who has just paid is thanked once the payment shows
+            boolean paid = answer.authorized() && WATCHING.remove(playerId) != null
+                    && (previous == null || !previous.authorized());
             server.execute(() -> {
                 ServerPlayer online = server.getPlayerList().getPlayer(playerId);
                 if (online != null) {
                     SyncSpecialAccessPacket.sendToPlayer(online);
+                    if (paid) {
+                        online.sendSystemMessage(Component.literal("[BlockPops] ")
+                                .withStyle(style -> style.withColor(0xBB8FCE))
+                                .append(Component.literal("Thank you for supporting BlockPops! The special plushes are unlocked.")
+                                        .withStyle(style -> style.withColor(0xE8D5F5))));
+                    }
                 }
             });
         });
+    }
+
+    /**
+     * Asks about the player every {@value #WATCH_INTERVAL_SECONDS} seconds for a while, as after
+     * the player got a checkout, until the service says they are a supporter or they leave.
+     */
+    public static void watchPurchase(ServerPlayer player) {
+        UUID playerId = player.getUUID();
+        if (WATCHING.put(playerId, System.currentTimeMillis() + WATCH_MILLIS) == null) {
+            watch(ServerLevels.serverOf(player), playerId);
+        }
+    }
+
+    private static void watch(MinecraftServer server, UUID playerId) {
+        IO.schedule(() -> server.execute(() -> {
+            Long until = WATCHING.get(playerId);
+            ServerPlayer online = server.getPlayerList().getPlayer(playerId);
+            if (until == null || online == null || !server.isRunning() || System.currentTimeMillis() > until) {
+                WATCHING.remove(playerId);
+                return;
+            }
+            refresh(online);
+            watch(server, playerId);
+        }), WATCH_INTERVAL_SECONDS, TimeUnit.SECONDS);
     }
 
     private static Answer ask(String url, String apiKey, long expiresAt) throws IOException {

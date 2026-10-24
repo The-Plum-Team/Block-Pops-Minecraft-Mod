@@ -3,12 +3,12 @@ package com.theplumteam.client.gui.creator.ui;
 import com.theplumteam.client.gui.style.PixelFont;
 import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.style.Surfaces;
+import com.theplumteam.client.gui.util.UiSounds;
+import com.theplumteam.registry.ModSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
@@ -163,7 +163,7 @@ public class UiButton extends UiNode.Box {
         if (!enabled || !visible()) {
             return false;
         }
-        Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0f));
+        UiSounds.play(ModSounds.CLICK);
         onPress.run();
         return true;
     }

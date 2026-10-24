@@ -51,6 +51,8 @@ the option changes or the display resizes under them.
 | A slider | extend `StyledSlider` |
 | A sidebar tab | `TabButton` with `setIcon(PixelIcon.X)` |
 | A title or a big label | `PixelFont` (upper-case blocky font, crisp sizes only) |
+| A small label in a corner | `Chip` (dark, the pixel font at half size, an optional icon, gold under the mouse) |
+| A mark over something not ready | `Stamp` (a rubber stamp in red ink, turned a little; Settings' Custom tab says IN DEVELOPMENT) |
 | A menu's opening | `HalftoneTransition` (a ring of black halftone dots travels from the middle outward, the world beyond it and the menu inside it) |
 | Text on a dark face | `UiText.draw`, `drawFitted` (cut with "..."), `wrap` (word-wrapped lines) |
 | A text field in the creator | `creator.ui.UiField`, an `EditBox` in a well |
@@ -84,7 +86,7 @@ beyond it and the menu inside it (about 1.3 s).
 A figure with alternative skins, or a plush with variants, has several versions. Its cell in the
 machine menu says which one it shows in a dark chip in its top right corner ("1/3", the pixel
 font at about half a GUI unit per font pixel, crisp), and a click anywhere on the cell shows the
-next one, back to the figure's own after the last, with a button's click. The chip turns gold
+next one, back to the figure's own after the last, with a snap. The chip turns gold
 under the mouse, and the cell's name follows the version.
 
 - The menu keeps the versions shown while it is open, through a resize or a tab switch; it opens
@@ -93,6 +95,47 @@ under the mouse, and the cell's name follows the version.
   the others as `alternatives` with their own models, in step with `BuiltInPlushes.VARIANT_GROUPS`
   (what a right-click on a placed plush turns it into). A supporter's secret plush is not listed.
 - The creator's previews show the skin they are told and no chip.
+
+## A collection's card in the list
+
+A collection's card shows its logo in a box on the left, up to twice as wide as tall, or a
+monogram when it has none. Only the drawn part of the image counts (what `LogoLayout` measures
+for the box front: texels of at least 10% alpha), so transparent margins in the file do not
+shrink it; that part keeps its shape and fills the box's height or its width.
+
+A collection with an author link shows a `Chip` "WEB" with an arrow in the top right corner of
+its card while the card is under the mouse, and the name stops short of it; a click opens the
+link through the game's own link handling, as a link in chat.
+
+## The token lines
+
+Each token count above its button ends in an "i" in the token's colour. Under the mouse it turns
+white and the token's cinema ticket opens above it (`TokenTicket`), blue or gold: ADMIT ONE up its
+stub; the wait for the next one (or the guaranteed one's renewal, in the player's own time once the
+server has said its hour) beside the clock it runs on, game time or real time; a pill for each of
+what runs and what stops that clock; and the tickets that add more. Its art is drawn pixel by
+pixel into a texture, made once for each token; its words are drawn over it. The small pixel font
+takes half a ticket unit per font pixel, and the whole ticket is drawn at the scale that makes
+that a whole number of screen pixels, so it keeps its layout and stays crisp at every GUI scale.
+
+## Sounds
+
+The mod plays sounds of its own, never vanilla's: `ModSounds` registers them and
+`assets/blockpops/sounds.json` names their files. The screens play theirs through `UiSounds`,
+heard the same wherever the player stands.
+
+- **Buttons.** Every button class of the mod overrides `playDownSound`. A `StyledButton` clicks
+  unless `sound(...)` gives it another, as the token buttons drop a coin; a `TabButton` flips a
+  switch, and so does choosing another collection. The creator's buttons click too.
+- **The menu** sounds once as its opening transition starts, and a figure's next version snaps in.
+- **A draw.** Each step of the light ticks at 0.55 volume, its pitch rising from 1 to 2 over the
+  path; the stop dings at 0.9; then a capsule pops for a new figure or a plop sounds for one the
+  player had, with an 8-bit sparkle over either when it comes out holographic.
+- **In the world**, a figure going into its box or out of it, a box cut open and a plush turning
+  into another come from the block, so their files are mono and have subtitles.
+
+The files were generated with ElevenLabs, trimmed to where the sound starts and ends and levelled
+against each other; how loud each plays is set where it is played.
 
 ## Versions
 

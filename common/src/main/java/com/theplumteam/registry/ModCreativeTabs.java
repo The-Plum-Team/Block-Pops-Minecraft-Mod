@@ -18,7 +18,7 @@ public class ModCreativeTabs {
             "blockpops_tab",
             () -> CreativeModeTab.builder(CreativeModeTab.Row.TOP, 0)
                     .title(Component.translatable("itemGroup.blockpops.blockpops_tab"))
-                    .icon(() -> ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(PopBlockColor.ORIGINAL).get().getDefaultInstance())
+                    .icon(() -> ModItems.BLUE_TICKET.get().getDefaultInstance())
                     .displayItems((parameters, output) -> {
                         // Add claw machine
                         output.accept(ModItems.CLAW_MACHINE_BLOCK_ITEM.get());

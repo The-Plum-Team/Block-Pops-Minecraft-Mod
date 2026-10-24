@@ -48,13 +48,23 @@ their boxes. It changes your collection progress; it is not a preview mode.
 
 Some plush collections have special plushes, outlined in purple and counted
 apart in the gacha machine's menu (`3/5 | 0/7 figures`). A token gives them
-only to Ko-fi supporters; the Ko-fi button at the top right of that menu
-opens the support page.
+only to supporters. The supporter button at the top right of that menu (the
+cup with a heart), or `/blockpops supporter`, opens the shop the supporter
+service names. On PayNow the checkout of the monthly supporter subscription is
+already made out to your Minecraft account; on Ko-fi a link in the chat then
+opens a page where you tie the Ko-fi email you paid with to your name. The
+specials unlock about a minute after that.
 
-To tell who is a supporter, the server sends each joining player's name to
-the service named by `specialAccessApiUrl` in `config/blockpops-server.json`
-and keeps the answer for `specialAccessCacheMinutes`. Set the URL to `""` to
-ask nobody; the special plushes then stay locked for everyone.
+To tell who is a supporter, the server sends each joining player's name, and
+on an online-mode server their UUID, to the service named by
+`specialAccessApiUrl` in `config/blockpops-server.json` and keeps the answer
+for `specialAccessCacheMinutes`. The supporter button sends the same service
+the player's name, and their UUID on an online-mode server, to get the
+checkout. A premium player's purchase follows their Mojang account; a
+non-premium player's, made on an offline-mode server, follows their name, so
+there anyone who joins with that name gets the specials too. Set the URL to
+`""` to ask nobody; the special plushes then stay locked for everyone and the
+button offers no checkout.
 
 ## World collections
 

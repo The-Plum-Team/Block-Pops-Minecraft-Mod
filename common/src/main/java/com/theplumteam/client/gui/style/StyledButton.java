@@ -1,12 +1,18 @@
 package com.theplumteam.client.gui.style;
 
+import com.theplumteam.client.gui.util.UiSounds;
+import com.theplumteam.registry.ModSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundEvent;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.function.Supplier;
 
 /**
  * The menus' button, drawn like a Bedrock Edition button in dark-mode greys, as Quick Skin draws
@@ -62,6 +68,7 @@ public class StyledButton extends Button {
     private int lipHeight = Surfaces.LIP_HEIGHT;
     @Nullable
     private String[] icon;
+    private Supplier<SoundEvent> sound = ModSounds.CLICK;
 
     public StyledButton(int x, int y, int width, int height, Component label, OnPress onPress) {
         super(x, y, width, height, label, onPress, DEFAULT_NARRATION);
@@ -102,6 +109,12 @@ public class StyledButton extends Button {
 
     public StyledButton tooltip(Component tooltip) {
         setTooltip(Tooltip.create(tooltip));
+        return this;
+    }
+
+    /** Sounds this when pressed, in place of the menus' click, as the token buttons do. */
+    public StyledButton sound(Supplier<SoundEvent> sound) {
+        this.sound = sound;
         return this;
     }
 
@@ -202,6 +215,11 @@ public class StyledButton extends Button {
             PixelIcon.draw(graphics, icon, left, faceTop + (faceHeight - icon.length) / 2, color);
         }
         UiText.draw(graphics, font, fitted, left + iconWidth, textY, color);
+    }
+
+    @Override
+    public void playDownSound(SoundManager soundManager) {
+        UiSounds.play(soundManager, sound);
     }
 
     @Override

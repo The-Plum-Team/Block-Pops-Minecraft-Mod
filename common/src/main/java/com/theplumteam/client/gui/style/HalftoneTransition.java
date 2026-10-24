@@ -134,11 +134,13 @@ public final class HalftoneTransition {
         return !plays || frame != null;
     }
 
-    /** Starts the transition, once the menu is laid out under it. */
-    public void begin() {
-        if (start < 0) {
-            start = System.nanoTime();
+    /** Starts the transition, once the menu is laid out under it; true when this call started it. */
+    public boolean begin() {
+        if (start >= 0) {
+            return false;
         }
+        start = System.nanoTime();
+        return true;
     }
 
     private double elapsed() {

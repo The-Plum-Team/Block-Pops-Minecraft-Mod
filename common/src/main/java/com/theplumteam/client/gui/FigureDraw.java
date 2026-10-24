@@ -2,6 +2,7 @@ package com.theplumteam.client.gui;
 
 import com.theplumteam.client.ClientSpecialAccess;
 import com.theplumteam.client.gui.util.GuiPose;
+import com.theplumteam.client.gui.util.UiSounds;
 import com.theplumteam.client.gui.style.PixelFont;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.style.UiText;
@@ -10,13 +11,11 @@ import com.theplumteam.client.gui.widget.FigureListWidget;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.registry.ModSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
-import net.minecraft.sounds.SoundEvent;
-import net.minecraft.sounds.SoundEvents;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -273,7 +272,7 @@ public final class FigureDraw {
             lit = path.get(path.size() - 1);
             list.followRow(lit.row());
             stoppedTicks = 0;
-            play(SoundEvents.NOTE_BLOCK_BELL.value(), 1.0F, 0.6F);
+            UiSounds.play(ModSounds.DRAW_STOP, 1.0F, 0.9F);
             return;
         }
         lit = path.get(step);
@@ -283,7 +282,7 @@ public final class FigureDraw {
         int slowdown = SLOWDOWN.length - fromEnd;
         ticksToNext = slowdown >= 0 ? SLOWDOWN[slowdown] : 1;
         float progress = step / (float) (path.size() - 1);
-        play(SoundEvents.NOTE_BLOCK_HAT.value(), 1.0F + progress, 0.4F);
+        UiSounds.play(ModSounds.DRAW_STEP, 1.0F + progress, 0.55F);
     }
 
     /**
@@ -462,13 +461,11 @@ public final class FigureDraw {
 
     // A holographic figure rings out over the usual sound and is announced in shifting colours
     private static void playResultSound(boolean isNew, boolean holographic, @Nullable FigureDefinition winner) {
-        play(isNew ? SoundEvents.PLAYER_LEVELUP : SoundEvents.EXPERIENCE_ORB_PICKUP, 1.0F, 1.0F);
+        UiSounds.play(isNew ? ModSounds.DRAW_NEW : ModSounds.DRAW_DUPLICATE, 1.0F, 1.0F);
         if (!holographic) {
             return;
         }
-        play(SoundEvents.AMETHYST_BLOCK_CHIME, 1.2F, 1.0F);
-        play(SoundEvents.AMETHYST_BLOCK_CHIME, 1.8F, 1.0F);
-        play(SoundEvents.PLAYER_LEVELUP, 1.6F, 0.6F);
+        UiSounds.play(ModSounds.DRAW_HOLOGRAPHIC, 1.0F, 1.0F);
         Component message = winner == null
                 ? Component.translatable("blockpops.draw.holographic_unknown")
                 : Component.translatable("blockpops.draw.holographic", winner.getName());
@@ -478,9 +475,5 @@ public final class FigureDraw {
         *///? } else {
         minecraft.gui.setOverlayMessage(message, true);
         //? }
-    }
-
-    private static void play(SoundEvent sound, float pitch, float volume) {
-        Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(sound, pitch, volume));
     }
 }

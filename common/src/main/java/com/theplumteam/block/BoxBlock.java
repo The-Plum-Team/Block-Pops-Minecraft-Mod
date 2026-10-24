@@ -11,13 +11,13 @@ import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.platform.PlatformHelper;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModItems;
+import com.theplumteam.registry.ModSounds;
 import com.theplumteam.util.TagReads;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -255,7 +255,7 @@ public class BoxBlock extends BaseEntityBlock {
                             boxBlockEntity.toggleOpen();
                             heldItem.shrink(1);
 
-                            level.playSound(null, pos, SoundEvents.ITEM_FRAME_ADD_ITEM, SoundSource.BLOCKS, 1.0F, 1.0F);
+                            level.playSound(null, pos, ModSounds.BOX_INSERT.get(), SoundSource.BLOCKS, 1.0F, 1.0F);
                             return InteractionResult.SUCCESS;
                         }
                     }
@@ -299,14 +299,14 @@ public class BoxBlock extends BaseEntityBlock {
                     }
 
                     boxBlockEntity.setFigureExtracted(true);
-                    level.playSound(null, pos, SoundEvents.ITEM_FRAME_REMOVE_ITEM, SoundSource.BLOCKS, 1.0F, 1.0F);
+                    level.playSound(null, pos, ModSounds.BOX_REMOVE.get(), SoundSource.BLOCKS, 1.0F, 1.0F);
                     return InteractionResult.SUCCESS;
                 }
             }
             else {
                 if (heldItem.getItem() == net.minecraft.world.item.Items.SHEARS) {
                     boxBlockEntity.toggleOpen();
-                    level.playSound(null, pos, SoundEvents.SHEEP_SHEAR, SoundSource.BLOCKS, 1.0F, 1.0F);
+                    level.playSound(null, pos, ModSounds.BOX_OPEN.get(), SoundSource.BLOCKS, 1.0F, 1.0F);
                     return InteractionResult.SUCCESS;
                 } else {
                     com.theplumteam.util.PlayerMessages.actionBar(player,

@@ -8,6 +8,7 @@ import com.theplumteam.client.gui.creator.ui.UiQuotaMeter;
 import com.theplumteam.client.gui.style.DialogFrame;
 import com.theplumteam.client.gui.style.DialogScreen;
 import com.theplumteam.client.gui.style.PixelIcon;
+import com.theplumteam.client.gui.style.Stamp;
 import com.theplumteam.client.gui.style.StyledButton;
 import com.theplumteam.client.gui.style.StyledSlider;
 import com.theplumteam.client.gui.style.Surfaces;
@@ -79,6 +80,9 @@ public class SettingsScreen extends DialogScreen {
 
     // How long a collection toggle shows the player's choice while the server answers
     private static final int VISIBILITY_ANSWER_TICKS = 40;
+
+    // The red of a rubber stamp's ink
+    private static final int STAMP_INK = 0xFFC62828;
 
     // Tab system
     private enum Tab {
@@ -346,6 +350,7 @@ public class SettingsScreen extends DialogScreen {
             this.actionButton.setMessage(Component.literal("Progression"));
             this.actionButton.active = true;
             this.actionButton.visible = true;
+            tone = StyledButton.Tone.NEUTRAL;
         } else if (activeTab == Tab.CUSTOM) {
             this.actionButton.setMessage(Component.literal("Add"));
             this.actionButton.active = !pendingCustomCode.isBlank();
@@ -448,6 +453,11 @@ public class SettingsScreen extends DialogScreen {
                 UiText.drawFitted(graphics, this.font, row.label.get(), contentX, textY,
                         control.getX() - 8 - contentX, ROW_TEXT);
             }
+        }
+        // Custom collections are not finished: a stamp across the tab says so
+        if (activeTab == Tab.CUSTOM) {
+            Stamp.draw(graphics, new String[] {"IN DEVELOPMENT", "COMING IN THE NEXT UPDATE"}, new float[] {3, 1},
+                    (contentX + contentRight) / 2.0f, (contentTop + contentBottom()) / 2.0f, STAMP_INK, 12);
         }
     }
 
@@ -752,9 +762,9 @@ public class SettingsScreen extends DialogScreen {
     }
 
     /**
-     * Convert UTC hour to local timezone hour
+     * Convert UTC hour to local timezone hour; the machine screen explains the reset with it too
      */
-    private static int convertUtcToLocal(int utcHour) {
+    static int convertUtcToLocal(int utcHour) {
         ZonedDateTime utcTime = ZonedDateTime.now(ZoneId.of("UTC"))
                 .withHour(utcHour)
                 .withMinute(0)

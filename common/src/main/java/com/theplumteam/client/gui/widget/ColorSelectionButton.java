@@ -1,12 +1,14 @@
 package com.theplumteam.client.gui.widget;
 
 import com.theplumteam.client.gui.util.GuiPose;
+import com.theplumteam.client.gui.util.UiSounds;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.registry.ModItems;
+import com.theplumteam.registry.ModSounds;
 //? if >=1.21.4 {
 /*import com.theplumteam.client.renderer.BoxBlockItemRenderer;
 import net.minecraft.core.component.DataComponents;
@@ -14,6 +16,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -139,6 +142,11 @@ public class ColorSelectionButton extends Button {
             blockEntityTag.putString("FigureId", "");
         }
         BlockEntityItemData.write(this.boxItem, blockEntityTag, "blockpops:box_block");
+    }
+
+    @Override
+    public void playDownSound(SoundManager soundManager) {
+        UiSounds.play(soundManager, ModSounds.CLICK);
     }
 
     @Override

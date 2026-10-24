@@ -10,14 +10,15 @@ import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.FigureDraw;
 import com.theplumteam.client.gui.GreyedTextures;
-import com.theplumteam.client.gui.style.PixelFont;
-import com.theplumteam.client.gui.style.Surfaces;
+import com.theplumteam.client.gui.style.Chip;
 import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.gui.util.GuiPose;
+import com.theplumteam.client.gui.util.UiSounds;
 import com.theplumteam.client.renderer.FigurePreviewItemRenderer;
 import com.theplumteam.client.renderer.HolographicRenderTypes;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.registry.ModSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ObjectSelectionList;
@@ -25,10 +26,8 @@ import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.client.renderer.MultiBufferSource;
 //? }
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.item.ItemStack;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 
@@ -100,11 +99,6 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     private static final int BORDER = 0x60FFFFFF;
     private static final int BORDER_UNDISCOVERED = 0x30FFFFFF;
     private static final int BORDER_HOVER = 0xC0FFFFFF;
-    // A cell of a figure with versions says which one it shows, "1/3", in a dark chip in its top
-    // right corner, gold under the mouse because a click on the cell shows the next
-    private static final int COUNTER = 0xD0101012;
-    private static final int COUNTER_BORDER = 0x80FFFFFF;
-    private static final int COUNTER_HOVER = 0xFFFFD700;
 
     // The size of this row's cells and how many a full row holds, which the list sets
     private int cellSize = FIGURE_SIZE;
@@ -224,7 +218,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             return false;
         }
         shownSkins.put(collectionId + ":" + figure.getId(), (shownSkin(figure) + 1) % versions);
-        mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0f));
+        UiSounds.play(ModSounds.VERSION);
         return true;
     }
 
@@ -272,22 +266,19 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         UiText.draw(graphics, mc.font, name, nameX, nameY, color);
     }
 
-    // The chip in a cell's top right corner that says which of its versions it shows, in the
-    // pixel font at about half a GUI unit per font pixel, crisp
+    // A cell of a figure with versions says which one it shows, "1/3", in a chip in its top right
+    // corner, gold under the mouse because a click on the cell shows the next
     private void drawVersionCounter(GuiGraphics graphics, int cellX, int cellY, int size, int skin, int versions,
                                     boolean hovered) {
-        Component label = PixelFont.text((skin + 1) + "/" + versions);
-        float scale = PixelFont.crispScale(0.5f);
-        int width = (int) Math.ceil(mc.font.width(label) * scale) + 6;
-        int height = Math.round(PixelFont.CAPITALS_HEIGHT * scale) + 4;
-        int right = cellX + size - 3;
-        int left = right - width;
-        int top = cellY + 3;
-        int color = hovered ? COUNTER_HOVER : 0xFFFFFFFF;
-        graphics.fill(left, top, right, top + height, COUNTER);
-        Surfaces.outline(graphics, left, top, width, height, hovered ? COUNTER_HOVER : COUNTER_BORDER);
-        // The capitals start 3 font pixels above the text's origin
-        PixelFont.draw(graphics, label, left + 3, top + 2 + 3 * scale, scale, color, true);
+        // Above the model, which reaches into the corner: a later stratum from 1.21.6, depth
+        // before it. The models reach no further than about 180, and the draw's result card and
+        // the token tickets are lifted to 400, so the counter stays below those.
+        GuiPose.flush(graphics);
+        GuiPose.nextStratum(graphics);
+        GuiPose.push(graphics);
+        GuiPose.lift(graphics, 300.0f);
+        Chip.draw(graphics, (skin + 1) + "/" + versions, null, cellX + size - 3, cellY + 3, hovered);
+        GuiPose.pop(graphics);
     }
 
     //? if >=26 {

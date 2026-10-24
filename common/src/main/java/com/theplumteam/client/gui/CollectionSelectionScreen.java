@@ -2,10 +2,13 @@ package com.theplumteam.client.gui;
 
 import com.theplumteam.client.gui.style.HalftoneTransition;
 import com.theplumteam.client.gui.style.MenuGuiScale;
+import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.style.StyledButton;
+import com.theplumteam.client.gui.style.TokenTicket;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.gui.util.GuiPose;
+import com.theplumteam.client.gui.util.UiSounds;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 //? if >=1.21.5 {
@@ -24,7 +27,9 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
 import com.theplumteam.blockentity.GachaMachineBlockEntity;
 import com.theplumteam.client.ClientHiddenCollections;
+import com.theplumteam.client.ClientServerSettings;
 import com.theplumteam.client.ClientSpecialAccess;
+import com.theplumteam.client.ClientSupportCheckout;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.widget.CollectionEntry;
@@ -37,13 +42,14 @@ import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.client.token.ClientTokenManager;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.figure.DrawRules;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.network.ClawMachineCollectionPacket;
 import com.theplumteam.network.DropBoxPacket;
 import com.theplumteam.network.TokenType;
 import com.theplumteam.registry.ModItems;
-import com.theplumteam.server.SpecialAccess;
+import com.theplumteam.registry.ModSounds;
 import com.theplumteam.util.ResourceLocations;
 import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.gui.GuiGraphics;
@@ -129,9 +135,15 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     private int rightX;
     private int rightWidth;
     private int tokenInfoY;
+    // The top row's free stretch, between the tabs and the link buttons, and its link buttons' top
+    private int tabsRight;
+    private int linksLeft;
+    private int linksTop;
     private int regularCenterX;
     private int specialCenterX;
     private int tokenButtonWidth;
+    // Where each token line's info icon was last drawn, its left and top
+    private int regularInfoX, regularInfoY, specialInfoX, specialInfoY;
 
     private static final int MARGIN = 8;
     private static final int GAP = 6;
@@ -167,13 +179,20 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     private static final ResourceLocation DISCORD_ICON = ResourceLocations.of("blockpops", "textures/gui/discord_icon.png");
     private static final ResourceLocation CURSEFORGE_ICON = ResourceLocations.of("blockpops", "textures/gui/curseforge_icon.png");
     private static final ResourceLocation MODRINTH_ICON = ResourceLocations.of("blockpops", "textures/gui/modrinth_icon.png");
+    private static final ResourceLocation PALETTE_ICON = ResourceLocations.of("blockpops", "textures/gui/palette_icon.png");
     private static final ResourceLocation SETTINGS_ICON = ResourceLocations.of("blockpops", "textures/gui/settings_icon.png");
-    private static final ResourceLocation KOFI_ICON = ResourceLocations.of("blockpops", "textures/gui/kofi_icon.png");
+    // A cup with a heart: support us
+    private static final ResourceLocation SUPPORT_ICON = ResourceLocations.of("blockpops", "textures/gui/support_icon.png");
 
     // The purple the BlockPops-Hytale project gives its specials
     private static final int SPECIAL_COLOR = 0xFFBB8FCE;
+    // The light purple of the supporter messages
+    private static final int SUPPORT_STATUS_COLOR = 0xFFE8D5F5;
     private static final int REGULAR_TOKEN_COLOR = 0xFF6FA0FF;
     private static final int GUARANTEED_TOKEN_COLOR = 0xFFFFC23A;
+    // An "i" at the end of each token line that explains the token under the mouse
+    private static final String[] ICON_INFO = {
+            ".#####.", "###.###", "#######", "##..###", "###.###", "###.###", "##...##", ".#####."};
     private static final int HAIRLINE = 0x30FFFFFF;
 
     // URLs
@@ -252,6 +271,11 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         otherTabSelection = leaving;
         collections = collectionsOf(plush);
         rebuildWidgets();
+        // The collection the tab kept from the last visit takes back its background; a first
+        // visit selects the first one, as a click would
+        if (selectedCollectionId != null && !selectedCollectionId.isEmpty()) {
+            CollectionRegistry.getCollection(selectedCollectionId).ifPresent(this::fadeBackgroundTo);
+        }
         selectFirstCollectionIfNone();
     }
 
@@ -291,6 +315,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
             collections = collectionsOf(plush);
         }
         selectedCollectionId = held;
+        fadeBackgroundTo(collection);
     }
 
     @Override
@@ -301,7 +326,14 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
             return;
         }
         menuShown = true;
-        opening.begin();
+        // The machine sounds as its menu opens, once: a resize lays the menu out again
+        if (opening.begin()) {
+            UiSounds.play(ModSounds.MENU_OPEN);
+        }
+        // The guaranteed token's ticket says when it renews, at the server's hour
+        if (ClientServerSettings.getGuaranteedResetHour() == null) {
+            ClientServerSettings.request();
+        }
         // The menu draws at its own GUI scale, chosen from the window size, so it looks the same
         // whatever scale the player picked; a window resize runs init() again
         if (this.minecraft != null) {
@@ -356,12 +388,12 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
 
         useRegularButton = new StyledButton(contentLeft, footTop, tokenButtonWidth, buttonHeight,
                 Component.literal("Use Regular Token"), button -> useToken(TokenType.REGULAR))
-                .tone(StyledButton.Tone.BLUE).pixelLabel();
+                .tone(StyledButton.Tone.BLUE).pixelLabel().sound(ModSounds.DRAW_TICKET);
         this.addRenderableWidget(useRegularButton);
         int specialX = contentLeft + tokenButtonWidth + GAP;
         useSpecialButton = new StyledButton(specialX, footTop, tokenButtonWidth, buttonHeight,
                 Component.literal("Use Guaranteed Token"), button -> useToken(TokenType.GUARANTEED))
-                .tone(StyledButton.Tone.GOLD).pixelLabel();
+                .tone(StyledButton.Tone.GOLD).pixelLabel().sound(ModSounds.DRAW_TICKET);
         this.addRenderableWidget(useSpecialButton);
         regularCenterX = contentLeft + tokenButtonWidth / 2;
         specialCenterX = specialX + tokenButtonWidth / 2;
@@ -384,6 +416,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
                 new ItemStack(ModItems.GACHA_MACHINE_BLOCK_ITEM.get()), plush, button -> switchTab(true));
         this.addRenderableWidget(figuresTab);
         this.addRenderableWidget(plushesTab);
+        tabsRight = plushesTab.right();
         addLinkButtons(contentRight, MARGIN + (TabButton.Folder.HEIGHT - LINK_SIZE) / 2);
 
         // The two columns between the rows: the collections, then the figures
@@ -425,7 +458,8 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         }
     }
 
-    // Settings at the right edge, then Discord, CurseForge and Modrinth, and Ko-fi on the plush tab
+    // Settings at the right edge, then Discord, CurseForge, Modrinth, the supporter button and the
+    // player's favourite colour, on both tabs
     private void addLinkButtons(int right, int y) {
         int x = right - LINK_SIZE;
         this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, SETTINGS_ICON,
@@ -449,12 +483,51 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         x -= LINK_SIZE + LINK_SPACING;
         this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, MODRINTH_ICON, MODRINTH_URL,
                 Component.literal("Visit our Modrinth page")));
-        if (plush) {
-            // The special plushes are for supporters
-            x -= LINK_SIZE + LINK_SPACING;
-            this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, KOFI_ICON, SpecialAccess.SUPPORT_URL,
-                    Component.literal("Support us on Ko-fi to get the special plushes")));
+        // The special plushes are for supporters: the button opens a checkout made for this player
+        x -= LINK_SIZE + LINK_SPACING;
+        this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, SUPPORT_ICON,
+                null, // No URL: the server gets the checkout and sends it back
+                Component.literal("Become a supporter to get the special plushes")) {
+            @Override
+            //? if >=26 {
+            /*public void onPress(net.minecraft.client.input.InputWithModifiers bpInput) {
+            *///? } else {
+            public void onPress() {
+            //? }
+                ClientSupportCheckout.request();
+            }
+        });
+        x -= LINK_SIZE + LINK_SPACING;
+        this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, PALETTE_ICON,
+                null, // No URL: it opens the favourite colour's screen, which comes back here
+                Component.literal("Change Favorite Color")) {
+            @Override
+            //? if >=26 {
+            /*public void onPress(net.minecraft.client.input.InputWithModifiers bpInput) {
+            *///? } else {
+            public void onPress() {
+            //? }
+                CollectionSelectionScreen.this.minecraft.setScreen(new FavoriteColorSelectionScreen(CollectionSelectionScreen.this));
+            }
+        });
+        linksLeft = x;
+        linksTop = y;
+    }
+
+    // What the supporter button is doing, or why no checkout opened, beside the link buttons
+    private void renderSupportStatus(GuiGraphics graphics) {
+        String status = ClientSupportCheckout.status();
+        if (status == null) {
+            return;
         }
+        int right = linksLeft - 6;
+        int room = right - tabsRight - 2 * GAP;
+        if (room < 40) {
+            return;
+        }
+        String shown = UiText.fit(this.font, status, room);
+        UiText.draw(graphics, this.font, shown, right - this.font.width(shown),
+                linksTop + (LINK_SIZE - this.font.lineHeight) / 2 + 1, SUPPORT_STATUS_COLOR);
     }
 
     // Spends a token on the selected collection; the screen stays open to play the draw out
@@ -517,12 +590,14 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         }
         renderCollectionListHeader(graphics);
         renderFigurePanelHeader(graphics);
-        renderTokenInfo(graphics);
+        renderTokenInfo(graphics, mouseX, mouseY);
 
         // The buttons, tabs and links
         super.render(graphics, mouseX, mouseY, partialTick);
+        renderSupportStatus(graphics);
 
         renderDrawResult(graphics, partialTick);
+        renderTokenTooltip(graphics, mouseX, mouseY);
         // The opening ring of dots, with the world beyond it, over everything
         opening.draw(graphics);
     }
@@ -822,34 +897,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         if (entry != null) {
             FigureCollection collection = entry.getCollection();
             selectedCollectionId = collection.getId();
-
-            // Start color transition if collection has a background color
-            if (collection.hasBackgroundColor()) {
-                int[] bgColor = collection.getBackgroundColor();
-
-                // Store current color as the starting point
-                ClientConfig config = ClientConfig.getInstance();
-                this.currentColorR = config.backgroundColorR;
-                this.currentColorG = config.backgroundColorG;
-                this.currentColorB = config.backgroundColorB;
-
-                // Set target color
-                this.targetColorR = bgColor[0] / 255.0f;
-                this.targetColorG = bgColor[1] / 255.0f;
-                this.targetColorB = bgColor[2] / 255.0f;
-
-                // Check if transition animation is enabled
-                if (config.enableColorTransition) {
-                    // Reset transition progress to start the animation
-                    this.colorTransitionProgress = 0.0f;
-                } else {
-                    // Instantly change color (no animation)
-                    this.colorTransitionProgress = 1.0f;
-                    config.backgroundColorR = this.targetColorR;
-                    config.backgroundColorG = this.targetColorG;
-                    config.backgroundColorB = this.targetColorB;
-                }
-            }
+            fadeBackgroundTo(collection);
 
             // Update figure list widget
             if (figureListWidget != null) {
@@ -861,6 +909,40 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
 
             // Update button states
             updateTokenButtonStates();
+        }
+    }
+
+    /**
+     * Fades the background to the collection's own colour, when it has one, or switches to it at
+     * once when the player turned the transition off.
+     */
+    private void fadeBackgroundTo(FigureCollection collection) {
+        if (!collection.hasBackgroundColor()) {
+            return;
+        }
+        int[] bgColor = collection.getBackgroundColor();
+
+        // Store current color as the starting point
+        ClientConfig config = ClientConfig.getInstance();
+        this.currentColorR = config.backgroundColorR;
+        this.currentColorG = config.backgroundColorG;
+        this.currentColorB = config.backgroundColorB;
+
+        // Set target color
+        this.targetColorR = bgColor[0] / 255.0f;
+        this.targetColorG = bgColor[1] / 255.0f;
+        this.targetColorB = bgColor[2] / 255.0f;
+
+        // Check if transition animation is enabled
+        if (config.enableColorTransition) {
+            // Reset transition progress to start the animation
+            this.colorTransitionProgress = 0.0f;
+        } else {
+            // Instantly change color (no animation)
+            this.colorTransitionProgress = 1.0f;
+            config.backgroundColorR = this.targetColorR;
+            config.backgroundColorG = this.targetColorG;
+            config.backgroundColorB = this.targetColorB;
         }
     }
 
@@ -905,7 +987,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     /**
      * Render token information centered above each respective button
      */
-    private void renderTokenInfo(GuiGraphics graphics) {
+    private void renderTokenInfo(GuiGraphics graphics, int mouseX, int mouseY) {
         // Regular tokens, above their button. Blue tickets can take the count past the 3 the
         // server grants on its own
         int regularTokens = ClientTokenManager.getRegularTokens();
@@ -913,7 +995,8 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         if (regularTokens < 3) {
             regularText += " - Next: " + ClientTokenManager.formatNextRegularTime();
         }
-        drawTokenLine(graphics, regularText, regularCenterX, REGULAR_TOKEN_COLOR);
+        regularInfoX = drawTokenLine(graphics, regularText, regularCenterX, REGULAR_TOKEN_COLOR, mouseX, mouseY);
+        regularInfoY = tokenInfoY;
 
         // The guaranteed token, above its button
         int guaranteedTokens = ClientTokenManager.getGuaranteedTokens();
@@ -922,16 +1005,53 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         if (guaranteedTokens == 0) {
             specialText += " - Resets: " + ClientTokenManager.formatNextSpecialResetTime();
         }
-        drawTokenLine(graphics, specialText, specialCenterX, GUARANTEED_TOKEN_COLOR);
+        specialInfoX = drawTokenLine(graphics, specialText, specialCenterX, GUARANTEED_TOKEN_COLOR, mouseX, mouseY);
+        specialInfoY = tokenInfoY;
     }
 
-    // A token count centred above its button, on a dark strip so it reads on any collection colour
-    private void drawTokenLine(GuiGraphics graphics, String text, int centerX, int color) {
-        String shown = UiText.fit(this.font, text, tokenButtonWidth - 8);
-        int halfWidth = font.width(shown) / 2 + 4;
-        graphics.fill(centerX - halfWidth, tokenInfoY - 2, centerX + halfWidth, tokenInfoY + font.lineHeight + 1,
+    // A token count centred above its button with its info icon after it, on a dark strip so it
+    // reads on any collection colour; returns where the icon is
+    private int drawTokenLine(GuiGraphics graphics, String text, int centerX, int color, int mouseX, int mouseY) {
+        int iconWidth = PixelIcon.width(ICON_INFO);
+        String shown = UiText.fit(this.font, text, tokenButtonWidth - 8 - iconWidth - 4);
+        int width = font.width(shown) + 4 + iconWidth;
+        int left = centerX - width / 2;
+        graphics.fill(left - 4, tokenInfoY - 2, left + width + 4, tokenInfoY + font.lineHeight + 1,
                 (int) (ClientConfig.getInstance().panelOpacity * 200) << 24 | 0x101012);
-        UiText.drawCentered(graphics, this.font, shown, centerX, tokenInfoY, color);
+        UiText.draw(graphics, this.font, shown, left, tokenInfoY, color);
+        int iconX = left + width - iconWidth;
+        PixelIcon.draw(graphics, ICON_INFO, iconX, tokenInfoY - 1,
+                overTokenInfo(iconX, tokenInfoY, mouseX, mouseY) ? Surfaces.TEXT : color);
+        return iconX;
+    }
+
+    private boolean overTokenInfo(int iconX, int iconY, int mouseX, int mouseY) {
+        // A pixel of slack round the small icon
+        return mouseX >= iconX - 1 && mouseX < iconX + PixelIcon.width(ICON_INFO) + 1
+                && mouseY >= iconY - 2 && mouseY < iconY + ICON_INFO.length;
+    }
+
+    // The ticket of the token whose info icon is under the mouse
+    private void renderTokenTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
+        if (overTokenInfo(regularInfoX, regularInfoY, mouseX, mouseY)) {
+            TokenTicket.draw(graphics, this.font, regularTokenView(), regularInfoX, tokenInfoY, this.width);
+        } else if (overTokenInfo(specialInfoX, specialInfoY, mouseX, mouseY)) {
+            TokenTicket.draw(graphics, this.font, guaranteedTokenView(), specialInfoX, tokenInfoY, this.width);
+        }
+    }
+
+    private static TokenTicket.View regularTokenView() {
+        int count = ClientTokenManager.getRegularTokens();
+        boolean full = count >= DrawRules.MAX_REGULAR_TOKENS;
+        return new TokenTicket.View(true, count, full ? null : ClientTokenManager.formatNextRegularTime(), null);
+    }
+
+    // The guaranteed one renews at the server's hour, said in the player's own time
+    private static TokenTicket.View guaranteedTokenView() {
+        Integer hour = ClientServerSettings.getGuaranteedResetHour();
+        String resetAt = hour == null ? null : String.format("%02d:00", SettingsScreen.convertUtcToLocal(hour));
+        return new TokenTicket.View(false, ClientTokenManager.getGuaranteedTokens(),
+                ClientTokenManager.formatNextSpecialResetTime(), resetAt);
     }
 
     @Override

@@ -57,10 +57,17 @@ public final class LogoLayout {
             return new float[] {config.getPositionX(), config.getPositionY(), config.getPositionZ(),
                     config.getScaleX(), config.getScaleY(), config.getScaleZ()};
         }
+        return place(bounds(config.getTexture()), config.getScale(), config.getOffsetX(), config.getOffsetY());
+    }
+
+    /**
+     * The logo image's size and the part of it that is drawn:
+     * {width, height, left, top, right, bottom}, in texels.
+     */
+    public static int[] bounds(ResourceLocation texture) {
         // A logo still downloading is measured again once it arrives.
-        int[] bounds = RuntimeTextures.isPending(config.getTexture()) ? new int[] {1, 1, 0, 0, 1, 1}
-                : BOUNDS.computeIfAbsent(config.getTexture(), LogoLayout::measure);
-        return place(bounds, config.getScale(), config.getOffsetX(), config.getOffsetY());
+        return RuntimeTextures.isPending(texture) ? new int[] {1, 1, 0, 0, 1, 1}
+                : BOUNDS.computeIfAbsent(texture, LogoLayout::measure);
     }
 
     private static float[] place(int[] bounds, float scale, float offsetX, float offsetY) {

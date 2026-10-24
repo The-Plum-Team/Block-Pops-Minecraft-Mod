@@ -10,6 +10,7 @@ import com.theplumteam.platform.PlatformHelper;
 import com.theplumteam.plush.BuiltInPlushes;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModBlocks;
+import com.theplumteam.registry.ModSounds;
 import com.theplumteam.server.SpecialAccess;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -18,7 +19,6 @@ import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -184,18 +184,19 @@ public class PlushBlock extends BaseEntityBlock {
                     previous.getHitboxScaleX(), previous.getHitboxScaleY(), previous.getHitboxScaleZ());
             current.setHolographic(previous.isHolographic());
         }
-        level.playSound(null, pos, SoundEvents.WOOL_PLACE, SoundSource.BLOCKS, 1.0F, 1.0F);
+        level.playSound(null, pos, ModSounds.PLUSH_CHANGE.get(), SoundSource.BLOCKS, 1.0F, 1.0F);
     }
 
     private static void sendSupporterHint(ServerPlayer player) {
+        // The link runs /blockpops supporter, which answers with a checkout made for the player
         MutableComponent link = Component.literal("Become a supporter here");
         //? if >=1.21.5 {
-        /*// 1.21.5 made ClickEvent a sealed hierarchy whose open-url case takes a parsed URI
+        /*// 1.21.5 made ClickEvent a sealed hierarchy
         link.withStyle(style -> style.withColor(0xBB8FCE).withBold(true).withUnderlined(true)
-                .withClickEvent(new ClickEvent.OpenUrl(java.net.URI.create(SpecialAccess.SUPPORT_URL))));
+                .withClickEvent(new ClickEvent.RunCommand("/blockpops supporter")));
         *///? } else {
         link.withStyle(style -> style.withColor(0xBB8FCE).withBold(true).withUnderlined(true)
-                .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, SpecialAccess.SUPPORT_URL)));
+                .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/blockpops supporter")));
         //? }
         player.sendSystemMessage(Component.literal("[BlockPops] ").withStyle(style -> style.withColor(0xBB8FCE))
                 .append(Component.literal("This plush has an alternate version exclusive to supporters! ")

@@ -18,6 +18,7 @@ import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModBlocks;
 import com.theplumteam.registry.ModCreativeTabs;
 import com.theplumteam.registry.ModItems;
+import com.theplumteam.registry.ModSounds;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
 import dev.architectury.event.events.common.LifecycleEvent;
 import dev.architectury.event.events.common.PlayerEvent;
@@ -47,6 +48,7 @@ public class BlockPopsFabric implements ModInitializer {
         ModItems.register();
         ModBlockEntities.register();
         ModCreativeTabs.register();
+        ModSounds.register();
 
         // Initialize common code
         BlockPopsMod.init();
