@@ -94,6 +94,13 @@ under the mouse, and the cell's name follows the version.
   (what a right-click on a placed plush turns it into). A supporter's secret plush is not listed.
 - The creator's previews show the skin they are told and no chip.
 
+## A collection's card in the list
+
+A collection's card shows its logo in a box on the left, up to twice as wide as tall, or a
+monogram when it has none. Only the drawn part of the image counts (what `LogoLayout` measures
+for the box front: texels of at least 10% alpha), so transparent margins in the file do not
+shrink it; that part keeps its shape and fills the box's height or its width.
+
 ## Versions
 
 New widgets override the hook of each era themselves, because the build's rename table
