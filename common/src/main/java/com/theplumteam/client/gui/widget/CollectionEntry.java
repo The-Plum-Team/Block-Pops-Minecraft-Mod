@@ -3,6 +3,7 @@ package com.theplumteam.client.gui.widget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.util.GuiPose;
+import com.theplumteam.client.gui.util.UiSounds;
 import com.theplumteam.client.gui.style.Chip;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.style.UiText;
@@ -11,6 +12,7 @@ import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.registry.ModSounds;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.Minecraft;
@@ -239,6 +241,15 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         UiText.drawFitted(graphics, font, authorText, textX, subTextY + font.lineHeight + 2, room, AUTHOR_COLOR);
     }
 
+    // Selects this card, with its sound when that changes the selected collection
+    private void select() {
+        if (parent.getSelected() != this) {
+            UiSounds.play(ModSounds.COLLECTION);
+        }
+        parent.setSelected(this);
+        parent.onCollectionSelected(this);
+    }
+
     @Override
     //? if >=26 {
     /*public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent bpEvent, boolean bpDouble) {
@@ -287,8 +298,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             }
 
             // Otherwise select this entry
-            parent.setSelected(this);
-            parent.onCollectionSelected(this);
+            select();
             return true;
         }
         return false;
@@ -328,8 +338,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             }
 
             // Otherwise select this entry
-            parent.setSelected(this);
-            parent.onCollectionSelected(this);
+            select();
             return true;
         }
         return false;

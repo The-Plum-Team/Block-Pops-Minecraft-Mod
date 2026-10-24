@@ -3,6 +3,8 @@ package com.theplumteam.client.gui.widget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.gui.style.Surfaces;
+import com.theplumteam.client.gui.util.UiSounds;
+import com.theplumteam.registry.ModSounds;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -11,6 +13,7 @@ import net.minecraft.client.gui.GuiGraphics;
 *///? }
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
@@ -34,6 +37,11 @@ public class LinkButton extends Button {
         this.textureHeight = 256;
 
         this.setTooltip(Tooltip.create(tooltip));
+    }
+
+    @Override
+    public void playDownSound(SoundManager soundManager) {
+        UiSounds.play(soundManager, ModSounds.CLICK);
     }
 
     @Override

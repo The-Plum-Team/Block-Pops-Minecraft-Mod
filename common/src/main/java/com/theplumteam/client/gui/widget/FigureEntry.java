@@ -13,10 +13,12 @@ import com.theplumteam.client.gui.GreyedTextures;
 import com.theplumteam.client.gui.style.Chip;
 import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.gui.util.GuiPose;
+import com.theplumteam.client.gui.util.UiSounds;
 import com.theplumteam.client.renderer.FigurePreviewItemRenderer;
 import com.theplumteam.client.renderer.HolographicRenderTypes;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.registry.ModSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ObjectSelectionList;
@@ -24,10 +26,8 @@ import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.client.renderer.MultiBufferSource;
 //? }
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.item.ItemStack;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 
@@ -218,7 +218,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             return false;
         }
         shownSkins.put(collectionId + ":" + figure.getId(), (shownSkin(figure) + 1) % versions);
-        mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0f));
+        UiSounds.play(ModSounds.VERSION);
         return true;
     }
 

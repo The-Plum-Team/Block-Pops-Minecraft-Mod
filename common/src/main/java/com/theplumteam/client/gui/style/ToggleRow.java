@@ -1,10 +1,13 @@
 package com.theplumteam.client.gui.style;
 
+import com.theplumteam.client.gui.util.UiSounds;
+import com.theplumteam.registry.ModSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
@@ -67,6 +70,11 @@ public class ToggleRow extends Button {
     //? }
         value = !value;
         onChange.accept(value);
+    }
+
+    @Override
+    public void playDownSound(SoundManager soundManager) {
+        UiSounds.play(soundManager, ModSounds.CLICK);
     }
 
     @Override

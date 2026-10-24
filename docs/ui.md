@@ -86,7 +86,7 @@ beyond it and the menu inside it (about 1.3 s).
 A figure with alternative skins, or a plush with variants, has several versions. Its cell in the
 machine menu says which one it shows in a dark chip in its top right corner ("1/3", the pixel
 font at about half a GUI unit per font pixel, crisp), and a click anywhere on the cell shows the
-next one, back to the figure's own after the last, with a button's click. The chip turns gold
+next one, back to the figure's own after the last, with a snap. The chip turns gold
 under the mouse, and the cell's name follows the version.
 
 - The menu keeps the versions shown while it is open, through a resize or a tab switch; it opens
@@ -117,6 +117,25 @@ what runs and what stops that clock; and the tickets that add more. Its art is d
 pixel into a texture, made once for each token; its words are drawn over it. The small pixel font
 takes half a ticket unit per font pixel, and the whole ticket is drawn at the scale that makes
 that a whole number of screen pixels, so it keeps its layout and stays crisp at every GUI scale.
+
+## Sounds
+
+The mod plays sounds of its own, never vanilla's: `ModSounds` registers them and
+`assets/blockpops/sounds.json` names their files. The screens play theirs through `UiSounds`,
+heard the same wherever the player stands.
+
+- **Buttons.** Every button class of the mod overrides `playDownSound`. A `StyledButton` clicks
+  unless `sound(...)` gives it another, as the token buttons drop a coin; a `TabButton` flips a
+  switch, and so does choosing another collection. The creator's buttons click too.
+- **The menu** sounds once as its opening transition starts, and a figure's next version snaps in.
+- **A draw.** Each step of the light ticks at 0.55 volume, its pitch rising from 1 to 2 over the
+  path; the stop dings at 0.9; then a capsule pops for a new figure or a plop sounds for one the
+  player had, with an 8-bit sparkle over either when it comes out holographic.
+- **In the world**, a figure going into its box or out of it, a box cut open and a plush turning
+  into another come from the block, so their files are mono and have subtitles.
+
+The files were generated with ElevenLabs, trimmed to where the sound starts and ends and levelled
+against each other; how loud each plays is set where it is played.
 
 ## Versions
 

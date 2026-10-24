@@ -5,10 +5,13 @@ import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.gui.util.GuiPose;
+import com.theplumteam.client.gui.util.UiSounds;
+import com.theplumteam.registry.ModSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
@@ -49,6 +52,11 @@ public class TabButton extends Button {
     public TabButton setIcon(@Nullable String[] icon) {
         this.icon = icon;
         return this;
+    }
+
+    @Override
+    public void playDownSound(SoundManager soundManager) {
+        UiSounds.play(soundManager, ModSounds.TAB);
     }
 
     @Override

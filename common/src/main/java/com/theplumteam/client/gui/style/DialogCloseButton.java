@@ -1,8 +1,11 @@
 package com.theplumteam.client.gui.style;
 
+import com.theplumteam.client.gui.util.UiSounds;
+import com.theplumteam.registry.ModSounds;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -43,6 +46,11 @@ public class DialogCloseButton extends Button {
         graphics.fill(x + 1, y + 1, x + this.width - 1, y + this.height - 1, hovered ? BORDER_HOVER : BORDER);
         graphics.fill(x + 2, y + 2, x + this.width - 2, y + this.height - 2, hovered ? FACE_HOVER : FACE);
         PixelIcon.drawCentered(graphics, PixelIcon.CLOSE, x, y, this.width, this.height, Surfaces.TEXT);
+    }
+
+    @Override
+    public void playDownSound(SoundManager soundManager) {
+        UiSounds.play(soundManager, ModSounds.CLICK);
     }
 
     @Override

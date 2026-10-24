@@ -8,6 +8,7 @@ import com.theplumteam.client.gui.style.TokenTicket;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.gui.util.GuiPose;
+import com.theplumteam.client.gui.util.UiSounds;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 //? if >=1.21.5 {
@@ -47,6 +48,7 @@ import com.theplumteam.network.ClawMachineCollectionPacket;
 import com.theplumteam.network.DropBoxPacket;
 import com.theplumteam.network.TokenType;
 import com.theplumteam.registry.ModItems;
+import com.theplumteam.registry.ModSounds;
 import com.theplumteam.server.SpecialAccess;
 import com.theplumteam.util.ResourceLocations;
 import com.theplumteam.worldcontent.WorldContentIds;
@@ -317,7 +319,10 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
             return;
         }
         menuShown = true;
-        opening.begin();
+        // The machine sounds as its menu opens, once: a resize lays the menu out again
+        if (opening.begin()) {
+            UiSounds.play(ModSounds.MENU_OPEN);
+        }
         // The guaranteed token's ticket says when it renews, at the server's hour
         if (ClientServerSettings.getGuaranteedResetHour() == null) {
             ClientServerSettings.request();
@@ -376,12 +381,12 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
 
         useRegularButton = new StyledButton(contentLeft, footTop, tokenButtonWidth, buttonHeight,
                 Component.literal("Use Regular Token"), button -> useToken(TokenType.REGULAR))
-                .tone(StyledButton.Tone.BLUE).pixelLabel();
+                .tone(StyledButton.Tone.BLUE).pixelLabel().sound(ModSounds.DRAW_TICKET);
         this.addRenderableWidget(useRegularButton);
         int specialX = contentLeft + tokenButtonWidth + GAP;
         useSpecialButton = new StyledButton(specialX, footTop, tokenButtonWidth, buttonHeight,
                 Component.literal("Use Guaranteed Token"), button -> useToken(TokenType.GUARANTEED))
-                .tone(StyledButton.Tone.GOLD).pixelLabel();
+                .tone(StyledButton.Tone.GOLD).pixelLabel().sound(ModSounds.DRAW_TICKET);
         this.addRenderableWidget(useSpecialButton);
         regularCenterX = contentLeft + tokenButtonWidth / 2;
         specialCenterX = specialX + tokenButtonWidth / 2;

@@ -10,6 +10,7 @@ import com.theplumteam.platform.PlatformHelper;
 import com.theplumteam.plush.BuiltInPlushes;
 import com.theplumteam.registry.ModBlockEntities;
 import com.theplumteam.registry.ModBlocks;
+import com.theplumteam.registry.ModSounds;
 import com.theplumteam.server.SpecialAccess;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -18,7 +19,6 @@ import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -184,7 +184,7 @@ public class PlushBlock extends BaseEntityBlock {
                     previous.getHitboxScaleX(), previous.getHitboxScaleY(), previous.getHitboxScaleZ());
             current.setHolographic(previous.isHolographic());
         }
-        level.playSound(null, pos, SoundEvents.WOOL_PLACE, SoundSource.BLOCKS, 1.0F, 1.0F);
+        level.playSound(null, pos, ModSounds.PLUSH_CHANGE.get(), SoundSource.BLOCKS, 1.0F, 1.0F);
     }
 
     private static void sendSupporterHint(ServerPlayer player) {
