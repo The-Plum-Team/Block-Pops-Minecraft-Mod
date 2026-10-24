@@ -29,6 +29,7 @@ import com.theplumteam.blockentity.GachaMachineBlockEntity;
 import com.theplumteam.client.ClientHiddenCollections;
 import com.theplumteam.client.ClientServerSettings;
 import com.theplumteam.client.ClientSpecialAccess;
+import com.theplumteam.client.ClientSupportCheckout;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.widget.CollectionEntry;
@@ -49,7 +50,6 @@ import com.theplumteam.network.DropBoxPacket;
 import com.theplumteam.network.TokenType;
 import com.theplumteam.registry.ModItems;
 import com.theplumteam.registry.ModSounds;
-import com.theplumteam.server.SpecialAccess;
 import com.theplumteam.util.ResourceLocations;
 import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.gui.GuiGraphics;
@@ -135,6 +135,10 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     private int rightX;
     private int rightWidth;
     private int tokenInfoY;
+    // The top row's free stretch, between the tabs and the link buttons, and its link buttons' top
+    private int tabsRight;
+    private int linksLeft;
+    private int linksTop;
     private int regularCenterX;
     private int specialCenterX;
     private int tokenButtonWidth;
@@ -177,10 +181,13 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     private static final ResourceLocation MODRINTH_ICON = ResourceLocations.of("blockpops", "textures/gui/modrinth_icon.png");
     private static final ResourceLocation PALETTE_ICON = ResourceLocations.of("blockpops", "textures/gui/palette_icon.png");
     private static final ResourceLocation SETTINGS_ICON = ResourceLocations.of("blockpops", "textures/gui/settings_icon.png");
-    private static final ResourceLocation KOFI_ICON = ResourceLocations.of("blockpops", "textures/gui/kofi_icon.png");
+    // A cup with a heart: support us
+    private static final ResourceLocation SUPPORT_ICON = ResourceLocations.of("blockpops", "textures/gui/support_icon.png");
 
     // The purple the BlockPops-Hytale project gives its specials
     private static final int SPECIAL_COLOR = 0xFFBB8FCE;
+    // The light purple of the supporter messages
+    private static final int SUPPORT_STATUS_COLOR = 0xFFE8D5F5;
     private static final int REGULAR_TOKEN_COLOR = 0xFF6FA0FF;
     private static final int GUARANTEED_TOKEN_COLOR = 0xFFFFC23A;
     // An "i" at the end of each token line that explains the token under the mouse
@@ -409,6 +416,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
                 new ItemStack(ModItems.GACHA_MACHINE_BLOCK_ITEM.get()), plush, button -> switchTab(true));
         this.addRenderableWidget(figuresTab);
         this.addRenderableWidget(plushesTab);
+        tabsRight = plushesTab.right();
         addLinkButtons(contentRight, MARGIN + (TabButton.Folder.HEIGHT - LINK_SIZE) / 2);
 
         // The two columns between the rows: the collections, then the figures
@@ -450,8 +458,8 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         }
     }
 
-    // Settings at the right edge, then Discord, CurseForge and Modrinth, Ko-fi on the plush tab,
-    // and the player's favourite colour
+    // Settings at the right edge, then Discord, CurseForge, Modrinth, the supporter button and the
+    // player's favourite colour, on both tabs
     private void addLinkButtons(int right, int y) {
         int x = right - LINK_SIZE;
         this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, SETTINGS_ICON,
@@ -475,12 +483,20 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         x -= LINK_SIZE + LINK_SPACING;
         this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, MODRINTH_ICON, MODRINTH_URL,
                 Component.literal("Visit our Modrinth page")));
-        if (plush) {
-            // The special plushes are for supporters
-            x -= LINK_SIZE + LINK_SPACING;
-            this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, KOFI_ICON, SpecialAccess.SUPPORT_URL,
-                    Component.literal("Support us on Ko-fi to get the special plushes")));
-        }
+        // The special plushes are for supporters: the button opens a checkout made for this player
+        x -= LINK_SIZE + LINK_SPACING;
+        this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, SUPPORT_ICON,
+                null, // No URL: the server gets the checkout and sends it back
+                Component.literal("Become a supporter to get the special plushes")) {
+            @Override
+            //? if >=26 {
+            /*public void onPress(net.minecraft.client.input.InputWithModifiers bpInput) {
+            *///? } else {
+            public void onPress() {
+            //? }
+                ClientSupportCheckout.request();
+            }
+        });
         x -= LINK_SIZE + LINK_SPACING;
         this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, PALETTE_ICON,
                 null, // No URL: it opens the favourite colour's screen, which comes back here
@@ -494,6 +510,24 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
                 CollectionSelectionScreen.this.minecraft.setScreen(new FavoriteColorSelectionScreen(CollectionSelectionScreen.this));
             }
         });
+        linksLeft = x;
+        linksTop = y;
+    }
+
+    // What the supporter button is doing, or why no checkout opened, beside the link buttons
+    private void renderSupportStatus(GuiGraphics graphics) {
+        String status = ClientSupportCheckout.status();
+        if (status == null) {
+            return;
+        }
+        int right = linksLeft - 6;
+        int room = right - tabsRight - 2 * GAP;
+        if (room < 40) {
+            return;
+        }
+        String shown = UiText.fit(this.font, status, room);
+        UiText.draw(graphics, this.font, shown, right - this.font.width(shown),
+                linksTop + (LINK_SIZE - this.font.lineHeight) / 2 + 1, SUPPORT_STATUS_COLOR);
     }
 
     // Spends a token on the selected collection; the screen stays open to play the draw out
@@ -560,6 +594,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
 
         // The buttons, tabs and links
         super.render(graphics, mouseX, mouseY, partialTick);
+        renderSupportStatus(graphics);
 
         renderDrawResult(graphics, partialTick);
         renderTokenTooltip(graphics, mouseX, mouseY);

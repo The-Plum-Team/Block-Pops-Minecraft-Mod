@@ -100,7 +100,7 @@ public class LinkButton extends Button {
         //? }
     }
 
-    private static void openLink(String url) {
+    public static void openLink(String url) {
         // Open the link in the default browser
         //? if >=26.3 {
         /*// 26.3 moved opening a link onto Blaze3D, and it takes a parsed URI.

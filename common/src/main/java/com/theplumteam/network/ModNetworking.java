@@ -101,6 +101,12 @@ public class ModNetworking {
             CustomCollectionRequestPacket::handleServer
         );
 
+        PacketNetworking.registerReceiver(
+            NetworkManager.c2s(),
+            RequestSupportCheckoutPacket.ID,
+            RequestSupportCheckoutPacket::handleServer
+        );
+
         // World collections: uploads and edits from operators, file requests from every player
         PacketNetworking.registerReceiver(
             NetworkManager.c2s(),
@@ -145,7 +151,8 @@ public class ModNetworking {
                 SyncServerSettingsPacket.ID, SyncHiddenCollectionsPacket.ID,
                 AdminProgressionSyncPacket.ID, SyncSpecialAccessPacket.ID,
                 SyncCustomCollectionsPacket.ID, CustomCollectionStatusPacket.ID, DrawResultPacket.ID,
-                SyncWorldCollectionsPacket.ID, WorldAssetChunkPacket.ID, WorldCollectionStatusPacket.ID);
+                SyncWorldCollectionsPacket.ID, WorldAssetChunkPacket.ID, WorldCollectionStatusPacket.ID,
+                OpenSupportCheckoutPacket.ID);
         *///? }
 
         BlockPopsMod.logDebug("BlockPops networking initialized");
@@ -187,6 +194,12 @@ public class ModNetworking {
             NetworkManager.s2c(),
             OpenFavoriteColorScreenPacket.ID,
             OpenFavoriteColorScreenPacket::handleClient
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.s2c(),
+            OpenSupportCheckoutPacket.ID,
+            OpenSupportCheckoutPacket::handleClient
         );
 
         PacketNetworking.registerReceiver(
