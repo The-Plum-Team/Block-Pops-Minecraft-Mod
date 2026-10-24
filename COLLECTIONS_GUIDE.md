@@ -296,9 +296,9 @@ them to every player who joins. Their ids are `w-<slug>`, where the slug is 1 to
 
 ### Making one in game
 
-The screens are still in progress: for now the creator opens only in a development environment (a
-game started from Gradle or an IDE). Elsewhere, use the [commands](#commands) and [import the files
-from a datapack](#importing-from-a-datapack).
+World collections are still in progress: for now the creator and the [commands](#commands) are
+there only in a development environment (a game started from Gradle or an IDE). A world that
+already holds World collections still sends them to its players everywhere.
 
 There, an operator opens it once the server has sent its World collections, even when it has none:
 with the **Creator** button of a claw or gacha machine's screen, with **Open creator** in the
@@ -457,7 +457,7 @@ uploaded again and no file quota grows.
 
 ### Commands
 
-Every command needs permission level 2.
+Every command needs permission level 2, and for now a development environment.
 
 ```
 /blockpops worldcollections list | quota | gc
