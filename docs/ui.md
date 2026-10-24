@@ -51,6 +51,7 @@ the option changes or the display resizes under them.
 | A slider | extend `StyledSlider` |
 | A sidebar tab | `TabButton` with `setIcon(PixelIcon.X)` |
 | A title or a big label | `PixelFont` (upper-case blocky font, crisp sizes only) |
+| A small label in a corner | `Chip` (dark, the pixel font at half size, an optional icon, gold under the mouse) |
 | A menu's opening | `HalftoneTransition` (a ring of black halftone dots travels from the middle outward, the world beyond it and the menu inside it) |
 | Text on a dark face | `UiText.draw`, `drawFitted` (cut with "..."), `wrap` (word-wrapped lines) |
 | A text field in the creator | `creator.ui.UiField`, an `EditBox` in a well |
@@ -100,6 +101,10 @@ A collection's card shows its logo in a box on the left, up to twice as wide as 
 monogram when it has none. Only the drawn part of the image counts (what `LogoLayout` measures
 for the box front: texels of at least 10% alpha), so transparent margins in the file do not
 shrink it; that part keeps its shape and fills the box's height or its width.
+
+A collection with an author link shows a `Chip` "WEB" with an arrow in the top right corner of
+its card while the card is under the mouse, and the name stops short of it; a click opens the
+link through the game's own link handling, as a link in chat.
 
 ## The token lines
 

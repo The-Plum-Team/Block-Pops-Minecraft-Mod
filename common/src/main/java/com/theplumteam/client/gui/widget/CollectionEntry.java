@@ -3,7 +3,7 @@ package com.theplumteam.client.gui.widget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
 import com.theplumteam.client.gui.util.GuiPose;
-import com.theplumteam.client.gui.style.PixelIcon;
+import com.theplumteam.client.gui.style.Chip;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.renderer.LogoLayout;
@@ -44,15 +44,9 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
     private static final int HAIRLINE = 0x38FFFFFF;
     private static final int AUTHOR_COLOR = 0xFFFFC23A;
 
-    // The author's link button, gold like Quick Skin's favourite star
-    private static final int LINK_BUTTON_SIZE = 13;
-    private static final int LINK_FACE = 0xFFB07C14;
-    private static final int LINK_FACE_HOVER = 0xFFC89018;
-    private static final int LINK_BORDER = 0xFFE0A830;
-    private static final int LINK_BORDER_HOVER = 0xFFFFD060;
-    private static final String[] ICON_LINK = {
-            "..###..", ".#.#.#.", "#..#..#", "#######", "#..#..#", ".#.#.#.", "..###.."};
-    private int linkButtonX, linkButtonY;
+    // The author's link, a chip like the figures' version counter
+    private static final String LINK_LABEL = "Web";
+    private static final int LINK_INSET = 4;
     private boolean isLinkHovered;
 
     public CollectionEntry(CollectionListWidget parent, FigureCollection collection) {
@@ -79,21 +73,20 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
     //? }
         // Check if this entry is selected
         boolean isSelected = parent.getSelected() == this;
-        drawCard(graphics, mc.font, collection, x, y, entryWidth, entryHeight, isSelected, isMouseOver);
+        boolean linkShown = isMouseOver && collection.getAuthorUrl() != null && !collection.getAuthorUrl().isEmpty();
+        int linkWidth = Chip.width(LINK_LABEL, Chip.ARROW_OUT);
+        // The name stops short of the link
+        drawCard(graphics, mc.font, collection, x, y, entryWidth, entryHeight, isSelected, isMouseOver,
+                ClientDiscoveryManager::isDiscovered, linkShown ? linkWidth + 3 : 0);
 
-        // The author's link, near a hovered card's top-right corner, as Quick Skin's favourite star
+        // The author's link, in a hovered card's top-right corner, gold under the mouse
         this.isLinkHovered = false;
-        if (isMouseOver && collection.getAuthorUrl() != null && !collection.getAuthorUrl().isEmpty()) {
-            this.linkButtonX = cardRight(x, entryWidth) - 3 - LINK_BUTTON_SIZE;
-            this.linkButtonY = cardTop(y) + 3;
-            boolean linkHovered = mouseX >= linkButtonX && mouseX < linkButtonX + LINK_BUTTON_SIZE
-                    && mouseY >= linkButtonY && mouseY < linkButtonY + LINK_BUTTON_SIZE;
-            Surfaces.raised(graphics, linkButtonX, linkButtonY, linkButtonX + LINK_BUTTON_SIZE,
-                    linkButtonY + LINK_BUTTON_SIZE,
-                    linkHovered ? LINK_BORDER_HOVER : LINK_BORDER, linkHovered ? LINK_FACE_HOVER : LINK_FACE,
-                    Surfaces.LIP, 2);
-            PixelIcon.draw(graphics, ICON_LINK, linkButtonX + (LINK_BUTTON_SIZE - 7) / 2,
-                    linkButtonY + (LINK_BUTTON_SIZE - 2 - 7) / 2, Surfaces.TEXT);
+        if (linkShown) {
+            int linkRight = cardRight(x, entryWidth) - LINK_INSET;
+            int linkTop = cardTop(y) + LINK_INSET;
+            boolean linkHovered = mouseX >= linkRight - linkWidth && mouseX < linkRight
+                    && mouseY >= linkTop && mouseY < linkTop + Chip.height();
+            Chip.draw(graphics, LINK_LABEL, Chip.ARROW_OUT, linkRight, linkTop, linkHovered);
             this.isLinkHovered = linkHovered;
         }
     }
@@ -116,25 +109,22 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
      * skin list: a raised charcoal card with the logo (or a monogram in its place) on the left
      * over a glow that is blue on the selected card, then the name over a hairline, the count of
      * discovered figures and the author line. The creator's machine replica draws its cards
-     * through this too.
+     * through this too, counting as discovered the figures a predicate names, asked with
+     * "collection:figure", as it shows a collection to a new player or a collector.
      *
      * @param entryWidth  the row's width; the card stops 8 short of it, before the scroll bar
      * @param entryHeight the row's height; the card reaches a pixel above and below it
      */
     public static void drawCard(GuiGraphics graphics, Font font, FigureCollection collection, int x, int y,
-                                int entryWidth, int entryHeight, boolean selected, boolean hovered) {
-        drawCard(graphics, font, collection, x, y, entryWidth, entryHeight, selected, hovered,
-                ClientDiscoveryManager::isDiscovered);
-    }
-
-    /**
-     * Draws a collection's card as above, counting as discovered the figures a predicate names,
-     * asked with "collection:figure", as the creator's replica shows a collection to a new player
-     * or a collector.
-     */
-    public static void drawCard(GuiGraphics graphics, Font font, FigureCollection collection, int x, int y,
                                 int entryWidth, int entryHeight, boolean selected, boolean hovered,
                                 Predicate<String> discovered) {
+        drawCard(graphics, font, collection, x, y, entryWidth, entryHeight, selected, hovered, discovered, 0);
+    }
+
+    // As above, with the name kept clear of the top-right corner by the given width
+    private static void drawCard(GuiGraphics graphics, Font font, FigureCollection collection, int x, int y,
+                                 int entryWidth, int entryHeight, boolean selected, boolean hovered,
+                                 Predicate<String> discovered, int nameReserve) {
         int left = cardLeft(x);
         int right = cardRight(x, entryWidth);
         int top = cardTop(y);
@@ -226,7 +216,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         int textX = logoLeft + logoBoxWidth + PADDING + 2;
         int room = right - 4 - textX;
         int textY = top + 5;
-        UiText.drawFitted(graphics, font, collection.getName(), textX, textY, room,
+        UiText.drawFitted(graphics, font, collection.getName(), textX, textY, room - nameReserve,
                 selected ? Surfaces.TEXT : 0xFFE8E8E8);
         graphics.fill(textX, textY + font.lineHeight + 1, right - 4, textY + font.lineHeight + 2, HAIRLINE);
 
