@@ -2,7 +2,9 @@ package com.theplumteam.client.gui;
 
 import com.theplumteam.client.gui.style.HalftoneTransition;
 import com.theplumteam.client.gui.style.MenuGuiScale;
+import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.style.StyledButton;
+import com.theplumteam.client.gui.style.TokenTicket;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.gui.util.GuiPose;
@@ -24,6 +26,7 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
 import com.theplumteam.blockentity.GachaMachineBlockEntity;
 import com.theplumteam.client.ClientHiddenCollections;
+import com.theplumteam.client.ClientServerSettings;
 import com.theplumteam.client.ClientSpecialAccess;
 import com.theplumteam.client.config.ClientConfig;
 import com.theplumteam.client.discovery.ClientDiscoveryManager;
@@ -37,6 +40,7 @@ import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.client.token.ClientTokenManager;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.figure.DrawRules;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.network.ClawMachineCollectionPacket;
@@ -132,6 +136,8 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     private int regularCenterX;
     private int specialCenterX;
     private int tokenButtonWidth;
+    // Where each token line's info icon was last drawn, its left and top
+    private int regularInfoX, regularInfoY, specialInfoX, specialInfoY;
 
     private static final int MARGIN = 8;
     private static final int GAP = 6;
@@ -174,6 +180,9 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     private static final int SPECIAL_COLOR = 0xFFBB8FCE;
     private static final int REGULAR_TOKEN_COLOR = 0xFF6FA0FF;
     private static final int GUARANTEED_TOKEN_COLOR = 0xFFFFC23A;
+    // An "i" at the end of each token line that explains the token under the mouse
+    private static final String[] ICON_INFO = {
+            ".#####.", "###.###", "#######", "##..###", "###.###", "###.###", "##...##", ".#####."};
     private static final int HAIRLINE = 0x30FFFFFF;
 
     // URLs
@@ -308,6 +317,10 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         }
         menuShown = true;
         opening.begin();
+        // The guaranteed token's ticket says when it renews, at the server's hour
+        if (ClientServerSettings.getGuaranteedResetHour() == null) {
+            ClientServerSettings.request();
+        }
         // The menu draws at its own GUI scale, chosen from the window size, so it looks the same
         // whatever scale the player picked; a window resize runs init() again
         if (this.minecraft != null) {
@@ -523,12 +536,13 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         }
         renderCollectionListHeader(graphics);
         renderFigurePanelHeader(graphics);
-        renderTokenInfo(graphics);
+        renderTokenInfo(graphics, mouseX, mouseY);
 
         // The buttons, tabs and links
         super.render(graphics, mouseX, mouseY, partialTick);
 
         renderDrawResult(graphics, partialTick);
+        renderTokenTooltip(graphics, mouseX, mouseY);
         // The opening ring of dots, with the world beyond it, over everything
         opening.draw(graphics);
     }
@@ -918,7 +932,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
     /**
      * Render token information centered above each respective button
      */
-    private void renderTokenInfo(GuiGraphics graphics) {
+    private void renderTokenInfo(GuiGraphics graphics, int mouseX, int mouseY) {
         // Regular tokens, above their button. Blue tickets can take the count past the 3 the
         // server grants on its own
         int regularTokens = ClientTokenManager.getRegularTokens();
@@ -926,7 +940,8 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         if (regularTokens < 3) {
             regularText += " - Next: " + ClientTokenManager.formatNextRegularTime();
         }
-        drawTokenLine(graphics, regularText, regularCenterX, REGULAR_TOKEN_COLOR);
+        regularInfoX = drawTokenLine(graphics, regularText, regularCenterX, REGULAR_TOKEN_COLOR, mouseX, mouseY);
+        regularInfoY = tokenInfoY;
 
         // The guaranteed token, above its button
         int guaranteedTokens = ClientTokenManager.getGuaranteedTokens();
@@ -935,16 +950,53 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         if (guaranteedTokens == 0) {
             specialText += " - Resets: " + ClientTokenManager.formatNextSpecialResetTime();
         }
-        drawTokenLine(graphics, specialText, specialCenterX, GUARANTEED_TOKEN_COLOR);
+        specialInfoX = drawTokenLine(graphics, specialText, specialCenterX, GUARANTEED_TOKEN_COLOR, mouseX, mouseY);
+        specialInfoY = tokenInfoY;
     }
 
-    // A token count centred above its button, on a dark strip so it reads on any collection colour
-    private void drawTokenLine(GuiGraphics graphics, String text, int centerX, int color) {
-        String shown = UiText.fit(this.font, text, tokenButtonWidth - 8);
-        int halfWidth = font.width(shown) / 2 + 4;
-        graphics.fill(centerX - halfWidth, tokenInfoY - 2, centerX + halfWidth, tokenInfoY + font.lineHeight + 1,
+    // A token count centred above its button with its info icon after it, on a dark strip so it
+    // reads on any collection colour; returns where the icon is
+    private int drawTokenLine(GuiGraphics graphics, String text, int centerX, int color, int mouseX, int mouseY) {
+        int iconWidth = PixelIcon.width(ICON_INFO);
+        String shown = UiText.fit(this.font, text, tokenButtonWidth - 8 - iconWidth - 4);
+        int width = font.width(shown) + 4 + iconWidth;
+        int left = centerX - width / 2;
+        graphics.fill(left - 4, tokenInfoY - 2, left + width + 4, tokenInfoY + font.lineHeight + 1,
                 (int) (ClientConfig.getInstance().panelOpacity * 200) << 24 | 0x101012);
-        UiText.drawCentered(graphics, this.font, shown, centerX, tokenInfoY, color);
+        UiText.draw(graphics, this.font, shown, left, tokenInfoY, color);
+        int iconX = left + width - iconWidth;
+        PixelIcon.draw(graphics, ICON_INFO, iconX, tokenInfoY - 1,
+                overTokenInfo(iconX, tokenInfoY, mouseX, mouseY) ? Surfaces.TEXT : color);
+        return iconX;
+    }
+
+    private boolean overTokenInfo(int iconX, int iconY, int mouseX, int mouseY) {
+        // A pixel of slack round the small icon
+        return mouseX >= iconX - 1 && mouseX < iconX + PixelIcon.width(ICON_INFO) + 1
+                && mouseY >= iconY - 2 && mouseY < iconY + ICON_INFO.length;
+    }
+
+    // The ticket of the token whose info icon is under the mouse
+    private void renderTokenTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
+        if (overTokenInfo(regularInfoX, regularInfoY, mouseX, mouseY)) {
+            TokenTicket.draw(graphics, this.font, regularTokenView(), regularInfoX, tokenInfoY, this.width);
+        } else if (overTokenInfo(specialInfoX, specialInfoY, mouseX, mouseY)) {
+            TokenTicket.draw(graphics, this.font, guaranteedTokenView(), specialInfoX, tokenInfoY, this.width);
+        }
+    }
+
+    private static TokenTicket.View regularTokenView() {
+        int count = ClientTokenManager.getRegularTokens();
+        boolean full = count >= DrawRules.MAX_REGULAR_TOKENS;
+        return new TokenTicket.View(true, count, full ? null : ClientTokenManager.formatNextRegularTime(), null);
+    }
+
+    // The guaranteed one renews at the server's hour, said in the player's own time
+    private static TokenTicket.View guaranteedTokenView() {
+        Integer hour = ClientServerSettings.getGuaranteedResetHour();
+        String resetAt = hour == null ? null : String.format("%02d:00", SettingsScreen.convertUtcToLocal(hour));
+        return new TokenTicket.View(false, ClientTokenManager.getGuaranteedTokens(),
+                ClientTokenManager.formatNextSpecialResetTime(), resetAt);
     }
 
     @Override

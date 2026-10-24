@@ -45,6 +45,15 @@ public final class GuiPose {
         //? }
     }
 
+    /** Turns later drawing about the current origin, in degrees. */
+    public static void rotate(GuiGraphics graphics, float degrees) {
+        //? if >=1.21.6 {
+        /*graphics.pose().rotate((float) Math.toRadians(degrees));
+        *///? } else {
+        graphics.pose().mulPose(com.mojang.math.Axis.ZP.rotationDegrees(degrees));
+        //? }
+    }
+
     /**
      * Moves later drawing toward the viewer, in front of models drawn into the screen with
      * depth. From 1.21.6 the GUI has no depth; {@link #nextStratum} orders it instead.

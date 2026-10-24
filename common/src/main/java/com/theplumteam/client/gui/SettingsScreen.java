@@ -752,9 +752,9 @@ public class SettingsScreen extends DialogScreen {
     }
 
     /**
-     * Convert UTC hour to local timezone hour
+     * Convert UTC hour to local timezone hour; the machine screen explains the reset with it too
      */
-    private static int convertUtcToLocal(int utcHour) {
+    static int convertUtcToLocal(int utcHour) {
         ZonedDateTime utcTime = ZonedDateTime.now(ZoneId.of("UTC"))
                 .withHour(utcHour)
                 .withMinute(0)

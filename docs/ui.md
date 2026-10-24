@@ -101,6 +101,17 @@ monogram when it has none. Only the drawn part of the image counts (what `LogoLa
 for the box front: texels of at least 10% alpha), so transparent margins in the file do not
 shrink it; that part keeps its shape and fills the box's height or its width.
 
+## The token lines
+
+Each token count above its button ends in an "i" in the token's colour. Under the mouse it turns
+white and the token's cinema ticket opens above it (`TokenTicket`), blue or gold: ADMIT ONE up its
+stub; the wait for the next one (or the guaranteed one's renewal, in the player's own time once the
+server has said its hour) beside the clock it runs on, game time or real time; a pill for each of
+what runs and what stops that clock; and the tickets that add more. Its art is drawn pixel by
+pixel into a texture, made once for each token; its words are drawn over it. The small pixel font
+takes half a ticket unit per font pixel, and the whole ticket is drawn at the scale that makes
+that a whole number of screen pixels, so it keeps its layout and stays crisp at every GUI scale.
+
 ## Versions
 
 New widgets override the hook of each era themselves, because the build's rename table
