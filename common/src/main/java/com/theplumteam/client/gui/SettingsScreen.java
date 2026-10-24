@@ -350,6 +350,7 @@ public class SettingsScreen extends DialogScreen {
             this.actionButton.setMessage(Component.literal("Progression"));
             this.actionButton.active = true;
             this.actionButton.visible = true;
+            tone = StyledButton.Tone.NEUTRAL;
         } else if (activeTab == Tab.CUSTOM) {
             this.actionButton.setMessage(Component.literal("Add"));
             this.actionButton.active = !pendingCustomCode.isBlank();
