@@ -14,6 +14,8 @@ from scripts.release.item_resources import generate, resource_plan
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "common/src/main/resources"
 RECIPE = "data/blockpops/recipe/claw_machine_block.json"
+AUTHORED_RECIPES = sorted((SOURCE / "data/blockpops/recipes").iterdir())
+RECIPES = {f"data/blockpops/recipe/{path.name}" for path in AUTHORED_RECIPES}
 
 
 class ItemResourceTests(unittest.TestCase):
@@ -72,7 +74,7 @@ class ItemResourceTests(unittest.TestCase):
         before = {path: path.read_bytes() for path in (SOURCE / "assets/blockpops/models/item").iterdir()}
         self.assertEqual({}, resource_plan(SOURCE, "1.20.1"))
         for version in ("1.21.1", "1.21.3"):
-            self.assertEqual({RECIPE}, set(resource_plan(SOURCE, version)))
+            self.assertEqual(RECIPES, set(resource_plan(SOURCE, version)))
         self.assertEqual(before, {path: path.read_bytes() for path in before})
 
     def test_the_claw_machine_recipe_follows_each_version_s_directory_and_format(self):
@@ -91,6 +93,18 @@ class ItemResourceTests(unittest.TestCase):
                 self.assertEqual(chain, recipe["key"]["C"])
                 self.assertEqual({"item": "minecraft:glass"} if version == "1.21.1" else "minecraft:glass",
                                  recipe["key"]["G"])
+
+    def test_every_authored_recipe_keeps_its_pattern_and_result_on_every_modern_version(self):
+        self.assertIn("data/blockpops/recipe/gacha_machine_block.json", RECIPES)
+        for path in AUTHORED_RECIPES:
+            authored = json.loads(path.read_text())
+            for version in ("1.21.1", "1.21.3", "1.21.9", "26.3"):
+                with self.subTest(recipe=path.name, version=version):
+                    recipe = json.loads(resource_plan(SOURCE, version)[f"data/blockpops/recipe/{path.name}"])
+                    self.assertEqual(authored["pattern"], recipe["pattern"])
+                    self.assertEqual(set(authored["key"]), set(recipe["key"]))
+                    self.assertEqual({"id": authored["result"]["item"], "count": authored["result"].get("count", 1)},
+                                     recipe["result"])
 
     def test_tags_counts_and_unsupported_recipes(self):
         recipes = self.source / "data/blockpops/recipes"
