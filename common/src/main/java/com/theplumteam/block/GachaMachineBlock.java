@@ -203,7 +203,8 @@ public class GachaMachineBlock extends BaseEntityBlock {
             if (player.isCreative()) {
                 preventCreativeDropFromBottomPart(level, pos, state, player);
             } else {
-                dropResources(state, level, pos, null, player, player.getMainHandItem());
+                // The machine drops itself, as it has no loot table
+                popResource(level, pos, new ItemStack(this));
             }
         }
         //? if >=1.21 {
