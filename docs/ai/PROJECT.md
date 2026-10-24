@@ -125,7 +125,9 @@ the shared collection sync. CI never contacts the CDN.
 
 World collections
 ([ADR 0003](../architecture/decisions/0003-accept-operator-uploaded-world-collections.md)) are
-authored in game by operators at level 2, which the server re-checks for every packet. Their files
+authored in game by operators at level 2, which the server re-checks for every packet. Until they
+are finished, `/blockpops worldcollections` is registered only in a development environment, as the
+creator opens only there. Their files
 come only from that operator's upload in `WorldUpload*Packet`s or from a datapack's
 `blockpops_world_collections/` directory; never from a URL, the CDN or a path a server names.
 `com.theplumteam.worldcontent` validates every file (`PngValidator`, `GeoJsonCheck`,

@@ -68,20 +68,22 @@ button offers no checkout.
 
 ## World collections
 
-Operators (permission level 2) can make collections for one world from their
-own skins, box textures, logos and Blockbench models with
-`/blockpops worldcollections`, importing the files from a datapack. The
-in-game creator, which uploads them from your computer, is still in progress
-and appears only in a development environment for now: there it opens from the
+World collections are still in progress, so for now they can be made only in a
+development environment (a game started from Gradle or an IDE). There,
+operators (permission level 2) make collections for one world from their own
+skins, box textures, logos and Blockbench models, with
+`/blockpops worldcollections` and files imported from a datapack, or with the
+in-game creator, which uploads them from your computer and opens from the
 **Creator** button of a machine, the **Creator** tab of its Settings or
-`/blockpopscreator`. It keeps a collection as a draft, out of the machines and
+`/blockpopscreator`. The creator keeps a collection as a draft, out of the machines and
 seen only by operators, until it is published; gives figures a rarity and up to
 four skin variants; places the logo on the box; makes plush collections for the
 gacha machine; adds many figures at once from dropped files or a folder; and
 duplicates, imports from a datapack or deletes a collection for good. The
 server checks every file, stores it with the world under
 `data/blockpops-world-collections/` and sends it to each player who joins;
-nothing is published anywhere else. A datapack can ship one for `importpack`.
+nothing is published anywhere else. A world that already holds some still sends
+them to its players outside a development environment. A datapack can ship one for `importpack`.
 See [World Collections](COLLECTIONS_GUIDE.md#world-collections) for the file
 rules, limits and commands, and
 [ADR 0003](docs/architecture/decisions/0003-accept-operator-uploaded-world-collections.md)
