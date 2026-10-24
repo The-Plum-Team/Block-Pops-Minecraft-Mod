@@ -252,6 +252,11 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         otherTabSelection = leaving;
         collections = collectionsOf(plush);
         rebuildWidgets();
+        // The collection the tab kept from the last visit takes back its background; a first
+        // visit selects the first one, as a click would
+        if (selectedCollectionId != null && !selectedCollectionId.isEmpty()) {
+            CollectionRegistry.getCollection(selectedCollectionId).ifPresent(this::fadeBackgroundTo);
+        }
         selectFirstCollectionIfNone();
     }
 
@@ -291,6 +296,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
             collections = collectionsOf(plush);
         }
         selectedCollectionId = held;
+        fadeBackgroundTo(collection);
     }
 
     @Override
@@ -822,34 +828,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         if (entry != null) {
             FigureCollection collection = entry.getCollection();
             selectedCollectionId = collection.getId();
-
-            // Start color transition if collection has a background color
-            if (collection.hasBackgroundColor()) {
-                int[] bgColor = collection.getBackgroundColor();
-
-                // Store current color as the starting point
-                ClientConfig config = ClientConfig.getInstance();
-                this.currentColorR = config.backgroundColorR;
-                this.currentColorG = config.backgroundColorG;
-                this.currentColorB = config.backgroundColorB;
-
-                // Set target color
-                this.targetColorR = bgColor[0] / 255.0f;
-                this.targetColorG = bgColor[1] / 255.0f;
-                this.targetColorB = bgColor[2] / 255.0f;
-
-                // Check if transition animation is enabled
-                if (config.enableColorTransition) {
-                    // Reset transition progress to start the animation
-                    this.colorTransitionProgress = 0.0f;
-                } else {
-                    // Instantly change color (no animation)
-                    this.colorTransitionProgress = 1.0f;
-                    config.backgroundColorR = this.targetColorR;
-                    config.backgroundColorG = this.targetColorG;
-                    config.backgroundColorB = this.targetColorB;
-                }
-            }
+            fadeBackgroundTo(collection);
 
             // Update figure list widget
             if (figureListWidget != null) {
@@ -861,6 +840,40 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
 
             // Update button states
             updateTokenButtonStates();
+        }
+    }
+
+    /**
+     * Fades the background to the collection's own colour, when it has one, or switches to it at
+     * once when the player turned the transition off.
+     */
+    private void fadeBackgroundTo(FigureCollection collection) {
+        if (!collection.hasBackgroundColor()) {
+            return;
+        }
+        int[] bgColor = collection.getBackgroundColor();
+
+        // Store current color as the starting point
+        ClientConfig config = ClientConfig.getInstance();
+        this.currentColorR = config.backgroundColorR;
+        this.currentColorG = config.backgroundColorG;
+        this.currentColorB = config.backgroundColorB;
+
+        // Set target color
+        this.targetColorR = bgColor[0] / 255.0f;
+        this.targetColorG = bgColor[1] / 255.0f;
+        this.targetColorB = bgColor[2] / 255.0f;
+
+        // Check if transition animation is enabled
+        if (config.enableColorTransition) {
+            // Reset transition progress to start the animation
+            this.colorTransitionProgress = 0.0f;
+        } else {
+            // Instantly change color (no animation)
+            this.colorTransitionProgress = 1.0f;
+            config.backgroundColorR = this.targetColorR;
+            config.backgroundColorG = this.targetColorG;
+            config.backgroundColorB = this.targetColorB;
         }
     }
 
