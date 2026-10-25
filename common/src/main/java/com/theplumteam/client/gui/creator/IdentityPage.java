@@ -251,9 +251,11 @@ final class IdentityPage implements EditorPage {
         this.swatchesHeight = this.colours.heightFor(width);
         this.colours.at(x, y, width, this.swatchesHeight);
         y += this.swatchesHeight + 2;
-        int fromLogoWidth = font.width(this.fromLogo.label());
-        this.fromLogo.at(x, y, fromLogoWidth, 10);
-        this.customColour.at(x + fromLogoWidth + 12, y, font.width(this.customColour.label()), 10);
+        // Side by side, both shrunk where a long language would carry them past the column
+        int[] linkWidths = UiButton.fitRow(width - 12, font.width(this.fromLogo.label()),
+                font.width(this.customColour.label()));
+        this.fromLogo.at(x, y, linkWidths[0], 10);
+        this.customColour.at(x + linkWidths[0] + 12, y, linkWidths[1], 10);
         y += LABEL + SECTION_GAP;
         addAll(this.colourHeading, this.colourHelp, this.colours, this.fromLogo, this.customColour);
 
@@ -278,7 +280,7 @@ final class IdentityPage implements EditorPage {
                 this.boxShown = showIn(this.boxZone, draft.boxTexture(), this.boxShown);
                 this.boxZone.at(x, y, width, UiDropZone.HEIGHT);
                 y += UiDropZone.HEIGHT + 4;
-                int linkWidth = font.width(this.templateLink.label());
+                int linkWidth = Math.min(width, font.width(this.templateLink.label()));
                 this.templateLink.at(x, y, linkWidth, 10);
                 this.templateNote.at(x + linkWidth + 6, y, Math.max(0, width - linkWidth - 6), 10);
                 y += LABEL;
@@ -505,7 +507,8 @@ final class IdentityPage implements EditorPage {
         int x = this.fieldsX;
 
         // Name, with its length on the right of its column and whether it can be used under it
-        int nameEnd = drawLabel(graphics, font, tr("name"), x, this.nameLabelY, this.editor.isChanged(CreatorDraft.NAME));
+        int nameEnd = drawLabel(graphics, font, tr("name"), x, this.nameLabelY, this.half,
+                this.editor.isChanged(CreatorDraft.NAME));
         String counter = draft.name().length() + "/" + WorldContentLimits.MAX_NAME_LENGTH;
         int counterX = x + this.half - font.width(counter);
         if (counterX > nameEnd + 4) {
@@ -520,14 +523,14 @@ final class IdentityPage implements EditorPage {
         // Author, saying when it cannot be used
         int authorX = x + this.half + 8;
         int authorEnd = drawLabel(graphics, font, tr("author"), authorX, this.nameLabelY,
-                this.editor.isChanged(CreatorDraft.AUTHOR));
+                x + this.fieldsWidth - authorX, this.editor.isChanged(CreatorDraft.AUTHOR));
         if (!WorldCollectionRecord.isPlainText(draft.author())) {
             Draw.text(graphics, font, tr("wizard.author_rule").getString(), authorEnd + 6, this.nameLabelY,
                     Math.max(0, x + this.fieldsWidth - authorEnd - 6), Theme.RED);
         }
 
         // Author link, with why it cannot be used on the right of its label
-        int linkEnd = drawLabel(graphics, font, tr("identity.url"), x, this.linkLabelY,
+        int linkEnd = drawLabel(graphics, font, tr("identity.url"), x, this.linkLabelY, this.fieldsWidth,
                 this.editor.isChanged(CreatorDraft.AUTHOR_URL));
         if (!draft.authorUrl().isEmpty() && !WorldCollectionRecord.isValidAuthorUrl(draft.authorUrl())) {
             Draw.text(graphics, font, tr("identity.url_rule").getString(), linkEnd + 6, this.linkLabelY,
@@ -535,10 +538,11 @@ final class IdentityPage implements EditorPage {
         }
     }
 
-    // A field's label, with an amber dot after it while it holds unsaved changes; returns its end
-    private static int drawLabel(GuiGraphics graphics, Font font, Component label, int x, int y, boolean changed) {
-        Draw.string(graphics, font, label, x, y, LABEL_COLOUR);
-        int end = x + font.width(label);
+    // A field's label, shrunk to its room with an amber dot after it while it holds unsaved
+    // changes; returns its end
+    private static int drawLabel(GuiGraphics graphics, Font font, Component label, int x, int y, int room,
+                                 boolean changed) {
+        int end = x + Draw.shrunk(graphics, font, label, x, y, Math.max(0, room - (changed ? 9 : 0)), LABEL_COLOUR);
         if (changed) {
             Draw.dot(graphics, end + 5, y + 4, 4, Theme.AMBER);
             end += 9;

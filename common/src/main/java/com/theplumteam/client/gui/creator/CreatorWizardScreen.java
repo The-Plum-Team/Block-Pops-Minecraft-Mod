@@ -145,6 +145,7 @@ public class CreatorWizardScreen extends CreatorScreen {
     private int advancedX;
     private int advancedWidth;
     private int idLabelY = -1;
+    private int idLabelWidth;
     private int idNoteY = -1;
     private int previewLabelY;
     private int previewHelpY = -1;
@@ -247,10 +248,11 @@ public class CreatorWizardScreen extends CreatorScreen {
         this.swatches.at(left, y + LABEL - 3, this.leftWidth, this.swatchHeight);
         addNode(this.swatches);
         y += LABEL - 3 + this.swatchHeight + 2;
-        int fromLogoWidth = this.font.width(this.fromLogoButton.label());
-        int customWidth = this.font.width(this.customButton.label());
-        this.fromLogoButton.at(left, y, fromLogoWidth, 10);
-        this.customButton.at(left + fromLogoWidth + 12, y, customWidth, 10);
+        // Side by side, both shrunk where a long language would carry them past the column
+        int[] linkWidths = UiButton.fitRow(this.leftWidth - 12, this.font.width(this.fromLogoButton.label()),
+                this.font.width(this.customButton.label()));
+        this.fromLogoButton.at(left, y, linkWidths[0], 10);
+        this.customButton.at(left + linkWidths[0] + 12, y, linkWidths[1], 10);
         this.fromLogoButton.disable(this.logo == null ? tr("wizard.no_logo") : null);
         addNode(this.fromLogoButton);
         addNode(this.customButton);
@@ -313,9 +315,11 @@ public class CreatorWizardScreen extends CreatorScreen {
             return;
         }
         int rowY = top + LABEL + 1;
-        int labelWidth = this.font.width(tr("wizard.id")) + 6;
+        // The label gives up room before the field does
+        int labelWidth = Math.min(this.font.width(tr("wizard.id")) + 6, Math.max(6, this.advancedWidth - 40));
         int fieldWidth = Math.max(40, Math.min(ID_FIELD_WIDTH, this.advancedWidth - labelWidth));
         this.idLabelY = rowY + 6;
+        this.idLabelWidth = labelWidth - 6;
         this.slugBox = textField("slug", this.advancedX + labelWidth, rowY, fieldWidth, Slugs.MAX_LENGTH,
                 Component.literal(autoSlug()), this.typedSlug, this::slugTyped);
         this.idNoteY = rowY + FIELD + 2;
@@ -572,10 +576,11 @@ public class CreatorWizardScreen extends CreatorScreen {
         int left = this.leftX;
         int width = this.leftWidth;
 
-        // Name: its label, its length and whether it can be used
-        Draw.string(graphics, this.font, tr("wizard.name"), left, this.nameLabelY, LABEL_COLOUR);
+        // Name: its label, shrunk to leave its length room, the length and whether it can be used
         String counter = this.name.length() + "/" + WorldContentLimits.MAX_NAME_LENGTH;
         int counterX = left + width - this.font.width(counter);
+        int nameLabelWidth = Draw.shrunk(graphics, this.font, tr("wizard.name"), left, this.nameLabelY,
+                Math.max(0, counterX - 8 - left), LABEL_COLOUR);
         Draw.string(graphics, this.font, counter, counterX, this.nameLabelY,
                 this.name.length() >= WorldContentLimits.MAX_NAME_LENGTH ? Theme.AMBER : HELP);
         Component nameProblem = nameProblem();
@@ -585,15 +590,16 @@ public class CreatorWizardScreen extends CreatorScreen {
             Draw.text(graphics, this.font, nameStatus.getString(), left, this.nameStatusY, width, statusColour);
         } else {
             // A short card says it on the label's line, before the counter
-            int labelEnd = left + this.font.width(tr("wizard.name")) + 8;
+            int labelEnd = left + nameLabelWidth + 8;
             Draw.text(graphics, this.font, nameStatus.getString(), labelEnd, this.nameLabelY,
                     Math.max(0, counterX - 8 - labelEnd), statusColour);
         }
 
         // Author
-        Draw.string(graphics, this.font, tr("wizard.author"), left, this.authorLabelY, LABEL_COLOUR);
+        int authorLabelWidth = Draw.shrunk(graphics, this.font, tr("wizard.author"), left, this.authorLabelY, width,
+                LABEL_COLOUR);
         if (!WorldCollectionRecord.isPlainText(this.author)) {
-            int labelEnd = left + this.font.width(tr("wizard.author")) + 8;
+            int labelEnd = left + authorLabelWidth + 8;
             Draw.text(graphics, this.font, tr("wizard.author_rule").getString(), labelEnd, this.authorLabelY,
                     Math.max(0, left + width - labelEnd), Theme.RED);
         }
@@ -602,13 +608,15 @@ public class CreatorWizardScreen extends CreatorScreen {
                     HELP_LINES - 1, HELP);
         }
 
-        // Background colour, with the chosen one's name and hex on the right of its label
-        String value = tr("wizard.colour_value", UiSwatches.nameOf(this.rgb), UiColourPicker.hex(this.rgb)).getString();
+        // Background colour, with the chosen one's name and hex on the right of its label; the
+        // label keeps its room and the value is cut first
+        Component colourLabel = tr("wizard.colour");
+        int helpX = left + Draw.shrunk(graphics, this.font, colourLabel, left, this.colourLabelY, width,
+                LABEL_COLOUR);
+        String value = Draw.cut(this.font, tr("wizard.colour_value", UiSwatches.nameOf(this.rgb),
+                UiColourPicker.hex(this.rgb)).getString(), Math.max(0, left + width - helpX - 8));
         int valueX = left + width - this.font.width(value);
         Draw.string(graphics, this.font, value, valueX, this.colourLabelY, Theme.TEXT_SOFT);
-        Component colourLabel = tr("wizard.colour");
-        Draw.string(graphics, this.font, colourLabel, left, this.colourLabelY, LABEL_COLOUR);
-        int helpX = left + this.font.width(colourLabel);
         String colourHelp = tr("wizard.colour_help").getString();
         if (helpX + this.font.width(colourHelp) <= valueX - 8) {
             // Whole or not at all: a cut "· the…" says nothing
@@ -619,7 +627,8 @@ public class CreatorWizardScreen extends CreatorScreen {
         graphics.fill(this.advancedX, this.advancedButton.bounds().y() - 2, this.advancedX + this.advancedWidth,
                 this.advancedButton.bounds().y() - 1, Theme.SEPARATOR);
         if (this.idLabelY >= 0) {
-            Draw.string(graphics, this.font, tr("wizard.id"), this.advancedX, this.idLabelY, Theme.CONTROL_TEXT);
+            Draw.shrunk(graphics, this.font, tr("wizard.id"), this.advancedX, this.idLabelY, this.idLabelWidth,
+                    Theme.CONTROL_TEXT);
             String slug = slug();
             if (this.typedSlug.isEmpty() || WorldContentIds.isSlug(slug) && !Slugs.isCollectionTaken(slug)) {
                 Draw.lines(graphics, this.font, tr("wizard.id_note").getString(), this.advancedX, this.idNoteY,

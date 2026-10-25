@@ -395,14 +395,16 @@ public final class CollectionCard {
             background = Theme.BADGE_PUBLISHED_BG;
             foreground = Theme.BADGE_PUBLISHED_FG;
         }
-        int width = Draw.badgeWidth(font, text);
+        // Never wider than the card: a long one in a narrow card shrinks its text
+        int maxWidth = card.width() - 8;
+        int width = Draw.badgeWidth(font, text, maxWidth);
         int badgeX = card.x() + card.width() - 4 - width;
         int badgeY = card.y() + 4;
         if (buttons && moreButton != null && badgeX < moreButton.bounds().right() + 3) {
             // A narrow card puts the badge under the buttons rather than over them
             badgeY += UiButton.SMALL_HEIGHT + 3;
         }
-        Draw.badge(graphics, font, text, badgeX, badgeY, background, foreground);
+        Draw.badge(graphics, font, text, badgeX, badgeY, maxWidth, background, foreground);
         if (tooltip != null && card.mouseX() >= badgeX && card.mouseX() < badgeX + width && card.mouseY() >= badgeY
                 && card.mouseY() < badgeY + 12) {
             UiTooltip.set(tooltip);

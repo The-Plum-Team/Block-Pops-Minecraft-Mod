@@ -19,7 +19,8 @@ import org.jetbrains.annotations.Nullable;
  * green with its label in the blocky pixel font; a positive action is green too, one that takes
  * something away red, and anything else charcoal. A link or a destructive action can also be
  * plain text. A disabled button stays visible and says why it cannot be used in its tooltip. It
- * may show an item or a pixel icon before its label.
+ * may show an item or a pixel icon before its label, which is drawn smaller when the button is
+ * narrower than the label needs.
  */
 public class UiButton extends UiNode.Box {
     /** How a button looks. */
@@ -83,6 +84,25 @@ public class UiButton extends UiNode.Box {
     /** The width a button needs to show its label, and its icon when it has one. */
     public static int widthFor(Font font, Component label, boolean withIcon) {
         return font.width(label) + 2 * PADDING + (withIcon ? 16 + ICON_GAP : 0);
+    }
+
+    /**
+     * Widths for buttons side by side in a room, not counting the gaps between them: the widths
+     * they need while those fit, else each gives up room in proportion and its label shrinks.
+     */
+    public static int[] fitRow(int room, int... widths) {
+        int[] fitted = widths.clone();
+        int total = 0;
+        for (int width : widths) {
+            total += width;
+        }
+        if (total <= room || total <= 0) {
+            return fitted;
+        }
+        for (int i = 0; i < fitted.length; i++) {
+            fitted[i] = (int) ((long) widths[i] * Math.max(0, room) / total);
+        }
+        return fitted;
     }
 
     /**
@@ -218,14 +238,13 @@ public class UiButton extends UiNode.Box {
         }
         int room = Math.max(0, width - 2 * PADDING - iconWidth);
         int labelWidth;
-        String text = null;
+        boolean pixel = pixelLabel || style == Style.PRIMARY;
         float pixelScale = 0;
-        if (pixelLabel || style == Style.PRIMARY) {
+        if (pixel) {
             pixelScale = PixelFont.crispScale(PIXEL_LABEL_SCALE);
             labelWidth = Math.min(room, PixelFont.width(label, pixelScale));
         } else {
-            text = Draw.cut(font, plain, room);
-            labelWidth = font.width(text);
+            labelWidth = Math.min(room, font.width(plain));
         }
         int left = x + (width - labelWidth - iconWidth) / 2;
         if (withIcon) {
@@ -234,11 +253,11 @@ public class UiButton extends UiNode.Box {
             PixelIcon.draw(graphics, glyph, left, faceTop + (faceHeight - glyph.length) / 2, colour);
         }
         left += iconWidth;
-        if (text == null) {
+        if (pixel) {
             PixelFont.drawCentered(graphics, label, left + labelWidth / 2, faceTop + faceHeight / 2.0f, room,
                     pixelScale, colour, true);
         } else {
-            Draw.string(graphics, font, text, left, faceTop + (faceHeight - 8) / 2, colour);
+            Draw.shrunk(graphics, font, plain, left, faceTop + (faceHeight - 8) / 2, room, colour);
         }
     }
 
@@ -251,11 +270,10 @@ public class UiButton extends UiNode.Box {
         } else {
             colour = hovered ? DANGER_HOVER : DANGER;
         }
-        String text = Draw.cut(font, label.getString(), width);
         int textY = y + (height - 8) / 2;
-        Draw.string(graphics, font, text, x, textY, colour);
+        int shown = Draw.shrunk(graphics, font, label.getString(), x, textY, width, colour);
         if (style == Style.LINK && enabled) {
-            graphics.fill(x, textY + 9, x + font.width(text), textY + 10, colour);
+            graphics.fill(x, textY + 9, x + shown, textY + 10, colour);
         }
     }
 

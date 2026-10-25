@@ -196,7 +196,8 @@ public class UiBoxView extends UiViewport {
     protected void drawOverlay(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (turnable()) {
             Font font = Minecraft.getInstance().font;
-            label(graphics, font, CreatorScreen.tr("preview.drag_hint"), x + INSET + 2, hintY(), Theme.MUTED);
+            label(graphics, font, CreatorScreen.tr("preview.drag_hint"), x + INSET + 2, hintY(),
+                    Math.max(0, width - 2 * INSET - 4), Theme.MUTED);
         }
     }
 }

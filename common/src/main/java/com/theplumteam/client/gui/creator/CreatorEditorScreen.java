@@ -81,6 +81,8 @@ public class CreatorEditorScreen extends CreatorScreen {
     private static final int SHORT_SCREEN = 400;
     // The room the collection's name, badge and count need after the way back
     private static final int MIN_CRUMB = 140;
+    // The least the buttons leave the crumb, squeezing their labels to do so
+    private static final int MIN_SQUEEZED_CRUMB = 60;
 
     // Folded or not for the rest of the session, as the operator left it
     private static boolean stepsFolded;
@@ -249,6 +251,16 @@ public class CreatorEditorScreen extends CreatorScreen {
                 break;
             }
         }
+        if (x - 8 - this.crumbX < MIN_SQUEEZED_CRUMB) {
+            // Not even that leaves the name a little room, as in a long language on a narrow
+            // panel: the buttons give it up in proportion and their labels shrink
+            int[] widths = UiButton.fitRow(right - this.crumbX - 8 - MIN_SQUEEZED_CRUMB - GAP - 4,
+                    buttonWidth(this.font, this.reviewButton), buttonWidth(this.font, this.saveButton),
+                    buttonWidth(this.font, this.undoButton));
+            x = place(this.reviewButton, right, 0, widths[0]);
+            x = place(this.saveButton, x, GAP, widths[1]);
+            x = place(this.undoButton, x, 4, widths[2]);
+        }
         this.crumbRight = x - 8;
         addNode(this.undoButton);
         addNode(this.saveButton);
@@ -280,7 +292,10 @@ public class CreatorEditorScreen extends CreatorScreen {
 
     // Places a button left of a point, as wide as its label needs; returns its left edge
     private int place(UiButton button, int rightEdge, int gap) {
-        int width = buttonWidth(this.font, button);
+        return place(button, rightEdge, gap, buttonWidth(this.font, button));
+    }
+
+    private int place(UiButton button, int rightEdge, int gap, int width) {
         int buttonX = rightEdge - gap - width;
         button.at(buttonX, this.barY, width, UiButton.HEIGHT);
         return buttonX;

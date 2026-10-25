@@ -222,13 +222,19 @@ final class PublishPage implements EditorPage {
 
         // The footer: back to the figures on the left, saving and publishing on the right
         this.footerY = bodyArea.bottom() - UiButton.HEIGHT;
-        this.backButton.at(x, this.footerY, UiButton.widthFor(font, this.backButton.label(), false), UiButton.HEIGHT);
-        this.editor.add(this.backButton);
         refreshFooterLabels();
-        int buttonX = placeLeftOf(this.publishButton, bodyArea.right(), this.footerY, 0, font);
+        boolean withDraft = draft().isDraftCollection();
+        // A narrow body in a long language squeezes the three, which shrink their labels
+        int[] widths = UiButton.fitRow(bodyArea.width() - (withDraft ? 2 : 1) * GAP,
+                UiButton.widthFor(font, this.backButton.label(), false),
+                withDraft ? CreatorEditorScreen.buttonWidth(font, this.saveDraftButton) : 0,
+                CreatorEditorScreen.buttonWidth(font, this.publishButton));
+        this.backButton.at(x, this.footerY, widths[0], UiButton.HEIGHT);
+        this.editor.add(this.backButton);
+        int buttonX = placeLeftOf(this.publishButton, bodyArea.right(), this.footerY, 0, widths[2]);
         this.editor.add(this.publishButton);
-        if (draft().isDraftCollection()) {
-            placeLeftOf(this.saveDraftButton, buttonX, this.footerY, GAP, font);
+        if (withDraft) {
+            placeLeftOf(this.saveDraftButton, buttonX, this.footerY, GAP, widths[1]);
             this.editor.add(this.saveDraftButton);
         }
 
@@ -253,9 +259,8 @@ final class PublishPage implements EditorPage {
         this.built = true;
     }
 
-    // Places a button left of a point, as wide as its label needs; returns its left edge
-    private static int placeLeftOf(UiButton button, int rightEdge, int y, int gap, Font font) {
-        int width = CreatorEditorScreen.buttonWidth(font, button);
+    // Places a button of a width left of a point; returns its left edge
+    private static int placeLeftOf(UiButton button, int rightEdge, int y, int gap, int width) {
         int buttonX = rightEdge - gap - width;
         button.at(buttonX, y, width, UiButton.HEIGHT);
         return buttonX;
@@ -272,6 +277,10 @@ final class PublishPage implements EditorPage {
         this.who.at(rowRight - whoWidth, top, whoWidth, UiSegmented.HEIGHT);
         this.who.setVisible(whoWidth >= 60);
         int buttonsRight = this.who.visible() ? rowRight - whoWidth - 2 * GAP : rowRight;
+        // Never over the view switch: a narrow body squeezes the two, which shrink their labels
+        int[] widths = UiButton.fitRow(buttonsRight - this.views.bounds().right() - 3 * GAP, pullsWidth, testWidth);
+        pullsWidth = widths[0];
+        testWidth = widths[1];
         this.pullsButton.at(buttonsRight - pullsWidth, top, pullsWidth, UiSegmented.HEIGHT);
         this.testPullButton.at(buttonsRight - pullsWidth - GAP - testWidth, top, testWidth, UiSegmented.HEIGHT);
         this.editor.add(this.who);
@@ -958,7 +967,7 @@ final class PublishPage implements EditorPage {
             for (Bar bar : this.bars) {
                 most = Math.max(most, Math.max(bar.count(), (int) Math.ceil(bar.chance() * this.pulls)));
             }
-            Draw.string(graphics, font, tr("publish.pulls_axis", most).getString(), x, y, HELP);
+            Draw.shrunk(graphics, font, tr("publish.pulls_axis", most).getString(), x, y, width, HELP);
             graphics.fill(x, bottom, x + width, bottom + 1, Theme.SEPARATOR);
             int slot = Math.max(1, width / this.bars.size());
             int gap = slot >= 6 ? Math.max(1, slot / 5) : 0;
