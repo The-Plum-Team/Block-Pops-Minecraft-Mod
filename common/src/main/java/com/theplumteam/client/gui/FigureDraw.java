@@ -360,10 +360,10 @@ public final class FigureDraw {
         graphics.fill(left, top, right, bottom, 0xB0000000);
 
         String name = draw.winner().getName();
-        String label = draw.isHolographic()
-                ? (draw.isNew() ? "✦ NEW & HOLOGRAPHIC! ✦" : "✦ HOLOGRAPHIC! ✦")
-                : draw.isNew() ? "NEW!" : "Already in your collection";
-        String hint = "Click or press Esc to close";
+        String label = Component.translatable(draw.isHolographic()
+                ? (draw.isNew() ? "blockpops.draw.new_holographic" : "blockpops.draw.holographic_card")
+                : draw.isNew() ? "blockpops.draw.new" : "blockpops.draw.owned").getString();
+        String hint = Component.translatable("blockpops.draw.close_hint").getString();
         String stampText = stamp != null ? stamp.getString() : null;
         int line = font.lineHeight + 4;
         int lines = stampText != null ? 4 : 3;

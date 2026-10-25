@@ -38,9 +38,17 @@ public final class PixelFont {
     private PixelFont() {
     }
 
-    /** Text in the pixel font, in upper case. */
+    /**
+     * Text in the pixel font, in upper case by the rules of the player's language: Turkish
+     * capitalises i as İ.
+     */
     public static Component text(Component text) {
-        return Component.literal(text.getString().toUpperCase(Locale.ROOT)).withStyle(style -> style.withFont(FONT));
+        return Component.literal(text.getString().toUpperCase(gameLocale())).withStyle(style -> style.withFont(FONT));
+    }
+
+    private static Locale gameLocale() {
+        String code = Minecraft.getInstance().getLanguageManager().getSelected();
+        return code == null || code.isEmpty() ? Locale.ROOT : Locale.forLanguageTag(code.replace('_', '-'));
     }
 
     public static Component text(String text) {

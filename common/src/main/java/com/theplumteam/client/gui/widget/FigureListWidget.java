@@ -5,6 +5,7 @@ import com.theplumteam.figure.FigureDefinition;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ObjectSelectionList;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -73,7 +74,8 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
         if (collection != null) {
             // The specials follow the regular figures, on rows of their own
             addRows(collection, collection.getRegularFigures(), null);
-            addRows(collection, collection.getSpecialFigures(), "Specials");
+            addRows(collection, collection.getSpecialFigures(),
+                    Component.translatable("blockpops.machine.specials").getString());
         }
 
         // Reset scroll to top when collection changes

@@ -1,6 +1,7 @@
 package com.theplumteam.client.token;
 
 import com.theplumteam.network.SyncTokenDataPacket;
+import net.minecraft.network.chat.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -96,7 +97,7 @@ public class ClientTokenManager {
     public static String formatNextRegularTime() {
         long ticks = getTicksUntilNextRegular();
         if (ticks <= 0) {
-            return "Ready!";
+            return Component.translatable("blockpops.tokens.ready").getString();
         }
 
         // Convert ticks to seconds (20 ticks = 1 second)
@@ -123,7 +124,7 @@ public class ClientTokenManager {
     public static String formatNextSpecialResetTime() {
         long millis = getMillisUntilNextSpecialReset();
         if (millis <= 0) {
-            return "Resetting...";
+            return Component.translatable("blockpops.tokens.resetting").getString();
         }
 
         long totalSeconds = millis / 1000;

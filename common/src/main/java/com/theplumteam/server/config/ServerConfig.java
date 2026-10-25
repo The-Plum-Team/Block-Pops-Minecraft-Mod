@@ -75,7 +75,7 @@ public class ServerConfig {
      */
     public PopBlockColor getDefaultPlayerColor() {
         try {
-            return PopBlockColor.valueOf(defaultPlayerColor.toUpperCase());
+            return PopBlockColor.valueOf(defaultPlayerColor.toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException | NullPointerException e) {
             return PopBlockColor.ORIGINAL;
         }

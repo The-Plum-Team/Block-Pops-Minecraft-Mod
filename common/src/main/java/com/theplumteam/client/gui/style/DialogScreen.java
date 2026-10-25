@@ -50,7 +50,7 @@ public abstract class DialogScreen extends Screen {
 
     /** The label of the header's X, which closes the dialog. */
     protected Component closeLabel() {
-        return Component.literal("Close");
+        return Component.translatable("blockpops.dialog.close");
     }
 
     /** Adds the dialog's widgets, once its bounds are known. */

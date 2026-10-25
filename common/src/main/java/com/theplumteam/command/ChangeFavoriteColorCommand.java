@@ -38,11 +38,11 @@ public class ChangeFavoriteColorCommand {
             // Send packet to client to open the favorite color selection screen using cross-platform networking
             OpenFavoriteColorScreenPacket.sendToPlayer(player);
 
-            source.sendSuccess(() -> Component.literal("Opening favorite color selection..."), false);
+            source.sendSuccess(() -> Component.translatable("blockpops.command.favorite_color.opening"), false);
             BlockPopsMod.logDebug("Player {} opened the favorite color selection screen", player.getName().getString());
             return 1;
         } catch (Exception e) {
-            source.sendFailure(Component.literal("This command can only be executed by a player"));
+            source.sendFailure(Component.translatable("blockpops.command.player_only"));
             LOGGER.error("Error executing changefavoritecolor command", e);
             return 0;
         }

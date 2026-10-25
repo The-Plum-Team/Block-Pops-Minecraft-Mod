@@ -189,7 +189,7 @@ public class PlushBlock extends BaseEntityBlock {
 
     private static void sendSupporterHint(ServerPlayer player) {
         // The link runs /blockpops supporter, which answers with a checkout made for the player
-        MutableComponent link = Component.literal("Become a supporter here");
+        MutableComponent link = Component.translatable("blockpops.support.plush_link");
         //? if >=1.21.5 {
         /*// 1.21.5 made ClickEvent a sealed hierarchy
         link.withStyle(style -> style.withColor(0xBB8FCE).withBold(true).withUnderlined(true)
@@ -199,9 +199,8 @@ public class PlushBlock extends BaseEntityBlock {
                 .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/blockpops supporter")));
         //? }
         player.sendSystemMessage(Component.literal("[BlockPops] ").withStyle(style -> style.withColor(0xBB8FCE))
-                .append(Component.literal("This plush has an alternate version exclusive to supporters! ")
-                        .withStyle(style -> style.withColor(0xE8D5F5)))
-                .append(link));
+                .append(Component.translatable("blockpops.support.plush_hint", link)
+                        .withStyle(style -> style.withColor(0xE8D5F5))));
     }
 
     @Nullable

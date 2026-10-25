@@ -155,6 +155,24 @@ layout variant. The canaries must accept legitimate font/layout differences and
 still reject empty, washed-out, blurred, missing-widget, or wrong-state frames.
 Do not tune a threshold from one loader screenshot and assume it is portable.
 
+## Translations
+
+Every text a player reads is a key in
+`common/src/main/resources/assets/blockpops/lang/`. `en_us.json` is the source, and each other
+file there translates all of its keys, in the same order; the game shows the English text for a key
+a file lacks. A new text gets a key in `en_us.json`, never a literal in the code. The packaged E2E
+reads the English labels, so changing an existing English text also changes its captures.
+
+To improve a translation, change only that language's file and keep, in every string:
+
+- each placeholder: `%s`, or the numbered `%1$s`, `%2$s`... when a sentence needs another order,
+  and `%%` for a percent sign;
+- the spaces at either end and the symbols (✦ ✔ ⚠ ▸ · ...);
+- technical names, commands and the collection name "World Players" as written.
+
+Item and block names follow vanilla Minecraft's capitalisation in that language. Open a pull request
+against `master`, or send the file to the team on Discord, saying which language and what changed.
+
 ## Release branch synchronization
 
 Shared product changes originate on `master`. The legacy synchronization path

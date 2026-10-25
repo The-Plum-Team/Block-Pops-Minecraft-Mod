@@ -51,7 +51,7 @@ public class SetDefaultColorCommand {
         CommandSourceStack source = context.getSource();
 
         try {
-            PopBlockColor color = PopBlockColor.valueOf(colorName.toUpperCase());
+            PopBlockColor color = PopBlockColor.valueOf(colorName.toUpperCase(java.util.Locale.ROOT));
 
             // 1. Update Config
             ServerConfig.getInstance().setDefaultPlayerColor(color);
@@ -69,10 +69,12 @@ public class SetDefaultColorCommand {
                 BlockPopsMod.logDebug("Synced updated World Players collection to all players");
             }
 
-            source.sendSuccess(() -> Component.literal("Set default player collection color to: " + color.getSerializedName()), true);
+            source.sendSuccess(() -> Component.translatable("blockpops.command.default_color.done", color.getSerializedName()), true);
             return 1;
         } catch (IllegalArgumentException e) {
-            source.sendFailure(Component.literal("Invalid color name: " + colorName + ". Valid colors: original, black, blue, brown, cyan, gray, green, light_blue, light_gray, lime, magenta, orange, pink, purple, red, yellow"));
+            source.sendFailure(Component.translatable("blockpops.command.default_color.invalid", colorName,
+                    "original, black, blue, brown, cyan, gray, green, light_blue, light_gray, lime, magenta, orange, "
+                            + "pink, purple, red, yellow"));
             return 0;
         }
     }

@@ -110,9 +110,9 @@ public class WorldPlayerRosterScreen extends DialogScreen {
         // The search box outlives rebuilds, so typing keeps its cursor and focus
         int searchWidth = Math.min(140, this.dialogWidth / 3);
         this.searchField = new EditBox(this.font, this.dialogX + this.dialogWidth - DialogFrame.PADDING - searchWidth,
-                bodyTop() + 5, searchWidth, 16, Component.literal("Search"));
+                bodyTop() + 5, searchWidth, 16, Component.translatable("blockpops.roster.search"));
         this.searchField.setMaxLength(32);
-        this.searchField.setHint(Component.literal("Search..."));
+        this.searchField.setHint(Component.translatable("blockpops.roster.search_hint"));
         this.searchField.setValue(this.search);
         this.searchField.setResponder(value -> {
             if (!value.equals(this.search)) {
@@ -151,11 +151,11 @@ public class WorldPlayerRosterScreen extends DialogScreen {
         this.outside.sort(byName);
 
         if (this.shownCanEdit) {
-            this.status = "Players on the right no longer come out of the machines.";
+            this.status = Component.translatable("blockpops.roster.status.can_edit").getString();
         } else if (hasPermission()) {
-            this.status = "This server cannot change the World Players roster.";
+            this.status = Component.translatable("blockpops.roster.status.cannot_edit").getString();
         } else {
-            this.status = "Only operators can change the World Players roster.";
+            this.status = Component.translatable("blockpops.roster.status.operators_only").getString();
         }
 
         int rows = visibleRows();
@@ -290,19 +290,22 @@ public class WorldPlayerRosterScreen extends DialogScreen {
         // Labels are drawn after the widgets: before 1.21.6 anything drawn earlier ends up
         // under the widgets' fills
         int total = this.inside.size() + this.outside.size();
-        String summary = total + (total == 1 ? " player, " : " players, ") + this.outside.size() + " out";
+        String summary = (total == 1 ? Component.translatable("blockpops.roster.summary_one", this.outside.size())
+                : Component.translatable("blockpops.roster.summary", total, this.outside.size())).getString();
         UiText.drawFitted(graphics, this.font, summary, this.leftX, bodyTop() + 9,
                 this.searchField.getX() - 8 - this.leftX, Surfaces.TEXT_DIM);
 
-        renderColumn(graphics, this.leftX, "In collection", this.visibleInside, this.inside.size(), false);
-        renderColumn(graphics, this.rightX, "Out of collection", this.visibleOutside, this.outside.size(), true);
+        renderColumn(graphics, this.leftX, Component.translatable("blockpops.roster.in").getString(), this.visibleInside, this.inside.size(), false);
+        renderColumn(graphics, this.rightX, Component.translatable("blockpops.roster.out").getString(), this.visibleOutside, this.outside.size(), true);
 
         if (this.inside.isEmpty()) {
-            String empty = this.search.isEmpty() ? "No players have joined this world yet." : "No player matches.";
+            String empty = Component.translatable(this.search.isEmpty() ? "blockpops.roster.empty" : "blockpops.roster.no_match")
+                    .getString();
             drawWrappedHint(graphics, empty, this.leftX);
         }
         if (this.outside.isEmpty()) {
-            drawWrappedHint(graphics, this.search.isEmpty() ? "Nobody is out. Press » to take a player out." : "No player matches.",
+            drawWrappedHint(graphics, Component.translatable(this.search.isEmpty() ? "blockpops.roster.nobody_out"
+                            : "blockpops.roster.no_match").getString(),
                     this.rightX);
         }
 

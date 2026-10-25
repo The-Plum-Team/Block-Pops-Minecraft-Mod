@@ -80,10 +80,12 @@ public final class TokenTicket {
     private static final String[] OFFLINE = {"..###", ".##..", "##...", "##...", "##...", ".##..", "..###"};
     private static final String[] CLOSED = {"#####", "#...#", "#...#", "#..##", "#...#", "#...#", "#####"};
     // What runs each clock and what stops it, two to a row
-    private static final String[] GAME_TIME = {"Playing", "Server on", "Paused", "World closed"};
+    private static final String[] GAME_TIME = {"blockpops.ticket.rule.playing", "blockpops.ticket.rule.server_on",
+            "blockpops.ticket.rule.paused", "blockpops.ticket.rule.world_closed"};
     private static final String[][] GAME_TIME_ICONS = {PLAYING, SERVER, PAUSED, CLOSED};
     private static final boolean[] GAME_TIME_RUNS = {true, true, false, false};
-    private static final String[] REAL_TIME = {"Playing", "Paused", "Offline", "World closed"};
+    private static final String[] REAL_TIME = {"blockpops.ticket.rule.playing", "blockpops.ticket.rule.paused",
+            "blockpops.ticket.rule.offline", "blockpops.ticket.rule.world_closed"};
     private static final String[][] REAL_TIME_ICONS = {PLAYING, PAUSED, OFFLINE, CLOSED};
     private static final boolean[] REAL_TIME_RUNS = {true, true, true, true};
 
@@ -122,8 +124,9 @@ public final class TokenTicket {
     }
 
     private static void words(GuiGraphics graphics, Font font, View v, Palette p) {
-        int admitLength = width("ADMIT ONE", 1.0f);
-        upText(graphics, "ADMIT ONE", 22, (HEIGHT - admitLength) / 2, admitLength, WHITE, 1.0f);
+        String admit = tr("blockpops.ticket.admit_one");
+        int admitLength = width(admit, 1.0f);
+        upText(graphics, admit, 22, (HEIGHT - admitLength) / 2, admitLength, WHITE, 1.0f);
         int serialLength = width("NO. 004127", SMALL);
         upText(graphics, "NO. 004127", 10, (HEIGHT - serialLength) / 2, serialLength, mix(p.light, WHITE, 0.4), SMALL);
 
@@ -132,29 +135,29 @@ public final class TokenTicket {
         String head;
         String time;
         if (v.regular()) {
-            head = v.full() ? "STOCK" : "NEXT SHOW IN";
-            time = v.full() || v.next() == null ? "FULL" : v.next();
+            head = tr(v.full() ? "blockpops.ticket.stock" : "blockpops.ticket.next_show_in");
+            time = v.full() || v.next() == null ? tr("blockpops.ticket.full") : v.next();
         } else if (v.count() > 0) {
-            head = v.resetAt() != null ? "RENEWS AT " + v.resetAt() : "RENEWS DAILY";
-            time = "READY";
+            head = v.resetAt() != null ? tr("blockpops.ticket.renews_at", v.resetAt()) : tr("blockpops.ticket.renews_daily");
+            time = tr("blockpops.ticket.ready");
         } else {
-            head = v.resetAt() != null ? "AT " + v.resetAt() + ", IN" : "NEXT SHOW IN";
+            head = v.resetAt() != null ? tr("blockpops.ticket.at_in", v.resetAt()) : tr("blockpops.ticket.next_show_in");
             time = v.next() != null ? v.next() : "";
         }
         // The head's capitals centred on the time's
         pixel(graphics, head, MAIN, WAIT_TOP + 3, lite, SMALL, true);
         int timeX = MAIN + width(head, SMALL) + 5;
         pixel(graphics, time, timeX, WAIT_TOP, WHITE, 1.0f, true);
-        String clock = v.regular() ? "GAME TIME" : "REAL TIME";
+        String clock = tr(v.regular() ? "blockpops.ticket.game_time" : "blockpops.ticket.real_time");
         chip(graphics, clock, timeX + width(time, 1.0f) + 6 + width(clock, SMALL) + 6, WAIT_TOP + 1, p.light, p.dark);
 
         // What runs the clock and what stops it
         String[] rules = v.regular() ? GAME_TIME : REAL_TIME;
         for (int i = 0; i < rules.length; i++) {
-            UiText.draw(graphics, font, rules[i], MAIN + (i % 2) * (RULE_WIDTH + 4) + 15,
+            UiText.draw(graphics, font, tr(rules[i]), MAIN + (i % 2) * (RULE_WIDTH + 4) + 15,
                     RULES_TOP + (i / 2) * 15 + 3, WHITE);
         }
-        UiText.draw(graphics, font, v.regular() ? "Blue tickets" : "Gold tickets", MAIN + 18, TICKETS_TOP + 4, WHITE);
+        UiText.draw(graphics, font, tr(v.regular() ? "blockpops.ticket.blue_tickets" : "blockpops.ticket.gold_tickets"), MAIN + 18, TICKETS_TOP + 4, WHITE);
     }
 
     // ---- the art --------------------------------------------------------------------------------
@@ -256,6 +259,10 @@ public final class TokenTicket {
     }
 
     // ---- words ----------------------------------------------------------------------------------
+
+    private static String tr(String key, Object... args) {
+        return Component.translatable(key, args).getString();
+    }
 
     private static int width(String text, float scale) {
         return PixelFont.width(Component.literal(text), scale);

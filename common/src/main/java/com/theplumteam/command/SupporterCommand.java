@@ -24,7 +24,7 @@ public class SupporterCommand {
     private static int executeCommand(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         if (!(source.getEntity() instanceof ServerPlayer player)) {
-            source.sendFailure(Component.literal("This command can only be executed by a player"));
+            source.sendFailure(Component.translatable("blockpops.command.player_only"));
             return 0;
         }
         SupportCheckout.request(player, false);

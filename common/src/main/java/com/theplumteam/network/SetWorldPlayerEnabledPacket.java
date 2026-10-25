@@ -10,6 +10,7 @@ import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -72,7 +73,8 @@ public class SetWorldPlayerEnabledPacket {
                     // Regenerate the World Players collection so every client drops or regains the figure
                     PlayerCollectionHelper.regenerateAndSyncPlayerCollection(server);
                 } else {
-                    player.sendSystemMessage(Component.literal("\u00A7cCould not save the World Players roster. Check the server log."));
+                    player.sendSystemMessage(Component.translatable("blockpops.message.roster_not_saved")
+                            .withStyle(ChatFormatting.RED));
                 }
             }
         });

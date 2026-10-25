@@ -47,7 +47,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
     private static final int AUTHOR_COLOR = 0xFFFFC23A;
 
     // The author's link, a chip like the figures' version counter
-    private static final String LINK_LABEL = "Web";
+    private static final String LINK_LABEL = "blockpops.machine.author_link";
     private static final int LINK_INSET = 4;
     private boolean isLinkHovered;
 
@@ -76,7 +76,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         // Check if this entry is selected
         boolean isSelected = parent.getSelected() == this;
         boolean linkShown = isMouseOver && collection.getAuthorUrl() != null && !collection.getAuthorUrl().isEmpty();
-        int linkWidth = Chip.width(LINK_LABEL, Chip.ARROW_OUT);
+        int linkWidth = Chip.width(Component.translatable(LINK_LABEL).getString(), Chip.ARROW_OUT);
         // The name stops short of the link
         drawCard(graphics, mc.font, collection, x, y, entryWidth, entryHeight, isSelected, isMouseOver,
                 ClientDiscoveryManager::isDiscovered, linkShown ? linkWidth + 3 : 0);
@@ -88,7 +88,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             int linkTop = cardTop(y) + LINK_INSET;
             boolean linkHovered = mouseX >= linkRight - linkWidth && mouseX < linkRight
                     && mouseY >= linkTop && mouseY < linkTop + Chip.height();
-            Chip.draw(graphics, LINK_LABEL, Chip.ARROW_OUT, linkRight, linkTop, linkHovered);
+            Chip.draw(graphics, Component.translatable(LINK_LABEL).getString(), Chip.ARROW_OUT, linkRight, linkTop, linkHovered);
             this.isLinkHovered = linkHovered;
         }
     }
@@ -229,14 +229,14 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         String author = collection.getAuthor();
         String authorText;
         if ("world_players".equals(collection.getId())) {
-            authorText = "Auto-generated skins";
+            authorText = Component.translatable("blockpops.machine.author.world_players").getString();
         } else if (isUnsignedWorldCollection(collection)) {
             // An operator made it in this world and gave no author; "multiple creators" would be wrong
             authorText = Component.translatable("blockpops.world_collections.created_in_world").getString();
         } else if (author.equals("Unknown")) {
-            authorText = "Collection with multiple creators";
+            authorText = Component.translatable("blockpops.machine.author.many").getString();
         } else {
-            authorText = "Skin creator: " + author;
+            authorText = Component.translatable("blockpops.machine.author.one", author).getString();
         }
         UiText.drawFitted(graphics, font, authorText, textX, subTextY + font.lineHeight + 2, room, AUTHOR_COLOR);
     }
@@ -417,7 +417,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
             count += " | " + discoveredCount(collection, current.getSpecialFigures(), discovered) + "/"
                     + current.getSpecialFigures().size();
         }
-        return count + " figures";
+        return Component.translatable("blockpops.machine.discovered", count).getString();
     }
 
     private static int discoveredCount(FigureCollection collection, java.util.List<FigureDefinition> figures,

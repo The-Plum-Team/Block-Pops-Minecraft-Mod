@@ -160,7 +160,7 @@ public final class SpecialAccess {
                     if (paid) {
                         online.sendSystemMessage(Component.literal("[BlockPops] ")
                                 .withStyle(style -> style.withColor(0xBB8FCE))
-                                .append(Component.literal("Thank you for supporting BlockPops! The special plushes are unlocked.")
+                                .append(Component.translatable("blockpops.support.thanks")
                                         .withStyle(style -> style.withColor(0xE8D5F5))));
                     }
                 }

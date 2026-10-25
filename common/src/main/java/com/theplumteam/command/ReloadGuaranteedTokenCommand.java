@@ -59,10 +59,10 @@ public class ReloadGuaranteedTokenCommand {
                     millisUntilReset
             );
 
-            source.sendSuccess(() -> Component.literal("Reloaded guaranteed token for " + player.getName().getString()), true);
+            source.sendSuccess(() -> Component.translatable("blockpops.command.reload_guaranteed.done", player.getName().getString()), true);
             return 1;
         } catch (Exception e) {
-            source.sendFailure(Component.literal("Could not reload the guaranteed token of " + player.getName().getString()));
+            source.sendFailure(Component.translatable("blockpops.command.reload_guaranteed.failed", player.getName().getString()));
             LOGGER.error("Error executing reloadguaranteedtoken command", e);
             return 0;
         }

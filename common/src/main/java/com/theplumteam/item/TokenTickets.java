@@ -28,11 +28,11 @@ public final class TokenTickets {
         Component message;
         if (ticket.is(ModItems.BLUE_TICKET.get())) {
             discovery.setRegularTokens(discovery.getRegularTokens() + 1);
-            message = Component.literal("Regular token added (" + discovery.getRegularTokens() + ")")
+            message = Component.translatable("blockpops.message.regular_token_added", discovery.getRegularTokens())
                     .withStyle(ChatFormatting.BLUE);
         } else if (ticket.is(ModItems.GOLD_TICKET.get())) {
             discovery.setExtraGuaranteedTokens(discovery.getExtraGuaranteedTokens() + 1);
-            message = Component.literal("Guaranteed token added (" + discovery.getGuaranteedTokens() + ")")
+            message = Component.translatable("blockpops.message.guaranteed_token_added", discovery.getGuaranteedTokens())
                     .withStyle(ChatFormatting.GOLD);
         } else {
             return;

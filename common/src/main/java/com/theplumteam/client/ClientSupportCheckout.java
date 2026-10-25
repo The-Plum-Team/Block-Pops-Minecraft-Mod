@@ -3,6 +3,7 @@ package com.theplumteam.client;
 import com.theplumteam.client.gui.widget.LinkButton;
 import com.theplumteam.network.OpenSupportCheckoutPacket;
 import com.theplumteam.network.RequestSupportCheckoutPacket;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -26,7 +27,7 @@ public final class ClientSupportCheckout {
 
     public static void request() {
         requestedAt = System.currentTimeMillis();
-        setStatus("Getting your supporter checkout...");
+        setStatus(Component.translatable("blockpops.support.getting").getString());
         new RequestSupportCheckoutPacket().sendToServer();
     }
 
@@ -36,15 +37,17 @@ public final class ClientSupportCheckout {
             return;
         }
         LinkButton.openLink(url);
-        setStatus(OpenSupportCheckoutPacket.isKofi(url)
-                ? "Ko-fi is open in your browser. After paying, use the link in the chat."
-                : "The checkout is open in your browser.");
+        setStatus(Component.translatable(OpenSupportCheckoutPacket.isKofi(url)
+                ? "blockpops.support.kofi_open" : "blockpops.support.open").getString());
     }
 
-    /** Shows why no checkout opens, if the player has just asked for one. */
+    /**
+     * Shows why no checkout opens, if the player has just asked for one. The server names the
+     * reason by its language key; a server that sends the words themselves gets them shown as sent.
+     */
     public static void show(String message) {
         if (answered()) {
-            setStatus(message);
+            setStatus(Component.translatable(message).getString());
         }
     }
 

@@ -58,6 +58,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
@@ -209,7 +210,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
      * set to a collection of the other kind opens on that kind's tab instead.
      */
     public CollectionSelectionScreen(BlockPos blockPos, String currentCollectionId, boolean plush) {
-        super(Component.literal(plush ? "Gacha Machine Configuration" : "Claw Machine Configuration"));
+        super(Component.translatable(plush ? "blockpops.machine.title.gacha" : "blockpops.machine.title.claw"));
         this.blockPos = blockPos;
         this.plush = currentCollectionId == null ? plush
                 : CollectionRegistry.getCollection(currentCollectionId).map(FigureCollection::isPlush).orElse(plush);
@@ -387,12 +388,12 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         tokenButtonWidth = (tokensWidth - GAP) / 2;
 
         useRegularButton = new StyledButton(contentLeft, footTop, tokenButtonWidth, buttonHeight,
-                Component.literal("Use Regular Token"), button -> useToken(TokenType.REGULAR))
+                Component.translatable("blockpops.machine.use_regular"), button -> useToken(TokenType.REGULAR))
                 .tone(StyledButton.Tone.BLUE).pixelLabel().sound(ModSounds.DRAW_TICKET);
         this.addRenderableWidget(useRegularButton);
         int specialX = contentLeft + tokenButtonWidth + GAP;
         useSpecialButton = new StyledButton(specialX, footTop, tokenButtonWidth, buttonHeight,
-                Component.literal("Use Guaranteed Token"), button -> useToken(TokenType.GUARANTEED))
+                Component.translatable("blockpops.machine.use_guaranteed"), button -> useToken(TokenType.GUARANTEED))
                 .tone(StyledButton.Tone.GOLD).pixelLabel().sound(ModSounds.DRAW_TICKET);
         this.addRenderableWidget(useSpecialButton);
         regularCenterX = contentLeft + tokenButtonWidth / 2;
@@ -404,15 +405,15 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
                     Component.translatable("blockpops.world_creator.machine_button"),
                     button -> SettingsScreen.openCreator(this, blockPos)));
         }
-        doneButton = new StyledButton(doneX, footTop, doneWidth, buttonHeight, Component.literal("Done"),
+        doneButton = new StyledButton(doneX, footTop, doneWidth, buttonHeight, CommonComponents.GUI_DONE,
                 button -> onClose()).tone(StyledButton.Tone.PRIMARY).pixelLabel();
         this.addRenderableWidget(doneButton);
         updateTokenButtonStates();
 
         // The top row: the figure and plush tabs on the left, the link buttons on the right
-        TabButton.Folder figuresTab = new TabButton.Folder(contentLeft, MARGIN, Component.literal("Figures"),
+        TabButton.Folder figuresTab = new TabButton.Folder(contentLeft, MARGIN, Component.translatable("blockpops.machine.tab.figures"),
                 new ItemStack(ModItems.CLAW_MACHINE_BLOCK_ITEM.get()), !plush, button -> switchTab(false));
-        TabButton.Folder plushesTab = new TabButton.Folder(figuresTab.right() + GAP, MARGIN, Component.literal("Plushes"),
+        TabButton.Folder plushesTab = new TabButton.Folder(figuresTab.right() + GAP, MARGIN, Component.translatable("blockpops.machine.tab.plushes"),
                 new ItemStack(ModItems.GACHA_MACHINE_BLOCK_ITEM.get()), plush, button -> switchTab(true));
         this.addRenderableWidget(figuresTab);
         this.addRenderableWidget(plushesTab);
@@ -464,7 +465,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         int x = right - LINK_SIZE;
         this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, SETTINGS_ICON,
                 null, // No URL: it opens the settings
-                Component.literal("Settings")) {
+                Component.translatable("blockpops.machine.settings")) {
             @Override
             //? if >=26 {
             /*public void onPress(net.minecraft.client.input.InputWithModifiers bpInput) {
@@ -476,18 +477,18 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         });
         x -= LINK_SIZE + LINK_SPACING;
         this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, DISCORD_ICON, DISCORD_URL,
-                Component.literal("Join our Discord!")));
+                Component.translatable("blockpops.machine.link.discord")));
         x -= LINK_SIZE + LINK_SPACING;
         this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, CURSEFORGE_ICON, CURSEFORGE_URL,
-                Component.literal("Visit our CurseForge page")));
+                Component.translatable("blockpops.machine.link.curseforge")));
         x -= LINK_SIZE + LINK_SPACING;
         this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, MODRINTH_ICON, MODRINTH_URL,
-                Component.literal("Visit our Modrinth page")));
+                Component.translatable("blockpops.machine.link.modrinth")));
         // The special plushes are for supporters: the button opens a checkout made for this player
         x -= LINK_SIZE + LINK_SPACING;
         this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, SUPPORT_ICON,
                 null, // No URL: the server gets the checkout and sends it back
-                Component.literal("Become a supporter to get the special plushes")) {
+                Component.translatable("blockpops.machine.link.supporter")) {
             @Override
             //? if >=26 {
             /*public void onPress(net.minecraft.client.input.InputWithModifiers bpInput) {
@@ -500,7 +501,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         x -= LINK_SIZE + LINK_SPACING;
         this.addRenderableWidget(new LinkButton(x, y, LINK_SIZE, LINK_SIZE, PALETTE_ICON,
                 null, // No URL: it opens the favourite colour's screen, which comes back here
-                Component.literal("Change Favorite Color")) {
+                Component.translatable("blockpops.machine.link.favorite_color")) {
             @Override
             //? if >=26 {
             /*public void onPress(net.minecraft.client.input.InputWithModifiers bpInput) {
@@ -626,8 +627,10 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         int x = leftX + 8;
         int y = bodyTop + 6;
         int room = leftWidth - 16;
-        UiText.drawFitted(graphics, this.font, "Collections", x, y, room, Surfaces.TEXT);
-        UiText.drawFitted(graphics, this.font, collectionListWidget.children().size() + " collections available",
+        UiText.drawFitted(graphics, this.font, Component.translatable("blockpops.machine.collections").getString(),
+                x, y, room, Surfaces.TEXT);
+        UiText.drawFitted(graphics, this.font, Component.translatable("blockpops.machine.collections_available",
+                        collectionListWidget.children().size()).getString(),
                 x, y + font.lineHeight + 2, room, Surfaces.TEXT_DIM);
         graphics.fill(x, bodyTop + COLUMN_HEADER - 3, leftX + leftWidth - 8, bodyTop + COLUMN_HEADER - 2, HAIRLINE);
     }
@@ -646,12 +649,14 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         int room = rightWidth - 16;
         UiText.drawFitted(graphics, this.font, collection.getName(), x, y, room, Surfaces.TEXT);
 
-        String figureCount = collection.getRegularFigures().size() + " figures"
-                + (collection.hasSpecials() ? " and " + collection.getSpecialFigures().size() + " specials" : "")
-                + " in this collection";
+        String figureCount = (collection.hasSpecials()
+                ? Component.translatable("blockpops.machine.figures_specials", collection.getRegularFigures().size(),
+                        collection.getSpecialFigures().size())
+                : Component.translatable("blockpops.machine.figures", collection.getRegularFigures().size()))
+                .getString();
         // Tell a player the server gives this collection's specials to
         boolean specialAccess = collection.hasSpecials() && ClientSpecialAccess.has(collection.getId());
-        String access = "Special access";
+        String access = Component.translatable("blockpops.machine.special_access").getString();
         int countRoom = specialAccess ? room - font.width(access) - 8 : room;
         String shownCount = UiText.fit(this.font, figureCount, countRoom);
         UiText.draw(graphics, this.font, shownCount, x, y + font.lineHeight + 2, Surfaces.TEXT_DIM);
@@ -991,20 +996,21 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         // Regular tokens, above their button. Blue tickets can take the count past the 3 the
         // server grants on its own
         int regularTokens = ClientTokenManager.getRegularTokens();
-        String regularText = "Regular Tokens: " + regularTokens + (regularTokens <= 3 ? "/3" : "");
-        if (regularTokens < 3) {
-            regularText += " - Next: " + ClientTokenManager.formatNextRegularTime();
-        }
+        String regularCount = regularTokens + (regularTokens <= 3 ? "/3" : "");
+        String regularText = (regularTokens < 3
+                ? Component.translatable("blockpops.machine.regular_tokens_next", regularCount,
+                        ClientTokenManager.formatNextRegularTime())
+                : Component.translatable("blockpops.machine.regular_tokens", regularCount)).getString();
         regularInfoX = drawTokenLine(graphics, regularText, regularCenterX, REGULAR_TOKEN_COLOR, mouseX, mouseY);
         regularInfoY = tokenInfoY;
 
         // The guaranteed token, above its button
         int guaranteedTokens = ClientTokenManager.getGuaranteedTokens();
-        String specialText = guaranteedTokens > 1 ? "Guaranteed Tokens: " + guaranteedTokens
-                : "Guaranteed Token: " + (guaranteedTokens == 1 ? "Available" : "Used");
-        if (guaranteedTokens == 0) {
-            specialText += " - Resets: " + ClientTokenManager.formatNextSpecialResetTime();
-        }
+        String specialText = (guaranteedTokens > 1
+                ? Component.translatable("blockpops.machine.guaranteed_tokens", guaranteedTokens)
+                : guaranteedTokens == 1 ? Component.translatable("blockpops.machine.guaranteed_available")
+                : Component.translatable("blockpops.machine.guaranteed_used",
+                        ClientTokenManager.formatNextSpecialResetTime())).getString();
         specialInfoX = drawTokenLine(graphics, specialText, specialCenterX, GUARANTEED_TOKEN_COLOR, mouseX, mouseY);
         specialInfoY = tokenInfoY;
     }

@@ -59,7 +59,7 @@ public class SetFavoriteColorPacket {
 
                 try {
                     // Parse the color string back to PopBlockColor enum
-                    PopBlockColor color = PopBlockColor.valueOf(packet.colorName.toUpperCase());
+                    PopBlockColor color = PopBlockColor.valueOf(packet.colorName.toUpperCase(java.util.Locale.ROOT));
 
                     // Set the favorite color and mark as chosen
                     discovery.setFavoriteColor(color);
