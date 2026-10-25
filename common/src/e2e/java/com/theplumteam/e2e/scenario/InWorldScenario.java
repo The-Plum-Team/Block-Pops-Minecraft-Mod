@@ -38,10 +38,11 @@ import java.util.concurrent.atomic.AtomicReference;
  * hand and placed, the claw machine in hand, and one wall per collection with every figure.
  *
  * The walls come from the test server's data pack (e2e/packaged_runtime.py), which builds them
- * with the same layout this class walks to: collections with figures sorted by id, then the
- * Custom collections the server offers sorted by id, wall i at x = WALL_ORIGIN_X + i * WALL_SPACING
- * on z = WALL_Z, figure k at column k % 9, row k / 9. The one Custom collection is the fixture
- * e2e/custom_fixture.py puts in the verified caches, since the game never reaches the CDN here.
+ * with the same layout this class walks to: collections with figures sorted by id, then, after
+ * one empty wall's place, the Custom collections the server offers sorted by id, wall i at
+ * x = WALL_ORIGIN_X + i * WALL_SPACING on z = WALL_Z, figure k at column k % 9, row k / 9. The one
+ * Custom collection is the fixture e2e/custom_fixture.py puts in the verified caches, since the
+ * game never reaches the CDN here.
  */
 public final class InWorldScenario implements Scenario {
     private static final String PREFIX = "in-world.client_a.";
@@ -197,8 +198,9 @@ public final class InWorldScenario implements Scenario {
                 steps.add(collectionWall(minecraft, collections.get(index), index, false));
             }
         }
-        // The Custom walls stand after the others. The server may sync its Custom collections only
-        // after the world is joined, so they come from the contract rather than the registry.
+        // The Custom walls stand after the others and one empty place, which keeps a short wall's
+        // neighbour out of its picture. The server may sync its Custom collections only after the
+        // world is joined, so they come from the contract rather than the registry.
         List<String> custom = contracted.stream()
                 .filter(step -> step.startsWith("collection_"))
                 .map(step -> step.substring("collection_".length()))
@@ -206,7 +208,7 @@ public final class InWorldScenario implements Scenario {
                 .sorted()
                 .toList();
         for (int index = 0; index < custom.size(); index++) {
-            steps.add(collectionWall(minecraft, custom.get(index), collections.size() + index, true));
+            steps.add(collectionWall(minecraft, custom.get(index), collections.size() + 1 + index, true));
         }
         return steps;
     }

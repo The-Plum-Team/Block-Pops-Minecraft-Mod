@@ -44,6 +44,8 @@ The `in-world` flow shows the mod as a player meets it in the world:
    - The collection borrows bundled resources under its own id: Goku with his
      own model, poses and texture, Luffy with a texture on the default model,
      the Dragon Ball Z box art and logo.
+   - Its wall stands one empty wall's place after the bundled ones, so the
+     short wall's neighbour stays out of its picture.
    - The harness waits until the server has synced the collection and every
      file it names has loaded, then photographs its wall.
    - It only runs in a scenario whose contract names the

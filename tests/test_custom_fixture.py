@@ -143,9 +143,10 @@ class CustomFixtureTests(unittest.TestCase):
                                        ((fixture.COLLECTION_ID, fixture.figures()),))
             written = (server / "world" / "datapacks" / "blockpops_e2e_time" / "data" / "blockpops_e2e"
                        / "function" / "showcase.mcfunction").read_text()
-        expected = runtime.showcase_function(packaged + [(fixture.COLLECTION_ID, fixture.figures())])
+        expected = runtime.showcase_function(packaged, ((fixture.COLLECTION_ID, fixture.figures()),))
         self.assertEqual(expected, written)
-        origin = runtime.SHOWCASE_WALL_ORIGIN_X + len(packaged) * runtime.SHOWCASE_WALL_SPACING
+        # One empty wall's place apart from the last packaged wall
+        origin = runtime.SHOWCASE_WALL_ORIGIN_X + (len(packaged) + 1) * runtime.SHOWCASE_WALL_SPACING
         self.assertIn(f'setblock {origin} {runtime.SHOWCASE_GROUND_Y} {runtime.SHOWCASE_WALL_Z} '
                       f'blockpops:box_block[facing=south]{{CollectionId:"{fixture.COLLECTION_ID}",'
                       f'FigureId:"{fixture.figures()[0]}"}}', written)
