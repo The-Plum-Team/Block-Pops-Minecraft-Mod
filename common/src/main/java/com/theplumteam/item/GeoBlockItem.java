@@ -10,6 +10,7 @@ import com.theplumteam.util.TagReads;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import com.theplumteam.figure.LocalNames;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
@@ -60,16 +61,15 @@ public class GeoBlockItem extends BlockItem {
                 return super.getName(stack);
             }
 
-            String collectionName = collection.getName();
 
             if (figureId != null && !figureId.isEmpty()) {
                 FigureDefinition figure = collection.getFigure(figureId).orElse(null);
                 if (figure != null) {
-                    return Component.literal(figure.getName()).withStyle(ChatFormatting.WHITE);
+                    return LocalNames.figure(collectionId, figure).withStyle(ChatFormatting.WHITE);
                 }
             }
 
-            return Component.translatable("block.blockpops.box_block.collection", collectionName);
+            return Component.translatable("block.blockpops.box_block.collection", LocalNames.collection(collection));
 
         } else if (getBlock() instanceof FigureBlock) {
             CompoundTag blockEntityTag = BlockEntityItemData.read(stack);
@@ -95,7 +95,7 @@ public class GeoBlockItem extends BlockItem {
 
             FigureDefinition figure = collection.getFigure(figureId).orElse(null);
             if (figure != null) {
-                return Component.literal(figure.getName()).withStyle(ChatFormatting.WHITE);
+                return LocalNames.figure(collectionId, figure).withStyle(ChatFormatting.WHITE);
             }
         }
 
@@ -156,7 +156,7 @@ public class GeoBlockItem extends BlockItem {
                 lines.accept(Component.translatable("tooltip.blockpops.holographic")
                         .withStyle(ChatFormatting.LIGHT_PURPLE));
             }
-            lines.accept(Component.literal(collection.getName()).withStyle(ChatFormatting.GRAY));
+            lines.accept(LocalNames.collection(collection).withStyle(ChatFormatting.GRAY));
 
             FigureDefinition figure = collection.getFigure(figureId).orElse(null);
             if (figure != null && figure.hasAlternatives()) {

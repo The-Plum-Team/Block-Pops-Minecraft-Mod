@@ -27,6 +27,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 //? }
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Component;
+import com.theplumteam.figure.LocalNames;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
@@ -190,8 +191,9 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         return skin < versions(figure) ? Math.max(0, skin) : 0;
     }
 
-    private static String nameOf(FigureDefinition figure, int skin) {
-        return skin > 0 ? figure.getAlternatives().get(skin - 1).name() : figure.getName();
+    private String nameOf(FigureDefinition figure, int skin) {
+        return (skin > 0 ? LocalNames.alternative(collectionId, figure, skin) : LocalNames.figure(collectionId, figure))
+                .getString();
     }
 
     /** Forgets where its cells are, as the list has every row do before it draws them. */
@@ -576,7 +578,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             FigureDefinition figure = figures.get(0);
             String uniqueFigureId = collectionId + ":" + figure.getId();
             boolean isDiscovered = discovered.test(uniqueFigureId);
-            return isDiscovered ? Component.literal(figure.getName())
+            return isDiscovered ? LocalNames.figure(collectionId, figure)
                     : Component.translatable("blockpops.machine.narration.undiscovered");
         } else {
             int discoveredCount = 0;

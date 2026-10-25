@@ -58,6 +58,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import com.theplumteam.figure.LocalNames;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -647,7 +648,7 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         int x = rightX + 8;
         int y = bodyTop + 6;
         int room = rightWidth - 16;
-        UiText.drawFitted(graphics, this.font, collection.getName(), x, y, room, Surfaces.TEXT);
+        UiText.drawFitted(graphics, this.font, LocalNames.collection(collection).getString(), x, y, room, Surfaces.TEXT);
 
         String figureCount = (collection.hasSpecials()
                 ? Component.translatable("blockpops.machine.figures_specials", collection.getRegularFigures().size(),

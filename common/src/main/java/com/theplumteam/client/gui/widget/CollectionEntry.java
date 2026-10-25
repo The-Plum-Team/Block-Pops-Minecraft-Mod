@@ -23,6 +23,7 @@ import net.minecraft.client.gui.GuiGraphics;
 *///? }
 import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.network.chat.Component;
+import com.theplumteam.figure.LocalNames;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 
@@ -218,7 +219,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
         int textX = logoLeft + logoBoxWidth + PADDING + 2;
         int room = right - 4 - textX;
         int textY = top + 5;
-        UiText.drawFitted(graphics, font, collection.getName(), textX, textY, room - nameReserve,
+        UiText.drawFitted(graphics, font, LocalNames.collection(collection).getString(), textX, textY, room - nameReserve,
                 selected ? Surfaces.TEXT : 0xFFE8E8E8);
         graphics.fill(textX, textY + font.lineHeight + 1, right - 4, textY + font.lineHeight + 2, HAIRLINE);
 
@@ -402,7 +403,7 @@ public class CollectionEntry extends ObjectSelectionList.Entry<CollectionEntry> 
 
     @Override
     public Component getNarration() {
-        return Component.literal(collection.getName() + " - "
+        return Component.literal(LocalNames.collection(collection).getString() + " - "
                 + figureCountText(collection, ClientDiscoveryManager::isDiscovered));
     }
 

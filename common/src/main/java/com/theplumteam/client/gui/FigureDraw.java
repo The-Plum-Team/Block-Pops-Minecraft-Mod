@@ -16,6 +16,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import com.theplumteam.figure.LocalNames;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -117,7 +118,7 @@ public final class FigureDraw {
                 ? screen.figureList() : null;
         if (!awaited || winner == null || list == null || list.getCurrentCollection() == null
                 || !collectionId.equals(list.getCurrentCollection().getId())) {
-            playResultSound(isNew, holographic, winner);
+            playResultSound(isNew, holographic, winner, collectionId);
             return;
         }
         List<Stop> path = path(cells(list, collection, figureId, guaranteed), figureId, winner);
@@ -258,7 +259,7 @@ public final class FigureDraw {
         if (stoppedTicks >= 0) {
             stoppedTicks++;
             if (stoppedTicks == REVEAL_DELAY) {
-                playResultSound(isNew, holographic, winner);
+                playResultSound(isNew, holographic, winner, collection == null ? null : collection.getId());
             } else if (stoppedTicks >= REVEAL_DELAY + RESULT_TICKS) {
                 finish();
             }
@@ -359,7 +360,7 @@ public final class FigureDraw {
         int bottom = list.bottom();
         graphics.fill(left, top, right, bottom, 0xB0000000);
 
-        String name = draw.winner().getName();
+        String name = LocalNames.figure(draw.collection.getId(), draw.winner()).getString();
         String label = Component.translatable(draw.isHolographic()
                 ? (draw.isNew() ? "blockpops.draw.new_holographic" : "blockpops.draw.holographic_card")
                 : draw.isNew() ? "blockpops.draw.new" : "blockpops.draw.owned").getString();
@@ -429,7 +430,8 @@ public final class FigureDraw {
     /** Forgets the draw when its screen closes, sounding a result the screen never got to show. */
     public static void reset() {
         if (active != null && active.stoppedTicks < REVEAL_DELAY) {
-            playResultSound(active.isNew, active.holographic, active.winner);
+            playResultSound(active.isNew, active.holographic, active.winner,
+                    active.collection == null ? null : active.collection.getId());
         }
         finish();
         awaitedCollection = null;
@@ -460,7 +462,8 @@ public final class FigureDraw {
     }
 
     // A holographic figure rings out over the usual sound and is announced in shifting colours
-    private static void playResultSound(boolean isNew, boolean holographic, @Nullable FigureDefinition winner) {
+    private static void playResultSound(boolean isNew, boolean holographic, @Nullable FigureDefinition winner,
+                                        @Nullable String collectionId) {
         UiSounds.play(isNew ? ModSounds.DRAW_NEW : ModSounds.DRAW_DUPLICATE, 1.0F, 1.0F);
         if (!holographic) {
             return;
@@ -468,7 +471,8 @@ public final class FigureDraw {
         UiSounds.play(ModSounds.DRAW_HOLOGRAPHIC, 1.0F, 1.0F);
         Component message = winner == null
                 ? Component.translatable("blockpops.draw.holographic_unknown")
-                : Component.translatable("blockpops.draw.holographic", winner.getName());
+                : Component.translatable("blockpops.draw.holographic", collectionId == null
+                        ? Component.literal(winner.getName()) : LocalNames.figure(collectionId, winner));
         Minecraft minecraft = Minecraft.getInstance();
         //? if >=26.2 {
         /*minecraft.gui.hud.setOverlayMessage(message, true);
