@@ -54,13 +54,29 @@ public final class UiText {
     }
 
     /**
-     * {@code text} broken at spaces into lines no wider than {@code width}; a word wider than
-     * that stays whole on its own line, for {@link #drawFitted} to cut.
+     * {@code text} broken at spaces into lines no wider than {@code width}. A run wider than a
+     * line is broken wherever the width runs out: Chinese, Japanese and Thai put no spaces
+     * between words, so a whole sentence of theirs is one such run.
      */
     public static java.util.List<String> wrap(Font font, String text, int width) {
         java.util.List<String> lines = new java.util.ArrayList<>();
         StringBuilder line = new StringBuilder();
         for (String word : text.split(" ")) {
+            if (word.isEmpty()) {
+                continue;
+            }
+            while (font.width(word) > width) {
+                if (line.length() > 0) {
+                    lines.add(line.toString());
+                    line.setLength(0);
+                }
+                String head = font.plainSubstrByWidth(word, Math.max(1, width));
+                if (head.isEmpty()) {
+                    head = word.substring(0, Character.charCount(word.codePointAt(0)));
+                }
+                lines.add(head);
+                word = word.substring(head.length());
+            }
             if (word.isEmpty()) {
                 continue;
             }
