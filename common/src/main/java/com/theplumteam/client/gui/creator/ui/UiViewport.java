@@ -194,6 +194,10 @@ public abstract class UiViewport extends UiNode.Box {
         int lightWidth = Math.max(UiButton.widthFor(font, CreatorScreen.tr("preview.light_day"), false),
                 UiButton.widthFor(font, CreatorScreen.tr("preview.light_night"), false));
         int spinWidth = UiButton.widthFor(font, CreatorScreen.tr("preview.rotate"), false);
+        // A view narrower than the two squeezes them, and their labels shrink
+        int[] widths = UiButton.fitRow(width - 2 * INSET - 4, spinWidth, lightWidth);
+        spinWidth = widths[0];
+        lightWidth = widths[1];
         int buttonY = y + height - INSET - UiButton.SMALL_HEIGHT;
         int lightX = x + width - INSET - lightWidth;
         lightButton.at(lightX, buttonY, lightWidth, UiButton.SMALL_HEIGHT);
@@ -456,10 +460,11 @@ public abstract class UiViewport extends UiNode.Box {
     }
     //? }
 
-    /** A line of text with a dark backing, readable over any scene. */
-    protected static void label(GuiGraphics graphics, Font font, Component text, int x, int y, int colour) {
-        int width = font.width(text);
+    /** A line of text with a dark backing, readable over any scene, cut to a width. */
+    protected static void label(GuiGraphics graphics, Font font, Component text, int x, int y, int room, int colour) {
+        String shown = Draw.cut(font, text.getString(), room);
+        int width = font.width(shown);
         graphics.fill(x - 2, y - 2, x + width + 2, y + 9, 0xA0000000);
-        Draw.string(graphics, font, text, x, y, colour);
+        Draw.string(graphics, font, shown, x, y, colour);
     }
 }

@@ -141,13 +141,14 @@ public class UiColourPicker extends UiNode.Box {
         graphics.fill(hueX, hueY, hueX + HUE_WIDTH, hueY + 1, 0xFF000000 | hsvToRgb(hue, 1.0f, 1.0f));
 
         int columnX = columnX();
-        Draw.string(graphics, font, CreatorScreen.tr("colour.new"), columnX, y, Theme.MUTED);
+        int columnWidth = Math.max(0, x + width - columnX);
+        Draw.shrunk(graphics, font, CreatorScreen.tr("colour.new"), columnX, y, columnWidth, Theme.MUTED);
         Draw.panel(graphics, columnX, y + 10, SWATCH_WIDTH, 16, 0xFF000000 | rgb(), Surfaces.OUTLINE);
         Draw.panel(graphics, columnX, y + 26, SWATCH_WIDTH, 12, 0xFF000000 | original, Surfaces.OUTLINE);
         if (oldSwatch().contains(mouseX, mouseY)) {
             UiTooltip.set(CreatorScreen.tr("colour.old", hex(original)));
         }
-        Draw.string(graphics, font, CreatorScreen.tr("colour.hex"), columnX, y + 44, Theme.MUTED);
+        Draw.shrunk(graphics, font, CreatorScreen.tr("colour.hex"), columnX, y + 44, columnWidth, Theme.MUTED);
         hexBox.render(graphics, mouseX, mouseY, partialTick);
         if (!hexValid) {
             // The well's border in red

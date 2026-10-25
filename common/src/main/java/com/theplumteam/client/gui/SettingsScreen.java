@@ -33,6 +33,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import com.theplumteam.figure.LocalNames;
 import org.jetbrains.annotations.Nullable;
 
 import java.time.ZoneId;
@@ -459,7 +460,8 @@ public class SettingsScreen extends DialogScreen {
             Stamp.draw(graphics, new String[] {Component.translatable("blockpops.settings.stamp.in_development").getString(),
                             Component.translatable("blockpops.settings.stamp.next_update").getString()},
                     new float[] {3, 1},
-                    (contentX + contentRight) / 2.0f, (contentTop + contentBottom()) / 2.0f, STAMP_INK, 12);
+                    (contentX + contentRight) / 2.0f, (contentTop + contentBottom()) / 2.0f, STAMP_INK, 12,
+                    contentRight - contentX - 16);
         }
     }
 
@@ -895,7 +897,7 @@ public class SettingsScreen extends DialogScreen {
         List<AbstractWidget> pair = new ArrayList<>();
         for (FigureCollection collection : filteredCollections) {
             boolean left = pair.isEmpty();
-            String label = Component.translatable("blockpops.settings.cheats.unlock", collection.getName()).getString();
+            String label = Component.translatable("blockpops.settings.cheats.unlock", LocalNames.collection(collection)).getString();
             StyledButton unlockButton = new StyledButton(left ? contentX : rightX, 0, left ? leftWidth : rightWidth,
                     WIDGET_HEIGHT, Component.literal(label),
                     button -> {
@@ -954,7 +956,7 @@ public class SettingsScreen extends DialogScreen {
             }
 
             ToggleRow toggle = new ToggleRow(contentX - ROW_OVERHANG, 0, contentRight - contentX + 2 * ROW_OVERHANG,
-                    Component.literal(collection.getName()),
+                    LocalNames.collection(collection),
                     !ClientHiddenCollections.isHidden(collection.getId()),
                     shown -> {
                         // Send packet to server to hide or show this collection for every player

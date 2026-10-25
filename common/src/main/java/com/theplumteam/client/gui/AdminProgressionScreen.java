@@ -14,6 +14,7 @@ import com.theplumteam.network.AdminProgressionSyncPacket;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import com.theplumteam.figure.LocalNames;
 import net.minecraft.network.chat.CommonComponents;
 import org.jetbrains.annotations.Nullable;
 
@@ -278,7 +279,8 @@ public class AdminProgressionScreen extends DialogScreen {
                 pickerY + (PICKER_HEIGHT - 8) / 2, selected < 0 ? Surfaces.TEXT_DIM : Surfaces.TEXT);
 
         if (collections.isEmpty()) {
-            UiText.drawCentered(graphics, this.font, Component.translatable("blockpops.progression.none").getString(), dialogX + dialogWidth / 2,
+            UiText.drawCentered(graphics, this.font, UiText.fit(this.font,
+                    Component.translatable("blockpops.progression.none").getString(), dialogWidth - 16), dialogX + dialogWidth / 2,
                     gridTop + (ROW_HEIGHT - 9) / 2, Surfaces.TEXT_MUTED);
             return;
         }
@@ -291,7 +293,7 @@ public class AdminProgressionScreen extends DialogScreen {
             // A hairline under each row, as the settings' rows
             graphics.fill(rowX, rowY + ROW_HEIGHT - 1, rowX + columnWidth, rowY + ROW_HEIGHT, Surfaces.ROW_LINE);
             int textY = rowY + (ROW_HEIGHT - 1 - 8) / 2;
-            UiText.drawFitted(graphics, this.font, collection.getName(), rowX + 4, textY, nameWidth, Surfaces.TEXT);
+            UiText.drawFitted(graphics, this.font, LocalNames.collection(collection).getString(), rowX + 4, textY, nameWidth, Surfaces.TEXT);
             if (selected < 0) {
                 continue;
             }

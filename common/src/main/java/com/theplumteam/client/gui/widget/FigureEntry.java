@@ -27,6 +27,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 //? }
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Component;
+import com.theplumteam.figure.LocalNames;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
@@ -190,8 +191,9 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
         return skin < versions(figure) ? Math.max(0, skin) : 0;
     }
 
-    private static String nameOf(FigureDefinition figure, int skin) {
-        return skin > 0 ? figure.getAlternatives().get(skin - 1).name() : figure.getName();
+    private String nameOf(FigureDefinition figure, int skin) {
+        return (skin > 0 ? LocalNames.alternative(collectionId, figure, skin) : LocalNames.figure(collectionId, figure))
+                .getString();
     }
 
     /** Forgets where its cells are, as the list has every row do before it draws them. */
@@ -313,14 +315,15 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             // Centred over the row, between two rules as wide as a full row
             int fullRowWidth = columns * effectiveFigureSize + (columns - 1) * effectiveSpacing;
             int rowLeft = x + (entryWidth - fullRowWidth) / 2;
-            int headingWidth = mc.font.width(heading);
+            String shown = UiText.fit(mc.font, heading, fullRowWidth - 24);
+            int headingWidth = mc.font.width(shown);
             int headingX = x + (entryWidth - headingWidth) / 2;
             int headingGap = ROW_GAP + HEADING_SPACE;
             int headingY = y - (headingGap + mc.font.lineHeight) / 2;
             int ruleY = headingY + mc.font.lineHeight / 2 - 1;
             graphics.fill(rowLeft, ruleY, headingX - 6, ruleY + 1, SPECIAL_BORDER_COLOR_UNDISCOVERED);
             graphics.fill(headingX + headingWidth + 6, ruleY, rowLeft + fullRowWidth, ruleY + 1, SPECIAL_BORDER_COLOR_UNDISCOVERED);
-            UiText.draw(graphics, mc.font, heading, headingX, headingY, SPECIAL_BORDER_COLOR);
+            UiText.draw(graphics, mc.font, shown, headingX, headingY, SPECIAL_BORDER_COLOR);
         }
 
         // Render each figure in this row
@@ -576,7 +579,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
             FigureDefinition figure = figures.get(0);
             String uniqueFigureId = collectionId + ":" + figure.getId();
             boolean isDiscovered = discovered.test(uniqueFigureId);
-            return isDiscovered ? Component.literal(figure.getName())
+            return isDiscovered ? LocalNames.figure(collectionId, figure)
                     : Component.translatable("blockpops.machine.narration.undiscovered");
         } else {
             int discoveredCount = 0;

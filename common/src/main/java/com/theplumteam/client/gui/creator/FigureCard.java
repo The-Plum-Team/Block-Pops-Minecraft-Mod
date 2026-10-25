@@ -149,16 +149,20 @@ final class FigureCard {
         return entry;
     }
 
-    // "SKIN" or "MODEL" at the top left, the size at the top right, both at half size
+    // "SKIN" or "MODEL" at the top left, the size at the top right, both at half size; the kind
+    // smaller still where a narrow card leaves it less room before the size
     private static void drawTags(GuiGraphics graphics, Font font, FigureDraft figure, int x, int y, int width) {
         String kind = CreatorScreen.tr(figure.kind() == Kind.SKIN ? "figures.tag_skin" : "figures.tag_model")
                 .getString();
-        smallText(graphics, font, kind, x + 4, y + 3, TAG_TEXT);
         String size = scaleText(figure.scale());
         int sizeWidth = Math.round(font.width(size) * TAG_SCALE) + 4;
         int sizeX = x + width - 3 - sizeWidth;
+        int kindRoom = sizeX - 2 - (x + 4);
+        float kindScale = Math.min(TAG_SCALE, Math.max(0, kindRoom) / (float) Math.max(1, font.width(kind)));
+        smallText(graphics, font, kind, x + 4, y + 3 + (TAG_SCALE - kindScale) * (font.lineHeight - 1) / 2.0f,
+                kindScale, TAG_TEXT);
         graphics.fill(sizeX, y + 2, sizeX + sizeWidth, y + 8, TAG_FILL);
-        smallText(graphics, font, size, sizeX + 2, y + 3, Theme.TEXT_SOFT);
+        smallText(graphics, font, size, sizeX + 2, y + 3, TAG_SCALE, Theme.TEXT_SOFT);
     }
 
     // A red "!" square whose tooltip lists the figure's problems
@@ -176,10 +180,11 @@ final class FigureCard {
                 && card.mouseY() < top + height;
     }
 
-    private static void smallText(GuiGraphics graphics, Font font, String text, int x, int y, int colour) {
+    private static void smallText(GuiGraphics graphics, Font font, String text, float x, float y, float scale,
+                                  int colour) {
         GuiPose.push(graphics);
         GuiPose.translate(graphics, x, y);
-        GuiPose.scale(graphics, TAG_SCALE, TAG_SCALE);
+        GuiPose.scale(graphics, scale, scale);
         graphics.drawString(font, text, 0, 0, colour, false);
         GuiPose.pop(graphics);
     }

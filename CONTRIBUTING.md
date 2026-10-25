@@ -170,7 +170,11 @@ To improve a translation, change only that language's file and keep, in every st
 - the spaces at either end and the symbols (✦ ✔ ⚠ ▸ · ...);
 - technical names, commands and the collection name "World Players" as written.
 
-Item and block names follow vanilla Minecraft's capitalisation in that language. Open a pull request
+Item and block names follow vanilla Minecraft's capitalisation in that language. Collection and
+figure names come from the collections' data files; a language that knows a character by another
+name may add `collection.blockpops.<collection>`, `figure.blockpops.<collection>.<figure>` or
+`figure.blockpops.<collection>.<figure>.<n>` (its n-th alternative skin) to its own file only, as
+Spanish does for Adventure Time ("Rey Hielo"). Every other name stays as the data writes it. Open a pull request
 against `master`, or send the file to the team on Discord, saying which language and what changed.
 
 ## Release branch synchronization

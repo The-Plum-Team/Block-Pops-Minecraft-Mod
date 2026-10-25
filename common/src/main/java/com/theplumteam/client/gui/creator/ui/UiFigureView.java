@@ -392,7 +392,7 @@ public class UiFigureView extends UiViewport {
         // The 1x figure's label and the discovery switch keep the bottom left
         int clear = discovery.visible() ? discovery.bounds().right() + 6 : x + INSET + 2;
         if (left >= clear) {
-            label(graphics, font, caption, left, y + height - INSET - 10, Theme.MUTED);
+            label(graphics, font, caption, left, y + height - INSET - 10, right - left, Theme.MUTED);
         }
     }
 

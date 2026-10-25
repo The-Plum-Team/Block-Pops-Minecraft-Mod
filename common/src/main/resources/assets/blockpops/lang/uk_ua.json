@@ -766,7 +766,7 @@
   "blockpops.machine.figures_specials": "У цій колекції фігурок: %s, особливих: %s",
   "blockpops.machine.special_access": "Особливий доступ",
   "blockpops.machine.regular_tokens": "Звичайні жетони: %s",
-  "blockpops.machine.regular_tokens_next": "Звичайні жетони: %s - Наступний через: %s",
+  "blockpops.machine.regular_tokens_next": "Звичайні жетони: %s - новий через %s",
   "blockpops.machine.guaranteed_tokens": "Гарантовані жетони: %s",
   "blockpops.machine.guaranteed_available": "Гарантований жетон: доступний",
   "blockpops.machine.guaranteed_used": "Гарантований жетон: використано - Оновиться через: %s",

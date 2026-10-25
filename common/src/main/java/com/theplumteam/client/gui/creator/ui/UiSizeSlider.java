@@ -149,7 +149,8 @@ public class UiSizeSlider extends UiNode.Box {
         int[] widths = new int[count];
         boolean fits = true;
         for (int i = 0; i < count; i++) {
-            widths[i] = font.width(label(i));
+            // A label wider than the whole slider, as a long language's Giant on a narrow one, shrinks
+            widths[i] = Math.min(font.width(label(i)), Math.max(0, width));
             lefts[i] = labelLeft(i, widths[i]);
             if (i > 0 && lefts[i] < lefts[i - 1] + widths[i - 1] + 4) {
                 fits = false;
@@ -160,7 +161,7 @@ public class UiSizeSlider extends UiNode.Box {
                 continue;
             }
             int colour = !enabled ? Theme.FAINT : i == selected ? Theme.SELECTED_LIGHT : Theme.MUTED;
-            Draw.string(graphics, font, label(i), lefts[i], labelY, colour);
+            Draw.shrunk(graphics, font, label(i), lefts[i], labelY, widths[i], colour);
         }
     }
 

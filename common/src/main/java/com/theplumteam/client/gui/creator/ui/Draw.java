@@ -16,8 +16,8 @@ import java.util.List;
 /**
  * Drawing helpers for the creator screens, made only of fills, text and items so they look the
  * same on every version: the menus' raised faces and sunk wells ({@link Surfaces}), panels,
- * outlines, dashed edges, badges, progress bars, pixel-font headings, and text cut or wrapped to a
- * width. Light text gets the menus' dark drop shadow ({@link UiText}), which stays visible on
+ * outlines, dashed edges, badges, progress bars, pixel-font headings, and text cut, wrapped or
+ * shrunk to a width. Light text gets the menus' dark drop shadow ({@link UiText}), which stays visible on
  * their dark faces where vanilla's does not. Lines are drawn as one-pixel fills because the line
  * helpers of {@link GuiGraphics} were renamed in 26.1.
  */
@@ -175,14 +175,24 @@ public final class Draw {
      */
     public static int badge(GuiGraphics graphics, Font font, Component text, int x, int y, int background,
                             int foreground) {
-        int width = badgeWidth(font, text);
+        return badge(graphics, font, text, x, y, Integer.MAX_VALUE, background, foreground);
+    }
+
+    /** A badge no wider than a width, its text drawn smaller when it would be wider. */
+    public static int badge(GuiGraphics graphics, Font font, Component text, int x, int y, int maxWidth,
+                            int background, int foreground) {
+        int width = badgeWidth(font, text, maxWidth);
         panel(graphics, x, y, width, 12, background, foreground);
-        string(graphics, font, text, x + 4, y + 2, foreground);
+        shrunk(graphics, font, text, x + 4, y + 2, width - 8, foreground);
         return width;
     }
 
     public static int badgeWidth(Font font, Component text) {
         return font.width(text) + 8;
+    }
+
+    public static int badgeWidth(Font font, Component text, int maxWidth) {
+        return Math.max(0, Math.min(badgeWidth(font, text), maxWidth));
     }
 
     /**
@@ -263,6 +273,36 @@ public final class Draw {
     /** Text on one line, cut to a width as {@link #cut} cuts it. */
     public static void text(GuiGraphics graphics, Font font, String text, int x, int y, int width, int colour) {
         string(graphics, font, cut(font, text, width), x, y, colour);
+    }
+
+    /**
+     * Text on one line, drawn smaller when it is wider than a width, as a short label that is
+     * shown nowhere else and would say little cut; text that fits is drawn as {@link #string}
+     * draws it.
+     *
+     * @return the width drawn
+     */
+    public static int shrunk(GuiGraphics graphics, Font font, String text, int x, int y, int width, int colour) {
+        return shrunk(graphics, font, Component.literal(text), x, y, width, colour);
+    }
+
+    public static int shrunk(GuiGraphics graphics, Font font, Component text, int x, int y, int width, int colour) {
+        int textWidth = font.width(text);
+        if (textWidth <= width) {
+            string(graphics, font, text, x, y, colour);
+            return textWidth;
+        }
+        if (width <= 0) {
+            return 0;
+        }
+        // Scaled about the line's middle, so it stays level with the text beside it
+        float scale = width / (float) textWidth;
+        GuiPose.push(graphics);
+        GuiPose.translate(graphics, x, y + (1.0f - scale) * (font.lineHeight - 1) / 2.0f);
+        GuiPose.scale(graphics, scale, scale);
+        string(graphics, font, text, 0, 0, colour);
+        GuiPose.pop(graphics);
+        return width;
     }
 
     /** Text centred on a point, cut to a width as {@link #cut} cuts it. */

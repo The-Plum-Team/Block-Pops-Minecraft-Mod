@@ -124,9 +124,11 @@ public final class TokenTicket {
     }
 
     private static void words(GuiGraphics graphics, Font font, View v, Palette p) {
+        // The stub's word, smaller when a translation is longer than the stub
         String admit = tr("blockpops.ticket.admit_one");
-        int admitLength = width(admit, 1.0f);
-        upText(graphics, admit, 22, (HEIGHT - admitLength) / 2, admitLength, WHITE, 1.0f);
+        float admitScale = Math.min(1.0f, (HEIGHT - 8) / (float) Math.max(1, width(admit, 1.0f)));
+        int admitLength = width(admit, admitScale);
+        upText(graphics, admit, 22, (HEIGHT - admitLength) / 2, admitLength, WHITE, admitScale);
         int serialLength = width("NO. 004127", SMALL);
         upText(graphics, "NO. 004127", 10, (HEIGHT - serialLength) / 2, serialLength, mix(p.light, WHITE, 0.4), SMALL);
 
@@ -144,20 +146,30 @@ public final class TokenTicket {
             head = v.resetAt() != null ? tr("blockpops.ticket.at_in", v.resetAt()) : tr("blockpops.ticket.next_show_in");
             time = v.next() != null ? v.next() : "";
         }
-        // The head's capitals centred on the time's
+        // The head's capitals centred on the time's, the whole line smaller when a translation would
+        // run past the ticket
+        String clock = tr(v.regular() ? "blockpops.ticket.game_time" : "blockpops.ticket.real_time");
+        int line = width(head, SMALL) + 5 + width(time, 1.0f) + 6 + width(clock, SMALL) + 6;
+        float lineScale = Math.min(1.0f, (RIGHT - MAIN) / (float) Math.max(1, line));
+        GuiPose.push(graphics);
+        GuiPose.translate(graphics, MAIN, WAIT_TOP);
+        GuiPose.scale(graphics, lineScale, lineScale);
+        GuiPose.translate(graphics, -MAIN, -WAIT_TOP);
         pixel(graphics, head, MAIN, WAIT_TOP + 3, lite, SMALL, true);
         int timeX = MAIN + width(head, SMALL) + 5;
         pixel(graphics, time, timeX, WAIT_TOP, WHITE, 1.0f, true);
-        String clock = tr(v.regular() ? "blockpops.ticket.game_time" : "blockpops.ticket.real_time");
         chip(graphics, clock, timeX + width(time, 1.0f) + 6 + width(clock, SMALL) + 6, WAIT_TOP + 1, p.light, p.dark);
+        GuiPose.pop(graphics);
 
         // What runs the clock and what stops it
         String[] rules = v.regular() ? GAME_TIME : REAL_TIME;
         for (int i = 0; i < rules.length; i++) {
-            UiText.draw(graphics, font, tr(rules[i]), MAIN + (i % 2) * (RULE_WIDTH + 4) + 15,
-                    RULES_TOP + (i / 2) * 15 + 3, WHITE);
+            // Clear of the pill's picture and of its check or cross
+            UiText.drawShrunk(graphics, font, tr(rules[i]), MAIN + (i % 2) * (RULE_WIDTH + 4) + 15,
+                    RULES_TOP + (i / 2) * 15 + 3, RULE_WIDTH - 15 - 12, WHITE);
         }
-        UiText.draw(graphics, font, tr(v.regular() ? "blockpops.ticket.blue_tickets" : "blockpops.ticket.gold_tickets"), MAIN + 18, TICKETS_TOP + 4, WHITE);
+        UiText.drawShrunk(graphics, font, tr(v.regular() ? "blockpops.ticket.blue_tickets" : "blockpops.ticket.gold_tickets"),
+                MAIN + 18, TICKETS_TOP + 4, RIGHT - MAIN - 18, WHITE);
     }
 
     // ---- the art --------------------------------------------------------------------------------
@@ -275,8 +287,10 @@ public final class TokenTicket {
 
     private static void chip(GuiGraphics graphics, String label, int right, int top, int color, int face) {
         int w = width(label, SMALL) + 6;
-        graphics.fill(right - w, top, right, top + 9, face);
-        Surfaces.outline(graphics, right - w, top, w, 9, color);
+        // Taller at the top for accents, which rise two units above the capitals
+        int raise = PixelFont.hasRaisedMarks(label) ? 2 : 0;
+        graphics.fill(right - w, top - raise, right, top + 9, face);
+        Surfaces.outline(graphics, right - w, top - raise, w, 9 + raise, color);
         pixel(graphics, label, right - w + 3, top + 2, color, SMALL, true);
     }
 

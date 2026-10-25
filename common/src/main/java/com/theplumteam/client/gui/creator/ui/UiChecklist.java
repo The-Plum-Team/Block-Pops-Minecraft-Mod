@@ -96,7 +96,8 @@ public class UiChecklist extends UiNode.Box {
             List<String> lines = Draw.fit(font, row.text().getString(), textWidth, MAX_LINES);
             Rect link = null;
             if (row.link() != null) {
-                int linkWidth = font.width(row.link());
+                // Under the text at worst, shrunk to the text's width
+                int linkWidth = Math.min(font.width(row.link()), textWidth);
                 String last = lines.get(lines.size() - 1);
                 int after = font.width(last + SEPARATOR);
                 if (after + linkWidth <= textWidth) {
@@ -135,7 +136,7 @@ public class UiChecklist extends UiNode.Box {
                 }
                 boolean hovered = link.contains(mouseX, mouseY);
                 int linkColour = hovered ? Theme.LINK_HOVER : Theme.LINK;
-                Draw.string(graphics, font, placed.row().link(), link.x(), link.y(), linkColour);
+                Draw.shrunk(graphics, font, placed.row().link(), link.x(), link.y(), link.width(), linkColour);
                 graphics.fill(link.x(), link.y() + 9, link.right(), link.y() + 10, linkColour);
             }
         }
