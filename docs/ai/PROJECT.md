@@ -121,7 +121,9 @@ server, packet or file, or a path outside `RemotePaths`. A Custom definition pas
 `CustomCollectionCheck` on both sides before registration. Its assets are served only by the
 runtime registries in `client.runtime`, which the figure models consult before GeckoLib, and are
 never written into GeckoLib's caches. They travel only in `SyncCustomCollectionsPacket`, never in
-the shared collection sync. CI never contacts the CDN.
+the shared collection sync. CI never contacts the CDN. The game takes its source only from
+`RemoteSource.forGame()`, which is `RemoteSource.NONE` in the packaged E2E. There the one Custom
+collection, `e2e_fixture`, comes from the verified caches `e2e/custom_fixture.py` fills.
 
 World collections
 ([ADR 0003](../architecture/decisions/0003-accept-operator-uploaded-world-collections.md)) are

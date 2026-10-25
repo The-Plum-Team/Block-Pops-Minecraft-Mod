@@ -7,7 +7,6 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.CustomCollectionCheck;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.network.SyncCustomCollectionsPacket;
-import com.theplumteam.remote.CdnSource;
 import com.theplumteam.remote.ManifestEntry;
 import com.theplumteam.remote.RemoteExecutor;
 import com.theplumteam.remote.RemoteLimits;
@@ -94,7 +93,7 @@ public final class ClientCustomCollections {
     /** Fetches each file from the cache or the CDN. Runs on the remote executor. */
     private static Map<String, Path> fetch(Iterable<ManifestEntry> entries) {
         VerifiedStore store = new VerifiedStore(CustomCollections.cacheRoot());
-        RemoteSource source = new CdnSource();
+        RemoteSource source = RemoteSource.forGame();
         Map<String, Path> files = new LinkedHashMap<>();
         int failed = 0;
         for (ManifestEntry entry : entries) {
