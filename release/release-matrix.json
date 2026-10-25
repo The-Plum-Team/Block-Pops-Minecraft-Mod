@@ -16,7 +16,7 @@
     "name": "BlockPops",
     "mod_id": "blockpops",
     "description": "Collectible figures, animated blocks, and interactive claw-machine gameplay.",
-    "mod_version": "2.0.0",
+    "mod_version": "2.0.1",
     "sources": "https://github.com/The-Plum-Team/Block-Pops-Minecraft-Mod",
     "issues": "https://github.com/The-Plum-Team/Block-Pops-Minecraft-Mod/issues",
     "license": "All Rights Reserved"
@@ -112,7 +112,7 @@
         "architectury": ">=9.2.14",
         "geckolib": ">=4.7.4"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "fabric",
@@ -138,7 +138,7 @@
         "architectury": "[9.2.14,)",
         "geckolib": "[4.7.4,)"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "forge",
@@ -164,7 +164,7 @@
         "architectury": ">=13.0.8",
         "geckolib": ">=4.8"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "fabric",
@@ -190,7 +190,7 @@
         "architectury": "[13.0.8,)",
         "geckolib": "[4.8,)"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "neoforge",
@@ -216,7 +216,7 @@
         "architectury": ">=15.0.3",
         "geckolib": ">=4.8.5"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "fabric",
@@ -242,7 +242,7 @@
         "architectury": "[15.0.3,)",
         "geckolib": "[4.8.5,)"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "neoforge",
@@ -268,7 +268,7 @@
         "architectury": ">=16.1.4",
         "geckolib": ">=5.1.0"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "fabric",
@@ -294,7 +294,7 @@
         "architectury": "[16.1.4,)",
         "geckolib": "[5.1.0,)"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "neoforge",
@@ -320,7 +320,7 @@
         "architectury": ">=17.0.6",
         "geckolib": ">=5.2.0"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "fabric",
@@ -346,7 +346,7 @@
         "architectury": "[17.0.6,)",
         "geckolib": "[5.2.0,)"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "neoforge",
@@ -372,7 +372,7 @@
         "architectury": ">=17.0.8",
         "geckolib": ">=5.2.0"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "fabric",
@@ -398,7 +398,7 @@
         "architectury": "[17.0.8,)",
         "geckolib": "[5.2.0,)"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "neoforge",
@@ -424,7 +424,7 @@
         "architectury": ">=17.0.8",
         "geckolib": ">=5.2.2"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "fabric",
@@ -450,7 +450,7 @@
         "architectury": "[17.0.8,)",
         "geckolib": "[5.2.2,)"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "neoforge",
@@ -476,7 +476,7 @@
         "architectury": ">=20.0.12",
         "geckolib": ">=5.5.2"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "fabric",
@@ -502,7 +502,7 @@
         "architectury": "[20.0.12,)",
         "geckolib": "[5.5.2,)"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "neoforge",
@@ -528,7 +528,7 @@
         "architectury": ">=21.1.10",
         "geckolib": ">=5.5.5"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "fabric",
@@ -554,7 +554,7 @@
         "architectury": "[21.1.10,)",
         "geckolib": "[5.5.6,)"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "neoforge",
@@ -580,7 +580,7 @@
         "architectury": ">=22.0.2",
         "geckolib": ">=5.5.6"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "fabric",
@@ -606,7 +606,7 @@
         "architectury": "[22.0.2,)",
         "geckolib": "[5.5.6,)"
       },
-      "mod_version": "2.0.0",
+      "mod_version": "2.0.1",
       "build_layout": "stonecutter",
       "gradle_java": 25,
       "repository_family": "neoforge",

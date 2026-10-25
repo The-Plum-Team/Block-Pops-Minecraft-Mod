@@ -25,7 +25,7 @@ class Fabric1211ConfigurationTests(unittest.TestCase):
         self.assertEqual(("stonecutter", "fabric", branch_java, 21),
                          (lane["build_layout"], lane["repository_family"],
                           lane["gradle_java"], lane["artifact"]["java"]))
-        self.assertEqual("2.0.0", lane["mod_version"])
+        self.assertEqual("2.0.1", lane["mod_version"])
         self.assertEqual(["common", "fabric"], lane["source_routes"])
         self.assertEqual("net.fabricmc:fabric-loader:0.17.2",
                          context["common_annotation_dependency"]["coordinate"])
@@ -36,7 +36,7 @@ class Fabric1211ConfigurationTests(unittest.TestCase):
         self.assertEqual(["validateReleaseMatrix", ":fabric:1.21.1:remapJar",
                           ":fabric:1.21.1:remapE2EHarnessJar", "check"], plan["lanes"][0]["command"][-4:])
         self.assertTrue(plan["lanes"][0]["outputs"]["production"].endswith(
-            "fabric/versions/1.21.1/build/libs/BlockPops - Fabric - 1.21.1-2.0.0.jar"))
+            "fabric/versions/1.21.1/build/libs/BlockPops - Fabric - 1.21.1-2.0.1.jar"))
 
     def test_preparing_keeps_legacy_default_and_denies_unconfigured_nodes(self):
         if self.document.inventory.migration_mode == "preparing":
