@@ -49,6 +49,11 @@ The `in-world` flow shows the mod as a player meets it in the world:
    - It only runs in a scenario whose contract names the
      `collection_e2e_fixture` step.
 
+   The pure core under it (`com.theplumteam.remote`) also has an opt-in
+   repository test, `tests/test_remote_core.py`. It needs a JDK and a Gson
+   JAR, and feeds the core hostile JSON, paths, digests, sizes, PNGs and
+   manifests.
+
 Only the packaged E2E sets `blockpops.e2e.enabled` on the client and server. With
 it the star background and the GeckoLib idle animations hold one frame, the
 claw-machine draw is seeded, and toasts are cleared before each capture, so an
