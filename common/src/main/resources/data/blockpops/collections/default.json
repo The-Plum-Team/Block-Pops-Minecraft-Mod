@@ -4,7 +4,7 @@
   "author": "BlockPops",
   "box_texture": "blockpops:textures/block/box/original.png",
   "logo": {
-    "texture": "blockpops:textures/block/box/logo/logo_worldplayers.png"
+    "texture": "blockpops:textures/logo/logo_worldplayers.png"
   },
   "figures": []
 }

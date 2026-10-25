@@ -1,19 +1,20 @@
 # Logo Textures
 
-This directory contains the collection logos shown on the front of the box, under the window.
+This directory contains the collection logos shown on the front of the box, under the window, and
+on the collection's card in the machine menu. Both draw each logo as a texture of its own. The logos
+are kept out of `textures/block/` because the game stitches every texture there into the shared
+block atlas, where a logo would take room and video memory without ever being drawn from it.
 
 ## Adding a Logo
 
-1. Put the PNG here as `logo_{id}.png`. Both sides must be multiples of 16: every texture under
-   `textures/block/` is stitched into the game's shared block atlas, and one sprite with any other
-   size lowers mipmapping for every block in the game. Reach that size by padding the image with
-   transparent pixels, or for pixel art by enlarging it 16 times, not by cropping or stretching it.
-   The box ignores transparent margins, but the collection menu draws the whole image.
+1. Put the PNG here as `logo_{id}.png`. Any size works, but there is no need for more than 512 on
+   the longest side. Do not crop or stretch it: the box ignores transparent margins, but the
+   collection menu draws the whole image.
 2. Name it in the collection JSON:
 
 ```json
 "logo": {
-  "texture": "blockpops:textures/block/box/logo/logo_{id}.png"
+  "texture": "blockpops:textures/logo/logo_{id}.png"
 }
 ```
 
@@ -33,7 +34,7 @@ Only when a logo should differ from that fit, add any of these keys:
 
 ```json
 "logo": {
-  "texture": "blockpops:textures/block/box/logo/logo_winx.png",
+  "texture": "blockpops:textures/logo/logo_winx.png",
   "scale": 1.21,
   "offset_x": -0.62,
   "offset_y": -0.71
