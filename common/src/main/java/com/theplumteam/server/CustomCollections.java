@@ -7,7 +7,6 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.CustomCollectionCheck;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.network.SyncCustomCollectionsPacket;
-import com.theplumteam.remote.CdnSource;
 import com.theplumteam.remote.CodeEntry;
 import com.theplumteam.remote.Manifest;
 import com.theplumteam.remote.ManifestEntry;
@@ -16,6 +15,7 @@ import com.theplumteam.remote.RemoteExecutor;
 import com.theplumteam.remote.RemoteLimits;
 import com.theplumteam.remote.RemoteNotFoundException;
 import com.theplumteam.remote.RemotePaths;
+import com.theplumteam.remote.RemoteSource;
 import com.theplumteam.remote.StrictJson;
 import com.theplumteam.remote.VerifiedStore;
 import dev.architectury.platform.Platform;
@@ -65,7 +65,7 @@ public final class CustomCollections {
     /** The CDN client and the cache in the game directory, shared with the player's side in single player. */
     public static synchronized RemoteCollections remote() {
         if (remote == null) {
-            remote = new RemoteCollections(new CdnSource(), new VerifiedStore(cacheRoot()));
+            remote = new RemoteCollections(RemoteSource.forGame(), new VerifiedStore(cacheRoot()));
         }
         return remote;
     }

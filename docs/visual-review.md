@@ -78,12 +78,12 @@ changed pairs only; no similarity threshold can declare a semantic pass.
 
 Changed pairs are ordered with key captures first. Triage chunks contain at
 most five pairs and verification chunks at most four, so the model opens at
-most ten images per call. The current matrix produces 56 pairs (two loaders by
-28 semantic captures: six `ui-regression` screens and twenty-two `in-world`
-views), within a 60-pair budget whose full escalation is bounded to 27 logical
+most ten images per call. The current matrix produces 60 pairs (two loaders by
+30 semantic captures: six `ui-regression` screens and twenty-four `in-world`
+views), filling a 60-pair budget whose full escalation is bounded to 27 logical
 calls (ceil(60 / 5) triage plus ceil(60 / 4) verification). The budget was
 raised from 48 pairs and 22 calls when the Winx Club, ULTRAKILL and Amazing
-Digital Circus walls were added; with the DOOM and Dragon Ball Z walls and the Plushes tab it leaves room for two more. A byte-identical pair
+Digital Circus walls were added; the DOOM and Dragon Ball Z walls, the Plushes tab, the Custom collection's wall and the World Players figure of a player who is not connected have filled it, so the next capture needs a larger budget. A byte-identical pair
 never reaches the model, and the E2E-only determinism (frozen star scroll and
 GeckoLib clocks, seeded claw-machine draws, cleared toasts, no clouds) keeps
 unchanged captures byte-identical. A capsule with more than 60 pairs, or whose

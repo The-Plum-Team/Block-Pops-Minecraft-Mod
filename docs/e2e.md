@@ -34,6 +34,46 @@ The `in-world` flow shows the mod as a player meets it in the world:
    ordinary one packages it (its wall is built but not yet photographed), then
    a controller upgrade adds its `collection_<id>` step to
    `e2e/scenario-contract.json`.
+5. The last wall is a Custom collection, `e2e_fixture`, with no CDN
+   (`e2e/custom_fixture.py`). The game never reaches the CDN in the packaged
+   E2E: `RemoteSource.forGame()` is `RemoteSource.NONE` there. Before the game
+   starts, the runtime fills the verified cache (`blockpops-cache/`) of the
+   server and of the client with the collection, in the CDN layout and with its
+   manifest. It enables the collection in the world through 1.5.0's
+   `data/blockpops_world.dat`, which the server imports on its first start.
+   - The collection borrows bundled resources under its own id: Goku with his
+     own model, poses and texture, Luffy with a texture on the default model,
+     the Dragon Ball Z box art and logo.
+   - Its wall stands one empty wall's place after the bundled ones, so the
+     short wall's neighbour stays out of its picture.
+   - The harness waits until the server has synced the collection and every
+     file it names has loaded, then photographs its wall.
+   - It only runs in a scenario whose contract names the
+     `collection_e2e_fixture` step.
+
+   The pure core under it (`com.theplumteam.remote`) also has an opt-in
+   repository test, `tests/test_remote_core.py`. It needs a JDK and a Gson
+   JAR, and feeds the core hostile JSON, paths, digests, sizes, PNGs and
+   manifests.
+6. In the next wall's place stand a World Players box and figure block of
+   Carol, a player who played on the server and is not connected
+   (`e2e/world_players_fixture.py`). They carry the skin a server stores in
+   what it hands out, so drawing them takes the stored-skin path, through
+   BlockPops' skin registration from Minecraft 1.21 on.
+   - Before the server starts, the runtime gives it her player file and her
+     name in `usercache.json`, so the World Players collection lists her
+     without her joining.
+   - Her skin link names `textures.minecraft.net`, as Mojang's do. The runtime
+     puts the image in the clients' skin cache, `assets/skins/`, under the name
+     the game gives that link, so the game reads it from disk and downloads
+     nothing. Only 26.3 first asks Mojang's discovery service, which the game
+     reads as it starts, whether that host serves skins: that lane needs the
+     service reachable, as the game does for every skin.
+   - The harness asserts that the collection lists her, that both blocks hold
+     the same stored skin, and that the box's own model draws exactly the
+     cached texture that skin names. Then it photographs both.
+   - It only runs in a scenario whose contract names the
+     `world_players_offline` step.
 
 Only the packaged E2E sets `blockpops.e2e.enabled` on the client and server. With
 it the star background and the GeckoLib idle animations hold one frame, the

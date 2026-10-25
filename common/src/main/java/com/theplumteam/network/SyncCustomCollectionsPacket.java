@@ -87,7 +87,7 @@ public class SyncCustomCollectionsPacket {
 
     /** Whether the player's client can receive this packet, so Custom collections are kept from it otherwise. */
     public static boolean canReceive(ServerPlayer player) {
-        return NetworkManager.canPlayerReceive(player, ID);
+        return PacketNetworking.canPlayerReceive(player, ID);
     }
 
     public static void sendToPlayer(ServerPlayer player, List<Entry> entries) {

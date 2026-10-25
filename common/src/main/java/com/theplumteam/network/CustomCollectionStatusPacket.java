@@ -43,7 +43,7 @@ public class CustomCollectionStatusPacket {
     }
 
     public static void send(ServerPlayer player, CustomCollections.Status status) {
-        if (NetworkManager.canPlayerReceive(player, ID)) {
+        if (PacketNetworking.canPlayerReceive(player, ID)) {
             PacketNetworking.sendToPlayer(player, ID, new CustomCollectionStatusPacket(status).encode());
         }
     }

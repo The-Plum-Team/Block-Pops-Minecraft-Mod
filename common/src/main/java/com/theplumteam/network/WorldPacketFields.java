@@ -28,18 +28,9 @@ final class WorldPacketFields {
     private WorldPacketFields() {
     }
 
-    /**
-     * Whether the player's client can receive a server-to-client World collection packet.
-     * Before 1.21 every joined client has the mod, and Architectury's Forge networking
-     * only learns the ids a client sends, never those it receives, so asking it would
-     * refuse every player.
-     */
+    /** Whether the player's client can receive a server-to-client World collection packet. */
     static boolean canReceive(ServerPlayer player, ResourceLocation id) {
-        //? if >=1.21 {
-        /*return dev.architectury.networking.NetworkManager.canPlayerReceive(player, id);
-        *///? } else {
-        return true;
-        //? }
+        return PacketNetworking.canPlayerReceive(player, id);
     }
 
     /** Reads a sha that must be present, refusing anything that is not 64 lowercase hex digits. */

@@ -11,6 +11,10 @@ description = '''
 BlockPops - A Minecraft mod featuring animated blocks and interactive gameplay mechanics.
 '''
 
+# NeoForge applies only the mixin configurations a mod declares here
+[[mixins]]
+config = "blockpops.mixins.json"
+
 [[dependencies.blockpops]]
 modId = "neoforge"
 type = "required"

@@ -2,6 +2,7 @@ package com.theplumteam.client;
 
 //? if >=1.21 {
 /*import com.mojang.authlib.GameProfile;
+import com.mojang.authlib.properties.PropertyMap;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 *///? }
@@ -28,7 +29,7 @@ public final class ClientSkinRegistration {
             //? }
             profile,
             minecraft.getUser().getProfileId(),
-            ((LocalProfileProperties) minecraft).blockpops$getInitialProfileProperties(),
+            localProperties(minecraft),
             Util.backgroundExecutor(), minecraft::execute,
             result -> {
                 prepared.accept(result);
@@ -38,6 +39,14 @@ public final class ClientSkinRegistration {
                 minecraft.getSkinManager().getOrLoad(result);
                 //? }
             });
+    }
+
+    // The properties the game started with, which BlockPops' client mixin keeps. Without the mixin,
+    // as on a loader that did not apply it, there are none, and the local player's skin is fetched
+    // like anyone else's instead of crashing the render.
+    private static PropertyMap localProperties(Minecraft minecraft) {
+        return minecraft instanceof LocalProfileProperties local
+                ? local.blockpops$getInitialProfileProperties() : PropertyMap.EMPTY;
     }
     *///? } elif >=1.21 {
     /*public static void register(GameProfile profile) {
@@ -50,13 +59,21 @@ public final class ClientSkinRegistration {
             //? }
             profile,
             minecraft.getUser().getProfileId(),
-            ((LocalProfileProperties) minecraft).blockpops$getInitialProfileProperties(),
+            localProperties(minecraft),
             Util.backgroundExecutor(), minecraft::execute,
             //? if >=26 {
             /^minecraft.getSkinManager()::get);
             ^///? } else {
             minecraft.getSkinManager()::getOrLoad);
             //? }
+    }
+
+    // The properties the game started with, which BlockPops' client mixin keeps. Without the mixin,
+    // as on a loader that did not apply it, there are none, and the local player's skin is fetched
+    // like anyone else's instead of crashing the render.
+    private static PropertyMap localProperties(Minecraft minecraft) {
+        return minecraft instanceof LocalProfileProperties local
+                ? local.blockpops$getInitialProfileProperties() : new PropertyMap();
     }
     *///? }
 }
