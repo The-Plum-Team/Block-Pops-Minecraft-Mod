@@ -1,5 +1,6 @@
 package com.theplumteam.client.model;
 
+import com.theplumteam.client.QuickSkinClient;
 import com.theplumteam.util.AuthlibProfiles;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
@@ -58,51 +59,6 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
     private static final Map<String, Boolean> snapshotRegistrationCache = new ConcurrentHashMap<>();
     private static final Map<UUID, GameProfile> liveProfileCache = new ConcurrentHashMap<>();
     private static final Map<UUID, Boolean> liveRegistrationCache = new ConcurrentHashMap<>();
-
-    // QuickSkin Reflection
-    private static boolean checkedQuickSkin = false;
-    private static boolean quickSkinAvailable = false;
-    private static java.lang.reflect.Method getSkinLocationMethod; // From SkinService
-    private static Object skinServiceInstance;
-
-    private static ResourceLocation resolveQuickSkinId(String skinId) {
-        if (!checkedQuickSkin) {
-            try {
-                // Use SkinService to resolve arbitrary skin IDs (local_skin:HASH)
-                Class<?> serviceClass = Class.forName("com.quickskin.mod.client.services.SkinService");
-                java.lang.reflect.Method getInstanceMethod = serviceClass.getMethod("getInstance");
-                skinServiceInstance = getInstanceMethod.invoke(null);
-                // getSkinLocation(UUID, String) - UUID can be null for local skins
-                getSkinLocationMethod = serviceClass.getMethod("getSkinLocation", UUID.class, String.class);
-                quickSkinAvailable = true;
-            } catch (Exception e) {
-                quickSkinAvailable = false;
-            }
-            checkedQuickSkin = true;
-        }
-
-        if (quickSkinAvailable && skinServiceInstance != null && skinId != null) {
-            try {
-                return (ResourceLocation) getSkinLocationMethod.invoke(skinServiceInstance, null, skinId);
-            } catch (Exception e) {
-                // Ignore
-            }
-        }
-        return null;
-    }
-
-    // Helper for live lookup (via PlayerAppearanceService)
-    private static ResourceLocation getLiveQuickSkin(UUID uuid) {
-        try {
-            Class<?> serviceClass = Class.forName("com.quickskin.mod.client.services.PlayerAppearanceService");
-            java.lang.reflect.Method getInstanceMethod = serviceClass.getMethod("getInstance");
-            Object instance = getInstanceMethod.invoke(null);
-            java.lang.reflect.Method getLocMethod = serviceClass.getMethod("getSkinLocation", UUID.class);
-            return (ResourceLocation) getLocMethod.invoke(instance, uuid);
-        } catch (Exception e) {
-            return null;
-        }
-    }
 
     //? if >=1.21.5 {
     /*@Override
@@ -215,7 +171,7 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
             // If the box was created while the player had a Quick Skin, use that stored ID.
             String qsId = animatable.getQuickSkinId();
             if (qsId != null && !qsId.isEmpty()) {
-                ResourceLocation loc = resolveQuickSkinId(qsId);
+                ResourceLocation loc = QuickSkinClient.skin(qsId);
                 if (loc != null) return loc;
             }
 
@@ -227,10 +183,8 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
 
             // 3. Live Quick Skin - PRIORITY #3
             // Fallback if no snapshot exists (e.g. preview before drop).
-            if (quickSkinAvailable) {
-                ResourceLocation liveQS = getLiveQuickSkin(figure.getPlayerUUID());
-                if (liveQS != null) return liveQS;
-            }
+            ResourceLocation liveQS = QuickSkinClient.playerSkin(figure.getPlayerUUID());
+            if (liveQS != null) return liveQS;
 
             // 4. Live Mojang Skin - PRIORITY #4
             // Check PlayerInfo for both items AND placed blocks.
@@ -252,7 +206,7 @@ public class FigureModel extends GeoModel<BoxBlockEntity> {
             // 5a. Discovery Quick Skin (NEW)
             String discoveryQuickSkin = ClientDiscoveryManager.getFigureQuickSkin(uniqueFigureId);
             if (discoveryQuickSkin != null && !discoveryQuickSkin.isEmpty()) {
-                ResourceLocation loc = resolveQuickSkinId(discoveryQuickSkin);
+                ResourceLocation loc = QuickSkinClient.skin(discoveryQuickSkin);
                 if (loc != null) return loc;
             }
 

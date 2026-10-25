@@ -1,5 +1,6 @@
 package com.theplumteam.client.gui;
 
+import com.theplumteam.client.QuickSkinClient;
 import com.mojang.authlib.GameProfile;
 //? if >=1.21 {
 /*import com.theplumteam.client.ClientSkinRegistration;
@@ -73,36 +74,6 @@ public class FigurePositionScreen extends DialogScreen implements MenuGuiScale.S
     // Cache for UI skin lookups
     private static final Map<UUID, GameProfile> profileCache = new ConcurrentHashMap<>();
     private static final Set<UUID> registeredSkins = Collections.newSetFromMap(new ConcurrentHashMap<>());
-
-    // QuickSkin Reflection Helper
-    private static boolean checkedQuickSkin = false;
-    private static boolean quickSkinAvailable = false;
-    private static java.lang.reflect.Method getSkinLocationMethod;
-    private static Object playerAppearanceServiceInstance;
-
-    private static ResourceLocation getQuickSkinLocation(UUID uuid) {
-        if (!checkedQuickSkin) {
-            try {
-                Class<?> serviceClass = Class.forName("com.quickskin.mod.client.services.PlayerAppearanceService");
-                java.lang.reflect.Method getInstanceMethod = serviceClass.getMethod("getInstance");
-                playerAppearanceServiceInstance = getInstanceMethod.invoke(null);
-                getSkinLocationMethod = serviceClass.getMethod("getSkinLocation", UUID.class);
-                quickSkinAvailable = true;
-            } catch (Exception e) {
-                quickSkinAvailable = false;
-            }
-            checkedQuickSkin = true;
-        }
-
-        if (quickSkinAvailable && playerAppearanceServiceInstance != null) {
-            try {
-                return (ResourceLocation) getSkinLocationMethod.invoke(playerAppearanceServiceInstance, uuid);
-            } catch (Exception e) {
-                // Ignore
-            }
-        }
-        return null;
-    }
 
     private final BlockPos blockPos;
     private double offsetX;
@@ -497,7 +468,7 @@ public class FigurePositionScreen extends DialogScreen implements MenuGuiScale.S
         }
 
         if (figure.getType() == com.theplumteam.figure.FigureType.PLAYER && figure.getPlayerUUID() != null) {
-            ResourceLocation quickSkinLoc = getQuickSkinLocation(figure.getPlayerUUID());
+            ResourceLocation quickSkinLoc = QuickSkinClient.playerSkin(figure.getPlayerUUID());
             if (quickSkinLoc != null) return quickSkinLoc;
 
             GameProfile profile = profileCache.computeIfAbsent(figure.getPlayerUUID(), uuid -> new GameProfile(uuid, figure.getName()));
