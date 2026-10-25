@@ -66,10 +66,13 @@ public final class DialogFrame {
         int iconX = x + 10;
         PixelIcon.draw(graphics, icon, iconX, middle - icon.length / 2, Surfaces.TEXT);
 
-        // The title in the pixel font, its capitals centred on the strip
+        // The title in the pixel font, its capitals centred on the strip, smaller when a translation
+        // would reach the close button
         int textX = iconX + PixelIcon.width(icon) + 6;
-        float textY = Math.round(middle + 0.5f - PixelFont.CAPITALS_MIDDLE);
-        PixelFont.draw(graphics, PixelFont.text(title), textX, textY, 1.0f, Surfaces.TEXT, true);
+        int room = right - 6 - DialogCloseButton.SIZE - 6 - textX;
+        float scale = Math.min(1.0f, room / (float) Math.max(1, PixelFont.width(title, 1.0f)));
+        float textY = Math.round(middle + 0.5f - PixelFont.CAPITALS_MIDDLE * scale);
+        PixelFont.draw(graphics, PixelFont.text(title), textX, textY, scale, Surfaces.TEXT, true);
     }
 
     /** The first row below the header. */

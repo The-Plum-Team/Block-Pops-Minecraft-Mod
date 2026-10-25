@@ -22,10 +22,11 @@ public final class Stamp {
 
     /**
      * Draws the stamp centred on (centerX, centerY), turned clockwise by {@code degrees}. Each
-     * line has its own size, in font pixels per half GUI unit.
+     * line has its own size, in font pixels per half GUI unit. A stamp wider than {@code maxWidth}
+     * GUI units is drawn smaller to fit.
      */
     public static void draw(GuiGraphics graphics, String[] lines, float[] sizes, float centerX, float centerY, int ink,
-                            float degrees) {
+                            float degrees, float maxWidth) {
         int[] widths = new int[lines.length];
         int textWidth = 0;
         int textHeight = LINE_GAP * (lines.length - 1);
@@ -43,7 +44,8 @@ public final class Stamp {
         GuiPose.push(graphics);
         GuiPose.translate(graphics, centerX, centerY);
         GuiPose.rotate(graphics, degrees);
-        GuiPose.scale(graphics, 0.5f, 0.5f);
+        float scale = Math.min(0.5f, maxWidth / width);
+        GuiPose.scale(graphics, scale, scale);
         GuiPose.translate(graphics, -width / 2.0f, -height / 2.0f);
         // The thick frame, with a gap worn through its top, bottom and left sides
         int topGap = width * 3 / 10;

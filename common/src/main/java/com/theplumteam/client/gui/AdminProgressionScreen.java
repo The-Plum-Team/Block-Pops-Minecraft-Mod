@@ -279,7 +279,8 @@ public class AdminProgressionScreen extends DialogScreen {
                 pickerY + (PICKER_HEIGHT - 8) / 2, selected < 0 ? Surfaces.TEXT_DIM : Surfaces.TEXT);
 
         if (collections.isEmpty()) {
-            UiText.drawCentered(graphics, this.font, Component.translatable("blockpops.progression.none").getString(), dialogX + dialogWidth / 2,
+            UiText.drawCentered(graphics, this.font, UiText.fit(this.font,
+                    Component.translatable("blockpops.progression.none").getString(), dialogWidth - 16), dialogX + dialogWidth / 2,
                     gridTop + (ROW_HEIGHT - 9) / 2, Surfaces.TEXT_MUTED);
             return;
         }

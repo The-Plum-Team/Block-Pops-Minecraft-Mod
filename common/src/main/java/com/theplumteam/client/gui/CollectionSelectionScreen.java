@@ -412,10 +412,12 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         updateTokenButtonStates();
 
         // The top row: the figure and plush tabs on the left, the link buttons on the right
+        // The two tabs share what the six link buttons leave of the top row
+        int tabWidth = (contentRight - contentLeft - 6 * LINK_SIZE - 5 * LINK_SPACING - 3 * GAP) / 2;
         TabButton.Folder figuresTab = new TabButton.Folder(contentLeft, MARGIN, Component.translatable("blockpops.machine.tab.figures"),
-                new ItemStack(ModItems.CLAW_MACHINE_BLOCK_ITEM.get()), !plush, button -> switchTab(false));
+                new ItemStack(ModItems.CLAW_MACHINE_BLOCK_ITEM.get()), !plush, button -> switchTab(false), tabWidth);
         TabButton.Folder plushesTab = new TabButton.Folder(figuresTab.right() + GAP, MARGIN, Component.translatable("blockpops.machine.tab.plushes"),
-                new ItemStack(ModItems.GACHA_MACHINE_BLOCK_ITEM.get()), plush, button -> switchTab(true));
+                new ItemStack(ModItems.GACHA_MACHINE_BLOCK_ITEM.get()), plush, button -> switchTab(true), tabWidth);
         this.addRenderableWidget(figuresTab);
         this.addRenderableWidget(plushesTab);
         tabsRight = plushesTab.right();

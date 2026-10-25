@@ -460,7 +460,8 @@ public class SettingsScreen extends DialogScreen {
             Stamp.draw(graphics, new String[] {Component.translatable("blockpops.settings.stamp.in_development").getString(),
                             Component.translatable("blockpops.settings.stamp.next_update").getString()},
                     new float[] {3, 1},
-                    (contentX + contentRight) / 2.0f, (contentTop + contentBottom()) / 2.0f, STAMP_INK, 12);
+                    (contentX + contentRight) / 2.0f, (contentTop + contentBottom()) / 2.0f, STAMP_INK, 12,
+                    contentRight - contentX - 16);
         }
     }
 

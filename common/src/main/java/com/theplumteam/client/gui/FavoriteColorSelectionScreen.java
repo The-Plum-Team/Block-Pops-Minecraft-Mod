@@ -312,9 +312,10 @@ public class FavoriteColorSelectionScreen extends Screen implements MenuGuiScale
                 titleScale, Surfaces.TEXT, true);
 
         // Description (2 lines)
-        UiText.drawCentered(graphics, this.font, Component.translatable(DESCRIPTION_1).getString(), centerX, descriptionY, Surfaces.TEXT_DIM);
-        UiText.drawCentered(graphics, this.font, Component.translatable(DESCRIPTION_2).getString(), centerX,
-                descriptionY + this.font.lineHeight + 2, Surfaces.TEXT_DIM);
+        UiText.drawCenteredShrunk(graphics, this.font, Component.translatable(DESCRIPTION_1).getString(), centerX,
+                descriptionY, this.width - 16, Surfaces.TEXT_DIM);
+        UiText.drawCenteredShrunk(graphics, this.font, Component.translatable(DESCRIPTION_2).getString(), centerX,
+                descriptionY + this.font.lineHeight + 2, this.width - 16, Surfaces.TEXT_DIM);
     }
 
     @Override

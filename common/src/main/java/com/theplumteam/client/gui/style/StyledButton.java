@@ -193,6 +193,11 @@ public class StyledButton extends Button {
             int smallest = (int) Math.round(guiScale);
             int fitting = (int) Math.floor((faceHeight - 2) * guiScale / (PixelFont.CAPITALS_HEIGHT * ROOM_PER_CAPITALS) + 1e-4);
             int pixels = Math.max(smallest, Math.min((int) MAX_PIXEL_SCALE * smallest, fitting));
+            if (PixelFont.hasRaisedMarks(label)) {
+                // Accents rise above the capitals: keep them on the face, smaller still if need be
+                int marksFit = (int) Math.floor((faceHeight - 2) * guiScale / (2 * PixelFont.MARKS_REACH) + 1e-4);
+                pixels = Math.max(1, Math.min(pixels, marksFit));
+            }
             if (labelScale < 1.0f) {
                 pixels = Math.max(1, Math.round(pixels * labelScale));
             }

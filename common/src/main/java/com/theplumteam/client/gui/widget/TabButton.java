@@ -114,7 +114,12 @@ public class TabButton extends Button {
         private final ItemStack icon;
 
         public Folder(int x, int y, Component label, ItemStack icon, boolean selected, OnPress onPress) {
-            super(x, y, widthOf(label), HEIGHT, label, selected, onPress);
+            this(x, y, label, icon, selected, onPress, Integer.MAX_VALUE);
+        }
+
+        /** A tab no wider than {@code maxWidth}: a longer label is drawn smaller to fit. */
+        public Folder(int x, int y, Component label, ItemStack icon, boolean selected, OnPress onPress, int maxWidth) {
+            super(x, y, Math.min(widthOf(label), maxWidth), HEIGHT, label, selected, onPress);
             this.icon = icon;
         }
 
@@ -153,8 +158,10 @@ public class TabButton extends Button {
 
             int textColor = selected ? SELECTED_TEXT : hovered ? HOVERED_TEXT : UNSELECTED_TEXT;
             Component text = PixelFont.text(getMessage());
+            int room = width - PADDING - ICON_SIZE - ICON_GAP - PADDING;
+            float scale = Math.min(1.0f, room / (float) Math.max(1, PixelFont.width(getMessage(), 1.0f)));
             PixelFont.draw(graphics, text, iconX + ICON_SIZE + ICON_GAP,
-                    Math.round(middle + 0.5f - PixelFont.CAPITALS_MIDDLE), 1.0f, textColor, true);
+                    Math.round(middle + 0.5f - PixelFont.CAPITALS_MIDDLE * scale), scale, textColor, true);
         }
     }
 }

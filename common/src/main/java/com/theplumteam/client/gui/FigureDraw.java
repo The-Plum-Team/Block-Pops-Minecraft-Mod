@@ -373,6 +373,9 @@ public final class FigureDraw {
         if (stampText != null) {
             cardWidth = Math.max(cardWidth, font.width(stampText) + 24);
         }
+        // No wider than the list it covers: a long translation is drawn smaller instead
+        cardWidth = Math.min(cardWidth, right - left - 8);
+        int textRoom = cardWidth - 16;
         int cardHeight = size + lines * line + 20;
         int cardX = (left + right - cardWidth) / 2;
         int cardY = (top + bottom - cardHeight) / 2;
@@ -391,11 +394,12 @@ public final class FigureDraw {
         row.renderPreview(graphics, draw.winner(), cardX + (cardWidth - size) / 2, textY + line, size, partialTick,
                 false, draw.isHolographic());
         textY += line + size + 4;
-        UiText.drawCentered(graphics, font, name, cardX + cardWidth / 2, textY, Surfaces.TEXT);
+        UiText.drawCenteredShrunk(graphics, font, name, cardX + cardWidth / 2, textY, textRoom, Surfaces.TEXT);
         textY += line;
-        UiText.drawCentered(graphics, font, hint, cardX + cardWidth / 2, textY, Surfaces.TEXT_MUTED);
+        UiText.drawCenteredShrunk(graphics, font, hint, cardX + cardWidth / 2, textY, textRoom, Surfaces.TEXT_MUTED);
         if (stampText != null) {
             textY += line;
+            stampText = UiText.fit(font, stampText, textRoom - 8);
             int stampWidth = font.width(stampText) + 8;
             int stampX = cardX + (cardWidth - stampWidth) / 2;
             int outline = 0xFFFF8A8A;

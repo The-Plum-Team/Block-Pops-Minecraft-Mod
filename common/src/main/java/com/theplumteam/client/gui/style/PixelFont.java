@@ -34,6 +34,8 @@ public final class PixelFont {
      * for accents start at -7 and the capitals run from -3 to 7, on the default font's baseline.
      */
     public static final float CAPITALS_MIDDLE = 2.0f;
+    /** Distance from the middle of the capitals to the top of the accents above them, in font pixels. */
+    public static final float MARKS_REACH = 9.0f;
 
     private PixelFont() {
     }
@@ -53,6 +55,22 @@ public final class PixelFont {
 
     public static Component text(String text) {
         return text(Component.literal(text));
+    }
+
+    /**
+     * Whether {@code text} has a letter with a mark above its capital, such as É, Ổ or İ, which
+     * the font draws in the four rows over the capitals and so needs room above them.
+     */
+    public static boolean hasRaisedMarks(String text) {
+        String decomposed = java.text.Normalizer.normalize(text.toUpperCase(gameLocale()), java.text.Normalizer.Form.NFD);
+        for (int i = 0; i < decomposed.length(); i++) {
+            char c = decomposed.charAt(i);
+            // Combining marks, except the dot below, cedilla and ogonek, which hang under the letter
+            if (c >= '\u0300' && c <= '\u036F' && c != '\u0323' && c != '\u0327' && c != '\u0328') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** The window's GUI scale, at least 1. */
