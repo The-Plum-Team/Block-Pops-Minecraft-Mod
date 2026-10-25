@@ -57,7 +57,7 @@ public class GetBoxCommand {
                                             String tokenTypeStr = StringArgumentType.getString(context, "token_type");
                                             TokenType tokenType = parseTokenType(tokenTypeStr);
                                             if (tokenType == null) {
-                                                context.getSource().sendFailure(Component.literal("Invalid token type. Use 'regular' or 'guaranteed'"));
+                                                context.getSource().sendFailure(Component.translatable("blockpops.command.get_box.invalid_token"));
                                                 return 0;
                                             }
                                             return executeCommand(context, tokenType);
@@ -92,11 +92,11 @@ public class GetBoxCommand {
         try {
             ServerPlayer player = source.getPlayerOrException();
             if (!CollectionRegistry.getCollection(collectionId).isPresent()) {
-                source.sendFailure(Component.literal("Collection '" + collectionId + "' does not exist"));
+                source.sendFailure(Component.translatable("blockpops.command.get_box.unknown_collection", collectionId));
                 return 0;
             }
             if (CollectionRegistry.getCollection(collectionId).get().getEnabledFigures().isEmpty()) {
-                source.sendFailure(Component.literal("Collection '" + collectionId + "' has no figures available"));
+                source.sendFailure(Component.translatable("blockpops.command.get_box.empty", collectionId));
                 return 0;
             }
 
@@ -105,10 +105,11 @@ public class GetBoxCommand {
             processBoxDrop(player, collectionId, tokenType, discovery);
             PlayerDataManager.saveDiscovery(player);
 
-            source.sendSuccess(() -> Component.literal("Gave box from collection '" + collectionId + "' using " + tokenType.name().toLowerCase() + " token logic"), true);
+            source.sendSuccess(() -> Component.translatable("blockpops.command.get_box.done", collectionId,
+                    tokenType.name().toLowerCase()), true);
             return 1;
         } catch (Exception e) {
-            source.sendFailure(Component.literal("This command can only be executed by a player"));
+            source.sendFailure(Component.translatable("blockpops.command.player_only"));
             LOGGER.error("Error executing getbox command", e);
             return 0;
         }

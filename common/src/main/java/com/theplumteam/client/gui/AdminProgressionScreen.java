@@ -14,6 +14,7 @@ import com.theplumteam.network.AdminProgressionSyncPacket;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.CommonComponents;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -77,7 +78,7 @@ public class AdminProgressionScreen extends DialogScreen {
      *                         creator just published; null lists every collection
      */
     public AdminProgressionScreen(Screen parent, @Nullable String onlyCollectionId) {
-        super(Component.literal("Player Progression"), parent);
+        super(Component.translatable("blockpops.progression.title"), parent);
         this.onlyCollectionId = onlyCollectionId;
         // Never show what an earlier session or server answered.
         AdminProgressionSyncPacket.clearLatest();
@@ -160,9 +161,10 @@ public class AdminProgressionScreen extends DialogScreen {
             String collectionId = collections.get(i).getId();
             int buttonsX = rowX(i) + columnWidth - BUTTONS_WIDTH;
             this.addRenderableWidget(new StyledButton(buttonsX, rowY(i) + buttonOffset, LOCK_WIDTH, ROW_BUTTON_HEIGHT,
-                    Component.literal("Lock"), button -> lock((StyledButton) button, collectionId)).lipHeight(2));
+                    Component.translatable("blockpops.progression.lock"), button -> lock((StyledButton) button, collectionId))
+                    .lipHeight(2));
             this.addRenderableWidget(new StyledButton(buttonsX + LOCK_WIDTH + 4, rowY(i) + buttonOffset, UNLOCK_WIDTH,
-                    ROW_BUTTON_HEIGHT, Component.literal("Unlock"), button -> {
+                    ROW_BUTTON_HEIGHT, Component.translatable("blockpops.progression.unlock"), button -> {
                 disarm();
                 edit(AdminProgressionPacket.UNLOCK, collectionId);
             }).lipHeight(2));
@@ -170,7 +172,7 @@ public class AdminProgressionScreen extends DialogScreen {
 
         int doneWidth = Math.min(120, innerWidth);
         this.addRenderableWidget(DialogFrame.button(dialogX + (dialogWidth - doneWidth) / 2, footerY, doneWidth,
-                FOOTER_HEIGHT, Component.literal("Done"), button -> this.onClose()).tone(StyledButton.Tone.PRIMARY));
+                FOOTER_HEIGHT, CommonComponents.GUI_DONE, button -> this.onClose()).tone(StyledButton.Tone.PRIMARY));
     }
 
     private int rowX(int index) {
@@ -235,7 +237,7 @@ public class AdminProgressionScreen extends DialogScreen {
             disarm();
             this.armedLock = button;
             this.armedAt = System.currentTimeMillis();
-            button.setMessage(Component.literal("Sure?"));
+            button.setMessage(Component.translatable("blockpops.progression.sure"));
             button.tone(StyledButton.Tone.DANGER);
             return;
         }
@@ -249,7 +251,7 @@ public class AdminProgressionScreen extends DialogScreen {
 
     private void disarm() {
         if (this.armedLock != null) {
-            this.armedLock.setMessage(Component.literal("Lock"));
+            this.armedLock.setMessage(Component.translatable("blockpops.progression.lock"));
             this.armedLock.tone(StyledButton.Tone.NEUTRAL);
             this.armedLock = null;
         }
@@ -261,13 +263,13 @@ public class AdminProgressionScreen extends DialogScreen {
         int selected = snapshot == null ? -1 : snapshot.getPlayerIds().indexOf(this.viewed);
         String header;
         if (snapshot == null) {
-            header = this.unsupported ? "The server's BlockPops is too old"
-                    : "Waiting for the server (operators only)...";
+            header = Component.translatable(this.unsupported ? "blockpops.progression.too_old"
+                    : "blockpops.progression.waiting").getString();
         } else if (selected < 0) {
-            header = "Player left - pick another";
+            header = Component.translatable("blockpops.progression.left").getString();
         } else {
-            header = snapshot.getPlayerNames().get(selected)
-                    + " (" + (selected + 1) + "/" + snapshot.getPlayerIds().size() + " online)";
+            header = Component.translatable("blockpops.progression.player", snapshot.getPlayerNames().get(selected),
+                    selected + 1, snapshot.getPlayerIds().size()).getString();
         }
         // The player's name between the picker's arrows
         int pickerY = bodyTop() + PADDING;
@@ -276,7 +278,7 @@ public class AdminProgressionScreen extends DialogScreen {
                 pickerY + (PICKER_HEIGHT - 8) / 2, selected < 0 ? Surfaces.TEXT_DIM : Surfaces.TEXT);
 
         if (collections.isEmpty()) {
-            UiText.drawCentered(graphics, this.font, "No collections to show", dialogX + dialogWidth / 2,
+            UiText.drawCentered(graphics, this.font, Component.translatable("blockpops.progression.none").getString(), dialogX + dialogWidth / 2,
                     gridTop + (ROW_HEIGHT - 9) / 2, Surfaces.TEXT_MUTED);
             return;
         }

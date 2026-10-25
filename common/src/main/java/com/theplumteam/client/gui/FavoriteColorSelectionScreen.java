@@ -15,6 +15,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.util.Mth;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -37,8 +38,9 @@ import java.util.List;
 public class FavoriteColorSelectionScreen extends Screen implements MenuGuiScale.Scaled {
     private static final Logger LOGGER = LoggerFactory.getLogger(FavoriteColorSelectionScreen.class);
 
-    private static final String DESCRIPTION_1 = "This color will be used for your figure box";
-    private static final String DESCRIPTION_2 = "in the World Players collection.";
+    // The description's two lines
+    private static final String DESCRIPTION_1 = "blockpops.favorite_color.description.1";
+    private static final String DESCRIPTION_2 = "blockpops.favorite_color.description.2";
 
     private static final int GRID_COLUMNS = 4; // 4x4 grid
     private static final int GRID_ROWS = 4;
@@ -93,7 +95,7 @@ public class FavoriteColorSelectionScreen extends Screen implements MenuGuiScale
     }
 
     public FavoriteColorSelectionScreen(@Nullable Screen parent) {
-        super(Component.literal("Choose Your Favorite Color"));
+        super(Component.translatable("blockpops.favorite_color.title"));
         this.parent = parent;
         BlockPopsMod.logDebug("FavoriteColorSelectionScreen created");
     }
@@ -171,9 +173,9 @@ public class FavoriteColorSelectionScreen extends Screen implements MenuGuiScale
         int toggleButtonWidth = Math.max(MIN_TOGGLE_WIDTH, (int) (rowWidth * 0.38f));
 
         StyledButton toggle = new StyledButton(rowX, buttonsY, toggleButtonWidth, buttonHeight,
-                Component.literal(showFigureInBox ? "Figure: ON" : "Figure: OFF"), button -> {
+                Component.translatable(showFigureInBox ? "blockpops.favorite_color.figure_on" : "blockpops.favorite_color.figure_off"), button -> {
             showFigureInBox = !showFigureInBox;
-            button.setMessage(Component.literal(showFigureInBox ? "Figure: ON" : "Figure: OFF"));
+            button.setMessage(Component.translatable(showFigureInBox ? "blockpops.favorite_color.figure_on" : "blockpops.favorite_color.figure_off"));
             ((StyledButton) button).setSelected(showFigureInBox);
             updateFigureVisibility();
         }).icon(PixelIcon.PLAYER);
@@ -184,7 +186,7 @@ public class FavoriteColorSelectionScreen extends Screen implements MenuGuiScale
 
         int doneButtonX = rowX + toggleButtonWidth + BUTTON_GAP;
         doneButton = new StyledButton(doneButtonX, buttonsY, rowX + rowWidth - doneButtonX, buttonHeight,
-                Component.literal("Done"), button -> {
+                CommonComponents.GUI_DONE, button -> {
             if (selectedColor != null) {
                 BlockPopsMod.logDebug("Player confirmed favorite color choice: {}", selectedColor.getSerializedName());
                 // Send packet to server using cross-platform networking
@@ -310,8 +312,8 @@ public class FavoriteColorSelectionScreen extends Screen implements MenuGuiScale
                 titleScale, Surfaces.TEXT, true);
 
         // Description (2 lines)
-        UiText.drawCentered(graphics, this.font, DESCRIPTION_1, centerX, descriptionY, Surfaces.TEXT_DIM);
-        UiText.drawCentered(graphics, this.font, DESCRIPTION_2, centerX,
+        UiText.drawCentered(graphics, this.font, Component.translatable(DESCRIPTION_1).getString(), centerX, descriptionY, Surfaces.TEXT_DIM);
+        UiText.drawCentered(graphics, this.font, Component.translatable(DESCRIPTION_2).getString(), centerX,
                 descriptionY + this.font.lineHeight + 2, Surfaces.TEXT_DIM);
     }
 

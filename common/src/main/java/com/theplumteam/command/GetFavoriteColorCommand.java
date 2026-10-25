@@ -36,23 +36,23 @@ public class GetFavoriteColorCommand {
             IPlayerDiscovery discovery = PlayerDataManager.getDiscovery(player);
 
             if (!discovery.hasChosenFavoriteColor()) {
-                source.sendSuccess(() -> Component.literal("You have not chosen a favorite color yet. Use /blockpops changefavoritecolor to choose one."), false);
+                source.sendSuccess(() -> Component.translatable("blockpops.command.favorite_color.none"), false);
                 BlockPopsMod.logDebug("Player {} checked their favorite color but hasn't chosen one yet", player.getName().getString());
             } else {
                 PopBlockColor favoriteColor = discovery.getFavoriteColor();
                 if (favoriteColor != null) {
                     String colorName = formatColorName(favoriteColor.getSerializedName());
-                    source.sendSuccess(() -> Component.literal("Your favorite color is: " + colorName), false);
+                    source.sendSuccess(() -> Component.translatable("blockpops.command.favorite_color.current", colorName), false);
                     BlockPopsMod.logDebug("Player {} checked their favorite color: {}", player.getName().getString(), favoriteColor.getSerializedName());
                 } else {
-                    source.sendFailure(Component.literal("Error: Favorite color data is corrupted. Please choose a new color with /blockpops changefavoritecolor"));
+                    source.sendFailure(Component.translatable("blockpops.command.favorite_color.corrupted"));
                     LOGGER.warn("Player {} has chosen a favorite color but the data is null", player.getName().getString());
                 }
             }
 
             return 1;
         } catch (Exception e) {
-            source.sendFailure(Component.literal("This command can only be executed by a player"));
+            source.sendFailure(Component.translatable("blockpops.command.player_only"));
             LOGGER.error("Error executing getfavoritecolor command", e);
             return 0;
         }

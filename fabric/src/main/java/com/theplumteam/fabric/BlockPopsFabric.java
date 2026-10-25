@@ -83,7 +83,7 @@ public class BlockPopsFabric implements ModInitializer {
                 if (figureBlockEntity.hasFigure()) {
                     figureBlockEntity.cyclePose();
                     com.theplumteam.util.PlayerMessages.actionBar(player,
-                        Component.literal("Pose changed to: " + figureBlockEntity.getPoseIndex()));
+                        Component.translatable("blockpops.message.pose_changed", figureBlockEntity.getPoseIndex()));
                     return InteractionResult.SUCCESS;
                 }
                 return InteractionResult.PASS;
@@ -94,7 +94,7 @@ public class BlockPopsFabric implements ModInitializer {
                 if (boxBlockEntity.hasFigure() && boxBlockEntity.isFigureExtracted()) {
                     boxBlockEntity.cyclePose();
                     com.theplumteam.util.PlayerMessages.actionBar(player,
-                        Component.literal("Pose changed to: " + boxBlockEntity.getPoseIndex()));
+                        Component.translatable("blockpops.message.pose_changed", boxBlockEntity.getPoseIndex()));
                     return InteractionResult.SUCCESS;
                 }
             }

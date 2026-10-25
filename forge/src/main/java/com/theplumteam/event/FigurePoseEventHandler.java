@@ -43,7 +43,7 @@ public class FigurePoseEventHandler {
             if (figureBlockEntity.hasFigure()) {
                 figureBlockEntity.cyclePose();
                 event.getEntity().displayClientMessage(
-                    Component.literal("Pose changed to: " + figureBlockEntity.getPoseIndex()), true);
+                    Component.translatable("blockpops.message.pose_changed", figureBlockEntity.getPoseIndex()), true);
                 event.setCanceled(true);
                 event.setCancellationResult(InteractionResult.SUCCESS);
             }
@@ -55,7 +55,7 @@ public class FigurePoseEventHandler {
             if (boxBlockEntity.hasFigure() && boxBlockEntity.isFigureExtracted()) {
                 boxBlockEntity.cyclePose();
                 event.getEntity().displayClientMessage(
-                    Component.literal("Pose changed to: " + boxBlockEntity.getPoseIndex()), true);
+                    Component.translatable("blockpops.message.pose_changed", boxBlockEntity.getPoseIndex()), true);
                 event.setCanceled(true);
                 event.setCancellationResult(InteractionResult.SUCCESS);
             }

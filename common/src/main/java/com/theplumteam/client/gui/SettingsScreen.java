@@ -86,23 +86,23 @@ public class SettingsScreen extends DialogScreen {
 
     // Tab system
     private enum Tab {
-        SERVER("Server", PixelIcon.SERVER),
-        DEVELOP("Develop", PixelIcon.WRENCH),
-        CHEATS("Cheats", PixelIcon.KEY),
-        COLLECTIONS("Collections", PixelIcon.LIST),
-        CUSTOM("Custom", PixelIcon.STAR),
-        CREATOR("Creator", PixelIcon.PALETTE);
+        SERVER("blockpops.settings.tab.server", PixelIcon.SERVER),
+        DEVELOP("blockpops.settings.tab.develop", PixelIcon.WRENCH),
+        CHEATS("blockpops.settings.tab.cheats", PixelIcon.KEY),
+        COLLECTIONS("blockpops.settings.tab.collections", PixelIcon.LIST),
+        CUSTOM("blockpops.settings.tab.custom", PixelIcon.STAR),
+        CREATOR("blockpops.settings.tab.creator", PixelIcon.PALETTE);
 
-        private final String displayName;
+        private final String nameKey;
         private final String[] icon;
 
-        Tab(String displayName, String[] icon) {
-            this.displayName = displayName;
+        Tab(String nameKey, String[] icon) {
+            this.nameKey = nameKey;
             this.icon = icon;
         }
 
         public String getDisplayName() {
-            return displayName;
+            return Component.translatable(nameKey).getString();
         }
     }
 
@@ -167,7 +167,7 @@ public class SettingsScreen extends DialogScreen {
     private float[] backgroundBeforeDevelop;
 
     public SettingsScreen(Screen parent) {
-        super(Component.literal("Settings"), parent);
+        super(Component.translatable("blockpops.settings.title"), parent);
     }
 
     @Override
@@ -232,7 +232,7 @@ public class SettingsScreen extends DialogScreen {
 
         // The action button, at the right of the footer - text and behavior depend on tab
         this.actionButton = DialogFrame.button(contentRight - ACTION_WIDTH, bodyBottom() - 6 - WIDGET_HEIGHT,
-                ACTION_WIDTH, WIDGET_HEIGHT, Component.literal("Action"), button -> handleActionClick());
+                ACTION_WIDTH, WIDGET_HEIGHT, Component.translatable("blockpops.settings.action"), button -> handleActionClick());
         this.addRenderableWidget(this.actionButton);
 
         // Create settings for all tabs
@@ -336,7 +336,7 @@ public class SettingsScreen extends DialogScreen {
     private void updateActionButtonState() {
         StyledButton.Tone tone = StyledButton.Tone.PRIMARY;
         if (activeTab == Tab.SERVER) {
-            this.actionButton.setMessage(Component.literal("Change time"));
+            this.actionButton.setMessage(Component.translatable("blockpops.settings.change_time"));
             // Locked until slider is moved to a different value
             this.actionButton.active = canChangeResetHour() && (pendingServerHourLocal != loadedServerHourLocal);
             this.actionButton.visible = true;
@@ -347,16 +347,16 @@ public class SettingsScreen extends DialogScreen {
             tone = StyledButton.Tone.NEUTRAL;
         } else if (activeTab == Tab.CHEATS) {
             // Cheats tab: open the per-player progression editor
-            this.actionButton.setMessage(Component.literal("Progression"));
+            this.actionButton.setMessage(Component.translatable("blockpops.settings.progression"));
             this.actionButton.active = true;
             this.actionButton.visible = true;
             tone = StyledButton.Tone.NEUTRAL;
         } else if (activeTab == Tab.CUSTOM) {
-            this.actionButton.setMessage(Component.literal("Add"));
+            this.actionButton.setMessage(Component.translatable("blockpops.settings.add"));
             this.actionButton.active = !pendingCustomCode.isBlank();
             this.actionButton.visible = true;
         } else if (activeTab == Tab.CREATOR) {
-            this.actionButton.setMessage(Component.literal("Open creator"));
+            this.actionButton.setMessage(Component.translatable("blockpops.settings.open_creator"));
             this.actionButton.active = true;
             this.actionButton.visible = true;
         } else {
@@ -456,7 +456,9 @@ public class SettingsScreen extends DialogScreen {
         }
         // Custom collections are not finished: a stamp across the tab says so
         if (activeTab == Tab.CUSTOM) {
-            Stamp.draw(graphics, new String[] {"IN DEVELOPMENT", "COMING IN THE NEXT UPDATE"}, new float[] {3, 1},
+            Stamp.draw(graphics, new String[] {Component.translatable("blockpops.settings.stamp.in_development").getString(),
+                            Component.translatable("blockpops.settings.stamp.next_update").getString()},
+                    new float[] {3, 1},
                     (contentX + contentRight) / 2.0f, (contentTop + contentBottom()) / 2.0f, STAMP_INK, 12);
         }
     }
@@ -666,13 +668,13 @@ public class SettingsScreen extends DialogScreen {
     private void createCustomSettings() {
         ClientCustomCollections.setStatusListener(status -> customStatus = ClientCustomCollections.message(status));
         List<Row> tabRows = rowsFor(Tab.CUSTOM);
-        tabRows.add(paragraph(() -> "Add a collection published for BlockPops by its access code. "
-                + "Every player downloads it on joining.", Surfaces.TEXT_DIM));
+        tabRows.add(paragraph(() -> Component.translatable("blockpops.settings.custom.help").getString(),
+                Surfaces.TEXT_DIM));
 
         customCodeField = new EditBox(this.font, contentX, 0, contentRight - contentX, WIDGET_HEIGHT,
-                Component.literal("Access code"));
+                Component.translatable("blockpops.settings.custom.code"));
         customCodeField.setMaxLength(64);
-        customCodeField.setHint(Component.literal("Access code"));
+        customCodeField.setHint(Component.translatable("blockpops.settings.custom.code"));
         customCodeField.setValue(pendingCustomCode);
         customCodeField.setResponder(value -> {
             pendingCustomCode = value;
@@ -690,7 +692,7 @@ public class SettingsScreen extends DialogScreen {
         int removeWidth = 70;
         for (FigureCollection collection : collections) {
             StyledButton remove = new StyledButton(contentRight - removeWidth, 0, removeWidth, WIDGET_HEIGHT,
-                    Component.literal("Remove"),
+                    Component.translatable("blockpops.settings.custom.remove"),
                     button -> new CustomCollectionRequestPacket(false, collection.getId()).sendToServer())
                     .tone(StyledButton.Tone.DANGER)
                     .icon(PixelIcon.BIN);
@@ -703,11 +705,12 @@ public class SettingsScreen extends DialogScreen {
      */
     private void createCreatorSettings() {
         List<Row> tabRows = rowsFor(Tab.CREATOR);
-        tabRows.add(paragraph(() -> "Make World collections for this world from your own skins, models, boxes and logos.",
+        tabRows.add(paragraph(() -> Component.translatable("blockpops.settings.creator.help").getString(),
                 Surfaces.TEXT_DIM));
-        tabRows.add(paragraph(() -> ClientWorldCollections.records().size() + " collections · "
-                + UiQuotaMeter.text(ClientWorldCollections.quotaUsedKiB(), ClientWorldCollections.quotaMaxKiB()).getString()
-                + " stored", ROW_TEXT));
+        tabRows.add(paragraph(() -> Component.translatable("blockpops.settings.creator.stored",
+                ClientWorldCollections.records().size(),
+                UiQuotaMeter.text(ClientWorldCollections.quotaUsedKiB(), ClientWorldCollections.quotaMaxKiB()))
+                .getString(), ROW_TEXT));
     }
 
     /**
@@ -732,7 +735,7 @@ public class SettingsScreen extends DialogScreen {
         this.resetHourSlider = new HourSlider(
                 contentX, 0,
                 contentRight - contentX, WIDGET_HEIGHT,
-                Component.literal("Guaranteed Token Reset Hour (" + timezoneName + "): "),
+                Component.translatable("blockpops.settings.reset_hour", timezoneName),
                 localHour,
                 localValue -> {
                     // Update pending value
@@ -742,19 +745,18 @@ public class SettingsScreen extends DialogScreen {
                 }
         );
         tabRows.add(widgetRow(null, this.resetHourSlider));
-        tabRows.add(paragraph(() -> "The guaranteed token grants an undiscovered figure from the collection. "
-                + "This token resets daily at the hour specified above (in your local time).", Surfaces.TEXT_DIM));
-        tabRows.add(paragraph(() -> !isOperator()
-                ? "Only server operators can change this hour (in single-player, enable cheats)."
-                : canChangeResetHour() ? "Set this to a time that works best for your server's player base."
-                : "The server has not reported its reset hour, so it cannot be changed from here.", Surfaces.TEXT_DIM));
+        tabRows.add(paragraph(() -> Component.translatable("blockpops.settings.reset_hour.help").getString(),
+                Surfaces.TEXT_DIM));
+        tabRows.add(paragraph(() -> Component.translatable(!isOperator() ? "blockpops.settings.reset_hour.operators_only"
+                : canChangeResetHour() ? "blockpops.settings.reset_hour.choose"
+                : "blockpops.settings.reset_hour.unknown").getString(), Surfaces.TEXT_DIM));
         refreshServerSettings();
 
         // World Players roster (admins only, like the Cheats tab; the server checks again)
         if (canAccessCheats()) {
             int manageWidth = 80;
             StyledButton manage = new StyledButton(contentRight - manageWidth, 0, manageWidth, WIDGET_HEIGHT,
-                    Component.literal("Manage"),
+                    Component.translatable("blockpops.settings.world_players.manage"),
                     button -> this.minecraft.setScreen(new WorldPlayerRosterScreen(this)))
                     .icon(PixelIcon.PLAYER);
             tabRows.add(widgetRow(() -> "World Players", manage));
@@ -846,34 +848,37 @@ public class SettingsScreen extends DialogScreen {
         int rightX = contentX + leftWidth + 6;
         int rightWidth = contentRight - rightX;
 
-        tabRows.add(paragraph(() -> "Use the token reload buttons to restore your tokens.", Surfaces.TEXT_DIM));
+        tabRows.add(paragraph(() -> Component.translatable("blockpops.settings.cheats.help").getString(),
+                Surfaces.TEXT_DIM));
 
         // Reload Regular Tokens button
         StyledButton reloadRegularButton = new StyledButton(contentX, 0, leftWidth, WIDGET_HEIGHT,
-                Component.literal("Reload Regular Tokens"),
+                Component.translatable("blockpops.settings.cheats.reload_regular"),
                 button -> {
                     // Send packet to server to reload regular tokens
                     ReloadTokensPacket packet = new ReloadTokensPacket(true, false);
                     packet.sendToServer();
 
                     // Provide visual feedback, re-enabled after a short delay
-                    showBusy(button, "Reloading...", "Reload Regular Tokens", 500);
+                    showBusy(button, Component.translatable("blockpops.settings.cheats.reloading").getString(),
+                            Component.translatable("blockpops.settings.cheats.reload_regular").getString(), 500);
                 });
 
         // Reload Guaranteed Token button
         StyledButton reloadGuaranteedButton = new StyledButton(rightX, 0, rightWidth, WIDGET_HEIGHT,
-                Component.literal("Reload Guaranteed Token"),
+                Component.translatable("blockpops.settings.cheats.reload_guaranteed"),
                 button -> {
                     // Send packet to server to reload guaranteed token
                     ReloadTokensPacket packet = new ReloadTokensPacket(false, true);
                     packet.sendToServer();
 
                     // Provide visual feedback, re-enabled after a short delay
-                    showBusy(button, "Reloading...", "Reload Guaranteed Token", 500);
+                    showBusy(button, Component.translatable("blockpops.settings.cheats.reloading").getString(),
+                            Component.translatable("blockpops.settings.cheats.reload_guaranteed").getString(), 500);
                 });
         tabRows.add(gridRow(reloadRegularButton, reloadGuaranteedButton));
 
-        tabRows.add(paragraph(() -> "Click a collection button to unlock all figures and receive all boxes.",
+        tabRows.add(paragraph(() -> Component.translatable("blockpops.settings.cheats.unlock_help").getString(),
                 Surfaces.TEXT_DIM));
 
         // Get all collections
@@ -890,7 +895,7 @@ public class SettingsScreen extends DialogScreen {
         List<AbstractWidget> pair = new ArrayList<>();
         for (FigureCollection collection : filteredCollections) {
             boolean left = pair.isEmpty();
-            String label = "Unlock " + collection.getName();
+            String label = Component.translatable("blockpops.settings.cheats.unlock", collection.getName()).getString();
             StyledButton unlockButton = new StyledButton(left ? contentX : rightX, 0, left ? leftWidth : rightWidth,
                     WIDGET_HEIGHT, Component.literal(label),
                     button -> {
@@ -899,7 +904,7 @@ public class SettingsScreen extends DialogScreen {
                         packet.sendToServer();
 
                         // Provide visual feedback, re-enabled after a short delay
-                        showBusy(button, "Unlocking...", label, 1000);
+                        showBusy(button, Component.translatable("blockpops.settings.cheats.unlocking").getString(), label, 1000);
                     });
             pair.add(unlockButton);
             if (pair.size() == 2) {
@@ -938,8 +943,8 @@ public class SettingsScreen extends DialogScreen {
      */
     private void createCollectionsSettings() {
         List<Row> tabRows = rowsFor(Tab.COLLECTIONS);
-        tabRows.add(paragraph(() -> "A collection switched off is hidden: it is removed from every player's "
-                + "collection list on this server.", Surfaces.TEXT_DIM));
+        tabRows.add(paragraph(() -> Component.translatable("blockpops.settings.collections.help").getString(),
+                Surfaces.TEXT_DIM));
 
         for (FigureCollection collection : CollectionRegistry.getAllCollections()) {
             // The default collection is never listed, so there is nothing to hide. A World

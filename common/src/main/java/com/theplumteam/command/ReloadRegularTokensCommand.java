@@ -60,10 +60,10 @@ public class ReloadRegularTokensCommand {
                     millisUntilReset
             );
 
-            source.sendSuccess(() -> Component.literal("Reloaded regular tokens to 3 for " + player.getName().getString()), true);
+            source.sendSuccess(() -> Component.translatable("blockpops.command.reload_regular.done", player.getName().getString()), true);
             return 1;
         } catch (Exception e) {
-            source.sendFailure(Component.literal("Could not reload the regular tokens of " + player.getName().getString()));
+            source.sendFailure(Component.translatable("blockpops.command.reload_regular.failed", player.getName().getString()));
             LOGGER.error("Error executing reloadregulartokens command", e);
             return 0;
         }

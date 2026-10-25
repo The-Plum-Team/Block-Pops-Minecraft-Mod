@@ -48,7 +48,7 @@ public class FigurePoseEventHandler {
             if (figureBlockEntity.hasFigure()) {
                 figureBlockEntity.cyclePose();
                 com.theplumteam.util.PlayerMessages.actionBar(event.getEntity(),
-                    Component.literal("Pose changed to: " + figureBlockEntity.getPoseIndex()));
+                    Component.translatable("blockpops.message.pose_changed", figureBlockEntity.getPoseIndex()));
                 event.setCanceled(true);
                 event.setCancellationResult(InteractionResult.SUCCESS);
             }
@@ -60,7 +60,7 @@ public class FigurePoseEventHandler {
             if (boxBlockEntity.hasFigure() && boxBlockEntity.isFigureExtracted()) {
                 boxBlockEntity.cyclePose();
                 com.theplumteam.util.PlayerMessages.actionBar(event.getEntity(),
-                    Component.literal("Pose changed to: " + boxBlockEntity.getPoseIndex()));
+                    Component.translatable("blockpops.message.pose_changed", boxBlockEntity.getPoseIndex()));
                 event.setCanceled(true);
                 event.setCancellationResult(InteractionResult.SUCCESS);
             }

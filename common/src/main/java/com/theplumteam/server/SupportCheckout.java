@@ -63,13 +63,13 @@ public final class SupportCheckout {
         String apiKey = config.getSpecialAccessApiKey();
         // The packaged E2E stays inside its sandbox
         if (apiUrl.isEmpty() || apiKey.isEmpty() || E2EDeterminism.ENABLED) {
-            reply(player, fromMenu, "Becoming a supporter isn't available on this server.");
+            reply(player, fromMenu, "blockpops.support.unavailable");
             return;
         }
         MinecraftServer server = ServerLevels.serverOf(player);
         // A second subscription would only charge twice
         if (SpecialAccess.isSupporter(player)) {
-            reply(player, fromMenu, "You're already a supporter. Thank you!");
+            reply(player, fromMenu, "blockpops.support.already");
             return;
         }
 
@@ -77,7 +77,7 @@ public final class SupportCheckout {
         long now = System.currentTimeMillis();
         Long last = LAST_REQUEST.get(playerId);
         if (last != null && now - last < REQUEST_INTERVAL_MILLIS) {
-            reply(player, fromMenu, "Your checkout is on its way.");
+            reply(player, fromMenu, "blockpops.support.on_its_way");
             return;
         }
         LAST_REQUEST.put(playerId, now);
@@ -101,7 +101,7 @@ public final class SupportCheckout {
                     return;
                 }
                 if (answer == null) {
-                    reply(online, fromMenu, "The checkout couldn't be opened. Try again in a moment.");
+                    reply(online, fromMenu, "blockpops.support.failed");
                     return;
                 }
                 SpecialAccess.watchPurchase(online);
@@ -172,22 +172,23 @@ public final class SupportCheckout {
         return Component.literal("[BlockPops] ").withStyle(style -> style.withColor(PREFIX_COLOR));
     }
 
-    // The menu shows its own answers; the chat's link gets them in the chat
-    private static void reply(ServerPlayer player, boolean fromMenu, String message) {
+    // The menu shows its own answers; the chat's link gets them in the chat. Both get the
+    // language key, so the player reads the answer in their own language.
+    private static void reply(ServerPlayer player, boolean fromMenu, String key) {
         if (fromMenu) {
-            OpenSupportCheckoutPacket.sendMessage(player, message);
+            OpenSupportCheckoutPacket.sendMessage(player, key);
         } else {
-            tell(player, message);
+            tell(player, key);
         }
     }
 
-    private static void tell(ServerPlayer player, String message) {
-        player.sendSystemMessage(prefix().append(Component.literal(message)
+    private static void tell(ServerPlayer player, String key) {
+        player.sendSystemMessage(prefix().append(Component.translatable(key)
                 .withStyle(style -> style.withColor(TEXT_COLOR))));
     }
 
     private static void sendLink(ServerPlayer player, String url) {
-        MutableComponent link = Component.literal("Open the checkout");
+        MutableComponent link = Component.translatable("blockpops.support.open_checkout");
         //? if >=1.21.5 {
         /*link.withStyle(style -> style.withColor(PREFIX_COLOR).withBold(true).withUnderlined(true)
                 .withClickEvent(new ClickEvent.OpenUrl(URI.create(url))));
@@ -195,13 +196,13 @@ public final class SupportCheckout {
         link.withStyle(style -> style.withColor(PREFIX_COLOR).withBold(true).withUnderlined(true)
                 .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url)));
         //? }
-        player.sendSystemMessage(prefix().append(Component.literal("Your supporter checkout is ready: ")
-                .withStyle(style -> style.withColor(TEXT_COLOR))).append(link));
+        player.sendSystemMessage(prefix().append(Component.translatable("blockpops.support.ready", link)
+                .withStyle(style -> style.withColor(TEXT_COLOR))));
     }
 
     // After paying on Ko-fi, the player ties the payment to their name on the service's page
     private static void sendLinkPage(ServerPlayer player, String url) {
-        MutableComponent link = Component.literal("Link my account");
+        MutableComponent link = Component.translatable("blockpops.support.link_account");
         //? if >=1.21.5 {
         /*link.withStyle(style -> style.withColor(PREFIX_COLOR).withBold(true).withUnderlined(true)
                 .withClickEvent(new ClickEvent.OpenUrl(URI.create(url))));
@@ -209,7 +210,7 @@ public final class SupportCheckout {
         link.withStyle(style -> style.withColor(PREFIX_COLOR).withBold(true).withUnderlined(true)
                 .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url)));
         //? }
-        player.sendSystemMessage(prefix().append(Component.literal("After paying on Ko-fi, tie it to your account with the email you used: ")
-                .withStyle(style -> style.withColor(TEXT_COLOR))).append(link));
+        player.sendSystemMessage(prefix().append(Component.translatable("blockpops.support.kofi_link", link)
+                .withStyle(style -> style.withColor(TEXT_COLOR))));
     }
 }

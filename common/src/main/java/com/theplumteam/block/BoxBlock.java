@@ -310,7 +310,7 @@ public class BoxBlock extends BaseEntityBlock {
                     return InteractionResult.SUCCESS;
                 } else {
                     com.theplumteam.util.PlayerMessages.actionBar(player,
-                            Component.literal("Use Shears to open").withStyle(ChatFormatting.GRAY));
+                            Component.translatable("blockpops.message.use_shears").withStyle(ChatFormatting.GRAY));
                     return InteractionResult.SUCCESS;
                 }
             }

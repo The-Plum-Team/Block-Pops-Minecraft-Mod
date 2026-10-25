@@ -59,6 +59,12 @@ scale while it is shown (`MenuGuiScale`), chosen from the window size, and puts 
 back in `removed()`; a dialog over a menu follows the menu's scale. Layouts derive from the
 canvas that scale gives, from about 400x300 up.
 
+Every text a player reads is a key of `assets/blockpops/lang/en_us.json`, never a literal in the
+code, and each other file of that folder translates all of its keys (CONTRIBUTING.md, Translations).
+The server sends translatable components, which each player's game shows in their own language; a
+reason the server sends as a plain string, as the supporter checkout does, is a key too. Only the
+development tools stay in English: the Develop tab and the figure-position editor.
+
 A collection screen shows each figure or plush in colour once discovered and in black and white
 before. Through 1.21.1 it draws the model straight into the screen. From 1.21.4 it draws an item
 bound to `FigurePreviewItemRenderer`, whose `figure_preview` model bakes that same camera and a

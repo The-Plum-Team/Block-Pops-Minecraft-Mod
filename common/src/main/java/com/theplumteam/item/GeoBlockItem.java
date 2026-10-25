@@ -69,7 +69,7 @@ public class GeoBlockItem extends BlockItem {
                 }
             }
 
-            return Component.literal(collectionName + " Box");
+            return Component.translatable("block.blockpops.box_block.collection", collectionName);
 
         } else if (getBlock() instanceof FigureBlock) {
             CompoundTag blockEntityTag = BlockEntityItemData.read(stack);

@@ -571,12 +571,13 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
     @Override
     public Component getNarration() {
         if (figures.isEmpty()) {
-            return Component.literal("Empty row");
+            return Component.translatable("blockpops.machine.narration.empty_row");
         } else if (figures.size() == 1) {
             FigureDefinition figure = figures.get(0);
             String uniqueFigureId = collectionId + ":" + figure.getId();
             boolean isDiscovered = discovered.test(uniqueFigureId);
-            return Component.literal(isDiscovered ? figure.getName() : "Undiscovered Figure");
+            return isDiscovered ? Component.literal(figure.getName())
+                    : Component.translatable("blockpops.machine.narration.undiscovered");
         } else {
             int discoveredCount = 0;
             for (FigureDefinition figure : figures) {
@@ -585,7 +586,7 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                     discoveredCount++;
                 }
             }
-            return Component.literal(discoveredCount + " of " + figures.size() + " figures discovered");
+            return Component.translatable("blockpops.machine.narration.discovered", discoveredCount, figures.size());
         }
     }
 

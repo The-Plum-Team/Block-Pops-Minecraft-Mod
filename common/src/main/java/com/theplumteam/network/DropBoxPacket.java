@@ -26,6 +26,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -84,7 +85,8 @@ public class DropBoxPacket {
                         player.getName().getString(), packet.tokenType);
 
                 if (player.getInventory().getFreeSlot() == -1) {
-                    player.sendSystemMessage(Component.literal("\u00A7cInventory is full! Cannot receive figure box."));
+                    player.sendSystemMessage(Component.translatable("blockpops.message.inventory_full")
+                            .withStyle(ChatFormatting.RED));
                     BlockPopsMod.logDebug("Player {} inventory is full, token not consumed", player.getName().getString());
                     return;
                 }
@@ -92,7 +94,8 @@ public class DropBoxPacket {
                 // The list only leaves a hidden collection out; a machine set to it before, or a
                 // modified client, still names it here
                 if (ServerConfig.getInstance().getHiddenCollections().contains(packet.collectionId)) {
-                    player.sendSystemMessage(Component.literal("§cThis collection is not available."));
+                    player.sendSystemMessage(Component.translatable("blockpops.message.collection_unavailable")
+                            .withStyle(ChatFormatting.RED));
                     BlockPopsMod.logDebug("Collection {} is hidden, token not consumed", packet.collectionId);
                     return;
                 }
@@ -102,14 +105,16 @@ public class DropBoxPacket {
                 List<FigureDefinition> pool = collection != null
                         ? SpecialAccess.figuresFor(player, collection) : List.of();
                 if (pool.isEmpty()) {
-                    player.sendSystemMessage(Component.literal("\u00A7cThis collection has no figures available."));
+                    player.sendSystemMessage(Component.translatable("blockpops.message.collection_empty")
+                            .withStyle(ChatFormatting.RED));
                     BlockPopsMod.logDebug("Collection {} has no available figures, token not consumed", packet.collectionId);
                     return;
                 }
 
                 // A plush with nothing to hand out is refused here, while the token is still unspent
                 if (collection.isPlush() && !PlushPrizes.canGiveAll(packet.collectionId, pool)) {
-                    player.sendSystemMessage(Component.literal("\u00A7cThis collection is not available."));
+                    player.sendSystemMessage(Component.translatable("blockpops.message.collection_unavailable")
+                            .withStyle(ChatFormatting.RED));
                     LOGGER.warn("Plush collection {} names a figure that is not a registered plush, token not consumed",
                             packet.collectionId);
                     return;
