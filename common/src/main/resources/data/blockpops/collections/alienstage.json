@@ -5,7 +5,7 @@
   "author_url": "",
   "box_texture": "blockpops:textures/block/box/alienstage.png",
   "logo": {
-    "texture": "blockpops:textures/block/box/logo/logo_alienstage.png",
+    "texture": "blockpops:textures/logo/logo_alienstage.png",
     "scale": 0.81
   },
   "background_color": {

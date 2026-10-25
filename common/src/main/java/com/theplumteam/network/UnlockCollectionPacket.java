@@ -1,7 +1,6 @@
 package com.theplumteam.network;
 
 import com.theplumteam.util.ServerLevels;
-import com.mojang.authlib.GameProfile;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
@@ -14,8 +13,8 @@ import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.item.PlushPrizes;
 import com.theplumteam.registry.ModItems;
+import com.theplumteam.server.PlayerSkins;
 import com.theplumteam.server.worldcollections.WorldCollections;
-import com.theplumteam.util.AuthlibProfiles;
 import com.theplumteam.util.ResourceLocations;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldContentIds;
@@ -202,12 +201,8 @@ public class UnlockCollectionPacket {
         String quickSkinSnapshot = null;
 
         if (figure.getType() == FigureType.PLAYER) {
-            GameProfile freshProfile = getFreshGameProfile(player, figure);
-            if (freshProfile != null && !AuthlibProfiles.properties(freshProfile).get("textures").isEmpty()) {
-                skinSnapshot = AuthlibProfiles.value(AuthlibProfiles.properties(freshProfile).get("textures").iterator().next());
-                discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
-                LOGGER.debug("Saved skin snapshot for player figure: {}", uniqueFigureId);
-            }
+            // The skin known now; a fresh one is fetched without holding up the server
+            skinSnapshot = PlayerSkins.forFigure(player, uniqueFigureId, figure, discovery);
 
             if (figure.getPlayerUUID() != null) {
                 String qsId = getQuickSkinIdFromServer(figure.getPlayerUUID());
@@ -261,18 +256,6 @@ public class UnlockCollectionPacket {
         );
         itemEntity.setDeltaMovement(0, 0.2, 0);
         player.level().addFreshEntity(itemEntity);
-    }
-
-    @Nullable
-    private static GameProfile getFreshGameProfile(ServerPlayer player, FigureDefinition figure) {
-        if (figure.getPlayerUUID() == null) return null;
-        try {
-            GameProfile freshProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
-            return AuthlibProfiles.fetch(ServerLevels.sessionServiceOf(player), freshProfile);
-        } catch (Exception e) {
-            LOGGER.error("Failed to fetch fresh GameProfile for {}: {}", figure.getName(), e.getMessage());
-            return null;
-        }
     }
 
     public void sendToServer() {

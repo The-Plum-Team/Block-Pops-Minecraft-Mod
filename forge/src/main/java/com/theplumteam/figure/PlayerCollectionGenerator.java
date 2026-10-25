@@ -188,7 +188,7 @@ public class PlayerCollectionGenerator {
             ResourceLocation boxTexture = new ResourceLocation("blockpops", "textures/block/box/default.png");
 
             // Create logo configuration for World Players collection
-            ResourceLocation logoTexture = new ResourceLocation("blockpops", "textures/block/box/logo/logo_worldplayers.png");
+            ResourceLocation logoTexture = new ResourceLocation("blockpops", "textures/logo/logo_worldplayers.png");
             FigureCollection.LogoConfig logoConfig = FigureCollection.LogoConfig.automatic(logoTexture, 1.0f, 0.0f, 0.0f);
 
             return new FigureCollection(
@@ -215,7 +215,7 @@ public class PlayerCollectionGenerator {
         ResourceLocation boxTexture = new ResourceLocation("blockpops", "textures/block/box/default.png");
 
         // Create logo configuration for World Players collection
-        ResourceLocation logoTexture = new ResourceLocation("blockpops", "textures/block/box/logo/logo_worldplayers.png");
+        ResourceLocation logoTexture = new ResourceLocation("blockpops", "textures/logo/logo_worldplayers.png");
         FigureCollection.LogoConfig logoConfig = FigureCollection.LogoConfig.automatic(logoTexture, 1.0f, 0.0f, 0.0f);
 
         return new FigureCollection(
