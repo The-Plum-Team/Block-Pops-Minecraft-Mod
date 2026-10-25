@@ -578,6 +578,31 @@ head. If either long-lived head moved, discard and reconstruct the candidate.
 Never merge it directly, invent ordinary-release PRT contexts, or broaden the
 conflict allowlist to force this bootstrap.
 
+## Publish a release
+
+A release reaches Modrinth (project `u1JjJR7q`) and CurseForge (project `1394429`) only
+through `.github/workflows/publish-marketplaces.yml`, from `master`:
+
+1. The version bump is a controller-upgrade pull request that sets every `mod_version` of
+   `release/release-matrix.json` and adds the release notes as `docs/changelogs/<version>.md`
+   (`tests/test_publish_marketplaces.py` requires the file). Merge it once its gates pass.
+2. Take the id of that pull request's successful `mod-base Build` run, the one whose tested
+   commit has `master`'s tree.
+3. Dispatch **Publish to marketplaces** on `master` with the version and that run id, and
+   approve the `marketplaces` deployment when GitHub asks.
+
+The job authenticates the run through the API (workflow path, success, latest attempt, its
+`mb-ci-build--<run>--a<attempt>` artifact), requires the commit it tested to have exactly the
+tree being released, downloads the bundle by artifact id and digest, and checks each
+production jar against the digest, tree, matrix and version its lane recorded. Only then do
+the upload steps run; each holds just its own token, from the `marketplaces` environment
+(`MODRINTH_TOKEN`, `CURSEFORGE_TOKEN`; required reviewer `AkaNebur`, deployments from
+`master` only). Modrinth skips a lane already published under that version, so a failed run
+can simply be dispatched again. CurseForge cannot be asked what it holds: to finish a partly
+failed run, dispatch `curseforge` with `lanes` set to the lanes that are missing.
+
+A token that expires is replaced in the environment's secrets; nothing else changes.
+
 ## Recovery runbook
 
 - **A gate failed:** inspect the newest exact-head run. Fix the root cause and
