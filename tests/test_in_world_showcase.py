@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from e2e import custom_fixture
 from e2e import packaged_runtime as runtime
 from e2e.scenario_contract import load_contract
 
@@ -25,12 +26,14 @@ class InWorldShowcaseTests(unittest.TestCase):
     def test_contract_photographs_packaged_collection_walls_in_id_order(self) -> None:
         # A new collection lands in two steps: an ordinary pull request packages it, then a
         # controller upgrade adds its wall here. Between the two it is built but not photographed.
+        # The Custom collection's wall (e2e/custom_fixture.py) stands after the packaged ones.
         contract = load_contract(CONTRACT)
         steps = contract.expected_capture_steps("in-world", "client_a")
         walls = [step.removeprefix("collection_") for step in steps if step.startswith("collection_")]
         packaged = [collection for collection, _ in runtime.showcase_collections(COLLECTIONS)]
         self.assertEqual(len(walls), len(set(walls)))
-        self.assertEqual([collection for collection in packaged if collection in walls], walls)
+        self.assertEqual(custom_fixture.COLLECTION_ID, walls[-1])
+        self.assertEqual([collection for collection in packaged if collection in walls], walls[:-1])
 
     def test_every_figure_stands_in_its_own_box_on_its_wall(self) -> None:
         collections = runtime.showcase_collections(COLLECTIONS)

@@ -5,6 +5,9 @@ import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.client.gui.CollectionSelectionScreen;
 import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
 import com.theplumteam.client.gui.FigureDraw;
+import com.theplumteam.client.remote.ClientCustomCollections;
+import com.theplumteam.client.runtime.RuntimeGeo;
+import com.theplumteam.client.runtime.RuntimeTextures;
 import com.theplumteam.e2e.Scenario;
 import com.theplumteam.e2e.Step;
 import com.theplumteam.e2e.VanillaShim;
@@ -35,8 +38,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * hand and placed, the claw machine in hand, and one wall per collection with every figure.
  *
  * The walls come from the test server's data pack (e2e/packaged_runtime.py), which builds them
- * with the same layout this class walks to: collections with figures sorted by id, wall i at
- * x = WALL_ORIGIN_X + i * WALL_SPACING on z = WALL_Z, figure k at column k % 9, row k / 9.
+ * with the same layout this class walks to: collections with figures sorted by id, then the
+ * Custom collections the server offers sorted by id, wall i at x = WALL_ORIGIN_X + i * WALL_SPACING
+ * on z = WALL_Z, figure k at column k % 9, row k / 9. The one Custom collection is the fixture
+ * e2e/custom_fixture.py puts in the verified caches, since the game never reaches the CDN here.
  */
 public final class InWorldScenario implements Scenario {
     private static final String PREFIX = "in-world.client_a.";
@@ -189,18 +194,31 @@ public final class InWorldScenario implements Scenario {
         List<String> collections = showcaseCollections();
         for (int index = 0; index < collections.size(); index++) {
             if (contracted.contains("collection_" + collections.get(index))) {
-                steps.add(collectionWall(minecraft, collections.get(index), index));
+                steps.add(collectionWall(minecraft, collections.get(index), index, false));
             }
+        }
+        // The Custom walls stand after the others. The server may sync its Custom collections only
+        // after the world is joined, so they come from the contract rather than the registry.
+        List<String> custom = contracted.stream()
+                .filter(step -> step.startsWith("collection_"))
+                .map(step -> step.substring("collection_".length()))
+                .filter(collection -> !collections.contains(collection))
+                .sorted()
+                .toList();
+        for (int index = 0; index < custom.size(); index++) {
+            steps.add(collectionWall(minecraft, custom.get(index), collections.size() + index, true));
         }
         return steps;
     }
 
-    /** Every collection with figures, sorted by id: the walls the data pack builds. */
+    /** Every bundled collection with figures, sorted by id: the walls the data pack builds first. */
     static List<String> showcaseCollections() {
+        Set<String> custom = new HashSet<>();
+        ClientCustomCollections.collections().forEach(collection -> custom.add(collection.getId()));
         return CollectionRegistry.getAllCollections().stream()
                 .filter(collection -> !collection.getFigures().isEmpty())
                 .map(FigureCollection::getId)
-                .filter(id -> !"world_players".equals(id))
+                .filter(id -> !"world_players".equals(id) && !custom.contains(id))
                 .sorted()
                 .toList();
     }
@@ -221,14 +239,8 @@ public final class InWorldScenario implements Scenario {
                         : Step.Result.fail("the placed box disappeared"));
     }
 
-    private static Step collectionWall(Minecraft minecraft, String collection, int index) {
+    private static Step collectionWall(Minecraft minecraft, String collection, int index, boolean custom) {
         int origin = WALL_ORIGIN_X + index * WALL_SPACING;
-        int figures = figures(collection).size();
-        int rows = (figures + WALL_COLUMNS - 1) / WALL_COLUMNS;
-        // Rows fill from the left, so a collection shorter than a row is centred on its boxes.
-        double centerX = origin + Math.min(figures, WALL_COLUMNS) / 2.0;
-        Vec3 feet = new Vec3(centerX, GROUND_Y, WALL_Z + 0.5 + WALL_VIEW_DISTANCE);
-        Vec3 target = new Vec3(centerX, GROUND_Y + rows / 2.0, WALL_Z + 0.5);
         String step = "collection_" + collection;
         return Step.of(step)
                 .action(() -> {
@@ -238,10 +250,54 @@ public final class InWorldScenario implements Scenario {
                 .minTicks(5)
                 .settleTicks(30)
                 .timeoutTicks(600)
-                .ready(() -> walkTo(minecraft, feet, target)
+                .ready(() -> (!custom || customLoaded(collection))
+                        && walkToWall(minecraft, collection, origin)
                         && validateWall(minecraft, collection, origin).pass())
                 .screenshot(PREFIX + step + ".png")
-                .assertion(() -> validateWall(minecraft, collection, origin));
+                .assertion(() -> custom ? validateCustomWall(minecraft, collection, origin)
+                        : validateWall(minecraft, collection, origin));
+    }
+
+    // Walks to the viewpoint of a wall, from the collection's figures as they are synchronized now
+    private static boolean walkToWall(Minecraft minecraft, String collection, int origin) {
+        int figures = figures(collection).size();
+        int rows = (figures + WALL_COLUMNS - 1) / WALL_COLUMNS;
+        // Rows fill from the left, so a collection shorter than a row is centred on its boxes.
+        double centerX = origin + Math.min(figures, WALL_COLUMNS) / 2.0;
+        Vec3 feet = new Vec3(centerX, GROUND_Y, WALL_Z + 0.5 + WALL_VIEW_DISTANCE);
+        Vec3 target = new Vec3(centerX, GROUND_Y + rows / 2.0, WALL_Z + 0.5);
+        return walkTo(minecraft, feet, target);
+    }
+
+    // Whether the server has synced the Custom collection and every file it names has loaded
+    private static boolean customLoaded(String collection) {
+        FigureCollection synced = ClientCustomCollections.collections().stream()
+                .filter(candidate -> candidate.getId().equals(collection))
+                .findFirst()
+                .orElse(null);
+        if (synced == null || synced.getFigures().isEmpty()
+                || RuntimeTextures.isPending(synced.getBoxTexture())
+                || RuntimeTextures.isPending(synced.getLogoTexture())) {
+            return false;
+        }
+        for (FigureDefinition figure : synced.getFigures()) {
+            if (RuntimeTextures.isPending(figure.getTexturePath())
+                    || RuntimeGeo.isPending(figure.getModelPath())
+                    || RuntimeGeo.isPending(figure.getRenderOptions().poseAnimation())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static Step.Result validateCustomWall(Minecraft minecraft, String collection, int origin) {
+        if (!customLoaded(collection)) {
+            return Step.Result.fail("Custom collection " + collection + " is not synced or its files are still loading");
+        }
+        Step.Result wall = validateWall(minecraft, collection, origin);
+        return wall.pass()
+                ? Step.Result.pass(wall.message() + ", a Custom collection loaded from the verified cache")
+                : wall;
     }
 
     private static List<FigureDefinition> figures(String collection) {

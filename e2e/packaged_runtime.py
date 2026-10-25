@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePath
 from typing import Any, BinaryIO
 
+from e2e import custom_fixture
 from e2e.dependency_integrity import DependencyIntegrityError, verified_sha256
 from e2e.runtime_store import (
     InvalidRuntimeTreeError,
@@ -1030,8 +1031,9 @@ SERVER_E2E_PROPERTY = "-Dblockpops.e2e.enabled=true"
 COLLECTIONS_PATH = Path("common/src/main/resources/data/blockpops/collections")
 # The in-world scenario photographs one wall per collection. The harness walks to the same
 # positions (common/src/e2e/.../scenario/InWorldScenario.java), so both follow this layout:
-# collections with figures, sorted by id; wall i starts at x = WALL_ORIGIN_X + i * WALL_SPACING
-# on z = WALL_Z; figure k of the collection's JSON stands at column k % 9, row k // 9.
+# collections with figures, sorted by id, then the Custom collections the server offers, sorted
+# by id; wall i starts at x = WALL_ORIGIN_X + i * WALL_SPACING on z = WALL_Z; figure k of the
+# collection's JSON stands at column k % 9, row k // 9.
 SHOWCASE_COLUMNS = 9
 SHOWCASE_WALL_ORIGIN_X = -70
 SHOWCASE_WALL_SPACING = 14
@@ -1073,7 +1075,13 @@ def showcase_function(collections: list[tuple[str, list[str]]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write_server_files(server: Path, port: int, template_root: Path, minecraft: str) -> None:
+def write_server_files(
+    server: Path,
+    port: int,
+    template_root: Path,
+    minecraft: str,
+    custom_walls: tuple[tuple[str, list[str]], ...] = (),
+) -> None:
     properties = (template_root / "server.properties").read_text(encoding="utf-8")
     properties = re.sub(r"(?m)^server-port=.*$", f"server-port={port}", properties)
     (server / "server.properties").write_text(properties, encoding="utf-8")
@@ -1082,7 +1090,9 @@ def write_server_files(server: Path, port: int, template_root: Path, minecraft: 
     datapack.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(template_root / "datapack", datapack, dirs_exist_ok=True)
     # template_root is <repository>/e2e/server-template.
-    showcase = showcase_function(showcase_collections(template_root.parents[1] / COLLECTIONS_PATH))
+    showcase = showcase_function(
+        showcase_collections(template_root.parents[1] / COLLECTIONS_PATH) + list(custom_walls)
+    )
     for functions in ("function", "functions"):
         target = datapack / "data" / "blockpops_e2e" / functions / "showcase.mcfunction"
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -2248,9 +2258,22 @@ def run_packaged_row(
                 java,
                 server_install_log,
             )
-            write_server_files(
-                server, port, repo / "e2e" / "server-template", str(row["minecraft"])
+            # A scenario that photographs the Custom fixture gets it in every cache and in the world
+            custom = any(
+                custom_fixture.STEP in SCENARIO_CONTRACT.role(scenario, role).step_ids
+                for role in roles
             )
+            write_server_files(
+                server,
+                port,
+                repo / "e2e" / "server-template",
+                str(row["minecraft"]),
+                ((custom_fixture.COLLECTION_ID, custom_fixture.figures()),) if custom else (),
+            )
+            if custom:
+                custom_fixture.install(
+                    repo, server, [client_directories[role] for role in roles]
+                )
             install_dir, version_id = prepare_client_install(
                 matrix, row, runtime_session, java
             )

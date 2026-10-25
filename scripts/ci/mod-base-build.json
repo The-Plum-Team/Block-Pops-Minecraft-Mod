@@ -7,12 +7,16 @@
         "sha256": "407bbb7969fe2e67295551afa02b40aefb81556e853734babd396084b19789e2"
       },
       {
+        "path": "e2e/custom_fixture.py",
+        "sha256": "71b657b4a4695e40d6819539471c60c001dd325d8252e9c6bbc125a876560571"
+      },
+      {
         "path": "e2e/dependency_integrity.py",
         "sha256": "86fc8da92b308576fa782f61568738a62b64455b65712896b24894d2573ea9f6"
       },
       {
         "path": "e2e/packaged_runtime.py",
-        "sha256": "946ac1c463bbb7ca042fa30b5cd6bb926861106c7c8b6db1718b7fc76d8d962b"
+        "sha256": "f98ad29149f6c5c0a11ad96acb0c3c6330a2e4a355f1194796478d2785bbae9c"
       },
       {
         "path": "e2e/runtime_store.py",

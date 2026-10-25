@@ -34,6 +34,20 @@ The `in-world` flow shows the mod as a player meets it in the world:
    ordinary one packages it (its wall is built but not yet photographed), then
    a controller upgrade adds its `collection_<id>` step to
    `e2e/scenario-contract.json`.
+5. The last wall is a Custom collection, `e2e_fixture`, with no CDN
+   (`e2e/custom_fixture.py`). The game never reaches the CDN in the packaged
+   E2E: `RemoteSource.forGame()` is `RemoteSource.NONE` there. Before the game
+   starts, the runtime fills the verified cache (`blockpops-cache/`) of the
+   server and of the client with the collection, in the CDN layout and with its
+   manifest. It enables the collection in the world through 1.5.0's
+   `data/blockpops_world.dat`, which the server imports on its first start.
+   - The collection borrows bundled resources under its own id: Goku with his
+     own model, poses and texture, Luffy with a texture on the default model,
+     the Dragon Ball Z box art and logo.
+   - The harness waits until the server has synced the collection and every
+     file it names has loaded, then photographs its wall.
+   - It only runs in a scenario whose contract names the
+     `collection_e2e_fixture` step.
 
 Only the packaged E2E sets `blockpops.e2e.enabled` on the client and server. With
 it the star background and the GeckoLib idle animations hold one frame, the
