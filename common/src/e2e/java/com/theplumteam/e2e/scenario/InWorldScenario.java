@@ -2,6 +2,7 @@ package com.theplumteam.e2e.scenario;
 
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
+import com.theplumteam.client.LocalProfileProperties;
 import com.theplumteam.client.gui.CollectionSelectionScreen;
 import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
 import com.theplumteam.client.gui.FigureDraw;
@@ -79,7 +80,10 @@ public final class InWorldScenario implements Scenario {
                 .minTicks(5)
                 .timeoutTicks(600)
                 .ready(() -> minecraft.screen instanceof FavoriteColorSelectionScreen)
-                .assertion(() -> Step.Result.pass("first-join favorite-color prompt opened")));
+                // Every loader must apply the client mixin; without it a World Players skin crashes the render
+                .assertion(() -> minecraft instanceof LocalProfileProperties
+                        ? Step.Result.pass("first-join favorite-color prompt opened, with BlockPops' client mixin applied")
+                        : Step.Result.fail("BlockPops' client mixin was not applied to Minecraft")));
         steps.add(Step.of("favorite_color_dismissed")
                 .action(() -> {
                     ((FavoriteColorSelectionScreen) minecraft.screen).setSelectedColor(PopBlockColor.PURPLE);
