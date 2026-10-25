@@ -154,8 +154,8 @@ public final class TokenTicket {
         // What runs the clock and what stops it
         String[] rules = v.regular() ? GAME_TIME : REAL_TIME;
         for (int i = 0; i < rules.length; i++) {
-            UiText.draw(graphics, font, tr(rules[i]), MAIN + (i % 2) * (RULE_WIDTH + 4) + 15,
-                    RULES_TOP + (i / 2) * 15 + 3, WHITE);
+            fitted(graphics, font, tr(rules[i]), MAIN + (i % 2) * (RULE_WIDTH + 4) + 15,
+                    RULES_TOP + (i / 2) * 15 + 3, RULE_WIDTH - 15 - 12);
         }
         UiText.draw(graphics, font, tr(v.regular() ? "blockpops.ticket.blue_tickets" : "blockpops.ticket.gold_tickets"), MAIN + 18, TICKETS_TOP + 4, WHITE);
     }
@@ -259,6 +259,22 @@ public final class TokenTicket {
     }
 
     // ---- words ----------------------------------------------------------------------------------
+
+    // Text drawn smaller when it is wider than room, so a long translation stays clear of the
+    // pill's picture and its check or cross
+    private static void fitted(GuiGraphics graphics, Font font, String text, int x, int y, int room) {
+        int textWidth = font.width(text);
+        if (textWidth <= room) {
+            UiText.draw(graphics, font, text, x, y, WHITE);
+            return;
+        }
+        float scale = room / (float) textWidth;
+        GuiPose.push(graphics);
+        GuiPose.translate(graphics, x, y + (1.0f - scale) * (font.lineHeight - 1) / 2.0f);
+        GuiPose.scale(graphics, scale, scale);
+        UiText.draw(graphics, font, text, 0, 0, WHITE);
+        GuiPose.pop(graphics);
+    }
 
     private static String tr(String key, Object... args) {
         return Component.translatable(key, args).getString();
