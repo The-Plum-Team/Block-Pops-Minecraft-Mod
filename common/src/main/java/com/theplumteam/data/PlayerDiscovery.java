@@ -133,7 +133,7 @@ public class PlayerDiscovery implements IPlayerDiscovery {
             return null;
         }
         try {
-            return PopBlockColor.valueOf(this.favoriteColor.toUpperCase());
+            return PopBlockColor.valueOf(this.favoriteColor.toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException e) {
             return null;
         }

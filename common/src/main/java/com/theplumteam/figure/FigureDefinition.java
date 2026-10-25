@@ -380,7 +380,7 @@ public class FigureDefinition {
             PopBlockColor favoriteColor = null;
             if (json.has("favorite_color")) {
                 try {
-                    favoriteColor = PopBlockColor.valueOf(json.get("favorite_color").getAsString().toUpperCase());
+                    favoriteColor = PopBlockColor.valueOf(json.get("favorite_color").getAsString().toUpperCase(java.util.Locale.ROOT));
                 } catch (IllegalArgumentException e) {
                     favoriteColor = PopBlockColor.ORIGINAL; // Default if invalid
                 }

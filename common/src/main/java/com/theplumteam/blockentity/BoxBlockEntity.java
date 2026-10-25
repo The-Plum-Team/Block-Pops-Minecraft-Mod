@@ -184,7 +184,7 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
     public PopBlockColor getColor() {
         if (colorOverride != null && !colorOverride.isEmpty()) {
             try {
-                return PopBlockColor.valueOf(colorOverride.toUpperCase());
+                return PopBlockColor.valueOf(colorOverride.toUpperCase(java.util.Locale.ROOT));
             } catch (IllegalArgumentException e) {
                 return null;
             }
