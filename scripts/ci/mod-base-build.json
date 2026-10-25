@@ -16,7 +16,7 @@
       },
       {
         "path": "e2e/packaged_runtime.py",
-        "sha256": "ed76a68cb15242b6dd13b8f3d589c22d696cf312ca23a56e997773fdfcb4c823"
+        "sha256": "a4fa85b73dcd6a8babad2d72bb02be5d71414f0e2ffbbaaeeff45fa2829a7d07"
       },
       {
         "path": "e2e/runtime_store.py",
@@ -25,6 +25,10 @@
       {
         "path": "e2e/scenario_contract.py",
         "sha256": "02b6969ac0a39566b3c5aaebc620c899275c466bc0a1a3daf658918650f60c7e"
+      },
+      {
+        "path": "e2e/world_players_fixture.py",
+        "sha256": "bd416e13dc96ccd1a65d8e5d9a96911d4bdc689216fb9dfff6a553291f1cdc1f"
       },
       {
         "path": "scripts/ci/__init__.py",

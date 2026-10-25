@@ -556,6 +556,16 @@
                 "expectation": "A wall of 2 placed boxes in 1 row, HUD hidden, one box per figure of the E2E Custom Collection, a Custom collection whose files came from the game's verified cache instead of the CDN: both boxes show the Dragon Ball Z collection's art and logo; the first holds Goku on his own model with his face on the front of the box, the second Monkey D. Luffy on the default figure model; both figures are fully textured and stand upright inside their box; no empty boxes, missing (magenta and black) textures, figures drawn as the plain default figure in place of their own model or texture, or figures poking through their box.",
                 "probes": []
               }
+            },
+            {
+              "id": "world_players_offline",
+              "assertion_required": true,
+              "capture": {
+                "title": "World Players figure of a player who is not connected, wearing the skin stored in it",
+                "review_tier": "all",
+                "expectation": "A placed box and, to its right, a placed figure, HUD hidden, both of the World Players collection's figure of Carol, a player who has played on the server but is not connected: the box is the plain purple BlockPops box with the World Players logo, a plum, in its lower front corner; both figures wear the same custom skin stored in them, Finn from Adventure Time (a white hood around a pale face, a teal shirt and blue shorts), never a default Minecraft skin such as Steve or Alex; the figure in the box stands upright inside it and the placed figure stands on its own; no empty box or missing (magenta and black) textures.",
+                "probes": []
+              }
             }
           ],
           "comparisons": []

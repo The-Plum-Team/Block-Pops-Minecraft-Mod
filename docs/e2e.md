@@ -55,6 +55,25 @@ The `in-world` flow shows the mod as a player meets it in the world:
    repository test, `tests/test_remote_core.py`. It needs a JDK and a Gson
    JAR, and feeds the core hostile JSON, paths, digests, sizes, PNGs and
    manifests.
+6. In the next wall's place stand a World Players box and figure block of
+   Carol, a player who played on the server and is not connected
+   (`e2e/world_players_fixture.py`). They carry the skin a server stores in
+   what it hands out, so drawing them takes the stored-skin path, through
+   BlockPops' skin registration from Minecraft 1.21 on.
+   - Before the server starts, the runtime gives it her player file and her
+     name in `usercache.json`, so the World Players collection lists her
+     without her joining.
+   - Her skin link names `textures.minecraft.net`, as Mojang's do. The runtime
+     puts the image in the clients' skin cache, `assets/skins/`, under the name
+     the game gives that link, so the game reads it from disk and downloads
+     nothing. Only 26.3 first asks Mojang's discovery service, which the game
+     reads as it starts, whether that host serves skins: that lane needs the
+     service reachable, as the game does for every skin.
+   - The harness asserts that the collection lists her, that both blocks hold
+     the same stored skin, and that the box's own model draws exactly the
+     cached texture that skin names. Then it photographs both.
+   - It only runs in a scenario whose contract names the
+     `world_players_offline` step.
 
 Only the packaged E2E sets `blockpops.e2e.enabled` on the client and server. With
 it the star background and the GeckoLib idle animations hold one frame, the

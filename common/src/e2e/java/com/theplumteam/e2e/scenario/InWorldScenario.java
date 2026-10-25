@@ -1,11 +1,14 @@
 package com.theplumteam.e2e.scenario;
 
+import com.google.gson.JsonParser;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
+import com.theplumteam.blockentity.FigureBlockEntity;
 import com.theplumteam.client.LocalProfileProperties;
 import com.theplumteam.client.gui.CollectionSelectionScreen;
 import com.theplumteam.client.gui.FavoriteColorSelectionScreen;
 import com.theplumteam.client.gui.FigureDraw;
+import com.theplumteam.client.model.FigureModel;
 import com.theplumteam.client.remote.ClientCustomCollections;
 import com.theplumteam.client.runtime.RuntimeGeo;
 import com.theplumteam.client.runtime.RuntimeTextures;
@@ -28,10 +31,16 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
 import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -43,7 +52,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * one empty wall's place, the Custom collections the server offers sorted by id, wall i at
  * x = WALL_ORIGIN_X + i * WALL_SPACING on z = WALL_Z, figure k at column k % 9, row k / 9. The one
  * Custom collection is the fixture e2e/custom_fixture.py puts in the verified caches, since the
- * game never reaches the CDN here.
+ * game never reaches the CDN here. In the next wall's place stand the World Players box and
+ * figure block of Carol, who played on the server and left (e2e/world_players_fixture.py), with
+ * the skin a server stores in them.
  */
 public final class InWorldScenario implements Scenario {
     private static final String PREFIX = "in-world.client_a.";
@@ -61,6 +72,13 @@ public final class InWorldScenario implements Scenario {
     // Nine columns fill about 80% of the frame at the default field of view; the neighbouring
     // walls stay out of it.
     private static final double WALL_VIEW_DISTANCE = 4.6;
+
+    private static final String WORLD_PLAYERS_STEP = "world_players_offline";
+    // The id the offline-mode test server gave Carol when she played on it
+    private static final String CAROL = UUID.nameUUIDFromBytes(
+            "OfflinePlayer:Carol".getBytes(StandardCharsets.UTF_8)).toString();
+    // Two blocks are a short row, so the camera stands closer than to a wall and the skins show
+    private static final double WORLD_PLAYERS_VIEW_DISTANCE = 2.2;
 
     // The server rejects a single movement of more than ten blocks as "moved too quickly".
     private static final double MAX_STEP = 8.0;
@@ -214,6 +232,9 @@ public final class InWorldScenario implements Scenario {
         for (int index = 0; index < custom.size(); index++) {
             steps.add(collectionWall(minecraft, custom.get(index), collections.size() + 1 + index, true));
         }
+        if (contracted.contains(WORLD_PLAYERS_STEP)) {
+            steps.add(worldPlayersOffline(minecraft, collections.size() + 1 + custom.size()));
+        }
         return steps;
     }
 
@@ -304,6 +325,72 @@ public final class InWorldScenario implements Scenario {
         return wall.pass()
                 ? Step.Result.pass(wall.message() + ", a Custom collection loaded from the verified cache")
                 : wall;
+    }
+
+    /**
+     * Carol's box and, east of it, her figure block: World Players figures of a player who is not
+     * connected, drawn with the skin stored in them, which the game reads from its skin cache.
+     */
+    private static Step worldPlayersOffline(Minecraft minecraft, int index) {
+        int origin = WALL_ORIGIN_X + index * WALL_SPACING;
+        BlockPos box = new BlockPos(origin, (int) GROUND_Y, WALL_Z);
+        Vec3 feet = new Vec3(origin + 1.0, GROUND_Y, WALL_Z + 0.5 + WORLD_PLAYERS_VIEW_DISTANCE);
+        Vec3 target = new Vec3(origin + 1.0, GROUND_Y + 0.4, WALL_Z + 0.5);
+        // The model the box renderer draws the figure with, asked as it asks for the skin
+        FigureModel model = new FigureModel();
+        return Step.of(WORLD_PLAYERS_STEP)
+                .action(() -> {
+                    VanillaShim.hideGui(minecraft, true);
+                    VanillaShim.cameraType(minecraft, CameraType.FIRST_PERSON);
+                })
+                .minTicks(5)
+                .settleTicks(30)
+                .timeoutTicks(600)
+                .ready(() -> walkTo(minecraft, feet, target) && validateWorldPlayers(minecraft, model, box).pass())
+                .screenshot(PREFIX + WORLD_PLAYERS_STEP + ".png")
+                .assertion(() -> validateWorldPlayers(minecraft, model, box));
+    }
+
+    private static Step.Result validateWorldPlayers(Minecraft minecraft, FigureModel model, BlockPos boxPosition) {
+        if (CollectionRegistry.getFigure("world_players", CAROL).isEmpty()) {
+            return Step.Result.fail("the World Players collection does not list Carol, who is not connected");
+        }
+        if (!(minecraft.level.getBlockEntity(boxPosition) instanceof BoxBlockEntity box)
+                || !"world_players".equals(box.getCollectionId())
+                || !CAROL.equals(box.getFigureId())
+                || box.getSkinSnapshot() == null) {
+            return Step.Result.fail("Carol's World Players box at " + boxPosition.toShortString()
+                    + " is missing or holds no stored skin");
+        }
+        BlockPos figurePosition = boxPosition.east();
+        if (!(minecraft.level.getBlockEntity(figurePosition) instanceof FigureBlockEntity figure)
+                || !"world_players".equals(figure.getCollectionId())
+                || !CAROL.equals(figure.getFigureId())
+                || !box.getSkinSnapshot().equals(figure.getSkinSnapshot())) {
+            return Step.Result.fail("Carol's World Players figure at " + figurePosition.toShortString()
+                    + " is missing or holds another skin than her box");
+        }
+        String stored = cachedSkin(box.getSkinSnapshot());
+        var skin = model.resolveTexture(box);
+        return "minecraft".equals(skin.getNamespace()) && stored.equals(skin.getPath())
+                ? Step.Result.pass("Carol, who is not connected, wears the skin stored in her World Players box"
+                        + " and figure, read from the skin cache as minecraft:" + stored)
+                : Step.Result.fail("Carol's box shows " + skin + " instead of the skin stored in it, minecraft:" + stored);
+    }
+
+    // The skin cache's texture for a stored skin: the SHA-1 of the last part of its link, two
+    // bytes per character, low byte first, as the game names it (and OwnSkin finds it)
+    private static String cachedSkin(String snapshot) {
+        try {
+            String json = new String(Base64.getDecoder().decode(snapshot), StandardCharsets.UTF_8);
+            String link = JsonParser.parseString(json).getAsJsonObject().getAsJsonObject("textures")
+                    .getAsJsonObject("SKIN").get("url").getAsString();
+            String hash = link.substring(link.lastIndexOf('/') + 1);
+            return "skins/" + HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-1").digest(hash.getBytes(StandardCharsets.UTF_16LE)));
+        } catch (NoSuchAlgorithmException | RuntimeException failure) {
+            return "(unreadable stored skin: " + failure + ")";
+        }
     }
 
     private static List<FigureDefinition> figures(String collection) {
