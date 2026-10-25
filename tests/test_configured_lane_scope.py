@@ -88,7 +88,7 @@ class NeoForge1211ConfigurationTests(unittest.TestCase):
                          plan["lanes"][0]["command"][-3:-1])
         outputs = plan["lanes"][0]["outputs"]
         self.assertTrue(outputs["production"].endswith(
-            "neoforge/versions/1.21.1/build/libs/BlockPops - NeoForge - 1.21.1-2.0.1.jar"))
+            "neoforge/versions/1.21.1/build/libs/BlockPops - NeoForge - 1.21.1-2.0.2.jar"))
         self.assertNotEqual(outputs["production"], outputs["harness"])
 
     def test_a_modern_lane_can_never_join_the_legacy_aggregate(self):
