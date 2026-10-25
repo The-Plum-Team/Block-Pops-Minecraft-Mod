@@ -1,7 +1,6 @@
 package com.theplumteam.command;
 
 import com.theplumteam.util.ServerLevels;
-import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -19,7 +18,7 @@ import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.network.TokenType;
 import com.theplumteam.network.UnlockFigurePacket;
 import com.theplumteam.registry.ModItems;
-import com.theplumteam.util.AuthlibProfiles;
+import com.theplumteam.server.PlayerSkins;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -116,18 +115,6 @@ public class GetBoxCommand {
     }
 
     @Nullable
-    private static GameProfile getFreshGameProfile(ServerPlayer player, FigureDefinition figure) {
-        if (figure.getPlayerUUID() == null) return null;
-        try {
-            GameProfile freshProfile = new GameProfile(figure.getPlayerUUID(), figure.getName());
-            return AuthlibProfiles.fetch(ServerLevels.sessionServiceOf(player), freshProfile);
-        } catch (Exception e) {
-            LOGGER.error("Failed to fetch fresh GameProfile for {}: {}", figure.getName(), e.getMessage());
-            return null;
-        }
-    }
-
-    @Nullable
     private static String getQuickSkinIdFromServer(UUID playerId) {
         try {
             Class<?> repoClass = Class.forName("com.quickskin.mod.server.data.ServerPlayerAppearanceRepository");
@@ -171,12 +158,8 @@ public class GetBoxCommand {
                     String quickSkinSnapshot = null;
 
                     if (selectedFigure.getType() == FigureType.PLAYER) {
-                        GameProfile freshProfile = getFreshGameProfile(player, selectedFigure);
-                        if (freshProfile != null && !AuthlibProfiles.properties(freshProfile).get("textures").isEmpty()) {
-                            skinSnapshot = AuthlibProfiles.value(AuthlibProfiles.properties(freshProfile).get("textures").iterator().next());
-                            discovery.saveFigureSkin(uniqueFigureId, skinSnapshot);
-                            BlockPopsMod.logDebug("Saved/updated fresh skin snapshot for {}.", uniqueFigureId);
-                        }
+                        // The skin known now; a fresh one is fetched without holding up the server
+                        skinSnapshot = PlayerSkins.forFigure(player, uniqueFigureId, selectedFigure, discovery);
 
                         if (selectedFigure.getPlayerUUID() != null) {
                             String qsId = getQuickSkinIdFromServer(selectedFigure.getPlayerUUID());

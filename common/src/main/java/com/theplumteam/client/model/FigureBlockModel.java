@@ -1,5 +1,6 @@
 package com.theplumteam.client.model;
 
+import com.theplumteam.client.QuickSkinClient;
 import com.theplumteam.util.AuthlibProfiles;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
@@ -59,47 +60,6 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
     private static final Map<String, Boolean> snapshotRegistrationCache = new ConcurrentHashMap<>();
     private static final Map<UUID, GameProfile> liveProfileCache = new ConcurrentHashMap<>();
     private static final Map<UUID, Boolean> liveRegistrationCache = new ConcurrentHashMap<>();
-
-    private static boolean checkedQuickSkin = false;
-    private static boolean quickSkinAvailable = false;
-    private static java.lang.reflect.Method getSkinLocationMethod;
-    private static Object skinServiceInstance;
-
-    private static ResourceLocation resolveQuickSkinId(String skinId) {
-        if (!checkedQuickSkin) {
-            try {
-                Class<?> serviceClass = Class.forName("com.quickskin.mod.client.services.SkinService");
-                java.lang.reflect.Method getInstanceMethod = serviceClass.getMethod("getInstance");
-                skinServiceInstance = getInstanceMethod.invoke(null);
-                getSkinLocationMethod = serviceClass.getMethod("getSkinLocation", UUID.class, String.class);
-                quickSkinAvailable = true;
-            } catch (Exception e) {
-                quickSkinAvailable = false;
-            }
-            checkedQuickSkin = true;
-        }
-
-        if (quickSkinAvailable && skinServiceInstance != null && skinId != null) {
-            try {
-                return (ResourceLocation) getSkinLocationMethod.invoke(skinServiceInstance, null, skinId);
-            } catch (Exception e) {
-                // Ignore
-            }
-        }
-        return null;
-    }
-
-    private static ResourceLocation getLiveQuickSkin(UUID uuid) {
-        try {
-            Class<?> serviceClass = Class.forName("com.quickskin.mod.client.services.PlayerAppearanceService");
-            java.lang.reflect.Method getInstanceMethod = serviceClass.getMethod("getInstance");
-            Object instance = getInstanceMethod.invoke(null);
-            java.lang.reflect.Method getLocMethod = serviceClass.getMethod("getSkinLocation", UUID.class);
-            return (ResourceLocation) getLocMethod.invoke(instance, uuid);
-        } catch (Exception e) {
-            return null;
-        }
-    }
 
     //? if >=1.21.5 {
     /*@Override
@@ -206,7 +166,7 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
             // 1. Quick Skin Snapshot (from NBT)
             String qsId = animatable.getQuickSkinId();
             if (qsId != null && !qsId.isEmpty()) {
-                ResourceLocation loc = resolveQuickSkinId(qsId);
+                ResourceLocation loc = QuickSkinClient.skin(qsId);
                 if (loc != null) return loc;
             }
 
@@ -217,10 +177,8 @@ public class FigureBlockModel extends GeoModel<FigureBlockEntity> {
             }
 
             // 3. Live Quick Skin
-            if (quickSkinAvailable) {
-                ResourceLocation liveQS = getLiveQuickSkin(figure.getPlayerUUID());
-                if (liveQS != null) return liveQS;
-            }
+            ResourceLocation liveQS = QuickSkinClient.playerSkin(figure.getPlayerUUID());
+            if (liveQS != null) return liveQS;
 
             // 4. Discovery Snapshot Fallback
             String uniqueFigureId = animatable.getCollectionId() + ":" + animatable.getFigureId();

@@ -64,10 +64,15 @@ public final class ServerLevels {
      * shortcut on MinecraftServer into its Services record.
      */
     public static MinecraftSessionService sessionServiceOf(ServerPlayer player) {
+        return sessionServiceOf(serverOf(player));
+    }
+
+    /** The authlib session service of a server. */
+    public static MinecraftSessionService sessionServiceOf(MinecraftServer server) {
         //? if >=1.21.9 {
-        /*return serverOf(player).services().sessionService();
+        /*return server.services().sessionService();
         *///? } else {
-        return serverOf(player).getSessionService();
+        return server.getSessionService();
         //? }
     }
 }

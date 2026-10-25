@@ -5,7 +5,7 @@
   "author_url": "https://www.planetminecraft.com/member/buhh/",
   "box_texture": "blockpops:textures/block/box/winx.png",
   "logo": {
-    "texture": "blockpops:textures/block/box/logo/logo_winx.png",
+    "texture": "blockpops:textures/logo/logo_winx.png",
     "scale": 1.21,
     "offset_x": -0.62,
     "offset_y": -0.71

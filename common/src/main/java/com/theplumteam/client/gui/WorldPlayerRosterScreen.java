@@ -1,5 +1,6 @@
 package com.theplumteam.client.gui;
 
+import com.theplumteam.client.QuickSkinClient;
 import com.mojang.authlib.GameProfile;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.theplumteam.client.gui.style.DialogFrame;
@@ -344,9 +345,16 @@ public class WorldPlayerRosterScreen extends DialogScreen {
         }
     }
 
-    /** The player's skin: from the tab list while they are online, else looked up by profile. */
+    /**
+     * The player's skin: Quick Skin's, which it knows for players who are offline too, else the
+     * tab list's while they are online, else looked up by profile.
+     */
     private ResourceLocation skinOf(FigureDefinition player) {
         UUID uuid = player.getPlayerUUID();
+        ResourceLocation quickSkin = QuickSkinClient.playerSkin(uuid);
+        if (quickSkin != null) {
+            return quickSkin;
+        }
         if (this.minecraft != null && this.minecraft.getConnection() != null) {
             PlayerInfo info = this.minecraft.getConnection().getPlayerInfo(uuid);
             if (info != null) {

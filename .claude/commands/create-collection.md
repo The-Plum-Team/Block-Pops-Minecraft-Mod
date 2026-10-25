@@ -37,9 +37,9 @@ file ModelToProcess/*
 
 ### Step 2: Check the Logo
 
-The logo needs no position or size values: the box fits it from its visible pixels and keeps its proportions (see `textures/block/box/logo/README.md`). Only check that `logo.png` has a transparent background, since anything opaque around the logo is drawn on the box too.
+The logo needs no position or size values: the box fits it from its visible pixels and keeps its proportions (see `textures/logo/README.md`). Only check that `logo.png` has a transparent background, since anything opaque around the logo is drawn on the box too.
 
-Then check the size of `logo.png` and `Box.png`: both sides of each must be multiples of 16. Every texture under `textures/block/` goes into the game's shared block atlas, and one texture with any other size turns off mipmapping for every block in the game. If the logo is not, pad it with transparent pixels, centered, up to the next multiples of 16 (pixel art: enlarge it 16 times with nearest-neighbour instead). Do not crop, stretch or resample it: the box ignores the padding, but the collection menu draws the whole image. If the box texture is not, stop and report it.
+Then check the size of `Box.png`: both sides must be multiples of 16. Every texture under `textures/block/` goes into the game's shared block atlas, and one texture with any other size turns off mipmapping for every block in the game. If it is not, stop and report it. The logo lives outside `textures/block/`, so any size works for it; do not crop or stretch it, since the box ignores transparent margins but the collection menu draws the whole image.
 
 ### Step 3: Determine Collection ID
 
@@ -59,7 +59,7 @@ Create `forge/src/main/resources/assets/blockpops/collections/{id}.json`:
   "author_url": "",
   "box_texture": "blockpops:textures/block/box/{id}.png",
   "logo": {
-    "texture": "blockpops:textures/block/box/logo/logo_{id}.png"
+    "texture": "blockpops:textures/logo/logo_{id}.png"
   },
   "background_color": {
     "r": 30,
@@ -103,7 +103,7 @@ Edit `forge/src/main/java/com/theplumteam/figure/BuiltInCollections.java`:
 
 3. **Copy logo:**
    ```bash
-   cp "ModelToProcess/logo.png" "forge/src/main/resources/assets/blockpops/textures/block/box/logo/logo_{id}.png"
+   cp "ModelToProcess/logo.png" "forge/src/main/resources/assets/blockpops/textures/logo/logo_{id}.png"
    ```
 
 4. **Copy box texture:**
@@ -135,7 +135,7 @@ Confirm all files are in place:
 - `collections/{id}.json`
 - `textures/figure/{id}/*.png` (all figures)
 - `textures/block/box/{id}.png`
-- `textures/block/box/logo/logo_{id}.png`
+- `textures/logo/logo_{id}.png`
 - `models/item/box_block_{id}.json`
 - Lang entry in `en_us.json`
 - Entry in `BuiltInCollections.java`
@@ -153,4 +153,4 @@ Report to the user:
 - All textures MUST be actual PNG files (64x64 for skins, any size for logo/box)
 - WebP files disguised as PNG will cause missing textures (magenta/black)
 - The author can be changed from "The Plum Team" if needed
-- The logo is placed automatically; only if it looks wrong in-game, add `scale`, `offset_x` or `offset_y` to it (see `textures/block/box/logo/README.md`)
+- The logo is placed automatically; only if it looks wrong in-game, add `scale`, `offset_x` or `offset_y` to it (see `textures/logo/README.md`)
