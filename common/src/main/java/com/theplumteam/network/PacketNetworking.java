@@ -70,6 +70,20 @@ public final class PacketNetworking {
         //? }
     }
 
+    /**
+     * Whether the player's client can receive a server-to-client packet. From 1.21 a client on an
+     * older build never registered a newer payload, and NeoForge refuses to send it. Before 1.21
+     * every joined client has the mod, and Architectury's Forge networking learns only the ids a
+     * client sends, never those it receives, so asking it would refuse every player.
+     */
+    public static boolean canPlayerReceive(ServerPlayer player, ResourceLocation id) {
+        //? if >=1.21 {
+        /*return NetworkManager.canPlayerReceive(player, id);
+        *///? } else {
+        return true;
+        //? }
+    }
+
     public static void sendToPlayer(ServerPlayer player, ResourceLocation id, FriendlyByteBuf payload) {
         //? if >=26 {
         /*NetworkManager.sendToPlayer(player, new RawPayload(id, drain(payload)));
