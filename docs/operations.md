@@ -580,26 +580,29 @@ conflict allowlist to force this bootstrap.
 
 ## Publish a release
 
-A release reaches Modrinth (project `u1JjJR7q`) and CurseForge (project `1394429`) only
-through `.github/workflows/publish-marketplaces.yml`, from `master`:
+A release reaches GitHub Releases, Modrinth (project `u1JjJR7q`) and CurseForge (project
+`1394429`) only through the kit's shared release
+([RELEASE-PROTOCOL.md](https://github.com/The-Plum-Team/mod-base/blob/main/docs/RELEASE-PROTOCOL.md)),
+the managed caller `.github/workflows/mod-base-release.yml`, with the data of
+`scripts/ci/mod-base-release.json`. It compiles nothing:
 
 1. The version bump is a controller-upgrade pull request that sets every `mod_version` of
-   `release/release-matrix.json` and adds the release notes as `docs/changelogs/<version>.md`
-   (`tests/test_publish_marketplaces.py` requires the file). Merge it once its gates pass.
-2. Take the id of that pull request's successful `mod-base Build` run, the one whose tested
-   commit has `master`'s tree.
-3. Dispatch **Publish to marketplaces** on `master` with the version and that run id, and
-   approve the `marketplaces` deployment when GitHub asks.
+   `release/release-matrix.json` and adds the release notes as `docs/changelogs/<version>.md`.
+   Merge it once its gates pass, and wait for the shared Build and packaged E2E of that `master`
+   head (a post-merge reuse counts).
+2. Rehearse: `gh workflow run mod-base-release.yml --ref master -f publish=false`. The plan job
+   authenticates the head's tested generation and seals the exact jars it would publish.
+3. Publish: `gh workflow run mod-base-release.yml --ref master -f publish=true`, and approve the
+   `marketplaces` deployment when GitHub asks. Nothing may merge to `master` between the dispatch
+   and the approval.
 
-The job authenticates the run through the API (workflow path, success, latest attempt, its
-`mb-ci-build--<run>--a<attempt>` artifact), requires the commit it tested to have exactly the
-tree being released, downloads the bundle by artifact id and digest, and checks each
-production jar against the digest, tree, matrix and version its lane recorded. Only then do
-the upload steps run; each holds just its own token, from the `marketplaces` environment
-(`MODRINTH_TOKEN`, `CURSEFORGE_TOKEN`; required reviewer `AkaNebur`, deployments from
-`master` only). Modrinth skips a lane already published under that version, so a failed run
-can simply be dispatched again. CurseForge cannot be asked what it holds: to finish a partly
-failed run, dispatch `curseforge` with `lanes` set to the lanes that are missing.
+The publish job admits the sealed plan, creates the draft GitHub Release, uploads every lane to
+both marketplaces, verifies each file by content and publishes the release (and creates the tag
+`v<version>`) only when every file is verified. Each upload step holds just its own token, from
+the `marketplaces` environment (`MODRINTH_TOKEN`, `CURSEFORGE_TOKEN`; required reviewer
+`AkaNebur`, deployments from `master` only). The hourly schedule finishes a release whose files
+moderation still holds. To finish a partly failed release, dispatch with `publish=true` again:
+the draft release's ledger records every file, and a file already published is never sent twice.
 
 A token that expires is replaced in the environment's secrets; nothing else changes.
 
