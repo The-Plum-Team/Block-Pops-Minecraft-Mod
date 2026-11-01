@@ -74,15 +74,16 @@ ACTIVATION = REPO / "site" / "mod-base-build-activation.json"
 _BUILD_CALLERS = frozenset(
     {".github/workflows/mod-base-build.yml", ".github/workflows/mod-base-gate-status.yml"}
 )
-#: The kit's Build/E2E callers that call the kit at the same pin, by the mode of the activation
-#: manifest (a reviewed rollback keeps the callers of the mode it leaves). ``template check`` keeps
-#: each one byte-identical to the pinned template; ``mod-base-guard.yml`` names the pin only as
-#: data and calls no kit workflow.
+#: The kit's callers that call the kit at the same pin, by the mode of the activation manifest (the
+#: release caller only in ``shared-build-and-e2e``; a reviewed rollback keeps the callers of the
+#: mode it leaves). ``template check`` keeps each one byte-identical to the pinned template;
+#: ``mod-base-guard.yml`` names the pin only as data and calls no kit workflow.
 KIT_CALLERS = {
     "disabled": frozenset(),
     "shadow": _BUILD_CALLERS | {".github/workflows/mod-base-packaged-e2e.yml"},
     "shared-build": _BUILD_CALLERS,
-    "shared-build-and-e2e": _BUILD_CALLERS | {".github/workflows/mod-base-packaged-e2e.yml"},
+    "shared-build-and-e2e": _BUILD_CALLERS | {".github/workflows/mod-base-packaged-e2e.yml",
+                                              ".github/workflows/mod-base-release.yml"},
 }
 
 
