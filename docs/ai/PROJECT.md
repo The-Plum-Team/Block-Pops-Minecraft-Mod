@@ -211,10 +211,11 @@ default skin resource is used otherwise. "Download box template" writes two bund
 - **Exact job graph.** `scripts/ci/e2e_job_graph.py` fixes the Packaged E2E job set that the gate,
   release attestation, visual review and public evidence authenticate. Change steps inside a job,
   never the set of jobs, unless the graph itself is deliberately upgraded.
-- **Publication.** Only `publish-marketplaces.yml`, dispatched on `master` and approved in the
-  `marketplaces` environment, uploads to Modrinth and CurseForge, and only the jars a successful
-  Build tested for `master`'s exact tree (see [`docs/operations.md`](../operations.md#publish-a-release)).
-  Its marketplace tokens reach no step but their own upload.
+- **Publication.** Only the kit's managed `mod-base-release.yml`, dispatched on `master` and
+  approved in the `marketplaces` environment that `scripts/ci/mod-base-release.json` names,
+  publishes to GitHub Releases, Modrinth and CurseForge, and only the jars of `master`'s head's
+  tested generation (see [`docs/operations.md`](../operations.md#publish-a-release)). Its
+  marketplace tokens reach no step but their own upload.
 - **Public evidence is advisory.** GitHub Pages and AI visual review never replace the
   deterministic gates.
 - **Matrix scope.** A schema-2 integration matrix in `preparing` uses the trusted gate's legacy
