@@ -30,6 +30,11 @@ import java.util.function.Predicate;
  * <p>The collection is looked up by id on every frame through the collection registry, so the
  * view follows the creator's preview of a collection (see {@link CreatorPreview}).
  *
+ * <p>A host that picks the view itself, or shows only the box, as the new-collection form does,
+ * can hide the switch ({@link #modeSwitch}) and the line that says the view turns
+ * ({@link #dragHint}); the box then takes their room. Such a host may also stand the box in the
+ * collection's colour, as the home's showcase does ({@link #stageBackground}).
+ *
  * <p>Unlike the other views, this one must not sit in a {@link UiScrollPane} or be scaled, since
  * its machine screen view holds a replica whose grid clips itself in screen units.
  */
@@ -53,6 +58,9 @@ public class UiBoxView extends UiViewport {
     @Nullable
     private String collectionId;
     private Mode mode = Mode.BOX;
+    private boolean switchShown = true;
+    private boolean hintShown = true;
+    private boolean stageShown;
     private ItemStack box = ItemStack.EMPTY;
     private ItemStack worldBox = ItemStack.EMPTY;
     private final ItemStack grass = grassStack();
@@ -82,6 +90,36 @@ public class UiBoxView extends UiViewport {
     public void setMode(Mode mode) {
         this.mode = mode;
         this.modes.select(mode.ordinal());
+    }
+
+    /**
+     * Shows or hides the switch between the three views at the top, for a host that picks the
+     * view itself; hidden, the scene starts at the view's top.
+     */
+    public UiBoxView modeSwitch(boolean shown) {
+        this.switchShown = shown;
+        return this;
+    }
+
+    /**
+     * Shows or hides the line over the scene that says it is live and turns when dragged, for a
+     * view too small to hold it whole; the host then says so where it has room, such as in a
+     * tooltip. Dragging turns the box either way.
+     */
+    public UiBoxView dragHint(boolean shown) {
+        this.hintShown = shown;
+        return this;
+    }
+
+    /**
+     * Paints the box view's background as the home's showcase paints a collection's stage: the
+     * collection's colour, darkened, fading into the dark well over three quarters of the
+     * height, so a preview looks as the collection will on the home. Off, and for a collection
+     * with no colour, the background is a neutral grey.
+     */
+    public UiBoxView stageBackground(boolean shown) {
+        this.stageShown = shown;
+        return this;
     }
 
     /** The machine screen the {@link Mode#SCREEN} view shows, for a host that sets who sees it. */
@@ -141,18 +179,20 @@ public class UiBoxView extends UiViewport {
         super.layout();
         modes.at(x + INSET, y + INSET, Math.min(modes.naturalWidth(), Math.max(0, width - 2 * INSET)),
                 UiSegmented.HEIGHT);
-        int top = y + INSET + UiSegmented.HEIGHT + 4;
+        modes.setVisible(switchShown);
+        int top = switchShown ? y + INSET + UiSegmented.HEIGHT + 4 : y + INSET;
         replica.at(x + INSET, top, width - 2 * INSET, Math.max(0, y + height - INSET - top));
         replica.setVisible(mode == Mode.SCREEN);
     }
 
-    // The room between the switch at the top and the buttons and hint at the bottom
+    // The room between the switch at the top and the buttons and hint at the bottom, or the
+    // view's edges where they are hidden
     private int sceneTop() {
-        return modes.bounds().bottom() + 4;
+        return switchShown ? modes.bounds().bottom() + 4 : y + INSET;
     }
 
     private int sceneBottom() {
-        return Math.min(buttonsTop(), hintY() - 2) - 4;
+        return (hintShown ? Math.min(buttonsTop(), hintY() - 2) : buttonsTop()) - 4;
     }
 
     // The hint goes beside the buttons where it fits, otherwise above them
@@ -170,7 +210,13 @@ public class UiBoxView extends UiViewport {
                 ? CollectionRegistry.getCollection(collectionId).orElse(null) : null;
         switch (mode) {
             case BOX -> {
-                graphics.fillGradient(x, y, x + width, y + height, BOX_TOP, BOX_BOTTOM);
+                int stage = stageShown ? collectionColour(collection, 0) : 0;
+                if (stage != 0) {
+                    graphics.fill(x, y, x + width, y + height, BACKGROUND);
+                    graphics.fillGradient(x, y, x + width, y + height * 3 / 4, darken(stage, 0.5f), BACKGROUND);
+                } else {
+                    graphics.fillGradient(x, y, x + width, y + height, BOX_TOP, BOX_BOTTOM);
+                }
                 if (collection != null) {
                     updateBoxes(collection);
                     float size = Math.max(8.0f, Math.min(width * 0.6f, (sceneBottom() - sceneTop())
@@ -194,7 +240,7 @@ public class UiBoxView extends UiViewport {
 
     @Override
     protected void drawOverlay(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        if (turnable()) {
+        if (turnable() && hintShown) {
             Font font = Minecraft.getInstance().font;
             label(graphics, font, CreatorScreen.tr("preview.drag_hint"), x + INSET + 2, hintY(),
                     Math.max(0, width - 2 * INSET - 4), Theme.MUTED);

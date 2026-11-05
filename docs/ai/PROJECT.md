@@ -172,11 +172,12 @@ previews files that are not sent yet: it decodes them under the same content-add
 copy gets, and materializes the draft into a client-only overlay of the collection registry under
 the reserved id `creator_preview.<slot>`. That overlay answers only on the client thread, appears
 in no collection list, and is cleared when the creator closes; nothing of a preview is sent or
-stored. "Use my skin" contacts no network: it reads the player's own skin from the game's local
-skin cache (`skins/<first two>/<name>` under the assets directory, where the name is the SHA-1 of
-the texture hash in the player's own textures property), only as a regular file of at most 64 KiB
-and never through a link. The bytes pass the same 64×64 PNG checks as a picked skin, and the
-default skin resource is used otherwise. "Download box template" writes two bundled images to
+stored. "Use my skin", and the sample figure the new-collection form's box holds, contact no
+network: they read the player's own skin from the game's local skin cache
+(`skins/<first two>/<name>` under the assets directory, where the name is the SHA-1 of the texture
+hash in the player's own textures property), only as a regular file of at most 64 KiB and never
+through a link. The bytes pass the same 64×64 PNG checks as a picked skin, and the default skin
+resource is used otherwise. "Download box template" writes two bundled images to
 `blockpops/templates/` in the game folder and opens that folder; it takes no path from the user.
 
 ## Trust model

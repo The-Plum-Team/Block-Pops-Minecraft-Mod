@@ -10,6 +10,8 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
+
 /**
  * A short message at the bottom centre of the creator screens, with an optional action such as
  * "Undo", drawn as Quick Skin's toasts are: a card in the buttons' style on a one-pixel lip, with
@@ -17,6 +19,10 @@ import org.jetbrains.annotations.Nullable;
  * shows at a time: a new message replaces the one before. It belongs to the creator rather than
  * to one screen, so a message about a save stays on screen when the creator moves to another
  * screen, and it goes away when the creator closes.
+ *
+ * <p>A message too long for one line in the band it is shown in, as on a small canvas, takes a
+ * second line and grows upwards, since a toast has no tooltip to show what a cut would hide; only
+ * what passes even two lines ends in "...".
  */
 public final class UiToast {
     // How long a message shows, which the sidebar's status slot keeps a passing line for too
@@ -27,6 +33,11 @@ public final class UiToast {
     private static final int MIN_WIDTH = 200;
     private static final int HEIGHT = 25;
     private static final int LIP_HEIGHT = 1;
+    // A long message's lines, and how far apart they are
+    private static final int MAX_LINES = 2;
+    private static final int LINE_STEP = 10;
+    // The height of a line of text, which the face centres
+    private static final int TEXT_HEIGHT = 7;
     /** The coloured strip on the left, holding the icon. */
     private static final int STRIP_WIDTH = 18;
     private static final int STRIP = 0xFF1F3A6E;
@@ -73,21 +84,59 @@ public final class UiToast {
         return current;
     }
 
-    private UiNode.Rect bounds(Font font, int screenWidth, int bottom) {
+    /**
+     * The height of the message shown now in a band of a width, one line or two, so a screen can
+     * keep it clear of what it would cover; 0 while none shows.
+     */
+    public static int height(int screenWidth) {
+        UiToast shown = current();
+        return shown == null ? 0 : shown.bounds(Minecraft.getInstance().font, screenWidth, 0).height();
+    }
+
+    private int width(Font font, int screenWidth) {
         int width = 4 + STRIP_WIDTH + font.width(text) + 2 * PADDING;
         if (action != null) {
             width += 12 + font.width(action);
         }
-        width = Math.min(Math.max(width, MIN_WIDTH), screenWidth - 16);
-        return new UiNode.Rect((screenWidth - width) / 2, bottom - HEIGHT, width, HEIGHT);
+        return Math.min(Math.max(width, MIN_WIDTH), screenWidth - 16);
     }
 
+    // The room the text has between the strip and the action, or the right edge
+    private int textRoom(Font font, int width) {
+        int room = width - 4 - STRIP_WIDTH - 2 * PADDING;
+        if (action != null) {
+            room -= 12 + font.width(action);
+        }
+        return Math.max(0, room);
+    }
+
+    // The message in the lines it takes in a toast of a width: one, or two when it does not fit
+    private List<String> lines(Font font, int width) {
+        String whole = text.getString();
+        int room = textRoom(font, width);
+        return font.width(whole) <= room ? List.of(whole) : Draw.fit(font, whole, Math.max(1, room), MAX_LINES);
+    }
+
+    private UiNode.Rect bounds(Font font, int screenWidth, int bottom) {
+        int width = width(font, screenWidth);
+        int height = HEIGHT + (lines(font, width).size() - 1) * LINE_STEP;
+        return new UiNode.Rect((screenWidth - width) / 2, bottom - height, width, height);
+    }
+
+    // The top of a block of lines of text centred on the face, from inside the outline to above the lip
+    private static int textTop(UiNode.Rect box, int lineCount) {
+        int faceBottom = box.bottom() - 1 - LIP_HEIGHT;
+        int blockHeight = TEXT_HEIGHT + (lineCount - 1) * LINE_STEP;
+        return box.y() + 2 + (faceBottom - 1 - box.y() - 2 - blockHeight) / 2;
+    }
+
+    // The action, on one line in the face's middle however many lines the message takes
     private UiNode.Rect actionBounds(Font font, UiNode.Rect box) {
         if (action == null) {
             return UiNode.Rect.EMPTY;
         }
         int actionWidth = font.width(action);
-        return new UiNode.Rect(box.right() - 2 - PADDING - actionWidth, box.y() + 2, actionWidth, HEIGHT - 6);
+        return new UiNode.Rect(box.right() - 2 - PADDING - actionWidth, textTop(box, 1) - 6, actionWidth, HEIGHT - 6);
     }
 
     /** Whether the message sits under the pointer, so what is below it ignores the pointer. */
@@ -118,16 +167,20 @@ public final class UiToast {
                 top + 2 + (faceBottom - 1 - top - 2 - ICON.length) / 2, fade(Theme.TEXT, alpha));
 
         int textX = left + 2 + STRIP_WIDTH + PADDING;
-        int textY = top + 2 + (faceBottom - 1 - top - 2 - 7) / 2;
-        UiNode.Rect actionBox = actionBounds(font, box);
-        int textRoom = (action != null ? actionBox.x() - 12 : right - 2 - PADDING) - textX;
-        UiText.draw(graphics, font, Draw.cut(font, text.getString(), Math.max(0, textRoom)), textX, textY,
-                fade(Theme.TEXT, alpha));
+        List<String> lines = lines(font, box.width());
+        int textY = textTop(box, lines.size());
+        int textRoom = textRoom(font, box.width());
+        for (String line : lines) {
+            UiText.draw(graphics, font, Draw.cut(font, line, textRoom), textX, textY, fade(Theme.TEXT, alpha));
+            textY += LINE_STEP;
+        }
         if (action != null) {
+            UiNode.Rect actionBox = actionBounds(font, box);
+            int actionY = textTop(box, 1);
             boolean hovered = actionBox.contains(mouseX, mouseY);
             int colour = fade(hovered ? Theme.LINK_HOVER : Theme.LINK, alpha);
-            UiText.draw(graphics, font, action, actionBox.x(), textY, colour);
-            graphics.fill(actionBox.x(), textY + 9, actionBox.right(), textY + 10, colour);
+            UiText.draw(graphics, font, action, actionBox.x(), actionY, colour);
+            graphics.fill(actionBox.x(), actionY + 9, actionBox.right(), actionY + 10, colour);
         }
     }
 

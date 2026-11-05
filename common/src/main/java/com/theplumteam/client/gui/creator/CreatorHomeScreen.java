@@ -44,6 +44,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 /**
  * The creator's first screen, in the layout of Quick Skin's settings ({@link SidebarScreen}): the
@@ -60,8 +62,14 @@ import java.util.function.BooleanSupplier;
  * list, and selects its first match when it hides the selected row. The heading holds the help,
  * which also gives the shortcuts and the server's file space, and a cross that leaves the
  * creator; the status slot speaks up only when the server's space runs low or the world has
- * every collection it may; the sidebar's button starts a new collection
- * ({@link CreatorWizardScreen}).
+ * every collection it may; the sidebar's button starts a new collection.
+ *
+ * <p>A new collection starts from its name alone, in a form the content panel shows while a
+ * temporary "New" row at the top of the list is selected ({@link CreateForm}); selecting another
+ * row, Cancel or Escape closes it and the selection it left returns. From "Create" until the
+ * server has synced the new collection, the home is locked: the rows, the sidebar's button, the
+ * help, the search and the shortcuts wait, and only Cancel, Escape and the cross act. The new
+ * collection then opens in the editor.
  *
  * <p>The content shows the selected collection: its name with a badge unless it is simply
  * published, its number of figures and its author, its box and as many of its figures as the
@@ -116,6 +124,12 @@ public class CreatorHomeScreen extends SidebarScreen {
     private static final float SPACE_LOW = 0.85f;
     // The key of the archived fold's own row, which no collection's id can be
     private static final Object ARCHIVED_FOLD = new Object();
+    // The key of the new collection's temporary row, which no collection's id can be either
+    private static final Object NEW_ROW = new Object();
+    // A toast keeps this far from the lines under the stage, and where it cannot, stands this far
+    // up the stage, on its floor
+    private static final int TOAST_CLEARANCE = 3;
+    private static final int TOAST_FLOOR_INSET = 3;
 
     // Kept for the rest of the session, so the home opens on the collection it was left on
     @Nullable
@@ -159,6 +173,9 @@ public class CreatorHomeScreen extends SidebarScreen {
     // budget lets it be drawn as a model rather than as the flat item
     private ItemStack emptyBox = ItemStack.EMPTY;
     private int emptyBoxModels;
+    // The new collection's form while it is open; the content shows it in place of the selection
+    @Nullable
+    private CreateForm form;
 
     /**
      * @param parent     the screen to go back to; null when the creator was opened by its
@@ -181,10 +198,12 @@ public class CreatorHomeScreen extends SidebarScreen {
         String revealed = takeReveal();
         keepSelection();
 
+        // While a new collection is being created only the cross, Cancel and Escape act
+        Component lock = creating() ? tr("wizard.creating") : null;
         sidebarHeading(tr("side.heading"));
         // Each glyph goes left of the one before: the cross at the far right, the help before it
-        headingGlyph(PixelIcon.CLOSE, tr("side.close"), this::leave);
-        headingGlyph(Theme.ICON_HELP, tr("side.help"), this.actions::openHelp);
+        headingGlyph(PixelIcon.CLOSE, tr("side.close"), this::closeCreator);
+        headingGlyph(Theme.ICON_HELP, tr("side.help"), this.actions::openHelp).disable(lock);
 
         UiNode.Rect area = sideList();
         this.searchBox = null;
@@ -192,10 +211,12 @@ public class CreatorHomeScreen extends SidebarScreen {
             this.searchBox = textField("search", this.side.x() + 6, this.side.y() + SEARCH_TOP,
                     Math.max(0, this.side.width() - 12), WorldContentLimits.MAX_NAME_LENGTH, tr("home.search_hint"),
                     this.search, this::searchTyped);
+            this.searchBox.active = lock == null;
             area = new UiNode.Rect(area.x(), area.y() + SEARCH_SHIFT, area.width(),
                     Math.max(0, area.height() - SEARCH_SHIFT));
         }
         this.list.at(area.x(), area.y(), area.width(), area.height());
+        this.list.lock(lock);
         fillList();
         addNode(this.list);
         // A search shows only some rows, and clearing it every row: ask for the boxes of them all
@@ -207,7 +228,7 @@ public class CreatorHomeScreen extends SidebarScreen {
 
         UiButton create = new UiButton(tr("side.new"), UiButton.Style.SECONDARY, this::newCollection);
         create.setGlyph(PixelIcon.PLUS);
-        Component full = CollectionActions.tooManyCollections();
+        Component full = lock != null ? lock : CollectionActions.tooManyCollections();
         if (full != null) {
             create.disable(full);
         } else {
@@ -216,9 +237,14 @@ public class CreatorHomeScreen extends SidebarScreen {
         sideFooter(create);
 
         if (this.focusListOnShow && this.minecraft.screen == this) {
-            // The list takes the keyboard whenever the screen is shown, so the arrows move through it
+            // The list takes the keyboard whenever the screen is shown, so the arrows move through
+            // it, unless the new collection's form is open, whose name takes it
             this.focusListOnShow = false;
-            focusNode(this.list);
+            if (this.form != null) {
+                this.form.focusName();
+            } else {
+                focusNode(this.list);
+            }
         }
     }
 
@@ -238,12 +264,17 @@ public class CreatorHomeScreen extends SidebarScreen {
 
     /**
      * Takes the collection this screen asked to show once the server has synced it: it becomes
-     * the selected one, its fold opens and a search that would hide it is cleared.
+     * the selected one, its fold opens and a search that would hide it is cleared. While the new
+     * collection's form is open it waits, and is taken once the form closes.
      *
      * @return its id, for the list to scroll to, or null when there is none to show yet
      */
     @Nullable
     private String takeReveal() {
+        if (this.form != null) {
+            // The form keeps the list's selection until it closes, and the collection waits
+            return null;
+        }
         String id = this.revealWhenSynced;
         WorldCollectionRecord record = id == null ? null : ClientWorldCollections.record(id);
         if (record == null) {
@@ -314,10 +345,18 @@ public class CreatorHomeScreen extends SidebarScreen {
      * A search that hides the selected row selects its first match, so the content shows a
      * collection the list shows; one that matches nothing keeps the selection. Without a search,
      * a selected collection that is archived opens the fold, so its row is in sight: one archived
-     * meanwhile, one found by a search just cleared, or the one the home was left on.
+     * meanwhile, one found by a search just cleared, or the one the home was left on. While the
+     * new collection's form is open, its own row comes first and is the one selected, and a
+     * search leaves the selection alone, so the one the form left returns when it closes.
      */
     private void fillList() {
         this.list.clearRows();
+        CreateForm open = this.form;
+        if (open != null) {
+            // The new collection's row, first and selected while its form is open
+            this.list.add(new UiSideRow(NEW_ROW, tr("side.new_row")).glyph(PixelIcon.PLUS)
+                    .onActivate(open::focusNameNow));
+        }
         String query = query();
         boolean searching = !query.isEmpty();
         this.list.setEmptyText(searching ? tr("home.no_match") : null);
@@ -333,7 +372,8 @@ public class CreatorHomeScreen extends SidebarScreen {
                     found.add(record);
                 }
             }
-            if (!found.isEmpty() && found.stream().noneMatch(record -> record.id().equals(this.selectedId))) {
+            if (open == null && !found.isEmpty()
+                    && found.stream().noneMatch(record -> record.id().equals(this.selectedId))) {
                 setSelected(found.get(0).id());
             }
             for (WorldCollectionRecord record : found) {
@@ -356,8 +396,9 @@ public class CreatorHomeScreen extends SidebarScreen {
                 }
             }
         }
-        if (!Objects.equals(this.list.selectedKey(), this.selectedId)) {
-            this.list.select(this.selectedId);
+        Object selectedRow = open != null ? NEW_ROW : this.selectedId;
+        if (!Objects.equals(this.list.selectedKey(), selectedRow)) {
+            this.list.select(selectedRow);
         }
     }
 
@@ -370,7 +411,13 @@ public class CreatorHomeScreen extends SidebarScreen {
                 .faint(record.archived())
                 .onSelect(() -> {
                     setSelected(id);
-                    rebuild();
+                    CreateForm open = this.form;
+                    if (open != null) {
+                        // Choosing a collection leaves the new one's form, as Cancel does
+                        closeForm(open);
+                    } else {
+                        rebuild();
+                    }
                 })
                 .onActivate(() -> open(id))
                 .onMenu(anchor -> openMenuFor(id, anchor));
@@ -441,6 +488,10 @@ public class CreatorHomeScreen extends SidebarScreen {
     @Override
     protected void buildContent() {
         this.shown = null;
+        if (this.form != null) {
+            this.form.build(this.content);
+            return;
+        }
         if (ClientWorldCollections.records().isEmpty()) {
             buildEmpty();
             return;
@@ -618,6 +669,11 @@ public class CreatorHomeScreen extends SidebarScreen {
 
     @Override
     protected void drawContent(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        if (this.form != null) {
+            contentTitle(graphics, tr("home.new"), 0);
+            this.form.draw(graphics, mouseX, mouseY);
+            return;
+        }
         if (ClientWorldCollections.records().isEmpty()) {
             drawEmpty(graphics);
             return;
@@ -745,6 +801,32 @@ public class CreatorHomeScreen extends SidebarScreen {
         }
     }
 
+    /**
+     * Where a toast stands on the home. Over the showcase it keeps clear of the lines under the
+     * stage, which say the state a message may be about, and of the buttons: under the lines
+     * where it fits, else over the stage's floor. With no collection the content has no buttons
+     * on its footer line, so it stands at the panel's foot. Over the new collection's form, under
+     * the form.
+     */
+    @Override
+    protected int toastBottom() {
+        int belowLines = super.toastBottom();
+        if (this.form != null) {
+            return belowLines;
+        }
+        if (ClientWorldCollections.records().isEmpty()) {
+            return bottom() - 4;
+        }
+        if (this.shown == null) {
+            return belowLines;
+        }
+        int linesBottom = stateLineY() + this.stateText.size() * INFO_LINE - INFO_TAIL;
+        if (belowLines - UiToast.height(toastWidth()) >= linesBottom + TOAST_CLEARANCE) {
+            return belowLines;
+        }
+        return this.stageTop + this.stageHeight - TOAST_FLOOR_INSET;
+    }
+
     @Override
     protected void filesDroppedNowhere(List<Path> paths) {
         toast(tr("drop.nowhere"));
@@ -754,6 +836,11 @@ public class CreatorHomeScreen extends SidebarScreen {
 
     @Override
     protected boolean shortcut(UiInput.Key key) {
+        CreateForm open = this.form;
+        if (open != null && open.locked()) {
+            // Nothing but Cancel, Escape and the cross until the new collection arrives
+            return false;
+        }
         if (key.ctrl() && key.is(InputConstants.KEY_N)) {
             newCollection();
             return true;
@@ -761,6 +848,19 @@ public class CreatorHomeScreen extends SidebarScreen {
         if (key.ctrl() && key.is(InputConstants.KEY_F)) {
             focusSearch();
             return true;
+        }
+        if (open != null) {
+            // The form has the content: Enter creates, and the arrows leave it for a collection
+            if (key.enter()) {
+                open.submit();
+                return true;
+            }
+            if (key.is(InputConstants.KEY_UP) || key.is(InputConstants.KEY_DOWN) || key.is(InputConstants.KEY_HOME)
+                    || key.is(InputConstants.KEY_END)) {
+                focusNode(this.list);
+                return this.list.key(key);
+            }
+            return false;
         }
         WorldCollectionRecord selected = this.selectedId == null ? null : ClientWorldCollections.record(this.selectedId);
         if (selected == null) {
@@ -785,6 +885,11 @@ public class CreatorHomeScreen extends SidebarScreen {
         return false;
     }
 
+    @Override
+    protected boolean fieldKey(EditBox field, UiInput.Key key) {
+        return this.form != null && this.form.fieldKey(field, key);
+    }
+
     /** Shows the search row, when a world of few collections leaves it out, and gives it the keyboard. */
     private void focusSearch() {
         if (ClientWorldCollections.records().isEmpty()) {
@@ -801,11 +906,16 @@ public class CreatorHomeScreen extends SidebarScreen {
     }
 
     /**
-     * Escape, once no menu or dialog is open: clears the search first, then hides the search row
-     * Ctrl+F showed, and then leaves the creator. The heading's cross leaves at once.
+     * Escape, once no menu or dialog is open: closes the new collection's form first, as Cancel
+     * does, then clears the search, then hides the search row Ctrl+F showed, and then leaves the
+     * creator. The heading's cross leaves at once ({@link #closeCreator}).
      */
     @Override
     public void onClose() {
+        if (this.form != null) {
+            this.form.cancel();
+            return;
+        }
         if (!this.search.isEmpty()) {
             if (this.searchBox != null) {
                 // Its responder fills the list again
@@ -825,22 +935,129 @@ public class CreatorHomeScreen extends SidebarScreen {
         leave();
     }
 
+    /** The heading's cross: leaves the creator, cancelling a new collection as Cancel would. */
+    private void closeCreator() {
+        if (this.form != null) {
+            this.form.cancel();
+        }
+        leave();
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (this.form != null && this.minecraft.screen == this) {
+            this.form.tick();
+        }
+    }
+
     @Override
     public void removed() {
         super.removed();
         this.focusListOnShow = true;
+        if (this.form != null) {
+            // Shown again when the home is, with what was typed
+            this.form.hide();
+        }
     }
 
     // Actions
 
-    /** Opens the new-collection wizard over this screen, or says why a collection cannot be added. */
+    /**
+     * Opens the new collection's form in the content panel, with its name taking the keyboard, or
+     * says why a collection cannot be added; an open form only takes the keyboard again.
+     */
     private void newCollection() {
+        if (creating()) {
+            return;
+        }
         Component reason = CollectionActions.tooManyCollections();
         if (reason != null) {
             toast(reason);
             return;
         }
-        this.minecraft.setScreen(new CreatorWizardScreen(this));
+        if (this.form == null) {
+            this.form = new CreateForm(this);
+            rebuild();
+        }
+        // Its row is at the top of the list, which may be scrolled down
+        this.list.reveal(NEW_ROW);
+        // After the rebuild, which gives the keyboard back to the field that had it
+        this.form.focusNameNow();
+    }
+
+    // Whether a new collection is being created, from Create until it has arrived
+    private boolean creating() {
+        return this.form != null && this.form.locked();
+    }
+
+    // The new collection's form
+
+    /** Whether this screen is the one shown, rather than under or behind another. */
+    boolean isShown() {
+        return this.minecraft.screen == this;
+    }
+
+    <T extends UiNode> T add(T node) {
+        return addNode(node);
+    }
+
+    EditBox field(String name, int x, int y, int width, int maxLength, Component hint, String value,
+                  Consumer<String> responder) {
+        return textField(name, x, y, width, maxLength, hint, value, responder);
+    }
+
+    /** Asks the screen's budget for the form's box, which ranks with the big previews. */
+    void budgetPreview(IntConsumer grant) {
+        budget((SidebarScreen.Budgeted) models -> models.request(SidebarScreen.ModelBudget.Rank.PREVIEW, 1, grant));
+    }
+
+    /** Gives a text field the keyboard, taking it from the node that had it, such as the list. */
+    void focusField(EditBox field) {
+        focusNode(null);
+        setFocused(field);
+    }
+
+    /**
+     * The form changed what it shows, as when it starts or stops creating or opens the id's
+     * field: the screen is built again, the field the form asks for takes the keyboard, and
+     * while it is locked no text field keeps it, so nothing types into them.
+     */
+    void formChanged(CreateForm changed) {
+        if (this.form != changed || !isShown()) {
+            return;
+        }
+        rebuild();
+        changed.rebuilt();
+        if (changed.locked() && getFocused() instanceof EditBox) {
+            setFocused(null);
+        }
+    }
+
+    /**
+     * Closes the form if it is the open one: its preview goes, and the selection it left returns,
+     * or a collection asked for meanwhile, scrolled into sight; the list takes the keyboard again.
+     */
+    void closeForm(CreateForm closed) {
+        if (this.form != closed) {
+            return;
+        }
+        this.form = null;
+        closed.dispose();
+        if (isShown()) {
+            rebuild();
+            if (this.selectedId != null) {
+                this.list.reveal(this.selectedId);
+            }
+            focusNode(this.list);
+        }
+    }
+
+    /** The new collection arrived: the form closes, the list selects it and the editor opens on its figures. */
+    void created(CreateForm done, String collectionId) {
+        closeForm(done);
+        reveal(collectionId);
+        open(collectionId);
     }
 
     /** Opens a collection in the editor, on its figures. */

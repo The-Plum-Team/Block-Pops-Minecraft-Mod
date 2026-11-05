@@ -700,7 +700,7 @@ public class BulkAddScreen extends CreatorScreen {
 
     /**
      * The editor this card opened over, dimmed. The card has to cover the editor's items and
-     * figures, which each version needs done its own way, as the new-collection wizard does it.
+     * figures, which each version needs done its own way, as SettingsScreen does it.
      */
     @Override
     protected void drawBackground(GuiGraphics graphics, float partialTick) {

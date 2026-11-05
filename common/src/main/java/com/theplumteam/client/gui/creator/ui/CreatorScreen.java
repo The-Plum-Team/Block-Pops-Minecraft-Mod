@@ -31,8 +31,8 @@ import java.util.function.Consumer;
  * machine screen's colour and scrolling stars, dimmed, under a raised charcoal panel in the
  * menus' grey border and black outline) and hosts the screen's toolkit nodes: it draws them,
  * hands them input, and draws the menu, toast, dialog and tooltip above them. Drawn under another
- * screen, as the overview is under the new-collection wizard, it leaves those overlays to the
- * screen on top.
+ * screen, as the editor is under the bulk add of figures, it leaves those overlays to the screen
+ * on top.
  *
  * <p>Like the other menus, the creator is drawn at a GUI scale of its own, chosen from the window
  * size ({@link MenuGuiScale}) whatever GUI Scale the player picked: a canvas of at least 640x360
@@ -44,7 +44,8 @@ import java.util.function.Consumer;
  * before 1.21, from 1.21 to 1.21.8, and from 1.21.9 (26.x here). Each override turns its event
  * into a {@link UiInput} record and passes it on in a fixed order: the open dialog or popover,
  * then the open menu, the toast, the node that has the keyboard, the other nodes from the top
- * down, and last the screen's vanilla widgets. A screen holds one dialog at a time, a
+ * down, and last the screen's vanilla widgets; a key typed in a text field of the screen's own is
+ * offered to the screen first ({@link #fieldKey}). A screen holds one dialog at a time, a
  * {@link UiModal} or a {@link UiPopover}: opening one closes the other.
  *
  * <p>A screen follows the World collections the server syncs: a new sync calls {@link #onSync}
@@ -164,8 +165,8 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
     }
 
     /**
-     * Whether this screen draws its parent under itself, as the new-collection wizard draws the
-     * overview; the parent is then laid out again whenever this screen's size changes.
+     * Whether this screen draws its parent under itself, as the bulk add of figures draws the
+     * editor; the parent is then laid out again whenever this screen's size changes.
      */
     protected boolean drawsParentBelow() {
         return false;
@@ -546,8 +547,8 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
             UiTooltip.clear();
         }
         if (this.minecraft.screen != this) {
-            // Drawn under another screen, such as the new-collection wizard's card, which
-            // draws the menu, the toast and the tooltips of its own
+            // Drawn under another screen, such as the bulk add's card, which draws the menu,
+            // the toast and the tooltips of its own
             return;
         }
 
@@ -906,6 +907,9 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
             return true;
         }
         if (getFocused() != null) {
+            if (getFocused() instanceof EditBox field && fieldKey(field, key)) {
+                return true;
+            }
             // A text field or other vanilla widget has the keyboard; a Ctrl shortcut it leaves
             // unused, such as Ctrl+S, still reaches the screen, since no Ctrl key types text
             return vanilla.getAsBoolean() || key.ctrl() && shortcut(key);
@@ -927,6 +931,21 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
      * field, so typing never triggers one. A text field passes on the Ctrl keys it does not use.
      */
     protected boolean shortcut(UiInput.Key key) {
+        return false;
+    }
+
+    /**
+     * A key pressed while one of the screen's own text fields has the keyboard, offered to the
+     * screen before the field: true when the screen used it, such as Enter sending the form the
+     * field is in, or Tab moving on to a control of the form that is not a text field. A dialog's
+     * fields are not offered. By default the field gets every key.
+     *
+     * <p>Vanilla would take Tab to move between its own widgets only, never to a node, and a
+     * field leaves Enter unused, so a form of fields and nodes needs the key before the field
+     * does. This is the creator's own step in the order above, not a vanilla hook: it is called
+     * from the one key override this class has, and is the same on every version.
+     */
+    protected boolean fieldKey(EditBox field, UiInput.Key key) {
         return false;
     }
 

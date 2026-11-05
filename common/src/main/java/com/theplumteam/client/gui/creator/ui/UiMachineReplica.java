@@ -33,8 +33,8 @@ import java.util.function.Predicate;
  * (see {@link #testDraw}): the machine's own light runs over the figures and its result card
  * shows the winner, with a stamp saying that nothing was spent.
  *
- * <p>Where there is no room for the grid's four columns of cells, or in compact mode, as in the
- * new-collection wizard, the grid is replaced by a line of text. The replica is never scaled down,
+ * <p>Where there is no room for the grid's four columns of cells, or in compact mode, the grid is
+ * replaced by a line of text. The replica is never scaled down,
  * because before 1.21.4 a clip ignores scaled drawing, and must not sit in a {@link UiScrollPane}:
  * its grid clips itself in screen units. A screen showing a replica calls {@link #close} when it
  * closes, which ends a test draw still playing.
@@ -91,7 +91,7 @@ public class UiMachineReplica extends UiNode.Box {
         this.sourceId = sourceId;
     }
 
-    /** Replaces the figure grid with a line of text, as the new-collection wizard shows it. */
+    /** Replaces the figure grid with a line of text, as a small view of the machine shows it. */
     public void setCompact(boolean compact) {
         this.compact = compact;
     }
