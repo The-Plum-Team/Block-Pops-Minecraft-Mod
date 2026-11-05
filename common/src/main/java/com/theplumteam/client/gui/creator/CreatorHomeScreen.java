@@ -2,35 +2,21 @@ package com.theplumteam.client.gui.creator;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.theplumteam.block.PopBlockColor;
-import com.theplumteam.client.ClientHiddenCollections;
 import com.theplumteam.client.gui.creator.ui.CreatorScreen;
 import com.theplumteam.client.gui.creator.ui.Draw;
 import com.theplumteam.client.gui.creator.ui.Theme;
 import com.theplumteam.client.gui.creator.ui.UiButton;
 import com.theplumteam.client.gui.creator.ui.UiCardGrid;
-import com.theplumteam.client.gui.creator.ui.UiCheckbox;
 import com.theplumteam.client.gui.creator.ui.UiDropdown;
 import com.theplumteam.client.gui.creator.ui.UiInput;
-import com.theplumteam.client.gui.creator.ui.UiMenu;
-import com.theplumteam.client.gui.creator.ui.UiModal;
 import com.theplumteam.client.gui.creator.ui.UiNode;
 import com.theplumteam.client.gui.creator.ui.UiQuotaMeter;
 import com.theplumteam.client.gui.creator.ui.UiScrollPane;
 import com.theplumteam.client.gui.creator.ui.UiTabs;
-import com.theplumteam.client.gui.style.DialogFrame;
 import com.theplumteam.client.gui.style.PixelFont;
-import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
-import com.theplumteam.client.worldcontent.ClientWorldUploads;
-import com.theplumteam.client.worldcontent.CreatorSave;
-import com.theplumteam.client.worldcontent.Slugs;
-import com.theplumteam.network.ClawMachineCollectionPacket;
-import com.theplumteam.network.UnlockCollectionPacket;
 import com.theplumteam.registry.ModItems;
-import com.theplumteam.server.worldcollections.WorldCollectionImporter;
-import com.theplumteam.worldcontent.WorldCollectionEdit;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
-import com.theplumteam.worldcontent.WorldContentIds;
 import com.theplumteam.worldcontent.WorldContentLimits;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -58,11 +44,12 @@ import java.util.Map;
  * many of the world's collections exist.
  *
  * <p>A card opens in the collection editor ({@link CreatorEditorScreen}) with its "Edit" button,
- * a double click or Enter. Its "..." menu, also opened with a right click, puts the collection
- * in the machine the creator was opened from, gives the operator every figure to try it out,
- * duplicates it into a new draft, archives or restores it, and deletes a draft or an archived
- * collection for good after the operator types its name. Archiving asks first and its message
- * offers an undo. The footer imports a collection that a data pack on the server ships. The
+ * a double click or Enter. Its "..." menu, also opened with a right click, holds the collection's
+ * own actions ({@link CollectionActions}): it puts the collection in the machine the creator was
+ * opened from, gives the operator every figure to try it out, duplicates it into a new draft,
+ * archives or restores it, and deletes a draft or an archived collection for good after the
+ * operator types its name. Archiving asks first and its message offers an undo. The footer
+ * imports a collection that a data pack on the server ships ({@link PackImportDialog}). The
  * new-collection card, Ctrl+N and the empty state's button open {@link CreatorWizardScreen} over
  * this screen.
  *
@@ -87,8 +74,6 @@ public class CreatorHomeScreen extends CreatorScreen {
     private static final int MAX_CARDS_WITH_HEADS = 15;
     private static final int SUBTITLE = Theme.MUTED;
     private static final int HINT = Theme.FAINT;
-    // The longest namespace:path WorldCollectionImporter accepts
-    private static final int MAX_PACK_SOURCE = 64 + 1 + 32;
 
     /** Which collections the grid shows. */
     private enum Filter {
@@ -115,6 +100,7 @@ public class CreatorHomeScreen extends CreatorScreen {
 
     @Nullable
     private final BlockPos machinePos;
+    private final CollectionActions actions;
     private Filter filter = lastFilter;
     private Sort sort = lastSort;
     private String search = "";
@@ -152,6 +138,7 @@ public class CreatorHomeScreen extends CreatorScreen {
     public CreatorHomeScreen(@Nullable Screen parent, @Nullable BlockPos machinePos) {
         super(tr("home.title"), parent);
         this.machinePos = machinePos;
+        this.actions = new CollectionActions(this, machinePos, this::reveal);
         this.tabs = new UiTabs(UiTabs.Style.FLAT, index -> {
             this.filter = Filter.values()[index];
             lastFilter = this.filter;
@@ -164,10 +151,10 @@ public class CreatorHomeScreen extends CreatorScreen {
                     lastSort = this.sort;
                     refreshCards();
                 });
-        this.helpButton = new UiButton(Component.empty(), UiButton.Style.SECONDARY, this::openHelp);
+        this.helpButton = new UiButton(Component.empty(), UiButton.Style.SECONDARY, this.actions::openHelp);
         this.helpButton.setGlyph(Theme.ICON_HELP);
         this.helpButton.setTooltip(tr("home.help_title"));
-        this.importButton = new UiButton(tr("home.import"), UiButton.Style.SECONDARY, this::openImport);
+        this.importButton = new UiButton(tr("home.import"), UiButton.Style.SECONDARY, this.actions::openImport);
         this.doneButton = new UiButton(tr("done"), UiButton.Style.PRIMARY, this::onClose);
         this.emptyCreateButton = new UiButton(tr("home.empty_create"), UiButton.Style.PRIMARY, this::newCollection);
     }
@@ -233,7 +220,7 @@ public class CreatorHomeScreen extends CreatorScreen {
             this.cards.put(record.id(), CollectionCard.of(record, () -> edit(record),
                     anchor -> openCardMenu(record, anchor)));
         }
-        Component newReason = newCollectionReason();
+        Component newReason = CollectionActions.tooManyCollections();
         if (records.isEmpty()) {
             int buttonWidth = Math.min(this.panelWidth - 2 * PAD, Math.max(180, this.emptyCreateButton.naturalWidth()));
             this.emptyCreateButton.at(this.panelX + (this.panelWidth - buttonWidth) / 2, emptyTop() + 64 + 30,
@@ -330,7 +317,8 @@ public class CreatorHomeScreen extends CreatorScreen {
         }
         List<CollectionCard> selected = this.grid != null ? this.grid.selected() : List.of();
         UiCardGrid<CollectionCard> cardGrid = new UiCardGrid<CollectionCard>(cardWidth, CollectionCard.HEIGHT,
-                (graphics, card, at) -> card.draw(graphics, at, this.headsShown, newCollectionReason(), this.partialTick))
+                (graphics, card, at) -> card.draw(graphics, at, this.headsShown, CollectionActions.tooManyCollections(),
+                        this.partialTick))
                 .gap(GAP)
                 .keys(CollectionCard::key)
                 .onActivate(this::activate)
@@ -506,18 +494,9 @@ public class CreatorHomeScreen extends CreatorScreen {
 
     // Actions
 
-    /** Why a new collection cannot be started now, or null when it can. */
-    @Nullable
-    private Component newCollectionReason() {
-        if (ClientWorldCollections.records().size() >= WorldContentLimits.MAX_COLLECTIONS) {
-            return tr("too_many_collections", WorldContentLimits.MAX_COLLECTIONS);
-        }
-        return null;
-    }
-
     /** Opens the new-collection wizard over this screen, or says why a collection cannot be added. */
     private void newCollection() {
-        Component reason = newCollectionReason();
+        Component reason = CollectionActions.tooManyCollections();
         if (reason != null) {
             toast(reason);
             return;
@@ -540,73 +519,9 @@ public class CreatorHomeScreen extends CreatorScreen {
         return this.machinePos;
     }
 
+    /** Opens a collection's menu of its own actions under an anchor, such as its "..." button. */
     private void openCardMenu(WorldCollectionRecord record, UiNode.Rect anchor) {
-        UiMenu menu = new UiMenu();
-        if (this.machinePos != null) {
-            if (ClientHiddenCollections.isHidden(record.id())) {
-                menu.disabled(tr("home.menu.put"), tr("home.reason.hidden_machine"));
-            } else if (record.archived()) {
-                menu.disabled(tr("home.menu.put"), tr("home.reason.archived_machine"));
-            } else if (record.draft()) {
-                menu.disabled(tr("home.menu.put"), tr("home.reason.draft_machine"));
-            } else {
-                menu.item(tr("home.menu.put"), () -> putInMachine(record));
-            }
-        }
-        if (record.figures().stream().anyMatch(WorldCollectionRecord.Figure::enabled)) {
-            menu.item(tr("home.menu.unlock"), tr("home.menu.unlock_hint"), () -> unlock(record));
-        } else {
-            menu.disabled(tr("home.menu.unlock"), tr("home.reason.no_figures"));
-        }
-        if (ClientWorldCollections.records().size() >= WorldContentLimits.MAX_COLLECTIONS) {
-            menu.disabled(tr("home.menu.duplicate"), tr("too_many_collections", WorldContentLimits.MAX_COLLECTIONS));
-        } else {
-            menu.item(tr("home.menu.duplicate"), () -> duplicate(record));
-        }
-        menu.separator();
-        if (record.archived()) {
-            menu.item(tr("home.menu.restore"), () -> setArchived(record, false));
-        } else if (!record.draft()) {
-            menu.warning(tr("home.menu.archive"), () -> confirmArchive(record));
-        }
-        if (record.archived() || record.draft()) {
-            menu.warning(tr("home.menu.purge"), () -> confirmPurge(record));
-        } else {
-            menu.disabled(tr("home.menu.purge"), tr("home.reason.archive_first"));
-        }
-        openMenu(menu, anchor);
-    }
-
-    private void putInMachine(WorldCollectionRecord record) {
-        if (this.machinePos == null) {
-            return;
-        }
-        new ClawMachineCollectionPacket(this.machinePos, record.id()).sendToServer();
-        toast(tr("home.put_done", record.name()));
-    }
-
-    private void unlock(WorldCollectionRecord record) {
-        try {
-            new UnlockCollectionPacket(record.id()).sendToServer();
-            toast(tr("unlock_sent", record.name()));
-        } catch (UnsupportedOperationException e) {
-            // NeoForge refuses to send a payload the server did not register
-            toast(tr("not_sent"));
-        }
-    }
-
-    private void duplicate(WorldCollectionRecord record) {
-        String name = cut(tr("home.copy_name", record.name()).getString(), WorldContentLimits.MAX_NAME_LENGTH);
-        String slug = Slugs.unique(record.slug(), Slugs::isCollectionTaken);
-        CreatorSave.create(slug, List.of(), next -> new WorldCollectionEdit.Duplicate(record.id(), next, name),
-                outcome -> {
-                    if (outcome.ok()) {
-                        reveal(outcome.collectionId());
-                        toast(tr("home.duplicated", name));
-                    } else if (outcome.ending() != CreatorSave.Ending.DISCONNECTED) {
-                        toast(outcome.message());
-                    }
-                });
+        openMenu(this.actions.menu(record), anchor);
     }
 
     /**
@@ -627,162 +542,5 @@ public class CreatorHomeScreen extends CreatorScreen {
         }
         int end = Character.isHighSurrogate(text.charAt(max - 1)) ? max - 1 : max;
         return text.substring(0, end).stripTrailing();
-    }
-
-    private void confirmArchive(WorldCollectionRecord record) {
-        UiModal dialog = new UiModal(tr("home.archive_title", record.name()), tr("home.archive_body"))
-                .accent(DialogFrame.Accent.DANGER, Theme.ICON_ARCHIVE);
-        dialog.cancelButton(tr("cancel"));
-        dialog.button(tr("home.archive_button"), UiButton.Style.DANGER, () -> setArchived(record, true));
-        openModal(dialog);
-    }
-
-    private void setArchived(WorldCollectionRecord record, boolean archived) {
-        send(new WorldCollectionEdit.SetArchived(record.id(), archived), () -> {
-            if (archived) {
-                toast(tr("home.archived", record.name()), tr("home.undo"), () -> setArchived(record, false));
-            } else {
-                toast(tr("home.restored", record.name()));
-            }
-        });
-    }
-
-    private void confirmPurge(WorldCollectionRecord record) {
-        String name = record.name();
-        UiModal dialog = new UiModal(tr("home.purge_title", name), tr("home.purge_body"))
-                .accent(DialogFrame.Accent.DANGER, PixelIcon.BIN);
-        UiButton[] confirm = new UiButton[1];
-        dialog.field(tr("home.purge_field", name), WorldContentLimits.MAX_NAME_LENGTH, "", Component.literal(name),
-                value -> confirm[0].disable(value.strip().equals(name.strip()) ? null : tr("home.purge_rule")));
-        dialog.cancelButton(tr("cancel"));
-        confirm[0] = dialog.button(tr("home.purge_button"), UiButton.Style.DANGER,
-                () -> send(new WorldCollectionEdit.Purge(record.id(), record.id()),
-                        () -> toast(tr("home.purged", name))));
-        confirm[0].disable(tr("home.purge_rule"));
-        openModal(dialog);
-    }
-
-    private void openHelp() {
-        UiModal dialog = new UiModal(tr("home.help_title"), tr("home.help_body")).width(320)
-                .accent(DialogFrame.Accent.SETTINGS, Theme.ICON_HELP);
-        dialog.cancelButton(tr("home.help_close"));
-        openModal(dialog);
-    }
-
-    private void openImport() {
-        new ImportForm().open();
-    }
-
-    /** Sends one edit; a refusal or a lost connection is told in the toast. */
-    private void send(WorldCollectionEdit edit, Runnable onSaved) {
-        boolean sent = ClientWorldUploads.edit(edit, outcome -> {
-            if (outcome.ok()) {
-                onSaved.run();
-            } else if (outcome.disconnected()) {
-                toast(tr("disconnected"));
-            } else if (!outcome.cancelled()) {
-                toast(CreatorSave.message(outcome.status()));
-            }
-        });
-        if (!sent) {
-            toast(tr("not_sent"));
-        }
-    }
-
-    // The namespace and the path of a typed pack, or null unless the importer accepts both
-    @Nullable
-    private static String[] packParts(String typed) {
-        int colon = typed.indexOf(':');
-        if (colon < 0) {
-            return null;
-        }
-        String namespace = typed.substring(0, colon);
-        String path = typed.substring(colon + 1);
-        return WorldCollectionImporter.isValidSource(namespace, path) ? new String[] {namespace, path} : null;
-    }
-
-    /**
-     * The import dialog: the pack's namespace:path, the slug of the collection it becomes,
-     * which follows the path until the operator types one, and whether a new collection starts
-     * as a draft.
-     */
-    private final class ImportForm {
-        private String source = "";
-        private String slug = "";
-        private boolean slugTyped;
-        private boolean settingSlug;
-        private boolean asDraft = true;
-        @Nullable
-        private EditBox slugBox;
-        @Nullable
-        private UiButton confirm;
-
-        void open() {
-            UiModal dialog = new UiModal(tr("home.import_title"), tr("home.import_body")).width(340)
-                    .accent(DialogFrame.Accent.CREATE, PixelIcon.PLUS);
-            dialog.field(tr("home.import_source"), MAX_PACK_SOURCE, "", tr("home.import_source_hint"), value -> {
-                this.source = value.strip();
-                if (!this.slugTyped && this.slugBox != null) {
-                    // setValue tells the slug's responder, which must not take it for typing
-                    this.settingSlug = true;
-                    this.slugBox.setValue(suggestedSlug(this.source));
-                    this.settingSlug = false;
-                }
-                check();
-            });
-            this.slugBox = dialog.field(tr("home.import_slug"), Slugs.MAX_LENGTH, "", tr("slug_hint"), value -> {
-                this.slug = value;
-                if (!this.settingSlug) {
-                    this.slugTyped = !value.isEmpty();
-                }
-                check();
-            });
-            dialog.node(new UiCheckbox(tr("home.import_draft"), true, checked -> this.asDraft = checked),
-                    UiCheckbox.BOX + 2);
-            dialog.cancelButton(tr("cancel"));
-            this.confirm = dialog.button(tr("home.import_button"), UiButton.Style.PRIMARY, this::send);
-            check();
-            openModal(dialog);
-        }
-
-        private String suggestedSlug(String typed) {
-            String[] parts = packParts(typed);
-            return parts != null ? Slugs.collection(parts[1]) : "";
-        }
-
-        @Nullable
-        private Component problem() {
-            if (packParts(this.source) == null) {
-                return tr("home.import_source_rule");
-            }
-            if (!WorldContentIds.isSlug(this.slug)) {
-                return tr("slug_rule");
-            }
-            if (!Slugs.isCollectionTaken(this.slug)
-                    && ClientWorldCollections.records().size() >= WorldContentLimits.MAX_COLLECTIONS) {
-                return tr("too_many_collections", WorldContentLimits.MAX_COLLECTIONS);
-            }
-            return null;
-        }
-
-        private void check() {
-            if (this.confirm != null) {
-                this.confirm.disable(problem());
-            }
-        }
-
-        private void send() {
-            String[] parts = packParts(this.source);
-            if (problem() != null || parts == null) {
-                return;
-            }
-            String id = WorldContentIds.collectionId(this.slug);
-            String shown = this.source;
-            CreatorHomeScreen.this.send(new WorldCollectionEdit.ImportPack(this.slug, parts[0], parts[1],
-                    this.asDraft), () -> {
-                        reveal(id);
-                        toast(tr("home.imported", shown));
-                    });
-        }
     }
 }

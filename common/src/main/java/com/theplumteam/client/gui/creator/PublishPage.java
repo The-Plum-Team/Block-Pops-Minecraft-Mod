@@ -1,6 +1,5 @@
 package com.theplumteam.client.gui.creator;
 
-import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.client.ClientHiddenCollections;
 import com.theplumteam.client.ClientServerSettings;
 import com.theplumteam.client.gui.AdminProgressionScreen;
@@ -13,36 +12,26 @@ import com.theplumteam.client.gui.creator.ui.UiChecklist;
 import com.theplumteam.client.gui.creator.ui.UiMachineReplica;
 import com.theplumteam.client.gui.creator.ui.UiModal;
 import com.theplumteam.client.gui.creator.ui.UiNode;
-import com.theplumteam.client.gui.creator.ui.UiQuotaMeter;
 import com.theplumteam.client.gui.creator.ui.UiScrollPane;
 import com.theplumteam.client.gui.creator.ui.UiSegmented;
 import com.theplumteam.client.gui.creator.ui.UiStepper;
-import com.theplumteam.client.gui.creator.ui.UiSwatches;
 import com.theplumteam.client.gui.creator.ui.UiInput;
 import com.theplumteam.client.gui.creator.ui.UiTooltip;
 import com.theplumteam.client.gui.style.DialogFrame;
 import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.style.Surfaces;
-import com.theplumteam.client.worldcontent.ClientWorldCollections;
-import com.theplumteam.client.worldcontent.ClientWorldUploads;
 import com.theplumteam.client.worldcontent.CreatorDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FigureDraft;
-import com.theplumteam.client.worldcontent.CreatorDraft.FileRef;
 import com.theplumteam.client.worldcontent.CreatorPreview;
-import com.theplumteam.client.worldcontent.CreatorSave;
 import com.theplumteam.client.worldcontent.DrawSimulation;
 import com.theplumteam.figure.DrawOdds;
 import com.theplumteam.figure.DrawRules;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.Holographic;
-import com.theplumteam.network.ClawMachineCollectionPacket;
-import com.theplumteam.network.UnlockCollectionPacket;
 import com.theplumteam.worldcontent.WorldCollectionEdit;
-import com.theplumteam.worldcontent.WorldCollectionRecord.Kind;
 import com.theplumteam.worldcontent.WorldCollectionRecord.Rarity;
 import com.theplumteam.worldcontent.WorldCollectionRecord.RarityWeights;
-import com.theplumteam.worldcontent.WorldContentLimits;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -71,21 +60,22 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  * played.
  *
  * <p>The page has two views, switched at its top. "Review" lists, on the left, a checklist of
- * everything a published collection needs, each problem with a link to where it is fixed, and
- * how the draw works: every figure's chance as a bar, the token rules of this server and how
- * many days of tokens completing the collection takes, worked out by {@link DrawSimulation}. On
- * the right are the weights of the four rarities, the kind of machine the collection goes in, and
- * its visibility. "How players will see it" shows the claw machine's own screen at full size,
- * because the half-size editor has no room for the machine's figure grid beside the review: as a
- * new player or a collector sees it, with a test draw that runs the machine's light and shows the
- * winner stamped as a test, and a hundred draws counted in a chart. Neither spends a token or
- * gives anything: the draws are made up on this computer.
+ * everything a published collection needs ({@link PublishCheck}), each problem with a link to
+ * where it is fixed, and how the draw works: every figure's chance as a bar, the token rules of
+ * this server and how many days of tokens completing the collection takes, worked out by
+ * {@link DrawSimulation}. On the right are the weights of the four rarities, the kind of machine
+ * the collection goes in, and its visibility. "How players will see it" shows the claw machine's
+ * own screen at full size, because the half-size editor has no room for the machine's figure
+ * grid beside the review: as a new player or a collector sees it, with a test draw that runs the
+ * machine's light and shows the winner stamped as a test, and a hundred draws counted in a chart.
+ * Neither spends a token or gives anything: the draws are made up on this computer.
  *
  * <p>A draft is published with "Publish collection", which saves every change and publishes in
  * one batch the server applies whole, and is disabled, saying why, while any checklist item is a
  * blocker. A published collection can be archived or brought back instead; it is never a draft
  * again. Once published, a dialog offers what comes next: putting it in the machine the creator
- * was opened from, getting every figure to try it, seeing players' progress, or going back.
+ * was opened from or getting every figure to try it ({@link CollectionActions}), seeing players'
+ * progress, or going back.
  */
 final class PublishPage implements EditorPage {
     private static final int GAP = 6;
@@ -98,7 +88,6 @@ final class PublishPage implements EditorPage {
     private static final int STEPPER_WIDTH = 64;
     private static final int HISTOGRAM_HEIGHT = 96;
     private static final int TEST_PULLS = 100;
-    private static final int MAX_RETIRED_ROWS = 3;
     private static final int HEADING = 0xFFE6E6E6;
     private static final int HELP = 0xFFA8A8A8;
     private static final int REGULAR = 0xFF5AA0FF;
@@ -121,6 +110,8 @@ final class PublishPage implements EditorPage {
     private final UiScrollPane left = new UiScrollPane();
     private final Text checklistHeading;
     private final UiChecklist checklist = new UiChecklist();
+    // What the checklist shows, worked out again with every change of the draft
+    private PublishCheck check;
     private final Text drawHeading;
     private final Text chanceLine;
     private final ShareBar shareBar = new ShareBar();
@@ -203,6 +194,7 @@ final class PublishPage implements EditorPage {
         this.pullsButton.setTooltip(tr("publish.test_tip"));
         this.replica.setStamp(tr("test_draw.stamp"));
         setCollector(false);
+        this.check = PublishCheck.of(editor.draft());
     }
 
     private CreatorDraft draft() {
@@ -404,7 +396,7 @@ final class PublishPage implements EditorPage {
             return;
         }
         Component problem = null;
-        if (this.checklist.blocked()) {
+        if (this.check.blocked()) {
             problem = tr("publish.blocked");
         } else if (!this.publishChosen) {
             problem = tr("publish.kept_draft");
@@ -423,146 +415,41 @@ final class PublishPage implements EditorPage {
     }
 
     /**
-     * The checklist, from the draft as it is: each line done, a warning, a blocker that holds back
-     * publishing, or optional, with a link to where it is fixed.
+     * The checklist, from the draft as it is ({@link PublishCheck}): each line done, a warning, a
+     * blocker that holds back publishing, or optional, with a link to where it is fixed.
      */
     private void refreshChecklist() {
-        CreatorDraft draft = draft();
+        this.check = PublishCheck.of(draft());
         UiChecklist list = this.checklist;
         list.clear();
-        Component fix = tr("publish.fix");
-        Component view = tr("publish.view");
-        Runnable toIdentity = () -> this.editor.selectTab(CreatorEditorScreen.Tab.IDENTITY);
-
-        // Name, author and colour, then the box
-        if (this.editor.identityReady()) {
-            list.row(UiChecklist.Mark.DONE, tr("publish.check.identity"));
-        } else {
-            Component problem = this.editor.identityProblem();
-            list.row(UiChecklist.Mark.BLOCKER, problem != null ? problem : tr("publish.check.identity"), fix, toIdentity);
-        }
-        Component boxProblem = this.editor.boxProblem();
-        if (boxProblem != null) {
-            list.row(UiChecklist.Mark.BLOCKER, boxProblem, fix, toIdentity);
-        } else {
-            list.row(UiChecklist.Mark.DONE, boxText(draft));
-        }
-
-        // The figures: some in the draw, none missing a file
-        int inDraw = 0;
-        FigureDraft lost = null;
-        int lostCount = 0;
-        FigureDraft unfinished = null;
-        int unfinishedCount = 0;
-        List<FigureDraft> retired = new ArrayList<>();
-        for (FigureDraft figure : draft.figures()) {
-            if (!figure.isComplete()) {
-                unfinishedCount++;
-                unfinished = unfinished != null ? unfinished : figure;
-                continue;
-            }
-            if (lostOnServer(figure)) {
-                lostCount++;
-                lost = lost != null ? lost : figure;
-            }
-            if (figure.enabled()) {
-                inDraw++;
+        for (PublishCheck.Item item : this.check.items()) {
+            UiChecklist.Mark mark = switch (item.mark()) {
+                case DONE -> UiChecklist.Mark.DONE;
+                case WARNING -> UiChecklist.Mark.WARNING;
+                case BLOCKER -> UiChecklist.Mark.BLOCKER;
+                case TODO -> UiChecklist.Mark.TODO;
+            };
+            PublishCheck.Fix fix = item.fix();
+            if (fix == null) {
+                list.row(mark, item.text());
             } else {
-                retired.add(figure);
+                list.row(mark, item.text(), fix.link(), () -> goTo(fix));
             }
-        }
-        if (inDraw == 0) {
-            list.row(UiChecklist.Mark.BLOCKER, tr("publish.check.no_figures"), tr("publish.add"),
-                    () -> this.editor.selectTab(CreatorEditorScreen.Tab.FIGURES));
-        } else if (lost != null) {
-            FigureDraft first = lost;
-            list.row(UiChecklist.Mark.BLOCKER, lostCount == 1 ? tr("publish.check.lost_one", nameOf(first))
-                    : tr("publish.check.lost", lostCount), view, () -> showFigure(first));
-        } else {
-            list.row(UiChecklist.Mark.DONE, inDraw == 1 ? tr("publish.check.figures_one")
-                    : tr("publish.check.figures", inDraw));
-        }
-        if (unfinished != null) {
-            FigureDraft first = unfinished;
-            list.row(UiChecklist.Mark.WARNING, unfinishedCount == 1 ? tr("publish.check.unfinished_one", nameOf(first))
-                    : tr("publish.check.unfinished", unfinishedCount), view, () -> showFigure(first));
-        }
-        for (int i = 0; i < retired.size() && i < MAX_RETIRED_ROWS; i++) {
-            FigureDraft figure = retired.get(i);
-            list.row(UiChecklist.Mark.WARNING, tr("publish.check.retired", nameOf(figure)), view,
-                    () -> showFigure(figure));
-        }
-        if (retired.size() > MAX_RETIRED_ROWS) {
-            list.row(UiChecklist.Mark.WARNING, tr("publish.check.retired_more", retired.size() - MAX_RETIRED_ROWS));
-        }
-
-        // The optional author link
-        if (draft.authorUrl().isEmpty()) {
-            list.row(UiChecklist.Mark.TODO, tr("publish.check.no_link"), tr("publish.add"), toIdentity);
-        } else {
-            list.row(UiChecklist.Mark.DONE, tr("publish.check.link"));
-        }
-
-        // What it takes on the server: its definition and its files
-        CreatorDraft.Forecast forecast = draft.forecast();
-        int recordKiB = (forecast.recordBytes() + 1023) / 1024;
-        if (forecast.recordBytes() > WorldContentLimits.RECORD_BYTES) {
-            list.row(UiChecklist.Mark.BLOCKER, tr("editor.too_big", recordKiB, WorldContentLimits.RECORD_BYTES / 1024));
-        } else {
-            list.row(UiChecklist.Mark.DONE, tr("publish.check.size", recordKiB, WorldContentLimits.RECORD_BYTES / 1024));
-        }
-        if (forecast.budgetProblem() != null) {
-            list.row(UiChecklist.Mark.BLOCKER, Component.literal(forecast.budgetProblem()));
-        } else {
-            int usedKiB = (int) Math.min(Integer.MAX_VALUE, (forecast.collectionBytes() + 1023) / 1024);
-            list.row(UiChecklist.Mark.DONE, tr("publish.check.files", UiQuotaMeter.text(usedKiB,
-                    (int) (WorldContentLimits.MAX_COLLECTION_BYTES / 1024))));
         }
     }
 
-    // Whether the server lost a file the figure names
-    private static boolean lostOnServer(FigureDraft figure) {
-        List<FileRef> refs = new ArrayList<>();
-        refs.add(figure.texture());
-        if (figure.kind() == Kind.MODEL) {
-            refs.add(figure.model());
-            refs.add(figure.animation());
-        }
-        for (CreatorDraft.VariantDraft variant : figure.variants()) {
-            refs.add(variant.texture());
-        }
-        for (FileRef ref : refs) {
-            if (ref != null && ref.local() == null && ClientWorldCollections.isMissingOnServer(ref.sha())) {
-                return true;
+    /** Takes the operator to where a checklist line is fixed, as its link does. */
+    private void goTo(PublishCheck.Fix fix) {
+        switch (fix.place()) {
+            case IDENTITY -> this.editor.selectTab(CreatorEditorScreen.Tab.IDENTITY);
+            case FIGURES -> this.editor.selectTab(CreatorEditorScreen.Tab.FIGURES);
+            case FIGURE -> {
+                FigureDraft figure = fix.figure();
+                if (figure != null) {
+                    showFigure(figure);
+                }
             }
         }
-        return false;
-    }
-
-    private static Component boxText(CreatorDraft draft) {
-        Component box = switch (draft.boxMode()) {
-            case COLOR -> {
-                PopBlockColor colour = boxColour(draft.boxColor());
-                yield tr("publish.check.box_colour", colour != null ? UiSwatches.nameOf(colour) : "");
-            }
-            case TEXTURE -> tr("publish.check.box_image");
-            case NONE -> tr("publish.check.box_default");
-        };
-        return draft.logo() != null ? tr("publish.check.box_logo", box) : box;
-    }
-
-    @Nullable
-    private static PopBlockColor boxColour(@Nullable String name) {
-        for (PopBlockColor colour : PopBlockColor.values()) {
-            if (colour.getSerializedName().equals(name)) {
-                return colour;
-            }
-        }
-        return null;
-    }
-
-    private static String nameOf(FigureDraft figure) {
-        return figure.name().isBlank() ? figure.id() : figure.name();
     }
 
     /** Opens the figure grid with one figure selected, as a checklist line's link does. */
@@ -792,28 +679,20 @@ final class PublishPage implements EditorPage {
         UiModal dialog = new UiModal(tr("editor.published", name), tr("publish.done.body")).width(280)
                 .accent(DialogFrame.Accent.CREATE, PixelIcon.CHECK);
         if (machinePos != null) {
-            UiButton put = action(dialog, tr("home.menu.put"), UiButton.Style.PRIMARY, () -> {
-                new ClawMachineCollectionPacket(machinePos, id).sendToServer();
-                this.editor.toast(tr("home.put_done", name));
-            });
+            UiButton put = action(dialog, tr("home.menu.put"), UiButton.Style.PRIMARY,
+                    () -> CollectionActions.put(machinePos, id, name));
             if (ClientHiddenCollections.isHidden(id)) {
                 put.disable(tr("home.reason.hidden_machine"));
             }
         }
-        action(dialog, tr("publish.done.unlock"), UiButton.Style.SECONDARY, () -> {
-            try {
-                new UnlockCollectionPacket(id).sendToServer();
-                this.editor.toast(tr("unlock_sent", name));
-            } catch (UnsupportedOperationException e) {
-                // NeoForge refuses to send a payload the server did not register
-                this.editor.toast(tr("not_sent"));
-            }
-        });
+        action(dialog, tr("publish.done.unlock"), UiButton.Style.SECONDARY, () -> CollectionActions.unlock(id, name));
         action(dialog, tr("publish.done.progress"), UiButton.Style.SECONDARY,
                 () -> this.editor.openChild(new AdminProgressionScreen(this.editor, id)));
         action(dialog, tr("publish.done.back"), UiButton.Style.SECONDARY, this.editor::onClose);
         // Publishing cannot be taken back, but archiving takes the collection out of the machines again
-        action(dialog, tr("publish.done.undo"), UiButton.Style.DANGER_TEXT, () -> archive(id, name));
+        action(dialog, tr("publish.done.undo"), UiButton.Style.DANGER_TEXT,
+                () -> CollectionActions.send(new WorldCollectionEdit.SetArchived(id, true),
+                        () -> this.editor.toast(tr("home.archived", name))));
         dialog.cancelButton(tr("publish.done.stay"));
         this.editor.openModal(dialog);
     }
@@ -826,21 +705,6 @@ final class PublishPage implements EditorPage {
         });
         dialog.node(made[0], style == UiButton.Style.DANGER_TEXT ? 10 : UiButton.HEIGHT);
         return made[0];
-    }
-
-    private void archive(String id, String name) {
-        boolean sent = ClientWorldUploads.edit(new WorldCollectionEdit.SetArchived(id, true), outcome -> {
-            if (outcome.ok()) {
-                this.editor.toast(tr("home.archived", name));
-            } else if (outcome.disconnected()) {
-                this.editor.toast(tr("disconnected"));
-            } else if (!outcome.cancelled()) {
-                this.editor.toast(CreatorSave.message(outcome.status()));
-            }
-        });
-        if (!sent) {
-            this.editor.toast(tr("not_sent"));
-        }
     }
 
     // Ticking and drawing

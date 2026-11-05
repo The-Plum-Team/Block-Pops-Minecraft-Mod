@@ -7,7 +7,6 @@ import com.theplumteam.client.gui.creator.ui.UiButton;
 import com.theplumteam.client.gui.creator.ui.UiCardGrid;
 import com.theplumteam.client.gui.creator.ui.UiInput;
 import com.theplumteam.client.gui.creator.ui.UiNode;
-import com.theplumteam.client.gui.creator.ui.UiQuotaMeter;
 import com.theplumteam.client.gui.creator.ui.UiScrollPane;
 import com.theplumteam.client.gui.creator.ui.UiTooltip;
 import com.theplumteam.client.gui.creator.ui.UiViewport;
@@ -16,13 +15,10 @@ import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.util.GuiPose;
 import com.theplumteam.client.gui.widget.FigureEntry;
-import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
-import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
-import com.theplumteam.worldcontent.WorldContentLimits;
 import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
@@ -42,9 +38,10 @@ import java.util.function.Consumer;
  * figures peeking up from the band's bottom edge; under the band come its name, its author, how
  * many figures it has and how many of them are in the draw, and how much of a collection's file
  * space it uses. A badge says whether it is published, a draft, archived or missing files on the
- * server, and an archived card is greyed out. While the pointer is over a card it shows an
- * "Edit" button and a "..." button for the card's menu. A card is raised as the menus' buttons
- * are, lighter under the pointer and with Quick Skin's blue border while selected.
+ * server, and an archived card is greyed out; {@link CollectionStatus} works all of that out.
+ * While the pointer is over a card it shows an "Edit" button and a "..." button for the card's
+ * menu. A card is raised as the menus' buttons are, lighter under the pointer and with Quick
+ * Skin's blue border while selected.
  *
  * <p>The first card of the overview is not a collection: it starts a new one, and is drawn as
  * Quick Skin's import zone, a dark backdrop with a bracket at each corner.
@@ -79,11 +76,9 @@ public final class CollectionCard {
 
     @Nullable
     private final WorldCollectionRecord record;
-    private final int figureCount;
-    private final int inDraw;
-    private final int retired;
-    private final int missingFiles;
-    private final long bytes;
+    // What the card says about the collection; null for the new-collection card
+    @Nullable
+    private final CollectionStatus status;
     @Nullable
     private final UiButton editButton;
     @Nullable
@@ -100,45 +95,14 @@ public final class CollectionCard {
                            @Nullable Consumer<UiNode.Rect> onMore) {
         this.record = record;
         if (record == null) {
-            this.figureCount = 0;
-            this.inDraw = 0;
-            this.retired = 0;
-            this.missingFiles = 0;
-            this.bytes = 0;
+            this.status = null;
             this.editButton = null;
             this.moreButton = null;
             this.boxFigureId = null;
             return;
         }
-        int enabled = 0;
-        List<String> enabledIds = new ArrayList<>();
-        List<String> retiredIds = new ArrayList<>();
-        for (WorldCollectionRecord.Figure figure : record.figures()) {
-            if (figure.enabled()) {
-                enabled++;
-                enabledIds.add(figure.id());
-            } else {
-                retiredIds.add(figure.id());
-            }
-        }
-        this.figureCount = record.figures().size();
-        this.inDraw = enabled;
-        this.retired = figureCount - enabled;
-        long total = 0;
-        int missing = 0;
-        for (String sha : record.referencedShas()) {
-            BlobInfo info = ClientWorldCollections.blob(sha);
-            if (info != null) {
-                total += info.size();
-            }
-            if (ClientWorldCollections.isMissingOnServer(sha)) {
-                missing++;
-            }
-        }
-        this.bytes = total;
-        this.missingFiles = missing;
-        List<String> order = new ArrayList<>(enabledIds);
-        order.addAll(retiredIds);
+        this.status = CollectionStatus.of(record);
+        List<String> order = this.status.figureOrder();
         this.headIds.addAll(order.subList(0, Math.min(MAX_HEADS, order.size())));
         // The box holds a figure as the machine hands it out: the first one in the draw
         this.boxFigureId = order.isEmpty() ? null : order.get(0);
@@ -228,7 +192,7 @@ public final class CollectionCard {
      */
     public void draw(GuiGraphics graphics, UiCardGrid.Card card, boolean withHeads, @Nullable Component disabled,
                      float partialTick) {
-        if (record == null) {
+        if (record == null || status == null) {
             drawNew(graphics, card, disabled);
             return;
         }
@@ -245,7 +209,7 @@ public final class CollectionCard {
         int bandY = y + 2;
         int bandRight = x + width - 2;
         int bandBottom = bandY + BAND;
-        graphics.fill(bandX, bandY, bandRight, bandBottom, bandColour(record));
+        graphics.fill(bandX, bandY, bandRight, bandBottom, status.bandColour());
         graphics.fill(bandX, bandBottom - 1, bandRight, bandBottom, Surfaces.OUTLINE);
         drawModels(graphics, bandX, bandY, bandRight, bandBottom, withHeads, archived, partialTick);
         // The wash, the badge and the buttons go above the models: a later stratum from 1.21.6,
@@ -259,7 +223,7 @@ public final class CollectionCard {
                 graphics.fill(bandX, bandY, bandRight, bandBottom, GREYED);
             }
             boolean buttons = showsButtons(card);
-            drawBadge(graphics, font, card, buttons);
+            drawBadge(graphics, font, card, status, buttons);
             if (buttons && editButton != null && moreButton != null) {
                 placeButtons(card);
                 editButton.draw(graphics, card.mouseX(), card.mouseY(), partialTick);
@@ -276,31 +240,17 @@ public final class CollectionCard {
         String author = record.author().isBlank() ? record.slug()
                 : CreatorScreen.tr("card.by", record.author()).getString();
         Draw.text(graphics, font, author, textX, top + Theme.LINE_HEIGHT, textWidth, Theme.MUTED);
-        int usedKiB = (int) Math.min(Integer.MAX_VALUE, (bytes + 1023) / 1024);
-        Component size = UiQuotaMeter.text(usedKiB, (int) (WorldContentLimits.MAX_COLLECTION_BYTES / 1024));
-        Component stats = stats(true);
+        Component size = status.size();
+        Component stats = status.stats(true);
+        int retired = status.retired();
         if (retired > 0 && !archived && font.width(stats) > textWidth) {
             // A narrow card moves the retired count down beside the size, rather than cut it off
-            stats = stats(false);
+            stats = status.stats(false);
             size = CreatorScreen.tr("card.joined", size, CreatorScreen.tr("card.retired", retired));
         }
         Draw.text(graphics, font, stats.getString(), textX, top + 2 * Theme.LINE_HEIGHT - 1, textWidth,
                 Theme.TEXT_SOFT);
         Draw.text(graphics, font, size.getString(), textX, top + 3 * Theme.LINE_HEIGHT - 2, textWidth, SIZE_TEXT);
-    }
-
-    // The band's own colour, or grey for an archived collection
-    private static int bandColour(WorldCollectionRecord record) {
-        int red = record.red();
-        int green = record.green();
-        int blue = record.blue();
-        if (record.archived()) {
-            int grey = (red * 30 + green * 59 + blue * 11) / 100;
-            red = grey;
-            green = grey;
-            blue = grey;
-        }
-        return 0xFF000000 | (red & 0xFF) << 16 | (green & 0xFF) << 8 | (blue & 0xFF);
     }
 
     private void drawModels(GuiGraphics graphics, int left, int top, int right, int bottom, boolean withHeads,
@@ -357,44 +307,11 @@ public final class CollectionCard {
         Draw.string(graphics, font, bold, x, y, colour);
     }
 
-    /** "8 figures · 7 in the draw · 1 retired", without the retired part if asked, or "9 figures · archived". */
-    private Component stats(boolean withRetired) {
-        Component figures = figureCount == 1 ? CreatorScreen.tr("card.figure_one")
-                : CreatorScreen.tr("card.figures", figureCount);
-        if (record != null && record.archived()) {
-            return CreatorScreen.tr("card.joined", figures, CreatorScreen.tr("card.archived"));
-        }
-        Component line = CreatorScreen.tr("card.joined", figures, CreatorScreen.tr("card.in_draw", inDraw));
-        return retired > 0 && withRetired
-                ? CreatorScreen.tr("card.joined", line, CreatorScreen.tr("card.retired", retired)) : line;
-    }
-
-    private void drawBadge(GuiGraphics graphics, Font font, UiCardGrid.Card card, boolean buttons) {
-        Component text;
-        int background;
-        int foreground;
-        Component tooltip = null;
-        if (record.archived()) {
-            text = CreatorScreen.tr("card.badge.archived");
-            background = Theme.BADGE_ARCHIVED_BG;
-            foreground = Theme.BADGE_ARCHIVED_FG;
-            tooltip = CreatorScreen.tr("card.badge.archived_tip");
-        } else if (missingFiles > 0) {
-            text = missingFiles == 1 ? CreatorScreen.tr("card.badge.missing_one")
-                    : CreatorScreen.tr("card.badge.missing", missingFiles);
-            background = Theme.BADGE_MISSING_BG;
-            foreground = Theme.BADGE_MISSING_FG;
-            tooltip = CreatorScreen.tr("card.badge.missing_tip");
-        } else if (record.draft()) {
-            text = CreatorScreen.tr("card.badge.draft");
-            background = Theme.BADGE_DRAFT_BG;
-            foreground = Theme.BADGE_DRAFT_FG;
-            tooltip = CreatorScreen.tr("card.badge.draft_tip");
-        } else {
-            text = CreatorScreen.tr("card.badge.published");
-            background = Theme.BADGE_PUBLISHED_BG;
-            foreground = Theme.BADGE_PUBLISHED_FG;
-        }
+    // The state badge at the band's top right, with what it means in its tooltip
+    private void drawBadge(GuiGraphics graphics, Font font, UiCardGrid.Card card, CollectionStatus status,
+                           boolean buttons) {
+        Component text = status.badge();
+        Component tooltip = status.badgeTooltip();
         // Never wider than the card: a long one in a narrow card shrinks its text
         int maxWidth = card.width() - 8;
         int width = Draw.badgeWidth(font, text, maxWidth);
@@ -404,7 +321,7 @@ public final class CollectionCard {
             // A narrow card puts the badge under the buttons rather than over them
             badgeY += UiButton.SMALL_HEIGHT + 3;
         }
-        Draw.badge(graphics, font, text, badgeX, badgeY, maxWidth, background, foreground);
+        Draw.badge(graphics, font, text, badgeX, badgeY, maxWidth, status.badgeBackground(), status.badgeForeground());
         if (tooltip != null && card.mouseX() >= badgeX && card.mouseX() < badgeX + width && card.mouseY() >= badgeY
                 && card.mouseY() < badgeY + 12) {
             UiTooltip.set(tooltip);

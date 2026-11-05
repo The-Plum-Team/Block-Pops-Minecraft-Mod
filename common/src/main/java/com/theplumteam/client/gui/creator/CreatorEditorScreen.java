@@ -353,29 +353,13 @@ public class CreatorEditorScreen extends CreatorScreen {
     /** Why the name, author, link or box cannot be saved as they are, or null when they can. */
     @Nullable
     Component identityProblem() {
-        if (this.draft.name().isBlank()) {
-            return tr("wizard.name_empty");
-        }
-        if (!WorldCollectionRecord.isPlainText(this.draft.name())) {
-            return tr("name_rule");
-        }
-        if (!WorldCollectionRecord.isPlainText(this.draft.author())) {
-            return tr("wizard.author_rule");
-        }
-        if (!this.draft.authorUrl().isEmpty() && !WorldCollectionRecord.isValidAuthorUrl(this.draft.authorUrl())) {
-            return tr("identity.url_rule");
-        }
-        return boxProblem();
+        return PublishCheck.identityProblem(this.draft);
     }
 
     /** Why the box cannot be saved as chosen, or null when it can. */
     @Nullable
     Component boxProblem() {
-        return switch (this.draft.boxMode()) {
-            case COLOR -> this.draft.boxColor() == null ? tr("identity.box_colour_missing") : null;
-            case TEXTURE -> this.draft.boxTexture() == null ? tr("identity.box_image_missing") : null;
-            case NONE -> null;
-        };
+        return PublishCheck.boxProblem(this.draft);
     }
 
     /** Why the draft cannot be sent now, with or without a publish, or null when it can. */
@@ -813,9 +797,7 @@ public class CreatorEditorScreen extends CreatorScreen {
 
     /** Whether the name, author and link can be saved, whatever the box. */
     boolean identityReady() {
-        return !this.draft.name().isBlank() && WorldCollectionRecord.isPlainText(this.draft.name())
-                && WorldCollectionRecord.isPlainText(this.draft.author())
-                && (this.draft.authorUrl().isEmpty() || WorldCollectionRecord.isValidAuthorUrl(this.draft.authorUrl()));
+        return PublishCheck.identityReady(this.draft);
     }
 
     private record Step(boolean done, Component text) {
