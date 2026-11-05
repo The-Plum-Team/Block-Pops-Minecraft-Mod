@@ -61,7 +61,8 @@ The screens share Quick Skin's look and its menu scale ([`docs/ui.md`](../ui.md)
 writes the player's GUI Scale option or calls `resizeDisplay()`: a menu sets only the window's
 scale while it is shown (`MenuGuiScale`), chosen from the window size, and puts the player's scale
 back in `removed()`; a dialog over a menu follows the menu's scale. Layouts derive from the
-canvas that scale gives, from about 400x300 up.
+canvas that scale gives, from about 400x300 up; the creator's screens from 427x240, and down to
+320x240 through their scrolling areas.
 
 Every text a player reads is a key of `assets/blockpops/lang/en_us.json`, never a literal in the
 code, and each other file of that folder translates all of its keys (CONTRIBUTING.md, Translations).
@@ -174,10 +175,12 @@ The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreato
 development environment, an operator, and World collections synced. Its entry points are the
 machine screen's **Creator** button, the Settings **Creator** tab and the client command
 `/blockpopscreator`, which is registered only in a development environment. Packaged E2E players
-run production code and are not operators, so no entry point may bypass that check. The creator
-previews files before they are sent. A draft's changes are sent a few seconds after they settle,
-and its files when the operator moves to another figure or tab, by a saver that outlives the editor
-screen until they are sent; a published collection's changes wait for Publish changes
+run production code and are not operators, so no entry point may bypass that check. Its screens
+are a sidebar and one content panel built on `SidebarScreen`; the editor's one explicit step is
+Publish, at the foot of its sidebar. The creator previews files before they are sent. A draft's
+changes are sent a few seconds after they settle, and its files when the operator moves to another
+figure or tab, by a saver that outlives the editor screen until they are sent; a published
+collection's changes wait for Publish changes
 ([ADR 0005](../architecture/decisions/0005-autosave-world-collection-drafts.md)). It decodes
 previewed files under the same content-addressed ids a synced copy gets, and materializes the draft
 into a client-only overlay of the collection registry under the reserved id

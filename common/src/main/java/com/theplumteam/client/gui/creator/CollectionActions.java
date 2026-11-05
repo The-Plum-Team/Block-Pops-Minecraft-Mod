@@ -57,6 +57,8 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
 final class CollectionActions {
     // Wide enough that the help's three paragraphs fit the height of Minecraft's default window
     private static final int HELP_WIDTH = 400;
+    // The width a dialog takes unless it asks for another
+    private static final int DIALOG_WIDTH = 300;
 
     private final CreatorScreen screen;
     @Nullable
@@ -233,8 +235,22 @@ final class CollectionActions {
 
     /** Asks before archiving a collection, which takes it out of the machines. */
     void confirmArchive(WorldCollectionRecord record) {
+        confirmArchive(record, null);
+    }
+
+    /**
+     * Asks before archiving a collection, with a line under the question, such as the editor's
+     * saying that the changes not published yet stay in it.
+     *
+     * @param note the line, in the muted grey; null for none
+     */
+    void confirmArchive(WorldCollectionRecord record, @Nullable Component note) {
         UiModal dialog = new UiModal(tr("home.archive_title", record.name()), tr("home.archive_body"))
                 .accent(DialogFrame.Accent.DANGER, Theme.ICON_ARCHIVE);
+        if (note != null) {
+            Paragraph line = new Paragraph(note, Theme.MUTED);
+            dialog.node(line, line.height(Minecraft.getInstance().font, dialogInner(DIALOG_WIDTH)));
+        }
         dialog.cancelButton(tr("cancel"));
         dialog.button(tr("home.archive_button"), UiButton.Style.DANGER, () -> setArchived(record, true));
         this.screen.openModal(dialog);
@@ -259,6 +275,21 @@ final class CollectionActions {
      * disabled until the operator types the collection's name.
      */
     void confirmPurge(WorldCollectionRecord record) {
+        confirmPurge(record, null, null);
+    }
+
+    /**
+     * Asks before deleting a collection for good, as {@link #confirmPurge(WorldCollectionRecord)}
+     * does, for a screen that has its own work on the collection to stop first, as the editor's
+     * saver of it.
+     *
+     * @param beforeSend runs once the operator confirmed, just before the deletion is sent; null
+     *                   for nothing
+     * @param onRefused  told why the server refused it, or why it could not be sent, in place of
+     *                   the toast; null for the toast
+     */
+    void confirmPurge(WorldCollectionRecord record, @Nullable Runnable beforeSend,
+                      @Nullable Consumer<Component> onRefused) {
         String name = record.name();
         UiModal dialog = new UiModal(tr("home.purge_title", name), tr("home.purge_body"))
                 .accent(DialogFrame.Accent.DANGER, PixelIcon.BIN);
@@ -266,9 +297,13 @@ final class CollectionActions {
         dialog.field(tr("home.purge_field", name), WorldContentLimits.MAX_NAME_LENGTH, "", Component.literal(name),
                 value -> confirm[0].disable(value.strip().equals(name.strip()) ? null : tr("home.purge_rule")));
         dialog.cancelButton(tr("cancel"));
-        confirm[0] = dialog.button(tr("home.purge_button"), UiButton.Style.DANGER,
-                () -> send(record.id(), new WorldCollectionEdit.Purge(record.id(), record.id()),
-                        () -> UiToast.show(tr("home.purged", name))));
+        confirm[0] = dialog.button(tr("home.purge_button"), UiButton.Style.DANGER, () -> {
+            if (beforeSend != null) {
+                beforeSend.run();
+            }
+            send(record.id(), new WorldCollectionEdit.Purge(record.id(), record.id()),
+                    () -> UiToast.show(tr("home.purged", name)), onRefused);
+        });
         confirm[0].disable(tr("home.purge_rule"));
         this.screen.openModal(dialog);
     }
@@ -282,7 +317,7 @@ final class CollectionActions {
         UiModal dialog = new UiModal(tr("home.help_title"), tr("home.help_body")).width(HELP_WIDTH)
                 .accent(DialogFrame.Accent.SETTINGS, Theme.ICON_HELP);
         // Each paragraph in a row of its own, as tall as its lines at the width the dialog takes
-        int inner = Math.max(160, Math.min(HELP_WIDTH, this.screen.width - 2 * Theme.SPACE_S)) - 2 * DialogFrame.PADDING;
+        int inner = dialogInner(HELP_WIDTH);
         Font font = Minecraft.getInstance().font;
         for (Paragraph paragraph : List.of(new Paragraph(tr("home.help_keys"), Theme.MUTED),
                 new Paragraph(quotaText(), Theme.FAINT))) {
@@ -290,6 +325,11 @@ final class CollectionActions {
         }
         dialog.cancelButton(tr("home.help_close"));
         this.screen.openModal(dialog);
+    }
+
+    // The width inside a dialog that asks for this width, as the screen lets it have it
+    private int dialogInner(int dialogWidth) {
+        return Math.max(160, Math.min(dialogWidth, this.screen.width - 2 * Theme.SPACE_S)) - 2 * DialogFrame.PADDING;
     }
 
     /**
@@ -327,25 +367,45 @@ final class CollectionActions {
      * @param onSaved      what follows once the server applied it, such as its own message
      */
     static void send(String collectionId, WorldCollectionEdit edit, Runnable onSaved) {
+        send(collectionId, edit, onSaved, null);
+    }
+
+    /**
+     * Sends one edit of a collection on its own, as {@link #send(String, WorldCollectionEdit, Runnable)}
+     * does, telling a refusal, a lost connection or a send that could not start to the screen
+     * rather than in the toast; a cancel is told too, with no message.
+     *
+     * @param onRefused told the message, or an empty one for a cancel; null for the toast
+     */
+    static void send(String collectionId, WorldCollectionEdit edit, Runnable onSaved,
+                     @Nullable Consumer<Component> onRefused) {
         CreatorRuns.Entry entry = CreatorRuns.begin(collectionId, edit);
         boolean sent = ClientWorldUploads.edit(edit, outcome -> {
             CreatorRuns.finish(entry, outcome.ok());
             if (outcome.ok()) {
                 onSaved.run();
-            } else if (outcome.disconnected()) {
-                UiToast.show(tr("disconnected"));
-            } else if (!outcome.cancelled()) {
-                UiToast.show(CreatorSave.message(outcome.status()));
+                return;
+            }
+            Component message = outcome.disconnected() ? tr("disconnected")
+                    : outcome.cancelled() ? Component.empty() : CreatorSave.message(outcome.status());
+            if (onRefused != null) {
+                onRefused.accept(message);
+            } else if (!message.getString().isEmpty()) {
+                UiToast.show(message);
             }
         });
         if (!sent) {
             CreatorRuns.forget(entry);
-            UiToast.show(tr("not_sent"));
+            if (onRefused != null) {
+                onRefused.accept(tr("not_sent"));
+            } else {
+                UiToast.show(tr("not_sent"));
+            }
         }
     }
 
-    // A paragraph of a dialog in a row of its own, wrapped to the row's width
-    private static final class Paragraph extends UiNode.Box {
+    /** A paragraph of a dialog in a row of its own, wrapped to the row's width, at most four lines. */
+    static final class Paragraph extends UiNode.Box {
         private static final int MAX_LINES = 4;
         private final Component text;
         private final int colour;

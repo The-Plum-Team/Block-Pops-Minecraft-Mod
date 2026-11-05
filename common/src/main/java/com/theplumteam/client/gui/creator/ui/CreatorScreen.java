@@ -79,6 +79,9 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
     private final List<UiNode> nodes = new ArrayList<>();
     // Text fields by name, so a rebuild can give the focus back to the same field
     private final Map<String, EditBox> textFields = new LinkedHashMap<>();
+    // The text field a rebuild gives the keyboard back to, which keeps its cursor rather than showing its start
+    @Nullable
+    private String refocusing;
     // The screen's own widgets the open dialog switched off, to switch back on when it closes
     private final List<AbstractWidget> disabledByModal = new ArrayList<>();
     @Nullable
@@ -207,10 +210,16 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
      */
     protected final EditBox textField(String name, int x, int y, int width, int maxLength, Component hint,
                                       String value, Consumer<String> responder) {
-        EditBox field = new UiField(this.font, x, y, width, UiField.HEIGHT, hint);
+        UiField field = new UiField(this.font, x, y, width, UiField.HEIGHT, hint);
         field.setMaxLength(maxLength);
-        field.setHint(hint);
+        // The hint is cut to the field, which a vanilla field would let run past its edge
+        field.setFittedHint(hint);
         field.setValue(value);
+        if (!name.equals(this.refocusing)) {
+            // A field shows the start of its text until it has the keyboard; the one that keeps
+            // the keyboard across a rebuild keeps its cursor where the operator was typing
+            field.showStart();
+        }
         field.setResponder(responder);
         this.addRenderableWidget(field);
         this.textFields.put(name, field);
@@ -232,12 +241,22 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
                 focusedName = field.getKey();
             }
         }
+        int cursor = focused instanceof EditBox box ? box.getCursorPosition() : 0;
         boolean modalField = this.modal != null && focused instanceof EditBox && this.modal.fields().contains(focused);
-        rebuildWidgets();
+        this.refocusing = focusedName;
+        try {
+            rebuildWidgets();
+        } finally {
+            this.refocusing = null;
+        }
         if (modalField) {
             setFocused(focused);
         } else if (focusedName != null && this.textFields.get(focusedName) != null) {
-            setFocused(this.textFields.get(focusedName));
+            EditBox again = this.textFields.get(focusedName);
+            setFocused(again);
+            int at = Math.min(cursor, again.getValue().length());
+            again.setCursorPosition(at);
+            again.setHighlightPos(at);
         }
         // init() forgets both; only a node still on the screen gets them back
         if (keyboardNode != null && this.nodes.contains(keyboardNode) && getFocused() == null) {
@@ -787,7 +806,12 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
     //? }
 
     private boolean handleScroll(double mouseX, double mouseY, double amount, BooleanSupplier vanilla) {
-        if (this.modal != null || this.popover != null) {
+        if (this.modal != null) {
+            // Only the dialog's own rows scroll, such as the test draw's figure grid
+            this.modal.scroll(mouseX, mouseY, amount);
+            return true;
+        }
+        if (this.popover != null) {
             return true;
         }
         if (this.menu != null) {

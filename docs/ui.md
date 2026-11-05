@@ -58,12 +58,12 @@ the option changes or the display resizes under them.
 | A mark over something not ready | `Stamp` (a rubber stamp in red ink, turned a little; Settings' Custom tab says IN DEVELOPMENT) |
 | A menu's opening | `HalftoneTransition` (a ring of black halftone dots travels from the middle outward, the world beyond it and the menu inside it) |
 | Text on a dark face | `UiText.draw`, `drawFitted` (cut with "..."), `wrap` (word-wrapped lines) |
-| A text field in the creator | `creator.ui.UiField`, an `EditBox` in a well |
+| A text field in the creator | `creator.ui.UiField`, an `EditBox` in a well; its hint is cut to the field (`setFittedHint`) and it shows the start of its text once it loses the keyboard |
 | A creator screen: a sidebar and one content panel | `creator.ui.SidebarScreen`: both panels laid out from the canvas (narrow under 360 content units wide, short under 300 high), one baseline for every bottom button, a heading with glyph buttons, a status slot, toasts over the content, and a budget of 15 models a screen |
 | A row of a creator sidebar | `creator.ui.UiSideRow` (icon or box, label, count, status, dot or chevron; selecting one plays the tab sound), in a `creator.ui.UiSideList` (selection by key, folds, arrow keys, lock, only the rows in sight drawn) |
 | A settings row that opens something or acts | `creator.ui.UiFoldRow` (label, faint hint, dot, chevron; red for what takes something away) |
 | An on/off setting in a creator list | `creator.ui.UiToggleRow`, a node on `ToggleRow`'s look that scrolls and can unfold content under it |
-| A dialog that stands on a button | `creator.ui.UiPopover`, opened with `CreatorScreen.openPopover`; it shares the one dialog slot with `UiModal`, keeps its buttons on the screen and runs `onClose` whatever closes it |
+| A dialog that stands on a button | `creator.ui.UiPopover`, opened with `CreatorScreen.openPopover`; it shares the one dialog slot with `UiModal`, keeps its buttons on the screen, can line up with its panel's edge (`leftEdge`) and runs `onClose` whatever closes it |
 | A collection's showcase | `creator.ui.UiStage` (its box and the figures that fit on a ledge, then a "+N" tile) |
 | A row of figure thumbnails | `creator.ui.UiThumbStrip` (selection, arrow keys, drag to reorder, a "+" tile, scrolling arrows) |
 

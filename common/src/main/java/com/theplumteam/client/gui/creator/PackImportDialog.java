@@ -1,6 +1,7 @@
 package com.theplumteam.client.gui.creator;
 
 import com.theplumteam.client.gui.creator.ui.CreatorScreen;
+import com.theplumteam.client.gui.creator.ui.Theme;
 import com.theplumteam.client.gui.creator.ui.UiButton;
 import com.theplumteam.client.gui.creator.ui.UiCheckbox;
 import com.theplumteam.client.gui.creator.ui.UiModal;
@@ -12,6 +13,7 @@ import com.theplumteam.server.worldcollections.WorldCollectionImporter;
 import com.theplumteam.worldcontent.WorldCollectionEdit;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldContentIds;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
@@ -36,6 +38,12 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  * deleted by another operator while the dialog is open, the update is refused rather than sent:
  * the server would take the pack for a new collection.
  *
+ * <p>An import over a collection waits while its changes are being saved, which it would race.
+ * Opened from the editor of that collection ({@link UpdateHooks}), the dialog follows the editor's
+ * saver as it finishes ({@link #recheck}); when the collection is published and has changes not
+ * published yet, it says they will be discarded and its button says so too, and the editor hears
+ * when the import goes and how it ended, in place of the toast's refusal.
+ *
  * <p>The toast says how the import went, and the screen is told the collection's id once the
  * server applied it.
  */
@@ -45,12 +53,34 @@ final class PackImportDialog {
         NEW, UPDATE
     }
 
+    /** What the editor of the collection an update imports over does around it. */
+    interface UpdateHooks {
+        /**
+         * How many changes not published yet the import would discard, as a published
+         * collection's; 0 for none.
+         */
+        int pendingChanges();
+
+        /** The operator confirmed the import, which is sent next. */
+        void sending();
+
+        /**
+         * How the import ended: null once the server applied it, else what it said or why it
+         * could not be sent, empty for a cancel.
+         */
+        void landed(@Nullable Component refusal);
+    }
+
     // The longest namespace:path WorldCollectionImporter accepts
     private static final int MAX_PACK_SOURCE = 64 + 1 + 32;
+    // The width the dialog asks for
+    private static final int WIDTH = 340;
 
     private final CreatorScreen screen;
     private final Mode mode;
     private final Consumer<String> onImported;
+    @Nullable
+    private final UpdateHooks hooks;
     // The name of the collection an update imports over, for the reason it is gone; empty for a new one
     private final String name;
     private String source = "";
@@ -62,15 +92,18 @@ final class PackImportDialog {
     private EditBox slugBox;
     @Nullable
     private UiButton confirm;
+    @Nullable
+    private UiModal dialog;
 
     private PackImportDialog(CreatorScreen screen, Mode mode, String slug, String name, boolean asDraft,
-                             Consumer<String> onImported) {
+                             Consumer<String> onImported, @Nullable UpdateHooks hooks) {
         this.screen = screen;
         this.mode = mode;
         this.slug = slug;
         this.name = name;
         this.asDraft = asDraft;
         this.onImported = onImported;
+        this.hooks = hooks;
     }
 
     /**
@@ -79,23 +112,40 @@ final class PackImportDialog {
      * @param onImported told the collection's id once the server applied the import
      */
     static PackImportDialog forNew(CreatorScreen screen, Consumer<String> onImported) {
-        return new PackImportDialog(screen, Mode.NEW, "", "", true, onImported);
+        return new PackImportDialog(screen, Mode.NEW, "", "", true, onImported, null);
     }
 
     /**
-     * The import of a pack over one existing collection, which keeps its slug and its state.
+     * The import of a pack over one existing collection, which keeps its slug and its state, as
+     * the editor of that collection offers it.
      *
      * @param onImported told the collection's id once the server applied the import
+     * @param hooks      what the editor does around the import; null for none
      */
     static PackImportDialog forUpdate(CreatorScreen screen, WorldCollectionRecord record,
-                                      Consumer<String> onImported) {
-        return new PackImportDialog(screen, Mode.UPDATE, record.slug(), record.name(), record.draft(), onImported);
+                                      Consumer<String> onImported, @Nullable UpdateHooks hooks) {
+        return new PackImportDialog(screen, Mode.UPDATE, record.slug(), record.name(), record.draft(), onImported,
+                hooks);
+    }
+
+    /** Whether the dialog is open on its screen now. */
+    boolean isOpen() {
+        return this.dialog != null && this.dialog.isOpen();
+    }
+
+    /**
+     * Checks again whether the import can go, as the editor's saver finishes a save it waited
+     * for; the screen calls this while the dialog is open.
+     */
+    void recheck() {
+        check();
     }
 
     /** Opens the dialog over the screen. */
     void open() {
-        UiModal dialog = new UiModal(tr("home.import_title"), tr("home.import_body")).width(340)
+        UiModal dialog = new UiModal(tr("home.import_title"), tr("home.import_body")).width(WIDTH)
                 .accent(DialogFrame.Accent.CREATE, PixelIcon.PLUS);
+        this.dialog = dialog;
         dialog.field(tr("home.import_source"), MAX_PACK_SOURCE, "", tr("home.import_source_hint"), value -> {
             this.source = value.strip();
             if (this.mode == Mode.NEW && !this.slugTyped && this.slugBox != null) {
@@ -121,8 +171,18 @@ final class PackImportDialog {
             this.slugBox.setEditable(false);
             this.slugBox.active = false;
         }
+        int discarded = this.hooks != null ? this.hooks.pendingChanges() : 0;
+        if (discarded > 0) {
+            // A published collection's changes not published yet go with the import
+            Component line = discarded == 1 ? tr("options.import_discard_one")
+                    : tr("options.import_discard", discarded);
+            CollectionActions.Paragraph note = new CollectionActions.Paragraph(line, Theme.AMBER);
+            int inner = Math.max(160, Math.min(WIDTH, this.screen.width - 2 * Theme.SPACE_S)) - 2 * DialogFrame.PADDING;
+            dialog.node(note, note.height(Minecraft.getInstance().font, inner));
+        }
         dialog.cancelButton(tr("cancel"));
-        this.confirm = dialog.button(tr("home.import_button"), UiButton.Style.PRIMARY, this::send);
+        this.confirm = dialog.button(tr(discarded > 0 ? "options.import_discard_button" : "home.import_button"),
+                UiButton.Style.PRIMARY, this::send);
         check();
         this.screen.openModal(dialog);
     }
@@ -183,10 +243,17 @@ final class PackImportDialog {
         }
         String id = WorldContentIds.collectionId(this.slug);
         String shown = this.source;
+        UpdateHooks told = this.hooks;
+        if (told != null) {
+            told.sending();
+        }
         CollectionActions.send(id, new WorldCollectionEdit.ImportPack(this.slug, parts[0], parts[1], this.asDraft),
                 () -> {
                     this.onImported.accept(id);
                     UiToast.show(tr("home.imported", shown));
-                });
+                    if (told != null) {
+                        told.landed(null);
+                    }
+                }, told == null ? null : told::landed);
     }
 }

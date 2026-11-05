@@ -6,6 +6,7 @@ import com.theplumteam.client.gui.creator.ui.Draw;
 import com.theplumteam.client.gui.creator.ui.SidebarScreen;
 import com.theplumteam.client.gui.creator.ui.Theme;
 import com.theplumteam.client.gui.creator.ui.UiButton;
+import com.theplumteam.client.gui.creator.ui.UiField;
 import com.theplumteam.client.gui.creator.ui.UiInput;
 import com.theplumteam.client.gui.creator.ui.UiMenu;
 import com.theplumteam.client.gui.creator.ui.UiNode;
@@ -906,6 +907,7 @@ public class CreatorHomeScreen extends SidebarScreen {
         if (this.searchBox != null) {
             focusNode(null);
             setFocused(this.searchBox);
+            UiField.cursorToEnd(this.searchBox);
         }
     }
 
@@ -1029,6 +1031,7 @@ public class CreatorHomeScreen extends SidebarScreen {
     void focusField(EditBox field) {
         focusNode(null);
         setFocused(field);
+        UiField.cursorToEnd(field);
     }
 
     /**

@@ -7,6 +7,7 @@ import com.theplumteam.client.gui.creator.ui.Theme;
 import com.theplumteam.client.gui.creator.ui.UiButton;
 import com.theplumteam.client.gui.creator.ui.UiCardGrid;
 import com.theplumteam.client.gui.creator.ui.UiDropZone;
+import com.theplumteam.client.gui.creator.ui.UiField;
 import com.theplumteam.client.gui.creator.ui.UiInput;
 import com.theplumteam.client.gui.creator.ui.UiMenu;
 import com.theplumteam.client.gui.creator.ui.UiNode;
@@ -49,7 +50,7 @@ import java.util.function.Supplier;
 import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
 
 /**
- * The editor's second tab, "Figures": every figure of the draft as a grid of cards (see
+ * The editor's first tab, "Figures": every figure of the draft as a grid of cards (see
  * {@link FigureCard}), drawn from the editor's live preview, so figures and files not yet saved
  * show at once.
  *
@@ -103,6 +104,14 @@ final class FiguresPage implements EditorPage {
     private final UiButton duplicateAll;
     private final UiButton clearSelection;
     private final FigureInspector inspector;
+    // On a narrow panel the grid and the inspector take turns at its full width: the inspector
+    // while one figure is selected, with a link back to the grid
+    private final UiButton backToGrid;
+    private boolean stacked;
+    private boolean inspecting;
+    // The selection changed which of the two a stacked page shows, so it is built again next tick
+    private boolean modeStale;
+    private boolean building;
     @Nullable
     private UiCardGrid<FigureDraft> grid;
     private int gridCardWidth;
@@ -139,7 +148,7 @@ final class FiguresPage implements EditorPage {
         this.dropCell = new DropCell(this.dropZone);
         this.severalButton = new UiButton(tr("figures.add_several"), UiButton.Style.SECONDARY,
                 () -> openBulkAdd(List.of()));
-        this.chips = new FilterChips(this::chipLabels, index -> {
+        this.chips = new FilterChips(this::chipLabels, () -> this.counts, index -> {
             this.filter = Filter.values()[index];
             refreshItems();
         });
@@ -152,6 +161,8 @@ final class FiguresPage implements EditorPage {
         this.clearSelection = small(Component.literal("✕"), UiButton.Style.LINK, this::clearSelection);
         this.clearSelection.setTooltip(tr("figures.clear_tip"));
         this.inspector = new FigureInspector(editor, this);
+        this.backToGrid = new UiButton(Component.literal("‹ ").append(tr("side.tab.figures")), UiButton.Style.LINK,
+                this::clearSelection);
     }
 
     private static UiButton small(Component label, UiButton.Style style, Runnable action) {
@@ -164,16 +175,42 @@ final class FiguresPage implements EditorPage {
 
     @Override
     public void build(UiNode.Rect area) {
+        this.building = true;
+        try {
+            buildPage(area);
+        } finally {
+            this.building = false;
+        }
+    }
+
+    private void buildPage(UiNode.Rect area) {
         Font font = Minecraft.getInstance().font;
-        int gridWidth = Math.max(MIN_GRID_WIDTH, Math.min(area.width() - COLUMN_GAP - MIN_PANEL_WIDTH,
-                area.width() * GRID_SHARE / 100));
+        this.modeStale = false;
+        this.stacked = area.width() < MIN_GRID_WIDTH + COLUMN_GAP + MIN_PANEL_WIDTH;
+        this.inspecting = this.stacked && this.grid != null && single() != null;
+        if (this.inspecting) {
+            // The one figure selected takes the whole panel, under the way back to the grid
+            int backWidth = font.width(this.backToGrid.label()) + 4;
+            this.backToGrid.at(area.x(), area.y(), Math.min(backWidth, area.width()), 10);
+            this.editor.add(this.backToGrid);
+            this.searchBox = null;
+            this.gridArea = UiNode.Rect.EMPTY;
+            this.panel = new UiNode.Rect(area.x(), area.y() + 14, area.width(), Math.max(0, area.height() - 14));
+            this.inspector.build(this.panel);
+            refreshItems();
+            return;
+        }
+        int gridWidth = this.stacked ? area.width() : Math.max(MIN_GRID_WIDTH, Math.min(area.width() - COLUMN_GAP
+                - MIN_PANEL_WIDTH, area.width() * GRID_SHARE / 100));
         gridWidth = Math.min(gridWidth, area.width());
         int left = area.x();
         int right = left + gridWidth;
         int y = area.y();
 
-        // Toolbar: the two ways to add, then the search filling the rest
-        int addWidth = CreatorEditorScreen.buttonWidth(font, this.addButton);
+        // Toolbar: the two ways to add, then the search filling the rest. Adding is the green
+        // action only while the sidebar's Publish is not
+        this.addButton.setStyle(addStyle());
+        int addWidth = this.addButton.naturalWidth();
         this.addButton.at(left, y, addWidth, UiButton.HEIGHT);
         int severalWidth = UiButton.widthFor(font, this.severalButton.label(), false);
         this.severalButton.at(left + addWidth + GAP, y, severalWidth, UiButton.HEIGHT);
@@ -208,10 +245,14 @@ final class FiguresPage implements EditorPage {
             this.editor.add(button);
         }
 
-        // The side panel: the inspector of the selected figure
-        int panelX = right + COLUMN_GAP;
-        this.panel = new UiNode.Rect(panelX, area.y(), Math.max(0, area.right() - panelX), area.height());
-        this.inspector.build(this.panel);
+        // The side panel: the inspector of the selected figure, beside the grid where it has room
+        if (this.stacked) {
+            this.panel = UiNode.Rect.EMPTY;
+        } else {
+            int panelX = right + COLUMN_GAP;
+            this.panel = new UiNode.Rect(panelX, area.y(), Math.max(0, area.right() - panelX), area.height());
+            this.inspector.build(this.panel);
+        }
         refreshItems();
     }
 
@@ -288,15 +329,25 @@ final class FiguresPage implements EditorPage {
             }
         }
         this.problems = found;
-        long bytes = draft.forecast().collectionBytes();
+        long bytes = this.editor.forecast().collectionBytes();
         this.counter = tr("card.joined", tr("figures.count", draft.figures().size(), WorldContentLimits.MAX_FIGURES),
                 UiQuotaMeter.text((int) Math.min(Integer.MAX_VALUE, (bytes + 1023) / 1024),
                         (int) (WorldContentLimits.MAX_COLLECTION_BYTES / 1024)));
         Component full = draft.isFull() ? tr("figures.full", WorldContentLimits.MAX_FIGURES) : null;
+        if (this.addButton.style() != addStyle() && this.searchBox != null) {
+            // Publish became the green action, or stopped being it: the toolbar is measured again
+            this.editor.rebuildPage();
+            return;
+        }
         this.addButton.disable(full);
         this.severalButton.disable(full);
         this.dropZone.disable(full);
         refreshItems();
+    }
+
+    // Green while the sidebar's foot is not, so the screen has one green action
+    private UiButton.Style addStyle() {
+        return this.editor.footerIsPrimary() ? UiButton.Style.SECONDARY : UiButton.Style.PRIMARY;
     }
 
     private static boolean accepts(Filter which, FigureDraft figure, boolean hasProblem) {
@@ -466,6 +517,10 @@ final class FiguresPage implements EditorPage {
         }
         this.inspected = figure;
         this.inspectedId = figureId;
+        if (this.stacked && !this.building && (figure != null) != this.inspecting) {
+            // A stacked page shows the inspector for one figure and the grid otherwise
+            this.modeStale = true;
+        }
     }
 
     /** The new figure whose name field has the keyboard, or null. */
@@ -692,15 +747,42 @@ final class FiguresPage implements EditorPage {
 
     @Override
     public void tick() {
+        if (this.modeStale) {
+            this.editor.rebuildPage();
+        }
         if (this.focusNameSoon) {
             this.focusNameSoon = false;
             this.inspector.focusName();
         }
     }
 
+    /** Escape on a stacked page showing one figure goes back to the grid. */
+    @Override
+    public boolean escape() {
+        if (this.inspecting) {
+            clearSelection();
+            return true;
+        }
+        return false;
+    }
+
     @Override
     public void drawContents(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.partialTick = partialTick;
+        if (this.inspecting) {
+            this.inspector.drawContents(graphics);
+            return;
+        }
+        if (this.stacked) {
+            // The inspector is not on the page while the grid takes it
+            drawGridContents(graphics);
+            return;
+        }
+        drawGridContents(graphics);
+        this.inspector.drawContents(graphics);
+    }
+
+    private void drawGridContents(GuiGraphics graphics) {
         Font font = Minecraft.getInstance().font;
         CreatorDraft draft = this.editor.draft();
 
@@ -733,7 +815,6 @@ final class FiguresPage implements EditorPage {
             Draw.centred(graphics, font, tr("figures.no_match").getString(), this.gridArea.centerX(),
                     this.gridArea.y() + FigureCard.HEIGHT + 12, this.gridArea.width(), Theme.MUTED);
         }
-        this.inspector.drawContents(graphics);
     }
 
     // Input
@@ -743,6 +824,7 @@ final class FiguresPage implements EditorPage {
         if (key.ctrl() && key.is(InputConstants.KEY_F) && this.searchBox != null) {
             this.editor.focusNode(null);
             this.editor.setFocused(this.searchBox);
+            UiField.cursorToEnd(this.searchBox);
             return true;
         }
         // Only asked while no field or node has the keyboard, which keeps the arrows of each
@@ -751,26 +833,57 @@ final class FiguresPage implements EditorPage {
             step(key.is(InputConstants.KEY_LEFT) ? -1 : 1);
             return true;
         }
+        if (!key.ctrl() && !key.shift() && key.is(InputConstants.KEY_DELETE) && single() != null) {
+            removeSelected();
+            return true;
+        }
         return false;
+    }
+
+    /**
+     * Delete on the one selected figure: what the inspector's red action does with it, each with
+     * a toast that undoes it. A figure never saved is discarded, a draft collection's saved
+     * figure deleted, and a published or archived collection's figure, which players may own,
+     * only retired from the draw.
+     */
+    private void removeSelected() {
+        FigureDraft figure = single();
+        if (figure == null) {
+            return;
+        }
+        if (figure.isNew()) {
+            discard();
+        } else if (this.editor.draft().isDraftCollection()) {
+            this.inspector.deleteShown();
+        } else if (figure.enabled()) {
+            setEnabled(false);
+        }
     }
 
     /**
      * The chips that pick which figures the grid shows, drawn as the editor's switches are: small
      * raised buttons, the chosen one on the slate of a selected tab inside the blue selection
-     * border. Given less room than their labels need, they share it and cut them.
+     * border. Given less room than their words need, each chip shows an icon and its count, its
+     * words in its tooltip, so no count is cut; with less room still they share it.
      */
     private static final class FilterChips extends UiNode.Box {
         static final int HEIGHT = 16;
         private static final int PADDING = 6;
         private static final int CHIP_GAP = 3;
+        private static final int ICON_GAP = 3;
+        // One per filter, in the filters' order
+        private static final String[][] ICONS = {PixelIcon.LIST, PixelIcon.PLAYER, PixelIcon.BOX, Theme.ICON_ARCHIVE,
+                Theme.ICON_WARNING};
 
         private final Supplier<List<Component>> labels;
+        private final Supplier<int[]> counts;
         private final IntConsumer onSelect;
         private int selected;
         private int room = -1;
 
-        FilterChips(Supplier<List<Component>> labels, IntConsumer onSelect) {
+        FilterChips(Supplier<List<Component>> labels, Supplier<int[]> counts, IntConsumer onSelect) {
             this.labels = labels;
+            this.counts = counts;
             this.onSelect = onSelect;
             this.height = HEIGHT;
         }
@@ -793,16 +906,40 @@ final class FiguresPage implements EditorPage {
             return Math.max(0, total - CHIP_GAP);
         }
 
+        private int available() {
+            return room < 0 ? width : Math.min(width, room);
+        }
+
+        // Whether the chips show their icons and counts rather than their words
+        private boolean compact() {
+            return naturalWidth() > available();
+        }
+
+        private String count(int index) {
+            int[] all = counts.get();
+            return index < all.length ? String.valueOf(all[index]) : "";
+        }
+
+        private int compactWidth(Font font, int index) {
+            return PixelIcon.width(ICONS[index % ICONS.length]) + ICON_GAP + font.width(count(index)) + 2 * PADDING;
+        }
+
         private int[] widths(List<Component> shown) {
             Font font = Minecraft.getInstance().font;
-            int available = room < 0 ? width : Math.min(width, room);
+            int available = available();
             int[] widths = new int[shown.size()];
-            int natural = naturalWidth();
+            boolean compact = compact();
+            int natural = 0;
             for (int i = 0; i < shown.size(); i++) {
-                int own = font.width(shown.get(i)) + 2 * PADDING;
-                widths[i] = natural <= available ? own
-                        : Math.max(12, own * (available - CHIP_GAP * (shown.size() - 1)) / Math.max(1, natural
-                        - CHIP_GAP * (shown.size() - 1)));
+                widths[i] = compact ? compactWidth(font, i) : font.width(shown.get(i)) + 2 * PADDING;
+                natural += widths[i] + (i > 0 ? CHIP_GAP : 0);
+            }
+            if (natural > available) {
+                // Less room than even the icons need: they share what there is
+                int gaps = CHIP_GAP * (shown.size() - 1);
+                for (int i = 0; i < shown.size(); i++) {
+                    widths[i] = Math.max(12, widths[i] * (available - gaps) / Math.max(1, natural - gaps));
+                }
             }
             return widths;
         }
@@ -812,6 +949,7 @@ final class FiguresPage implements EditorPage {
             Font font = Minecraft.getInstance().font;
             List<Component> shown = labels.get();
             int[] widths = widths(shown);
+            boolean compact = compact();
             int left = x;
             for (int i = 0; i < shown.size(); i++) {
                 boolean on = i == selected;
@@ -820,10 +958,25 @@ final class FiguresPage implements EditorPage {
                 Draw.raised(graphics, left, y, widths[i], height,
                         on ? Theme.SELECTED : lit ? Surfaces.BORDER_HOVER : Surfaces.BORDER,
                         on ? Theme.HIGHLIGHT : lit ? Surfaces.FACE_HOVER : Surfaces.FACE, 1);
-                String text = Draw.cut(font, shown.get(i).getString(), widths[i] - 6);
-                Draw.string(graphics, font, text, left + (widths[i] - font.width(text)) / 2, y + (height - 9) / 2,
-                        on || lit ? Theme.TEXT : Theme.CONTROL_TEXT);
-                if (over && !text.equals(shown.get(i).getString())) {
+                int colour = on || lit ? Theme.TEXT : Theme.CONTROL_TEXT;
+                boolean cut;
+                if (compact) {
+                    String[] icon = ICONS[i % ICONS.length];
+                    String number = count(i);
+                    int content = PixelIcon.width(icon) + ICON_GAP + font.width(number);
+                    int iconX = left + Math.max(2, (widths[i] - content) / 2);
+                    PixelIcon.draw(graphics, icon, iconX, y + (height - icon.length) / 2, colour);
+                    int numberX = iconX + PixelIcon.width(icon) + ICON_GAP;
+                    String fitted = Draw.cut(font, number, Math.max(0, left + widths[i] - 2 - numberX));
+                    Draw.string(graphics, font, fitted, numberX, y + (height - 9) / 2, colour);
+                    cut = true;
+                } else {
+                    String text = Draw.cut(font, shown.get(i).getString(), widths[i] - 6);
+                    Draw.string(graphics, font, text, left + (widths[i] - font.width(text)) / 2, y + (height - 9) / 2,
+                            colour);
+                    cut = !text.equals(shown.get(i).getString());
+                }
+                if (over && cut) {
                     UiTooltip.set(shown.get(i));
                 }
                 left += widths[i] + CHIP_GAP;

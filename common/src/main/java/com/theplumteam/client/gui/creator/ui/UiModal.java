@@ -25,11 +25,12 @@ import java.util.function.Consumer;
  * fields and other nodes, and a centred row of buttons with pixel labels. Unless told otherwise
  * ({@link #accent}), a dialog with a red button is a red one with a bin, and any other the
  * collections' purple. A node in a row gets the drags and the release of a press it took, so it
- * can be a slider or a colour square. Escape, the X, a click outside the card and a cancel button
- * all cancel it; Enter presses its last button, the main action, unless a default button was named
- * ({@link #defaultButton}), which Enter presses instead and which is outlined. While it is open nothing below
- * it takes input, and {@link CreatorScreen} disables the screen's own vanilla widgets. Choosing a
- * button closes the dialog before its action runs, so the action may open another one.
+ * can be a slider or a colour square, and the wheel over a row scrolls it, as a figure grid
+ * would. Escape, the X, a click outside the card and a cancel button all cancel it; Enter presses
+ * its last button, the main action, unless a default button was named ({@link #defaultButton}),
+ * which Enter presses instead and which is outlined. While it is open nothing below it takes
+ * input, and {@link CreatorScreen} disables the screen's own vanilla widgets. Choosing a button
+ * closes the dialog before its action runs, so the action may open another one.
  */
 public class UiModal implements UiNode {
     private static final int PADDING = DialogFrame.PADDING;
@@ -66,6 +67,8 @@ public class UiModal implements UiNode {
     private UiButton defaultButton;
     @Nullable
     private Runnable onCancel;
+    // A dialog that waits for something and cannot be cancelled: no X, and Escape and a click outside do nothing
+    private boolean blocking;
     private int preferredWidth = 300;
     @Nullable
     private DialogFrame.Accent accent;
@@ -108,6 +111,16 @@ public class UiModal implements UiNode {
         return this;
     }
 
+    /**
+     * Makes the dialog one that says something is on its way and cannot be stopped from it: it
+     * has no X, and Escape and a click outside leave it open. The screen closes it once the wait
+     * is over.
+     */
+    public UiModal blocking() {
+        this.blocking = true;
+        return this;
+    }
+
     /** Adds a button that closes the dialog and then runs its action. */
     public UiButton button(Component label, UiButton.Style style, Runnable action) {
         UiButton button = new UiButton(label, style, () -> {
@@ -142,9 +155,10 @@ public class UiModal implements UiNode {
      */
     public EditBox field(Component label, int maxLength, String value, Component hint, Consumer<String> responder) {
         Font font = Minecraft.getInstance().font;
-        EditBox box = new UiField(font, 0, 0, 100, FIELD_HEIGHT, label);
+        UiField box = new UiField(font, 0, 0, 100, FIELD_HEIGHT, label);
         box.setMaxLength(maxLength);
-        box.setHint(hint);
+        // Cut to the field once the dialog has placed it
+        box.setFittedHint(hint);
         box.setValue(value);
         box.setResponder(responder);
         fields.add(new Field(label, box));
@@ -178,6 +192,14 @@ public class UiModal implements UiNode {
 
     void attach(@Nullable CreatorScreen host) {
         this.host = host;
+    }
+
+    /**
+     * Whether the dialog is open on a screen now: false once it closed, by its buttons, a cancel,
+     * or another dialog or popover opened over the screen.
+     */
+    public boolean isOpen() {
+        return host != null;
     }
 
     /** Closes the dialog without running its cancel action. */
@@ -236,9 +258,13 @@ public class UiModal implements UiNode {
         this.height = Math.min(frame + contentHeight + 2 * PADDING, screenHeight - 2 * Theme.SPACE_S);
         this.x = (screenWidth - width) / 2;
         this.y = Math.max(Theme.SPACE_S, (screenHeight - height) / 2);
-        this.closeButton = DialogCloseButton.forDialog(x, y, width, CommonComponents.GUI_CANCEL, button -> cancel());
-        // Its tooltip is the creator's own, so it is drawn above the dialog
-        this.closeButton.setTooltip(null);
+        if (blocking) {
+            this.closeButton = null;
+        } else {
+            this.closeButton = DialogCloseButton.forDialog(x, y, width, CommonComponents.GUI_CANCEL, button -> cancel());
+            // Its tooltip is the creator's own, so it is drawn above the dialog
+            this.closeButton.setTooltip(null);
+        }
 
         int top = DialogFrame.bodyTop(y) + PADDING + bodyLines.size() * Theme.LINE_HEIGHT;
         if (bodyLines.isEmpty()) {
@@ -341,7 +367,9 @@ public class UiModal implements UiNode {
     public boolean click(UiInput.Click click) {
         pressedRow = null;
         if (!bounds().contains(click.x(), click.y())) {
-            cancel();
+            if (!blocking) {
+                cancel();
+            }
             return true;
         }
         if (closeButton != null && click.left() && closeButton.isMouseOver(click.x(), click.y())) {
@@ -375,10 +403,23 @@ public class UiModal implements UiNode {
         return pressed != null && pressed.release(click);
     }
 
+    /** The wheel scrolls the row under the pointer, such as a grid of figures a row shows. */
+    @Override
+    public boolean scroll(double mouseX, double mouseY, double amount) {
+        for (Row row : rows) {
+            if (row.node().isMouseOver(mouseX, mouseY) && row.node().scroll(mouseX, mouseY, amount)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public boolean key(UiInput.Key key) {
         if (key.escape()) {
-            cancel();
+            if (!blocking) {
+                cancel();
+            }
             return true;
         }
         if (key.enter()) {

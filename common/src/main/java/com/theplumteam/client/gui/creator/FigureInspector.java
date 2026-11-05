@@ -277,6 +277,7 @@ final class FigureInspector {
         if (box != null && box.visible) {
             this.editor.focusNode(null);
             this.editor.setFocused(box);
+            UiField.cursorToEnd(box);
         }
     }
 
@@ -552,6 +553,11 @@ final class FigureInspector {
         String name = shown.name().isBlank() ? shown.id() : shown.name();
         this.editor.undoToast(tr("inspector.kind_changed", name,
                 tr(kind == Kind.SKIN ? "figures.kind_skin" : "figures.kind_model")));
+    }
+
+    /** Deletes the figure shown, as its red action does, with a toast that undoes it. */
+    void deleteShown() {
+        delete();
     }
 
     private void delete() {

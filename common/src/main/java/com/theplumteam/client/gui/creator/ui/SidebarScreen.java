@@ -1,5 +1,6 @@
 package com.theplumteam.client.gui.creator.ui;
 
+import com.theplumteam.client.gui.style.PixelFont;
 import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.style.UiText;
@@ -57,6 +58,8 @@ public abstract class SidebarScreen extends CreatorScreen {
     public static final int GLYPH_STEP = 17;
     /** The heading glyph's width before the heading of a screen that goes back. */
     private static final int BACK_ROOM = 14;
+    // On a narrow canvas the heading takes a little more of its row, so a short name is not cut
+    private static final int BACK_ROOM_NARROW = 10;
     private static final int MAX_PANEL_WIDTH = 900;
     private static final int MAX_PANEL_HEIGHT = 520;
     private static final int MIN_SIDE_WIDTH = 116;
@@ -226,7 +229,8 @@ public abstract class SidebarScreen extends CreatorScreen {
         UiButton button = new UiButton(Component.empty(), UiButton.Style.SECONDARY, action);
         button.setGlyph(glyph);
         button.setTooltip(tooltip);
-        int buttonX = this.side.right() - 8 - GLYPH_SIZE - this.headingGlyphs.size() * GLYPH_STEP;
+        // On a narrow canvas they stand as far right as the rule under them reaches, leaving the name more room
+        int buttonX = this.side.right() - (this.narrow ? 6 : 8) - GLYPH_SIZE - this.headingGlyphs.size() * GLYPH_STEP;
         button.at(buttonX, this.side.y() + HEADING_MIDDLE - GLYPH_SIZE / 2, GLYPH_SIZE, GLYPH_SIZE);
         this.headingGlyphs.add(button);
         return addNode(button);
@@ -514,7 +518,7 @@ public abstract class SidebarScreen extends CreatorScreen {
         private int textRight() {
             int right = side.right() - 8;
             for (UiButton glyph : headingGlyphs) {
-                right = Math.min(right, glyph.bounds().x() - 4);
+                right = Math.min(right, glyph.bounds().x() - (narrow ? 2 : 4));
             }
             return right;
         }
@@ -527,19 +531,28 @@ public abstract class SidebarScreen extends CreatorScreen {
 
         @Override
         public void draw(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-            boolean hovered = back != null && hovered(mouseX, mouseY);
-            int textX = side.x() + 10;
+            boolean hovered = hovered(mouseX, mouseY);
+            int textX = side.x() + (narrow ? 7 : 10);
             int middle = side.y() + HEADING_MIDDLE;
             if (back != null) {
                 // The arrow lights up in the selection's blue under the mouse, as a link would
                 PixelIcon.draw(graphics, PixelIcon.ARROW_LEFT, textX, middle - 3,
                         hovered ? Theme.SELECTED_LIGHT : Theme.TEXT_SOFT);
-                textX += BACK_ROOM;
-                if (hovered && backTooltip != null) {
+                textX += narrow ? BACK_ROOM_NARROW : BACK_ROOM;
+            }
+            int room = Math.max(0, textRight() - textX);
+            Draw.heading(graphics, text, textX, middle, room, 1.0f, Theme.TEXT);
+            if (hovered) {
+                // The whole name when it was cut, over where the arrow goes
+                boolean cut = PixelFont.width(text, PixelFont.crispScale(1.0f)) > room;
+                if (cut && backTooltip != null) {
+                    UiTooltip.set(List.of(text, backTooltip));
+                } else if (cut) {
+                    UiTooltip.set(text);
+                } else if (back != null && backTooltip != null) {
                     UiTooltip.set(backTooltip);
                 }
             }
-            Draw.heading(graphics, text, textX, middle, Math.max(0, textRight() - textX), 1.0f, Theme.TEXT);
             graphics.fill(side.x() + 6, side.y() + RULE_Y, side.right() - 6, side.y() + RULE_Y + 1,
                     Surfaces.BORDER_DISABLED);
         }

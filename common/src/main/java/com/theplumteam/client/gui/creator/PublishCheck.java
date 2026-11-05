@@ -89,6 +89,14 @@ final class PublishCheck {
 
     /** The check of a draft as it is now. */
     static PublishCheck of(CreatorDraft draft) {
+        return of(draft, draft.forecast());
+    }
+
+    /**
+     * The check of a draft as it is now, with its forecast already worked out, which is the
+     * check's costly part: the editor works it out once per change.
+     */
+    static PublishCheck of(CreatorDraft draft, CreatorDraft.Forecast forecast) {
         List<Item> items = new ArrayList<>();
         Component fix = tr("publish.fix");
 
@@ -160,7 +168,6 @@ final class PublishCheck {
         }
 
         // What it takes on the server: its definition and its files
-        CreatorDraft.Forecast forecast = draft.forecast();
         int recordKiB = (forecast.recordBytes() + 1023) / 1024;
         if (forecast.recordBytes() > WorldContentLimits.RECORD_BYTES) {
             items.add(new Item(Mark.BLOCKER, tr("editor.too_big", recordKiB, WorldContentLimits.RECORD_BYTES / 1024),

@@ -74,6 +74,8 @@ public class UiPopover implements UiNode {
     private DialogFrame.Accent accent = DialogFrame.Accent.SETTINGS;
     private String[] icon = PixelIcon.BOX;
     private int preferredWidth = PREFERRED_WIDTH;
+    // The popover's left edge stays at or right of this, as a panel's edge it lines up with
+    private int leftEdge = SCREEN_EDGE;
     private final List<Row> rows = new ArrayList<>();
     private final List<UiButton> buttons = new ArrayList<>();
     // The buttons the filler added, which go when it lays the body out again
@@ -131,6 +133,16 @@ public class UiPopover implements UiNode {
     /** The width the popover would like, kept within the screen; 300 unless set. */
     public UiPopover width(int width) {
         this.preferredWidth = width;
+        return this;
+    }
+
+    /**
+     * Keeps the popover's left edge at or right of this x, so it lines up with the panel its
+     * anchor is on rather than hanging past it; the screen's edge unless set. The tail still
+     * points at the anchor.
+     */
+    public UiPopover leftEdge(int x) {
+        this.leftEdge = x;
         return this;
     }
 
@@ -344,7 +356,9 @@ public class UiPopover implements UiNode {
         }
         int bodyHeight = bodyHeight(font, inner, limit, shownRows) + (overflow != null ? LINE_HEIGHT : 0);
         this.height = frame + bodyHeight;
-        this.x = Math.max(SCREEN_EDGE, Math.min(at.centerX() - width / 2, screenWidth - width - SCREEN_EDGE));
+        this.x = Math.max(Math.max(SCREEN_EDGE, leftEdge), Math.min(at.centerX() - width / 2,
+                screenWidth - width - SCREEN_EDGE));
+        this.x = Math.min(this.x, Math.max(SCREEN_EDGE, screenWidth - width - SCREEN_EDGE));
         this.tail = standing;
         this.y = standing ? at.y() - TAIL - height : SCREEN_EDGE;
 

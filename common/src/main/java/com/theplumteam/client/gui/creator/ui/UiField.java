@@ -1,6 +1,7 @@
 package com.theplumteam.client.gui.creator.ui;
 
 import com.theplumteam.client.gui.util.GuiPose;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -16,12 +17,20 @@ import net.minecraft.network.chat.Component;
  *
  * <p>The position and width given to the constructor and to {@link #place} are the well's; the
  * vanilla field's own {@code getX()} and {@code getWidth()} are the text area's.
+ *
+ * <p>A hint set with {@link #setFittedHint} is cut to the text area, which a vanilla field would
+ * let run past its edge, and a field that loses the keyboard shows the start of its text again
+ * rather than where the cursor last was ({@link #showStart}).
  */
 public class UiField extends EditBox {
     /** Room between the well's outside and the text, on the left and the right. */
     public static final int TEXT_PADDING = 5;
     public static final int HEIGHT = 20;
     private static final int LINE_HEIGHT = 8;
+    // The whole hint, and the width it was last cut to
+    private Component fullHint = Component.empty();
+    private int hintWidth = -1;
+    private boolean wasFocused;
 
     public UiField(Font font, int x, int y, int width, int height, Component narration) {
         super(font, x + TEXT_PADDING, y, Math.max(1, width - 2 * TEXT_PADDING), height, narration);
@@ -33,6 +42,33 @@ public class UiField extends EditBox {
         setX(x + TEXT_PADDING);
         setY(y);
         setWidth(Math.max(1, width - 2 * TEXT_PADDING));
+    }
+
+    /** Sets the hint, cut with an ellipsis to the text area's width now and whenever it changes. */
+    public void setFittedHint(Component hint) {
+        this.fullHint = hint;
+        this.hintWidth = -1;
+        fitHint();
+    }
+
+    private void fitHint() {
+        if (this.hintWidth != this.width) {
+            this.hintWidth = this.width;
+            setHint(Component.literal(Draw.cut(Minecraft.getInstance().font, this.fullHint.getString(), this.width)));
+        }
+    }
+
+    /** Puts the cursor at the start of the text, which then shows from its first letter. */
+    public void showStart() {
+        setCursorPosition(0);
+        setHighlightPos(0);
+    }
+
+    /** Puts the cursor after the last letter, as a field given the keyboard by a shortcut types there. */
+    public static void cursorToEnd(EditBox field) {
+        int end = field.getValue().length();
+        field.setCursorPosition(end);
+        field.setHighlightPos(end);
     }
 
     /** The well's left edge. */
@@ -53,6 +89,15 @@ public class UiField extends EditBox {
     //? }
         if (!isVisible()) {
             return;
+        }
+        boolean focused = isFocused();
+        if (this.wasFocused && !focused) {
+            // Left: the start of the text shows again, not where the typing ended
+            showStart();
+        }
+        this.wasFocused = focused;
+        if (this.hintWidth >= 0) {
+            fitHint();
         }
         int left = wellX();
         int top = getY();

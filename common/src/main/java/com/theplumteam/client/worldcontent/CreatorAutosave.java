@@ -140,6 +140,18 @@ public final class CreatorAutosave {
         }
     }
 
+    /**
+     * Ends a collection's saver at once, as before the editor deletes the collection for good:
+     * what waits is dropped, its batches not sent yet leave the upload queue, and the outcome of
+     * one already on its way is no longer heard, so it says nothing once the collection is gone.
+     */
+    public static void cancel(String collectionId) {
+        AutoSaver saver = SAVERS.remove(collectionId);
+        if (saver != null) {
+            saver.cancel();
+        }
+    }
+
     /** Ends every saver, when the client leaves or joins a server. */
     public static void reset() {
         for (AutoSaver saver : SAVERS.values()) {

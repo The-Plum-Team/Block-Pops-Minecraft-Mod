@@ -34,7 +34,10 @@ import java.util.function.Predicate;
  * shows the winner, with a stamp saying that nothing was spent.
  *
  * <p>Where there is no room for the grid's four columns of cells, or in compact mode, the grid is
- * replaced by a line of text. The replica is never scaled down,
+ * replaced by a line of text. A host may let the grid fit a smaller replica instead
+ * ({@link #setFittedGrid}), as the machine's own screen fits its grid to a narrow window: the
+ * list of collections narrows and the cells shrink to keep four, three or two columns, and to keep
+ * one row in sight. The replica is never scaled down,
  * because before 1.21.4 a clip ignores scaled drawing, and must not sit in a {@link UiScrollPane}:
  * its grid clips itself in screen units. A screen showing a replica calls {@link #close} when it
  * closes, which ends a test draw still playing.
@@ -50,6 +53,16 @@ public class UiMachineReplica extends UiNode.Box {
     private static final int GAP = 6;
     private static final int HEADER = 30;
     private static final int MIN_LEFT = 150;
+    // A fitted grid: the list's narrowest, and the cells as the machine screen shrinks them
+    private static final int FITTED_LEFT = 110;
+    private static final float FITTED_LEFT_SHARE = 0.35f;
+    private static final int GRID_CHROME = 8 + 8;
+    private static final int MIN_CELL_FOR_FOUR = 60;
+    private static final int MIN_CELL_FOR_THREE = 56;
+    private static final int MIN_CELL = 40;
+    private static final int ROW_GAP = GRID_ROW - FigureEntry.FIGURE_SIZE;
+    // The list's rows start this far under its top
+    private static final int ROW_TOP = 4;
     // The menus' palette; the layout stays the machine screen's
     private static final int PANEL = Surfaces.PANEL_FACE;
     private static final int DIMMED = 0xA026272A;
@@ -64,6 +77,7 @@ public class UiMachineReplica extends UiNode.Box {
     @Nullable
     private String sourceId;
     private boolean compact;
+    private boolean fitted;
     @Nullable
     private Component compactNote;
     @Nullable
@@ -74,6 +88,7 @@ public class UiMachineReplica extends UiNode.Box {
     private FigureListWidget list;
     // The grid's bounds the list was made for, and the collection it shows
     private UiNode.Rect listArea = UiNode.Rect.EMPTY;
+    private int listCell;
     @Nullable
     private FigureCollection listCollection;
     private boolean listPressed;
@@ -94,6 +109,14 @@ public class UiMachineReplica extends UiNode.Box {
     /** Replaces the figure grid with a line of text, as a small view of the machine shows it. */
     public void setCompact(boolean compact) {
         this.compact = compact;
+    }
+
+    /**
+     * Lets the grid fit a replica too small for four cells of the machine's usual size, as the
+     * machine's own screen does in a narrow window, rather than showing the line of text.
+     */
+    public void setFittedGrid(boolean fitted) {
+        this.fitted = fitted;
     }
 
     /** The line shown in place of the grid; null for the count of figures. */
@@ -179,7 +202,12 @@ public class UiMachineReplica extends UiNode.Box {
             return Math.min(MIN_LEFT, inner / 2);
         }
         // The machine gives its list 45%; the grid keeps the room for its four columns
-        return Math.max(Math.min(MIN_LEFT, inner / 2), Math.min((int) (inner * 0.45f), inner - GAP - GRID_MIN_WIDTH));
+        int full = Math.max(Math.min(MIN_LEFT, inner / 2), Math.min((int) (inner * 0.45f), inner - GAP - GRID_MIN_WIDTH));
+        if (!fitted || inner - GAP - full >= GRID_MIN_WIDTH) {
+            return full;
+        }
+        // Too narrow for four cells of 80: the list narrows so the cells keep what room they can
+        return Math.max(Math.min(FITTED_LEFT, inner / 2), Math.min(MIN_LEFT, (int) (inner * FITTED_LEFT_SHARE)));
     }
 
     private int rightX() {
@@ -190,8 +218,45 @@ public class UiMachineReplica extends UiNode.Box {
         return Math.max(0, innerX() + innerWidth() - rightX());
     }
 
-    private boolean showsGrid() {
-        return !compact && rightWidth() >= GRID_MIN_WIDTH && height - 2 * (FRAME + PADDING) - HEADER >= GRID_ROW;
+    /** Whether the figure grid shows, rather than the line of text: it has the room it needs. */
+    public boolean showsGrid() {
+        if (compact) {
+            return false;
+        }
+        if (!fitted) {
+            return rightWidth() >= GRID_MIN_WIDTH && height - 2 * (FRAME + PADDING) - HEADER >= GRID_ROW;
+        }
+        return grid()[0] >= MIN_CELL;
+    }
+
+    /** The size of the grid's cells as the replica is laid out now, or 0 while it shows no grid. */
+    public int gridCell() {
+        return showsGrid() ? grid()[0] : 0;
+    }
+
+    /**
+     * The cells' size and how many make a row: four of 80 where they fit; a fitted grid keeps
+     * four, then three, then two, shrinking them as the machine screen does, and no taller than
+     * one row in sight.
+     */
+    private int[] grid() {
+        if (!fitted) {
+            return new int[] {FigureEntry.FIGURE_SIZE, 4};
+        }
+        int room = rightWidth() - GRID_CHROME;
+        int spacing = FigureEntry.GRID_SPACING;
+        int columns = 4;
+        int cell = Math.min(FigureEntry.FIGURE_SIZE, (room - 3 * spacing) / 4);
+        if (cell < MIN_CELL_FOR_FOUR) {
+            columns = 3;
+            cell = Math.min(FigureEntry.FIGURE_SIZE, (room - 2 * spacing) / 3);
+            if (cell < MIN_CELL_FOR_THREE) {
+                columns = 2;
+                cell = Math.min(FigureEntry.FIGURE_SIZE, (room - spacing) / 2);
+            }
+        }
+        int tall = height - 2 * (FRAME + PADDING) - HEADER - ROW_GAP - ROW_TOP;
+        return new int[] {Math.min(cell, tall), columns};
     }
 
     private UiNode.Rect gridArea() {
@@ -202,11 +267,15 @@ public class UiMachineReplica extends UiNode.Box {
     // The list is made again when its place changes, and shown the collection again when it changes
     private void updateList(@Nullable FigureCollection collection) {
         UiNode.Rect area = gridArea();
-        if (list == null || !area.equals(listArea)) {
+        int[] cells = grid();
+        if (list == null || !area.equals(listArea) || cells[0] != listCell) {
             if (list != null) {
                 FigureDraw.stopOn(list);
             }
-            list = new FigureListWidget(Minecraft.getInstance(), area.width(), area.height(), area.y(), GRID_ROW);
+            list = new FigureListWidget(Minecraft.getInstance(), area.width(), area.height(), area.y(),
+                    cells[0] + ROW_GAP);
+            list.setGrid(cells[0], cells[1]);
+            listCell = cells[0];
             list.setLeftPos(area.x());
             list.setRenderBackground(false);
             list.setRenderTopAndBottom(false);

@@ -319,6 +319,14 @@ public final class AutoSaver {
     }
 
     /**
+     * Whether a publish the operator asked for is on its way itself, rather than waiting for the
+     * saves before it: the editor then says it is publishing, not saving.
+     */
+    public boolean isPublishSent() {
+        return this.publishing != null && this.publishing.sent;
+    }
+
+    /**
      * Whether the saver still sends something of a draft collection, or waits for the sync of
      * what it sent; changes that cannot be saved as they are, or whose save failed, do not count.
      */
@@ -466,6 +474,20 @@ public final class AutoSaver {
     /** Holds the saves back while a token, such as an open bulk add, says so. */
     public void pause(Object token) {
         this.pausers.add(token);
+    }
+
+    /**
+     * Holds the saves back as {@link #pause} does, and also drops the batches of the save on its
+     * way that have not gone yet, so nothing of this saver's follows what the screen sends next,
+     * such as the deletion of the collection. The batch being sent still lands and is heard. The
+     * changes the dropped batches carried stay in the draft, and {@link #resume} sends them again.
+     */
+    public void suspend(Object token) {
+        pause(token);
+        CreatorSave.Run sending = this.flight;
+        if (sending != null && (this.publishing == null || !this.publishing.sent)) {
+            sending.cancel();
+        }
     }
 
     /** Lets the saves go again once no token holds them. */
@@ -1009,6 +1031,13 @@ public final class AutoSaver {
             sending.cancel();
         }
         this.flight = null;
+        CreatorSave.Run adding = this.bulk;
+        if (adding != null) {
+            // A bulk add hidden behind the editor sends nothing more either
+            adding.cancel();
+        }
+        this.bulk = null;
+        this.bulkFigures = Set.of();
         this.publishing = null;
         this.draft.listen(null);
     }

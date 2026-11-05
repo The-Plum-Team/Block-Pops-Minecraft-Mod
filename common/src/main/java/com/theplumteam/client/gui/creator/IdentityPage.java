@@ -51,8 +51,8 @@ import java.util.function.Supplier;
 import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
 
 /**
- * The editor's first tab, "Identity & box": the collection's name, author and author link, its
- * background colour, its box and its logo, beside a live view of the result.
+ * The editor's "Look" tab: the collection's name, author and author link, its background colour,
+ * its box and its logo, beside a live view of the result.
  *
  * <p>The view on the left shows the box with the collection's first figure in it, the box
  * standing in the world, or the claw machine's screen; it is drawn from the editor's preview of
@@ -60,7 +60,9 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  *
  * <p>On the right, the text fields stay at the top and the other sections scroll under them,
  * each heading in the menus' pixel font and marked with an amber dot while it holds unsaved
- * changes. The background colour
+ * changes. On a narrow panel the view is a small box beside the name and the author, one under
+ * the other, and the author link and the sections take the panel's whole width under them, so
+ * every field and label keeps its room. The background colour
  * comes from the swatches, a custom colour or the logo's main colour. The box is a plain box of
  * one of the sixteen box colours, the collection's own 64×64 image, or the mod's usual box;
  * "Download box template" writes a template with its faces marked into the game folder and
@@ -75,6 +77,11 @@ final class IdentityPage implements EditorPage {
     private static final int MAX_VIEW_WIDTH = 258;
     private static final int MIN_VIEW_WIDTH = 140;
     private static final int COLUMN_GAP = 14;
+    // Under this width the page stacks: a small view beside the name and author, the rest under them
+    private static final int NARROW_WIDTH = 300;
+    private static final int NARROW_GAP = 10;
+    private static final int MIN_NARROW_VIEW = 64;
+    private static final int MAX_NARROW_VIEW = 90;
     private static final int LABEL = 11;
     // A section's heading, in the pixel font, whose capitals are taller than Minecraft's
     private static final int HEADING = 13;
@@ -120,12 +127,16 @@ final class IdentityPage implements EditorPage {
     private int swatchesHeight;
     private int swatchesWidth;
 
-    // Where build() put what drawContents() draws
-    private int fieldsX;
-    private int fieldsWidth;
-    private int half;
+    // Where build() put what drawContents() draws: each field's label, its column and its width
+    private int nameX;
+    private int nameWidth;
     private int nameLabelY = -1;
     private int nameStatusY;
+    private int authorX;
+    private int authorWidth;
+    private int authorLabelY;
+    private int linkX;
+    private int linkWidth;
     private int linkLabelY;
 
     IdentityPage(CreatorEditorScreen editor) {
@@ -190,7 +201,15 @@ final class IdentityPage implements EditorPage {
 
     @Override
     public void build(UiNode.Rect area) {
-        CreatorDraft draft = this.editor.draft();
+        boolean narrow = area.width() < NARROW_WIDTH;
+        // The narrow view is too small for its switch, its buttons and its hint: it only turns
+        this.view.modeSwitch(!narrow).dragHint(!narrow);
+        this.view.setButtons(!narrow);
+        if (narrow) {
+            this.view.setMode(UiBoxView.Mode.BOX);
+            buildNarrow(area);
+            return;
+        }
         int viewWidth = Math.min(MAX_VIEW_WIDTH, Math.max(MIN_VIEW_WIDTH, (area.width() - COLUMN_GAP) * 42 / 100));
         this.view.at(area.x(), area.y(), viewWidth, area.height());
         this.editor.add(this.view);
@@ -198,40 +217,94 @@ final class IdentityPage implements EditorPage {
         // Name and author side by side, then the author link, fixed above the sections
         int x = area.x() + viewWidth + COLUMN_GAP;
         int width = Math.max(0, area.right() - x);
-        this.fieldsX = x;
-        this.fieldsWidth = width;
-        this.half = (width - 8) / 2;
+        int half = (width - 8) / 2;
         int y = area.y();
+        this.nameX = x;
+        this.nameWidth = half;
         this.nameLabelY = y;
-        this.editor.field("name", x, y + LABEL, this.half, WorldContentLimits.MAX_NAME_LENGTH, tr("wizard.name_hint"),
+        this.authorX = x + half + 8;
+        this.authorWidth = width - half - 8;
+        this.authorLabelY = y;
+        nameField(x, y + LABEL, half);
+        authorField(this.authorX, y + LABEL, this.authorWidth);
+        y += LABEL + FIELD + 3;
+        this.nameStatusY = y + 1;
+        placePlayerName(this.authorX, y, this.authorWidth);
+        y += UiCheckbox.BOX + 6;
+        y = linkField(x, y, width);
+        buildSections(x, y, width, area.bottom());
+    }
+
+    // The small view on the left, the name and the author one under the other beside it, then
+    // the author link and the sections at the panel's whole width
+    private void buildNarrow(UiNode.Rect area) {
+        int viewWidth = Math.max(MIN_NARROW_VIEW, Math.min(MAX_NARROW_VIEW, area.width() * 30 / 100));
+        int x = area.x() + viewWidth + NARROW_GAP;
+        int width = Math.max(0, area.right() - x);
+        int y = area.y();
+        this.nameX = x;
+        this.nameWidth = width;
+        this.nameLabelY = y;
+        nameField(x, y + LABEL, width);
+        y += LABEL + FIELD + 3;
+        this.nameStatusY = y + 1;
+        y += LABEL + 2;
+        this.authorX = x;
+        this.authorWidth = width;
+        this.authorLabelY = y;
+        authorField(x, y + LABEL, width);
+        y += LABEL + FIELD + 3;
+        placePlayerName(x, y, width);
+        y += UiCheckbox.BOX + 4;
+        this.view.at(area.x(), area.y(), viewWidth, Math.max(0, y - area.y()));
+        this.editor.add(this.view);
+        y = linkField(area.x(), y + 2, area.width());
+        buildSections(area.x(), y, area.width(), area.bottom());
+    }
+
+    private void nameField(int x, int y, int width) {
+        CreatorDraft draft = this.editor.draft();
+        this.editor.field("name", x, y, width, WorldContentLimits.MAX_NAME_LENGTH, tr("wizard.name_hint"),
                 draft.name(), value -> {
                     draft.setName(value);
                     this.editor.changed();
                 });
-        int authorX = x + this.half + 8;
-        this.authorBox = this.editor.field("author", authorX, y + LABEL, width - this.half - 8,
-                WorldContentLimits.MAX_AUTHOR_LENGTH, tr("wizard.author_hint"), draft.author(), value -> {
+    }
+
+    private void authorField(int x, int y, int width) {
+        CreatorDraft draft = this.editor.draft();
+        this.authorBox = this.editor.field("author", x, y, width, WorldContentLimits.MAX_AUTHOR_LENGTH,
+                tr("wizard.author_hint"), draft.author(), value -> {
                     draft.setAuthor(value);
                     this.playerName.setChecked(isPlayerName(value));
                     this.editor.changed();
                 });
-        y += LABEL + FIELD + 3;
-        this.nameStatusY = y + 1;
-        this.playerName.setChecked(isPlayerName(draft.author()));
-        this.playerName.at(authorX, y, Math.min(width - this.half - 8,
-                UiCheckbox.widthFor(Minecraft.getInstance().font, tr("identity.use_player_name"))), UiCheckbox.BOX + 2);
+    }
+
+    private void placePlayerName(int x, int y, int width) {
+        this.playerName.setChecked(isPlayerName(this.editor.draft().author()));
+        this.playerName.at(x, y, Math.min(width, UiCheckbox.widthFor(Minecraft.getInstance().font,
+                tr("identity.use_player_name"))), UiCheckbox.BOX + 2);
         this.editor.add(this.playerName);
-        y += UiCheckbox.BOX + 6;
+    }
+
+    // The author link under its label; returns where the sections start
+    private int linkField(int x, int y, int width) {
+        CreatorDraft draft = this.editor.draft();
+        this.linkX = x;
+        this.linkWidth = width;
         this.linkLabelY = y;
         this.editor.field("author_url", x, y + LABEL, width, WorldContentLimits.MAX_AUTHOR_URL_LENGTH,
                 tr("identity.url_hint"), draft.authorUrl(), value -> {
                     draft.setAuthorUrl(value);
                     this.editor.changed();
                 });
-        y += LABEL + FIELD + 8;
+        return y + LABEL + FIELD + 8;
+    }
 
+    private void buildSections(int x, int y, int width, int bottom) {
         this.sections.clear();
-        this.sections.at(x, y, width, Math.max(0, area.bottom() - y));
+        this.sections.at(x, y, width, Math.max(0, bottom - y));
         layoutSections(x, y, this.sections.contentWidth());
         this.editor.add(this.sections);
     }
@@ -504,37 +577,35 @@ final class IdentityPage implements EditorPage {
         }
         Font font = Minecraft.getInstance().font;
         CreatorDraft draft = this.editor.draft();
-        int x = this.fieldsX;
 
         // Name, with its length on the right of its column and whether it can be used under it
-        int nameEnd = drawLabel(graphics, font, tr("name"), x, this.nameLabelY, this.half,
+        int nameEnd = drawLabel(graphics, font, tr("name"), this.nameX, this.nameLabelY, this.nameWidth,
                 this.editor.isChanged(CreatorDraft.NAME));
         String counter = draft.name().length() + "/" + WorldContentLimits.MAX_NAME_LENGTH;
-        int counterX = x + this.half - font.width(counter);
+        int counterX = this.nameX + this.nameWidth - font.width(counter);
         if (counterX > nameEnd + 4) {
             Draw.string(graphics, font, counter, counterX, this.nameLabelY,
                     draft.name().length() >= WorldContentLimits.MAX_NAME_LENGTH ? Theme.AMBER : HELP);
         }
         Component nameProblem = draft.name().isBlank() ? tr("wizard.name_empty")
                 : !WorldCollectionRecord.isPlainText(draft.name()) ? tr("name_rule") : null;
-        Draw.text(graphics, font, (nameProblem != null ? nameProblem : tr("wizard.name_ok")).getString(), x,
-                this.nameStatusY, this.half, nameProblem != null ? Theme.RED : Theme.GREEN);
+        Draw.text(graphics, font, (nameProblem != null ? nameProblem : tr("wizard.name_ok")).getString(), this.nameX,
+                this.nameStatusY, this.nameWidth, nameProblem != null ? Theme.RED : Theme.GREEN);
 
         // Author, saying when it cannot be used
-        int authorX = x + this.half + 8;
-        int authorEnd = drawLabel(graphics, font, tr("author"), authorX, this.nameLabelY,
-                x + this.fieldsWidth - authorX, this.editor.isChanged(CreatorDraft.AUTHOR));
+        int authorEnd = drawLabel(graphics, font, tr("author"), this.authorX, this.authorLabelY, this.authorWidth,
+                this.editor.isChanged(CreatorDraft.AUTHOR));
         if (!WorldCollectionRecord.isPlainText(draft.author())) {
-            Draw.text(graphics, font, tr("wizard.author_rule").getString(), authorEnd + 6, this.nameLabelY,
-                    Math.max(0, x + this.fieldsWidth - authorEnd - 6), Theme.RED);
+            Draw.text(graphics, font, tr("wizard.author_rule").getString(), authorEnd + 6, this.authorLabelY,
+                    Math.max(0, this.authorX + this.authorWidth - authorEnd - 6), Theme.RED);
         }
 
         // Author link, with why it cannot be used on the right of its label
-        int linkEnd = drawLabel(graphics, font, tr("identity.url"), x, this.linkLabelY, this.fieldsWidth,
+        int linkEnd = drawLabel(graphics, font, tr("identity.url"), this.linkX, this.linkLabelY, this.linkWidth,
                 this.editor.isChanged(CreatorDraft.AUTHOR_URL));
         if (!draft.authorUrl().isEmpty() && !WorldCollectionRecord.isValidAuthorUrl(draft.authorUrl())) {
             Draw.text(graphics, font, tr("identity.url_rule").getString(), linkEnd + 6, this.linkLabelY,
-                    Math.max(0, x + this.fieldsWidth - linkEnd - 6), Theme.RED);
+                    Math.max(0, this.linkX + this.linkWidth - linkEnd - 6), Theme.RED);
         }
     }
 
