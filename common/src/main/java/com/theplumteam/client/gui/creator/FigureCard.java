@@ -4,6 +4,7 @@ import com.theplumteam.client.gui.creator.ui.CreatorScreen;
 import com.theplumteam.client.gui.creator.ui.Draw;
 import com.theplumteam.client.gui.creator.ui.Theme;
 import com.theplumteam.client.gui.creator.ui.UiCardGrid;
+import com.theplumteam.client.gui.creator.ui.UiSizeSlider;
 import com.theplumteam.client.gui.creator.ui.UiTooltip;
 import com.theplumteam.client.gui.creator.ui.UiViewport;
 import com.theplumteam.client.gui.style.Surfaces;
@@ -20,7 +21,6 @@ import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Draws the cards of the editor's figure grid. A card shows its figure as the machine screen
@@ -189,17 +189,9 @@ final class FigureCard {
         GuiPose.pop(graphics);
     }
 
-    /** A size as a card's tag shows it, such as "1x" or "1.25x". */
+    /** A size as a card's tag shows it, such as "1x" or "1.25x"; see {@link UiSizeSlider#scaleText}. */
     static String scaleText(float scale) {
-        String text = String.format(Locale.ROOT, "%.2f", scale);
-        // 0.50 reads 0.5 and 1.00 reads 1, while 0.75 and 1.25 keep both decimals
-        while (text.endsWith("0")) {
-            text = text.substring(0, text.length() - 1);
-        }
-        if (text.endsWith(".")) {
-            text = text.substring(0, text.length() - 1);
-        }
-        return text + "x";
+        return UiSizeSlider.scaleText(scale);
     }
 
     private static int darken(int colour, float keep) {

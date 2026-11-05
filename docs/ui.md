@@ -15,7 +15,8 @@ the option changes or the display resizes under them.
   true), and calls `MenuGuiScale.restore(minecraft)` from `removed()`. The scale is chosen from the
   window size (`MenuGuiScale.forFramebuffer`) as Quick Skin chooses its own, but for a canvas of at
   least 640x360 GUI units: 640x360 at 720p, 1080p, 1440p and 4K, 800x450 at 1600x900, wider on
-  ultrawide windows, and smaller (down to 400x300) only in windows under 1280x720.
+  ultrawide windows, and smaller only in windows under 1280x720, down to 320x240: 400x300 in an
+  800x600 window, and 427x240 in Minecraft's default 854x480 window.
 - A dialog drawn over a menu (`DialogScreen`, or a screen that calls `MenuGuiScale.follow` first in
   `init()` and `MenuGuiScale.leave` from `removed()`) takes the menu's scale, so the menu behind it
   keeps its layout.
@@ -23,7 +24,9 @@ the option changes or the display resizes under them.
   block), is a `DialogScreen` that also implements `MenuGuiScale.Scaled`: it calls `enter` before
   `super.init()` and `restore` from `removed()`, and the world stays visible under its veil.
 - Layouts are responsive within that canvas: sizes come from `this.width` and `this.height`, never
-  from a fixed GUI scale, and every screen stays usable at 400x300.
+  from a fixed GUI scale. Screens are laid out from 400x300 up; the creator's sidebar screens
+  (`SidebarScreen`) are laid out for 427x240 too, and stay usable through their scrolling areas
+  down to 320x240.
 
 ## Surfaces and colours
 
@@ -56,6 +59,13 @@ the option changes or the display resizes under them.
 | A menu's opening | `HalftoneTransition` (a ring of black halftone dots travels from the middle outward, the world beyond it and the menu inside it) |
 | Text on a dark face | `UiText.draw`, `drawFitted` (cut with "..."), `wrap` (word-wrapped lines) |
 | A text field in the creator | `creator.ui.UiField`, an `EditBox` in a well |
+| A creator screen: a sidebar and one content panel | `creator.ui.SidebarScreen`: both panels laid out from the canvas (narrow under 360 content units wide, short under 300 high), one baseline for every bottom button, a heading with glyph buttons, a status slot, toasts over the content, and a budget of 15 models a screen |
+| A row of a creator sidebar | `creator.ui.UiSideRow` (icon or box, label, count, status, dot or chevron; selecting one plays the tab sound), in a `creator.ui.UiSideList` (selection by key, folds, arrow keys, lock, only the rows in sight drawn) |
+| A settings row that opens something or acts | `creator.ui.UiFoldRow` (label, faint hint, dot, chevron; red for what takes something away) |
+| An on/off setting in a creator list | `creator.ui.UiToggleRow`, a node on `ToggleRow`'s look that scrolls and can unfold content under it |
+| A dialog that stands on a button | `creator.ui.UiPopover`, opened with `CreatorScreen.openPopover`; it shares the one dialog slot with `UiModal`, keeps its buttons on the screen and runs `onClose` whatever closes it |
+| A collection's showcase | `creator.ui.UiStage` (its box and the figures that fit on a ledge, then a "+N" tile) |
+| A row of figure thumbnails | `creator.ui.UiThumbStrip` (selection, arrow keys, drag to reorder, a "+" tile, scrolling arrows) |
 
 Dialog accents: `SETTINGS` (slate) for settings, `EDIT` (blue) to edit or rename, `CREATE` (green)
 to create or upload, `DANGER` (red) to delete, `COLLECTION` (purple) for collection content.

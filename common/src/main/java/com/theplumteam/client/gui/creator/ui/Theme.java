@@ -35,6 +35,8 @@ public final class Theme {
     public static final int TEXT_SOFT = 0xFFDDDDDD;
     public static final int MUTED = Surfaces.TEXT_DIM;
     public static final int FAINT = Surfaces.TEXT_MUTED;
+    /** The text of a row that cannot be used now, dimmer than faint text, as a locked list's rows. */
+    public static final int TEXT_DISABLED = 0xFF6C6D70;
 
     // Selection and focus: Quick Skin's blue border, and the slate of a selected tab with its bar
     public static final int SELECTED = Surfaces.SELECTED;
@@ -97,6 +99,8 @@ public final class Theme {
     public static final String[] ICON_UNDO = {
             "..#......", ".##......", "#######..", ".##....#.", "..#.....#",
             "........#", "........#", ".......#.", "..#####.."};
+    /** Three dots, for a small button that opens a menu of more actions ("More"). */
+    public static final String[] ICON_MORE = {"##..##..##", "##..##..##"};
     public static final String[] ICON_FILE = {
             "#####....", "#...##...", "#...#.#..", "#...####.", "#......#.",
             "#......#.", "#......#.", "#......#.", "########."};

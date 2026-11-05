@@ -19,7 +19,8 @@ import org.jetbrains.annotations.Nullable;
  * screen, and it goes away when the creator closes.
  */
 public final class UiToast {
-    private static final long LIFETIME_MS = 6000;
+    // How long a message shows, which the sidebar's status slot keeps a passing line for too
+    static final long LIFETIME_MS = 6000;
     private static final long FADE_IN_MS = 300;
     private static final long FADE_OUT_MS = 500;
     private static final int PADDING = 6;

@@ -79,7 +79,7 @@ public class UiSizeSlider extends UiNode.Box {
 
     /** A size for people, such as "1.25x", the smallest called Mini and the largest Giant. */
     public static Component label(int index) {
-        String text = number(scales().get(index)) + "x";
+        String text = scaleText(scales().get(index));
         if (index == 0) {
             return CreatorScreen.tr("size.mini", text);
         }
@@ -87,6 +87,11 @@ public class UiSizeSlider extends UiNode.Box {
             return CreatorScreen.tr("size.giant", text);
         }
         return Component.literal(text);
+    }
+
+    /** A size as a short tag shows it, such as "1x" or "1.25x", with no name for the ends. */
+    public static String scaleText(float scale) {
+        return number(scale) + "x";
     }
 
     // 0.50 reads 0.5 and 1.00 reads 1, while 0.75 and 1.25 keep both decimals

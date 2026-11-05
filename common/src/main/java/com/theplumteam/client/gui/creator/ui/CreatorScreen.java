@@ -35,15 +35,17 @@ import java.util.function.Consumer;
  * screen on top.
  *
  * <p>Like the other menus, the creator is drawn at a GUI scale of its own, chosen from the window
- * size ({@link MenuGuiScale}), so its canvas is between about 400x300 and 860x520 GUI units
- * whatever GUI Scale the player picked; the player's option is never written. Every screen lays
- * itself out from {@code width} and {@code height} within that canvas.
+ * size ({@link MenuGuiScale}) whatever GUI Scale the player picked: a canvas of at least 640x360
+ * GUI units (800x450 at 1600x900, wider on ultrawide windows), smaller only in windows under
+ * 1280x720, down to 320x240 (427x240 in Minecraft's default window). The player's option is
+ * never written. Every screen lays itself out from {@code width} and {@code height}.
  *
  * <p>This is the only creator class that overrides Minecraft's input hooks, whose shapes differ
  * before 1.21, from 1.21 to 1.21.8, and from 1.21.9 (26.x here). Each override turns its event
- * into a {@link UiInput} record and passes it on in a fixed order: the open dialog, then the open
- * menu, the toast, the node that has the keyboard, the other nodes from the top down, and last
- * the screen's vanilla widgets.
+ * into a {@link UiInput} record and passes it on in a fixed order: the open dialog or popover,
+ * then the open menu, the toast, the node that has the keyboard, the other nodes from the top
+ * down, and last the screen's vanilla widgets. A screen holds one dialog at a time, a
+ * {@link UiModal} or a {@link UiPopover}: opening one closes the other.
  *
  * <p>A screen follows the World collections the server syncs: a new sync calls {@link #onSync}
  * and builds the screen again, keeping the focus in the text field that had it. It goes back to
@@ -82,6 +84,13 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
     private UiModal modal;
     @Nullable
     private GuiEventListener focusBeforeModal;
+    @Nullable
+    private UiPopover popover;
+    @Nullable
+    private GuiEventListener focusBeforePopover;
+    // The node that had the keyboard when the popover opened, such as the sidebar's list
+    @Nullable
+    private UiNode nodeBeforePopover;
     @Nullable
     private UiMenu menu;
     @Nullable
@@ -142,6 +151,10 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
         build();
         if (this.modal != null) {
             attachModal(this.modal);
+        }
+        if (this.popover != null) {
+            // Its anchor may have moved with the layout
+            this.popover.place(this.width, this.height);
         }
     }
 
@@ -257,6 +270,9 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
         if (!(minecraft.screen instanceof CreatorScreen screen) || screen.modal != null) {
             return false;
         }
+        if (screen.popover != null) {
+            return false;
+        }
         UiNode at = screen.focusedNode;
         // Bounded, so a node that names itself as its own child cannot hang the game
         for (int depth = 0; at != null && depth < 16; depth++) {
@@ -278,10 +294,13 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
 
     // Overlays
 
-    /** Opens a dialog over the screen, closing any dialog or menu already open. */
+    /** Opens a dialog over the screen, closing any dialog, popover or menu already open. */
     public final void openModal(UiModal dialog) {
         if (this.modal != null) {
             closeModal(this.modal);
+        }
+        if (this.popover != null) {
+            closePopover(this.popover);
         }
         closeMenu();
         this.focusBeforeModal = getFocused();
@@ -332,6 +351,56 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
         return this.modal != null;
     }
 
+    /**
+     * Opens a popover over the screen, anchored where it says, closing any dialog, other popover
+     * or menu already open. It takes the keyboard from whatever had it while it is open, and
+     * gives it back when it closes.
+     */
+    public final void openPopover(UiPopover dialog) {
+        if (this.modal != null) {
+            closeModal(this.modal);
+        }
+        if (this.popover != null && this.popover != dialog) {
+            closePopover(this.popover);
+        }
+        closeMenu();
+        if (this.popover == null) {
+            this.focusBeforePopover = getFocused();
+            this.nodeBeforePopover = this.focusedNode;
+        }
+        this.focusedNode = null;
+        setFocused(null);
+        this.popover = dialog;
+        dialog.attach(this);
+        dialog.place(this.width, this.height);
+    }
+
+    /**
+     * Closes a popover if it is the open one, whatever closes it, and runs its
+     * {@link UiPopover#onClose}; {@link UiPopover#close()} calls this.
+     */
+    final void closePopover(UiPopover dialog) {
+        if (this.popover != dialog) {
+            return;
+        }
+        dialog.attach(null);
+        this.popover = null;
+        GuiEventListener back = this.focusBeforePopover;
+        UiNode backNode = this.nodeBeforePopover;
+        this.focusBeforePopover = null;
+        this.nodeBeforePopover = null;
+        setFocused(back != null && children().contains(back) ? back : null);
+        if (getFocused() == null && backNode != null && this.nodes.contains(backNode)) {
+            // The node that had the keyboard, such as the sidebar's list, has it again
+            this.focusedNode = backNode;
+        }
+        dialog.closed();
+    }
+
+    public final boolean isPopoverOpen() {
+        return this.popover != null;
+    }
+
     /** Opens a menu under an anchor, closing any menu already open. */
     public final void openMenu(UiMenu popup, UiNode.Rect anchor) {
         popup.place(anchor, this.width, this.height);
@@ -357,12 +426,24 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
     }
 
     public final void status(Component text, int colour) {
+        statusSink(text, colour);
+    }
+
+    /**
+     * Takes the line {@link #status} sets. By default the panel shows it centred above its
+     * bottom row of buttons; a screen with a status slot of its own, as {@link SidebarScreen},
+     * shows it there instead, and a screen may turn it into a toast.
+     */
+    protected void statusSink(Component text, int colour) {
         this.status = text;
         this.statusColour = colour;
     }
 
-    /** Whether the status line shows a message now. */
-    protected final boolean hasStatus() {
+    /**
+     * Whether the status line shows a message now; a screen whose {@link #statusSink} shows it
+     * elsewhere answers for that place.
+     */
+    protected boolean hasStatus() {
         return !this.status.getString().isEmpty();
     }
 
@@ -374,6 +455,21 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
     /** The height of the toast's bottom edge. */
     protected int toastBottom() {
         return this.panelY + this.panelHeight - 34;
+    }
+
+    /** The left edge of the band the toast is centred in; by default the whole screen's. */
+    protected int toastLeft() {
+        return 0;
+    }
+
+    /** The width of the band the toast is centred in and kept within. */
+    protected int toastWidth() {
+        return this.width;
+    }
+
+    // The toast is laid out in its band, so a point on the screen is moved into the band's units
+    private boolean toastCovers(UiToast toastShown, double mouseX, double mouseY) {
+        return toastShown.covers(toastWidth(), toastBottom(), mouseX - toastLeft(), mouseY);
     }
 
     // Ticking
@@ -404,6 +500,9 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
         if (this.modal != null) {
             this.modal.tick();
         }
+        if (this.popover != null) {
+            this.popover.tick();
+        }
     }
 
     // Drawing
@@ -418,11 +517,11 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // Nothing under the dialog, the menu or the toast reacts to the pointer over them
+        // Nothing under a dialog or an open menu reacts to the pointer, since a click outside a
+        // menu only closes it, nor anything under the toast
         UiToast toastShown = UiToast.current();
-        boolean covered = this.modal != null
-                || (this.menu != null && this.menu.isMouseOver(mouseX, mouseY))
-                || (toastShown != null && toastShown.covers(this.width, toastBottom(), mouseX, mouseY));
+        boolean covered = this.modal != null || this.popover != null || this.menu != null
+                || (toastShown != null && toastCovers(toastShown, mouseX, mouseY));
         int nodeX = covered ? -1 : mouseX;
         int nodeY = covered ? -1 : mouseY;
         UiTooltip.clear();
@@ -464,7 +563,16 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
             this.menu.draw(graphics, overlayX, overlayY, partialTick);
         }
         if (toastShown != null) {
-            toastShown.draw(graphics, this.width, toastBottom(), overlayX, overlayY);
+            GuiPose.push(graphics);
+            GuiPose.translate(graphics, toastLeft(), 0);
+            toastShown.draw(graphics, toastWidth(), toastBottom(), overlayX - toastLeft(), overlayY);
+            GuiPose.pop(graphics);
+        }
+        if (this.popover != null) {
+            // Its own layer, as a dialog's, above the menu and the toast
+            GuiPose.flush(graphics);
+            GuiPose.nextStratum(graphics);
+            this.popover.draw(graphics, overlayX, overlayY, partialTick);
         }
         if (this.modal != null) {
             // Its own layer, so the text of the menu and toast does not show through its dimming
@@ -552,6 +660,11 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
             }
             return dialog.click(click);
         }
+        if (this.popover != null) {
+            // A click outside it closes it; nothing behind it hears the click either way
+            this.pressedNode = null;
+            return this.popover.click(click);
+        }
         if (this.menu != null) {
             UiMenu popup = this.menu;
             if (!popup.isMouseOver(click.x(), click.y())) {
@@ -567,7 +680,8 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
             return true;
         }
         UiToast toastShown = UiToast.current();
-        if (toastShown != null && toastShown.click(click, this.width, toastBottom())) {
+        if (toastShown != null && toastShown.click(click.at(click.x() - toastLeft(), click.y()), toastWidth(),
+                toastBottom())) {
             return true;
         }
         UiNode focused = this.focusedNode;
@@ -615,7 +729,8 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
     private boolean handleRelease(UiInput.Click click, BooleanSupplier vanilla) {
         UiNode pressed = this.pressedNode;
         this.pressedNode = null;
-        boolean used = this.modal != null && this.modal.release(click);
+        boolean used = this.modal != null && this.modal.release(click)
+                || this.popover != null && this.popover.release(click);
         // A node whose press opened a dialog still hears its release, so it ends that press
         if (pressed != null && pressed.release(click)) {
             used = true;
@@ -642,7 +757,7 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
     private boolean handleDrag(UiInput.Click click, double dragX, double dragY, BooleanSupplier vanilla) {
         this.lastMouseX = click.x();
         this.lastMouseY = click.y();
-        UiNode pressed = this.modal != null ? this.modal : this.pressedNode;
+        UiNode pressed = this.modal != null ? this.modal : this.popover != null ? this.popover : this.pressedNode;
         if (pressed != null && pressed.drag(click, dragX, dragY)) {
             return true;
         }
@@ -661,7 +776,7 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
     //? }
 
     private boolean handleScroll(double mouseX, double mouseY, double amount, BooleanSupplier vanilla) {
-        if (this.modal != null) {
+        if (this.modal != null || this.popover != null) {
             return true;
         }
         if (this.menu != null) {
@@ -686,7 +801,7 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
      */
     @Override
     public void onFilesDrop(List<Path> paths) {
-        if (this.modal != null || paths.isEmpty()) {
+        if (this.modal != null || this.popover != null || paths.isEmpty()) {
             return;
         }
         closeMenu();
@@ -766,6 +881,11 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
             // Only the dialog's own fields type while it is open
             return focused instanceof EditBox && this.modal.fields().contains(focused) ? vanilla.getAsBoolean() : true;
         }
+        if (this.popover != null) {
+            // Nothing behind it types or takes a shortcut while it is open
+            this.popover.key(key);
+            return true;
+        }
         if (this.menu != null) {
             UiMenu popup = this.menu;
             if (key.escape()) {
@@ -825,7 +945,7 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
         if (this.modal != null) {
             return vanilla.getAsBoolean();
         }
-        if (this.menu != null) {
+        if (this.popover != null || this.menu != null) {
             return true;
         }
         UiNode focused = this.focusedNode;
