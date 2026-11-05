@@ -34,10 +34,11 @@ import java.util.function.Supplier;
  *
  * <p>A save sends only what changed: SetCollection when the name, author, colour, box or
  * logo did, SetCollectionExtras for the author link, logo placement, plush flag and rarity
- * weights, then each changed figure's PutFigure, SetFigureExtras and SetFigureEnabled
- * together, ReorderFigures when the order differs from what the server would keep, and
- * Publish last when asked. A collection that does not exist yet is created first, as a
- * draft. A figure that misses a file is not saved and stays unsaved in the draft.
+ * weights, SetHolographic when holographic draws were turned on or off, then each changed
+ * figure's PutFigure, SetFigureExtras and SetFigureEnabled together, ReorderFigures when the
+ * order differs from what the server would keep, and Publish last when asked. A collection that
+ * does not exist yet is created first, as a draft. A figure that misses a file is not saved and
+ * stays unsaved in the draft.
  *
  * <p>The edits are packed into batches of at most {@link WorldCollectionEdit#MAX_BATCH}
  * edits and {@link WorldCollectionEditPacket#MAX_CLIENT_BYTES} bytes; each batch is one
@@ -100,9 +101,9 @@ public final class CreatorSave {
     /**
      * One unit of a batch: edits that must land together, such as a figure's put and extras.
      *
-     * @param key        what the unit saves: {@code identity}, {@code extras}, {@code figure/<id>},
-     *                   {@code remove/<id>}, {@code order}, {@code archive}, {@code enable},
-     *                   {@code publish} or {@code create}
+     * @param key        what the unit saves: {@code identity}, {@code extras}, {@code holographic},
+     *                   {@code figure/<id>}, {@code remove/<id>}, {@code order}, {@code archive},
+     *                   {@code enable}, {@code publish} or {@code create}
      * @param values     each change key the unit carries, as {@link CreatorDraft#changes()} names
      *                   it, with the value it sends (null values allowed)
      * @param putFigures the new figures the unit puts, whose ids the put fixes
@@ -303,6 +304,9 @@ public final class CreatorSave {
         if (whole && draft.extrasChanged()) {
             units.add(extrasUnit(draft, draft.effectiveLogoLayout()));
         }
+        if (whole && draft.holographic() != base.holographic()) {
+            units.add(holographicUnit(draft));
+        }
         List<CreatorDraft.FigureDraft> figures = draft.figures();
         Set<String> inDraft = new HashSet<>();
         for (CreatorDraft.FigureDraft figure : figures) {
@@ -439,6 +443,16 @@ public final class CreatorSave {
     }
 
     /**
+     * SetHolographic, a unit of its own: whether the collection's draws may come out holographic
+     * depends on nothing else, so it goes even while the other extras are held.
+     */
+    private static Unit holographicUnit(CreatorDraft draft) {
+        return new Unit("holographic", List.of(new WorldCollectionEdit.SetHolographic(draft.collectionId(),
+                draft.holographic())), List.of(), single(CreatorDraft.HOLOGRAPHIC, draft.holographic()), List.of(),
+                List.of());
+    }
+
+    /**
      * What takes a saved figure the draft has no more off the server: a draft collection deletes
      * it, a published one retires it, and one already retired needs nothing.
      */
@@ -535,7 +549,8 @@ public final class CreatorSave {
      *       waits with it, since the edit carries them together;</li>
      *   <li>SetCollectionExtras while the author link is not one the server takes. It never waits
      *       for SetCollection: while the server has no logo yet it carries the default placement,
-     *       and the draft's own placement goes once the logo has landed;</li>
+     *       and the draft's own placement goes once the logo has landed. SetHolographic waits for
+     *       neither;</li>
      *   <li>a figure's edits while it misses a file, a file or a name fails its check, its box face
      *       lies outside its texture, or it names a file the server no longer has and this
      *       computer has no copy of; and a new figure's first put while its name is being typed
@@ -600,6 +615,12 @@ public final class CreatorSave {
                 if (allowed(unit, hold, held, waits, null)) {
                     units.add(unit);
                 }
+            }
+        }
+        if (draft.holographic() != base.holographic()) {
+            Unit unit = holographicUnit(draft);
+            if (allowed(unit, hold, held, waits, null)) {
+                units.add(unit);
             }
         }
         List<CreatorDraft.FigureDraft> figures = draft.figures();

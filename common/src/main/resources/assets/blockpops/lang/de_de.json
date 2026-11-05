@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "Plüschtiere (Gacha-Automat)",
   "blockpops.world_creator.publish.type.figure_note": "Spieler gewinnen die Figuren in Boxen aus dem Greifautomaten.",
   "blockpops.world_creator.publish.type.plush_note": "Sie erscheint im Plüschtiere-Tab des Gacha-Automaten. Plüschtiere werden als Figurenblöcke ausgegeben.",
+  "blockpops.world_creator.options.holographic": "Kann holografisch herauskommen",
+  "blockpops.world_creator.options.holographic_note": "Eine von 25 Ziehungen kommt holografisch heraus. Ausgeschaltet kommt keine Ziehung aus dieser Sammlung holografisch heraus.",
   "blockpops.world_creator.publish.visibility": "Sichtbarkeit",
   "blockpops.world_creator.publish.visibility.draft": "Entwurf",
   "blockpops.world_creator.publish.visibility.draft_help": "Nicht in den Automaten: Nur Operatoren sehen sie, in der Werkstatt",

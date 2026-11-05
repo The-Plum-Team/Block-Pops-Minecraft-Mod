@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "Peluşlar (gacha makinesi)",
   "blockpops.world_creator.publish.type.figure_note": "Oyuncular figürlerini pençe makinesinden kutular içinde kazanır.",
   "blockpops.world_creator.publish.type.plush_note": "Gacha makinesinin Peluşlar sekmesinde görünür. Peluşlar figür bloğu olarak verilir.",
+  "blockpops.world_creator.options.holographic": "Holografik çıkabilir",
+  "blockpops.world_creator.options.holographic_note": "Her 25 çekilişten biri holografik çıkar. Kapalıyken bu koleksiyondan hiçbir çekiliş holografik çıkmaz.",
   "blockpops.world_creator.publish.visibility": "Görünürlük",
   "blockpops.world_creator.publish.visibility.draft": "Taslak",
   "blockpops.world_creator.publish.visibility.draft_help": "Makinelerin dışında: onu yalnızca yöneticiler oluşturucuda görür",

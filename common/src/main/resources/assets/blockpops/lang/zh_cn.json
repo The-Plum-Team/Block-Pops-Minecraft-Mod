@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "毛绒玩偶（扭蛋机）",
   "blockpops.world_creator.publish.type.figure_note": "玩家可以从抓娃娃机中赢得装在盒子里的手办。",
   "blockpops.world_creator.publish.type.plush_note": "它会显示在扭蛋机的“毛绒玩偶”标签页中。毛绒玩偶会以手办方块的形式发放。",
+  "blockpops.world_creator.options.holographic": "可能抽出全息",
+  "blockpops.world_creator.options.holographic_note": "每 25 次抽取中有 1 次会抽出全息。关闭后，此收藏的抽取永远不会抽出全息。",
   "blockpops.world_creator.publish.visibility": "可见性",
   "blockpops.world_creator.publish.visibility.draft": "草稿",
   "blockpops.world_creator.publish.visibility.draft_help": "不在机器中：只有管理员能在创作工具中看到它",

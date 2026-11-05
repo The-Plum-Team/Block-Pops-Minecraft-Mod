@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "Peluches (máquina gacha)",
   "blockpops.world_creator.publish.type.figure_note": "Los jugadores ganan sus figuras en cajas de la máquina de garra.",
   "blockpops.world_creator.publish.type.plush_note": "Aparece en la pestaña Peluches de la máquina gacha. Los peluches se entregan como bloques de figura.",
+  "blockpops.world_creator.options.holographic": "Puede salir holográfica",
+  "blockpops.world_creator.options.holographic_note": "Una de cada 25 tiradas sale holográfica. Si lo desactivas, ninguna tirada de esta colección saldrá holográfica.",
   "blockpops.world_creator.publish.visibility": "Visibilidad",
   "blockpops.world_creator.publish.visibility.draft": "Borrador",
   "blockpops.world_creator.publish.visibility.draft_help": "Fuera de las máquinas: solo los operadores la ven, en el creador",

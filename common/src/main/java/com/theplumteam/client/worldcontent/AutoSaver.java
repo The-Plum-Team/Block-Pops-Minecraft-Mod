@@ -520,6 +520,7 @@ public final class AutoSaver {
         switch (key) {
             case "identity" -> this.draft.revertIdentity();
             case "extras" -> this.draft.revertExtras();
+            case "holographic" -> this.draft.revertHolographic();
             case "order" -> this.draft.revertOrder();
             case "archive" -> this.draft.revertArchived();
             default -> {

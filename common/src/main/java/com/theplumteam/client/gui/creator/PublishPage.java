@@ -8,6 +8,7 @@ import com.theplumteam.client.gui.creator.ui.CreatorScreen;
 import com.theplumteam.client.gui.creator.ui.Draw;
 import com.theplumteam.client.gui.creator.ui.Theme;
 import com.theplumteam.client.gui.creator.ui.UiButton;
+import com.theplumteam.client.gui.creator.ui.UiCheckbox;
 import com.theplumteam.client.gui.creator.ui.UiChecklist;
 import com.theplumteam.client.gui.creator.ui.UiMachineReplica;
 import com.theplumteam.client.gui.creator.ui.UiModal;
@@ -64,11 +65,12 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  * where it is fixed, and how the draw works: every figure's chance as a bar, the token rules of
  * this server and how many days of tokens completing the collection takes, worked out by
  * {@link DrawSimulation}. On the right are the weights of the four rarities, the kind of machine
- * the collection goes in, and its visibility. "How players will see it" shows the claw machine's
- * own screen at full size, because the half-size editor has no room for the machine's figure
- * grid beside the review: as a new player or a collector sees it, with a test draw that runs the
- * machine's light and shows the winner stamped as a test, and a hundred draws counted in a chart.
- * Neither spends a token or gives anything: the draws are made up on this computer.
+ * the collection goes in and whether its draws may come out holographic, and its visibility.
+ * "How players will see it" shows the claw machine's own screen at full size, because the
+ * half-size editor has no room for the machine's figure grid beside the review: as a new player
+ * or a collector sees it, with a test draw that runs the machine's light and shows the winner
+ * stamped as a test, and a hundred draws counted in a chart. Neither spends a token or gives
+ * anything: the draws are made up on this computer.
  *
  * <p>A draft saves itself; "Publish collection" waits for its last changes to be saved, checks it
  * once more and publishes it, with whatever changed meanwhile in the same batch, and is disabled,
@@ -128,6 +130,8 @@ final class PublishPage implements EditorPage {
     private final Text typeHeading;
     private final UiSegmented types;
     private final Text typeNote;
+    private final UiCheckbox holographicBox;
+    private final ChangeDot holographicDot;
     private final Text visibilityHeading;
     private final Radio visibility;
     private final Text visibilityNote;
@@ -179,6 +183,12 @@ final class PublishPage implements EditorPage {
                 tr("publish.type.plushes"));
         this.typeNote = new Text(() -> tr(editor.draft().plush() ? "publish.type.plush_note" : "publish.type.figure_note"),
                 () -> HELP, 2);
+        // One line, as the toggle row it becomes: what it does is in its tooltip, and its own dot
+        // says when it waits for Publish changes
+        this.holographicBox = new UiCheckbox(tr("options.holographic"), editor.draft().holographic(),
+                this::setHolographic);
+        this.holographicBox.setTooltip(tr("options.holographic_note"));
+        this.holographicDot = new ChangeDot(() -> editor.isChanged(CreatorDraft.HOLOGRAPHIC));
         this.visibilityHeading = Text.heading(() -> tr("publish.visibility"),
                 () -> editor.isChanged(CreatorDraft.ARCHIVED));
         this.visibility = new Radio(this::setVisibility);
@@ -287,8 +297,8 @@ final class PublishPage implements EditorPage {
         for (int i = 0; i < RARITIES.length; i++) {
             addAll(this.right, this.rarityLabels[i], this.steppers[i]);
         }
-        addAll(this.right, this.typeHeading, this.types, this.typeNote, this.visibilityHeading, this.visibility,
-                this.visibilityNote);
+        addAll(this.right, this.typeHeading, this.types, this.typeNote, this.holographicBox, this.holographicDot,
+                this.visibilityHeading, this.visibility, this.visibilityNote);
     }
 
     private static void addAll(UiScrollPane pane, UiNode... nodes) {
@@ -338,7 +348,12 @@ final class PublishPage implements EditorPage {
         y = place(this.typeHeading, x, y, width, HEADING_ROW) + 1;
         this.types.at(x, y, Math.min(width, this.types.naturalWidth()), UiSegmented.HEIGHT);
         y += UiSegmented.HEIGHT + 3;
-        y = place(this.typeNote, x, y, width, this.typeNote.heightFor(width)) + SECTION_GAP;
+        y = place(this.typeNote, x, y, width, this.typeNote.heightFor(width)) + 6;
+        // The box and its whole label, cut short of the dot after it in a narrow column
+        int boxWidth = Math.max(0, Math.min(width - ChangeDot.WIDTH,
+                UiCheckbox.widthFor(Minecraft.getInstance().font, tr("options.holographic"))));
+        this.holographicDot.at(x + boxWidth, y, ChangeDot.WIDTH, UiCheckbox.BOX + 2);
+        y = place(this.holographicBox, x, y, boxWidth, UiCheckbox.BOX + 2) + SECTION_GAP;
         y = place(this.visibilityHeading, x, y, width, HEADING_ROW) + 2;
         int radioHeight = this.visibility.heightFor(width);
         this.visibility.at(x, y, width, radioHeight);
@@ -366,6 +381,7 @@ final class PublishPage implements EditorPage {
             }
         }
         this.types.select(draft.plush() ? 1 : 0);
+        this.holographicBox.setChecked(draft.holographic());
         refreshVisibility();
         refreshFooter();
         if (this.built && !this.playersView && this.left.bounds().width() > 0) {
@@ -544,6 +560,11 @@ final class PublishPage implements EditorPage {
         this.editor.changed();
     }
 
+    private void setHolographic(boolean allowed) {
+        draft().setHolographic(allowed);
+        this.editor.changed();
+    }
+
     // Visibility
 
     private void refreshVisibility() {
@@ -600,7 +621,8 @@ final class PublishPage implements EditorPage {
     /**
      * Plays a test draw as a regular token would, on the replica's grid: the winner is drawn by
      * weight here and counts as found by the new player shown, so a run of test draws fills the
-     * grid. It comes out holographic as often as a real draw does. Nothing is sent to the server.
+     * grid. It comes out holographic as often as a real draw does, so never when the collection
+     * turned that off. Nothing is sent to the server.
      */
     private void testPull() {
         List<FigureDefinition> pool = pool();
@@ -614,7 +636,7 @@ final class PublishPage implements EditorPage {
         FigureDefinition winner = DrawOdds.pick(pool, this.random);
         String key = keyOf(winner);
         boolean isNew = !this.found.contains(key);
-        boolean holographic = this.random.nextFloat() < Holographic.CHANCE;
+        boolean holographic = draft().holographic() && this.random.nextFloat() < Holographic.CHANCE;
         if (this.replica.testDraw(winner, isNew, holographic)) {
             this.found.add(key);
         } else {
@@ -953,6 +975,26 @@ final class PublishPage implements EditorPage {
                 this.onSelect.accept(index);
             }
             return true;
+        }
+    }
+
+    /**
+     * The amber dot after a setting that is not a section of its own, while its change waits for
+     * Publish changes, as a heading's dot does for its section.
+     */
+    private static final class ChangeDot extends UiNode.Box {
+        static final int WIDTH = 9;
+        private final BooleanSupplier changed;
+
+        ChangeDot(BooleanSupplier changed) {
+            this.changed = changed;
+        }
+
+        @Override
+        public void draw(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+            if (visible() && width > 0 && this.changed.getAsBoolean()) {
+                Draw.dot(graphics, x + 5, y + height / 2, 4, Theme.AMBER);
+            }
         }
     }
 

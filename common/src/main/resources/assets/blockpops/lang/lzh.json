@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "絨偶（扭蛋機）",
   "blockpops.world_creator.publish.type.figure_note": "戲者得其偶於夾偶機，盛之以匣。",
   "blockpops.world_creator.publish.type.plush_note": "見於扭蛋機之「絨偶」籤葉。絨偶以偶塊授之。",
+  "blockpops.world_creator.options.holographic": "或出幻彩",
+  "blockpops.world_creator.options.holographic_note": "每抽二十五，一出幻彩。閉之，則此集之抽永無幻彩。",
   "blockpops.world_creator.publish.visibility": "顯晦",
   "blockpops.world_creator.publish.visibility.draft": "稿",
   "blockpops.world_creator.publish.visibility.draft_help": "不在機中：唯吏見之，於創作坊",

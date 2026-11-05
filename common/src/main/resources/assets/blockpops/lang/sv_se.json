@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "Gosedjur (gachamaskin)",
   "blockpops.world_creator.publish.type.figure_note": "Spelarna vinner dess figurer i lådor från klomaskinen.",
   "blockpops.world_creator.publish.type.plush_note": "Den visas under fliken Gosedjur i gachamaskinen. Gosedjuren delas ut som figurblock.",
+  "blockpops.world_creator.options.holographic": "Kan bli holografisk",
+  "blockpops.world_creator.options.holographic_note": "En dragning av 25 blir holografisk. Avstängt blir ingen dragning ur den här samlingen holografisk.",
   "blockpops.world_creator.publish.visibility": "Synlighet",
   "blockpops.world_creator.publish.visibility.draft": "Utkast",
   "blockpops.world_creator.publish.visibility.draft_help": "Utanför maskinerna: endast operatörer ser den, i skaparen",

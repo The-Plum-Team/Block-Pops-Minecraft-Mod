@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "دمى محشوة (آلة الغاتشا)",
   "blockpops.world_creator.publish.type.figure_note": "يربح اللاعبون مجسماتها في علب من آلة المخلب.",
   "blockpops.world_creator.publish.type.plush_note": "تظهر في تبويب الدمى المحشوة في آلة الغاتشا. وتُمنح الدمى المحشوة ككتل مجسمات.",
+  "blockpops.world_creator.options.holographic": "قد تخرج هولوغرافية",
+  "blockpops.world_creator.options.holographic_note": "تخرج سحبة واحدة من كل 25 هولوغرافية. عند إيقافه، لا تخرج أي سحبة من هذه المجموعة هولوغرافية.",
   "blockpops.world_creator.publish.visibility": "الظهور",
   "blockpops.world_creator.publish.visibility.draft": "مسودة",
   "blockpops.world_creator.publish.visibility.draft_help": "خارج الآلات: لا يراها إلا المشغّلون، في المنشئ",

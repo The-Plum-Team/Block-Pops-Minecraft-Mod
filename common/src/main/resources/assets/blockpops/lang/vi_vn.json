@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "Thú bông (máy gacha)",
   "blockpops.world_creator.publish.type.figure_note": "Người chơi giành được tượng trong hộp từ máy gắp.",
   "blockpops.world_creator.publish.type.plush_note": "Hiện ở mục Thú bông của máy gacha. Thú bông được trao dưới dạng khối tượng.",
+  "blockpops.world_creator.options.holographic": "Có thể ra bản hologram",
+  "blockpops.world_creator.options.holographic_note": "Cứ 25 lượt quay thì có 1 lượt ra bản hologram. Khi tắt, không lượt quay nào của bộ sưu tập này ra hologram.",
   "blockpops.world_creator.publish.visibility": "Hiển thị",
   "blockpops.world_creator.publish.visibility.draft": "Bản nháp",
   "blockpops.world_creator.publish.visibility.draft_help": "Không có trong máy: chỉ người điều hành thấy được, trong trình tạo",

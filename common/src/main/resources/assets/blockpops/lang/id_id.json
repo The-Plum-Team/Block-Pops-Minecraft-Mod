@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "Boneka (mesin gacha)",
   "blockpops.world_creator.publish.type.figure_note": "Pemain memenangkan figurnya dalam kotak dari mesin capit.",
   "blockpops.world_creator.publish.type.plush_note": "Koleksi ini tampil di tab Boneka pada mesin gacha. Boneka diberikan sebagai balok figur.",
+  "blockpops.world_creator.options.holographic": "Bisa keluar holografis",
+  "blockpops.world_creator.options.holographic_note": "Satu dari 25 undian keluar holografis. Jika dimatikan, tidak ada undian dari koleksi ini yang keluar holografis.",
   "blockpops.world_creator.publish.visibility": "Visibilitas",
   "blockpops.world_creator.publish.visibility.draft": "Draf",
   "blockpops.world_creator.publish.visibility.draft_help": "Di luar mesin: hanya operator yang bisa melihatnya, di kreator",

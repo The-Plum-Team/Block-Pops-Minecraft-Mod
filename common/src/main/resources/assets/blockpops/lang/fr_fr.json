@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "Peluches (machine gacha)",
   "blockpops.world_creator.publish.type.figure_note": "Les joueurs gagnent ses figurines en boîte dans la machine à pince.",
   "blockpops.world_creator.publish.type.plush_note": "Elle apparaît dans l'onglet Peluches de la machine gacha. Les peluches sont données sous forme de blocs de figurine.",
+  "blockpops.world_creator.options.holographic": "Peut sortir holographique",
+  "blockpops.world_creator.options.holographic_note": "Un tirage sur 25 sort holographique. Désactivé, aucun tirage de cette collection ne sort holographique.",
   "blockpops.world_creator.publish.visibility": "Visibilité",
   "blockpops.world_creator.publish.visibility.draft": "Brouillon",
   "blockpops.world_creator.publish.visibility.draft_help": "Hors des machines : seuls les opérateurs la voient, dans le créateur",

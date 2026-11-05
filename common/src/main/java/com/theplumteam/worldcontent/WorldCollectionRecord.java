@@ -46,13 +46,15 @@ import java.util.Set;
  * @param logoLayout    how the logo is sized and moved on the box; null for the automatic fit
  * @param plush         whether the gacha machine offers it as a plush collection
  * @param rarityWeights the draw weight of each rarity; null for {@link RarityWeights#DEFAULT}
+ * @param holographic   whether a draw from it may come out holographic, as every draw may by
+ *                      default; false keeps every figure it hands out plain
  */
 public record WorldCollectionRecord(String id, String name, String author, int red, int green, int blue,
                                     @Nullable String boxTexture, @Nullable String boxColor, @Nullable String logo,
                                     boolean archived, int revision, List<Figure> figures,
                                     boolean draft, long editedAt, @Nullable String authorUrl,
                                     @Nullable LogoLayout logoLayout, boolean plush,
-                                    @Nullable RarityWeights rarityWeights) {
+                                    @Nullable RarityWeights rarityWeights, boolean holographic) {
     /** The figure sizes an operator can choose from. */
     public static final List<Float> SCALES = List.of(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f);
     // The background a new collection starts with
@@ -62,7 +64,7 @@ public record WorldCollectionRecord(String id, String name, String author, int r
     private static final Set<String> KEYS = Set.of("id", "name", "author", "background_color", "box", "logo",
             "archived", "revision", "figures");
     private static final Set<String> OPTIONAL_KEYS = Set.of("draft", "edited_at", "author_url", "logo_layout",
-            "plush", "rarity_weights");
+            "plush", "rarity_weights", "holographic");
     private static final Set<String> FIGURE_KEYS = Set.of("id", "name", "kind", "texture", "model", "animation",
             "scale", "enabled");
     private static final Set<String> FIGURE_OPTIONAL_KEYS = Set.of("rarity", "variants", "box_face");
@@ -368,7 +370,7 @@ public record WorldCollectionRecord(String id, String name, String author, int r
                                  @Nullable String boxTexture, @Nullable String boxColor, @Nullable String logo,
                                  boolean archived, int revision, List<Figure> figures) {
         this(id, name, author, red, green, blue, boxTexture, boxColor, logo, archived, revision, figures,
-                false, 0L, null, null, false, null);
+                false, 0L, null, null, false, null, true);
     }
 
     /**
@@ -383,27 +385,27 @@ public record WorldCollectionRecord(String id, String name, String author, int r
 
     public WorldCollectionRecord withDraft(boolean next) {
         return new WorldCollectionRecord(id, name, author, red, green, blue, boxTexture, boxColor, logo, archived,
-                revision, figures, next, editedAt, authorUrl, logoLayout, plush, rarityWeights);
+                revision, figures, next, editedAt, authorUrl, logoLayout, plush, rarityWeights, holographic);
     }
 
     public WorldCollectionRecord withArchived(boolean next) {
         return new WorldCollectionRecord(id, name, author, red, green, blue, boxTexture, boxColor, logo, next,
-                revision, figures, draft, editedAt, authorUrl, logoLayout, plush, rarityWeights);
+                revision, figures, draft, editedAt, authorUrl, logoLayout, plush, rarityWeights, holographic);
     }
 
     public WorldCollectionRecord withRevision(int next) {
         return new WorldCollectionRecord(id, name, author, red, green, blue, boxTexture, boxColor, logo, archived,
-                next, figures, draft, editedAt, authorUrl, logoLayout, plush, rarityWeights);
+                next, figures, draft, editedAt, authorUrl, logoLayout, plush, rarityWeights, holographic);
     }
 
     public WorldCollectionRecord withEditedAt(long next) {
         return new WorldCollectionRecord(id, name, author, red, green, blue, boxTexture, boxColor, logo, archived,
-                revision, figures, draft, next, authorUrl, logoLayout, plush, rarityWeights);
+                revision, figures, draft, next, authorUrl, logoLayout, plush, rarityWeights, holographic);
     }
 
     public WorldCollectionRecord withFigures(List<Figure> next) {
         return new WorldCollectionRecord(id, name, author, red, green, blue, boxTexture, boxColor, logo, archived,
-                revision, next, draft, editedAt, authorUrl, logoLayout, plush, rarityWeights);
+                revision, next, draft, editedAt, authorUrl, logoLayout, plush, rarityWeights, holographic);
     }
 
     /**
@@ -415,13 +417,20 @@ public record WorldCollectionRecord(String id, String name, String author, int r
                                               @Nullable String nextBoxColor, @Nullable String nextLogo) {
         return new WorldCollectionRecord(id, nextName, nextAuthor, nextRed, nextGreen, nextBlue, nextBoxTexture,
                 nextBoxColor, nextLogo, archived, revision, figures, draft, editedAt, authorUrl,
-                nextLogo != null ? logoLayout : null, plush, rarityWeights);
+                nextLogo != null ? logoLayout : null, plush, rarityWeights, holographic);
     }
 
     public WorldCollectionRecord withExtras(@Nullable String nextAuthorUrl, @Nullable LogoLayout nextLogoLayout,
                                             boolean nextPlush, @Nullable RarityWeights nextRarityWeights) {
         return new WorldCollectionRecord(id, name, author, red, green, blue, boxTexture, boxColor, logo, archived,
-                revision, figures, draft, editedAt, nextAuthorUrl, nextLogoLayout, nextPlush, nextRarityWeights);
+                revision, figures, draft, editedAt, nextAuthorUrl, nextLogoLayout, nextPlush, nextRarityWeights,
+                holographic);
+    }
+
+    /** This record with holographic draws allowed, or turned off. */
+    public WorldCollectionRecord withHolographic(boolean next) {
+        return new WorldCollectionRecord(id, name, author, red, green, blue, boxTexture, boxColor, logo, archived,
+                revision, figures, draft, editedAt, authorUrl, logoLayout, plush, rarityWeights, next);
     }
 
     /** Whether any figure has a rarity other than common, which makes the draw weighted. */
@@ -574,6 +583,9 @@ public record WorldCollectionRecord(String id, String name, String author, int r
         if (rarityWeights != null) {
             json.add("rarity_weights", rarityWeights.toJson());
         }
+        if (!holographic) {
+            json.addProperty("holographic", false);
+        }
         return json;
     }
 
@@ -682,9 +694,10 @@ public record WorldCollectionRecord(String id, String name, String author, int r
         }
         boolean plush = trueOnly(json, "plush");
         RarityWeights rarityWeights = json.has("rarity_weights") ? RarityWeights.fromJson(json.get("rarity_weights")) : null;
+        boolean holographic = !falseOnly(json, "holographic");
         WorldCollectionRecord record = new WorldCollectionRecord(id, name, author, red, green, blue,
                 boxTexture, boxColor, logo, archived, revision, figures, draft, editedAt, authorUrl, logoLayout,
-                plush, rarityWeights);
+                plush, rarityWeights, holographic);
         if (record.toUtf8().length > WorldContentLimits.RECORD_BYTES) {
             throw new WorldContentException("Collection record is larger than " + WorldContentLimits.RECORD_BYTES + " bytes");
         }
@@ -850,6 +863,20 @@ public record WorldCollectionRecord(String id, String name, String author, int r
         }
         if (!JsonFields.bool(json.get(key), key)) {
             throw new WorldContentException(key + " is written only when true");
+        }
+        return true;
+    }
+
+    /**
+     * Whether an optional flag whose default is true is there, which it is only as false: true
+     * is the omitted default, so each value has one form in the record.
+     */
+    private static boolean falseOnly(JsonObject json, String key) throws WorldContentException {
+        if (!json.has(key)) {
+            return false;
+        }
+        if (JsonFields.bool(json.get(key), key)) {
+            throw new WorldContentException(key + " is written only when false");
         }
         return true;
     }

@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "Pluszaki (automat gacha)",
   "blockpops.world_creator.publish.type.figure_note": "Gracze wygrywają jej figurki w pudełkach z automatu z chwytakiem.",
   "blockpops.world_creator.publish.type.plush_note": "Pojawia się w zakładce Pluszaki automatu gacha. Pluszaki są wydawane jako bloki figurek.",
+  "blockpops.world_creator.options.holographic": "Może wypaść holograficzna",
+  "blockpops.world_creator.options.holographic_note": "Jedno losowanie na 25 daje wersję holograficzną. Po wyłączeniu żadne losowanie z tej kolekcji jej nie da.",
   "blockpops.world_creator.publish.visibility": "Widoczność",
   "blockpops.world_creator.publish.visibility.draft": "Szkic",
   "blockpops.world_creator.publish.visibility.draft_help": "Poza automatami: widzą ją tylko operatorzy, w kreatorze",

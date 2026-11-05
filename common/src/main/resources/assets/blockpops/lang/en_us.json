@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "Plushes (gacha machine)",
   "blockpops.world_creator.publish.type.figure_note": "Players win its figures in boxes from the claw machine.",
   "blockpops.world_creator.publish.type.plush_note": "It shows in the gacha machine's Plushes tab. Plushes are handed out as figure blocks.",
+  "blockpops.world_creator.options.holographic": "Can come out holographic",
+  "blockpops.world_creator.options.holographic_note": "One draw in 25 comes out holographic. Turned off, no draw from this collection ever does.",
   "blockpops.world_creator.publish.visibility": "Visibility",
   "blockpops.world_creator.publish.visibility.draft": "Draft",
   "blockpops.world_creator.publish.visibility.draft_help": "Out of the machines: only operators see it, in the creator",

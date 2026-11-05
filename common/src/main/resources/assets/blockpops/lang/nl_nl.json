@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "Knuffels (gachamachine)",
   "blockpops.world_creator.publish.type.figure_note": "Spelers winnen de figuren in dozen uit de grijpmachine.",
   "blockpops.world_creator.publish.type.plush_note": "Verschijnt op het tabblad Knuffels van de gachamachine. Knuffels worden uitgedeeld als figuurblokken.",
+  "blockpops.world_creator.options.holographic": "Kan holografisch zijn",
+  "blockpops.world_creator.options.holographic_note": "Eén op de 25 trekkingen is holografisch. Uitgeschakeld is geen enkele trekking uit deze collectie holografisch.",
   "blockpops.world_creator.publish.visibility": "Zichtbaarheid",
   "blockpops.world_creator.publish.visibility.draft": "Concept",
   "blockpops.world_creator.publish.visibility.draft_help": "Niet in de machines: alleen beheerders zien de collectie, in de maker",

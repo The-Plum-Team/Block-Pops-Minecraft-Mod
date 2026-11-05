@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "인형 (가챠 기계)",
   "blockpops.world_creator.publish.type.figure_note": "플레이어는 크레인 게임기에서 이 컬렉션의 피규어를 박스에 담긴 채로 뽑습니다.",
   "blockpops.world_creator.publish.type.plush_note": "가챠 기계의 인형 탭에 표시됩니다. 인형은 피규어 블록으로 지급됩니다.",
+  "blockpops.world_creator.options.holographic": "홀로그램이 나올 수 있음",
+  "blockpops.world_creator.options.holographic_note": "뽑기 25번 중 1번은 홀로그램으로 나옵니다. 끄면 이 컬렉션의 뽑기에서는 홀로그램이 나오지 않습니다.",
   "blockpops.world_creator.publish.visibility": "공개 상태",
   "blockpops.world_creator.publish.visibility.draft": "초안",
   "blockpops.world_creator.publish.visibility.draft_help": "기계에 나오지 않음: 관리자만 제작기에서 볼 수 있습니다",

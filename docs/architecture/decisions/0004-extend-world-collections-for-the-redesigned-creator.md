@@ -9,7 +9,9 @@ this record does not change. Partially superseded by
 files included, are no longer kept until Save but saved as they settle, files once the operator
 moves on; the editor's Save, Save draft and Save figure, which saved one figure on its own, are
 gone; and a publish is atomic only with the edits still pending when it is confirmed, not with
-every change of the session.
+every change of the session. Extended by
+[ADR 0006](0006-let-world-collections-turn-off-holographic-draws.md), which adds one more optional
+key and one more edit under this record's rules.
 
 ## Context
 

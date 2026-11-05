@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "毛公仔（扭蛋機）",
   "blockpops.world_creator.publish.type.figure_note": "玩家可以從夾公仔機贏得裝在盒子裏的公仔。",
   "blockpops.world_creator.publish.type.plush_note": "它會顯示在扭蛋機的「毛公仔」分頁中。毛公仔會以公仔方塊的形式派發。",
+  "blockpops.world_creator.options.holographic": "可能抽出全息",
+  "blockpops.world_creator.options.holographic_note": "每 25 次抽取中有 1 次會抽出全息。關閉後，此收藏的抽取永遠不會抽出全息。",
   "blockpops.world_creator.publish.visibility": "可見度",
   "blockpops.world_creator.publish.visibility.draft": "草稿",
   "blockpops.world_creator.publish.visibility.draft_help": "不在機器中：只有管理員能在創作工具中看到它",

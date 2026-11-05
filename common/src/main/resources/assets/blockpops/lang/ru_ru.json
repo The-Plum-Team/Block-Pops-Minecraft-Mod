@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "Плюшевые игрушки (гача-автомат)",
   "blockpops.world_creator.publish.type.figure_note": "Игроки выигрывают её фигурки в коробках из автомата с клешнёй.",
   "blockpops.world_creator.publish.type.plush_note": "Она появится на вкладке „Плюшевые игрушки“ гача-автомата. Плюшевые игрушки выдаются как блоки фигурок.",
+  "blockpops.world_creator.options.holographic": "Может выпасть голографической",
+  "blockpops.world_creator.options.holographic_note": "Один розыгрыш из 25 даёт голографическую фигурку. Если выключить, ни один розыгрыш этой коллекции её не даст.",
   "blockpops.world_creator.publish.visibility": "Видимость",
   "blockpops.world_creator.publish.visibility.draft": "Черновик",
   "blockpops.world_creator.publish.visibility.draft_help": "Не в автоматах: её видят только операторы, в конструкторе",

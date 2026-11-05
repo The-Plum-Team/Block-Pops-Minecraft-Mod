@@ -69,6 +69,7 @@ public final class CreatorDraft {
     public static final String LOGO_LAYOUT = "logo_layout";
     public static final String PLUSH = "plush";
     public static final String RARITY_WEIGHTS = "rarity_weights";
+    public static final String HOLOGRAPHIC = "holographic";
     public static final String ARCHIVED = "archived";
     public static final String ORDER = "order";
     /** The change key {@link #listen} hears for an undo, which may change any field. */
@@ -516,7 +517,8 @@ public final class CreatorDraft {
     private record Snapshot(String slug, String name, String author, int red, int green, int blue, BoxMode boxMode,
                             @Nullable String boxColor, @Nullable FileRef boxTexture, @Nullable FileRef logo,
                             String authorUrl, @Nullable LogoLayout logoLayout, boolean plush,
-                            @Nullable RarityWeights rarityWeights, boolean archived, List<FigureDraft> figures) {
+                            @Nullable RarityWeights rarityWeights, boolean holographic, boolean archived,
+                            List<FigureDraft> figures) {
     }
 
     // The record the draft was made from, or the one a create would make while it is new
@@ -541,6 +543,7 @@ public final class CreatorDraft {
     private boolean plush;
     @Nullable
     private RarityWeights rarityWeights;
+    private boolean holographic;
     private boolean archived;
     private List<FigureDraft> figures = new ArrayList<>();
     private final ArrayDeque<Snapshot> undo = new ArrayDeque<>();
@@ -597,6 +600,7 @@ public final class CreatorDraft {
         logoLayout = record.logoLayout();
         plush = record.plush();
         rarityWeights = record.rarityWeights();
+        holographic = record.holographic();
         archived = record.archived();
         figures = new ArrayList<>();
         for (WorldCollectionRecord.Figure figure : record.figures()) {
@@ -701,6 +705,11 @@ public final class CreatorDraft {
         return rarityWeights != null ? rarityWeights : RarityWeights.DEFAULT;
     }
 
+    /** Whether a draw from the collection may come out holographic, as it may by default. */
+    public boolean holographic() {
+        return holographic;
+    }
+
     public boolean archived() {
         return archived;
     }
@@ -752,7 +761,7 @@ public final class CreatorDraft {
             undo.addLast(new Snapshot(next, snapshot.name(), snapshot.author(), snapshot.red(), snapshot.green(),
                     snapshot.blue(), snapshot.boxMode(), snapshot.boxColor(), snapshot.boxTexture(), snapshot.logo(),
                     snapshot.authorUrl(), snapshot.logoLayout(), snapshot.plush(), snapshot.rarityWeights(),
-                    snapshot.archived(), snapshot.figures()));
+                    snapshot.holographic(), snapshot.archived(), snapshot.figures()));
         }
         return true;
     }
@@ -878,6 +887,17 @@ public final class CreatorDraft {
         if (next != plush) {
             checkpoint(PLUSH);
             plush = next;
+        }
+    }
+
+    /**
+     * Lets the collection's draws come out holographic, one time in 25 as every collection's may,
+     * or turns that off, so none of them ever does.
+     */
+    public void setHolographic(boolean next) {
+        if (next != holographic) {
+            checkpoint(HOLOGRAPHIC);
+            holographic = next;
         }
     }
 
@@ -1086,7 +1106,7 @@ public final class CreatorDraft {
             copies.add(figure.copy());
         }
         return new Snapshot(slug, name, author, red, green, blue, boxMode, boxColor, boxTexture, logo, authorUrl,
-                logoLayout, plush, rarityWeights, archived, copies);
+                logoLayout, plush, rarityWeights, holographic, archived, copies);
     }
 
     private void restore(Snapshot snapshot) {
@@ -1107,6 +1127,7 @@ public final class CreatorDraft {
         logoLayout = snapshot.logoLayout();
         plush = snapshot.plush();
         rarityWeights = snapshot.rarityWeights();
+        holographic = snapshot.holographic();
         archived = snapshot.archived();
         figures = new ArrayList<>();
         for (FigureDraft figure : snapshot.figures()) {
@@ -1156,6 +1177,9 @@ public final class CreatorDraft {
         }
         if (!Objects.equals(rarityWeights, base.rarityWeights())) {
             changes.add(RARITY_WEIGHTS);
+        }
+        if (holographic != base.holographic()) {
+            changes.add(HOLOGRAPHIC);
         }
         if (archived != base.archived()) {
             changes.add(ARCHIVED);
@@ -1341,7 +1365,7 @@ public final class CreatorDraft {
         }
         return new WorldCollectionRecord(collectionId(), name, author, red, green, blue, boxTextureSha(),
                 boxColorName(), FileRef.shaOf(logo), archived, base.revision(), complete, base.draft(),
-                base.editedAt(), authorUrlOrNull(), effectiveLogoLayout(), plush, rarityWeights);
+                base.editedAt(), authorUrlOrNull(), effectiveLogoLayout(), plush, rarityWeights, holographic);
     }
 
     /** Every file picked on this computer that the draft names, by sha. */
@@ -1520,6 +1544,7 @@ public final class CreatorDraft {
             case LOGO_LAYOUT -> effectiveLogoLayout();
             case PLUSH -> plush;
             case RARITY_WEIGHTS -> rarityWeights;
+            case HOLOGRAPHIC -> holographic;
             case ARCHIVED -> archived;
             case ORDER -> orderedIds(figures);
             default -> null;
@@ -1552,6 +1577,7 @@ public final class CreatorDraft {
             case LOGO_LAYOUT -> record.logoLayout();
             case PLUSH -> record.plush();
             case RARITY_WEIGHTS -> record.rarityWeights();
+            case HOLOGRAPHIC -> record.holographic();
             case ARCHIVED -> record.archived();
             case ORDER -> {
                 List<String> ids = new ArrayList<>();
@@ -1650,6 +1676,7 @@ public final class CreatorDraft {
         boolean layoutKept = kept(LOGO_LAYOUT, older, syncRevision);
         boolean plushKept = kept(PLUSH, older, syncRevision);
         boolean weightsKept = kept(RARITY_WEIGHTS, older, syncRevision);
+        boolean holographicKept = kept(HOLOGRAPHIC, older, syncRevision);
         boolean archivedKept = kept(ARCHIVED, older, syncRevision);
         if (!nameKept) {
             name = newer.name();
@@ -1687,6 +1714,9 @@ public final class CreatorDraft {
         }
         if (!weightsKept) {
             rarityWeights = newer.rarityWeights();
+        }
+        if (!holographicKept) {
+            holographic = newer.holographic();
         }
         if (!archivedKept) {
             archived = newer.archived();
@@ -1839,6 +1869,14 @@ public final class CreatorDraft {
         logoLayout = base.logoLayout();
         plush = base.plush();
         rarityWeights = base.rarityWeights();
+    }
+
+    /**
+     * Puts whether the collection's draws may come out holographic back as the server has it. It is
+     * no undo step.
+     */
+    public void revertHolographic() {
+        holographic = base.holographic();
     }
 
     /**

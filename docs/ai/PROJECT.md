@@ -30,9 +30,11 @@ follow-up pull request (#11). `site/mod-base.json` no longer defers it or any ot
   [ADR 0003](../architecture/decisions/0003-accept-operator-uploaded-world-collections.md)
   operator-uploaded World collections,
   [ADR 0004](../architecture/decisions/0004-extend-world-collections-for-the-redesigned-creator.md)
-  their extensions for the redesigned creator and
+  their extensions for the redesigned creator,
   [ADR 0005](../architecture/decisions/0005-autosave-world-collection-drafts.md) the autosave of
-  their drafts.
+  their drafts and
+  [ADR 0006](../architecture/decisions/0006-let-world-collections-turn-off-holographic-draws.md)
+  turning off their holographic draws.
 - `site/mod-base.json` and `scripts/pages/mod_base_adapter.py` connect this repository to the
   mod-base public-evidence kit; `scripts/ci/mod_base_kit.py` finds the pinned kit.
 
@@ -78,7 +80,8 @@ clicked; a plush collection lists a base plush's variants as its alternatives, i
 `BuiltInPlushes.VARIANT_GROUPS`.
 
 A drawn figure or plush comes out holographic one time in 25 (`figure.Holographic`; never in the
-packaged E2E). The `Holographic` flag travels in the block-entity data of the box, the figure
+packaged E2E, and never from a World collection that turned it off, which `Holographic.roll` checks
+on the server). The `Holographic` flag travels in the block-entity data of the box, the figure
 taken out of it, the plush and every item they drop; tooltips, the draw result card and an
 announcement with its own sound show it. `HolographicRenderTypes` draws it with a shader on
 every lane, by era: 1.20.1 and 1.21.1 swap in the shader instance each loader registers, 1.21.4
@@ -153,7 +156,9 @@ owns, are never written into GeckoLib's caches, are refused when a bundled resou
 id, and are left alone by `RuntimeAssets.clear()`. Since
 [ADR 0004](../architecture/decisions/0004-extend-world-collections-for-the-redesigned-creator.md)
 a record may carry optional keys (draft, author link, logo placement, plush, rarity, texture-only
-skin variants, box face), each left out while it holds its default so older records keep their
+skin variants, box face, and since
+[ADR 0006](../architecture/decisions/0006-let-world-collections-turn-off-holographic-draws.md)
+holographic draws turned off), each left out while it holds its default so older records keep their
 bytes; the store stays at format 1, and client and server must run the same BlockPops version. A
 draft is synced only to operators, whose status the server polls, and is offered by no machine. The
 author link is display-only: `http` or `https`, printable ASCII, never fetched by the game, and

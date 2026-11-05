@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "ぬいぐるみ（ガチャマシン）",
   "blockpops.world_creator.publish.type.figure_note": "プレイヤーはクレーンゲームで、ボックス入りのフィギュアを獲得します。",
   "blockpops.world_creator.publish.type.plush_note": "ガチャマシンの「ぬいぐるみ」タブに表示されます。ぬいぐるみはフィギュアブロックとして渡されます。",
+  "blockpops.world_creator.options.holographic": "ホログラムが出ることがある",
+  "blockpops.world_creator.options.holographic_note": "抽選の25回に1回はホログラムになります。オフにすると、このコレクションの抽選では一度もホログラムになりません。",
   "blockpops.world_creator.publish.visibility": "公開状態",
   "blockpops.world_creator.publish.visibility.draft": "下書き",
   "blockpops.world_creator.publish.visibility.draft_help": "マシンには出ません: クリエイターで管理者だけが見られます",

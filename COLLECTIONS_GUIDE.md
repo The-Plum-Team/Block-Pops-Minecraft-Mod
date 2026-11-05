@@ -378,8 +378,10 @@ Every change shows at once in the editor's views, unsaved files included, and is
   fixed, and how its draw works: every figure's chance, this server's token rules and about how
   many days of tokens completing the collection takes. **Draw by rarity** sets the weight of each
   rarity, **Collection type** puts it in the claw machine as boxed figures or in the gacha
-  machine's **Plushes** tab, handed out as figure blocks, and **Visibility** chooses between draft
-  and published, or, once published, between published and archived. **How players will see it**
+  machine's **Plushes** tab, handed out as figure blocks, **Can come out holographic**, ticked by
+  default, lets one draw in 25 come out holographic (untick it and no draw from the collection ever
+  does), and **Visibility** chooses between draft and published, or, once published, between
+  published and archived. **How players will see it**
   shows the machine screen as a new player or a collector sees it, with **Test pull** and **Pull
   100 times**, which spend no tokens and give nobody anything. To publish a draft, choose
   **Published** and press **Publish collection**, which saves every change and publishes in one
@@ -536,6 +538,8 @@ Required keys are `name`, `author`, `background_color` and `figures`, and each f
   defaults each legendary figure comes up once for every 20 times each common figure does. A
   guaranteed token still gives a figure the player has not found yet, picked by the same weights
   among those;
+- `holographic`: `false` keeps every figure drawn from the collection plain. Left out, or `true`,
+  one draw in 25 comes out holographic, as in every collection;
 - a figure's `scale`: one of the sizes listed under [Files](#files);
 - a figure's `rarity`: `rare`, `epic` or `legendary`; a figure without one is common, and while
   every figure is common they are all equally likely;

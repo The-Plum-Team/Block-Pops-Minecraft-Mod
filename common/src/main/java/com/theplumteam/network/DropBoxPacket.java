@@ -165,7 +165,7 @@ public class DropBoxPacket {
 
                 if (collection.isPlush()) {
                     // A plush collection hands out the plush itself, not a box
-                    givePlush(player, packet.collectionId, selectedFigure, discovery);
+                    givePlush(player, packet.collectionId, collection, selectedFigure, discovery);
                     return;
                 }
 
@@ -201,7 +201,7 @@ public class DropBoxPacket {
                     }
 
                     boolean isNew = !discovery.isDiscovered(uniqueFigureId);
-                    boolean holographic = Holographic.roll();
+                    boolean holographic = Holographic.roll(collection);
                     // Ahead of the unlock: the screen plays the draw out and sounds its result
                     DrawResultPacket.sendToPlayer(player, packet.collectionId, selectedFigure.getId(), isNew, holographic);
                     if (isNew) {
@@ -245,9 +245,9 @@ public class DropBoxPacket {
         });
     }
 
-    private static void givePlush(ServerPlayer player, String collectionId, FigureDefinition figure,
-                                  IPlayerDiscovery discovery) {
-        boolean holographic = Holographic.roll();
+    private static void givePlush(ServerPlayer player, String collectionId, FigureCollection collection,
+                                  FigureDefinition figure, IPlayerDiscovery discovery) {
+        boolean holographic = Holographic.roll(collection);
         ItemStack plushItem = PlushPrizes.of(collectionId, figure, holographic);
         // The pool was checked before the token was spent, so this is only a guard
         if (plushItem == null) {

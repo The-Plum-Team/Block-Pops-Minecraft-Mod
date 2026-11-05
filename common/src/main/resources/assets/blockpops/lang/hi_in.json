@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "सॉफ़्ट टॉय (गाचा मशीन)",
   "blockpops.world_creator.publish.type.figure_note": "खिलाड़ी इसके फ़िगर क्लॉ मशीन से बॉक्स में जीतते हैं।",
   "blockpops.world_creator.publish.type.plush_note": "यह गाचा मशीन के 'सॉफ़्ट टॉय' टैब में दिखता है। सॉफ़्ट टॉय फ़िगर ब्लॉक के रूप में दिए जाते हैं।",
+  "blockpops.world_creator.options.holographic": "होलोग्राफ़िक निकल सकता है",
+  "blockpops.world_creator.options.holographic_note": "हर 25 में से एक ड्रॉ होलोग्राफ़िक निकलता है। बंद करने पर इस संग्रह का कोई भी ड्रॉ होलोग्राफ़िक नहीं निकलता।",
   "blockpops.world_creator.publish.visibility": "दृश्यता",
   "blockpops.world_creator.publish.visibility.draft": "ड्राफ़्ट",
   "blockpops.world_creator.publish.visibility.draft_help": "मशीनों से बाहर: सिर्फ़ ऑपरेटर इसे क्रिएटर में देखते हैं",

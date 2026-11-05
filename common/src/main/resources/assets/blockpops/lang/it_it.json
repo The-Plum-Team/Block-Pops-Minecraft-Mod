@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "Peluche (macchina gacha)",
   "blockpops.world_creator.publish.type.figure_note": "I giocatori vincono le sue figure in scatola alla gru.",
   "blockpops.world_creator.publish.type.plush_note": "Appare nella scheda Peluche della macchina gacha. I peluche vengono consegnati come blocchi figura.",
+  "blockpops.world_creator.options.holographic": "Può uscire olografica",
+  "blockpops.world_creator.options.holographic_note": "Un'estrazione su 25 esce olografica. Se disattivato, nessuna estrazione di questa collezione esce olografica.",
   "blockpops.world_creator.publish.visibility": "Visibilità",
   "blockpops.world_creator.publish.visibility.draft": "Bozza",
   "blockpops.world_creator.publish.visibility.draft_help": "Fuori dalle macchine: la vedono solo gli operatori, nel creatore",

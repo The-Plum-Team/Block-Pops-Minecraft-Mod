@@ -636,6 +636,8 @@ public final class WorldCollections {
             return remove.id();
         } else if (edit instanceof WorldCollectionEdit.SetCollectionExtras set) {
             return set.id();
+        } else if (edit instanceof WorldCollectionEdit.SetHolographic set) {
+            return set.id();
         } else if (edit instanceof WorldCollectionEdit.SetFigureExtras set) {
             return set.id();
         }
@@ -675,7 +677,7 @@ public final class WorldCollections {
         WorldCollectionRecord copy = new WorldCollectionRecord(id, duplicate.name(), source.author(), source.red(),
                 source.green(), source.blue(), source.boxTexture(), source.boxColor(), source.logo(), false, 0,
                 source.figures(), true, 0L, source.authorUrl(), source.logoLayout(), source.plush(),
-                source.rarityWeights());
+                source.rarityWeights(), source.holographic());
         txn.create(copy, by, System.currentTimeMillis());
         txn.copiedFrom.put(id, source);
         return null;
@@ -805,6 +807,10 @@ public final class WorldCollections {
         }
         if (edit instanceof WorldCollectionEdit.SetCollectionExtras set) {
             return withCollectionExtras(previous, set);
+        }
+        if (edit instanceof WorldCollectionEdit.SetHolographic set) {
+            // Any collection, a draft or archived one too: it says only how its next draws come out
+            return previous.withHolographic(set.holographic());
         }
         if (edit instanceof WorldCollectionEdit.SetFigureExtras set) {
             return withFigure(previous, figureExtras(existingFigure(previous, set.figure()), set));

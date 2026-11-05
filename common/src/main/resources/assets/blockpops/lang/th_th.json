@@ -821,6 +821,8 @@
   "blockpops.world_creator.publish.type.plushes": "ตุ๊กตา (ตู้กาชา)",
   "blockpops.world_creator.publish.type.figure_note": "ผู้เล่นลุ้นรับฟิกเกอร์ของคอลเลกชันนี้ในกล่องจากตู้คีบ",
   "blockpops.world_creator.publish.type.plush_note": "แสดงในแท็บตุ๊กตาของตู้กาชา ตุ๊กตาจะถูกมอบให้เป็นบล็อกฟิกเกอร์",
+  "blockpops.world_creator.options.holographic": "อาจออกเป็นโฮโลแกรม",
+  "blockpops.world_creator.options.holographic_note": "การสุ่ม 1 ใน 25 ครั้งจะออกเป็นโฮโลแกรม เมื่อปิดไว้ การสุ่มจากคอลเลกชันนี้จะไม่ออกเป็นโฮโลแกรมเลย",
   "blockpops.world_creator.publish.visibility": "การมองเห็น",
   "blockpops.world_creator.publish.visibility.draft": "ฉบับร่าง",
   "blockpops.world_creator.publish.visibility.draft_help": "ไม่อยู่ในตู้: มีเพียงผู้ควบคุมที่เห็นได้ในตัวสร้าง",
