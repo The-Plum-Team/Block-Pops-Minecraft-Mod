@@ -99,6 +99,10 @@ public final class Theme {
     public static final String[] ICON_UNDO = {
             "..#......", ".##......", "#######..", ".##....#.", "..#.....#",
             "........#", "........#", ".......#.", "..#####.."};
+    /** A warning triangle with its "!" cut out, for a state that needs a look, such as space running low. */
+    public static final String[] ICON_WARNING = {
+            "....#....", "...###...", "...#.#...", "..##.##..", "..##.##..",
+            ".#######.", ".###.###.", "#########"};
     /** Three dots, for a small button that opens a menu of more actions ("More"). */
     public static final String[] ICON_MORE = {"##..##..##", "##..##..##"};
     public static final String[] ICON_FILE = {

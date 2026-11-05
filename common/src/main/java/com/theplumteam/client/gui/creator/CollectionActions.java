@@ -1,11 +1,15 @@
 package com.theplumteam.client.gui.creator;
 
 import com.theplumteam.client.ClientHiddenCollections;
+import com.theplumteam.client.gui.AdminProgressionScreen;
 import com.theplumteam.client.gui.creator.ui.CreatorScreen;
+import com.theplumteam.client.gui.creator.ui.Draw;
 import com.theplumteam.client.gui.creator.ui.Theme;
 import com.theplumteam.client.gui.creator.ui.UiButton;
 import com.theplumteam.client.gui.creator.ui.UiMenu;
 import com.theplumteam.client.gui.creator.ui.UiModal;
+import com.theplumteam.client.gui.creator.ui.UiNode;
+import com.theplumteam.client.gui.creator.ui.UiQuotaMeter;
 import com.theplumteam.client.gui.creator.ui.UiToast;
 import com.theplumteam.client.gui.style.DialogFrame;
 import com.theplumteam.client.gui.style.PixelIcon;
@@ -18,6 +22,9 @@ import com.theplumteam.network.UnlockCollectionPacket;
 import com.theplumteam.worldcontent.WorldCollectionEdit;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldContentLimits;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
@@ -36,12 +43,16 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  * import of a collection a data pack ships ({@link PackImportDialog}).
  *
  * <p>{@link #menu} offers a collection's actions, each disabled with the reason it cannot be used
- * now, in the order the overview's card menu lists them. The confirmations and the help are
- * dialogs over the screen the actions were made for; the outcome of each is told in the
- * creator's toast. Every action only asks the server, which checks it again; the screens follow
- * the collections the server syncs back.
+ * now, in the order the home's "More" menu lists them, with the players' progress of a published
+ * collection and the import at its end. The confirmations and the help are dialogs over the
+ * screen the actions were made for; the outcome of each is told in the creator's toast. Every
+ * action only asks the server, which checks it again; the screens follow the collections the
+ * server syncs back.
  */
 final class CollectionActions {
+    // Wide enough that the help's three paragraphs fit the height of Minecraft's default window
+    private static final int HELP_WIDTH = 400;
+
     private final CreatorScreen screen;
     @Nullable
     private final BlockPos machinePos;
@@ -93,9 +104,10 @@ final class CollectionActions {
 
     /**
      * A collection's menu: putting it in this machine, when the creator was opened from one;
-     * every figure for the operator; a duplicate; then restoring an archived collection or
-     * archiving a published one, and deleting it for good, which a published collection must be
-     * archived for first.
+     * every figure for the operator; the players' progress in a collection that is or was in the
+     * machines; a duplicate; then restoring an archived collection or archiving a published one,
+     * and deleting it for good, which a published collection must be archived for first; and
+     * last the import of a new collection from a data pack.
      */
     UiMenu menu(WorldCollectionRecord record) {
         UiMenu menu = new UiMenu();
@@ -113,6 +125,10 @@ final class CollectionActions {
         } else {
             menu.disabled(tr("home.menu.unlock"), tr("home.reason.no_figures"));
         }
+        if (!record.draft()) {
+            // Players can only have figures of a collection that was in the machines
+            menu.item(tr("home.menu.progress"), () -> openProgress(record.id()));
+        }
         Component full = tooManyCollections();
         if (full != null) {
             menu.disabled(tr("home.menu.duplicate"), full);
@@ -125,12 +141,24 @@ final class CollectionActions {
         } else if (!record.draft()) {
             menu.warning(tr("home.menu.archive"), () -> confirmArchive(record));
         }
-        if (record.archived() || record.draft()) {
+        if (canPurge(record)) {
             menu.warning(tr("home.menu.purge"), () -> confirmPurge(record));
         } else {
             menu.disabled(tr("home.menu.purge"), tr("home.reason.archive_first"));
         }
+        menu.separator();
+        Component importProblem = tooManyCollections();
+        if (importProblem != null) {
+            menu.disabled(tr("home.import"), importProblem);
+        } else {
+            menu.item(tr("home.import"), this::openImport);
+        }
         return menu;
+    }
+
+    /** Whether a collection can be deleted for good: a draft or an archived one; a published one is archived first. */
+    static boolean canPurge(WorldCollectionRecord record) {
+        return record.archived() || record.draft();
     }
 
     // The actions
@@ -213,12 +241,42 @@ final class CollectionActions {
         this.screen.openModal(dialog);
     }
 
-    /** The creator's help: what World collections are and how players get them. */
+    /**
+     * The creator's help: what World collections are and how players get them, then the home's
+     * keyboard shortcuts, and last how much of the server's file space the collections use and
+     * how many of the world's collections exist.
+     */
     void openHelp() {
-        UiModal dialog = new UiModal(tr("home.help_title"), tr("home.help_body")).width(320)
+        UiModal dialog = new UiModal(tr("home.help_title"), tr("home.help_body")).width(HELP_WIDTH)
                 .accent(DialogFrame.Accent.SETTINGS, Theme.ICON_HELP);
+        // Each paragraph in a row of its own, as tall as its lines at the width the dialog takes
+        int inner = Math.max(160, Math.min(HELP_WIDTH, this.screen.width - 2 * Theme.SPACE_S)) - 2 * DialogFrame.PADDING;
+        Font font = Minecraft.getInstance().font;
+        for (Paragraph paragraph : List.of(new Paragraph(tr("home.help_keys"), Theme.MUTED),
+                new Paragraph(quotaText(), Theme.FAINT))) {
+            dialog.node(paragraph, paragraph.height(font, inner));
+        }
         dialog.cancelButton(tr("home.help_close"));
         this.screen.openModal(dialog);
+    }
+
+    /**
+     * How much of the server's file space every World collection uses and how many of the
+     * world's collections exist: "3.2 of 64 MiB · 3 of 32 collections".
+     */
+    static Component quotaText() {
+        return Component.empty()
+                .append(UiQuotaMeter.text(ClientWorldCollections.quotaUsedKiB(), ClientWorldCollections.quotaMaxKiB()))
+                .append(tr("home.collections", ClientWorldCollections.records().size(),
+                        WorldContentLimits.MAX_COLLECTIONS));
+    }
+
+    /**
+     * What the players of this world have of one collection, over the screen the actions were
+     * made for, which it goes back to.
+     */
+    void openProgress(String collectionId) {
+        Minecraft.getInstance().setScreen(new AdminProgressionScreen(this.screen, collectionId));
     }
 
     /**
@@ -246,6 +304,27 @@ final class CollectionActions {
         });
         if (!sent) {
             UiToast.show(tr("not_sent"));
+        }
+    }
+
+    // A paragraph of a dialog in a row of its own, wrapped to the row's width
+    private static final class Paragraph extends UiNode.Box {
+        private static final int MAX_LINES = 4;
+        private final Component text;
+        private final int colour;
+
+        Paragraph(Component text, int colour) {
+            this.text = text;
+            this.colour = colour;
+        }
+
+        int height(Font font, int width) {
+            return Math.min(MAX_LINES, Draw.wrap(font, text.getString(), width).size()) * Theme.LINE_HEIGHT - 2;
+        }
+
+        @Override
+        public void draw(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+            Draw.lines(graphics, Minecraft.getInstance().font, text.getString(), x, y, width, MAX_LINES, colour);
         }
     }
 }

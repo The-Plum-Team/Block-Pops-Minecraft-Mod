@@ -581,7 +581,7 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
             this.modal.draw(graphics, mouseX, mouseY, partialTick);
         }
         // Still lifted, so before 1.21.6 an item on the dialog cannot cover the tooltip
-        UiTooltip.draw(graphics, this.font, mouseX, mouseY);
+        UiTooltip.draw(graphics, this.font, mouseX, mouseY, this.width);
         GuiPose.pop(graphics);
     }
 

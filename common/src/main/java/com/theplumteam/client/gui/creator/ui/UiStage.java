@@ -1,5 +1,6 @@
 package com.theplumteam.client.gui.creator.ui;
 
+import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.client.gui.style.PixelFont;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.util.GuiPose;
@@ -8,10 +9,12 @@ import com.theplumteam.client.gui.widget.FigureEntry;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
+import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.registry.ModSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
@@ -32,10 +35,11 @@ import java.util.function.IntFunction;
  *
  * <p>The models come only from the collection the game has registered, so a collection not
  * registered shows the glow alone, and one with no figure its box alone with a faint note beside
- * it. An archived collection is shown greyed: the screen gives its grey band colour, and the
- * figures are drawn in black and white under a wash that leaves them recognisable. The box takes
- * the screen's first model and the figures the next ones ({@link SidebarScreen.ModelBudget});
- * with none left, a model is not drawn.
+ * it. An archived collection is shown greyed: the screen gives its grey band colour, the
+ * figures are drawn in black and white under a wash that leaves them recognisable, and the box
+ * is the plain light grey one, empty, since a box cannot be drawn in black and white. The box
+ * takes the screen's first model and the figures the next ones
+ * ({@link SidebarScreen.ModelBudget}); with none left, a model is not drawn.
  */
 public class UiStage extends UiNode.Box implements SidebarScreen.Budgeted {
     /** The box's turn, a little to the left of its front, as in the machine's showcase. */
@@ -47,8 +51,10 @@ public class UiStage extends UiNode.Box implements SidebarScreen.Budgeted {
     // A cell's size against the box's (which then stands as tall as a figure) and against its step
     private static final float BOX_RATIO = 0.66f;
     private static final float STEP_RATIO = 0.45f;
+    // Five figures by the box reach the widest content panel's width at about 234; a tall
+    // canvas lets the figures grow with the height up to that
     private static final int MIN_CELL = 60;
-    private static final int MAX_CELL = 170;
+    private static final int MAX_CELL = 240;
     private static final int MAX_NARROW_CELL = 110;
     // A cell is at most this much shorter than the stage, which leaves the figures' heads clear
     private static final int HEAD_ROOM = 12;
@@ -150,8 +156,8 @@ public class UiStage extends UiNode.Box implements SidebarScreen.Budgeted {
 
     /**
      * The height at which a stage of this width shows its figures as large as its width lets
-     * them, with room over their heads; a screen keeps its stage no taller, so the glow over the
-     * figures stays a glow rather than an empty band.
+     * them, with room over their heads; a screen keeps its stage about this tall (a fifth
+     * taller at most), so the glow over the figures stays a glow rather than an empty band.
      */
     public static int preferredHeight(int width, boolean narrow) {
         return SidebarScreen.clamp(cellForWidth(width, narrow), MIN_CELL, narrow ? MAX_NARROW_CELL : MAX_CELL)
@@ -231,7 +237,7 @@ public class UiStage extends UiNode.Box implements SidebarScreen.Budgeted {
             try {
                 if (boxModels > 0) {
                     if (box.isEmpty()) {
-                        box = UiViewport.boxStack(collectionId, boxFigureId, false);
+                        box = greyed ? greyBox(collectionId) : UiViewport.boxStack(collectionId, boxFigureId, false);
                     }
                     UiViewport.drawBoxFront(graphics, box, BOX_YAW, 0, rowLeft + boxSize / 2.0f,
                             floor + 2 - boxSize * BOX_MIDDLE, boxSize);
@@ -271,6 +277,17 @@ public class UiStage extends UiNode.Box implements SidebarScreen.Budgeted {
         if (hovered(mouseX, mouseY) && !moreTile.contains(mouseX, mouseY) && tooltip != null && !tooltip.isEmpty()) {
             UiTooltip.set(tooltip);
         }
+    }
+
+    // A box of the collection in the plain light grey, which its own art and colour give way to,
+    // holding no figure: the box and the figure inside it have no black-and-white texture
+    private static ItemStack greyBox(String collectionId) {
+        ItemStack stack = UiViewport.boxStack(collectionId, null, false);
+        CompoundTag tag = BlockEntityItemData.read(stack);
+        tag = tag != null ? tag.copy() : new CompoundTag();
+        tag.putString("Color", PopBlockColor.LIGHT_GRAY.getSerializedName());
+        BlockEntityItemData.write(stack, tag, "blockpops:box_block");
+        return stack;
     }
 
     // Each figure stands in a place of the row, its feet on the ledge, as many as the budget allows

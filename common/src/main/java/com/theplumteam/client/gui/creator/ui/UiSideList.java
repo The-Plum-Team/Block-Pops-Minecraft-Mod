@@ -117,6 +117,8 @@ public class UiSideList extends UiScrollPane implements SidebarScreen.Budgeted {
     @Nullable
     private Component emptyText;
     private int grantedModels = Integer.MAX_VALUE;
+    // The boxes to ask the budget for at least, whatever the rows hold at the build
+    private int reservedModels;
 
     // Building
 
@@ -162,6 +164,14 @@ public class UiSideList extends UiScrollPane implements SidebarScreen.Budgeted {
     public boolean isEmpty() {
         layout();
         return shown.isEmpty();
+    }
+
+    /**
+     * Asks the screen's budget for this many boxes at least, as when the rows are filled again
+     * between builds, such as by a search, and may then show more boxes than they hold now.
+     */
+    public void reserveModels(int boxes) {
+        this.reservedModels = Math.max(0, boxes);
     }
 
     /** A faint line the list shows while it has no row in sight, as when a search matches none. */
@@ -364,6 +374,7 @@ public class UiSideList extends UiScrollPane implements SidebarScreen.Budgeted {
                 boxes++;
             }
         }
+        boxes = Math.max(boxes, reservedModels);
         // No more than can be in sight at once, partly cut at both ends
         int inSight = height / STEP + 2;
         budget.request(SidebarScreen.ModelBudget.Rank.SIDEBAR, Math.min(boxes, inSight),
