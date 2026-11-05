@@ -4,6 +4,7 @@ import com.theplumteam.client.ClientHiddenCollections;
 import com.theplumteam.client.gui.creator.ui.Theme;
 import com.theplumteam.client.gui.creator.ui.UiSideRow;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
+import com.theplumteam.client.worldcontent.CreatorAutosave;
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldCollectionRecord.Rarity;
@@ -266,7 +267,8 @@ final class CollectionStatus {
 
     /**
      * Shows the state at the right end of the collection's sidebar row, in the badge's order of
-     * priority: a red "⚠ 2" when the server lost files, a draft's gold dot and word, or else the
+     * priority: a red "⚠ 2" when the server lost files, a faint "saving" while its changes are
+     * being saved ({@link CreatorAutosave#isSaving}), a draft's gold dot and word, or else the
      * number of figures, which says in its tooltip when the server hides the collection.
      *
      * @param selected whether the row is the selected one, on whose slate a count is brighter
@@ -274,6 +276,8 @@ final class CollectionStatus {
     void showOnRow(UiSideRow row, boolean selected) {
         if (missingFiles > 0) {
             row.count(Component.literal("⚠ " + missingFiles), Theme.RED, tr("card.badge.missing_tip"));
+        } else if (CreatorAutosave.isSaving(record.id())) {
+            row.status(tr("side.status.saving"), Theme.FAINT, tr("autosave.saving_tip"));
         } else if (record.draft() && !record.archived()) {
             row.status(tr("side.status.draft"), Theme.GOLD, tr("card.badge.draft_tip"));
         } else if (hidden()) {

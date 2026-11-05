@@ -248,6 +248,13 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
         }
     }
 
+    /**
+     * A node that took a press was let go, as a slider is at the end of a drag; the editor saves
+     * the value it set sooner then. Nothing by default.
+     */
+    protected void nodeReleased(UiNode node) {
+    }
+
     /** Gives the keyboard to a node, or to none, taking it from any text field. */
     public final void focusNode(@Nullable UiNode node) {
         this.focusedNode = node;
@@ -735,6 +742,9 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
         // A node whose press opened a dialog still hears its release, so it ends that press
         if (pressed != null && pressed.release(click)) {
             used = true;
+        }
+        if (pressed != null) {
+            nodeReleased(pressed);
         }
         // Vanilla always hears the release, so a text field ends its selection drag
         return vanilla.getAsBoolean() || used;

@@ -26,7 +26,7 @@ import java.util.List;
  */
 public final class UiToast {
     // How long a message shows, which the sidebar's status slot keeps a passing line for too
-    static final long LIFETIME_MS = 6000;
+    public static final long LIFETIME_MS = 6000;
     private static final long FADE_IN_MS = 300;
     private static final long FADE_OUT_MS = 500;
     private static final int PADDING = 6;

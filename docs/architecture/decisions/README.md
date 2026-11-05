@@ -6,6 +6,7 @@ Accepted project decisions:
 - [ADR 0002: Load Custom collections at runtime](0002-load-custom-collections-at-runtime.md)
 - [ADR 0003: Accept operator-uploaded World collections](0003-accept-operator-uploaded-world-collections.md)
 - [ADR 0004: Extend World collections for the redesigned creator](0004-extend-world-collections-for-the-redesigned-creator.md)
+- [ADR 0005: Autosave World-collection drafts](0005-autosave-world-collection-drafts.md)
 
 An ADR records the evidence and trade-offs behind a decision. Operational instructions remain in
 the focused human and AI documentation linked from the repository root. Name each record

@@ -4,7 +4,12 @@
 
 Accepted. It partially supersedes
 [ADR 0003](0003-accept-operator-uploaded-world-collections.md), which stays in force for everything
-this record does not change.
+this record does not change. Partially superseded by
+[ADR 0005](0005-autosave-world-collection-drafts.md): a draft's changes, its picked and own-skin
+files included, are no longer kept until Save but saved as they settle, files once the operator
+moves on; the editor's Save, Save draft and Save figure, which saved one figure on its own, are
+gone; and a publish is atomic only with the edits still pending when it is confirmed, not with
+every change of the session.
 
 ## Context
 

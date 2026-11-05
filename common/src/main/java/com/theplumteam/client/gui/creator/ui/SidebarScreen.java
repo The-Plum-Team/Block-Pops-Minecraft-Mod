@@ -311,16 +311,19 @@ public abstract class SidebarScreen extends CreatorScreen {
     /**
      * A tooltip's text in lines no wider than a tooltip should be, so a long sentence, such as a
      * cut line's whole text or a setting's note, stays on the screen rather than running off it.
+     * A line break starts a new line, as between the reasons of a list.
      */
     public static List<Component> tooltipLines(Component text) {
         Font font = Minecraft.getInstance().font;
         String whole = text.getString();
-        if (UiText.width(font, whole) <= TOOLTIP_WIDTH) {
+        if (whole.indexOf('\n') < 0 && UiText.width(font, whole) <= TOOLTIP_WIDTH) {
             return List.of(text);
         }
         List<Component> lines = new ArrayList<>();
-        for (String line : UiText.wrap(font, whole, TOOLTIP_WIDTH)) {
-            lines.add(Component.literal(line));
+        for (String paragraph : whole.split("\n")) {
+            for (String line : UiText.wrap(font, paragraph, TOOLTIP_WIDTH)) {
+                lines.add(Component.literal(line));
+            }
         }
         return lines;
     }
@@ -596,7 +599,8 @@ public abstract class SidebarScreen extends CreatorScreen {
             if (hovered) {
                 Component tip = status.tooltip() != null ? status.tooltip() : !cut.equals(whole) ? status.label() : null;
                 if (tip != null) {
-                    UiTooltip.set(tooltipLines(tip));
+                    // Above the slot, which it explains, rather than over it
+                    UiTooltip.setAbove(tooltipLines(tip), x, slotY - 2);
                 }
             }
         }

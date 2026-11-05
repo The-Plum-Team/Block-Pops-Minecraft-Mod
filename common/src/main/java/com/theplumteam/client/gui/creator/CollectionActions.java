@@ -15,6 +15,8 @@ import com.theplumteam.client.gui.style.DialogFrame;
 import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.client.worldcontent.ClientWorldUploads;
+import com.theplumteam.client.worldcontent.CreatorAutosave;
+import com.theplumteam.client.worldcontent.CreatorRuns;
 import com.theplumteam.client.worldcontent.CreatorSave;
 import com.theplumteam.client.worldcontent.Slugs;
 import com.theplumteam.network.ClawMachineCollectionPacket;
@@ -44,10 +46,13 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  *
  * <p>{@link #menu} offers a collection's actions, each disabled with the reason it cannot be used
  * now, in the order the home's "More" menu lists them, with the players' progress of a published
- * collection and the import at its end. The confirmations and the help are dialogs over the
- * screen the actions were made for; the outcome of each is told in the creator's toast. Every
- * action only asks the server, which checks it again; the screens follow the collections the
- * server syncs back.
+ * collection and the import at its end. While the collection's changes are still being saved, or
+ * another of the creator's runs of it is on its way ({@link CreatorAutosave#isSaving}), its own
+ * actions wait: a duplicate would copy the server state before the save, and the others would
+ * race it. Each action counts in {@link CreatorRuns} until the sync after it. The confirmations
+ * and the help are dialogs over the screen the actions were made for; the outcome of each is told
+ * in the creator's toast. Every action only asks the server, which checks it again; the screens
+ * follow the collections the server syncs back.
  */
 final class CollectionActions {
     // Wide enough that the help's three paragraphs fit the height of Minecraft's default window
@@ -100,6 +105,12 @@ final class CollectionActions {
         return null;
     }
 
+    /** Why a collection's own actions wait now, while its changes are being saved; null when they need not. */
+    @Nullable
+    static Component savingProblem(String collectionId) {
+        return CreatorAutosave.isSaving(collectionId) ? tr("autosave.saving_tip") : null;
+    }
+
     // The menu
 
     /**
@@ -111,25 +122,33 @@ final class CollectionActions {
      */
     UiMenu menu(WorldCollectionRecord record) {
         UiMenu menu = new UiMenu();
+        // Everything but the import waits while the collection's changes are being saved
+        Component saving = savingProblem(record.id());
         BlockPos machine = this.machinePos;
         if (machine != null) {
-            Component putProblem = putProblem(record);
+            Component putProblem = saving != null ? saving : putProblem(record);
             if (putProblem != null) {
                 menu.disabled(tr("home.menu.put"), putProblem);
             } else {
                 menu.item(tr("home.menu.put"), () -> put(machine, record.id(), record.name()));
             }
         }
-        if (record.figures().stream().anyMatch(WorldCollectionRecord.Figure::enabled)) {
+        if (saving != null) {
+            menu.disabled(tr("home.menu.unlock"), saving);
+        } else if (record.figures().stream().anyMatch(WorldCollectionRecord.Figure::enabled)) {
             menu.item(tr("home.menu.unlock"), tr("home.menu.unlock_hint"), () -> unlock(record.id(), record.name()));
         } else {
             menu.disabled(tr("home.menu.unlock"), tr("home.reason.no_figures"));
         }
         if (!record.draft()) {
             // Players can only have figures of a collection that was in the machines
-            menu.item(tr("home.menu.progress"), () -> openProgress(record.id()));
+            if (saving != null) {
+                menu.disabled(tr("home.menu.progress"), saving);
+            } else {
+                menu.item(tr("home.menu.progress"), () -> openProgress(record.id()));
+            }
         }
-        Component full = tooManyCollections();
+        Component full = saving != null ? saving : tooManyCollections();
         if (full != null) {
             menu.disabled(tr("home.menu.duplicate"), full);
         } else {
@@ -137,14 +156,24 @@ final class CollectionActions {
         }
         menu.separator();
         if (record.archived()) {
-            menu.item(tr("home.menu.restore"), () -> setArchived(record, false));
+            if (saving != null) {
+                menu.disabled(tr("home.menu.restore"), saving);
+            } else {
+                menu.item(tr("home.menu.restore"), () -> setArchived(record, false));
+            }
         } else if (!record.draft()) {
-            menu.warning(tr("home.menu.archive"), () -> confirmArchive(record));
+            if (saving != null) {
+                menu.disabled(tr("home.menu.archive"), saving);
+            } else {
+                menu.warning(tr("home.menu.archive"), () -> confirmArchive(record));
+            }
         }
-        if (canPurge(record)) {
-            menu.warning(tr("home.menu.purge"), () -> confirmPurge(record));
-        } else {
+        if (!canPurge(record)) {
             menu.disabled(tr("home.menu.purge"), tr("home.reason.archive_first"));
+        } else if (saving != null) {
+            menu.disabled(tr("home.menu.purge"), saving);
+        } else {
+            menu.warning(tr("home.menu.purge"), () -> confirmPurge(record));
         }
         menu.separator();
         Component importProblem = tooManyCollections();
@@ -188,8 +217,11 @@ final class CollectionActions {
         String name = CreatorHomeScreen.cut(tr("home.copy_name", record.name()).getString(),
                 WorldContentLimits.MAX_NAME_LENGTH);
         String slug = Slugs.unique(record.slug(), Slugs::isCollectionTaken);
+        // The source counts as busy too, until the copy of it is synced
+        CreatorRuns.Entry source = CreatorRuns.begin(record.id(), this);
         CreatorSave.create(slug, List.of(), next -> new WorldCollectionEdit.Duplicate(record.id(), next, name),
                 outcome -> {
+                    CreatorRuns.finish(source, outcome.ok());
                     if (outcome.ok()) {
                         this.reveal.accept(outcome.collectionId());
                         UiToast.show(tr("home.duplicated", name));
@@ -213,7 +245,7 @@ final class CollectionActions {
      * which restores the collection.
      */
     void setArchived(WorldCollectionRecord record, boolean archived) {
-        send(new WorldCollectionEdit.SetArchived(record.id(), archived), () -> {
+        send(record.id(), new WorldCollectionEdit.SetArchived(record.id(), archived), () -> {
             if (archived) {
                 UiToast.show(tr("home.archived", record.name()), tr("home.undo"), () -> setArchived(record, false));
             } else {
@@ -235,7 +267,7 @@ final class CollectionActions {
                 value -> confirm[0].disable(value.strip().equals(name.strip()) ? null : tr("home.purge_rule")));
         dialog.cancelButton(tr("cancel"));
         confirm[0] = dialog.button(tr("home.purge_button"), UiButton.Style.DANGER,
-                () -> send(new WorldCollectionEdit.Purge(record.id(), record.id()),
+                () -> send(record.id(), new WorldCollectionEdit.Purge(record.id(), record.id()),
                         () -> UiToast.show(tr("home.purged", name))));
         confirm[0].disable(tr("home.purge_rule"));
         this.screen.openModal(dialog);
@@ -288,12 +320,16 @@ final class CollectionActions {
     }
 
     /**
-     * Sends one edit on its own; a refusal or a lost connection is told in the toast.
+     * Sends one edit of a collection on its own, which counts in {@link CreatorRuns} under the
+     * collection until the sync after it; a refusal or a lost connection is told in the toast.
      *
-     * @param onSaved what follows once the server applied it, such as its own message
+     * @param collectionId the collection it changes, or the one an import makes or replaces
+     * @param onSaved      what follows once the server applied it, such as its own message
      */
-    static void send(WorldCollectionEdit edit, Runnable onSaved) {
+    static void send(String collectionId, WorldCollectionEdit edit, Runnable onSaved) {
+        CreatorRuns.Entry entry = CreatorRuns.begin(collectionId, edit);
         boolean sent = ClientWorldUploads.edit(edit, outcome -> {
+            CreatorRuns.finish(entry, outcome.ok());
             if (outcome.ok()) {
                 onSaved.run();
             } else if (outcome.disconnected()) {
@@ -303,6 +339,7 @@ final class CollectionActions {
             }
         });
         if (!sent) {
+            CreatorRuns.forget(entry);
             UiToast.show(tr("not_sent"));
         }
     }

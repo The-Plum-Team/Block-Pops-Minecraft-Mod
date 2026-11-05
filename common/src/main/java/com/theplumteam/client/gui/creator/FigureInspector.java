@@ -52,17 +52,19 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  * whose poses have no sitting one; a skin figure uses the shared poses, which always have it.
  *
  * <p>The name field renames the figure. A figure never saved takes the id its name makes, unique
- * in the collection, which the top line shows and which is fixed once the figure is saved. Under
+ * in the collection, which the top line shows and which is fixed once the server has the figure;
+ * while a save that puts this figure is on its way, its id holds still and follows the name again
+ * once the save is over. Under
  * the field, the size slider, the choice between a Minecraft skin and a Blockbench model, and one
  * drop zone for each file the figure's kind needs, each with its checks and the first that fails
  * in red, scroll as one, with "Use my skin" under a skin figure's skin (see {@link OwnSkin}) and
  * the rarity, skin variants and box face under the files (see {@link FigureExtrasPanel}). The
- * bottom row retires the figure from the draw or restores it, discards
- * a figure never saved, deletes a draft collection's figure for good, duplicates it, and saves
- * this figure alone; "Save figure" lists what is still wrong while it cannot be used.
+ * bottom row retires the figure from the draw or restores it, discards a figure never saved,
+ * deletes a draft collection's figure for good, which its toast offers to undo, and duplicates it.
  *
- * <p>Every change goes to the editor's draft as the grid's own do, and the editor's Undo takes
- * it back. The panel lives as long as the page and keeps its nodes across rebuilds.
+ * <p>Every change goes to the editor's draft as the grid's own do, which the collection's saver
+ * sends, and the editor's Undo takes it back. The panel lives as long as the page and keeps its
+ * nodes across rebuilds.
  */
 final class FigureInspector {
     private static final int PAD = 8;
@@ -104,7 +106,6 @@ final class FigureInspector {
     private final UiButton retire;
     private final UiButton delete;
     private final UiButton duplicate;
-    private final UiButton save;
     @Nullable
     private EditBox nameBox;
     // Set while the inspector itself puts a name in the field, which its responder then ignores
@@ -164,14 +165,6 @@ final class FigureInspector {
         this.delete = new UiButton(tr("inspector.delete"), UiButton.Style.DANGER_TEXT, this::delete);
         this.duplicate = new UiButton(tr("figures.duplicate"), UiButton.Style.SECONDARY, page::duplicateSelected);
         this.duplicate.at(0, 0, 0, UiButton.SMALL_HEIGHT);
-        this.save = new UiButton(tr("inspector.save"), UiButton.Style.GREEN, () -> {
-            FigureDraft shown = this.figure;
-            if (shown != null) {
-                editor.saveFigure(shown.id());
-            }
-        });
-        this.save.setTooltip(tr("inspector.save_tip"));
-        this.save.at(0, 0, 0, UiButton.SMALL_HEIGHT);
     }
 
     // Whether a field of the figure shown is among the editor's unsaved changes
@@ -215,7 +208,7 @@ final class FigureInspector {
         this.slotLabelWidth = Math.min(this.slotLabelWidth, Math.max(30, width / 2));
 
         for (UiNode node : List.of(this.previous, this.next, this.view, this.sections, this.retire, this.delete,
-                this.duplicate, this.save)) {
+                this.duplicate)) {
             this.editor.add(node);
         }
         layout();
@@ -235,7 +228,7 @@ final class FigureInspector {
         this.count = shownOf;
         this.selectedCount = selected;
         boolean one = shown != null;
-        for (UiNode.Box node : List.of(this.previous, this.next, this.view, this.sections, this.duplicate, this.save)) {
+        for (UiNode.Box node : List.of(this.previous, this.next, this.view, this.sections, this.duplicate)) {
             node.setVisible(one);
         }
         EditBox box = this.nameBox;
@@ -257,7 +250,8 @@ final class FigureInspector {
         }
         this.viewFigure = shown;
         this.view.setGreyed(!shown.enabled());
-        this.view.setCaption(shown.isDirty() ? tr("inspector.preview_note") : null);
+        // A draft collection saves itself, so only a published one's preview runs ahead of the server
+        this.view.setCaption(this.editor.showsChangeDots() && shown.isDirty() ? tr("inspector.preview_note") : null);
         this.view.setEmptyText(tr(shown.isComplete() ? "inspector.no_preview" : "inspector.needs_files"));
         if (box != null && !box.getValue().equals(shown.name())) {
             this.settingName = true;
@@ -307,68 +301,15 @@ final class FigureInspector {
             this.delete.setVisible(draft.isDraftCollection());
         }
         this.duplicate.disable(draft.isFull() ? tr("figures.full", WorldContentLimits.MAX_FIGURES) : null);
-        this.save.disable(saveProblem(shown));
     }
 
-    /**
-     * Why "Save figure" cannot be used, or null when it can: a save already on its way, the
-     * list of what is fine and what is wrong while anything is, or no change to save.
-     */
+    /** The figure shown while its name field has the keyboard and the server does not have it yet, or null. */
     @Nullable
-    private Component saveProblem(FigureDraft shown) {
-        Component sending = this.editor.figureSendProblem();
-        if (sending != null) {
-            return sending;
-        }
-        List<String> marks = new ArrayList<>();
-        boolean skin = shown.kind() == Kind.SKIN;
-        boolean ready = mark(marks, !shown.name().isBlank() && WorldCollectionRecord.isPlainText(shown.name()),
-                "inspector.need.name");
-        BlobInfo model = shown.model() != null ? shown.model().info() : null;
-        ready &= mark(marks, fileOk(shown.texture(),
-                info -> skin ? FileChecks.skin(info) : FileChecks.modelTexture(info, model)),
-                skin ? "inspector.need.skin" : "inspector.need.texture");
-        if (!skin) {
-            ready &= mark(marks, fileOk(shown.model(), FileChecks::geo), "inspector.need.model");
-            if (shown.animation() != null) {
-                ready &= mark(marks, fileOk(shown.animation(), FileChecks::animation), "inspector.need.poses");
-            }
-        }
-        if (!shown.variants().isEmpty()) {
-            Function<BlobInfo, List<FileChecks.Check>> variantChecks = FigureExtrasPanel.textureChecks(shown.kind(), model);
-            boolean variantsOk = true;
-            for (CreatorDraft.VariantDraft variant : shown.variants()) {
-                variantsOk &= fileOk(variant.texture(), variantChecks);
-            }
-            ready &= mark(marks, variantsOk, "inspector.need.variants");
-        }
-        WorldCollectionRecord.BoxFace face = shown.boxFace();
-        if (!skin && face != null && face.show() && face.uv() != null) {
-            BlobInfo texture = shown.texture() != null ? shown.texture().info() : null;
-            ready &= mark(marks, texture == null || FigureExtrasPanel.fits(face.uv(), texture), "inspector.need.face");
-        }
-        if (!ready) {
-            return Component.literal(String.join(" · ", marks));
-        }
-        return shown.isDirty() ? null : tr("inspector.nothing_to_save");
-    }
-
-    private static boolean mark(List<String> marks, boolean ok, String key) {
-        marks.add((ok ? "✔ " : "✖ ") + tr(key).getString());
-        return ok;
-    }
-
-    // A file the figure has, that the server still holds when it is stored there, and that passes its checks
-    private static boolean fileOk(@Nullable FileRef file, Function<BlobInfo, List<FileChecks.Check>> checks) {
-        if (file == null) {
-            return false;
-        }
-        if (file.local() == null && ClientWorldCollections.isMissingOnServer(file.sha())) {
-            return false;
-        }
-        BlobInfo info = file.info();
-        // A stored file the server did not describe is still its own to check
-        return info == null || FileChecks.allOk(checks.apply(info));
+    String typingFigureId() {
+        FigureDraft shown = this.figure;
+        EditBox box = this.nameBox;
+        return shown != null && shown.isNew() && box != null && box.visible && this.editor.getFocused() == box
+                ? shown.id() : null;
     }
 
     // The file zones
@@ -577,10 +518,11 @@ final class FigureInspector {
         if (this.settingName || shown == null) {
             return;
         }
-        if (this.editor.isSaving()) {
-            // The save may be sending the figure under its id, which the sync then brings back,
-            // so the id holds still until then
+        if (this.editor.isSaving(shown.id())) {
+            // The save on its way puts the figure under its id, which the sync then brings back,
+            // so the id holds still until that save is over, and then follows the name
             shown.setName(value);
+            this.editor.renamedWhileSaving(shown.id());
         } else {
             shown.rename(value);
             // A new figure's id follows its name, and the grid tells its cards apart by id
@@ -603,10 +545,13 @@ final class FigureInspector {
         if (shown == null || shown.kind() == kind) {
             return;
         }
-        // A skin keeps no model or poses; Undo brings them back
+        // A skin keeps no model or poses; Undo brings them back, which the toast offers
         this.editor.draft().checkpoint();
         shown.setKind(kind);
         this.editor.changed();
+        String name = shown.name().isBlank() ? shown.id() : shown.name();
+        this.editor.undoToast(tr("inspector.kind_changed", name,
+                tr(kind == Kind.SKIN ? "figures.kind_skin" : "figures.kind_model")));
     }
 
     private void delete() {
@@ -626,7 +571,8 @@ final class FigureInspector {
         if (this.editor.draft().removeFigure(shown.id())) {
             this.editor.changed();
             this.page.selectNear(index);
-            this.editor.toast(tr("inspector.deleted", name));
+            // It leaves the draft at the next save, so the toast offers to take it back
+            this.editor.undoToast(tr("inspector.deleted", name));
         }
     }
 
@@ -648,18 +594,10 @@ final class FigureInspector {
         this.next.at(nextX, headerY, navWidth, UiButton.SMALL_HEIGHT);
         this.previous.at(nextX - 8 - font.width(counter) - navWidth, headerY, navWidth, UiButton.SMALL_HEIGHT);
 
-        // Footer: the buttons on the right, the links on their left, or on a row above them
+        // Footer: the button on the right, the links on its left, or on a row above it
         int buttonsY = panel.bottom() - PAD - UiButton.SMALL_HEIGHT;
-        int saveWidth = UiButton.widthFor(font, this.save.label(), false);
-        int duplicateWidth = UiButton.widthFor(font, this.duplicate.label(), false);
-        if (saveWidth + 4 + duplicateWidth > right - left) {
-            // A narrow panel shares its row between the two, which cut their labels
-            saveWidth = Math.max(0, (right - left - 4) / 2);
-            duplicateWidth = saveWidth;
-        }
-        this.save.at(right - saveWidth, buttonsY, saveWidth, UiButton.SMALL_HEIGHT);
-        this.duplicate.at(this.save.bounds().x() - 4 - duplicateWidth, buttonsY, duplicateWidth,
-                UiButton.SMALL_HEIGHT);
+        int duplicateWidth = Math.min(UiButton.widthFor(font, this.duplicate.label(), false), right - left);
+        this.duplicate.at(right - duplicateWidth, buttonsY, duplicateWidth, UiButton.SMALL_HEIGHT);
         List<UiButton> links = new ArrayList<>();
         for (UiButton link : List.of(this.retire, this.delete)) {
             if (link.visible()) {
@@ -778,11 +716,12 @@ final class FigureInspector {
         Draw.text(graphics, font, (problem != null ? problem : idLine).getString(), x, headerY + 4,
                 Math.max(0, this.previous.bounds().x() - 6 - x), problem != null ? Theme.RED : HELP);
 
-        // The name's label left of its field, with an amber dot while the name is not saved
+        // The name's label left of its field, with an amber dot while a published collection's
+        // name change waits; a draft collection's saves itself
         Component label = tr("inspector.name");
         int labelY = this.fieldY + 6;
         Draw.string(graphics, font, label, x, labelY, LABEL_COLOUR);
-        if (changed("name") || shown.isNew()) {
+        if (changed("name") || shown.isNew() && this.editor.showsChangeDots()) {
             Draw.dot(graphics, x + font.width(label) + 5, labelY + 4, 4, Theme.AMBER);
         }
     }

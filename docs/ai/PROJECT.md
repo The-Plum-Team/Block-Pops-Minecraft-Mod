@@ -28,9 +28,11 @@ follow-up pull request (#11). `site/mod-base.json` no longer defers it or any ot
   [ADR 0002](../architecture/decisions/0002-load-custom-collections-at-runtime.md) runtime Custom
   collections,
   [ADR 0003](../architecture/decisions/0003-accept-operator-uploaded-world-collections.md)
-  operator-uploaded World collections and
+  operator-uploaded World collections,
   [ADR 0004](../architecture/decisions/0004-extend-world-collections-for-the-redesigned-creator.md)
-  their extensions for the redesigned creator.
+  their extensions for the redesigned creator and
+  [ADR 0005](../architecture/decisions/0005-autosave-world-collection-drafts.md) the autosave of
+  their drafts.
 - `site/mod-base.json` and `scripts/pages/mod_base_adapter.py` connect this repository to the
   mod-base public-evidence kit; `scripts/ci/mod_base_kit.py` finds the pinned kit.
 
@@ -168,9 +170,13 @@ development environment, an operator, and World collections synced. Its entry po
 machine screen's **Creator** button, the Settings **Creator** tab and the client command
 `/blockpopscreator`, which is registered only in a development environment. Packaged E2E players
 run production code and are not operators, so no entry point may bypass that check. The creator
-previews files that are not sent yet: it decodes them under the same content-addressed ids a synced
-copy gets, and materializes the draft into a client-only overlay of the collection registry under
-the reserved id `creator_preview.<slot>`. That overlay answers only on the client thread, appears
+previews files before they are sent. A draft's changes are sent a few seconds after they settle,
+and its files when the operator moves to another figure or tab, by a saver that outlives the editor
+screen until they are sent; a published collection's changes wait for Publish changes
+([ADR 0005](../architecture/decisions/0005-autosave-world-collection-drafts.md)). It decodes
+previewed files under the same content-addressed ids a synced copy gets, and materializes the draft
+into a client-only overlay of the collection registry under the reserved id
+`creator_preview.<slot>`. That overlay answers only on the client thread, appears
 in no collection list, and is cleared when the creator closes; nothing of a preview is sent or
 stored. "Use my skin", and the sample figure the new-collection form's box holds, contact no
 network: they read the player's own skin from the game's local skin cache

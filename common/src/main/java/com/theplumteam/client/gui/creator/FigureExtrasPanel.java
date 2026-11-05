@@ -509,10 +509,12 @@ final class FigureExtrasPanel {
                 return;
             }
             List<VariantDraft> next = new ArrayList<>(target.variants());
-            next.remove(this.index);
+            VariantDraft gone = next.remove(this.index);
             editor.draft().checkpoint();
             target.setVariants(next);
             editor.changed();
+            // Its file goes with it, so the toast offers to take it back
+            editor.undoToast(tr("extras.variant_removed", gone.name()));
         }
     }
 

@@ -40,6 +40,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.IntConsumer;
@@ -112,6 +113,11 @@ final class FiguresPage implements EditorPage {
     private String search = "";
     private final int[] counts = new int[Filter.values().length];
     private Set<String> dirtyIds = Set.of();
+    // The figure the inspector showed last, and its id, which tell a move to another figure apart
+    @Nullable
+    private FigureDraft inspected;
+    @Nullable
+    private String inspectedId;
     private Map<String, List<Component>> problems = Map.of();
     // How many figures and how much file space, worked out once per change rather than per frame
     private Component counter = Component.empty();
@@ -259,7 +265,8 @@ final class FiguresPage implements EditorPage {
     public void draftChanged() {
         CreatorDraft draft = this.editor.draft();
         Set<String> dirty = new HashSet<>();
-        for (String change : this.editor.changes()) {
+        // A draft collection's changes save themselves, so its cards mark none
+        for (String change : this.editor.showsChangeDots() ? this.editor.changes() : List.<String>of()) {
             if (change.startsWith(CreatorDraft.FIGURE)) {
                 int end = change.indexOf('/', CreatorDraft.FIGURE.length());
                 dirty.add(end < 0 ? change.substring(CreatorDraft.FIGURE.length())
@@ -451,6 +458,20 @@ final class FiguresPage implements EditorPage {
         List<FigureDraft> shown = this.grid != null ? this.grid.items() : List.of();
         this.inspector.show(figure, figure != null ? Math.max(0, shown.indexOf(figure)) : 0, shown.size(),
                 chosen.size());
+        // Another figure, or none: the operator moved on, so what waits is saved, files included.
+        // A rename keeps the figure and an undo its id, so neither counts.
+        String figureId = figure != null ? figure.id() : null;
+        if (figure != this.inspected && !Objects.equals(figureId, this.inspectedId)) {
+            this.editor.navigated();
+        }
+        this.inspected = figure;
+        this.inspectedId = figureId;
+    }
+
+    /** The new figure whose name field has the keyboard, or null. */
+    @Nullable
+    String typingFigureId() {
+        return this.inspector.typingFigureId();
     }
 
     private void clearSelection() {
@@ -552,6 +573,13 @@ final class FiguresPage implements EditorPage {
             }
         });
         this.editor.changed();
+        if (!enabled) {
+            // Taking figures out of the draw is the change to undo, which the toast offers
+            FigureDraft first = chosen.get(0);
+            this.editor.undoToast(chosen.size() == 1
+                    ? tr("figures.retired_toast_one", first.name().isBlank() ? first.id() : first.name())
+                    : tr("figures.retired_toast", chosen.size()));
+        }
     }
 
     private void openSizeMenu() {
@@ -624,9 +652,12 @@ final class FiguresPage implements EditorPage {
             return;
         }
         int index = this.grid != null ? this.grid.items().indexOf(figure) : -1;
+        String name = figure.name().isBlank() ? figure.id() : figure.name();
         if (this.editor.draft().removeFigure(figure.id())) {
             this.editor.changed();
             selectNear(index);
+            // Its picked files go with it, so the toast offers to take it back
+            this.editor.undoToast(tr("inspector.deleted", name));
         }
     }
 

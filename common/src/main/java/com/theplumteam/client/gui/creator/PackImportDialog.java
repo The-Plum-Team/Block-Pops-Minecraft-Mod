@@ -161,7 +161,8 @@ final class PackImportDialog {
             // Only a slug no collection has makes a new one
             return CollectionActions.tooManyCollections();
         }
-        return null;
+        // An import over a collection waits for its changes to be saved, which it would race
+        return CollectionActions.savingProblem(WorldContentIds.collectionId(this.slug));
     }
 
     private void check() {
@@ -182,9 +183,10 @@ final class PackImportDialog {
         }
         String id = WorldContentIds.collectionId(this.slug);
         String shown = this.source;
-        CollectionActions.send(new WorldCollectionEdit.ImportPack(this.slug, parts[0], parts[1], this.asDraft), () -> {
-            this.onImported.accept(id);
-            UiToast.show(tr("home.imported", shown));
-        });
+        CollectionActions.send(id, new WorldCollectionEdit.ImportPack(this.slug, parts[0], parts[1], this.asDraft),
+                () -> {
+                    this.onImported.accept(id);
+                    UiToast.show(tr("home.imported", shown));
+                });
     }
 }

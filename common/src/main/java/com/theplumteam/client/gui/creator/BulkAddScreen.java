@@ -25,6 +25,7 @@ import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.util.GuiPose;
 import com.theplumteam.client.gui.widget.FigureEntry;
+import com.theplumteam.client.worldcontent.AutoSaver;
 import com.theplumteam.client.worldcontent.BulkPlan;
 import com.theplumteam.client.worldcontent.BulkPlan.Row;
 import com.theplumteam.client.worldcontent.ClientPreviewAssets;
@@ -70,15 +71,18 @@ import java.util.Set;
  * Tab moves between the name and size cells, and a row shows "Remove" under the pointer.
  *
  * <p>Under the table, the capacity line says how many figures and how much file space the
- * collection would use, against its caps, and a summary counts the rows. "Add" puts the ready
- * rows in the draft as one undo step and sends them at once, in batches of
- * {@link CreatorSave#BULK_FIGURES_PER_BATCH} figures, each batch saved whole by the server; the
- * other unsaved changes of the draft stay unsaved. While they are sent a bar shows the files
- * going up, which can be paused between batches or stopped after the current one, the figures
- * already saved staying saved and the others staying in the draft, unsaved. When the server
+ * collection would use, against its caps, and a summary counts the rows. On a draft collection
+ * "Add" puts the ready rows in the draft as one undo step and sends them at once, in batches of
+ * {@link CreatorSave#BULK_FIGURES_PER_BATCH} figures, each batch saved whole by the server, while
+ * the collection's saver waits ({@link AutoSaver#pause}) from the moment the card opens until the
+ * figures are sent. While they are sent a bar shows the files going up, which can be paused
+ * between batches or stopped after the current one; the figures already saved stay saved, and the
+ * others, once the send is stopped or has failed for good, leave the draft in one undo step, so the
+ * saver does not send what the operator stopped and Ctrl+Z brings them back. When the server
  * answers that it is busy, as it does once the player's upload or edit limit is used up, the
- * rest goes on by itself a little later. Hiding the card leaves the
- * upload going, and the editor's status row shows how far it is.
+ * rest goes on by itself a little later. Hiding the card leaves the upload going, and the editor's
+ * status row shows how far it is and opens the card again. On a published or archived collection
+ * nothing is sent: "Add" puts the figures among the changes that wait for "Publish changes".
  *
  * <p>The card is drawn as the menus' dialogs are ({@link DialogFrame}), with the green header of a
  * dialog that adds something and an X that does what Escape does; the table is a sunk well whose
@@ -203,19 +207,23 @@ public class BulkAddScreen extends CreatorScreen {
             this.plan.setPair(checked);
             rowsChanged(true);
         });
-        this.cancelButton = new UiButton(tr("cancel"), UiButton.Style.SECONDARY, this::leave);
+        this.cancelButton = new UiButton(tr("cancel"), UiButton.Style.SECONDARY, this::closeCard);
         this.addButton = new UiButton(tr("bulk.add_none"), UiButton.Style.PRIMARY, this::add);
         this.pauseButton = new UiButton(tr("bulk.pause"), UiButton.Style.LINK, this::togglePause);
         this.stopButton = new UiButton(tr("bulk.stop"), UiButton.Style.DANGER_TEXT, this::stopRest);
         this.hideButton = new UiButton(tr("bulk.hide"), UiButton.Style.SECONDARY, this::hide);
         this.hideButton.setTooltip(tr("bulk.hide_tip"));
         this.retryButton = new UiButton(tr("bulk.retry"), UiButton.Style.GREEN, this::retryRest);
-        this.closeButton = new UiButton(tr("bulk.close"), UiButton.Style.SECONDARY, this::leave);
+        this.closeButton = new UiButton(tr("bulk.close"), UiButton.Style.SECONDARY, this::closeCard);
         tooMany(this.plan.add(results));
         rowsChanged(true);
+        // The collection's saver waits while the card is open, so the figures are planned against
+        // a server state no save of its changes
+        editor.saver().pause(this);
     }
 
     // Building
+
 
     @Override
     protected boolean drawsParentBelow() {
@@ -225,6 +233,10 @@ public class BulkAddScreen extends CreatorScreen {
 
     @Override
     protected void build() {
+        // Shown, perhaps again from the editor's status line while the figures are sent: the
+        // saver waits, and the editor no longer follows the card
+        this.editor.bulkHidden(null);
+        this.editor.saver().pause(this);
         fitCard();
         int left = this.panelX + PAD;
         int right = this.panelX + this.panelWidth - PAD;
@@ -382,11 +394,13 @@ public class BulkAddScreen extends CreatorScreen {
     }
 
     private void updateAddButton() {
+        boolean held = !this.editor.saver().isAuto();
         this.addButton.setLabel(this.adding == 0 ? tr("bulk.add_none")
+                : held ? this.adding == 1 ? tr("bulk.add_held_one") : tr("bulk.add_held", this.adding)
                 : this.adding == 1 ? tr("bulk.add_one") : tr("bulk.add", this.adding));
         Component problem = this.addProblem;
-        if (problem == null) {
-            // A save of the editor's may be on its way, or wait for its sync
+        if (problem == null && !held) {
+            // A save of the collection's may be on its way, or wait for its sync
             problem = this.editor.figureSendProblem();
         }
         this.addButton.disable(problem);
@@ -452,6 +466,12 @@ public class BulkAddScreen extends CreatorScreen {
         }
         this.editor.changed();
         this.editor.revealFigures(added);
+        if (!this.editor.saver().isAuto()) {
+            // A published collection's figures wait with its other changes for Publish changes
+            UiToast.show(added.size() == 1 ? tr("bulk.added_held_one") : tr("bulk.added_held", added.size()));
+            leave();
+            return;
+        }
         this.sending.clear();
         for (FigureDraft figure : added) {
             this.sending.add(figure.id());
@@ -535,6 +555,11 @@ public class BulkAddScreen extends CreatorScreen {
         switch (outcome.ending()) {
             case SAVED -> {
                 this.savedIds.addAll(this.sending);
+                if (!shown) {
+                    // Hidden: the editor's status line follows the saver again
+                    this.editor.bulkHidden(null);
+                    this.editor.saver().resume(this);
+                }
                 // Left on the next tick: the editor takes the outcome first
                 this.closeSoon = true;
                 return false;
@@ -542,6 +567,15 @@ public class BulkAddScreen extends CreatorScreen {
             case CANCELLED -> {
                 this.phase = Phase.STOPPED;
                 this.message = tr("bulk.stopped", saved, this.sending.size());
+                // What the operator stopped is not left for the saver to send
+                dropUnsent();
+            }
+            case DISCONNECTED -> {
+                // The client left the server, which ends the draft with every saver: nothing is
+                // taken out of it, and no preview is drawn again
+                this.phase = Phase.FAILED;
+                this.message = tr("bulk.failed", saved, this.sending.size(), outcome.message());
+                return false;
             }
             default -> {
                 boolean limited = outcome.ending() == CreatorSave.Ending.REFUSED
@@ -553,13 +587,54 @@ public class BulkAddScreen extends CreatorScreen {
                 } else {
                     this.phase = Phase.FAILED;
                     this.message = tr("bulk.failed", saved, this.sending.size(), outcome.message());
+                    if (!shown) {
+                        // Hidden, so nothing offers to try again: the rest leaves the draft now
+                        dropUnsent();
+                    }
                 }
             }
         }
         if (shown) {
             rebuild();
+        } else {
+            // Hidden: the editor's status line follows the saver again
+            this.editor.bulkHidden(null);
+            this.editor.saver().resume(this);
         }
         return shown;
+    }
+
+    /**
+     * Takes the figures of this add that were not sent out of the draft, in one undo step, once
+     * the send was stopped or failed for good, so the collection's saver does not upload them;
+     * Ctrl+Z brings them back as ordinary new figures.
+     */
+    private void dropUnsent() {
+        CreatorDraft draft = this.editor.draft();
+        List<String> unsent = new ArrayList<>();
+        for (String figureId : this.sending) {
+            FigureDraft figure = draft.figure(figureId);
+            if (!this.savedIds.contains(figureId) && figure != null && figure.isNew()) {
+                unsent.add(figureId);
+            }
+        }
+        if (unsent.isEmpty()) {
+            return;
+        }
+        draft.change("bulk/left", () -> {
+            for (String figureId : unsent) {
+                draft.removeFigure(figureId);
+            }
+        });
+        this.editor.changed();
+    }
+
+    // Leaves the card; after a failure or a stop the figures not sent leave the draft first
+    private void closeCard() {
+        if (this.phase == Phase.FAILED || this.phase == Phase.STOPPED) {
+            dropUnsent();
+        }
+        leave();
     }
 
     private int savedCount() {
@@ -621,6 +696,8 @@ public class BulkAddScreen extends CreatorScreen {
         if (this.phase == Phase.WAITING) {
             this.phase = Phase.STOPPED;
             this.message = tr("bulk.stopped", savedCount(), this.sending.size());
+            // What the operator stopped is not left for the saver to send, as the message says
+            dropUnsent();
             rebuild();
             return;
         }
@@ -649,8 +726,12 @@ public class BulkAddScreen extends CreatorScreen {
             sendingRun.resume();
         }
         if (this.phase == Phase.WAITING) {
+            // Nothing waits on the server's limit once the card is gone: the rest leaves the draft
             int rest = remaining().size();
-            UiToast.show(tr("bulk.left_unsaved", rest));
+            this.phase = Phase.STOPPED;
+            dropUnsent();
+            // The editor it goes back to offers to take them back, as Ctrl+Z does
+            this.editor.undoToast(tr("bulk.left_unsaved", rest));
         }
         leave();
     }
@@ -817,9 +898,12 @@ public class BulkAddScreen extends CreatorScreen {
         return mouseX >= left && mouseX < left + width && mouseY >= top && mouseY < top + height;
     }
 
-    // "Uploading 4 of 14 files · gohan.png · about 30 s", the bar, and the server's limit
-    private void drawSendingFooter(GuiGraphics graphics, int left, int mouseX, int mouseY) {
-        int room = Math.max(0, this.footerRight - left);
+    /** What the sending footer says, and how far its bar is filled. */
+    private record SendProgress(Component text, float fraction) {
+    }
+
+    // "Uploading 4 of 14 files · gohan.png · about 30 s" and how far the files are
+    private SendProgress sendProgress() {
         Component text;
         float fraction;
         CreatorSave.Run sendingRun = this.run;
@@ -862,6 +946,15 @@ public class BulkAddScreen extends CreatorScreen {
             fraction = this.filesTotal > 0 ? done / (float) this.filesTotal
                     : progress.batches() > 0 ? progress.batch() / (float) progress.batches() : 1.0f;
         }
+        return new SendProgress(text, fraction);
+    }
+
+    // The sending line, the bar, and the server's limit
+    private void drawSendingFooter(GuiGraphics graphics, int left, int mouseX, int mouseY) {
+        int room = Math.max(0, this.footerRight - left);
+        SendProgress progress = sendProgress();
+        Component text = progress.text();
+        float fraction = progress.fraction();
         // The text on top, and under it the bar with the server's limit beside it
         String shown = text.getString();
         Draw.text(graphics, this.font, shown, left, this.footerY + 1, room,
@@ -917,7 +1010,7 @@ public class BulkAddScreen extends CreatorScreen {
         if (this.phase == Phase.SENDING || this.phase == Phase.WAITING) {
             hide();
         } else {
-            leave();
+            closeCard();
         }
     }
 
@@ -930,6 +1023,45 @@ public class BulkAddScreen extends CreatorScreen {
             sendingRun.resume();
         }
         CreatorPreview.clear(PREVIEW_SLOT);
+        if (sendingRun != null && !sendingRun.isFinished()) {
+            // Hidden: the editor's status line shows how far the figures are and opens the card again
+            this.editor.bulkHidden(this);
+        } else {
+            this.editor.saver().resume(this);
+        }
+    }
+
+    // How far the send is, for the editor's status line while the card is hidden
+
+    /** How many figures of this add the server has, the batches before the one being sent included. */
+    int sentCount() {
+        int count = savedCount();
+        CreatorSave.Run sendingRun = this.run;
+        if (sendingRun != null) {
+            int batch = sendingRun.progress().batch();
+            for (String figureId : this.sending) {
+                Integer of = this.batchOf.get(figureId);
+                if (!this.savedIds.contains(figureId) && of != null && of < batch) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    /** How many figures this add sends. */
+    int sendingCount() {
+        return this.sending.size();
+    }
+
+    /** How far the send is, from 0 to 1. */
+    float sentFraction() {
+        return sendProgress().fraction();
+    }
+
+    /** The line the card's footer shows while the figures are sent. */
+    Component progressLine() {
+        return sendProgress().text();
     }
 
     /**
@@ -1213,7 +1345,8 @@ public class BulkAddScreen extends CreatorScreen {
                 return tr("bulk.status.saved");
             }
             if (BulkAddScreen.this.phase == Phase.FAILED || BulkAddScreen.this.phase == Phase.STOPPED) {
-                return tr("bulk.status.not_saved");
+                // Left out of the draft once the send is over, so the saver does not send it
+                return tr("bulk.status.left_out");
             }
             // A batch before the one being sent was saved; the one being sent is uploading
             // unless the pause holds it

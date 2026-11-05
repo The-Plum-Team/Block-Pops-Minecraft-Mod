@@ -19,6 +19,7 @@ import com.theplumteam.client.gui.style.PixelFont;
 import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.util.UiSounds;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
+import com.theplumteam.client.worldcontent.CreatorAutosave;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
@@ -43,6 +44,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
@@ -176,6 +178,8 @@ public class CreatorHomeScreen extends SidebarScreen {
     // The new collection's form while it is open; the content shows it in place of the selection
     @Nullable
     private CreateForm form;
+    // The collections whose rows said "saving" when the list was last filled
+    private Set<String> shownSaving = Set.of();
 
     /**
      * @param parent     the screen to go back to; null when the creator was opened by its
@@ -871,7 +875,7 @@ public class CreatorHomeScreen extends SidebarScreen {
             return true;
         }
         if (key.is(InputConstants.KEY_DELETE)) {
-            if (CollectionActions.canPurge(selected)) {
+            if (CollectionActions.canPurge(selected) && CollectionActions.savingProblem(selected.id()) == null) {
                 this.actions.confirmPurge(selected);
             }
             return true;
@@ -946,8 +950,17 @@ public class CreatorHomeScreen extends SidebarScreen {
     @Override
     public void tick() {
         super.tick();
-        if (this.form != null && this.minecraft.screen == this) {
+        if (this.minecraft.screen != this) {
+            return;
+        }
+        if (this.form != null) {
             this.form.tick();
+        }
+        Set<String> saving = CreatorAutosave.savingIds();
+        if (!saving.equals(this.shownSaving)) {
+            // A collection's changes started or finished saving: its row says so
+            this.shownSaving = saving;
+            fillList();
         }
     }
 

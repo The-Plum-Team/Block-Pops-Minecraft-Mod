@@ -70,9 +70,10 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  * machine's light and shows the winner stamped as a test, and a hundred draws counted in a chart.
  * Neither spends a token or gives anything: the draws are made up on this computer.
  *
- * <p>A draft is published with "Publish collection", which saves every change and publishes in
- * one batch the server applies whole, and is disabled, saying why, while any checklist item is a
- * blocker. A published collection can be archived or brought back instead; it is never a draft
+ * <p>A draft saves itself; "Publish collection" waits for its last changes to be saved, checks it
+ * once more and publishes it, with whatever changed meanwhile in the same batch, and is disabled,
+ * saying why, while any checklist item is a blocker. A published or archived collection's changes,
+ * its visibility included, wait for "Publish changes", which sends them all; it is never a draft
  * again. Once published, a dialog offers what comes next: putting it in the machine the creator
  * was opened from or getting every figure to try it ({@link CollectionActions}), seeing players'
  * progress, or going back.
@@ -103,7 +104,6 @@ final class PublishPage implements EditorPage {
     // The view switch and the footer
     private final UiSegmented views;
     private final UiButton backButton;
-    private final UiButton saveDraftButton;
     private final UiButton publishButton;
 
     // Review: the checklist and the draw on the left
@@ -153,8 +153,6 @@ final class PublishPage implements EditorPage {
                 tr("publish.view.players"));
         this.backButton = new UiButton(tr("publish.back"), UiButton.Style.SECONDARY,
                 () -> editor.selectTab(CreatorEditorScreen.Tab.FIGURES));
-        this.saveDraftButton = new UiButton(tr("publish.save_draft"), UiButton.Style.SECONDARY,
-                () -> editor.save(false, false));
         this.publishButton = new UiButton(tr("publish.publish"), UiButton.Style.PRIMARY, this::publishOrSave);
 
         this.checklistHeading = Text.heading(() -> tr("publish.checklist"), null);
@@ -212,23 +210,17 @@ final class PublishPage implements EditorPage {
         this.views.at(x, top, Math.min(bodyArea.width(), this.views.naturalWidth()), UiSegmented.HEIGHT);
         this.editor.add(this.views);
 
-        // The footer: back to the figures on the left, saving and publishing on the right
+        // The footer: back to the figures on the left, publishing on the right
         this.footerY = bodyArea.bottom() - UiButton.HEIGHT;
         refreshFooterLabels();
-        boolean withDraft = draft().isDraftCollection();
-        // A narrow body in a long language squeezes the three, which shrink their labels
-        int[] widths = UiButton.fitRow(bodyArea.width() - (withDraft ? 2 : 1) * GAP,
+        // A narrow body in a long language squeezes the two, which shrink their labels
+        int[] widths = UiButton.fitRow(bodyArea.width() - GAP,
                 UiButton.widthFor(font, this.backButton.label(), false),
-                withDraft ? CreatorEditorScreen.buttonWidth(font, this.saveDraftButton) : 0,
                 CreatorEditorScreen.buttonWidth(font, this.publishButton));
         this.backButton.at(x, this.footerY, widths[0], UiButton.HEIGHT);
         this.editor.add(this.backButton);
-        int buttonX = placeLeftOf(this.publishButton, bodyArea.right(), this.footerY, 0, widths[2]);
+        placeLeftOf(this.publishButton, bodyArea.right(), this.footerY, 0, widths[1]);
         this.editor.add(this.publishButton);
-        if (withDraft) {
-            placeLeftOf(this.saveDraftButton, buttonX, this.footerY, GAP, widths[1]);
-            this.editor.add(this.saveDraftButton);
-        }
 
         int contentTop = top + UiSegmented.HEIGHT + GAP;
         int contentBottom = this.footerY - GAP;
@@ -383,34 +375,33 @@ final class PublishPage implements EditorPage {
 
     private void refreshFooterLabels() {
         boolean isDraft = draft().isDraftCollection();
-        this.publishButton.setLabel(tr(isDraft ? "publish.publish" : "publish.save"));
+        this.publishButton.setLabel(tr(isDraft ? "publish.publish" : "publish.button_changes"));
         this.publishButton.setStyle(UiButton.Style.PRIMARY);
     }
 
     private void refreshFooter() {
         refreshFooterLabels();
-        Component saveProblem = this.editor.saveProblem();
-        this.saveDraftButton.disable(saveProblem);
         if (!draft().isDraftCollection()) {
-            this.publishButton.disable(saveProblem);
+            this.publishButton.disable(this.editor.publishChangesProblem());
             return;
         }
-        Component problem = null;
+        Component problem;
         if (this.check.blocked()) {
             problem = tr("publish.blocked");
         } else if (!this.publishChosen) {
             problem = tr("publish.kept_draft");
         } else {
-            problem = this.editor.sendProblem();
+            problem = this.editor.publishProblem();
         }
         this.publishButton.disable(problem);
     }
 
+    // A draft is published once its last changes are saved; a published collection's changes are sent
     private void publishOrSave() {
         if (draft().isDraftCollection()) {
-            this.editor.save(true, false);
+            this.editor.publish();
         } else {
-            this.editor.save(false, false);
+            this.editor.publishChanges(false);
         }
     }
 
@@ -574,7 +565,7 @@ final class PublishPage implements EditorPage {
     private void setVisibility(int index) {
         CreatorDraft draft = draft();
         if (draft.isDraftCollection()) {
-            // Only a choice: publishing happens with the button, in one batch with the changes
+            // Only a choice: publishing happens with the button, once the changes before it are saved
             this.publishChosen = index == 1;
             refreshFooter();
             return;
@@ -691,7 +682,7 @@ final class PublishPage implements EditorPage {
         action(dialog, tr("publish.done.back"), UiButton.Style.SECONDARY, this.editor::onClose);
         // Publishing cannot be taken back, but archiving takes the collection out of the machines again
         action(dialog, tr("publish.done.undo"), UiButton.Style.DANGER_TEXT,
-                () -> CollectionActions.send(new WorldCollectionEdit.SetArchived(id, true),
+                () -> CollectionActions.send(id, new WorldCollectionEdit.SetArchived(id, true),
                         () -> this.editor.toast(tr("home.archived", name))));
         dialog.cancelButton(tr("publish.done.stay"));
         this.editor.openModal(dialog);
@@ -713,6 +704,8 @@ final class PublishPage implements EditorPage {
     public void tick() {
         this.simulation.request(weights(pool()));
         this.simulation.tick();
+        // What the saver is doing changes the button without a change of the draft
+        refreshFooter();
         if (this.playersView) {
             Component none = pool().isEmpty() ? tr("publish.no_pool") : null;
             this.testPullButton.disable(none != null ? none : FigureDraw.isBusy() ? tr("publish.drawing") : null);
@@ -728,7 +721,7 @@ final class PublishPage implements EditorPage {
         // What publishing leads to, between the footer's buttons, where it fits
         Font font = Minecraft.getInstance().font;
         int from = this.backButton.bounds().right() + 10;
-        int to = this.saveDraftButton.bounds().x() - 10;
+        int to = this.publishButton.bounds().x() - 10;
         String shown = Draw.cut(font, tr("publish.afterwards").getString(), Math.max(0, to - from));
         if (font.width(shown) >= 80) {
             Draw.string(graphics, font, shown, to - font.width(shown), this.footerY + 6, HELP);

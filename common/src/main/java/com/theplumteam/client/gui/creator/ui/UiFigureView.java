@@ -251,6 +251,8 @@ public class UiFigureView extends UiViewport {
         boolean canSit = figure != null && !figure.getRenderOptions().poseLocked();
         poses.disable(1, canSit ? null : CreatorScreen.tr("preview.no_sit"));
         poses.select(sitting && canSit ? 1 : 0);
+        // A figure that cannot be drawn yet has no pose to choose, and its note takes the room
+        poses.setVisible(figure != null);
     }
 
     // The room between the switches at the top and those at the bottom, for the models
@@ -262,7 +264,10 @@ public class UiFigureView extends UiViewport {
         if (variantSwitch.visible()) {
             top = Math.max(top, variantSwitch.bounds().bottom());
         }
-        return Math.max(top, poses.bounds().bottom()) + 4;
+        if (poses.visible()) {
+            top = Math.max(top, poses.bounds().bottom());
+        }
+        return top + 4;
     }
 
     private int sceneBottom() {
@@ -294,7 +299,12 @@ public class UiFigureView extends UiViewport {
         if (collection == null || figure == null) {
             graphics.fill(x, y, x + width, y + height, BACKGROUND);
             Font font = Minecraft.getInstance().font;
-            Draw.centred(graphics, font, emptyText.getString(), x + width / 2, y + height / 2 - 4, width - 8,
+            // In the middle of the room the switches leave, so none of them covers it, or right
+            // under them in a view too short for that
+            int top = sceneTop();
+            int bottom = sceneBottom();
+            int middle = bottom - top >= 10 ? (top + bottom) / 2 : top + 5;
+            Draw.centred(graphics, font, emptyText.getString(), x + width / 2, middle - 4, width - 8,
                     Theme.MUTED);
             return;
         }

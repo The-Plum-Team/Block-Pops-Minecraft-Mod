@@ -26,7 +26,8 @@ import java.util.function.Consumer;
  * ({@link #accent}), a dialog with a red button is a red one with a bin, and any other the
  * collections' purple. A node in a row gets the drags and the release of a press it took, so it
  * can be a slider or a colour square. Escape, the X, a click outside the card and a cancel button
- * all cancel it; Enter presses its last button, the main action. While it is open nothing below
+ * all cancel it; Enter presses its last button, the main action, unless a default button was named
+ * ({@link #defaultButton}), which Enter presses instead and which is outlined. While it is open nothing below
  * it takes input, and {@link CreatorScreen} disables the screen's own vanilla widgets. Choosing a
  * button closes the dialog before its action runs, so the action may open another one.
  */
@@ -60,6 +61,9 @@ public class UiModal implements UiNode {
     private UiNode.Box pressedRow;
     @Nullable
     private UiButton cancelButton;
+    // The button Enter presses, outlined, when it is not the last one
+    @Nullable
+    private UiButton defaultButton;
     @Nullable
     private Runnable onCancel;
     private int preferredWidth = 300;
@@ -120,6 +124,15 @@ public class UiModal implements UiNode {
         buttons.add(button);
         cancelButton = button;
         return button;
+    }
+
+    /**
+     * Makes one of the dialog's buttons the one Enter presses, as the safe choice of a question
+     * whose other buttons discard something; it is outlined so the choice shows.
+     */
+    public UiModal defaultButton(UiButton button) {
+        this.defaultButton = button;
+        return this;
     }
 
     /**
@@ -312,6 +325,16 @@ public class UiModal implements UiNode {
         for (UiButton button : buttons) {
             button.draw(graphics, mouseX, mouseY, partialTick);
         }
+        UiButton chosen = defaultButton;
+        if (chosen != null && chosen.visible()) {
+            // A focus ring one unit outside the default button
+            Rect ring = chosen.bounds();
+            int colour = Theme.SELECTED_LIGHT;
+            graphics.fill(ring.x() - 1, ring.y() - 1, ring.right() + 1, ring.y(), colour);
+            graphics.fill(ring.x() - 1, ring.bottom(), ring.right() + 1, ring.bottom() + 1, colour);
+            graphics.fill(ring.x() - 1, ring.y(), ring.x(), ring.bottom(), colour);
+            graphics.fill(ring.right(), ring.y(), ring.right() + 1, ring.bottom(), colour);
+        }
     }
 
     @Override
@@ -359,6 +382,10 @@ public class UiModal implements UiNode {
             return true;
         }
         if (key.enter()) {
+            if (defaultButton != null) {
+                defaultButton.press();
+                return true;
+            }
             for (int i = buttons.size() - 1; i >= 0; i--) {
                 UiButton button = buttons.get(i);
                 if (button != cancelButton) {
