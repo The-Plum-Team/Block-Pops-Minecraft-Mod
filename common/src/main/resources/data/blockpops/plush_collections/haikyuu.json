@@ -1,0 +1,162 @@
+{
+  "id": "plush_haikyuu",
+  "name": "Haikyuu Plushes",
+  "author": "The Plum Team",
+  "author_url": "",
+  "logo": {
+    "texture": "blockpops:textures/gui/plush_collections/logo_haikyuu.png"
+  },
+  "background_color": {
+    "r": 214,
+    "g": 96,
+    "b": 20
+  },
+  "specials_released_at": "2026-11-06",
+  "figures": [
+    {
+      "id": "hinata",
+      "name": "Hinata",
+      "model": "blockpops:geo/plush/hinata.geo.json",
+      "texture": "blockpops:textures/item/plush_hinata.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "kageyama",
+      "name": "Kageyama",
+      "model": "blockpops:geo/plush/kageyama.geo.json",
+      "texture": "blockpops:textures/item/plush_kageyama.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "kenma",
+      "name": "Kenma",
+      "model": "blockpops:geo/plush/kenma.geo.json",
+      "texture": "blockpops:textures/item/plush_kenma.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "oikawa",
+      "name": "Oikawa",
+      "model": "blockpops:geo/plush/oikawa.geo.json",
+      "texture": "blockpops:textures/item/plush_oikawa.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "daichi",
+      "name": "Daichi",
+      "model": "blockpops:geo/plush/daichi.geo.json",
+      "texture": "blockpops:textures/item/plush_daichi.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "asahi",
+      "name": "Asahi",
+      "model": "blockpops:geo/plush/asahi.geo.json",
+      "texture": "blockpops:textures/item/plush_asahi.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "tanaka",
+      "name": "Tanaka",
+      "model": "blockpops:geo/plush/tanaka.geo.json",
+      "texture": "blockpops:textures/item/plush_tanaka.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json"
+    },
+    {
+      "id": "sugawara",
+      "name": "Sugawara",
+      "model": "blockpops:geo/plush/sugawara.geo.json",
+      "texture": "blockpops:textures/item/plush_sugawara.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "nishinoya",
+      "name": "Nishinoya",
+      "model": "blockpops:geo/plush/nishinoya.geo.json",
+      "texture": "blockpops:textures/item/plush_nishinoya.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "tsukishima",
+      "name": "Tsukishima",
+      "model": "blockpops:geo/plush/tsukishima.geo.json",
+      "texture": "blockpops:textures/item/plush_tsukishima.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "yamaguchi",
+      "name": "Yamaguchi",
+      "model": "blockpops:geo/plush/yamaguchi.geo.json",
+      "texture": "blockpops:textures/item/plush_yamaguchi.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "kuroo",
+      "name": "Kuroo",
+      "model": "blockpops:geo/plush/kuroo.geo.json",
+      "texture": "blockpops:textures/item/plush_kuroo.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "bokuto",
+      "name": "Bokuto",
+      "model": "blockpops:geo/plush/bokuto.geo.json",
+      "texture": "blockpops:textures/item/plush_bokuto.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "akaashi",
+      "name": "Akaashi",
+      "model": "blockpops:geo/plush/akaashi.geo.json",
+      "texture": "blockpops:textures/item/plush_akaashi.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "iwaizumi",
+      "name": "Iwaizumi",
+      "model": "blockpops:geo/plush/iwaizumi.geo.json",
+      "texture": "blockpops:textures/item/plush_iwaizumi.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "ushijima",
+      "name": "Ushijima",
+      "model": "blockpops:geo/plush/ushijima.geo.json",
+      "texture": "blockpops:textures/item/plush_ushijima.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "tendo",
+      "name": "Tendo",
+      "model": "blockpops:geo/plush/tendo.geo.json",
+      "texture": "blockpops:textures/item/plush_tendo.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "atsumu",
+      "name": "Atsumu",
+      "model": "blockpops:geo/plush/atsumu.geo.json",
+      "texture": "blockpops:textures/item/plush_atsumu.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "osamu",
+      "name": "Osamu",
+      "model": "blockpops:geo/plush/osamu.geo.json",
+      "texture": "blockpops:textures/item/plush_osamu.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    }
+  ]
+}

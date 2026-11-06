@@ -11,6 +11,7 @@
     "g": 138,
     "b": 222
   },
+  "specials_released_at": "2026-11-06",
   "figures": [
     {
       "id": "finn",
@@ -67,6 +68,69 @@
           "texture": "blockpops:textures/item/plush_simon.png"
         }
       ]
+    },
+    {
+      "id": "bmo",
+      "name": "BMO",
+      "model": "blockpops:geo/plush/bmo.geo.json",
+      "texture": "blockpops:textures/item/plush_bmo.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "prince_gumball",
+      "name": "Prince Gumball",
+      "model": "blockpops:geo/plush/prince_gumball.geo.json",
+      "texture": "blockpops:textures/item/plush_prince_gumball.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "marshall_lee",
+      "name": "Marshall Lee",
+      "model": "blockpops:geo/plush/marshall_lee.geo.json",
+      "texture": "blockpops:textures/item/plush_marshall_lee.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "huntress_wizard",
+      "name": "Huntress Wizard",
+      "model": "blockpops:geo/plush/huntress_wizard.geo.json",
+      "texture": "blockpops:textures/item/plush_huntress_wizard.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "lemongrab",
+      "name": "Lemongrab",
+      "model": "blockpops:geo/plush/lemongrab.geo.json",
+      "texture": "blockpops:textures/item/plush_lemongrab.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true,
+      "alternatives": [
+        {
+          "name": "Lemongrab 2",
+          "model": "blockpops:geo/plush/lemongrab_2.geo.json",
+          "texture": "blockpops:textures/item/plush_lemongrab_2.png"
+        }
+      ]
+    },
+    {
+      "id": "the_lich",
+      "name": "The Lich",
+      "model": "blockpops:geo/plush/the_lich.geo.json",
+      "texture": "blockpops:textures/item/plush_the_lich.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
+    },
+    {
+      "id": "fern",
+      "name": "Fern",
+      "model": "blockpops:geo/plush/fern.geo.json",
+      "texture": "blockpops:textures/item/plush_fern.png",
+      "animation": "blockpops:animations/figure/box_figure_default.animation.json",
+      "special": true
     }
   ]
 }
