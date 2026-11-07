@@ -354,11 +354,13 @@ final class TestDrawDialog {
             int ruleLines = Math.min(2, Draw.wrap(font, regularRule().getString(), width - indent).size())
                     + Math.min(2, Draw.wrap(font, guaranteedRule().getString(), width - indent).size());
             top += ruleLines * Theme.LINE_HEIGHT + 2 + GAP;
-            // The estimate and the hundred draws' line take three lines each where the room is,
-            // else one, cut with the whole of it in its tooltip
+            // The estimate and the hundred draws' line take three lines each where the room is, two
+            // on a low window, where the chart keeps only its least, else one, each cut with the
+            // whole of it in its tooltip
             int bottom = this.buttonsY - GAP;
             int roomy = 3 * Theme.LINE_HEIGHT * 2 + 2 * GAP + MIN_HISTOGRAM;
-            int lines = bottom - top >= roomy ? 3 : 1;
+            int low = 2 * Theme.LINE_HEIGHT * 2 + GAP + 2 + MIN_HISTOGRAM;
+            int lines = bottom - top >= roomy ? 3 : bottom - top >= low ? 2 : 1;
             this.estimateY = top;
             this.estimateLines = lines;
             top += lines * Theme.LINE_HEIGHT + GAP;

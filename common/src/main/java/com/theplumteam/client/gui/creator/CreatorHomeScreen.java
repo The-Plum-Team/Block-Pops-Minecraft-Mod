@@ -68,11 +68,11 @@ import java.util.function.IntConsumer;
  * every collection it may; the sidebar's button starts a new collection.
  *
  * <p>A new collection starts from its name alone, in a form the content panel shows while a
- * temporary "New" row at the top of the list is selected ({@link CreateForm}); selecting another
- * row, Cancel or Escape closes it and the selection it left returns. From "Create" until the
- * server has synced the new collection, the home is locked: the rows, the sidebar's button, the
- * help, the search and the shortcuts wait, and only Cancel, Escape and the cross act. The new
- * collection then opens in the editor.
+ * temporary "New" row at the top of the list is selected ({@link CreateForm}), and the sidebar's
+ * button is gone meanwhile; selecting another row, Cancel or Escape closes it and the selection it
+ * left returns. From "Create" until the server has synced the new collection, the home is locked:
+ * the rows, the help, the search and the shortcuts wait, and only Cancel, Escape and the cross act.
+ * The new collection then opens in the editor.
  *
  * <p>The content shows the selected collection: its name with a badge unless it is simply
  * published, its number of figures and its author, its box and as many of its figures as the
@@ -231,15 +231,19 @@ public class CreatorHomeScreen extends SidebarScreen {
             this.list.reveal(revealed);
         }
 
-        UiButton create = new UiButton(tr("side.new"), UiButton.Style.SECONDARY, this::newCollection);
-        create.setGlyph(PixelIcon.PLUS);
-        Component full = lock != null ? lock : CollectionActions.tooManyCollections();
-        if (full != null) {
-            create.disable(full);
-        } else {
-            create.setTooltip(CollectionActions.quotaText());
+        // While the new collection's form is open its row stands for it, and the foot has no
+        // second "New collection"
+        if (this.form == null) {
+            UiButton create = new UiButton(tr("side.new"), UiButton.Style.SECONDARY, this::newCollection);
+            create.setGlyph(PixelIcon.PLUS);
+            Component full = CollectionActions.tooManyCollections();
+            if (full != null) {
+                create.disable(full);
+            } else {
+                create.setTooltip(CollectionActions.quotaText());
+            }
+            sideFooter(create);
         }
-        sideFooter(create);
 
         if (this.focusListOnShow && this.minecraft.screen == this) {
             // The list takes the keyboard whenever the screen is shown, so the arrows move through

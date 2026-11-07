@@ -101,7 +101,8 @@ public class BulkAddScreen extends CreatorScreen {
     private static final int HEADER = DialogFrame.HEADER_HEIGHT + 6;
     // The room the header's X takes at its right end
     private static final int CLOSE_ROOM = 6 + DialogCloseButton.SIZE + 8;
-    private static final int ZONE_HEIGHT = 40;
+    // Tall enough for the zone's hint on two lines to clear its frame
+    private static final int ZONE_HEIGHT = 44;
     private static final int GAP = 6;
     private static final int TABLE_HEAD = 12;
     private static final int CAPACITY_BAR = 4;
@@ -146,8 +147,12 @@ public class BulkAddScreen extends CreatorScreen {
     private final UiButton retryButton;
     private final UiButton closeButton;
 
-    // What changes with the rows, worked out once per change rather than per frame
+    // What changes with the rows, worked out once per change rather than per frame: the capacity
+    // line whole, then shorter forms for a narrow footer, each with the figures against the cap
     private Component capacity = Component.empty();
+    private Component capacityFigures = Component.empty();
+    private Component capacityShort = Component.empty();
+    private Component capacityCount = Component.empty();
     private float currentShare;
     private float newShare;
     private boolean overCapacity;
@@ -375,10 +380,12 @@ public class BulkAddScreen extends CreatorScreen {
         long addedBytes = Math.max(0, after.collectionBytes() - before.collectionBytes());
         int afterKiB = (int) Math.min(Integer.MAX_VALUE, (after.collectionBytes() + 1023) / 1024);
         this.overCapacity = !after.fits() || after.collectionBytes() > WorldContentLimits.MAX_COLLECTION_BYTES;
-        this.capacity = tr("card.joined",
-                tr("bulk.capacity", this.adding, current, total, WorldContentLimits.MAX_FIGURES),
-                tr("bulk.bytes", String.format(Locale.ROOT, "%.1f", addedBytes / (1024.0 * 1024.0)),
-                        UiQuotaMeter.text(afterKiB, (int) (WorldContentLimits.MAX_COLLECTION_BYTES / 1024))));
+        Component bytes = tr("bulk.bytes", String.format(Locale.ROOT, "%.1f", addedBytes / (1024.0 * 1024.0)),
+                UiQuotaMeter.text(afterKiB, (int) (WorldContentLimits.MAX_COLLECTION_BYTES / 1024)));
+        this.capacityFigures = tr("bulk.capacity", this.adding, current, total, WorldContentLimits.MAX_FIGURES);
+        this.capacity = tr("card.joined", this.capacityFigures, bytes);
+        this.capacityCount = tr("figures.count", total, WorldContentLimits.MAX_FIGURES);
+        this.capacityShort = tr("card.joined", this.capacityCount, bytes);
         if (this.adding == 0) {
             this.addProblem = tr(this.plan.isEmpty() ? "bulk.no_files" : "bulk.nothing");
         } else if (after.recordBytes() > WorldContentLimits.RECORD_BYTES) {
@@ -884,12 +891,21 @@ public class BulkAddScreen extends CreatorScreen {
             graphics.fill(left + currentWidth, barY, left + currentWidth + newWidth, barY + CAPACITY_BAR,
                     this.overCapacity ? Theme.RED : Theme.GREEN);
         }
-        String capacityText = this.capacity.getString();
         int textX = left + barWidth + 6;
         int textY = this.footerY + 12;
         int textRoom = Math.max(0, right - textX);
+        // The whole line where it fits, else the first shorter form that does, so the figures
+        // against the cap always show; the whole line is then the tooltip
+        String capacityText = this.capacityCount.getString();
+        for (Component form : List.of(this.capacity, this.capacityFigures, this.capacityShort)) {
+            if (this.font.width(form.getString()) <= textRoom) {
+                capacityText = form.getString();
+                break;
+            }
+        }
         Draw.text(graphics, this.font, capacityText, textX, textY, textRoom, this.overCapacity ? Theme.RED : HEAD_TEXT);
-        if (this.font.width(capacityText) > textRoom && inside(mouseX, mouseY, left, textY - 1, right - left, 10)) {
+        if (!capacityText.equals(this.capacity.getString())
+                && inside(mouseX, mouseY, left, textY - 1, right - left, 10)) {
             UiTooltip.set(this.capacity);
         }
     }
@@ -1115,7 +1131,8 @@ public class BulkAddScreen extends CreatorScreen {
             int width = contentWidth();
             int name = 84;
             int type = 44;
-            int size = 36;
+            // As wide as its title and a gap, so the status's title never runs on from it
+            int size = Math.max(36, Math.min(60, Minecraft.getInstance().font.width(tr("bulk.column.size")) + 4));
             int flexible = width - CHECK - VIEW - name - type - size - 6 * COLUMN_GAP;
             if (flexible < 120) {
                 name = 64;
@@ -1153,7 +1170,13 @@ public class BulkAddScreen extends CreatorScreen {
             int headY = y - TABLE_HEAD + 2;
             String[] keys = {"", "bulk.column.view", "bulk.column.files", "bulk.column.name", "bulk.column.type",
                     "bulk.column.size", "bulk.column.status"};
-            for (int i = 1; i < keys.length; i++) {
+            // The pictures' title ends where its column does, and may take the boxes' room before it
+            String view = tr(keys[1]).getString();
+            int viewRoom = this.columnX[1] + this.columnWidth[1] - this.columnX[0];
+            int viewWidth = Math.min(font.width(view), viewRoom);
+            Draw.text(graphics, font, view, this.columnX[1] + this.columnWidth[1] - viewWidth, headY, viewRoom,
+                    HEAD_TEXT);
+            for (int i = 2; i < keys.length; i++) {
                 Draw.text(graphics, font, tr(keys[i]).getString(), this.columnX[i], headY, this.columnWidth[i],
                         HEAD_TEXT);
             }
