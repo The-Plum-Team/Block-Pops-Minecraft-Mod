@@ -305,97 +305,149 @@ with the **Creator** button of a claw or gacha machine's screen, with **Open cre
 **Creator** tab of the machine's Settings, or with the client command `/blockpopscreator`, which
 opens it without a machine.
 
-**Collections in this world** shows every World collection as a card: its box with the logo, its
-name and author, how many figures it has, are in the draw and are retired, how much space its files
-take, and a badge saying whether it is published, a draft or archived, or how many of its files the
-server lost. Tabs show every collection, or only the published ones, the drafts or the archived
-ones, the search (Ctrl+F) finds a name or an author, and the list sorts by the last edit, the name or the number of
-figures. The meter at the top shows how many collections and how much of the world's file space are
-in use. Each card has **Edit** (or Enter) and a menu:
+Every screen of the creator is a sidebar on the left and one panel on the right, as in Quick Skin's
+settings, with one green button for the step that matters there. Detail is kept in tooltips: point
+at something to read more about it.
+
+#### The collections
+
+The sidebar lists the world's collections, the last edited first, each with its box and, at its
+right end, its number of figures, **saving** while its changes are being saved, a gold dot and
+**draft** for a draft (the dot alone on a narrow sidebar), or a red count of the files the server
+lost. Archived collections fold under **Archived**. Once the world has more than eight collections
+a search row finds a name, an author or an id, archived collections included; Ctrl+F shows it at
+any time. **?** at the top says what World collections are, lists the shortcuts and shows how much
+of the server's file space is in use, and **✕** closes the creator. The line above **New
+collection** speaks up only when that space is almost used up or the world has all the collections
+it may.
+
+The panel shows off the selected collection: its name, with a badge for a draft, an archived
+collection or files the server lost; how many figures it has and who made it; its box and as many
+figures as fit, standing in its background colour (pointing at them gives the space its files
+take); how many figures in the draw are of each rarity; and where players find it, with a link that
+puts it in the machine the creator was opened from. **Open** (or Enter, or a double click on its
+row) opens it in the editor, and **··· More** (or a right click on its row) has:
 
 - **Put in this machine**, when the creator was opened from a machine. It works only for a
   collection that is in the machines: published, not archived and not hidden by the server;
 - **Give me every figure** (for testing), like the Cheats tab does for bundled ones;
+- **Players' progress**, for a published or archived collection;
 - **Duplicate** makes a draft copy (see [below](#retiring-archiving-and-purging));
 - **Archive...** takes the collection out of every machine after asking, while boxes and figures
   already in the world keep showing, and offers to undo it for a few seconds; **Restore** offers it
   again;
-- **Delete forever...** deletes an archived collection or a draft once you type its name.
+- **Delete forever...** deletes an archived collection or a draft once you type its name;
+- **Import from a data pack...** starts a [datapack import](#importing-from-a-datapack) on the
+  server.
 
-**Import from a data pack...** at the bottom starts a [datapack import](#importing-from-a-datapack)
-on the server, and **Done** goes back.
+A collection's own actions wait while its changes are still being saved.
 
-**New collection** (the first card, or Ctrl+N) asks for a name, an author (your player name to
-start with), an optional logo and a background colour, which **Take from the logo** can pick for
-you, and shows the machine screen as you type. The id is made from the name; **Advanced options**
-shows it and lets you type another, because it cannot change later. **Create and add figures**
-creates the collection as a draft, out of every machine until you publish it, and opens it in the
-editor.
+**New collection** (or Ctrl+N) asks only for a name. The faint line under it is the id the name
+makes; pointing at it, or reaching it with Tab, offers **change**, because the id cannot change
+later. Beside the form, the box the collection will get holds a figure in your own skin. **Create**
+makes the collection a draft, out of every machine until you publish it, with your player name as
+its author and an orange background, and opens it in the editor; **Cancel** goes back. A world with
+no collections offers to create the first one, or to import one from a data pack.
 
-The editor has three tabs. Its top bar counts the unsaved changes and has **Undo** (Ctrl+Z),
-**Save** (Ctrl+S) and **Review and publish**; leaving with unsaved changes asks whether to save
-them, discard them or stay. **Next steps** under the tabs says what the collection still needs.
-Every change shows at once in the editor's views, unsaved files included, and is sent only with
-**Save** unless said otherwise below.
+#### The editor
 
-- **Identity & box** sets the name, the author (or **Use my player name**), an optional author
-  link, which players can open from the machine screen, the background colour, the box and the
-  logo. The box is a solid colour, your own 64×64 image or the mod's default box; **Download box
-  template** writes a template with each face in its own colour, and a guide naming the faces, to
-  `blockpops/templates/` in the game folder and opens that folder. The logo's size on the box (50
-  to 150 %) and position can be changed. The view beside it shows the box, the box placed in the
-  world or the machine screen; dragging turns it, and **Light** shows it by day or by night.
+The editor's sidebar names the collection after an arrow back to the collections, with **?** for
+its help and shortcuts beside it, and has three tabs: **Figures**, **Look** and **Options**
+(Ctrl+1, 2 and 3). Every change shows at once in the editor's views, files not uploaded yet
+included, and Ctrl+Z undoes it.
 
-- **Figures** shows every figure as a card, with a search and chips for the skins, the 3D models,
-  the retired figures and those with a problem. **Add figure** adds an empty one. **Add
-  several...**, or dropping files or a folder on the grid, first lists what the files make: a skin
-  figure for each 64×64 PNG and a 3D model figure for each model and texture with the same name
-  (with the poses of that name, if any), named after the file with or without its numbers, at a
-  default size. Each row shows a preview, and its name and size can be changed in place (Tab moves
-  between them); a row whose files break a rule says why and is skipped, and one whose id is taken
-  gets another. **Add** puts the ready rows in the collection and saves them at once, a few figures
-  at a time, with a bar you can pause or stop: what was saved stays saved, and the rest stays in
-  the editor, unsaved. Ctrl or Shift + click picks several figures to retire, restore, resize or
-  duplicate together, and dragging a card (with every figure shown and no search) changes their
-  order.
+A draft saves itself a few seconds after each change. Its files upload when you move to another
+figure or tab, or press Ctrl+S, publish or leave, so trying ten skins on one figure uploads only the
+last. A published or archived collection keeps your changes in the editor until **Publish
+changes**, so players never see half of a change; leaving before that asks whether to publish them
+or discard them. The line above the sidebar's button says how saving stands: saved, saving, files
+waiting to upload, a change that cannot be saved yet (such as a figure with no skin, which a click
+on the line goes to), a refusal from the server (a click gives the details and **Retry**), the
+space running low, or how many changes are not published. A tab holding something that cannot be
+saved has a red dot, and, on a published or archived collection, a tab with changes not published
+an amber one. Leaving while some changes cannot be saved asks first.
 
-  Beside the grid, the inspector shows the selected figure live: loose beside a 1x figure for
-  scale, in its box, or in the machine's grid as discovered or not, standing or sitting, and
-  dragging turns it. **‹ ›** or the left and right arrow keys step through the cards. There you
-  rename it (a figure never saved takes the id its name makes, fixed once saved), set its size,
-  make it a Minecraft skin or a Blockbench model, and drop or choose each of its files, each with
-  its checks. **Use my skin** fills a skin figure with your own skin from the game's skin cache on
-  this computer, without downloading anything, or with the default skin when the cache has none.
-  Under the files, **Rarity** sets how often the figure comes out, with its chance in one draw
-  shown live; **Skin variants** adds up to 4 other textures, each named, which **‹ ›** in the view
-  steps through; and **Box face** turns the face on the box on or off, where a 3D model figure's
-  face is chosen by dragging across its texture (after a click the arrow keys move it one pixel at
-  a time, and resize it with Shift). The links under it retire the figure from the draw or restore
-  it, or, in a draft, delete it for good; **Save figure** sends that figure alone and lists what is
-  still wrong while it cannot.
+- **Figures** shows the collection's figures in a strip, with a **+** at its end that adds an empty
+  one. Under the strip the selected figure stands in a big preview, which turns when dragged, and
+  its settings fill the column beside it. **View ⌄** on the preview shows the figure loose (beside a
+  1x figure for scale when it has another size), in its box, or in the machine's grid as discovered
+  or not; standing or sitting; by day or at night; spinning by itself; and in each of its skins. A
+  red **!** on a figure says what it still needs, a **?** that it cannot be shown yet, and a retired
+  figure shows in black and white. Ctrl or Shift + click picks several figures, the arrow keys step
+  through them, and dragging a figure, with every figure shown and no search, changes their order.
+  The search button at the strip's end counts the figures and the space they use, searches
+  (Ctrl+F) and shows only the skins, the 3D models, the retired figures or those with a problem.
 
-- **Review & publish** lists what the collection still needs, each with a link to where it is
-  fixed, and how its draw works: every figure's chance, this server's token rules and about how
-  many days of tokens completing the collection takes. **Draw by rarity** sets the weight of each
-  rarity, **Collection type** puts it in the claw machine as boxed figures or in the gacha
-  machine's **Plushes** tab, handed out as figure blocks, **Can come out holographic**, ticked by
-  default, lets one draw in 25 come out holographic (untick it and no draw from the collection ever
-  does), and **Visibility** chooses between draft and published, or, once published, between
-  published and archived. **How players will see it**
-  shows the machine screen as a new player or a collector sees it, with **Test pull** and **Pull
-  100 times**, which spend no tokens and give nobody anything. To publish a draft, choose
-  **Published** and press **Publish collection**, which saves every change and publishes in one
-  step, and stays disabled while the list has a ✖. A dialog then offers to put the collection in
-  this machine, give you every figure, show players' progress, go back to the collections or
-  archive it again.
+  In the column you rename the figure (a new figure's id follows its name until the server has the
+  figure, and then stays) and give it its files. A skin figure takes its skin with **Choose PNG…**
+  or **Use my skin**, which fills it with your own skin from the game's skin cache on this
+  computer, without downloading anything, or with the default skin when the cache has none; a 3D
+  model figure takes its model, its texture and optionally its poses, each in a box of its own. A
+  skin picked for a figure still called "New figure" names it after the file, or after you. The
+  line under the files says whether they pass their checks. The rarity row shows the figure's
+  chance in one draw and opens a menu of the four rarities, each with the chance it would give.
+  **More settings** holds the figure's size, its type (a Minecraft skin or a Blockbench model), up
+  to 4 skin variants, each a named texture, its face on the box, which a 3D model figure chooses
+  by dragging across its texture (after a click the arrow keys move it one pixel at a time, and
+  resize it with Shift), and **Duplicate**. The red link at the bottom discards a figure never
+  saved, deletes a draft's figure, or retires a published collection's figure from the draw, each
+  with a message that undoes it; on a retired figure the link restores it. With several figures
+  picked, the column changes their size, duplicates them, or retires or restores them together.
+
+  Files dropped on the strip or on its **+**, or chosen with **Import a folder of skins** in
+  Options, first list what they make: a skin figure for each 64×64 PNG and a 3D model figure for
+  each model and texture with the same name (with the poses of that name, if any), named after the
+  file with or without its numbers, at a default size. Each row shows a preview, and its name and
+  size can be changed in place (Tab moves between them); a row whose files break a rule says why
+  and is skipped, and one whose id is taken gets another. In a draft, **Add** puts the ready rows in
+  the collection and saves them at once, a few figures at a time, with a bar you can pause or stop:
+  what was saved stays saved, and the rest leaves the draft, which Ctrl+Z brings back. In a
+  published or archived collection the figures join the changes that wait for **Publish changes**.
+
+- **Look** shows the box holding the first figure, which turns when dragged, beside the
+  collection's name and three sections, each saying what it is set to. **Background** is the panel
+  behind the figures in the machine: one of twelve colours, a colour of your own or the main colour
+  of the logo, with a sample of the machine's panel under them. **Box** is one of the 16 box
+  colours (five shown, the rest under **More**), your own 64×64 **Image**, or **Default**, the
+  mod's usual box; **Template ↓** beside an image writes a template with each face in its own
+  colour, and a guide naming the faces, to `blockpops/templates/` in the game folder and opens that
+  folder. **Logo** takes an optional logo, whose size on the box (50 to 150 %) can be changed and
+  whose place on the front of the box **Position…** lets you drag, or nudge with the arrow keys.
+  **View ⌄** shows the box alone or placed in the world, or opens the machine's screen as players
+  will see it, and two icons in the view's corner spin the box and switch the night light.
+
+- **Options** holds the collection's settings, each explained in its tooltip. **Plushes instead of
+  figures** puts the collection in the gacha machine's **Plushes** tab, handed out as figure
+  blocks, instead of the claw machine as boxed figures. **Can come out holographic**, on by
+  default, lets one draw in 25 come out holographic; turned off, no draw from the collection ever
+  does. **Rarity by hand** sets the weight of each rarity, 100, 40, 15 and 5 when off. **Author**
+  sets who made the collection (or **Use my player name**) and an optional author link, which
+  players can open from the machine screen. **Import a folder of skins** adds several figures at
+  once (see Figures), **Import from a data pack** imports a pack over this collection, and
+  **Archive or delete** (**Delete** on a draft) archives, restores or deletes it for good. A row at
+  the top warns when the collection or the server is running out of space.
+
+**Publish** at the foot of a draft's sidebar, or **Publish changes** for a published or archived
+collection, opens a small panel that says whether the collection can be published: each thing that
+holds it back in red, a click on it going to where it is fixed, or else how many figures are in the
+draw; which figures a draft leaves out for a missing file, or what a published collection's changes
+are; and where players will find it. **Yes, publish** (**Publish changes** for a published one)
+waits for the last changes to save and publishes them in one step, and a message then says the
+collection is in the machines and, when the creator was opened from a machine, offers to put it
+there. **Test pull ▶** opens the machine's screen as it will show the collection and draws from it
+as a regular token does, again with **Another pull**; **Odds** shows every figure's chance, this
+server's token rules and about how many days of tokens completing the collection takes, and its
+**Pull 100 times** how often each figure comes out. Test pulls spend no tokens and give nobody
+anything, and never come out holographic while the collection turned that off. A published or
+archived collection with nothing to publish has **Test pull ▶** at the sidebar's foot instead.
 
 Each file box says what it takes and opens your system's file dialog when clicked. A file dropped
-on the game window goes to the box under the pointer, else to the only box that takes that kind of
-file, else the game asks which one. If no dialog can be shown (for example on a Linux desktop
-without one), clicking asks for the file's full path instead, and **Use path** reads it; if a
-dialog hides behind a fullscreen window, leave fullscreen or drop the file. Nothing is sent until
-you press **Save** (or **Add** in **Add several...**, or **Save figure**); the file's name and your
-local path never leave your computer, and PNG metadata is removed before upload.
+on the game window goes to the box under the pointer (a figure's preview takes the files of that
+figure), else to the only box that takes that kind of file, else the game asks which one. If no
+dialog can be shown (for example on a Linux desktop without one), clicking asks for the file's full
+path instead, and **Use path** reads it; if a dialog hides behind a fullscreen window, leave
+fullscreen or drop the file. The file's name and your local path never leave your computer, and PNG
+metadata is removed before upload.
 
 ### Files
 
@@ -434,14 +486,15 @@ cubes and 65,536 keyframes.
 
 ### Retiring, archiving and purging
 
-Published figures and collections are never deleted from the editor, because boxes in the world
+Published figures and collections are never deleted from the creator, because boxes in the world
 still name them. A retired figure and every figure of an archived collection can no longer be drawn
 or given, but placed and held ones keep showing. An operator's **Give me every figure** still gives
 the figures of an archived collection that are not retired, and no machine can be set to an
 archived collection. Purging deletes a collection for good, and its id can never be used again in
 that world; its boxes then show empty. The `purge` command, given the id twice, deletes any
-collection; the editor's **Delete forever...** deletes only an archived collection or a draft, once
-you type its name, so archive a collection before deleting it there.
+collection; the creator's **Delete forever...**, in **··· More** or under **Archive or delete**
+(**Delete** on a draft) in a collection's Options, deletes only an archived collection or a draft,
+once you type its name, so archive a collection before deleting it there.
 
 A draft is a collection that has not been published yet. Operators see and edit it, and **Give me
 every figure** gives its figures for testing, but no machine offers it. Other players are not sent
@@ -451,9 +504,9 @@ deleted figure then shows empty. A draft cannot be archived. Publishing it, whic
 one figure that is not retired, puts it in the machines and cannot be undone; archive the
 collection to take it out again. The `create` command and a datapack import of a new collection
 make it published at once; importing into a draft keeps it a draft. An import started from the
-editor can make a new collection a draft instead.
+creator's **··· More** makes a new collection a draft unless you untick **Create as draft**.
 
-Duplicating a collection in the editor makes a draft copy with a new slug and name: every figure,
+Duplicating a collection in the creator makes a draft copy with a new slug and name: every figure,
 retired ones included, its files and its extras. The copy uses the same stored files, so nothing is
 uploaded again and no file quota grows.
 
@@ -479,18 +532,24 @@ Every command needs permission level 2, and for now a development environment.
 `gc` deletes files no collection uses that were uploaded more than a day ago; the server also does
 this when it starts.
 
-Commands have no rate limit. The editor does: an operator may make 5 edits a second and 60 a
+Commands have no rate limit. The creator does: an operator may make 5 edits a second and 60 a
 minute (a batch of up to 16 changes counts as one), start 2 datapack imports a minute, and begin
 120 uploads or 32 MiB of uploads a minute. A file the server already has costs nothing, and only
-one upload per player runs at a time.
+one upload per player runs at a time. The creator keeps under these limits by itself: it waits
+until there is room rather than send what the server would refuse, keeps some room for what you
+do by hand while it saves or adds figures, and leaves at least 5 seconds between two saves it makes
+on its own.
 
 ### Importing from a datapack
 
-Server administrators without the editor can ship a collection in a datapack and import it with
-`importpack`; operators in the editor can start the same import by typing `<namespace>:<path>`.
-The game only ever reads a pack from the server's own datapacks, by that exact name. The pack lives
-under `data/<namespace>/blockpops_world_collections/<path>/`, where `<path>` is 1 to 32 characters
-of `a-z`, `0-9` and `_`:
+Server administrators without the creator can ship a collection in a datapack and import it with
+`importpack`; operators in the creator can start the same import by typing `<namespace>:<path>`,
+with **Import from a data pack...** in **··· More** (as a new collection, or over the one with the
+slug given) or **Import from a data pack** in a collection's Options (over that collection; the
+changes of a published one that are not published yet are discarded). The game only ever reads a
+pack from the server's own datapacks, by that exact name. The pack lives under
+`data/<namespace>/blockpops_world_collections/<path>/`, where `<path>` is 1 to 32 characters of
+`a-z`, `0-9` and `_`:
 
 ```
 collection.json

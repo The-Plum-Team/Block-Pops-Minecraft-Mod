@@ -21,7 +21,8 @@ follow-up pull request (#11). `site/mod-base.json` no longer defers it or any ot
   configuration, the controller-upgrade procedure and recovery;
   [`docs/e2e.md`](../e2e.md) owns the packaged scenarios;
   [`docs/visual-review.md`](../visual-review.md) owns the advisory AI review; and
-  [`docs/ui.md`](../ui.md) owns the screens' shared style and their own GUI scale.
+  [`docs/ui.md`](../ui.md) owns the screens' shared style, their own GUI scale and the creator's
+  layout rules. How operators use the creator is in `COLLECTIONS_GUIDE.md`.
 - `docs/architecture/decisions/` records evidence-backed architectural decisions;
   [ADR 0001](../architecture/decisions/0001-adopt-mod-base-public-evidence.md) records the
   adoption of mod-base public evidence,

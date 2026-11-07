@@ -75,20 +75,31 @@ skins, box textures, logos and Blockbench models, with
 `/blockpops worldcollections` and files imported from a datapack, or with the
 in-game creator, which uploads them from your computer and opens from the
 **Creator** button of a machine, the **Creator** tab of its Settings or
-`/blockpopscreator`. The creator keeps a collection as a draft, out of the machines and
-seen only by operators, until it is published; gives figures a rarity and up to
-four skin variants; places the logo on the box; makes plush collections for the
-gacha machine; can keep a collection's draws from ever coming out holographic;
-adds many figures at once from dropped files or a folder; and duplicates, imports
-from a datapack or deletes a collection for good. The server checks every file,
-stores it with the world under `data/blockpops-world-collections/` and sends it
-to each player who joins;
+`/blockpopscreator`.
+
+The creator is laid out like Quick Skin's settings: the world's collections down
+a sidebar, and the one you pick shown off beside them with its box and figures.
+A new collection needs only a name. Its editor has three tabs: **Figures**, a
+strip of the figures over a big live preview and the selected figure's settings;
+**Look**, the name, background, box and logo; and **Options**. A collection
+stays a draft, out of the machines and seen only by operators, until **Publish**
+puts it in them; a draft saves itself as you work, while a published
+collection's changes wait for **Publish changes**. The creator gives figures a
+rarity and up to four skin variants; places the logo on the box; makes plush
+collections for the gacha machine; can keep a collection's draws from ever
+coming out holographic; adds many figures at once from dropped files or a
+folder; tries the draw out without spending tokens; and duplicates, imports from
+a datapack or deletes a collection for good.
+
+The server checks every file, stores it with the world under
+`data/blockpops-world-collections/` and sends it to each player who joins;
 nothing is published anywhere else. A world that already holds some still sends
-them to its players outside a development environment. A datapack can ship one for `importpack`.
-See [World Collections](COLLECTIONS_GUIDE.md#world-collections) for the file
-rules, limits and commands, and
+them to its players outside a development environment. A datapack can ship one
+for `importpack`. See [World Collections](COLLECTIONS_GUIDE.md#world-collections)
+for how to use the creator, the file rules, limits and commands, and
 [ADR 0003](docs/architecture/decisions/0003-accept-operator-uploaded-world-collections.md),
-[ADR 0004](docs/architecture/decisions/0004-extend-world-collections-for-the-redesigned-creator.md)
+[ADR 0004](docs/architecture/decisions/0004-extend-world-collections-for-the-redesigned-creator.md),
+[ADR 0005](docs/architecture/decisions/0005-autosave-world-collection-drafts.md)
 and
 [ADR 0006](docs/architecture/decisions/0006-let-world-collections-turn-off-holographic-draws.md)
 for the design.

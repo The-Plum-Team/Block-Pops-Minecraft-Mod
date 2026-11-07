@@ -79,6 +79,53 @@ to create or upload, `DANGER` (red) to delete, `COLLECTION` (purple) for collect
 Messages stay as written (for example "Done", "Use Regular Token"): the pixel font upper-cases only
 what it draws, and the packaged E2E scenario finds widgets by their message.
 
+## The creator
+
+The World-collection creator's screens, its home and its editor, are laid out as Quick Skin's
+settings: a sidebar and one content panel, both from `SidebarScreen`. Its home lists the
+collections in the sidebar and shows the selected one in the content; its editor lists the
+collection's tabs (Figures, Look, Options) and shows the selected tab's page.
+
+- **Panels.** Both panels sit on the starry background, 8 units in from the canvas edge, together
+  at most 900x520. The sidebar is a quarter of that width plus 20, from 116 to 156 units; the
+  content takes the rest, 6 units to its right. The sidebar holds a heading with glyph buttons at
+  its right (the help, and on the home a cross that leaves; the editor's heading is a back arrow
+  before the collection's name), a list of whole rows, a one-line status slot and one button at its
+  foot.
+- **One green action.** Each screen state has one PRIMARY button: **Open** on the home, **Create**
+  in its form (and the empty world's invitation), **Publish** or **Publish changes** in the editor.
+  While the publish popover is open the editor's button is drawn pressed in the SECONDARY face, so
+  the popover's own button is the only green. Rarer actions stay out of the main view: a
+  collection's in the home's **More** menu (archiving, deleting and importing also in the editor's
+  Options), the test draw in the publish popover (or at the editor's foot on a published or archived
+  collection with nothing waiting), the collection's settings in Options.
+- **Footer baseline.** Every bottom button of either panel sits on one line, `footerY`. Toasts are
+  centred over the content panel just above it, or over its foot on a small canvas when the screen
+  has no buttons there.
+- **Narrow and short.** The content is narrow under 360 units wide (in an 800x600 or 854x480
+  window), which tightens its padding and puts side by side less: the home's showcase holds fewer
+  figures and its **More** becomes a glyph, Look's view becomes a band over one labelled row a
+  section, and the Figures column shortens its hints. The canvas is short under 300 units high
+  (427x240 in Minecraft's default window), which raises the content's title and lets the columns
+  that no longer fit scroll. Below that, down to 320x240, the scrolling areas keep every control in
+  reach.
+- **Model budget.** From 1.21.6 each figure or box drawn into a screen takes a render target of its
+  own, so a creator screen draws at most 15 models, handed out in a fixed order: the big preview or
+  the showcase's box, the showcase's figures or Look's sample, the figure strip's thumbs from the
+  selected one, then the sidebar's boxes. A node left without one draws a flat stand-in (a thumb
+  its figure's texture, a sidebar row a swatch of the collection's colour) or, on the showcase's
+  stage, nothing; while a dialog that draws models of its own is open (the test draw, the machine's
+  screen) the screen behind it draws none.
+- **Rows.** Choosing a sidebar row plays the tab sound. A setting is a `UiFoldRow` or a
+  `UiToggleRow` whose explanation is its label's tooltip, never a second line.
+- **Saving.** The editor's status slot says how the saving stands in a few words, its full sentence
+  in the tooltip: saved, saving soon, uploading, files waiting for the operator to move on, changes
+  that cannot be saved, a refusal, the space running low, or a published collection's changes not
+  published yet. A click on it does what the state offers, such as going to a change that cannot be
+  saved or retrying. A passing message takes the slot for a toast's lifetime, but never covers an
+  urgent state (changes that cannot be saved, no connection, a failed save). The tab rows repeat it
+  as dots: red where something cannot be saved, amber where a published collection's changes wait.
+
 ## Opening transition
 
 The machine menu opens with a comic halftone: black dots on a grid of 10 GUI units grow over the
