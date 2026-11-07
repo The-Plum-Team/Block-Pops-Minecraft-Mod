@@ -1,12 +1,14 @@
 package com.theplumteam.client.gui.creator.ui;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.platform.NativeImage;
 import com.theplumteam.client.gui.style.PixelFont;
 import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.util.GuiPose;
 import com.theplumteam.client.gui.util.UiSounds;
 import com.theplumteam.client.gui.widget.FigureEntry;
+import com.theplumteam.client.runtime.RuntimeTextures;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.registry.ModSounds;
@@ -15,6 +17,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -35,12 +38,14 @@ import java.util.function.Supplier;
  * mouse wheel over it, a thumbnail at a time; between the arrows only whole thumbnails show, the
  * room left over shared on both sides, and only the thumbnails in sight are drawn.
  *
- * <p>A thumbnail marks only what needs the operator: a red "!" for a problem, whose tooltip lists
- * them, a "?" for a figure that cannot be shown yet, and a retired figure in black and white on a
- * neutral grey cell under a light wash, still recognisable. The selected one has Quick Skin's
- * blue border.
+ * <p>Every figure is drawn at the usual size, whatever size it was given, so a giant one keeps its
+ * head in the thumbnail and a mini one fills it too; its tooltip says its size. A thumbnail marks
+ * only what needs the operator, one mark at most: a red "!" for a problem, whose tooltip lists
+ * them, or else a "?" for a figure that cannot be shown yet; a retired figure is in black and
+ * white on a neutral grey cell under a light wash, still recognisable. The selected one has Quick
+ * Skin's blue border.
  *
- * <p>Selection follows {@link UiCardGrid} on one row: a click selects a thumbnail, Ctrl and a
+ * <p>Selection works as in a grid of cards, on one row: a click selects a thumbnail, Ctrl and a
  * click adds or removes one, and Shift and a click selects every one from the last clicked. While
  * the strip has the keyboard, Left and Right move through them, going round at the ends (with
  * Shift they extend the selection instead), Ctrl+A selects them all, Enter or a double click
@@ -52,7 +57,9 @@ import java.util.function.Supplier;
  * <p>Files dropped anywhere over the strip go to its {@link #filesZone}, the bulk add's, which
  * the strip lays over itself without drawing. Its models are the strip's share of the screen's
  * ({@link SidebarScreen.ModelBudget}): the selected thumbnail first, then the others in sight
- * from the left; one left without draws its figure's initial on its cell instead. A strip that only
+ * from the left; one left without is drawn flat from its texture instead, a skin as the front of
+ * a paper figure and a model's texture whole, and only one whose texture has not arrived shows its
+ * figure's initial. A strip that only
  * shows figures, as a sample of the machine's screen does, is made {@link #selectable(boolean)
  * unselectable} and may ask the budget at another {@link #rank}.
  *
@@ -68,9 +75,16 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
      * @param retired  whether the figure is out of the draw
      * @param problems what is wrong with the figure, which a red "!" lists; empty when nothing is
      * @param tooltip  the thumbnail's tooltip, such as its name, kind and size
+     * @param scale    the size the figure was given, 1 for the usual size, which the thumbnail
+     *                 draws it without
      */
     public record Look(String figureId, String name, boolean complete, boolean retired, List<Component> problems,
-                       List<Component> tooltip) {
+                       List<Component> tooltip, float scale) {
+        /** A figure of the usual size. */
+        public Look(String figureId, String name, boolean complete, boolean retired, List<Component> problems,
+                    List<Component> tooltip) {
+            this(figureId, name, complete, retired, problems, tooltip, 1.0f);
+        }
     }
 
     /** Moves a thumbnail to a new place in the row. */
@@ -96,6 +110,8 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     // A retired figure's cell: a neutral grey, and a wash that leaves its figure readable
     private static final int RETIRED_CELL = 0xFF5C5D61;
     private static final int RETIRED_WASH = 0x40000000;
+    // A retired figure drawn flat keeps its colours, so its wash is darker
+    private static final int RETIRED_FLAT_WASH = 0x90000000;
     private static final int DRAGGED_WASH = 0x80000000;
     private static final int ADD_FACE = 0x28000000;
     private static final int ADD_FACE_HOVER = 0x40000000;
@@ -106,6 +122,13 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     // A figure is drawn larger than its cell and cut to it, so it fills the thumbnail
     private static final float FIGURE_SCALE = 1.3f;
     private static final float FEET = 0.80f;
+    // A skin's texture side, and the parts of its front a flat thumbnail draws, in skin pixels:
+    // u, v, width and height in the texture, then where the part goes on the paper figure
+    private static final int SKIN_TEXTURE = 64;
+    private static final int[][] SKIN_FRONT = {
+            {4, 20, 4, 12, 4, 20}, {20, 52, 4, 12, 8, 20},
+            {20, 20, 8, 12, 4, 8}, {44, 20, 4, 12, 0, 8}, {36, 52, 4, 12, 12, 8},
+            {8, 8, 8, 8, 4, 0}, {40, 8, 8, 8, 4, 0}};
 
     private final int thumbWidth;
     private final int thumbHeight;
@@ -432,10 +455,10 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
 
     @Override
     public void requestModels(SidebarScreen.ModelBudget budget) {
-        // No more than can be in sight at once, partly cut at both ends
+        // As many as can be in sight at once, partly cut at both ends, whatever the row holds
+        // now: figures added later, before the screen is built again, then still get theirs
         int inSight = width / step() + 2;
-        budget.request(this.rank, Math.min(items.size(), inSight),
-                granted -> this.grantedModels = granted);
+        budget.request(this.rank, inSight, granted -> this.grantedModels = granted);
     }
 
     // Drawing
@@ -541,9 +564,13 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
         FigureCollection from = collection.get();
         FigureDefinition figure = from != null ? from.getFigure(shown.figureId()).orElse(null) : null;
         boolean drawable = figure != null && shown.complete();
+        boolean flat = false;
         if (drawable && withModel) {
             FigureEntry figures = entry(from);
             figures.setPreviewScale(from.isPlush() ? PLUSH_SCALE : 1.0f);
+            // Drawn at the usual size, whatever size the figure was given, so its whole height shows
+            figures.setConfiguration(1.0f / Math.max(0.1f, shown.scale()), 0.0f, CAMERA_YAW, 0.0f, 0.0f, CAMERA_Y,
+                    0.0f);
             int size = Math.round(cellHeight * FIGURE_SCALE);
             int feet = cellY + cellHeight - 2;
             UiScrollPane.clip(graphics, cellX, cellY, cellX + cellWidth, cellY + cellHeight);
@@ -553,6 +580,8 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
             } finally {
                 graphics.disableScissor();
             }
+        } else if (drawable) {
+            flat = drawFlat(graphics, figure, cellX, cellY, cellWidth, cellHeight);
         }
 
         // The marks go above the model: a later stratum from 1.21.6, depth before it
@@ -563,17 +592,19 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
         try {
             int middleX = cellX + cellWidth / 2;
             float middleY = cellY + cellHeight / 2.0f;
-            if (!drawable) {
+            boolean problem = !shown.problems().isEmpty();
+            if (!drawable && !problem) {
+                // Only the strongest mark: a figure with a problem shows its "!" alone
                 Draw.centred(graphics, font, "?", middleX, Math.round(middleY) - 4, cellWidth, Theme.FAINT);
-            } else if (!withModel) {
+            } else if (drawable && !withModel && !flat) {
                 PixelFont.drawCentered(graphics, Component.literal(initial(shown.name())), middleX, middleY,
                         cellWidth - 2, 1.0f, shown.retired() ? Theme.FAINT : Theme.TEXT_SOFT, true);
             }
             if (shown.retired()) {
-                graphics.fill(cellX, cellY, cellX + cellWidth, cellY + cellHeight, RETIRED_WASH);
+                graphics.fill(cellX, cellY, cellX + cellWidth, cellY + cellHeight, flat ? RETIRED_FLAT_WASH : RETIRED_WASH);
             }
             boolean overProblem = false;
-            if (!shown.problems().isEmpty()) {
+            if (problem) {
                 int markX = cellX;
                 int markY = cellY + cellHeight - 9;
                 graphics.fill(markX, markY, markX + 9, markY + 9, PROBLEM);
@@ -594,6 +625,51 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
         } finally {
             GuiPose.pop(graphics);
         }
+    }
+
+    /**
+     * Draws a figure flat from its texture, for a thumbnail the model budget left without a model:
+     * a skin as the front of a paper figure, head and hat over the body, arms and legs, standing
+     * on the cell's floor; any other texture whole, fitted to the cell.
+     *
+     * @return false while the texture has not arrived, which draws nothing
+     */
+    private static boolean drawFlat(GuiGraphics graphics, FigureDefinition figure, int cellX, int cellY,
+                                    int cellWidth, int cellHeight) {
+        ResourceLocation texture = figure.getTexturePath();
+        if (texture == null || RuntimeTextures.isPending(texture)) {
+            return false;
+        }
+        NativeImage image = RuntimeTextures.image(texture);
+        int textureWidth = image != null ? image.getWidth() : SKIN_TEXTURE;
+        int textureHeight = image != null ? image.getHeight() : SKIN_TEXTURE;
+        UiScrollPane.clip(graphics, cellX, cellY, cellX + cellWidth, cellY + cellHeight);
+        try {
+            if (FigureDefinition.DEFAULT_MODEL.equals(figure.getModelPath()) && textureWidth == textureHeight
+                    && textureWidth >= SKIN_TEXTURE) {
+                // A skin's texels per skin pixel, and the screen units per skin pixel: the paper
+                // figure is 16 skin pixels wide and 32 tall
+                int texel = textureWidth / SKIN_TEXTURE;
+                float unit = Math.min((cellWidth - 4) / 16.0f, (cellHeight - 3) / 32.0f);
+                int left = cellX + Math.round((cellWidth - 16 * unit) / 2.0f);
+                int top = cellY + cellHeight - 2 - Math.round(32 * unit);
+                for (int[] part : SKIN_FRONT) {
+                    int x0 = left + Math.round(part[4] * unit);
+                    int y0 = top + Math.round(part[5] * unit);
+                    int x1 = left + Math.round((part[4] + part[2]) * unit);
+                    int y1 = top + Math.round((part[5] + part[3]) * unit);
+                    Draw.texture(graphics, texture, x0, y0, x1 - x0, y1 - y0, part[0] * texel, part[1] * texel,
+                            part[2] * texel, part[3] * texel, textureWidth, textureHeight);
+                }
+            } else {
+                int[] fitted = Draw.fitInside(textureWidth, textureHeight, cellWidth - 4, cellHeight - 4);
+                Draw.texture(graphics, texture, cellX + (cellWidth - fitted[0]) / 2, cellY + (cellHeight - fitted[1]) / 2,
+                        fitted[0], fitted[1], textureWidth, textureHeight);
+            }
+        } finally {
+            graphics.disableScissor();
+        }
+        return true;
     }
 
     // The first letter of a name, in capitals, for a thumbnail without a model

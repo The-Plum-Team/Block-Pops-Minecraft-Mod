@@ -30,6 +30,8 @@ import java.util.function.Consumer;
  * open is a field of the row, which turning the toggle on opens and turning it off closes, and
  * which the screen sets itself when it builds the row ({@link #setOpen}), never derived from the
  * value on every rebuild. The row's bounds take the open content in, with the hairline under it.
+ * A row may {@link #wrapLabel wrap} a long label over as many lines as it needs, growing to hold
+ * them, where a narrow column would otherwise cut it.
  */
 public class UiToggleRow extends UiNode.Box {
     public static final int HEIGHT = ToggleRow.HEIGHT;
@@ -58,6 +60,7 @@ public class UiToggleRow extends UiNode.Box {
     @Nullable
     private Component dotTooltip;
     private boolean lineAbove;
+    private boolean wrapLabel;
     private boolean open;
     private final List<UiNode> content = new ArrayList<>();
     @Nullable
@@ -102,6 +105,40 @@ public class UiToggleRow extends UiNode.Box {
         return this;
     }
 
+    /** Whether a label too long for the row wraps over more lines, the row growing with them, rather than being cut. */
+    public UiToggleRow wrapLabel(boolean wrap) {
+        this.wrapLabel = wrap;
+        return this;
+    }
+
+    // Where the label may run: from after the dot to before the toggle
+    private int labelLeft() {
+        return x + INSET + (dot != 0 ? DOT_ROOM : 0);
+    }
+
+    private int labelRight() {
+        return x + width - TOGGLE_INSET - TOGGLE_WIDTH - 8;
+    }
+
+    // The label's lines: one, cut to fit, unless the row wraps it
+    private List<String> labelLines(Font font) {
+        String whole = label.getString();
+        int room = Math.max(1, labelRight() - labelLeft());
+        if (!wrapLabel || UiText.width(font, whole) <= room) {
+            return List.of(UiText.fit(font, whole, room));
+        }
+        return Draw.wrap(font, whole, room);
+    }
+
+    /** The height of the row itself, without its content: more than {@link #HEIGHT} only for a wrapped label. */
+    public int rowHeight() {
+        if (!wrapLabel) {
+            return HEIGHT;
+        }
+        int lines = labelLines(Minecraft.getInstance().font).size();
+        return Math.max(HEIGHT, lines * Theme.LINE_HEIGHT + 10);
+    }
+
     /** Disables the toggle and says why in its tooltip; null enables it again. */
     public UiToggleRow disable(@Nullable Component reason) {
         this.disabledReason = reason;
@@ -135,7 +172,7 @@ public class UiToggleRow extends UiNode.Box {
 
     /** Where the content under the row starts, for the screen to place its nodes from. */
     public int contentTop() {
-        return y + HEIGHT;
+        return y + rowHeight();
     }
 
     /** Adds a node to the content that unfolds under the row, placed by the screen. */
@@ -176,7 +213,7 @@ public class UiToggleRow extends UiNode.Box {
     /** The row's height with its content when that is open. */
     public int totalHeight() {
         if (!showsContent()) {
-            return HEIGHT;
+            return rowHeight();
         }
         Font font = Minecraft.getInstance().font;
         int bottom = nodesBottom();
@@ -201,18 +238,19 @@ public class UiToggleRow extends UiNode.Box {
         }
         Font font = Minecraft.getInstance().font;
         boolean enabled = enabled();
-        boolean overRow = mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + HEIGHT;
+        int head = rowHeight();
+        boolean overRow = mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + head;
         boolean lit = overRow && enabled;
         int total = totalHeight();
         if (lit) {
-            graphics.fill(x, y, x + width, y + HEIGHT - (showsContent() ? 0 : 1), ROW_HOVER);
+            graphics.fill(x, y, x + width, y + head - (showsContent() ? 0 : 1), ROW_HOVER);
         }
         if (lineAbove) {
             graphics.fill(x, y - 1, x + width, y, Surfaces.ROW_LINE);
         }
         graphics.fill(x, y + total - 1, x + width, y + total, Surfaces.ROW_LINE);
 
-        int middle = y + (HEIGHT - 1) / 2;
+        int middle = y + (head - 1) / 2;
         int trackLeft = x + width - TOGGLE_INSET - TOGGLE_WIDTH;
         ToggleRow.drawToggle(graphics, trackLeft, middle, value, enabled, lit);
         int textX = x + INSET;
@@ -224,10 +262,14 @@ public class UiToggleRow extends UiNode.Box {
         }
         int end = trackLeft - 8;
         String whole = label.getString();
-        String shown = UiText.fit(font, whole, Math.max(0, end - textX));
-        UiText.draw(graphics, font, shown, textX, middle - 4,
-                !enabled ? Theme.TEXT_DISABLED : lit ? Theme.TEXT : TEXT);
-        int labelRight = textX + UiText.width(font, shown);
+        List<String> labelLines = labelLines(font);
+        String shown = String.join(" ", labelLines);
+        int lineY = middle - 4 - (labelLines.size() - 1) * Theme.LINE_HEIGHT / 2;
+        for (String line : labelLines) {
+            UiText.draw(graphics, font, line, textX, lineY, !enabled ? Theme.TEXT_DISABLED : lit ? Theme.TEXT : TEXT);
+            lineY += Theme.LINE_HEIGHT;
+        }
+        int labelRight = textX + UiText.width(font, labelLines.get(labelLines.size() - 1));
         if (hint != null) {
             int hintX = labelRight + HINT_GAP;
             if (hintX < end - MIN_HINT) {
@@ -277,7 +319,7 @@ public class UiToggleRow extends UiNode.Box {
         if (!visible() || !isMouseOver(click.x(), click.y())) {
             return false;
         }
-        if (click.y() < y + HEIGHT) {
+        if (click.y() < y + rowHeight()) {
             focusedChild = null;
             if (click.left()) {
                 // A disabled row still takes its click, so nothing under it reacts

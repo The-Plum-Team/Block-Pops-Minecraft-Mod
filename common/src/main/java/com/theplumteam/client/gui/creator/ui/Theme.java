@@ -103,6 +103,10 @@ public final class Theme {
     public static final String[] ICON_WARNING = {
             "....#....", "...###...", "...#.#...", "..##.##..", "..##.##..",
             ".#######.", ".###.###.", "#########"};
+    /** A magnifying glass, for a button that searches or filters a list. */
+    public static final String[] ICON_SEARCH = {
+            ".####....", "#....#...", "#....#...", "#....#...", "#....#...",
+            ".####....", ".....##..", "......##.", ".......##"};
     /** Three dots, for a small button that opens a menu of more actions ("More"). */
     public static final String[] ICON_MORE = {"##..##..##", "##..##..##"};
     public static final String[] ICON_FILE = {

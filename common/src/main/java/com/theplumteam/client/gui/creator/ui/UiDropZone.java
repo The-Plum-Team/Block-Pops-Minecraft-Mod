@@ -56,6 +56,13 @@ import java.util.function.Supplier;
  * the screen's which-slot menu names it by, even where it is not drawn ({@link #showLabel}), and a
  * one-line zone may show only some of its chips ({@link #chips}). Enter opens the file dialog of a
  * zone that has the keyboard.
+ *
+ * <p>A zone can be {@link #hidden}: it draws nothing and takes no click, takes a file only while
+ * the pointer is over it, and is never one of the slots the which-slot menu names, so a zone that
+ * shows elsewhere is not named twice. A button can still open its dialog ({@link #choose}), and
+ * the screen reads its state ({@link #error}, {@link #waitingNote}) to show it its own way. A
+ * hidden zone may also {@link #routing route} a file by its kind to one of several zones, as a
+ * figure's preview hands a model, its texture or its poses each to its own.
  */
 public class UiDropZone extends UiNode.Box {
     /** The height of a zone with a thumbnail. */
@@ -133,6 +140,10 @@ public class UiDropZone extends UiNode.Box {
     private BooleanSupplier missing = () -> false;
     @Nullable
     private Supplier<Thumbnail> thumbnail;
+    // A hidden zone, and the zone a routing one hands each file to by its kind
+    private boolean hidden;
+    @Nullable
+    private Function<Path, UiDropZone> route;
 
     private UiDropZone(CreatorScreen host, @Nullable FilePicker.Slot slot, Component label,
                        @Nullable Consumer<FilePicker.LocalFile> onFile,
@@ -160,6 +171,18 @@ public class UiDropZone extends UiNode.Box {
     /** A zone for the bulk add, which hands over every file read from a drop or a pick at once. */
     public static UiDropZone many(CreatorScreen host, Component label, Consumer<List<FilePicker.PickResult>> onFiles) {
         return new UiDropZone(host, null, label, null, onFiles);
+    }
+
+    /**
+     * A hidden zone that takes one file dropped on it and hands it to the zone its kind goes to,
+     * as the route answers for the file's path, or nowhere when it answers null. Its label is
+     * never shown: it is not one of the which-slot menu's slots.
+     */
+    public static UiDropZone routing(CreatorScreen host, Component label, Function<Path, UiDropZone> route) {
+        UiDropZone zone = new UiDropZone(host, null, label, null, null);
+        zone.route = route;
+        zone.hidden = true;
+        return zone;
     }
 
     /** What a zone of a slot says it accepts. */
@@ -233,6 +256,35 @@ public class UiDropZone extends UiNode.Box {
         this.thumbnail = thumbnail;
         this.labelShown = false;
         return this;
+    }
+
+    /**
+     * Hides the zone: it draws nothing and takes no click or key, takes a file dropped only while
+     * the pointer is over it, and stays out of the which-slot menu. {@link #choose} still opens
+     * its dialog, and a file it takes reaches its receiver as from a shown zone.
+     */
+    public UiDropZone hidden() {
+        this.hidden = true;
+        return this;
+    }
+
+    public boolean isHidden() {
+        return hidden;
+    }
+
+    /** Why the last file was refused or could not be read, or null; for a screen that shows a hidden zone's state. */
+    @Nullable
+    public Component error() {
+        return error;
+    }
+
+    /**
+     * What the zone is waiting for, such as the file dialog or a file being checked, or null
+     * while it waits for nothing; for a screen that shows a hidden zone's state.
+     */
+    @Nullable
+    public Component waitingNote() {
+        return waiting ? waitingText() : null;
     }
 
     /** Stops the zone taking files, saying why in its tooltip; null lets it take them again. */
@@ -309,6 +361,10 @@ public class UiDropZone extends UiNode.Box {
         if (disabledReason != null || paths.isEmpty()) {
             return false;
         }
+        if (route != null) {
+            UiDropZone target = routed(paths);
+            return target != null && target.accepts(paths);
+        }
         if (slot == null) {
             for (Path path : paths) {
                 if (FilePicker.typeOf(path) == null && !Files.isDirectory(path)) {
@@ -333,6 +389,15 @@ public class UiDropZone extends UiNode.Box {
 
     /** Reads dropped paths into the zone; {@link CreatorScreen} calls this for the zone it routed them to. */
     public void receive(List<Path> paths) {
+        if (route != null) {
+            UiDropZone target = routed(paths);
+            if (target != null) {
+                target.receive(paths);
+            } else {
+                host.status(CreatorScreen.tr("drop.nowhere"), Theme.RED);
+            }
+            return;
+        }
         flash();
         if (disabledReason != null) {
             host.status(disabledReason, Theme.RED);
@@ -344,6 +409,16 @@ public class UiDropZone extends UiNode.Box {
         started(problem);
     }
 
+    // The zone a routing zone hands one dropped file to, or null; never itself
+    @Nullable
+    private UiDropZone routed(List<Path> paths) {
+        if (route == null || paths.size() != 1) {
+            return null;
+        }
+        UiDropZone target = route.apply(paths.get(0));
+        return target == this ? null : target;
+    }
+
     /** Lights the zone up briefly, as when a file lands on it. */
     public void flash() {
         this.flashUntil = Util.getMillis() + FLASH_MS;
@@ -351,7 +426,7 @@ public class UiDropZone extends UiNode.Box {
 
     /** Opens the file dialog, or, where none can be shown, asks for the file's path. */
     public void choose() {
-        if (disabledReason != null) {
+        if (disabledReason != null || route != null) {
             return;
         }
         if (!FilePicker.isNativeAvailable()) {
@@ -380,7 +455,7 @@ public class UiDropZone extends UiNode.Box {
 
     /** A dialog with a path field, for systems with no file dialog; dropping always works too. */
     private void askForPath() {
-        UiModal dialog = new UiModal(CreatorScreen.tr("drop.path_title"), Component.literal(FilePicker.NO_DIALOG_HINT))
+        UiModal dialog = new UiModal(CreatorScreen.tr("drop.path_title"), CreatorScreen.tr("drop.path_body"))
                 .accent(DialogFrame.Accent.CREATE, Theme.ICON_FILE);
         EditBox field = dialog.field(CreatorScreen.tr("path_hint"), FilePicker.MAX_TYPED_PATH, "",
                 CreatorScreen.tr("path_hint"), text -> { });
@@ -473,6 +548,10 @@ public class UiDropZone extends UiNode.Box {
         if (!visible()) {
             return null;
         }
+        if (hidden) {
+            // Only under the pointer, and never a slot of the which-slot menu
+            return isMouseOver(mouseX, mouseY) ? this : null;
+        }
         zones.add(this);
         return isMouseOver(mouseX, mouseY) ? this : null;
     }
@@ -485,7 +564,7 @@ public class UiDropZone extends UiNode.Box {
 
     @Override
     public void draw(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        if (!visible()) {
+        if (!visible() || hidden) {
             return;
         }
         Font font = Minecraft.getInstance().font;
@@ -607,15 +686,22 @@ public class UiDropZone extends UiNode.Box {
             return;
         }
         // The chips keep the right side; the name has what is left
+        List<FileChecks.Check> shownChecks = shownChecks();
         int chipsWidth = 0;
-        for (FileChecks.Check check : shownChecks()) {
+        for (FileChecks.Check check : shownChecks) {
             chipsWidth += chipWidth(font, check) + 3;
         }
         chipsWidth = Math.min(chipsWidth, Math.max(0, (right - left) * 2 / 3));
-        int nameRoom = Math.max(0, right - left - chipsWidth - 6);
-        Draw.text(graphics, font, fileName, left, textY, nameRoom, Theme.TEXT);
+        int nameRoom = Math.max(0, right - left - (chipsWidth > 0 ? chipsWidth + 6 : 0));
+        String name = Draw.cut(font, fileName, nameRoom);
+        Draw.string(graphics, font, name, left, textY, Theme.TEXT);
         int chipsY = y + (height - CHIP_HEIGHT) / 2;
-        if (!drawChecks(graphics, font, shownChecks(), right - chipsWidth, chipsY, right)) {
+        boolean everyChip = drawChecks(graphics, font, shownChecks, right - chipsWidth, chipsY, right);
+        // What the line leaves out, the whole name or checks it shows no chip for, is in the tooltip
+        if (!name.equals(fileName)) {
+            tooltip.add(Component.literal(fileName));
+        }
+        if (!everyChip || shownChecks.size() != checks.size()) {
             addChecks(tooltip);
         }
     }
@@ -811,7 +897,7 @@ public class UiDropZone extends UiNode.Box {
     /** Enter opens the file dialog of a zone that has the keyboard, as a click on it does. */
     @Override
     public boolean key(UiInput.Key key) {
-        if (!visible() || !key.enter() || !CreatorScreen.hasKeyboard(this)) {
+        if (!visible() || hidden || !key.enter() || !CreatorScreen.hasKeyboard(this)) {
             return false;
         }
         if (disabledReason == null) {
@@ -822,7 +908,7 @@ public class UiDropZone extends UiNode.Box {
 
     @Override
     public boolean click(UiInput.Click click) {
-        if (!click.left() || !isMouseOver(click.x(), click.y())) {
+        if (hidden || !click.left() || !isMouseOver(click.x(), click.y())) {
             return false;
         }
         if (disabledReason != null) {

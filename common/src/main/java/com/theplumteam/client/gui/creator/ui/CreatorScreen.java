@@ -125,6 +125,36 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
         return Component.translatable(KEY + key, args);
     }
 
+    /**
+     * A number with at most {@code decimals} decimals and no trailing zeros, written with a comma
+     * where the player's language writes one between the units and the decimals, as "2,4" in
+     * Spanish, and with a point elsewhere.
+     */
+    public static String decimal(double value, int decimals) {
+        String text = String.format(java.util.Locale.ROOT, "%." + Math.max(0, decimals) + "f", value);
+        if (text.indexOf('.') >= 0) {
+            int end = text.length();
+            while (text.charAt(end - 1) == '0') {
+                end--;
+            }
+            if (text.charAt(end - 1) == '.') {
+                end--;
+            }
+            text = text.substring(0, end);
+        }
+        return decimalComma() ? text.replace('.', ',') : text;
+    }
+
+    // Whether the player's language writes decimals after a comma
+    private static boolean decimalComma() {
+        String code = Minecraft.getInstance().getLanguageManager().getSelected();
+        if (code == null || code.isEmpty()) {
+            return false;
+        }
+        java.util.Locale locale = java.util.Locale.forLanguageTag(code.replace('_', '-'));
+        return java.text.DecimalFormatSymbols.getInstance(locale).getDecimalSeparator() == ',';
+    }
+
     // Building
 
     @Override
@@ -837,7 +867,9 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
      * Routes files dropped on the window: to the drop zone under the pointer when it takes
      * them, else to the only zone that does, else a menu at the pointer asks which. With no
      * zone to take them, the zone under the pointer says why it cannot; with none there,
-     * {@link #filesDroppedNowhere} does.
+     * {@link #filesDroppedNowhere} does. A {@link UiDropZone#hidden hidden} zone, such as a
+     * figure preview's, counts only under the pointer: it is never the only zone nor one the
+     * menu names, so every slot the menu lists is a zone the operator can see, each once.
      */
     @Override
     public void onFilesDrop(List<Path> paths) {

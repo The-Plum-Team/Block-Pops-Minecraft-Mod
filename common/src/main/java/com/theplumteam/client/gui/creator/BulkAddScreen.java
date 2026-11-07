@@ -1302,7 +1302,7 @@ public class BulkAddScreen extends CreatorScreen {
                 } else {
                     Draw.well(graphics, sizeX, top + 2, sizeWidth, ROW_HEIGHT - 4, over, false);
                 }
-                String size = FigureCard.scaleText(row.scale());
+                String size = UiSizeSlider.scaleText(row.scale());
                 Draw.string(graphics, font, size, sizeX + 4, textY + 1, editable ? Theme.CONTROL_TEXT : Theme.MUTED);
                 int arrowX = sizeX + sizeWidth - 4 - font.width("▾");
                 if (editable && sizeX + 4 + font.width(size) + 2 <= arrowX) {

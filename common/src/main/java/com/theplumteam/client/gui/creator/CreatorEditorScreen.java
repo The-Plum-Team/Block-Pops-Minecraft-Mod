@@ -1482,13 +1482,18 @@ public class CreatorEditorScreen extends SidebarScreen {
     // Typing into another field, or into the same one after a pause, undoes on its own, and what
     // was typed into the field left is saved at once. A press gives the keyboard to the node it
     // lands on; while it lasts, as through a drag that is one undo step from its start, the move
-    // is left to be noticed after the release
+    // is left to be noticed after the release. A node that passes the keyboard on to a child, as
+    // a scrolling column to a name typed in place, counts by the child that has it
     private void trackFocus() {
         if (nodePressed()) {
             return;
         }
         GuiEventListener focused = getFocused();
         UiNode focusedNode = focusedNode();
+        // Bounded, so a node that names itself as its own child cannot hang the game
+        for (int depth = 0; focusedNode != null && focusedNode.focusedChild() != null && depth < 16; depth++) {
+            focusedNode = focusedNode.focusedChild();
+        }
         if (focused != this.lastFocused || focusedNode != this.lastFocusedNode) {
             boolean typed = this.lastFocused instanceof EditBox || this.lastFocusedNode != null;
             this.lastFocused = focused;

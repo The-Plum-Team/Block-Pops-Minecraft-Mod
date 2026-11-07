@@ -16,42 +16,76 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 /**
- * The live preview of one figure, as the figure inspector shows it, in one of three views:
+ * The big live preview of one figure, as the figure editor shows it beside its strip: the figure
+ * alone on a stage, in the look of the home's showcase ({@link UiStage}): the collection's colour
+ * fading into the dark of a well over three quarters of its height, a ledge the figure stands on
+ * and the well's double outline. The figure's full height fills {@value #FILL_PERCENT} percent
+ * of the stage, its feet on the ledge, turned a quarter of the way round from its front, and it
+ * is never wider than the stage allows: a model is fitted by the height and the turned width its
+ * host gives ({@link #setExtent}). Dragging turns it, and a double click brings it back to that
+ * turn (see {@link UiViewport}).
+ *
+ * <p>The only control is "View ⌄" in the top right corner ({@link UiViewButton}), whose menu
+ * picks how the figure is shown:
  * <ul>
- *   <li>{@link Mode#LOOSE}: the figure standing on a pedestal, with the default figure at size
- *       1x beside it in black and white to show its size;</li>
- *   <li>{@link Mode#IN_BOX}: the figure in its collection's box, as the machine hands it out;</li>
- *   <li>{@link Mode#IN_COLLECTION}: the figure in a cell of the machine's figure grid, in colour
- *       once discovered and in black and white before, which a switch picks.</li>
+ *   <li>{@link Mode#LOOSE}: standing on the ledge. A figure of another size than 1x has the
+ *       default figure at 1x beside it, in its default skin and labelled "1x" over its head, the
+ *       two side by side across the stage, so its size reads at a glance;</li>
+ *   <li>{@link Mode#IN_BOX}: in its collection's box, standing on the ledge, as the machine
+ *       hands it out;</li>
+ *   <li>{@link Mode#IN_COLLECTION}: in a cell of the machine's figure grid, in colour once
+ *       discovered and in black and white before, which the menu also picks;</li>
  * </ul>
- * Switches at the top pick the view and the pose, standing or sitting; sitting is disabled for
- * a model whose poses have no sitting one. A figure with skin variants also gets "‹ name ›" on
- * the right under the top switches, which steps through its own skin and each variant, in every
- * view.
- * Dragging turns the figure (see {@link UiViewport}).
+ * standing or sitting (sitting disabled for a model whose poses have no sitting one), the light
+ * by day or at night, spinning by itself or not, and, for a figure with skin variants, which of
+ * its skins it wears: its own, the base, or a variant by name. The menu keeps inside the panel the
+ * host names ({@link #within}); where the skins would make it taller than the room there, they
+ * move to a menu of their own behind one "Variant" item.
  *
  * <p>The figure is looked up by collection and figure id on every frame, through the collection
  * registry, so the view follows the creator's preview of a collection (see {@link CreatorPreview})
- * as soon as the screen shows it again. Figures are drawn with the machine screen's camera.
+ * as soon as the screen shows it again. Its models are the screen's first
+ * ({@link SidebarScreen.ModelBudget.Rank#PREVIEW}): the figure, then the 1x figure; with none
+ * left, as under a dialog that draws models of its own, the stage shows empty.
+ *
+ * <p>A host may lay a {@link UiDropZone#hidden hidden} zone over the view ({@link #dropZone}),
+ * so a file dropped on the figure goes to the figure, without the view naming a slot of its own.
  */
-public class UiFigureView extends UiViewport {
+public class UiFigureView extends UiViewport implements SidebarScreen.Budgeted {
     /** What the view shows the figure in. */
     public enum Mode {
         LOOSE, IN_BOX, IN_COLLECTION
     }
 
-    // The loose view draws figures at half the size the machine's grid would in a cell as tall,
-    // so a figure of the largest size, twice the usual, still fits
-    private static final float LOOSE_SCALE = 0.5f;
-    // The machine screen's camera: turned 150 degrees, set down in an 80 unit cell
-    private static final float CAMERA_YAW = 150.0f;
-    private static final float CAMERA_X = 0.0f;
+    /** How much of the stage's height a figure's full height fills, in percent. */
+    public static final int FILL_PERCENT = 70;
+    private static final float FILL = FILL_PERCENT / 100.0f;
+    // A skin figure of size 1 is about this tall against the cell it is drawn in, with this camera,
+    // and about this wide against its height; a model is fitted to stand at most 15 of the cell's
+    // 16 pixels tall and 9 wide at size 1 (see WorldCollectionMaterializer)
+    private static final float SKIN_HEIGHT = 0.71f;
+    private static final float SKIN_WIDTH = 0.56f;
+    private static final float MODEL_HEIGHT = 15.0f / 16.0f;
+    private static final float MODEL_WIDTH = 9.0f / 16.0f;
+    // The share of the stage's width a figure may take alone, and the two figures side by side,
+    // with the gap between them
+    private static final float WIDTH_ALONE = 0.86f;
+    private static final float WIDTH_PAIR = 0.88f;
+    private static final int PAIR_GAP = 4;
+    // The machine screen's camera height, turned a quarter of the way round from the figure's front
+    private static final float FRONT_TURN = 155.0f;
     private static final float CAMERA_Y = 15.0f;
     // A plush is about twice as wide as a figure, as the machine's grid shrinks it
     private static final float PLUSH_SCALE = 0.6f;
-    private static final int PEDESTAL = 0xFF3A3A3A;
-    private static final int PEDESTAL_TOP = 0xFF4A4A4A;
-    private static final int BOX_BACKGROUND = 0xFF10141B;
+    // Where a figure's feet are in its cell with this camera (0.6 of the cell, and the camera's
+    // height in an 80 unit cell), and a box's middle above the ledge, against their size
+    private static final float FEET = 0.6f + CAMERA_Y / 80.0f;
+    private static final float BOX_MIDDLE = 0.56f;
+    // How far into the ledge a figure's feet stand, so it reads as standing on it
+    private static final int ON_LEDGE = 2;
+    private static final int FLOOR_INSET = 6;
+    private static final int FLOOR = 0xFF262729;
+    private static final int FLOOR_EDGE = 0xFF3C3D40;
     // The machine grid's cell look, from FigureEntry
     private static final int CELL_DISCOVERED = 0x30FFFFFF;
     private static final int CELL_UNDISCOVERED = 0x50000000;
@@ -59,13 +93,13 @@ public class UiFigureView extends UiViewport {
     private static final int BORDER_UNDISCOVERED = 0x60808080;
     private static final int SPECIAL_BORDER = 0xE0BB8FCE;
     private static final int SPECIAL_BORDER_UNDISCOVERED = 0x80BB8FCE;
-    private static final int MAX_CELL = 100;
+    private static final int MAX_CELL = 160;
+    // The room the view button keeps at the top of the stage
+    private static final int TOP_ROOM = UiButton.SMALL_HEIGHT + 4;
     // How tall a box seen from the front and a little above is, against the size it is drawn at
     static final float BOX_HEIGHT = 1.15f;
 
-    private final UiSegmented modes;
-    private final UiSegmented poses;
-    private final UiSegmented discovery;
+    private final UiViewButton viewButton;
     @Nullable
     private String collectionId;
     @Nullable
@@ -77,11 +111,24 @@ public class UiFigureView extends UiViewport {
     // The names of the figure's variants, and which skin is shown: 0 its own, 1 onwards a variant
     private List<String> variants = List.of();
     private int skinIndex;
-    private final VariantSwitch variantSwitch = new VariantSwitch();
     private boolean showReference = true;
-    @Nullable
-    private Component caption;
+    // The figure's size as the operator chose it, 1 for the usual size
+    private float figureScale = 1.0f;
     private Component emptyText = CreatorScreen.tr("preview.no_figure");
+    // The figure's height and turned width against its cell at size 1, as the host knows them for
+    // a model; 0 for a skin's own shape or a model's usual fit
+    private float extentHeight;
+    private float extentWidth;
+    // The panel the menu keeps inside, or null for the screen
+    @Nullable
+    private java.util.function.Supplier<Rect> within;
+    // Where the last frame put the 1x figure's label: its middle and its top
+    private int referenceLabelX;
+    private int referenceLabelY;
+    @Nullable
+    private UiDropZone dropZone;
+    // The models the screen's budget gives the view: the figure or the box, then the 1x figure
+    private int models = 2;
     // Draws the figures; made again for another collection, since it names its collection
     @Nullable
     private FigureEntry entry;
@@ -92,17 +139,10 @@ public class UiFigureView extends UiViewport {
     private String boxKey;
 
     public UiFigureView() {
-        this.modes = new UiSegmented(0, index -> this.mode = Mode.values()[index],
-                CreatorScreen.tr("preview.loose"), CreatorScreen.tr("preview.in_box"),
-                CreatorScreen.tr("preview.in_collection"));
-        this.poses = new UiSegmented(0, index -> this.sitting = index == 1,
-                CreatorScreen.tr("preview.stand"), CreatorScreen.tr("preview.sit"));
-        this.discovery = new UiSegmented(0, index -> this.discovered = index == 0,
-                CreatorScreen.tr("preview.discovered"), CreatorScreen.tr("preview.undiscovered"));
-        this.controls.add(this.modes);
-        this.controls.add(this.poses);
-        this.controls.add(this.discovery);
-        this.controls.add(this.variantSwitch);
+        this.viewButton = new UiViewButton(CreatorScreen.tr("preview.view"), this::openMenu);
+        this.controls.add(this.viewButton);
+        // The menu switches the light and the spinning, so the buttons for them stay hidden
+        setButtons(false);
     }
 
     /**
@@ -120,12 +160,6 @@ public class UiFigureView extends UiViewport {
 
     public void setMode(Mode mode) {
         this.mode = mode;
-        this.modes.select(mode.ordinal());
-    }
-
-    /** Hides or shows the view switch, for a screen that shows only one view. */
-    public void setModeSwitch(boolean shown) {
-        this.modes.setVisible(shown);
     }
 
     public boolean isSitting() {
@@ -134,18 +168,17 @@ public class UiFigureView extends UiViewport {
 
     public void setSitting(boolean sitting) {
         this.sitting = sitting;
-        this.poses.select(sitting ? 1 : 0);
     }
 
     /** In the collection view, whether the figure shows as discovered, in colour. */
     public void setDiscovered(boolean discovered) {
         this.discovered = discovered;
-        this.discovery.select(discovered ? 0 : 1);
     }
 
     /**
-     * The names of the figure's skin variants, in order, for the switch that steps through them;
-     * an empty list hides it. The skin shown stays when it still exists, else the figure's own.
+     * The names of the figure's skin variants, in order, which the menu lets the operator pick;
+     * an empty list leaves them out. The skin shown stays when it still exists, else the figure's
+     * own.
      */
     public void setVariants(List<String> names) {
         this.variants = List.copyOf(names);
@@ -168,17 +201,31 @@ public class UiFigureView extends UiViewport {
         this.greyed = greyed;
     }
 
-    /** Whether the loose view shows the default figure at 1x beside the figure. */
+    /** Whether the loose view may show the default figure at 1x beside a figure of another size. */
     public void setShowReference(boolean showReference) {
         this.showReference = showReference;
     }
 
     /**
-     * A note in the bottom right corner, left of the "Rotate" and "Light" buttons when they show,
-     * such as "preview before saving"; null for none.
+     * The figure's size as the operator chose it, such as 1 or 1.5: the loose view sizes the
+     * stage for it, and shows the 1x figure beside any other size.
      */
-    public void setCaption(@Nullable Component caption) {
-        this.caption = caption;
+    public void setFigureScale(float scale) {
+        this.figureScale = scale > 0 ? scale : 1.0f;
+    }
+
+    /**
+     * A model figure's height and its width at the view's turn, against the cell it is drawn in
+     * at size 1, as its bounds give them; 0 for either keeps the usual fit, as for a skin.
+     */
+    public void setExtent(float height, float width) {
+        this.extentHeight = Math.max(0.0f, height);
+        this.extentWidth = Math.max(0.0f, width);
+    }
+
+    /** The panel "View ⌄"'s menu keeps inside, such as the editor's content panel; null for the screen. */
+    public void within(@Nullable java.util.function.Supplier<Rect> panel) {
+        this.within = panel;
     }
 
     /** What the view says while it has no figure to show, such as one that misses a file. */
@@ -186,11 +233,129 @@ public class UiFigureView extends UiViewport {
         this.emptyText = emptyText;
     }
 
+    /**
+     * A hidden zone laid over the whole view, which takes a file dropped on the figure; null for
+     * none. It is not drawn, and the which-slot menu never names it.
+     */
+    public void dropZone(@Nullable UiDropZone zone) {
+        this.dropZone = zone;
+    }
+
+    @Override
+    public void requestModels(SidebarScreen.ModelBudget budget) {
+        budget.request(SidebarScreen.ModelBudget.Rank.PREVIEW, 2, granted -> this.models = granted);
+    }
+
+    // The menu
+
+    /**
+     * Opens "View ⌄"'s menu under the button, by its right edge: the three views, the pose, the
+     * discovery in the collection view, the light, the spinning and the skins, kept inside the
+     * host's panel; skins that would not fit there go behind one item of their own.
+     */
+    public void openMenu() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (!(minecraft.screen instanceof CreatorScreen screen)) {
+            return;
+        }
+        Rect button = this.viewButton.bounds();
+        Rect panel = within != null ? within.get() : null;
+        UiMenu menu = menu(false);
+        if (panel != null && !variants.isEmpty()) {
+            int below = panel.bottom() - 4 - (button.bottom() + 2);
+            int above = button.y() - 2 - (panel.y() + 4);
+            if (menu.fullHeight() > Math.max(below, above)) {
+                menu = menu(true);
+            }
+        }
+        open(screen, menu, button, panel);
+    }
+
+    // Opens a menu under the view button, by its right edge, inside the panel when there is one
+    private static void open(CreatorScreen screen, UiMenu menu, Rect button, @Nullable Rect panel) {
+        menu.within(panel);
+        menu.place(button, screen.width, screen.height);
+        int menuX = Math.max(0, button.right() - menu.bounds().width());
+        screen.openMenu(menu, new Rect(menuX, button.y(), button.width(), button.height()));
+    }
+
+    /**
+     * "View ⌄"'s menu, with the skins as a group of their own or, folded, behind one item that
+     * opens them.
+     */
+    private UiMenu menu(boolean foldSkins) {
+        UiMenu menu = new UiMenu();
+        menu.radio(CreatorScreen.tr("preview.loose"), mode == Mode.LOOSE, () -> setMode(Mode.LOOSE));
+        menu.radio(CreatorScreen.tr("preview.in_box"), mode == Mode.IN_BOX, () -> setMode(Mode.IN_BOX));
+        menu.radio(CreatorScreen.tr("preview.in_collection"), mode == Mode.IN_COLLECTION,
+                () -> setMode(Mode.IN_COLLECTION));
+        FigureDefinition figure = currentFigure();
+        if (figure != null) {
+            menu.separator();
+            boolean canSit = !figure.getRenderOptions().poseLocked();
+            menu.radio(CreatorScreen.tr("preview.stand"), !sitting || !canSit, () -> setSitting(false));
+            if (canSit) {
+                menu.radio(CreatorScreen.tr("preview.sit"), sitting, () -> setSitting(true));
+            } else {
+                menu.radioDisabled(CreatorScreen.tr("preview.sit"), false, CreatorScreen.tr("preview.no_sit"));
+            }
+        }
+        if (mode == Mode.IN_COLLECTION) {
+            menu.separator();
+            menu.radio(CreatorScreen.tr("preview.discovered"), discovered, () -> setDiscovered(true));
+            menu.radio(CreatorScreen.tr("preview.undiscovered"), !discovered, () -> setDiscovered(false));
+        }
+        menu.separator();
+        menu.radio(CreatorScreen.tr("preview.light_day"), !isNight(), () -> setNight(false));
+        menu.radio(CreatorScreen.tr("preview.light_night"), isNight(), () -> setNight(true));
+        menu.radio(CreatorScreen.tr("preview.spin"), isSpinning(), () -> setSpinning(!isSpinning()));
+        if (!variants.isEmpty()) {
+            menu.separator();
+            if (foldSkins) {
+                Component current = skinIndex == 0 ? CreatorScreen.tr("figures.variant_base")
+                        : Component.literal(variants.get(skinIndex - 1));
+                menu.item(CreatorScreen.tr("figures.variant"), current, this::openSkinMenu);
+            } else {
+                skinItems(menu);
+            }
+        }
+        menu.highlight(mode.ordinal());
+        return menu;
+    }
+
+    // The skins: a heading, the base, then each variant by name, the one shown checked
+    private void skinItems(UiMenu menu) {
+        menu.heading(CreatorScreen.tr("figures.variant"));
+        menu.radio(CreatorScreen.tr("figures.variant_base"), skinIndex == 0, () -> setSkinIndex(0));
+        for (int i = 0; i < variants.size(); i++) {
+            int index = i + 1;
+            menu.radio(Component.literal(variants.get(i)), skinIndex == index, () -> setSkinIndex(index));
+        }
+    }
+
+    // The skins' own menu, opened from the folded "Variant" item where the whole would not fit
+    private void openSkinMenu() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (!(minecraft.screen instanceof CreatorScreen screen)) {
+            return;
+        }
+        UiMenu menu = new UiMenu();
+        skinItems(menu);
+        menu.highlight(skinIndex + 1);
+        open(screen, menu, this.viewButton.bounds(), within != null ? within.get() : null);
+    }
+
     // Resolving
 
     @Nullable
     private FigureCollection collection() {
         return collectionId != null ? CollectionRegistry.getCollection(collectionId).orElse(null) : null;
+    }
+
+    @Nullable
+    private FigureDefinition currentFigure() {
+        FigureCollection collection = collection();
+        return collection != null && figureId != null ? collection.getFigure(figureId).orElse(null) : null;
     }
 
     private FigureEntry entry(FigureCollection collection) {
@@ -222,70 +387,12 @@ public class UiFigureView extends UiViewport {
     @Override
     protected void layout() {
         super.layout();
-        // A switch wider than the view narrows and cuts its labels rather than spill out of it
-        int room = Math.max(0, width - 2 * INSET);
-        modes.at(x + INSET, y + INSET, Math.min(modes.naturalWidth(), room), UiSegmented.HEIGHT);
-        int posesWidth = Math.min(poses.naturalWidth(), room);
-        poses.at(x + width - INSET - posesWidth, y + INSET, posesWidth, UiSegmented.HEIGHT);
-        // A narrow view keeps the view switch and puts the pose switch under it
-        if (modes.visible() && poses.bounds().x() < modes.bounds().right() + 4) {
-            poses.at(x + INSET, y + INSET + UiSegmented.HEIGHT + 3, posesWidth, UiSegmented.HEIGHT);
-        }
-        // The discovery switch sits beside the buttons where it fits, otherwise above them
-        int discoveryWidth = Math.min(discovery.naturalWidth(), room);
-        int discoveryY = x + INSET + discoveryWidth + 4 <= buttonsLeft() ? y + height - INSET - UiSegmented.HEIGHT
-                : buttonsTop() - 3 - UiSegmented.HEIGHT;
-        discovery.at(x + INSET, discoveryY, discoveryWidth, UiSegmented.HEIGHT);
-        discovery.setVisible(mode == Mode.IN_COLLECTION);
-        // The variant switch sits on the right, beside the pose switch when that moved under the
-        // view switch and leaves room, otherwise under it; the bottom corners keep the 1x label,
-        // the discovery switch and the caption
-        int switchWidth = Math.min(variantSwitch.naturalWidth(), room);
-        int switchX = x + width - INSET - switchWidth;
-        Rect pose = poses.bounds();
-        boolean besidePoses = pose.y() > y + INSET && switchX >= pose.right() + 4;
-        variantSwitch.at(switchX, besidePoses ? pose.y() + (UiSegmented.HEIGHT - VariantSwitch.HEIGHT) / 2
-                : pose.bottom() + 3, switchWidth, VariantSwitch.HEIGHT);
-        variantSwitch.setVisible(!variants.isEmpty());
-        FigureDefinition figure = currentFigure();
-        boolean canSit = figure != null && !figure.getRenderOptions().poseLocked();
-        poses.disable(1, canSit ? null : CreatorScreen.tr("preview.no_sit"));
-        poses.select(sitting && canSit ? 1 : 0);
-        // A figure that cannot be drawn yet has no pose to choose, and its note takes the room
-        poses.setVisible(figure != null);
+        int buttonWidth = Math.min(viewButton.naturalWidth(), Math.max(0, width - 2 * INSET));
+        viewButton.at(x + width - INSET - buttonWidth, y + INSET, buttonWidth, UiButton.SMALL_HEIGHT);
     }
 
-    // The room between the switches at the top and those at the bottom, for the models
-    private int sceneTop() {
-        int top = y + INSET;
-        if (modes.visible()) {
-            top = Math.max(top, modes.bounds().bottom());
-        }
-        if (variantSwitch.visible()) {
-            top = Math.max(top, variantSwitch.bounds().bottom());
-        }
-        if (poses.visible()) {
-            top = Math.max(top, poses.bounds().bottom());
-        }
-        return top + 4;
-    }
-
-    private int sceneBottom() {
-        int bottom = buttonsTop();
-        if (caption != null) {
-            // The caption sits in the bottom right corner, which the box would otherwise reach
-            bottom = Math.min(bottom, y + height - INSET - 12);
-        }
-        if (discovery.visible()) {
-            bottom = Math.min(bottom, discovery.bounds().y());
-        }
-        return bottom - 4;
-    }
-
-    @Nullable
-    private FigureDefinition currentFigure() {
-        FigureCollection collection = collection();
-        return collection != null && figureId != null ? collection.getFigure(figureId).orElse(null) : null;
+    private int floor() {
+        return y + height - FLOOR_INSET;
     }
 
     // Drawing
@@ -293,81 +400,129 @@ public class UiFigureView extends UiViewport {
     @Override
     protected void drawScene(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         FigureCollection collection = collection();
-        FigureDefinition figure = collection != null && figureId != null
-                ? collection.getFigure(figureId).orElse(null) : null;
+        FigureDefinition figure = currentFigure();
         int colour = collectionColour(collection, 0xFF3A3A3A);
-        if (collection == null || figure == null) {
-            graphics.fill(x, y, x + width, y + height, BACKGROUND);
-            Font font = Minecraft.getInstance().font;
-            // In the middle of the room the switches leave, so none of them covers it, or right
-            // under them in a view too short for that
-            int top = sceneTop();
-            int bottom = sceneBottom();
-            int middle = bottom - top >= 10 ? (top + bottom) / 2 : top + 5;
-            Draw.centred(graphics, font, emptyText.getString(), x + width / 2, middle - 4, width - 8,
-                    Theme.MUTED);
+        if (mode == Mode.IN_COLLECTION && collection != null && figure != null) {
+            drawInCollection(graphics, figure, entry(collection), colour, mouseX, mouseY, partialTick);
             return;
         }
-        FigureEntry figures = entry(collection);
-        switch (mode) {
-            case LOOSE -> drawLoose(graphics, collection, figure, figures, colour, partialTick);
-            case IN_BOX -> drawInBox(graphics, collection, figure, colour);
-            case IN_COLLECTION -> drawInCollection(graphics, figure, figures, colour, mouseX, mouseY, partialTick);
+        drawStage(graphics, colour);
+        if (collection == null || figure == null) {
+            Font font = Minecraft.getInstance().font;
+            // In the middle of the room under the view button
+            int middle = (y + TOP_ROOM + floor()) / 2;
+            for (String line : Draw.fit(font, emptyText.getString(), width - 12, 3)) {
+                Draw.centred(graphics, font, line, x + width / 2, middle - 4, width - 8, Theme.MUTED);
+                middle += Theme.LINE_HEIGHT;
+            }
+            return;
+        }
+        if (models <= 0) {
+            return;
+        }
+        if (mode == Mode.IN_BOX) {
+            drawInBox(graphics, collection, figure);
+        } else {
+            drawLoose(graphics, collection, figure, entry(collection), partialTick);
         }
     }
 
-    // A soft light of the collection's colour behind the figure, fading to near black
-    private void drawGlow(GuiGraphics graphics, int colour, int background) {
-        graphics.fill(x, y, x + width, y + height, background);
-        graphics.fillGradient(x, y, x + width, y + height * 3 / 4, darken(colour, 0.45f), background);
+    // The showcase's stage: the colour fading into the well, and the ledge along the bottom
+    private void drawStage(GuiGraphics graphics, int colour) {
+        graphics.fill(x, y, x + width, y + height, Surfaces.WELL);
+        graphics.fillGradient(x, y, x + width, y + height * 3 / 4, darken(colour, 0.5f), Surfaces.WELL);
+        int floor = floor();
+        graphics.fill(x + 2, floor, x + width - 2, y + height - 2, FLOOR);
+        graphics.fill(x + 2, floor, x + width - 2, floor + 1, FLOOR_EDGE);
+    }
+
+    // Whether the 1x figure stands beside the figure: in the loose view, beside one of another size
+    private boolean referenceShown(FigureCollection collection, FigureDefinition figure) {
+        if (!showReference || mode != Mode.LOOSE || models < 2) {
+            return false;
+        }
+        FigureDefinition reference = collection.getFigure(CreatorPreview.REFERENCE_FIGURE).orElse(null);
+        return reference != null && !reference.getId().equals(figure.getId()) && Math.abs(figureScale - 1.0f) > 0.01f;
+    }
+
+    // The figure's height against its cell at size 1 and its own size: a skin's shape, a model's
+    // extent as its host gives it, or else the most a model is fitted to
+    private float figureHeight(FigureDefinition figure) {
+        boolean skin = FigureDefinition.DEFAULT_MODEL.equals(figure.getModelPath());
+        return (skin ? SKIN_HEIGHT : extentHeight > 0 ? extentHeight : MODEL_HEIGHT) * figureScale;
+    }
+
+    private float figureWidth(FigureDefinition figure) {
+        boolean skin = FigureDefinition.DEFAULT_MODEL.equals(figure.getModelPath());
+        return (skin ? SKIN_WIDTH * SKIN_HEIGHT : extentWidth > 0 ? extentWidth : MODEL_WIDTH) * figureScale;
+    }
+
+    /**
+     * The size of the loose view's figures, as the cell of the machine's grid they would fill: as
+     * large as lets the taller of the figure and the 1x figure fill {@value #FILL_PERCENT} percent
+     * of the stage, and no larger than lets the figure, or the two side by side, keep within the
+     * stage's width. A skin is the default figure's shape; a model is as tall and as wide, turned,
+     * as its host says, or else as the most it is fitted to: 15 pixels of 16 tall and 9 wide.
+     */
+    private int looseCell(FigureCollection collection, FigureDefinition figure, boolean withReference) {
+        float previewScale = collection.isPlush() ? PLUSH_SCALE : 1.0f;
+        float height = figureHeight(figure);
+        float wide = figureWidth(figure);
+        float tallest = Math.max(height, withReference ? SKIN_HEIGHT : 0.0f) * previewScale;
+        float byHeight = FILL * (floor() - y) / Math.max(0.01f, tallest);
+        float pair = (wide + SKIN_WIDTH * SKIN_HEIGHT) * previewScale;
+        float byWidth = withReference ? Math.max(1.0f, width * WIDTH_PAIR - PAIR_GAP) / Math.max(0.01f, pair)
+                : width * WIDTH_ALONE / Math.max(0.01f, wide * previewScale);
+        return Math.max(16, Math.round(Math.min(byHeight, byWidth)));
     }
 
     private void drawLoose(GuiGraphics graphics, FigureCollection collection, FigureDefinition figure,
-                           FigureEntry figures, int colour, float partialTick) {
-        drawGlow(graphics, colour, BACKGROUND);
-        int cell = Math.max(16, height - 4);
-        int cellY = y + 2;
-        // The figure stands where the machine's camera puts feet in a cell: lower than its middle
-        int feetY = cellY + Math.round(cell * 0.6f + CAMERA_Y * cell / 80.0f);
-        graphics.fill(x, feetY, x + width, feetY + 5, PEDESTAL);
-        graphics.fill(x, feetY, x + width, feetY + 1, PEDESTAL_TOP);
-
-        int centerX = x + width / 2;
-        FigureDefinition reference = collection.getFigure(CreatorPreview.REFERENCE_FIGURE).orElse(null);
-        boolean withReference = showReference && reference != null && !reference.getId().equals(figure.getId());
-        int figureCenter = withReference ? centerX + cell / 8 : centerX;
-        figures.setConfiguration(LOOSE_SCALE, 0.0f, CAMERA_YAW, 0.0f, CAMERA_X * LOOSE_SCALE, CAMERA_Y, 0.0f);
+                           FigureEntry figures, float partialTick) {
+        boolean withReference = referenceShown(collection, figure);
+        int floor = floor();
+        int size = looseCell(collection, figure, withReference);
+        // A figure is cut to its cell, so the cell reaches the stage's top above the feet, and the
+        // figures are drawn smaller in it as much: one of twice the usual size keeps its head
+        int cell = Math.max(size, Math.round((floor + ON_LEDGE - y) / FEET));
+        int cellY = floor + ON_LEDGE - Math.round(cell * FEET);
+        figures.setConfiguration(size / (float) cell, 0.0f, FRONT_TURN, 0.0f, 0.0f, CAMERA_Y, 0.0f);
         figures.setPreviewYaw(yaw());
+        int figureCenter = x + width / 2;
         if (withReference) {
-            int referenceCenter = centerX - cell * 3 / 8;
+            // Side by side across the stage, the 1x figure on the left, neither over the other
+            float previewScale = collection.isPlush() ? PLUSH_SCALE : 1.0f;
+            int referenceWidth = Math.round(SKIN_WIDTH * SKIN_HEIGHT * previewScale * size);
+            int figureWidth = Math.round(figureWidth(figure) * previewScale * size);
+            int left = x + (width - referenceWidth - PAIR_GAP - figureWidth) / 2;
+            int referenceCenter = left + referenceWidth / 2;
+            figureCenter = left + referenceWidth + PAIR_GAP + figureWidth / 2;
+            FigureDefinition reference = collection.getFigure(CreatorPreview.REFERENCE_FIGURE).orElseThrow();
             figures.setPreviewPose(0);
             figures.setPreviewSkin(0);
-            drawFigure(graphics, figures, reference, referenceCenter - cell / 2, cellY, cell, partialTick, true);
-            Font font = Minecraft.getInstance().font;
-            String label = CreatorScreen.tr("preview.reference").getString();
-            Draw.string(graphics, font, label, referenceCenter - font.width(label) / 2, feetY + 7, Theme.MUTED);
+            // In its own colours, neither greyed nor washed: a measure, not a figure of the collection
+            drawFigure(graphics, figures, reference, referenceCenter - cell / 2, cellY, cell, partialTick, false);
+            this.referenceLabelX = referenceCenter;
+            this.referenceLabelY = floor + ON_LEDGE - Math.round(SKIN_HEIGHT * previewScale * size) - 13;
         }
         figures.setPreviewPose(pose(figure));
         figures.setPreviewSkin(skinIndex);
         drawFigure(graphics, figures, figure, figureCenter - cell / 2, cellY, cell, partialTick, greyed);
     }
 
-    private void drawInBox(GuiGraphics graphics, FigureCollection collection, FigureDefinition figure, int colour) {
-        drawGlow(graphics, colour, BOX_BACKGROUND);
-        int top = sceneTop();
-        int bottom = sceneBottom();
-        // A box seen from a little above stands a little taller than the size it is drawn at
-        float size = Math.max(8.0f, Math.min(width * 0.6f, (bottom - top) / BOX_HEIGHT));
+    // The box standing on the ledge, as large as the stage under the view button allows
+    private void drawInBox(GuiGraphics graphics, FigureCollection collection, FigureDefinition figure) {
+        int floor = floor();
+        float size = Math.max(8.0f, Math.min((width - 2 * INSET) * 0.8f, (floor - 4 - (y + TOP_ROOM)) / BOX_HEIGHT));
         drawBoxFront(graphics, box(collection, figure), yaw(), pose(figure), x + width / 2.0f,
-                (top + bottom) / 2.0f, size);
+                floor + 2 - size * BOX_MIDDLE, size);
     }
 
     // One cell of the machine's figure grid, on the collection's colour as the machine shows it
     private void drawInCollection(GuiGraphics graphics, FigureDefinition figure, FigureEntry figures, int colour,
                                   int mouseX, int mouseY, float partialTick) {
         graphics.fill(x, y, x + width, y + height, colour);
-        int top = sceneTop();
-        int bottom = sceneBottom();
+        int top = y + TOP_ROOM;
+        int bottom = y + height - INSET;
         int cell = Math.max(16, Math.min(MAX_CELL, Math.min(bottom - top, width - 2 * INSET)));
         int cellX = x + (width - cell) / 2;
         int cellY = (top + bottom - cell) / 2;
@@ -380,11 +535,13 @@ public class UiFigureView extends UiViewport {
         int border = figure.isSpecial() ? (shown ? SPECIAL_BORDER : SPECIAL_BORDER_UNDISCOVERED)
                 : (shown ? BORDER_DISCOVERED : BORDER_UNDISCOVERED);
         Draw.outline(graphics, cellX, cellY, cell, cell, border);
-        figures.setConfiguration(1.0f, 0.0f, CAMERA_YAW, 0.0f, CAMERA_X, CAMERA_Y, 0.0f);
-        figures.setPreviewYaw(yaw());
-        figures.setPreviewPose(pose(figure));
-        figures.setPreviewSkin(skinIndex);
-        drawFigure(graphics, figures, figure, cellX, cellY, cell, partialTick, !shown);
+        if (models > 0) {
+            figures.setConfiguration(1.0f, 0.0f, FRONT_TURN, 0.0f, 0.0f, CAMERA_Y, 0.0f);
+            figures.setPreviewYaw(yaw());
+            figures.setPreviewPose(pose(figure));
+            figures.setPreviewSkin(skinIndex);
+            drawFigure(graphics, figures, figure, cellX, cellY, cell, partialTick, !shown);
+        }
         Font font = Minecraft.getInstance().font;
         String name = Draw.cut(font, figure.getName(), cell - 4);
         graphics.drawString(font, name, cellX + (cell - font.width(name)) / 2, cellY + cell - font.lineHeight - 2,
@@ -393,74 +550,35 @@ public class UiFigureView extends UiViewport {
 
     @Override
     protected void drawOverlay(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        if (caption == null) {
+        FigureCollection collection = collection();
+        FigureDefinition figure = currentFigure();
+        if (collection == null || figure == null || !referenceShown(collection, figure)) {
             return;
         }
+        // The 1x figure's label over its head, below the view button where the two would meet
         Font font = Minecraft.getInstance().font;
-        int right = Math.min(buttonsLeft() - 6, x + width - INSET - 2);
-        int left = right - font.width(caption);
-        // The 1x figure's label and the discovery switch keep the bottom left
-        int clear = discovery.visible() ? discovery.bounds().right() + 6 : x + INSET + 2;
-        if (left >= clear) {
-            label(graphics, font, caption, left, y + height - INSET - 10, right - left, Theme.MUTED);
+        Component label = CreatorScreen.tr("preview.reference");
+        int labelWidth = font.width(label);
+        int labelX = Math.max(x + INSET + 2,
+                Math.min(x + width - INSET - 2 - labelWidth, this.referenceLabelX - labelWidth / 2));
+        int labelY = Math.max(y + INSET + 2, this.referenceLabelY);
+        Rect button = this.viewButton.bounds();
+        if (labelX + labelWidth + 2 > button.x() && labelY - 2 < button.bottom() + 2) {
+            labelY = button.bottom() + 4;
         }
+        label(graphics, font, label, labelX, labelY, labelWidth, Theme.MUTED);
     }
 
-    /**
-     * "‹ name ›": which skin the figure wears, its own or one of its variants. The arrows step
-     * back and forward, going round at the ends, and a click on the name steps forward.
-     */
-    private final class VariantSwitch extends UiNode.Box {
-        static final int HEIGHT = 14;
-        private static final int ARROW = 12;
+    // Files dropped on the view go to its hidden zone, laid over it
 
-        private Component current() {
-            return skinIndex == 0 ? CreatorScreen.tr("preview.variant_own")
-                    : Component.literal(variants.get(skinIndex - 1));
+    @Override
+    @Nullable
+    public UiDropZone dropZones(double mouseX, double mouseY, List<UiDropZone> zones) {
+        UiDropZone zone = this.dropZone;
+        if (!visible() || zone == null) {
+            return null;
         }
-
-        int naturalWidth() {
-            Font font = Minecraft.getInstance().font;
-            int widest = font.width(CreatorScreen.tr("preview.variant_own"));
-            for (String name : variants) {
-                widest = Math.max(widest, font.width(name));
-            }
-            return 2 * ARROW + Math.min(widest, 110) + 8;
-        }
-
-        @Override
-        public void draw(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-            if (!visible() || width <= 2 * ARROW) {
-                return;
-            }
-            Font font = Minecraft.getInstance().font;
-            // A dark see-through strip in the menus' border and outline, over the scene
-            boolean over = hovered(mouseX, mouseY);
-            graphics.fill(x, y, x + width, y + height, Surfaces.OUTLINE);
-            graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, over ? Surfaces.BORDER_HOVER : Surfaces.BORDER);
-            graphics.fill(x + 2, y + 2, x + width - 2, y + height - 2, Surfaces.WELL);
-            boolean overLeft = over && mouseX < x + ARROW;
-            boolean overRight = over && mouseX >= x + width - ARROW;
-            int textY = y + (height - 8) / 2 + 1;
-            Draw.string(graphics, font, "‹", x + 4, textY, overLeft ? Theme.SELECTED_LIGHT : Theme.TEXT);
-            Draw.string(graphics, font, "›", x + width - ARROW + 3, textY,
-                    overRight ? Theme.SELECTED_LIGHT : Theme.TEXT);
-            Draw.centred(graphics, font, current().getString(), x + width / 2, textY, width - 2 * ARROW,
-                    skinIndex == 0 ? Theme.TEXT_SOFT : Theme.SELECTED_LIGHT);
-            if (over) {
-                UiTooltip.set(CreatorScreen.tr("preview.variant_tip", variants.size()));
-            }
-        }
-
-        @Override
-        public boolean click(UiInput.Click click) {
-            if (!click.left() || !isMouseOver(click.x(), click.y())) {
-                return false;
-            }
-            int skins = variants.size() + 1;
-            int step = click.x() < x + ARROW ? -1 : 1;
-            skinIndex = ((skinIndex + step) % skins + skins) % skins;
-            return true;
-        }
+        zone.at(x, y, width, height);
+        return zone.dropZones(mouseX, mouseY, zones);
     }
 }

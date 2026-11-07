@@ -18,7 +18,9 @@ import java.util.function.Consumer;
  * faint hint after it (such as the value it holds) and a chevron at the right, a hairline under
  * the row, lighter under the mouse. An optional dot before the label carries a colour, such as a
  * rarity's or a change waiting. A row that runs an action at once has no chevron, and one that
- * takes something away has its label in red.
+ * takes something away has its label in red. A hint that does not fit gives way to its short
+ * form, when it has one, or is cut; a row that keeps its hint, such as a count, cuts its label
+ * instead. Whatever is cut or shortened shows whole in the row's tooltip.
  *
  * <p>A click or Enter runs the row's action; an action told the row's place on the screen can
  * anchor a menu to it, even inside a {@link UiScrollPane}. A disabled row is drawn in the
@@ -38,6 +40,9 @@ public class UiFoldRow extends UiNode.Box {
     private Component label;
     @Nullable
     private Component hint;
+    @Nullable
+    private Component shortHint;
+    private boolean keepHint;
     private int hintColour = Theme.FAINT;
     private final Consumer<Rect> action;
     private boolean chevron = true;
@@ -79,7 +84,25 @@ public class UiFoldRow extends UiNode.Box {
     /** A hint in a colour of its own, such as red for a problem the sub-view fixes. */
     public UiFoldRow hint(@Nullable Component hint, int colour) {
         this.hint = hint;
+        this.shortHint = null;
         this.hintColour = colour;
+        return this;
+    }
+
+    /**
+     * A hint with a short form shown where the whole does not fit, such as "12 %" for "12 % per
+     * draw"; an empty short form leaves the hint out there.
+     */
+    public UiFoldRow hint(@Nullable Component hint, @Nullable Component shortHint) {
+        this.hint = hint;
+        this.shortHint = shortHint;
+        this.hintColour = Theme.FAINT;
+        return this;
+    }
+
+    /** Whether the hint keeps its room and the label is cut instead, as for a short value such as a count. */
+    public UiFoldRow keepHint(boolean keep) {
+        this.keepHint = keep;
         return this;
     }
 
@@ -159,18 +182,36 @@ public class UiFoldRow extends UiNode.Box {
         }
         int labelColour = !enabled ? Theme.TEXT_DISABLED : danger ? Theme.RED : lit ? Theme.TEXT : TEXT;
         String whole = label.getString();
-        String shown = UiText.fit(font, whole, Math.max(0, end - textX));
+        String wholeHint = hint != null ? hint.getString() : "";
+        int labelWidth = UiText.width(font, whole);
+        // The hint to show: the whole where it fits after the whole label, else the short form
+        String hintText = wholeHint;
+        if (hint != null && shortHint != null
+                && textX + labelWidth + HINT_GAP + UiText.width(font, wholeHint) > end) {
+            hintText = shortHint.getString();
+        }
+        int labelRoom = Math.max(0, end - textX);
+        if (keepHint && !hintText.isEmpty()) {
+            labelRoom = Math.max(0, Math.min(labelRoom, end - textX - HINT_GAP - UiText.width(font, hintText)));
+        }
+        String shown = UiText.fit(font, whole, labelRoom);
         UiText.draw(graphics, font, shown, textX, middle - 4, labelColour);
-        if (hint != null) {
+        boolean hintWhole = hintText.equals(wholeHint);
+        if (!hintText.isEmpty()) {
             int hintX = textX + UiText.width(font, shown) + HINT_GAP;
-            if (hintX < end - MIN_HINT) {
-                UiText.drawFitted(graphics, font, hint.getString(), hintX, middle - 4, end - hintX,
-                        enabled ? hintColour : Theme.TEXT_DISABLED);
+            if (hintX < end - MIN_HINT || keepHint) {
+                String hintShown = UiText.fit(font, hintText, Math.max(0, end - hintX));
+                hintWhole &= hintShown.equals(hintText);
+                UiText.draw(graphics, font, hintShown, hintX, middle - 4, enabled ? hintColour : Theme.TEXT_DISABLED);
+            } else {
+                hintWhole = false;
             }
         }
         if (over) {
+            Component cut = !shown.equals(whole) || !hintWhole
+                    ? (hint != null && !wholeHint.isEmpty() ? CreatorScreen.tr("card.joined", label, hint) : label) : null;
             Component tip = !enabled ? disabledReason : overDot && dotTooltip != null ? dotTooltip
-                    : tooltip != null ? tooltip : !shown.equals(whole) ? label : null;
+                    : tooltip != null ? tooltip : cut;
             if (tip != null) {
                 UiTooltip.set(SidebarScreen.tooltipLines(tip));
             }
