@@ -118,12 +118,58 @@ about to change, and would send a removal, a reorder or a publish again.
 - Each accepted autosave costs one full store write and one world-wide sync, as each Save did, now
   at the client's pace rather than the operator's: at most 12 a minute per editing operator, and
   syncs go to players who are not operators even when only a draft changed.
-- Measured cost: not yet, and an open item of this change before it ships. The two-client soak
-  this rework calls for (an operator typing for a minute, dragging sliders, swapping a logo ten
-  times in one visit and across tab switches, and a bulk add of 40 while typing, with a second,
-  non-operator client on a dedicated server) has not been run; until it is, the client-side bounds
-  above are the only evidence. Its store writes a minute, its average server tick time against an
-  idle baseline and the sync bytes the non-operator receives a minute are to be recorded here.
+- Measured cost, from the soak of 2026-11-07 on `f719a1c` (two runs, the second in brackets where
+  it differed). Setup: Fabric 1.20.1 in the development environment, a dedicated server in offline
+  mode with a flat world, view distance 4 and the world's own saving off, on a 16-core Linux
+  machine that other builds shared (load average about 6 to 12), clients under Xvfb. One operator
+  at level 2 drove the editor through its own input: keys typed into the name, drags of the logo's
+  size slider, files dropped on the logo zone, clicks on the tab rows and the bulk add's own
+  buttons. One player who is not an operator stayed idle. The world held two published collections
+  of 13 figures and the draft, a copy of a 3-figure collection that grew to 43, in a 23 KB store.
+  The soak lasted 197 s: 60 s of typing with pauses between words, ten drags of the slider, ten
+  logos in one visit to Aspecto, ten visits with a logo each, and a bulk add of 40 skins while
+  typing; idle baselines of the same length ran before and after it. Throwaway hooks outside the
+  product counted the server's own time for each tick (`MinecraftServer.tickTimes`, since
+  `/debug stop` on 1.20.1 reports only ticks per second, 20.0 in every window), each move of the
+  store file into place, the statuses and syncs on each player's connection and the sync payloads
+  the non-operator received. Both runs counted the same events.
+  - No busy refusal: pass. The server answered no request with busy in either run, setup and
+    checks included; the soak's 40 batches and 51 uploads, the bulk add's 40 files and 5 batches
+    among them, were all accepted.
+  - At most 12 autosave store writes a minute: fail. Autosaves stayed within the client's bound,
+    35 in the soak and at most 12 in any minute, and so did the store while no file went: 12
+    writes in the minute of typing, 18 over typing and dragging. But an autosave that uploads a
+    file writes the store twice: `WorldCollections.addBlob` saves the whole store and marks the
+    collections dirty when the file is stored, and the batch that names the file saves it again.
+    Ten visits with a logo each wrote it 20 times in 48 s, 22 times in the worst minute outside
+    the bulk add, and the two writes usually leave as two world-wide syncs, since a sync goes as
+    soon as a second has passed since the last one: 21 syncs in that minute. The bulk add of 40
+    wrote the store 45 times in 4 s. The "at most 12 autosave store writes and 12 world-wide syncs
+    a minute" above holds only for autosaves that send no file; one that sends a file costs two of
+    each.
+  - One upload per visit: pass. Ten logos tried in one visit uploaded one file, when the operator
+    left the tab; ten visits with a logo each uploaded one file each.
+  - Average tick time within 2 ms of an idle baseline: pass. 0.68 ms a tick over the soak against
+    0.80 ms [0.67 ms] over the baseline after it and 0.82 ms [0.75 ms] over the one before, a
+    difference of -0.13 ms [+0.01 ms], within the noise of the shared machine. The slowest soak
+    tick, 43 ms [36 ms], was the game's own five-minute save, which fell into a baseline as well;
+    the next slowest was 3.8 ms [8.4 ms], against up to 13 ms [8.1 ms] in the baselines.
+  - Sync bytes received by the non-operator: 55,488 bytes a minute over the soak, 182,100 bytes in
+    50 syncs of 3,642 bytes (the two published collections and their file table, as payload before
+    the connection's compression), 94,692 bytes in the worst minute, the bulk add's, and none in
+    either baseline. Every change of the soak was to a draft this player never sees, so skipping
+    the public sync when only a draft changed would have saved all of it. The operator received
+    about 95,000 bytes a minute.
+  - The other checks behaved as this record says. Leaving with a save on its way, the save started
+    the next tick, and the collection opened during it attached the same saver and draft; leaving
+    and staying away, the save finished in the background and the saver ended without a word. A
+    purge confirmed while a name change waited for the client's interval reached the server with
+    nothing after it; the saver ended and the only message was the deletion's own. Two operators,
+    one renaming the draft while the other, on a third client, picked its background colour, both
+    kept their change on the server and in both editors, and no sync undid either. A disconnect
+    while an autosave's upload had begun ended every saver and upload at once; the server dropped
+    the upload, and after joining again the collection was as before, its old logo in the file
+    table and nothing waiting, the logo tried last lost as a disconnect loses it.
 - Orphaned files grow only with explicit navigation; a file that uploads and is replaced still
   counts towards the server's files and bytes until garbage collection, 24 hours after its upload.
 - The asset re-send limit remains: a file that toggles in and out of the synced records across
