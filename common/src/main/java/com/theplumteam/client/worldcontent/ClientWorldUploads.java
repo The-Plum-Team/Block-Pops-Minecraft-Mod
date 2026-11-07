@@ -38,7 +38,7 @@ import java.util.function.Consumer;
  * sent only after every file is stored, and the first refusal ends the submission.
  *
  * <p>Answers are routed by the request id each step carries. Waiting
- * {@link #ANSWER_TIMEOUT_NANOS} for one counts as a failure. {@link #reset()} cancels
+ * {@link #ANSWER_TIMEOUT_MS} for one counts as a failure. {@link #reset()} cancels
  * everything when the client leaves or joins a server, and tells each submission it was
  * disconnected.
  *
@@ -66,8 +66,8 @@ import java.util.function.Consumer;
 public final class ClientWorldUploads {
     /** Chunks sent per client tick: 64 KiB, so a 512 KiB file takes eight ticks. */
     public static final int CHUNKS_PER_TICK = 4;
-    /** How long to wait for any answer the server owes before giving up. */
-    private static final long ANSWER_TIMEOUT_NANOS = 30_000_000_000L;
+    /** How long to wait for any answer the server owes before giving up, by {@link Host#millis()}. */
+    static final long ANSWER_TIMEOUT_MS = 30_000;
     /** Submissions waiting behind the current one. */
     private static final int MAX_QUEUED = 8;
     private static final long SECOND_MS = 1_000;
@@ -191,9 +191,10 @@ public final class ClientWorldUploads {
     private static final ArrayDeque<Charge> IMPORTS = new ArrayDeque<>();
 
     /**
-     * The game's clock, its connection and the server at the other end, which the uploads, the
-     * creator's runs ({@link CreatorRuns}) and its savers ({@link AutoSaver}) go by. The game always
-     * uses {@link #GAME}; only the unit tests put a stand-in in its place.
+     * The game's clock, its connection and the server at the other end, which the uploads (their
+     * budget and the deadlines of the answers they wait for), the creator's runs ({@link CreatorRuns})
+     * and its savers ({@link AutoSaver}) go by. The game always uses {@link #GAME}; only the unit
+     * tests put a stand-in in its place.
      */
     interface Host {
         /** Milliseconds, as {@link Util#getMillis()} counts them. */
@@ -548,7 +549,7 @@ public final class ClientWorldUploads {
             return;
         }
         if (submission.phase != Phase.SENDING) {
-            if (System.nanoTime() - submission.deadline > 0) {
+            if (host.millis() - submission.deadline > 0) {
                 finish(new Outcome(WorldContentStatus.of(Result.TIMED_OUT, "The server did not answer in time"),
                         false));
             }
@@ -563,7 +564,7 @@ public final class ClientWorldUploads {
         }
         if (submission.offset == bytes.length) {
             submission.phase = Phase.COMMIT;
-            submission.deadline = System.nanoTime() + ANSWER_TIMEOUT_NANOS;
+            submission.deadline = host.millis() + ANSWER_TIMEOUT_MS;
             host.commit(submission.uploadId);
         }
     }
@@ -604,13 +605,13 @@ public final class ClientWorldUploads {
             submission.uploadId = 0;
             submission.offset = 0;
             submission.requestId = nextRequestId();
-            submission.deadline = System.nanoTime() + ANSWER_TIMEOUT_NANOS;
+            submission.deadline = host.millis() + ANSWER_TIMEOUT_MS;
             chargeBegin(file);
             host.begin(submission.requestId, file.type(), file.bytes().length, file.sha());
         } else if (submission.edit != null) {
             submission.phase = Phase.EDIT;
             submission.requestId = nextRequestId();
-            submission.deadline = System.nanoTime() + ANSWER_TIMEOUT_NANOS;
+            submission.deadline = host.millis() + ANSWER_TIMEOUT_MS;
             chargeEdit(submission.edit);
             host.edit(submission.requestId, submission.edit);
         } else {

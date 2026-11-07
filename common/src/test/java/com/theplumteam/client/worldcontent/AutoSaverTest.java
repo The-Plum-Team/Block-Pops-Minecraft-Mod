@@ -120,6 +120,39 @@ class AutoSaverTest extends CreatorTestBase {
     }
 
     @Test
+    void aSaveTheServerNeverAnswersTimesOutAndIsSentAgainAfterTheBackoff() {
+        open(draftRecord());
+        draft.setName("Alpha");
+        saver.textLeft();
+        tick();
+        assertEquals(1, server.edits.size());
+
+        server.advance(ClientWorldUploads.ANSWER_TIMEOUT_MS);
+        tick();
+        assertEquals(AutoSaver.State.SAVING, saver.status().state());
+        server.advance(1);
+        tick();
+        assertEquals(AutoSaver.State.BUSY, saver.status().state());
+
+        server.advance(AutoSaver.BUSY_BACKOFF_MS - 1);
+        tick();
+        assertEquals(1, server.edits.size());
+        server.advance(1);
+        tick();
+        assertEquals(2, server.edits.size());
+        assertEquals("Alpha", assertInstanceOf(WorldCollectionEdit.SetCollection.class, server.lastEdit()).name());
+
+        // The answer to the save that timed out comes late and is not taken for the one sent again
+        server.answer(Result.OK);
+        assertEquals(AutoSaver.State.SAVING, saver.status().state());
+        server.answer(Result.OK);
+        ClientWorldState.sync(named(base, "Alpha").withRevision(2));
+        tick();
+        assertEquals(AutoSaver.State.SAVED, saver.status().state());
+        assertEquals(2, server.edits.size());
+    }
+
+    @Test
     void changesWaitWhileTheClientIsOffline() {
         open(draftRecord());
         server.connected = false;
