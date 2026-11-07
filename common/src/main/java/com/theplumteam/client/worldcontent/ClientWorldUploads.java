@@ -8,6 +8,7 @@ import com.theplumteam.network.WorldUploadChunkPacket;
 import com.theplumteam.network.WorldUploadCommitPacket;
 import com.theplumteam.server.worldcollections.WorldRateLimits;
 import com.theplumteam.server.worldcollections.WorldUploads;
+import com.theplumteam.worldcontent.BlobType;
 import com.theplumteam.worldcontent.Sha256;
 import com.theplumteam.worldcontent.WorldCollectionEdit;
 import com.theplumteam.worldcontent.WorldContentLimits;
@@ -189,7 +190,76 @@ public final class ClientWorldUploads {
     private static final ArrayDeque<Charge> BYTES = new ArrayDeque<>();
     private static final ArrayDeque<Charge> IMPORTS = new ArrayDeque<>();
 
+    /**
+     * The game's clock, its connection and the server at the other end, which the uploads, the
+     * creator's runs ({@link CreatorRuns}) and its savers ({@link AutoSaver}) go by. The game always
+     * uses {@link #GAME}; only the unit tests put a stand-in in its place.
+     */
+    interface Host {
+        /** Milliseconds, as {@link Util#getMillis()} counts them. */
+        long millis();
+
+        /** Whether the client is connected to a server. */
+        boolean connected();
+
+        /** Announces a file to upload ({@link WorldUploadBeginPacket}). */
+        void begin(int requestId, BlobType type, int size, String sha);
+
+        /** Sends part of a file being uploaded ({@link WorldUploadChunkPacket}). */
+        void chunk(int uploadId, int offset, byte[] bytes);
+
+        /** Asks the server to check and store an uploaded file ({@link WorldUploadCommitPacket}). */
+        void commit(int uploadId);
+
+        /** Sends an edit ({@link WorldCollectionEditPacket}). */
+        void edit(int requestId, WorldCollectionEdit edit);
+    }
+
+    static final Host GAME = new Host() {
+        @Override
+        public long millis() {
+            return Util.getMillis();
+        }
+
+        @Override
+        public boolean connected() {
+            return Minecraft.getInstance().getConnection() != null;
+        }
+
+        @Override
+        public void begin(int requestId, BlobType type, int size, String sha) {
+            new WorldUploadBeginPacket(requestId, type, size, sha).sendToServer();
+        }
+
+        @Override
+        public void chunk(int uploadId, int offset, byte[] bytes) {
+            new WorldUploadChunkPacket(uploadId, offset, bytes).sendToServer();
+        }
+
+        @Override
+        public void commit(int uploadId) {
+            new WorldUploadCommitPacket(uploadId).sendToServer();
+        }
+
+        @Override
+        public void edit(int requestId, WorldCollectionEdit edit) {
+            new WorldCollectionEditPacket(requestId, edit).sendToServer();
+        }
+    };
+
+    static Host host = GAME;
+
     private ClientWorldUploads() {
+    }
+
+    /** The time the creator's saving goes by: {@link Util#getMillis()}. */
+    static long millis() {
+        return host.millis();
+    }
+
+    /** Whether the client is connected to a server, so a submission can be sent. */
+    static boolean connected() {
+        return host.connected();
     }
 
     /**
@@ -240,8 +310,7 @@ public final class ClientWorldUploads {
             }
             unique.putIfAbsent(file.sha(), file);
         }
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.getConnection() == null || QUEUE.size() >= MAX_QUEUED) {
+        if (!host.connected() || QUEUE.size() >= MAX_QUEUED) {
             return false;
         }
         QUEUE.add(new Submission(List.copyOf(unique.values()), edit, receiver, tag, background));
@@ -326,7 +395,7 @@ public final class ClientWorldUploads {
      * is sent in the background; 0 when it has room now.
      */
     public static long roomInMillis(Cost cost, boolean background) {
-        long now = Util.getMillis();
+        long now = host.millis();
         prune(now);
         int reserveSecond = background ? RESERVE_EDITS_PER_SECOND : 0;
         int reserveMinute = background ? RESERVE_EDITS_PER_MINUTE : 0;
@@ -399,7 +468,7 @@ public final class ClientWorldUploads {
     }
 
     private static void chargeEdit(WorldCollectionEdit edit) {
-        long now = Util.getMillis();
+        long now = host.millis();
         if (edit instanceof WorldCollectionEdit.ImportPack) {
             IMPORTS.addLast(new Charge(now, 1));
         } else {
@@ -408,7 +477,7 @@ public final class ClientWorldUploads {
     }
 
     private static void chargeBegin(FilePicker.LocalFile file) {
-        long now = Util.getMillis();
+        long now = host.millis();
         BEGINS.addLast(new Charge(now, 1));
         BYTES.addLast(new Charge(now, file.bytes().length));
     }
@@ -489,14 +558,13 @@ public final class ClientWorldUploads {
         byte[] bytes = file.bytes();
         for (int i = 0; i < CHUNKS_PER_TICK && submission.offset < bytes.length; i++) {
             int end = Math.min(bytes.length, submission.offset + WorldUploads.CHUNK_BYTES);
-            new WorldUploadChunkPacket(submission.uploadId, submission.offset,
-                    Arrays.copyOfRange(bytes, submission.offset, end)).sendToServer();
+            host.chunk(submission.uploadId, submission.offset, Arrays.copyOfRange(bytes, submission.offset, end));
             submission.offset = end;
         }
         if (submission.offset == bytes.length) {
             submission.phase = Phase.COMMIT;
             submission.deadline = System.nanoTime() + ANSWER_TIMEOUT_NANOS;
-            new WorldUploadCommitPacket(submission.uploadId).sendToServer();
+            host.commit(submission.uploadId);
         }
     }
 
@@ -538,14 +606,13 @@ public final class ClientWorldUploads {
             submission.requestId = nextRequestId();
             submission.deadline = System.nanoTime() + ANSWER_TIMEOUT_NANOS;
             chargeBegin(file);
-            new WorldUploadBeginPacket(submission.requestId, file.type(), file.bytes().length, file.sha())
-                    .sendToServer();
+            host.begin(submission.requestId, file.type(), file.bytes().length, file.sha());
         } else if (submission.edit != null) {
             submission.phase = Phase.EDIT;
             submission.requestId = nextRequestId();
             submission.deadline = System.nanoTime() + ANSWER_TIMEOUT_NANOS;
             chargeEdit(submission.edit);
-            new WorldCollectionEditPacket(submission.requestId, submission.edit).sendToServer();
+            host.edit(submission.requestId, submission.edit);
         } else {
             finish(new Outcome(last, false));
         }

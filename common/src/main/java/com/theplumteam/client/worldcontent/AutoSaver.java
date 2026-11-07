@@ -4,8 +4,6 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.worldcontent.WorldCollectionEdit;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldContentStatus.Result;
-import net.minecraft.Util;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
@@ -220,7 +218,7 @@ public final class AutoSaver {
                 return false;
             }
             Long changed = nameChangedAt.get(figureId);
-            return figureId.equals(typingFigure) || changed != null && Util.getMillis() - changed < TEXT_MS;
+            return figureId.equals(typingFigure) || changed != null && ClientWorldUploads.millis() - changed < TEXT_MS;
         }
 
         @Override
@@ -349,7 +347,7 @@ public final class AutoSaver {
 
     /** What can go now and what is held, as last worked out. */
     public CreatorSave.Available analysis() {
-        long now = Util.getMillis();
+        long now = ClientWorldUploads.millis();
         if (this.analysis == null || this.stale || now - this.analyzedAt >= ANALYSIS_MS) {
             this.analysis = CreatorSave.planAvailable(this.draft, false, this.hold);
             this.pendingCount = this.draft.changes().size();
@@ -366,11 +364,11 @@ public final class AutoSaver {
 
     /** What the saver is doing now, highest priority first; see {@link State}. */
     public Status status() {
-        long now = Util.getMillis();
+        long now = ClientWorldUploads.millis();
         CreatorSave.Available available = analysis();
         int pending = this.pendingCount;
         List<CreatorSave.Held> held = available.held();
-        if (Minecraft.getInstance().getConnection() == null) {
+        if (!ClientWorldUploads.connected()) {
             return new Status(State.OFFLINE, held, List.of(), null, 0, pending);
         }
         List<Component> messages = new ArrayList<>();
@@ -445,7 +443,7 @@ public final class AutoSaver {
     /** A text field lost the keyboard: what was typed in it is due now. */
     public void textLeft() {
         if (this.textAt != 0) {
-            this.textAt = Util.getMillis() - TEXT_MS;
+            this.textAt = ClientWorldUploads.millis() - TEXT_MS;
         }
         this.stale = true;
     }
@@ -678,7 +676,7 @@ public final class AutoSaver {
         if (this.cancelled) {
             return;
         }
-        long now = Util.getMillis();
+        long now = ClientWorldUploads.millis();
         if (this.mode != Mode.AUTO || this.flight != null || this.bulk != null || !this.pausers.isEmpty()) {
             return;
         }
@@ -691,7 +689,7 @@ public final class AutoSaver {
         if (!wantsPublish && !due(now)) {
             return;
         }
-        if (Minecraft.getInstance().getConnection() == null || isBusy() || this.budgetUntil > now
+        if (!ClientWorldUploads.connected() || isBusy() || this.budgetUntil > now
                 || this.retryAt > now) {
             return;
         }
@@ -771,7 +769,7 @@ public final class AutoSaver {
 
     // Sends a plan as this saver's save
     private void start(CreatorSave.Plan plan, boolean background) {
-        long now = Util.getMillis();
+        long now = ClientWorldUploads.millis();
         this.textAt = 0;
         this.numberAt = 0;
         this.numberReleased = false;
@@ -807,7 +805,7 @@ public final class AutoSaver {
         this.stale = true;
         PublishRequest request = this.publishing;
         boolean published = request != null && request.sent;
-        long now = Util.getMillis();
+        long now = ClientWorldUploads.millis();
         switch (outcome.ending()) {
             case SAVED -> {
                 this.busyTries = 0;
@@ -942,7 +940,7 @@ public final class AutoSaver {
     // ---- Changes the draft heard
 
     private void changed(String key) {
-        long now = Util.getMillis();
+        long now = ClientWorldUploads.millis();
         switch (classOf(key)) {
             case TEXT -> this.textAt = now;
             case NUMBER -> {

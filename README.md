@@ -114,6 +114,8 @@ python3 -m unittest discover -s tests -v
 python3 -m unittest discover -s scripts/ci/tests -t . -v
 # or both suites across every core, as the Build gate runs them:
 python3 scripts/ci/parallel_unittest.py -t . scripts/ci/tests tests
+# the common module's JUnit tests on one lane (the build below runs them on every lane):
+./gradlew -PblockpopsLane=fabric-1.20.1 :common:1.20.1:test
 python3 scripts/ci/dependency_policy.py --metadata gradle/verification-metadata.xml
 python3 scripts/ci/mod_base_kit.py verify --network
 python3 scripts/ci/mod_base_kit.py run template check --repo .
