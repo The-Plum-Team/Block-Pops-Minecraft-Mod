@@ -48,13 +48,14 @@ while iterating:
 ```
 
 Minecraft is on their classpath but never bootstrapped, so they test only code
-that loads without a running game: World collection records and edits, and the
-creator's draft, save plans and saver. The creator's saving reaches the clock,
-the connection and the server only through the package-private
-`ClientWorldUploads.Host`, which the game never replaces and the tests replace
-with a stand-in server. Ordinary pull requests may add or change these tests;
-their Gradle wiring (`common/build.gradle`, `gradle/build-conventions.gradle`)
-and the JUnit checksums in `gradle/verification-metadata.xml` are protected.
+that loads without a running game: World collection records, edits and the keys
+of a datapack's `collection.json`, and the creator's draft, save plans and
+saver. The creator's saving reaches the clock, the connection and the server
+only through the package-private `ClientWorldUploads.Host`, which the game never
+replaces and the tests replace with a stand-in server. Ordinary pull requests
+may add or change these tests; their Gradle wiring (`common/build.gradle`,
+`gradle/build-conventions.gradle`) and the JUnit checksums in
+`gradle/verification-metadata.xml` are protected.
 
 Tests that need the pinned mod-base kit resolve it only through
 `scripts/ci/mod_base_kit.py`: from the Build gate's staged `out/mod-base-kit`

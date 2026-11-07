@@ -213,21 +213,37 @@ public final class WorldCollectionImporter {
         String author = JsonFields.string(json.get("author"), "author", WorldContentLimits.MAX_AUTHOR_LENGTH);
         // Whatever depends on the files (variant proportions, the face region, a layout without a
         // logo) is checked when the record is validated against the blob table before it is stored
+        Options options = options(json);
+        if (options.logoLayout() != null && logo == null) {
+            throw new WorldContentException("logo_layout places a logo.png the pack does not have");
+        }
+        WorldCollectionRecord record = new WorldCollectionRecord(WorldContentIds.collectionId(slug), name, author,
+                rgb[0], rgb[1], rgb[2], boxTexture, boxColor, logo != null ? logo.sha() : null, false, 0, figures,
+                false, 0L, options.authorUrl(), options.logoLayout(), options.plush(), options.rarityWeights(),
+                options.holographic());
+        return new Pack(record, files);
+    }
+
+    /**
+     * What the optional collection-wide keys of collection.json that name no file say. A key the
+     * pack leaves out takes its default: no author link, logo placement or rarity weights, not a
+     * plush, and draws that may come out holographic.
+     */
+    record Options(@Nullable String authorUrl, @Nullable WorldCollectionRecord.LogoLayout logoLayout, boolean plush,
+                   @Nullable WorldCollectionRecord.RarityWeights rarityWeights, boolean holographic) {
+    }
+
+    /** Reads the {@link Options} of a collection.json, refusing a key of another type or form. */
+    static Options options(JsonObject json) throws WorldContentException {
         String authorUrl = json.has("author_url") ? WorldCollectionRecord.authorUrl(json.get("author_url")) : null;
         WorldCollectionRecord.LogoLayout logoLayout = json.has("logo_layout")
                 ? WorldCollectionRecord.LogoLayout.fromJson(json.get("logo_layout")) : null;
-        if (logoLayout != null && logo == null) {
-            throw new WorldContentException("logo_layout places a logo.png the pack does not have");
-        }
         boolean plush = json.has("plush") && JsonFields.bool(json.get("plush"), "plush");
         WorldCollectionRecord.RarityWeights rarityWeights = json.has("rarity_weights")
                 ? WorldCollectionRecord.RarityWeights.fromJson(json.get("rarity_weights")) : null;
         // Draws may come out holographic unless the pack turns that off
         boolean holographic = !json.has("holographic") || JsonFields.bool(json.get("holographic"), "holographic");
-        WorldCollectionRecord record = new WorldCollectionRecord(WorldContentIds.collectionId(slug), name, author,
-                rgb[0], rgb[1], rgb[2], boxTexture, boxColor, logo != null ? logo.sha() : null, false, 0, figures,
-                false, 0L, authorUrl, logoLayout, plush, rarityWeights, holographic);
-        return new Pack(record, files);
+        return new Options(authorUrl, logoLayout, plush, rarityWeights, holographic);
     }
 
     private static PackFile required(@Nullable PackFile file, String path) throws WorldContentException {
