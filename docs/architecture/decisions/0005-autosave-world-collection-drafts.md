@@ -107,6 +107,13 @@ about to change, and would send a removal, a reorder or a publish again.
   until the file is chosen again. A file is predicted lost, and the figure held before anything is
   sent, only when the server says it lost it or a synced record still names it while the table
   does not list it.
+- **A stored upload waits for the edit that names it.** The server adds an uploaded file to its
+  file table in memory, without writing the store or scheduling a sync: no record names the file
+  yet, and the batch that names it, which follows in every autosave, writes the store and syncs once
+  for both. A file that no edit names within 30 seconds is written and synced on its own, and so is
+  any such file when the server stops; a crash before either leaves the file unlisted, and the
+  start-up sweep deletes it after 24 hours. A file uploaded again because it was lost is synced at
+  once, since players were told it was missing, and starts its 24 hours again.
 - **No wire, record or store change.** Every save uses the existing edits of
   `WorldCollectionEditPacket` and the existing uploads, and is answered by
   `WorldCollectionStatusPacket`.
@@ -115,11 +122,13 @@ about to change, and would send a removal, a reorder or a publish again.
 
 - Operators no longer lose a draft's changes by leaving the editor, and the editor has one explicit
   verb, Publish. A published collection still changes only when the operator asks.
-- Each accepted autosave costs one full store write and one world-wide sync, as each Save did, now
+- Each accepted autosave costs one full store write and one world-wide sync, as each Save did,
+  whether or not it uploads a file, now
   at the client's pace rather than the operator's: at most 12 a minute per editing operator, and
   syncs go to players who are not operators even when only a draft changed.
 - Measured cost, from the soak of 2026-11-07 on `f719a1c` (two runs, the second in brackets where
-  it differed). Setup: Fabric 1.20.1 in the development environment, a dedicated server in offline
+  it differed), before uploads stopped writing the store; the run after that change follows the
+  list. Setup: Fabric 1.20.1 in the development environment, a dedicated server in offline
   mode with a flat world, view distance 4 and the world's own saving off, on a 16-core Linux
   machine that other builds shared (load average about 6 to 12), clients under Xvfb. One operator
   at level 2 drove the editor through its own input: keys typed into the name, drags of the logo's
@@ -145,8 +154,8 @@ about to change, and would send a removal, a reorder or a publish again.
     the bulk add, and the two writes usually leave as two world-wide syncs, since a sync goes as
     soon as a second has passed since the last one: 21 syncs in that minute. The bulk add of 40
     wrote the store 45 times in 4 s. The "at most 12 autosave store writes and 12 world-wide syncs
-    a minute" above holds only for autosaves that send no file; one that sends a file costs two of
-    each.
+    a minute" above held only for autosaves that sent no file; one that sent a file cost two of
+    each. Uploads now wait for the edit that names them (see the decision above).
   - One upload per visit: pass. Ten logos tried in one visit uploaded one file, when the operator
     left the tab; ten visits with a logo each uploaded one file each.
   - Average tick time within 2 ms of an idle baseline: pass. 0.68 ms a tick over the soak against
@@ -170,6 +179,12 @@ about to change, and would send a removal, a reorder or a publish again.
     while an autosave's upload had begun ended every saver and upload at once; the server dropped
     the upload, and after joining again the collection was as before, its old logo in the file
     table and nothing waiting, the logo tried last lost as a disconnect loses it.
+- The same soak on the change that makes uploads wait for their edit, the same day: no busy refusal;
+  40 store writes in 198 s, one per accepted batch, and none for the 51 files uploaded. Outside the
+  bulk add the store was written at most 12 times in any minute, 10 times for the ten visits with a
+  logo each (20 before), and the bulk add of 40 skins wrote it once per batch, 5 times (45 before).
+  The non-operator received 44,224 bytes a minute in 40 syncs (55,488 before), mean tick time stayed
+  within 0.15 ms of both baselines, and the other checks behaved as above.
 - Orphaned files grow only with explicit navigation; a file that uploads and is replaced still
   counts towards the server's files and bytes until garbage collection, 24 hours after its upload.
 - The asset re-send limit remains: a file that toggles in and out of the synced records across
