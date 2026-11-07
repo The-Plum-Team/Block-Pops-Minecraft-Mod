@@ -287,6 +287,11 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
         return this.focusedNode;
     }
 
+    /** Whether a node took a press that has not been let go yet, as a slider being dragged. */
+    protected final boolean nodePressed() {
+        return this.pressedNode != null;
+    }
+
     /**
      * Whether a node has the keyboard on the creator screen now shown: it is the focused node,
      * or the focused node passes the keyboard down to it through {@link UiNode#focusedChild}.

@@ -55,6 +55,18 @@ public final class PixelIcon {
     public static final String[] UPLOAD = {
             "....#....", "...###...", "..#####..", ".#######.", "...###...",
             "...###...", "...###...", ".........", "#########"};
+    /** A sun, for a preview lit as by day. */
+    public static final String[] SUN = {
+            "....#....", ".#.....#.", "...###...", "..#####..", "#.#####.#",
+            "..#####..", "...###...", ".#.....#.", "....#...."};
+    /** A crescent moon, for a preview lit as by night. */
+    public static final String[] MOON = {
+            "..####...", ".###.....", "###......", "###......", "###......",
+            "###......", ".###.....", "..####...", "........."};
+    /** A turning arrow, for a preview that spins by itself. */
+    public static final String[] ROTATE = {
+            "...####.#", "..#....##", ".#....###", ".#.......", ".#.......",
+            ".#.....#.", "..#...#..", "...###...", "........."};
 
     private PixelIcon() {
     }

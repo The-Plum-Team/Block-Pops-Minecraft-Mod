@@ -30,7 +30,8 @@ import java.util.List;
  *
  * <p>Night is a translucent blue wash over the models rather than real lighting, because from
  * 1.21.6 an item in a screen is always lit the same way. The wash and the controls are drawn on a
- * layer above the models: a later stratum from 1.21.6, depth before it.
+ * layer above the models: a later stratum from 1.21.6, depth before it. The view's frame is drawn
+ * again over the wash, so a view keeps its edge at night.
  *
  * <p>The models turn about their upright centre line: a figure through its entry's preview turn,
  * a box through the turn {@link BoxBlockItemRenderer#setView} writes into its stack, so the same
@@ -159,6 +160,8 @@ public abstract class UiViewport extends UiNode.Box {
             try {
                 if (night && turnable()) {
                     graphics.fill(x, y, x + width, y + height, NIGHT);
+                    // The frame again over the wash, which on this layer would otherwise cover it
+                    drawFrame(graphics);
                 }
                 drawOverlay(graphics, sceneX, sceneY, partialTick);
                 for (UiNode control : controls) {
@@ -172,7 +175,11 @@ public abstract class UiViewport extends UiNode.Box {
         } finally {
             graphics.disableScissor();
         }
-        // Framed as the menus' wells are: a grey border inside a black outline
+        drawFrame(graphics);
+    }
+
+    // Framed as the menus' wells are: a grey border inside a black outline
+    private void drawFrame(GuiGraphics graphics) {
         Draw.outline(graphics, x, y, width, height, OUTLINE);
         Draw.outline(graphics, x + 1, y + 1, width - 2, height - 2, Surfaces.BORDER);
     }

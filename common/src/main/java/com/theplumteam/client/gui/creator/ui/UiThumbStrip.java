@@ -52,7 +52,9 @@ import java.util.function.Supplier;
  * <p>Files dropped anywhere over the strip go to its {@link #filesZone}, the bulk add's, which
  * the strip lays over itself without drawing. Its models are the strip's share of the screen's
  * ({@link SidebarScreen.ModelBudget}): the selected thumbnail first, then the others in sight
- * from the left; one left without draws its figure's initial on its cell instead.
+ * from the left; one left without draws its figure's initial on its cell instead. A strip that only
+ * shows figures, as a sample of the machine's screen does, is made {@link #selectable(boolean)
+ * unselectable} and may ask the budget at another {@link #rank}.
  *
  * @param <T> what a thumbnail shows, such as a figure of the draft
  */
@@ -134,6 +136,8 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     private UiDropZone filesZone;
     private int scroll;
     private int grantedModels = Integer.MAX_VALUE;
+    private boolean selectable = true;
+    private SidebarScreen.ModelBudget.Rank rank = SidebarScreen.ModelBudget.Rank.STRIP;
     // A press on a thumbnail, which a long enough drag turns into moving it
     private int pressedIndex = -1;
     private double pressX;
@@ -197,6 +201,24 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     public UiThumbStrip<T> onReorder(@Nullable Reorder onReorder, @Nullable Component whyNot) {
         this.onReorder = onReorder;
         this.reorderBlocked = onReorder == null ? whyNot : null;
+        return this;
+    }
+
+    /**
+     * Whether the thumbnails can be selected, moved and stepped through; false for a strip that only
+     * shows them, which draws no selection, takes no click or key, and lets its tooltips show.
+     */
+    public UiThumbStrip<T> selectable(boolean selectable) {
+        this.selectable = selectable;
+        return this;
+    }
+
+    /**
+     * The rank the strip asks the screen's model budget at, such as the showcase's for a sample of
+     * the machine; {@link SidebarScreen.ModelBudget.Rank#STRIP} unless set.
+     */
+    public UiThumbStrip<T> rank(SidebarScreen.ModelBudget.Rank rank) {
+        this.rank = rank;
         return this;
     }
 
@@ -412,7 +434,7 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     public void requestModels(SidebarScreen.ModelBudget budget) {
         // No more than can be in sight at once, partly cut at both ends
         int inSight = width / step() + 2;
-        budget.request(SidebarScreen.ModelBudget.Rank.STRIP, Math.min(items.size(), inSight),
+        budget.request(this.rank, Math.min(items.size(), inSight),
                 granted -> this.grantedModels = granted);
     }
 
@@ -496,7 +518,7 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     }
 
     private boolean isSelected(int index) {
-        return selectedKeys.contains(keyOf.apply(items.get(index)));
+        return selectable && selectedKeys.contains(keyOf.apply(items.get(index)));
     }
 
     private void drawThumb(GuiGraphics graphics, Font font, int index, boolean hovered, boolean withModel,
@@ -635,7 +657,7 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     public boolean click(UiInput.Click click) {
         pressedIndex = -1;
         dragging = false;
-        if (!visible() || !isMouseOver(click.x(), click.y())) {
+        if (!visible() || !selectable || !isMouseOver(click.x(), click.y())) {
             return false;
         }
         boolean onArrow = click.x() < x + ARROW_WIDTH || click.x() >= x + width - ARROW_WIDTH;
@@ -772,7 +794,7 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
 
     @Override
     public boolean key(UiInput.Key key) {
-        if (items.isEmpty() || !CreatorScreen.hasKeyboard(this)) {
+        if (!selectable || items.isEmpty() || !CreatorScreen.hasKeyboard(this)) {
             return false;
         }
         if (key.is(InputConstants.KEY_LEFT) || key.is(InputConstants.KEY_RIGHT)) {

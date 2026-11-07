@@ -516,7 +516,7 @@ public final class AutoSaver {
     public void revertHeld() {
         for (CreatorSave.Held unit : analysis().held()) {
             switch (unit.reason()) {
-                case NAME, BOX -> this.draft.revertIdentity();
+                case NAME, AUTHOR, BOX -> this.draft.revertIdentity();
                 case LINK -> this.draft.revertExtras();
                 case SKIN, FIGURE, LOST_FILE -> {
                     if (unit.figureId() != null) {

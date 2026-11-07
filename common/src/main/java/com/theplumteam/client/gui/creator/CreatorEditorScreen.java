@@ -211,7 +211,7 @@ public class CreatorEditorScreen extends SidebarScreen {
                 .pixelLabel();
         this.testButton = new UiButton(tr("publish.test_pull"), UiButton.Style.SECONDARY, () -> openTestDraw(null));
         this.pages.put(Tab.FIGURES, new FiguresPage(this));
-        this.pages.put(Tab.LOOK, new IdentityPage(this));
+        this.pages.put(Tab.LOOK, new LookPage(this));
         this.pages.put(Tab.OPTIONS, new OptionsPage(this));
         refresh();
     }
@@ -238,6 +238,16 @@ public class CreatorEditorScreen extends SidebarScreen {
 
     void rebuildPage() {
         rebuild();
+    }
+
+    /** The content panel's bounds, which a page's popovers stay inside. */
+    UiNode.Rect contentPanel() {
+        return this.content;
+    }
+
+    /** Gives a page's node that draws models its share of the screen's budget; call it while building. */
+    <T extends SidebarScreen.Budgeted> T budgetNode(T node) {
+        return budget(node);
     }
 
     /** Draws a page's title at the top of the content panel, as the options draw theirs. */
@@ -403,9 +413,17 @@ public class CreatorEditorScreen extends SidebarScreen {
         refresh();
     }
 
-    // The name the heading shows: the collection's, or "New collection" while it has none
-    private String displayName() {
-        return this.draft.name().isBlank() ? tr("home.new").getString() : this.draft.name();
+    /**
+     * The collection's name as the editor's headings show it: the draft's; while it is blank, the
+     * one last saved, so an emptied field still reads as this collection; "New collection" only for
+     * one that never had a name.
+     */
+    String displayName() {
+        if (!this.draft.name().isBlank()) {
+            return this.draft.name();
+        }
+        String saved = this.draft.base().name();
+        return saved == null || saved.isBlank() ? tr("home.new").getString() : saved;
     }
 
     /**
@@ -483,8 +501,16 @@ public class CreatorEditorScreen extends SidebarScreen {
                 reasons.add(held.detail());
             }
         }
-        if (which == Tab.LOOK && reasons.isEmpty()) {
-            Component problem = identityProblem();
+        if (reasons.isEmpty()) {
+            // A problem not held yet, as while the name is being typed, still marks its tab
+            Component problem = switch (which) {
+                case LOOK -> {
+                    Component name = PublishCheck.nameProblem(this.draft);
+                    yield name != null ? name : boxProblem();
+                }
+                case OPTIONS -> PublishCheck.authorProblem(this.draft);
+                case FIGURES -> null;
+            };
             if (problem != null) {
                 reasons.add(problem);
             }
@@ -515,8 +541,9 @@ public class CreatorEditorScreen extends SidebarScreen {
             return Tab.FIGURES;
         }
         return switch (key) {
-            case CreatorDraft.NAME, CreatorDraft.AUTHOR, CreatorDraft.AUTHOR_URL, CreatorDraft.COLOUR,
-                    CreatorDraft.BOX, CreatorDraft.LOGO, CreatorDraft.LOGO_LAYOUT -> Tab.LOOK;
+            case CreatorDraft.NAME, CreatorDraft.COLOUR, CreatorDraft.BOX, CreatorDraft.LOGO,
+                    CreatorDraft.LOGO_LAYOUT -> Tab.LOOK;
+            // The author and the link are edited from the options' Author row
             default -> Tab.OPTIONS;
         };
     }
@@ -527,28 +554,40 @@ public class CreatorEditorScreen extends SidebarScreen {
     }
 
     /**
-     * The tabs that hold what a unit held back is made of. The collection's extras go in one unit
-     * (the author link and the logo's place, edited on the look, and the plush flag and the
-     * rarities' weights, on the options), so a refusal of it marks the tabs of the extras that
-     * wait, the look first.
+     * The tabs that hold what a unit held back is made of. The name and the box are the look's,
+     * the author and its link the options'. The collection's own units bundle fields of both tabs
+     * (the identity holds the name, the box and the author; the extras the logo's place, edited on
+     * the look, and the link, the plush flag and the rarities' weights, on the options), so a
+     * refusal of one marks the tabs of its fields that wait, the look first.
      */
     private Set<Tab> tabsOf(CreatorSave.Held held) {
         if (held.figureId() != null) {
             return EnumSet.of(Tab.FIGURES);
         }
         return switch (held.reason()) {
-            case NAME, BOX, LINK -> EnumSet.of(Tab.LOOK);
-            case TOO_BIG -> EnumSet.of(Tab.OPTIONS);
+            case NAME, BOX -> EnumSet.of(Tab.LOOK);
+            case AUTHOR, LINK, TOO_BIG -> EnumSet.of(Tab.OPTIONS);
             default -> switch (held.unitKey()) {
-                case "identity" -> EnumSet.of(Tab.LOOK);
+                case "identity" -> {
+                    Set<Tab> tabs = EnumSet.noneOf(Tab.class);
+                    if (!this.changes.contains(CreatorDraft.AUTHOR) || this.changes.contains(CreatorDraft.NAME)
+                            || this.changes.contains(CreatorDraft.BOX) || this.changes.contains(CreatorDraft.COLOUR)
+                            || this.changes.contains(CreatorDraft.LOGO)) {
+                        tabs.add(Tab.LOOK);
+                    }
+                    if (this.changes.contains(CreatorDraft.AUTHOR)) {
+                        tabs.add(Tab.OPTIONS);
+                    }
+                    yield tabs;
+                }
                 case "order" -> EnumSet.of(Tab.FIGURES);
                 case "extras" -> {
                     Set<Tab> tabs = EnumSet.noneOf(Tab.class);
-                    if (this.changes.contains(CreatorDraft.LOGO_LAYOUT) || this.changes.contains(CreatorDraft.AUTHOR_URL)) {
+                    if (this.changes.contains(CreatorDraft.LOGO_LAYOUT)) {
                         tabs.add(Tab.LOOK);
                     }
-                    if (this.changes.contains(CreatorDraft.PLUSH) || this.changes.contains(CreatorDraft.RARITY_WEIGHTS)
-                            || tabs.isEmpty()) {
+                    if (this.changes.contains(CreatorDraft.AUTHOR_URL) || this.changes.contains(CreatorDraft.PLUSH)
+                            || this.changes.contains(CreatorDraft.RARITY_WEIGHTS) || tabs.isEmpty()) {
                         tabs.add(Tab.OPTIONS);
                     }
                     yield tabs;
@@ -556,6 +595,28 @@ public class CreatorEditorScreen extends SidebarScreen {
                 default -> EnumSet.of(Tab.OPTIONS);
             };
         };
+    }
+
+    /**
+     * Why the author or its link holds the collection's own changes back, for the options' Author
+     * row: an author or a link that cannot be saved, or the server's refusal of a unit while the
+     * author or the link waits in it; null while nothing of them is held.
+     */
+    @Nullable
+    Component authorHeld() {
+        for (CreatorSave.Held held : this.saver.held()) {
+            if (held.figureId() != null) {
+                continue;
+            }
+            boolean refusedAuthor = held.reason() == CreatorSave.Reason.REFUSED
+                    && (held.unitKey().equals("identity") && this.changes.contains(CreatorDraft.AUTHOR)
+                    || held.unitKey().equals("extras") && this.changes.contains(CreatorDraft.AUTHOR_URL));
+            boolean invalid = held.reason() == CreatorSave.Reason.AUTHOR || held.reason() == CreatorSave.Reason.LINK;
+            if (invalid || refusedAuthor) {
+                return held.detail();
+            }
+        }
+        return PublishCheck.authorProblem(this.draft);
     }
 
     // Lines joined into one tooltip, each a line of its own
@@ -607,7 +668,10 @@ public class CreatorEditorScreen extends SidebarScreen {
 
     // The collection's rules
 
-    /** Why the name, author, link or box cannot be saved as they are, or null when they can. */
+    /**
+     * Why the name, author, link or box cannot be saved as they are, or null when they can; the
+     * look's mark takes the name's and the box's, the options' the author's and the link's.
+     */
     @Nullable
     Component identityProblem() {
         return PublishCheck.identityProblem(this.draft);
@@ -635,7 +699,8 @@ public class CreatorEditorScreen extends SidebarScreen {
         }
         for (PublishCheck.Item item : check().items()) {
             PublishCheck.Fix fix = item.fix();
-            if (!item.blocks() || hold && fix != null && fix.place() != PublishCheck.Place.IDENTITY) {
+            if (!item.blocks() || hold && fix != null && fix.place() != PublishCheck.Place.IDENTITY
+                    && fix.place() != PublishCheck.Place.AUTHOR) {
                 continue;
             }
             found.add(new Blocker(item.text(), () -> goTo(fix)));
@@ -643,7 +708,7 @@ public class CreatorEditorScreen extends SidebarScreen {
         for (CreatorSave.Held held : this.saver.held()) {
             boolean shownAbove = switch (held.reason()) {
                 // The check names these already
-                case NAME, BOX, LINK, TOO_BIG -> true;
+                case NAME, BOX, AUTHOR, LINK, TOO_BIG -> true;
                 case SKIN, FIGURE -> !hold;
                 default -> false;
             };
@@ -663,6 +728,7 @@ public class CreatorEditorScreen extends SidebarScreen {
         }
         switch (fix.place()) {
             case IDENTITY -> selectTab(Tab.LOOK);
+            case AUTHOR -> openAuthor();
             case FIGURES -> selectTab(Tab.FIGURES);
             case FIGURE -> {
                 if (fix.figure() != null) {
@@ -848,14 +914,25 @@ public class CreatorEditorScreen extends SidebarScreen {
         }
     }
 
-    /** Takes the operator to a unit held back: its figure, or the tab where the collection's own is fixed. */
+    /**
+     * Takes the operator to a unit held back: its figure, the author's dialog for the author or
+     * its link, or the tab where the collection's own is fixed.
+     */
     void revealHeld(CreatorSave.Held held) {
         CreatorDraft.FigureDraft figure = held.figureId() != null ? this.draft.figure(held.figureId()) : null;
         if (figure != null) {
             revealFigures(List.of(figure));
+        } else if (held.reason() == CreatorSave.Reason.AUTHOR || held.reason() == CreatorSave.Reason.LINK) {
+            openAuthor();
         } else {
             selectTab(tabOf(held));
         }
+    }
+
+    /** Shows the options and opens the author's dialog over them, as the options' Author row does. */
+    void openAuthor() {
+        selectTab(Tab.OPTIONS);
+        AuthorDialog.open(this);
     }
 
     // Publishing
@@ -1271,6 +1348,7 @@ public class CreatorEditorScreen extends SidebarScreen {
         } else {
             label = switch (first.reason()) {
                 case NAME -> tr("autosave.held.name");
+                case AUTHOR -> tr("autosave.held.author");
                 case BOX -> tr("autosave.held.box");
                 case LINK -> tr("autosave.held.link");
                 case SKIN -> tr("autosave.held.skin");
@@ -1402,8 +1480,13 @@ public class CreatorEditorScreen extends SidebarScreen {
     }
 
     // Typing into another field, or into the same one after a pause, undoes on its own, and what
-    // was typed into the field left is saved at once
+    // was typed into the field left is saved at once. A press gives the keyboard to the node it
+    // lands on; while it lasts, as through a drag that is one undo step from its start, the move
+    // is left to be noticed after the release
     private void trackFocus() {
+        if (nodePressed()) {
+            return;
+        }
         GuiEventListener focused = getFocused();
         UiNode focusedNode = focusedNode();
         if (focused != this.lastFocused || focusedNode != this.lastFocusedNode) {
@@ -1488,19 +1571,26 @@ public class CreatorEditorScreen extends SidebarScreen {
         return page().shortcut(key);
     }
 
-    /** Escape in a text field only takes the keyboard from it; the next one leaves. */
+    /**
+     * Escape in a text field only takes the keyboard from it; the next one leaves. Other keys are
+     * the page's to take first, such as Tab moving on from the look's name to its tiles.
+     */
     @Override
     protected boolean fieldKey(EditBox field, UiInput.Key key) {
         if (key.escape()) {
             setFocused(null);
             return true;
         }
-        return false;
+        return page().fieldKey(field, key);
     }
 
-    /** The editor's help: how saving works here in one paragraph, then its keys, one a row. */
+    /**
+     * The editor's help: how saving works here in one paragraph, a draft's or a published
+     * collection's, then its keys, one a row.
+     */
     private void openHelp() {
-        UiModal dialog = new UiModal(tr("editor.help_title"), tr("editor.help_body")).width(HELP_WIDTH)
+        Component body = tr(this.saver.isAuto() ? "editor.help_body_auto" : "editor.help_body_hold");
+        UiModal dialog = new UiModal(tr("editor.help_title"), body).width(HELP_WIDTH)
                 .accent(DialogFrame.Accent.SETTINGS, Theme.ICON_HELP);
         KeyList keys = new KeyList(tr("editor.help_keys"));
         dialog.node(keys, keys.height());

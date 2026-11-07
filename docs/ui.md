@@ -63,9 +63,13 @@ the option changes or the display resizes under them.
 | A row of a creator sidebar | `creator.ui.UiSideRow` (icon or box, label, count, status, dot or chevron; selecting one plays the tab sound), in a `creator.ui.UiSideList` (selection by key, folds, arrow keys, lock, only the rows in sight drawn) |
 | A settings row that opens something or acts | `creator.ui.UiFoldRow` (label, faint hint, dot, chevron; red for what takes something away) |
 | An on/off setting in a creator list | `creator.ui.UiToggleRow`, a node on `ToggleRow`'s look that scrolls and can unfold content under it |
-| A dialog that stands on a button | `creator.ui.UiPopover`, opened with `CreatorScreen.openPopover`; it shares the one dialog slot with `UiModal`, keeps its buttons on the screen, can line up with its panel's edge (`leftEdge`) and runs `onClose` whatever closes it |
+| A dialog that stands on a button | `creator.ui.UiPopover`, opened with `CreatorScreen.openPopover`; it shares the one dialog slot with `UiModal`, keeps its buttons on the screen, can line up with its panel's edge (`leftEdge`) or be held inside a panel on every side (`within`), and runs `onClose` whatever closes it |
 | A collection's showcase | `creator.ui.UiStage` (its box and the figures that fit on a ledge, then a "+N" tile) |
-| A row of figure thumbnails | `creator.ui.UiThumbStrip` (selection, arrow keys, drag to reorder, a "+" tile, scrolling arrows) |
+| A row of figure thumbnails | `creator.ui.UiThumbStrip` (selection, arrow keys, drag to reorder, a "+" tile, scrolling arrows; `selectable(false)` for one that only shows) |
+| A row of tiles to pick from (colours, boxes, Image, More) | `creator.ui.UiTileRow`: `UiSwatches`' tiles and selection ring kept inside the row, tiles asked for on every frame, optional captions, wrapping, a tooltip a tile, and a keyboard cursor once a key moves it |
+| The head of a form's section, or a narrow row's label | `creator.ui.UiSectionHead`: a line, the small pixel-font name and its value on the right; `stacked` puts the value under the name |
+| A preview's corner controls | `creator.ui.UiViewButton` ("View ⌄", a small grey button with a pixel chevron that opens a menu) and `creator.ui.UiIconButton` (14×14, a pixel icon, lit blue while on), placed by `UiBoxView.corners` |
+| The front of a box with the logo to drag on it | `creator.ui.UiBoxFrontEditor`, shown by `UiBoxView.frontEditor` in place of the box; the logo sits where the box draws it (`LogoLayout.onFace`) |
 
 Dialog accents: `SETTINGS` (slate) for settings, `EDIT` (blue) to edit or rename, `CREATE` (green)
 to create or upload, `DANGER` (red) to delete, `COLLECTION` (purple) for collection content.

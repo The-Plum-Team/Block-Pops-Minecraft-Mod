@@ -88,8 +88,10 @@ final class SaveDetailsDialog {
     /**
      * Asks before leaving a published or archived collection with changes that are not
      * published: "Keep editing" stays, as Enter and Escape do; "Discard" drops them and leaves;
-     * "Publish changes" ("Publish" where the longer label would shrink) sends them and leaves once
-     * they are published, the dialog saying so meanwhile.
+     * "Publish changes" sends them and leaves once they are published, the dialog saying so
+     * meanwhile. Every button keeps its whole label: the dialog widens, up to the screen's width,
+     * until the row of three fits, and where it still does not, their labels are drawn in
+     * Minecraft's narrower font, as the sidebar's foot draws Publish changes.
      *
      * @param refusal why the last try to publish them failed, in red under the question; or null
      * @param problem why they cannot be published now, which disables the button; or null
@@ -97,22 +99,31 @@ final class SaveDetailsDialog {
     static void openLeaveUnpublished(CreatorEditorScreen editor, int changes, @Nullable Component refusal,
                                      @Nullable Component problem, Runnable publish, Runnable discard) {
         UiModal dialog = new UiModal(tr("editor.leave_title"),
-                changes == 1 ? tr("editor.leave_body_one") : tr("editor.leave_body", changes)).width(WIDE)
+                changes == 1 ? tr("editor.leave_body_one") : tr("editor.leave_body", changes))
                 .accent(DialogFrame.Accent.DANGER, Theme.ICON_SAVE);
-        if (refusal != null) {
-            addLines(editor, dialog, List.of(refusal), Theme.RED, WIDE);
-        }
         UiButton keep = dialog.cancelButton(tr("autosave.leave_keep"));
-        dialog.button(tr("editor.discard"), UiButton.Style.DANGER, discard);
+        UiButton discardButton = dialog.button(tr("editor.discard"), UiButton.Style.DANGER, discard);
         UiButton publishButton = dialog.button(tr("publish.button_changes"), UiButton.Style.GREEN, () -> {
             openPublishing(editor);
             publish.run();
         });
-        // Three buttons share the row: one whose label would shrink to fit says "Publish", so every
-        // label keeps the dialog's size
-        int inner = Math.max(160, Math.min(WIDE, editor.width - 2 * Theme.SPACE_S)) - 2 * DialogFrame.PADDING;
-        if (publishButton.naturalWidth() > (inner - 2 * BUTTON_GAP) / 3) {
-            publishButton.setLabel(tr("publish.button"));
+        // The dialog's buttons are as wide as the widest: wide enough for three of those, or the screen
+        UiButton[] row = {keep, discardButton, publishButton};
+        int widest = 0;
+        for (UiButton button : row) {
+            widest = Math.max(widest, button.naturalWidth());
+        }
+        int needed = row.length * widest + (row.length - 1) * BUTTON_GAP + 2 * DialogFrame.PADDING;
+        int most = Math.max(160, editor.width - 2 * Theme.SPACE_S);
+        int width = Math.min(most, Math.max(WIDE, needed));
+        dialog.width(width);
+        if (needed > width) {
+            for (UiButton button : row) {
+                button.setPlainLabel(true);
+            }
+        }
+        if (refusal != null) {
+            addLines(editor, dialog, List.of(refusal), Theme.RED, width);
         }
         publishButton.disable(problem);
         dialog.defaultButton(keep);

@@ -45,16 +45,18 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  * three quarters used or more, red once one is over; whether it is a collection of plushes for
  * the gacha machine rather than of boxed figures for the claw machine; whether its draws may come
  * out holographic; the rarities' weights set by hand, which unfold four steppers while on and
- * fall back to the defaults when turned off; an import of a folder of skins into new figures
+ * fall back to the defaults when turned off; who made it, its author and a link to the author's
+ * page, edited in a dialog ({@link AuthorDialog}); an import of a folder of skins into new figures
  * ({@link BulkAddScreen}); an import of a data pack over the collection ({@link PackImportDialog});
  * and, in red, archiving or deleting it, which a menu offers as the collection's state allows.
  * What each setting does is its label's tooltip.
  *
- * <p>The three settings are changes of the draft, saved as the editor saves every change; on a
- * published or archived collection a setting waiting for Publish changes carries an amber dot,
- * and one the server refused a red dot, in either mode. Whether the weights are unfolded is the
- * row's own: it follows the weights when the page is made and when they change from outside, as
- * by an undo or another operator, never while the operator steps them. Archiving, restoring and
+ * <p>The settings and the author are changes of the draft, saved as the editor saves every change;
+ * on a published or archived collection one waiting for Publish changes carries an amber dot, and
+ * one the server refused, or an author or link that cannot be saved, a red dot, in either mode.
+ * Whether the weights are unfolded is the row's own: it follows the weights when the page is made
+ * and when they change from outside, as by an undo or another operator, never while the operator
+ * steps them. Archiving, restoring and
  * deleting go to the server at once, through {@link CollectionActions}.
  */
 final class OptionsPage implements EditorPage {
@@ -77,6 +79,7 @@ final class OptionsPage implements EditorPage {
     private final UiToggleRow weights;
     private final RarityLabel[] rarityLabels = new RarityLabel[RARITIES.length];
     private final UiStepper[] steppers = new UiStepper[RARITIES.length];
+    private final UiFoldRow author;
     private final UiFoldRow bulk;
     private final UiFoldRow pack;
     private final UiFoldRow danger;
@@ -106,6 +109,7 @@ final class OptionsPage implements EditorPage {
                     current.weight(rarity), value -> setWeight(rarity, value)));
         }
         this.shownWeights = current;
+        this.author = new UiFoldRow(tr("options.author"), authorHint(draft), editor::openAuthor);
         this.bulk = new UiFoldRow(tr("options.bulk"), tr("options.bulk_hint"), editor::openBulkAdd);
         this.pack = new UiFoldRow(tr("options.pack"), null, editor::openImport);
         this.danger = new UiFoldRow(tr("options.danger"), null, this::openDangerMenu).danger(true);
@@ -121,12 +125,17 @@ final class OptionsPage implements EditorPage {
     public void build(UiNode.Rect area) {
         this.rows.clear();
         this.rows.at(area.x(), area.y(), area.width(), area.height());
-        for (UiNode row : List.of(this.space, this.plush, this.holographic, this.weights, this.bulk, this.pack,
-                this.danger)) {
+        for (UiNode row : rows()) {
             this.rows.add(row);
         }
         this.editor.add(this.rows);
         layout();
+    }
+
+    // The rows, top to bottom
+    private List<UiNode> rows() {
+        return List.of(this.space, this.plush, this.holographic, this.weights, this.author, this.bulk, this.pack,
+                this.danger);
     }
 
     /**
@@ -140,8 +149,7 @@ final class OptionsPage implements EditorPage {
         // One unit down, so the first row's hairline above it stays inside the list
         int y = this.rows.bounds().y() + 1;
         boolean first = true;
-        for (UiNode node : List.of(this.space, this.plush, this.holographic, this.weights, this.bulk, this.pack,
-                this.danger)) {
+        for (UiNode node : rows()) {
             UiNode.Box row = (UiNode.Box) node;
             if (!row.visible()) {
                 continue;
@@ -201,6 +209,8 @@ final class OptionsPage implements EditorPage {
         mark(this.plush, CreatorDraft.PLUSH, "extras");
         mark(this.holographic, CreatorDraft.HOLOGRAPHIC, "holographic");
         mark(this.weights, CreatorDraft.RARITY_WEIGHTS, "extras");
+        this.author.hint(authorHint(draft));
+        markAuthor();
         this.space.refresh(this.editor.forecast());
         this.space.setVisible(this.space.shown());
         this.bulk.disable(draft.isFull() ? tr("figures.full", WorldContentLimits.MAX_FIGURES) : null);
@@ -224,6 +234,25 @@ final class OptionsPage implements EditorPage {
             row.dot(Theme.AMBER, tr("autosave.unpublished_tip_one"));
         } else {
             row.dot(0, null);
+        }
+    }
+
+    // "Name · link", or "no author", and " · link" when there is one
+    private static Component authorHint(CreatorDraft draft) {
+        Component name = draft.author().isBlank() ? tr("options.author_none") : Component.literal(draft.author());
+        return draft.authorUrl().isEmpty() ? name : Component.empty().append(name).append(tr("options.author_link"));
+    }
+
+    // The author's dot: red while the author or the link cannot be saved, or the server refused
+    // them, in either mode; amber while either waits for Publish changes
+    private void markAuthor() {
+        Component held = this.editor.authorHeld();
+        if (held != null) {
+            this.author.dot(Theme.RED, held);
+        } else if (this.editor.isChanged(CreatorDraft.AUTHOR) || this.editor.isChanged(CreatorDraft.AUTHOR_URL)) {
+            this.author.dot(Theme.AMBER, tr("autosave.unpublished_tip_one"));
+        } else {
+            this.author.dot(0, null);
         }
     }
 

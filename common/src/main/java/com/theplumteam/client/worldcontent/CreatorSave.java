@@ -122,8 +122,10 @@ public final class CreatorSave {
 
     /** Why a unit is held back. */
     public enum Reason {
-        /** The name is blank or holds control characters, or the author does. */
+        /** The name is blank or holds control characters. */
         NAME,
+        /** The author holds control characters. */
+        AUTHOR,
         /** A box colour or image was chosen and not given. */
         BOX,
         /** The author link is not one the server takes. */
@@ -745,7 +747,7 @@ public final class CreatorSave {
             return new Held("identity", Reason.NAME, null, Component.translatable(KEY + "name_rule"));
         }
         if (!WorldCollectionRecord.isPlainText(draft.author())) {
-            return new Held("identity", Reason.NAME, null, Component.translatable(KEY + "wizard.author_rule"));
+            return new Held("identity", Reason.AUTHOR, null, Component.translatable(KEY + "wizard.author_rule"));
         }
         if (draft.boxMode() == CreatorDraft.BoxMode.COLOR && draft.boxColor() == null) {
             return new Held("identity", Reason.BOX, null, Component.translatable(KEY + "identity.box_colour_missing"));

@@ -211,6 +211,13 @@ final class PackImportDialog {
             // The collection to update is gone: the server would make the pack a new collection
             return tr("editor.gone", this.name);
         }
+        if (this.mode == Mode.UPDATE) {
+            // Over the open collection, waiting for its changes to be saved comes before what is typed
+            Component saving = CollectionActions.savingProblem(WorldContentIds.collectionId(this.slug));
+            if (saving != null) {
+                return saving;
+            }
+        }
         if (packParts(this.source) == null) {
             return tr("home.import_source_rule");
         }

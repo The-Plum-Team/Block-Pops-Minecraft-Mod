@@ -37,7 +37,8 @@ import java.util.function.Supplier;
  * {@link #hold held} open while it waits for something; Enter presses its primary button. Whatever
  * closes it, its {@link #onClose} runs, so a screen can undo what it showed while it was open.
  *
- * <p>It sits above its anchor and is kept on the screen. Its lines wrap to up to four lines while
+ * <p>It sits above its anchor and is kept on the screen, or, given {@link #within}, inside a panel
+ * with a margin on every side, its width capped to the panel's. Its lines wrap to up to four lines while
  * it still stands on its anchor, and to fewer when that is what it takes; one with no room above
  * its anchor even then is pushed down to the screen's top and loses its tail. Rows past what the
  * screen holds are left out, and a last line says how many there are, with their text in its
@@ -59,6 +60,8 @@ public class UiPopover implements UiNode {
     private static final int TAIL = 5;
     // The tail keeps clear of the frame's corners
     private static final int TAIL_INSET = 12;
+    // A popover held inside a panel keeps this far from its edges
+    private static final int WITHIN_MARGIN = 6;
     // Theme.MODAL_DIM at half its alpha: the popover belongs to the screen, so it dims it less
     private static final int DIM = 0x40000000;
     // The most lines a line of text wraps to, and the fewest it is cut to before rows are left out
@@ -76,6 +79,9 @@ public class UiPopover implements UiNode {
     private int preferredWidth = PREFERRED_WIDTH;
     // The popover's left edge stays at or right of this, as a panel's edge it lines up with
     private int leftEdge = SCREEN_EDGE;
+    // The panel the popover is held inside on every side, asked whenever it is laid out; null for the screen
+    @Nullable
+    private Supplier<Rect> within;
     private final List<Row> rows = new ArrayList<>();
     private final List<UiButton> buttons = new ArrayList<>();
     // The buttons the filler added, which go when it lays the body out again
@@ -143,6 +149,17 @@ public class UiPopover implements UiNode {
      */
     public UiPopover leftEdge(int x) {
         this.leftEdge = x;
+        return this;
+    }
+
+    /**
+     * Holds the popover inside a panel, such as the content panel its tiles are on, rather than the
+     * screen: {@value #WITHIN_MARGIN} units from each edge, no wider than the panel allows, and no
+     * higher than its top, where it loses its tail and leaves out the rows that do not fit. The tail
+     * still points at the anchor. A generalisation of {@link #leftEdge}; null holds it to the screen.
+     */
+    public UiPopover within(@Nullable Supplier<Rect> panel) {
+        this.within = panel;
         return this;
     }
 
@@ -323,15 +340,21 @@ public class UiPopover implements UiNode {
         this.screenWidth = screenWidth;
         this.screenHeight = screenHeight;
         Font font = Minecraft.getInstance().font;
+        Rect panel = within != null ? within.get() : null;
         this.width = Math.max(120, Math.min(preferredWidth, screenWidth - 2 * SCREEN_EDGE));
+        if (panel != null) {
+            this.width = Math.max(2 * PADDING + 1, Math.min(this.width, panel.width() - 2 * WITHIN_MARGIN));
+        }
         int inner = width - 2 * PADDING;
+        // How high the popover may reach: the screen's top, or the panel's with its margin
+        int ceiling = panel != null ? panel.y() + WITHIN_MARGIN : SCREEN_EDGE;
         boolean withButtons = leftButton != null || !buttons.isEmpty();
         int frame = DialogFrame.HEADER_HEIGHT + 2 + Surfaces.LIP_HEIGHT + BODY_TOP
                 + (withButtons ? BODY_GAP + BUTTON_HEIGHT : 0) + PADDING - 2;
         Rect at = anchor.get();
         // The body's room standing on the anchor, and at the screen's top
-        int above = at.y() - TAIL - SCREEN_EDGE - frame;
-        int most = screenHeight - 2 * SCREEN_EDGE - frame;
+        int above = at.y() - TAIL - ceiling - frame;
+        int most = screenHeight - SCREEN_EDGE - ceiling - frame;
         int limit = MAX_LINES;
         while (limit > MIN_LINES && bodyHeight(font, inner, limit, rows.size()) > above) {
             limit--;
@@ -356,11 +379,16 @@ public class UiPopover implements UiNode {
         }
         int bodyHeight = bodyHeight(font, inner, limit, shownRows) + (overflow != null ? LINE_HEIGHT : 0);
         this.height = frame + bodyHeight;
-        this.x = Math.max(Math.max(SCREEN_EDGE, leftEdge), Math.min(at.centerX() - width / 2,
-                screenWidth - width - SCREEN_EDGE));
-        this.x = Math.min(this.x, Math.max(SCREEN_EDGE, screenWidth - width - SCREEN_EDGE));
+        if (panel != null) {
+            int left = panel.x() + WITHIN_MARGIN;
+            this.x = Math.max(left, Math.min(at.centerX() - width / 2, panel.right() - WITHIN_MARGIN - width));
+        } else {
+            this.x = Math.max(Math.max(SCREEN_EDGE, leftEdge), Math.min(at.centerX() - width / 2,
+                    screenWidth - width - SCREEN_EDGE));
+            this.x = Math.min(this.x, Math.max(SCREEN_EDGE, screenWidth - width - SCREEN_EDGE));
+        }
         this.tail = standing;
-        this.y = standing ? at.y() - TAIL - height : SCREEN_EDGE;
+        this.y = standing ? at.y() - TAIL - height : ceiling;
 
         int top = DialogFrame.bodyTop(y) + BODY_TOP;
         for (int i = 0; i < shownRows; i++) {

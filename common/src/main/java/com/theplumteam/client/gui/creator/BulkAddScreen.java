@@ -818,7 +818,7 @@ public class BulkAddScreen extends CreatorScreen {
     protected void drawContents(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         int left = this.panelX + PAD;
         int right = this.panelX + this.panelWidth - PAD;
-        String name = this.editor.draft().name().isBlank() ? tr("home.new").getString() : this.editor.draft().name();
+        String name = this.editor.displayName();
         int titleX = this.panelX + 10 + PixelIcon.width(PixelIcon.UPLOAD) + 6;
         int middle = (this.panelY + 2 + this.panelY + DialogFrame.HEADER_HEIGHT - 1) / 2;
         Draw.heading(graphics, tr("bulk.title", name), titleX, middle + 0.5f,

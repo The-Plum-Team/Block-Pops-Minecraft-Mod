@@ -15,7 +15,8 @@ import java.util.List;
  * A popup list of actions under the node that opened it, as a card's "..." menu or a dropdown's
  * choices. An item can be shown in a warning colour, carry a grey hint after its label, be
  * disabled with a reason in its tooltip, or be locked behind a "SOON" badge. Separators group
- * items. It is drawn as the menus' dialogs are, a charcoal face in a grey border and a black
+ * items, and a group of radio items says which of several views is the one shown with a check
+ * before it. It is drawn as the menus' dialogs are, a charcoal face in a grey border and a black
  * outline, and the row under the mouse or the arrow keys is on the slate of a selected tab.
  * {@link CreatorScreen#openMenu} shows it above everything but a modal; any click outside
  * it closes it, and so do Escape and choosing an item. A menu taller than the screen, such as a
@@ -29,9 +30,22 @@ public class UiMenu implements UiNode {
     // The outline and the border around the rows
     private static final int EDGE = 2;
     private static final int LOCK = 0xFF9A9A9A;
+    // The check of a chosen radio item, and the room it leaves before every radio item's label
+    private static final String CHECK = "\u2714";
+    private static final int CHECK_GAP = 4;
+
+    /** Whether an item is a radio item, and whether it is the chosen one. */
+    private enum Radio {
+        NONE, CHOSEN, OTHER
+    }
 
     private record Item(Component label, @Nullable Component hint, int colour, @Nullable Runnable action,
-                        @Nullable Component disabledReason, boolean locked, boolean separator) {
+                        @Nullable Component disabledReason, boolean locked, boolean separator, Radio radio) {
+        Item(Component label, @Nullable Component hint, int colour, @Nullable Runnable action,
+             @Nullable Component disabledReason, boolean locked, boolean separator) {
+            this(label, hint, colour, action, disabledReason, locked, separator, Radio.NONE);
+        }
+
         boolean usable() {
             return !separator && action != null && disabledReason == null && !locked;
         }
@@ -55,6 +69,17 @@ public class UiMenu implements UiNode {
     /** An item with a grey hint after its label, such as "for testing". */
     public UiMenu item(Component label, Component hint, Runnable action) {
         items.add(new Item(label, hint, Theme.TEXT, action, null, false, false));
+        return this;
+    }
+
+    /**
+     * An item of a group of which one is chosen, such as the view a preview shows: the chosen one
+     * is led by a check in the text's colour, the others are indented as far, so the labels line
+     * up. Choosing one runs its action, which picks it.
+     */
+    public UiMenu radio(Component label, boolean selected, Runnable action) {
+        items.add(new Item(label, null, Theme.TEXT, action, null, false, false,
+                selected ? Radio.CHOSEN : Radio.OTHER));
         return this;
     }
 
@@ -108,7 +133,7 @@ public class UiMenu implements UiNode {
         int total = 2 * EDGE;
         for (Item item : items) {
             total += item.separator() ? SEPARATOR : ROW;
-            int itemWidth = font.width(item.label()) + 2 * PADDING;
+            int itemWidth = font.width(item.label()) + 2 * PADDING + (item.radio() != Radio.NONE ? checkRoom(font) : 0);
             if (item.hint() != null) {
                 itemWidth += 8 + font.width(item.hint());
             }
@@ -199,7 +224,14 @@ public class UiMenu implements UiNode {
                 Draw.string(graphics, font, item.hint(), right - hintWidth, textY, Theme.FAINT);
                 right -= hintWidth + 8;
             }
-            Draw.text(graphics, font, item.label().getString(), x + PADDING, textY, Math.max(0, right - x - PADDING),
+            int labelX = x + PADDING;
+            if (item.radio() != Radio.NONE) {
+                if (item.radio() == Radio.CHOSEN) {
+                    Draw.string(graphics, font, CHECK, labelX, textY, Theme.TEXT);
+                }
+                labelX += checkRoom(font);
+            }
+            Draw.text(graphics, font, item.label().getString(), labelX, textY, Math.max(0, right - labelX),
                     item.colour());
             if (i == hoveredIndex && item.disabledReason() != null) {
                 UiTooltip.set(item.disabledReason());
@@ -243,6 +275,10 @@ public class UiMenu implements UiNode {
         } else if (top + ROW > scroll + room) {
             scrollTo(top + ROW - room);
         }
+    }
+
+    private static int checkRoom(Font font) {
+        return font.width(CHECK) + CHECK_GAP;
     }
 
     private static Component soon() {

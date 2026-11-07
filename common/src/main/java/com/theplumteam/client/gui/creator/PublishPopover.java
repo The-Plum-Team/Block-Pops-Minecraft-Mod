@@ -80,7 +80,7 @@ final class PublishPopover {
     }
 
     private Component title() {
-        String name = this.editor.draft().name().isBlank() ? tr("home.new").getString() : this.editor.draft().name();
+        String name = this.editor.displayName();
         return changesOnly() ? tr("publish.popover_title_changes", name) : tr("publish.popover_title", name);
     }
 
@@ -245,7 +245,11 @@ final class PublishPopover {
         }
         Component what = Component.empty();
         for (int i = 0; i < parts.size(); i++) {
-            what = Component.empty().append(what).append(i > 0 ? ", " : "").append(parts.get(i));
+            if (i > 0) {
+                // Each language's own list separator, such as "、" in Chinese and Japanese
+                what = Component.empty().append(what).append(tr("publish.change_separator"));
+            }
+            what = Component.empty().append(what).append(parts.get(i));
         }
         int count = words.size() + figures.size() + (order ? 1 : 0);
         return count == 1 ? tr("publish.changes_summary_one", what) : tr("publish.changes_summary", count, what);

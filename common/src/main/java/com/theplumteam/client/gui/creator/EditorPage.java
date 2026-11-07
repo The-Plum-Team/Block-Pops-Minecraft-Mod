@@ -3,6 +3,7 @@ package com.theplumteam.client.gui.creator;
 import com.theplumteam.client.gui.creator.ui.UiInput;
 import com.theplumteam.client.gui.creator.ui.UiNode;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.EditBox;
 
 /**
  * One tab of the collection editor, drawn in its content panel, beside the sidebar that picks
@@ -46,6 +47,15 @@ interface EditorPage {
 
     /** The page's keyboard shortcuts, asked after the editor's own. */
     default boolean shortcut(UiInput.Key key) {
+        return false;
+    }
+
+    /**
+     * A key pressed in one of the page's text fields, offered to the page before the field, as
+     * Tab moving on from a field to a control of the page that is not a text field: true when
+     * the page used it. Escape never reaches it: the editor takes the keyboard from the field.
+     */
+    default boolean fieldKey(EditBox field, UiInput.Key key) {
         return false;
     }
 

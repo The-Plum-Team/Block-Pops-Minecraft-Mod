@@ -23,14 +23,15 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  * working copy ({@link CreatorDraft}) as it is now: a list of items in the order the review shows
  * them, each done, a warning, a blocker that holds publishing back, or an optional step still to
  * do. An item about something the operator can fix says where it is fixed ({@link Fix}): the
- * collection's identity and box, its figures, or one figure.
+ * collection's name and box, its author, its figures, or one figure.
  *
- * <p>The blockers: a name, author or author link that cannot be saved ({@link #identityProblem});
- * a box chosen without its colour or image ({@link #boxProblem}); no complete figure in the draw;
- * a figure naming a file the server lost; a definition over {@link WorldContentLimits#RECORD_BYTES};
- * and files over the collection's or the server's space. Figures still missing a file are
- * warnings, since publishing leaves them out, and so are retired ones, which players who have
- * them keep. The author link is optional.
+ * <p>The blockers: a name that cannot be saved ({@link #nameProblem}); an author or author link
+ * that cannot be saved ({@link #authorProblem}), which has no item while it can, since both are
+ * optional; a box chosen without its colour or image ({@link #boxProblem}); no complete figure in
+ * the draw; a figure naming a file the server lost; a definition over
+ * {@link WorldContentLimits#RECORD_BYTES}; and files over the collection's or the server's space.
+ * Figures still missing a file are warnings, since publishing leaves them out, and so are retired
+ * ones, which players who have them keep. The author link is optional.
  */
 final class PublishCheck {
     /** How an item stands. */
@@ -40,8 +41,10 @@ final class PublishCheck {
 
     /** Where an item's problem is fixed. */
     enum Place {
-        /** The collection's name, author, link, colour and box. */
+        /** The collection's name, colour, box and logo, on the look. */
         IDENTITY,
+        /** The collection's author and its link, in the options' author dialog. */
+        AUTHOR,
         /** The figures, to add one. */
         FIGURES,
         /** One figure, which {@link Fix#figure()} names. */
@@ -56,6 +59,10 @@ final class PublishCheck {
     record Fix(Place place, Component link, @Nullable FigureDraft figure) {
         static Fix identity(Component link) {
             return new Fix(Place.IDENTITY, link, null);
+        }
+
+        static Fix author(Component link) {
+            return new Fix(Place.AUTHOR, link, null);
         }
 
         static Fix figures(Component link) {
@@ -100,13 +107,16 @@ final class PublishCheck {
         List<Item> items = new ArrayList<>();
         Component fix = tr("publish.fix");
 
-        // Name, author and colour, then the box
-        if (identityReady(draft)) {
+        // The name, the author while it cannot be saved, then the box
+        Component nameProblem = nameProblem(draft);
+        if (nameProblem == null) {
             items.add(done(tr("publish.check.identity")));
         } else {
-            Component problem = identityProblem(draft);
-            items.add(new Item(Mark.BLOCKER, problem != null ? problem : tr("publish.check.identity"),
-                    Fix.identity(fix)));
+            items.add(new Item(Mark.BLOCKER, nameProblem, Fix.identity(fix)));
+        }
+        Component authorProblem = authorProblem(draft);
+        if (authorProblem != null) {
+            items.add(new Item(Mark.BLOCKER, authorProblem, Fix.author(fix)));
         }
         Component boxProblem = boxProblem(draft);
         if (boxProblem != null) {
@@ -162,7 +172,7 @@ final class PublishCheck {
 
         // The optional author link
         if (draft.authorUrl().isEmpty()) {
-            items.add(new Item(Mark.TODO, tr("publish.check.no_link"), Fix.identity(tr("publish.add"))));
+            items.add(new Item(Mark.TODO, tr("publish.check.no_link"), Fix.author(tr("publish.add"))));
         } else {
             items.add(done(tr("publish.check.link")));
         }
@@ -206,29 +216,45 @@ final class PublishCheck {
 
     // The collection's own rules, which saving follows too
 
-    /** Whether the name, author and link can be saved, whatever the box. */
-    static boolean identityReady(CreatorDraft draft) {
-        return !draft.name().isBlank() && WorldCollectionRecord.isPlainText(draft.name())
-                && WorldCollectionRecord.isPlainText(draft.author())
-                && (draft.authorUrl().isEmpty() || WorldCollectionRecord.isValidAuthorUrl(draft.authorUrl()));
-    }
-
-    /** Why the name, author, link or box cannot be saved as they are, or null when they can. */
+    /**
+     * Why the name, author, link or box cannot be saved as they are, or null when they can: all
+     * of {@link #nameProblem}, {@link #authorProblem} and {@link #boxProblem}, in that order.
+     */
     @Nullable
     static Component identityProblem(CreatorDraft draft) {
+        Component name = nameProblem(draft);
+        if (name != null) {
+            return name;
+        }
+        Component author = authorProblem(draft);
+        return author != null ? author : boxProblem(draft);
+    }
+
+    /** Why the name cannot be saved: blank, or holding control characters; null when it can. */
+    @Nullable
+    static Component nameProblem(CreatorDraft draft) {
         if (draft.name().isBlank()) {
             return tr("wizard.name_empty");
         }
         if (!WorldCollectionRecord.isPlainText(draft.name())) {
             return tr("name_rule");
         }
+        return null;
+    }
+
+    /**
+     * Why the author or its link cannot be saved: an author holding control characters, or a
+     * link the server does not take; null when both can, an empty one included.
+     */
+    @Nullable
+    static Component authorProblem(CreatorDraft draft) {
         if (!WorldCollectionRecord.isPlainText(draft.author())) {
             return tr("wizard.author_rule");
         }
         if (!draft.authorUrl().isEmpty() && !WorldCollectionRecord.isValidAuthorUrl(draft.authorUrl())) {
             return tr("identity.url_rule");
         }
-        return boxProblem(draft);
+        return null;
     }
 
     /** Why the box cannot be saved as chosen, or null when it can. */
