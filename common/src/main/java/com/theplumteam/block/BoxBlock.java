@@ -340,6 +340,18 @@ public class BoxBlock extends BaseEntityBlock {
     public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
         super.setPlacedBy(level, pos, state, placer, stack);
 
+        // The game copies the item's block entity data on the server only, so until the server's
+        // update arrives the placing client would draw a plain new box (its default colour, no
+        // figure) for a frame or two. It reads the same data now; the server's update replaces it.
+        if (level.isClientSide()) {
+            if (level.getBlockEntity(pos) instanceof BoxBlockEntity boxBlockEntity) {
+                CompoundTag tag = BlockEntityItemData.read(stack);
+                if (tag != null) {
+                    boxBlockEntity.loadForItemRendering(tag);
+                }
+            }
+        }
+
         if (!level.isClientSide()) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
