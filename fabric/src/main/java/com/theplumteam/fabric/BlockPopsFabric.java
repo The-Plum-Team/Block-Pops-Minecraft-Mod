@@ -2,7 +2,6 @@ package com.theplumteam.fabric;
 
 import com.theplumteam.util.ServerLevels;
 import com.theplumteam.BlockPopsMod;
-import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.FigureBlockEntity;
 import com.theplumteam.command.ModCommands;
 import com.theplumteam.data.IPlayerDiscovery;
@@ -87,16 +86,6 @@ public class BlockPopsFabric implements ModInitializer {
                     return InteractionResult.SUCCESS;
                 }
                 return InteractionResult.PASS;
-            }
-
-            // Handle BoxBlockEntity (figures inside boxes) - only allow pose change if figure is extracted
-            if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
-                if (boxBlockEntity.hasFigure() && boxBlockEntity.isFigureExtracted()) {
-                    boxBlockEntity.cyclePose();
-                    com.theplumteam.util.PlayerMessages.actionBar(player,
-                        Component.translatable("blockpops.message.pose_changed", boxBlockEntity.getPoseIndex()));
-                    return InteractionResult.SUCCESS;
-                }
             }
 
             return InteractionResult.PASS;

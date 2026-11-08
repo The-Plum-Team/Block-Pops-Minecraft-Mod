@@ -1,7 +1,6 @@
 package com.theplumteam.event;
 
 import com.theplumteam.BlockPopsMod;
-import com.theplumteam.blockentity.BoxBlockEntity;
 import com.theplumteam.blockentity.FigureBlockEntity;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
@@ -48,17 +47,6 @@ public class FigurePoseEventHandler {
                 event.setCancellationResult(InteractionResult.SUCCESS);
             }
             return;
-        }
-
-        // Handle BoxBlockEntity (figures inside boxes) - only allow pose change if figure is extracted
-        if (blockEntity instanceof BoxBlockEntity boxBlockEntity) {
-            if (boxBlockEntity.hasFigure() && boxBlockEntity.isFigureExtracted()) {
-                boxBlockEntity.cyclePose();
-                event.getEntity().displayClientMessage(
-                    Component.translatable("blockpops.message.pose_changed", boxBlockEntity.getPoseIndex()), true);
-                event.setCanceled(true);
-                event.setCancellationResult(InteractionResult.SUCCESS);
-            }
         }
     }
 }
