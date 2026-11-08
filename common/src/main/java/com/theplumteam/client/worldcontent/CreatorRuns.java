@@ -1,6 +1,5 @@
 package com.theplumteam.client.worldcontent;
 
-import net.minecraft.Util;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -87,7 +86,7 @@ public final class CreatorRuns {
         }
         entry.finished = true;
         entry.revisionAtFinish = ClientWorldCollections.revision();
-        entry.finishedAt = Util.getMillis();
+        entry.finishedAt = ClientWorldUploads.millis();
         if (!changedServer) {
             ENTRIES.remove(entry);
         }
@@ -105,7 +104,7 @@ public final class CreatorRuns {
 
     /** As {@link #busy}, leaving out the runs that belong to an owner. */
     public static boolean busyOther(String collectionId, @Nullable Object owner) {
-        long now = Util.getMillis();
+        long now = ClientWorldUploads.millis();
         ENTRIES.removeIf(entry -> !entry.counts(now));
         for (Entry entry : ENTRIES) {
             if (entry.collectionId.equals(collectionId) && (owner == null || entry.owner != owner)) {

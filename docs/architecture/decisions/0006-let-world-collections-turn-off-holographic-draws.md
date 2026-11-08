@@ -70,5 +70,5 @@ server refuses a packet whose action it does not know.
 - A World collection with holographic draws turned off never hands out a holographic figure or plush
   from a machine; turned back on, it rolls again from the next draw.
 - Bundled and Custom collections draw exactly as before.
-- Tests for the key and the edit belong with the creator's unit tests, which are a protected
-  follow-up because tests are protected paths.
+- Tests for the key and the edit are in the common module's unit tests (`common/src/test`), added
+  by a protected follow-up because their build wiring is protected.

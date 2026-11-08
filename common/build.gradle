@@ -80,4 +80,20 @@ dependencies {
     // loader/Minecraft coordinate is owned by the branch-local release matrix.
     def geckoLoader = rootProject.forge_family_loader ?: 'fabric'
     add(blockPopsModCompileOnly, rootProject.runtime_dependency_coordinate.call(geckoLoader, 'geckolib'))
+
+    // Unit tests of the logic that needs no running game (common/src/test). Test-only: nothing
+    // of them reaches a production or harness jar.
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.14.4'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.14.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.14.4'
+}
+
+// `check`, which every lane's build runs, runs them on the lane's own Java. Minecraft is on their
+// classpath but never bootstrapped, so they reach only classes that load without it.
+tasks.named('test') {
+    useJUnitPlatform()
+    testLogging {
+        events 'failed'
+        exceptionFormat 'full'
+    }
 }

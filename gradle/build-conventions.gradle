@@ -289,8 +289,8 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
         }
         if (rewritesIdentifier) {
             // The E2E generate task is created later, by the harness conventions, so
-            // both are matched by name rather than looked up now.
-            tasks.matching { it.name in ['stonecutterGenerate', 'stonecutterGenerateE2e'] }
+            // all three are matched by name rather than looked up now.
+            tasks.matching { it.name in ['stonecutterGenerate', 'stonecutterGenerateE2e', 'stonecutterGenerateTest'] }
                     .configureEach { applySourceRewrites(it) }
         }
         sourceSets.main.java.setSrcDirs([
@@ -302,6 +302,16 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
         if (module == 'common') {
             // Only preprocessing is consumed; the loader compiles the combined harness.
             sourceSets.create('e2e')
+            // The common module's unit tests (common/src/test) are preprocessed and rewritten
+            // like its main sources, so each node compiles them against its own era, and
+            // `check` runs them on the node's Java.
+            def generatedTest = stonecutter.tasks.generate['stonecutterGenerateTest']
+            sourceSets.test.java.setSrcDirs([
+                files(generatedTest.map { new File(it.destinationDir, 'java') }).builtBy(generatedTest)
+            ])
+            sourceSets.test.resources.setSrcDirs([
+                files(generatedTest.map { new File(it.destinationDir, 'resources') }).builtBy(generatedTest)
+            ])
         }
         ext.blockPopsConfigureOverlay = { String sourceSet ->
             if (releaseMatrix.schema_version != 2) return
@@ -396,9 +406,10 @@ configure(subprojects.findAll { it.path in buildProjectPaths }) {
         [project, project(rootProject.common_project_path)].each { sourceProject ->
             sourceProject.tasks.withType(JavaCompile).configureEach { dependsOn generateIdentity }
             sourceProject.tasks.matching { it.name in [
-                'processResources', 'processE2eResources', 'generateE2EContractJava',
+                'processResources', 'processE2eResources', 'processTestResources', 'generateE2EContractJava',
                 'stonecutterPrepare', 'stonecutterGenerate',
-                'stonecutterPrepareE2e', 'stonecutterGenerateE2e'
+                'stonecutterPrepareE2e', 'stonecutterGenerateE2e',
+                'stonecutterPrepareTest', 'stonecutterGenerateTest'
             ] }.configureEach { dependsOn generateIdentity }
         }
     }
