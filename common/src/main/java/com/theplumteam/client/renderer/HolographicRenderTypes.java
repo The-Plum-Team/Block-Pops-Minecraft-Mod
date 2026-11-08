@@ -45,6 +45,10 @@ import java.lang.reflect.Modifier;
  * which is vanilla's entity cutout pipeline with the holographic shaders in place of its own.
  * Vanilla keeps the factory that makes such a render type to itself, so it is reached by
  * reflection, found by its parameters since Fabric runs on other names than Mojang's.
+ *
+ * While an Iris or Oculus shader pack is in use, a holographic figure is drawn as any other:
+ * the pack draws the world with its own programs and leaves a render type with a shader of a
+ * mod's own undrawn, so the figure vanished and its box looked empty.
  */
 public final class HolographicRenderTypes {
     /** The shader instance 1.20.1 and 1.21.1 load, under shaders/core/rendertype_holographic.json. */
@@ -66,7 +70,7 @@ public final class HolographicRenderTypes {
     /** The holographic version of entityCutoutNoCull for a texture. */
     public static RenderType entity(ResourceLocation texture) {
         RenderType base = RenderType.entityCutoutNoCull(texture);
-        if (shader == null) {
+        if (shader == null || ShaderPacks.inUse()) {
             return base;
         }
         return BY_TEXTURE.computeIfAbsent(texture, key -> new RenderType("blockpops_holographic",
@@ -90,6 +94,9 @@ public final class HolographicRenderTypes {
     // The holographic version of entityCutoutNoCull for a texture
     public static RenderType entity(ResourceLocation texture) {
         RenderType base = RenderType.entityCutoutNoCull(texture);
+        if (ShaderPacks.inUse()) {
+            return base;
+        }
         return BY_TEXTURE.computeIfAbsent(texture, key -> new RenderType("blockpops_holographic",
                 DefaultVertexFormat.NEW_ENTITY, VertexFormat.Mode.QUADS, 256, true, false,
                 () -> {
@@ -120,15 +127,18 @@ public final class HolographicRenderTypes {
 
     // The holographic version of the entity cutout figures are drawn with, for a texture
     public static RenderType entity(ResourceLocation texture) {
-        RenderType cached = BY_TEXTURE.get(texture);
-        if (cached != null) {
-            return cached;
-        }
         //? if >=26 {
         /^RenderType base = net.minecraft.client.renderer.rendertype.RenderTypes.entityCutout(texture);
         ^///? } else {
         RenderType base = RenderType.entityCutoutNoCull(texture);
         //? }
+        if (ShaderPacks.inUse()) {
+            return base;
+        }
+        RenderType cached = BY_TEXTURE.get(texture);
+        if (cached != null) {
+            return cached;
+        }
         if (failed) {
             return base;
         }

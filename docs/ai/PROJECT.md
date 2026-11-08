@@ -94,7 +94,9 @@ eras too: `core/rendertype_holographic` (1.20.1 to 1.21.5), `_ubo` (1.21.6 to 1.
 effect the first repeats. Every lane ships every variant, and 1.21.2 to 26.2 resolve the
 `#moj_import`s of all of them when resources load, failing the whole reload on a missing one: a
 variant imports only vanilla includes that 1.21.2 already has and declares the rest itself. The
-effect follows the view, never the clock.
+effect follows the view, never the clock. While an Iris or Oculus shader pack is in use
+(`ShaderPacks`, through Iris's public API by reflection) the figure is drawn without it: the pack
+leaves a render type with a mod's own shader undrawn, which made the figure vanish from its box.
 
 `common/build.gradle` derives special-item definitions and base-model transforms for Minecraft
 1.21.4 onward with `scripts/release/item_resources.py`, from the authored entity models. Older
