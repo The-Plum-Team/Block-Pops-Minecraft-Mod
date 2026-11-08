@@ -35,6 +35,28 @@ production/harness build, and artifact staging commands in the README. Changes
 to the scenario contract must regenerate both harnesses and pass contract
 mutation tests.
 
+### Java unit tests
+
+The common module's JUnit 5 tests live in `common/src/test/java`. Stonecutter
+preprocesses and rewrites them like the main sources, and every lane's `check`
+runs them on that lane's Java against its Minecraft, so the Build gate runs
+them on all lanes in the same sandbox as the rest of the build. Run one lane's
+while iterating:
+
+```bash
+./gradlew -PblockpopsLane=fabric-1.20.1 :common:1.20.1:test
+```
+
+Minecraft is on their classpath but never bootstrapped, so they test only code
+that loads without a running game: World collection records, edits and the keys
+of a datapack's `collection.json`, and the creator's draft, save plans and
+saver. The creator's saving reaches the clock, the connection and the server
+only through the package-private `ClientWorldUploads.Host`, which the game never
+replaces and the tests replace with a stand-in server. Ordinary pull requests
+may add or change these tests; their Gradle wiring (`common/build.gradle`,
+`gradle/build-conventions.gradle`) and the JUnit checksums in
+`gradle/verification-metadata.xml` are protected.
+
 Tests that need the pinned mod-base kit resolve it only through
 `scripts/ci/mod_base_kit.py`: from the Build gate's staged `out/mod-base-kit`
 overlay, from `MOD_BASE_KIT_PATH`/`MOD_BASE_KIT_SHA`, or from a verified user

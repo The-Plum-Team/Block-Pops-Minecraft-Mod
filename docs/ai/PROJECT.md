@@ -305,3 +305,8 @@ python3 scripts/ci/mod_base_kit.py run template check --repo .
 
 The README lists the Gradle build and release staging commands. Packaged Minecraft scenarios are
 described in [`docs/e2e.md`](../e2e.md).
+
+Every lane's Gradle `check`, which the Build gate runs, also runs the common module's JUnit tests
+(`common/src/test/java`, see CONTRIBUTING.md, "Java unit tests") on that lane's Java against its
+Minecraft. The smallest check of the creator's saving or of a World collection record is one lane's:
+`./gradlew -PblockpopsLane=fabric-1.20.1 :common:1.20.1:test`.
