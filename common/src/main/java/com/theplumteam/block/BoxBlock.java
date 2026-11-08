@@ -295,13 +295,7 @@ public class BoxBlock extends BaseEntityBlock {
 
                     BlockEntityItemData.write(figureBlockItem, blockEntityTag, "blockpops:figure_block");
 
-                    if (!player.getInventory().add(figureBlockItem)) {
-                        //? if >=26.3 {
-                        /*player.drop(figureBlockItem, false, net.minecraft.util.Prediction.SERVER_ONLY);
-                        *///? } else {
-                        player.drop(figureBlockItem, false);
-                        //? }
-                    }
+                    com.theplumteam.util.PlayerItems.giveOrDrop(player, figureBlockItem);
 
                     boxBlockEntity.setFigureExtracted(true);
                     level.playSound(null, pos, ModSounds.BOX_REMOVE.get(), SoundSource.BLOCKS, 1.0F, 1.0F);

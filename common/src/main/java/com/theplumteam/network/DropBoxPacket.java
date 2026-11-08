@@ -238,7 +238,7 @@ public class DropBoxPacket {
                     }
 
                     BlockEntityItemData.write(boxItem, blockEntityTag, "blockpops:box_block");
-                    player.getInventory().add(boxItem);
+                    com.theplumteam.util.PlayerItems.giveOrDrop(player, boxItem);
                     PlayerDataManager.markDirty(player, discovery);
                 }
             }
@@ -261,7 +261,7 @@ public class DropBoxPacket {
             discovery.discover(uniqueFigureId);
             UnlockFigurePacket.sendToPlayer(player, uniqueFigureId, figure.getName(), null, null);
         }
-        player.getInventory().add(plushItem);
+        com.theplumteam.util.PlayerItems.giveOrDrop(player, plushItem);
         PlayerDataManager.markDirty(player, discovery);
     }
 
