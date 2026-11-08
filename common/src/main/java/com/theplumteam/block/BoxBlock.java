@@ -222,6 +222,11 @@ public class BoxBlock extends BaseEntityBlock {
                     return InteractionResult.SUCCESS;
                 }
             }
+            // A closed box shows the next alternative skin of its figure, as BlockPops 1.5.0 did
+            else if (!boxBlockEntity.isOpen()) {
+                boxBlockEntity.cycleAlternativeSkin();
+                return InteractionResult.SUCCESS;
+            }
             //? if >=1.21.2 {
             /*return InteractionResult.SUCCESS;
             *///? } else {
