@@ -377,8 +377,8 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         rightX = leftX + leftWidth + GAP;
 
         // The bottom row: the token buttons, blue and gold as their counts, then the creator's
-        // button for an operator in a development game, then Done; the token counts stand on a
-        // line above their buttons
+        // button for an operator on a server that syncs its World collections, then Done; the
+        // token counts stand on a line above their buttons
         int buttonHeight = Mth.clamp(Math.round(this.height * BUTTON_HEIGHT_SHARE), MIN_BUTTON_HEIGHT, MAX_BUTTON_HEIGHT);
         int footTop = this.height - MARGIN - buttonHeight;
         tokenInfoY = footTop - 4 - font.lineHeight;

@@ -62,7 +62,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * differs is moved to `corrupt/` and marked missing until it is uploaded again.
  *
  * <p>The state is an immutable {@link State}: a change builds the next one, which takes
- * effect only once it is saved. The state and the missing set belong to the server
+ * effect only once it is saved. A file an upload stored is different: it joins the table
+ * at once and reaches the metadata with a later save ({@link #addUnsavedBlob}). The state
+ * and the missing set belong to the server
  * thread; {@link #writeBlob}, {@link #readBlob} and {@link #deleteBlobFiles} only touch
  * files and may run on the World content executor.
  */
@@ -165,6 +167,8 @@ public final class WorldCollectionStore {
     private final Set<String> missing = ConcurrentHashMap.newKeySet();
     private boolean degraded;
     private boolean directoriesReady;
+    /** Whether the table holds an uploaded file that the metadata on disk does not name yet. */
+    private boolean unsavedBlobs;
 
     private WorldCollectionStore(Path dataDirectory) {
         this.dataDirectory = dataDirectory.toAbsolutePath().normalize();
@@ -224,11 +228,44 @@ public final class WorldCollectionStore {
             }
             move(temporary, file);
             state = next;
+            unsavedBlobs = false;
             return true;
         } catch (IOException e) {
             BlockPopsMod.LOGGER.error("Failed to save the World collections {}", dataDirectory.resolve(FILE_NAME), e);
             return false;
         }
+    }
+
+    /**
+     * Adds a file an upload has written to the table, or refreshes its entry, without
+     * saving the metadata. Every save builds on the current state, so whichever comes next
+     * writes the entry: usually the edit that names the file, else
+     * {@link #saveUnsavedBlobs} a little later or when the server stops. Until then a run
+     * that ends without stopping can lose the entry, which leaves the file unlisted: the
+     * sweep at a later start deletes it once the grace period has passed. Server thread.
+     */
+    public void addUnsavedBlob(String sha, StoredBlob blob) {
+        if (!Sha256.isValidHex(sha)) {
+            throw new IllegalArgumentException("Not a SHA-256: " + WorldContentException.excerpt(sha));
+        }
+        Map<String, StoredBlob> next = new TreeMap<>(state.blobs());
+        next.put(sha, blob);
+        state = state.withBlobs(next);
+        unsavedBlobs = true;
+    }
+
+    /** Whether the table holds a file that no save has written yet. */
+    public boolean hasUnsavedBlobs() {
+        return unsavedBlobs;
+    }
+
+    /**
+     * Saves the table when it holds files no save has written yet.
+     *
+     * @return false if there were some and they could not be saved
+     */
+    public boolean saveUnsavedBlobs() {
+        return !unsavedBlobs || save(state);
     }
 
     /** Marks a file as present again once an upload or import has written it. */

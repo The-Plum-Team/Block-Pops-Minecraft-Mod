@@ -63,6 +63,11 @@ public final class WorldCollections {
     private static final int SYNC_INTERVAL_TICKS = 20;
     /** The fewest ticks between two syncs to every player when the sync is larger than one part. */
     private static final int LARGE_SYNC_INTERVAL_TICKS = 100;
+    /**
+     * How long an uploaded file may stay out of the saved table before it is saved on its
+     * own: long enough for the edit that names it to save it, as it does in every autosave.
+     */
+    private static final int UNSAVED_FILE_TICKS = 30 * 20;
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private static volatile WorldCollectionStore store;
@@ -75,6 +80,8 @@ public final class WorldCollections {
     /** Whether each player was last sent the operators' view, which includes the drafts. */
     private static final Map<UUID, Boolean> SYNCED_AS_OPERATOR = new HashMap<>();
     private static boolean dirty;
+    /** The tick from which the table has held a file no save has written, or -1. */
+    private static int unsavedSinceTick = -1;
     private static int revision;
     private static int lastSyncTick;
     private static int lastSyncId;
@@ -150,6 +157,11 @@ public final class WorldCollections {
 
     /** Unregisters every World collection and drops all per-server state. */
     public static void onServerStopped() {
+        if (store != null && !store.saveUnsavedBlobs()) {
+            BlockPopsMod.LOGGER.warn("Could not save the table entries of World collection files uploaded since the "
+                    + "last save; the next start deletes those files once they are {} hours old",
+                    WorldCollectionStore.GC_GRACE_MILLIS / 3_600_000L);
+        }
         REGISTERED.forEach(CollectionRegistry::unregisterDynamicCollection);
         REGISTERED.clear();
         if (executor != null) {
@@ -164,6 +176,7 @@ public final class WorldCollections {
         WorldUploads.clear();
         WorldAssetSender.clear();
         dirty = false;
+        unsavedSinceTick = -1;
         lastSyncTick = 0;
         operatorContent = null;
         publicContent = null;
@@ -201,6 +214,7 @@ public final class WorldCollections {
         if (tick % SYNC_INTERVAL_TICKS == 0) {
             resyncChangedOperators(server);
         }
+        saveUnsavedFiles(tick);
         if (!dirty) {
             return;
         }
@@ -212,6 +226,33 @@ public final class WorldCollections {
         dirty = false;
         lastSyncTick = tick;
         server.getPlayerList().getPlayers().forEach(WorldCollections::sendSync);
+    }
+
+    /**
+     * Saves the table once an uploaded file has stayed out of the saved one for
+     * {@link #UNSAVED_FILE_TICKS}, because no edit named it: it then counts against the
+     * quotas after a crash too, and the sync that follows shows operators the stored bytes
+     * it uses. An edit that names the file saves it first, so an autosave costs one store
+     * write and one sync.
+     */
+    private static void saveUnsavedFiles(int tick) {
+        WorldCollectionStore current = store;
+        if (!current.hasUnsavedBlobs()) {
+            unsavedSinceTick = -1;
+            return;
+        }
+        if (unsavedSinceTick < 0 || tick < unsavedSinceTick) {
+            unsavedSinceTick = tick;
+            return;
+        }
+        if (tick - unsavedSinceTick < UNSAVED_FILE_TICKS) {
+            return;
+        }
+        // Tried again after the same wait when it fails
+        unsavedSinceTick = tick;
+        if (current.saveUnsavedBlobs()) {
+            markDirty();
+        }
     }
 
     /**
@@ -471,7 +512,15 @@ public final class WorldCollections {
         }
     }
 
-    /** Adds a written file to the table. Server thread. */
+    /**
+     * Adds a written file to the table. Server thread.
+     *
+     * <p>Neither the metadata nor a sync goes for the file at once: no record names it yet,
+     * and the edit that names it, which follows in every autosave, saves the table and syncs
+     * once for both, so such an autosave costs one store write and one sync, not two of each
+     * (ADR 0005). A file no edit names within {@link #UNSAVED_FILE_TICKS} is saved and synced
+     * on its own. A file that was missing is synced at once, since players were told it was.
+     */
     private static WorldContentStatus addBlob(WorldCollectionStore current, String sha, BlobInfo info, UUID by) {
         WorldContentStatus refused = checkUpload(sha, info.type(), info.size());
         if (refused != null) {
@@ -481,13 +530,16 @@ public final class WorldCollections {
             }
             return refused.result() == Result.ALREADY_STORED ? WorldContentStatus.of(Result.STORED, sha) : refused;
         }
-        Map<String, WorldCollectionStore.StoredBlob> blobs = new TreeMap<>(current.state().blobs());
-        blobs.put(sha, new WorldCollectionStore.StoredBlob(info, System.currentTimeMillis(), by));
-        if (!current.save(current.state().withBlobs(blobs))) {
-            return WorldContentStatus.of(Result.SAVE_FAILED);
-        }
+        boolean wasMissing = current.state().blobs().containsKey(sha);
+        // A file uploaded again starts its grace period again and takes the bounds just derived
+        current.addUnsavedBlob(sha, new WorldCollectionStore.StoredBlob(info, System.currentTimeMillis(), by));
         current.markPresent(sha);
-        markDirty();
+        if (wasMissing) {
+            markDirty();
+        } else {
+            // The stored bytes a sync carries have changed: whichever sync goes next is built again
+            revision++;
+        }
         return WorldContentStatus.of(Result.STORED, sha);
     }
 
@@ -636,6 +688,8 @@ public final class WorldCollections {
             return remove.id();
         } else if (edit instanceof WorldCollectionEdit.SetCollectionExtras set) {
             return set.id();
+        } else if (edit instanceof WorldCollectionEdit.SetHolographic set) {
+            return set.id();
         } else if (edit instanceof WorldCollectionEdit.SetFigureExtras set) {
             return set.id();
         }
@@ -675,7 +729,7 @@ public final class WorldCollections {
         WorldCollectionRecord copy = new WorldCollectionRecord(id, duplicate.name(), source.author(), source.red(),
                 source.green(), source.blue(), source.boxTexture(), source.boxColor(), source.logo(), false, 0,
                 source.figures(), true, 0L, source.authorUrl(), source.logoLayout(), source.plush(),
-                source.rarityWeights());
+                source.rarityWeights(), source.holographic());
         txn.create(copy, by, System.currentTimeMillis());
         txn.copiedFrom.put(id, source);
         return null;
@@ -805,6 +859,10 @@ public final class WorldCollections {
         }
         if (edit instanceof WorldCollectionEdit.SetCollectionExtras set) {
             return withCollectionExtras(previous, set);
+        }
+        if (edit instanceof WorldCollectionEdit.SetHolographic set) {
+            // Any collection, a draft or archived one too: it says only how its next draws come out
+            return previous.withHolographic(set.holographic());
         }
         if (edit instanceof WorldCollectionEdit.SetFigureExtras set) {
             return withFigure(previous, figureExtras(existingFigure(previous, set.figure()), set));

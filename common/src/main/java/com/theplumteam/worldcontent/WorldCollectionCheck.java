@@ -19,8 +19,8 @@ import java.util.Set;
  * on the client, as {@link com.theplumteam.figure.CustomCollectionCheck} does for Custom
  * collections: every model, texture, animation and logo it names must be one of its own
  * files in the role the record gives it, or one of the shared assets every figure may use.
- * Whatever else it carries (plush, author link, logo placement, rarity and draw weight,
- * skin variants and box face) must be exactly what its record says.
+ * Whatever else it carries (plush, holographic draws, author link, logo placement, rarity and
+ * draw weight, skin variants and box face) must be exactly what its record says.
  */
 public final class WorldCollectionCheck {
     private static final Set<ResourceLocation> SHARED_ANIMATIONS = Set.of(
@@ -37,8 +37,9 @@ public final class WorldCollectionCheck {
             return "declares id " + collection.getId();
         }
         if (collection.isPlush() != record.plush() || collection.getSpecialsReleasedAt() != null
-                || !Objects.equals(collection.getAuthorUrl(), record.authorUrl())) {
-            return "is plush, linked or special apart from its record";
+                || !Objects.equals(collection.getAuthorUrl(), record.authorUrl())
+                || collection.allowsHolographic() != record.holographic()) {
+            return "is plush, linked, special or holographic apart from its record";
         }
         if (collection.getFigures().size() != record.figures().size()
                 || collection.getFigures().size() > WorldContentLimits.MAX_FIGURES) {

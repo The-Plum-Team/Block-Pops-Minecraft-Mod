@@ -634,12 +634,11 @@ public class SettingsScreen extends DialogScreen {
      * the creator asks this one check, and its screens close once it turns false.
      * Operators only: unlike the Cheats tab, development mode alone is not enough, because
      * the server refuses every change from a player below level 2. The server also has to
-     * be one that syncs its World collections. The creator opens only in development mode
-     * while it is still being worked on; the commands stay available.
+     * be one that syncs its World collections.
      */
     public static boolean canOpenCreator() {
         net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
-        return isDevelopmentMode() && minecraft.player != null
+        return minecraft.player != null
                 && com.theplumteam.util.ServerLevels.hasCommandLevel(minecraft.player, 2)
                 && ClientWorldCollections.isSynced();
     }

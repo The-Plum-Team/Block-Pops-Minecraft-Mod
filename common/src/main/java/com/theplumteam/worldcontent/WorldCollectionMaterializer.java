@@ -67,7 +67,8 @@ public final class WorldCollectionMaterializer {
                         layout.offsetXPixels(), layout.offsetYPixels())
                 : null;
         return new FigureCollection(record.id(), record.name(), record.author().isEmpty() ? "Unknown" : record.author(),
-                record.authorUrl(), boxTexture, logo, figures, record.backgroundColor(), record.plush(), null);
+                record.authorUrl(), boxTexture, logo, figures, record.backgroundColor(), record.plush(), null,
+                record.holographic());
     }
 
     /**

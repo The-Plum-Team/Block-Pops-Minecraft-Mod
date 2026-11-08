@@ -21,16 +21,21 @@ follow-up pull request (#11). `site/mod-base.json` no longer defers it or any ot
   configuration, the controller-upgrade procedure and recovery;
   [`docs/e2e.md`](../e2e.md) owns the packaged scenarios;
   [`docs/visual-review.md`](../visual-review.md) owns the advisory AI review; and
-  [`docs/ui.md`](../ui.md) owns the screens' shared style and their own GUI scale.
+  [`docs/ui.md`](../ui.md) owns the screens' shared style, their own GUI scale and the creator's
+  layout rules. How operators use the creator is in `COLLECTIONS_GUIDE.md`.
 - `docs/architecture/decisions/` records evidence-backed architectural decisions;
   [ADR 0001](../architecture/decisions/0001-adopt-mod-base-public-evidence.md) records the
   adoption of mod-base public evidence,
   [ADR 0002](../architecture/decisions/0002-load-custom-collections-at-runtime.md) runtime Custom
   collections,
   [ADR 0003](../architecture/decisions/0003-accept-operator-uploaded-world-collections.md)
-  operator-uploaded World collections and
+  operator-uploaded World collections,
   [ADR 0004](../architecture/decisions/0004-extend-world-collections-for-the-redesigned-creator.md)
-  their extensions for the redesigned creator.
+  their extensions for the redesigned creator,
+  [ADR 0005](../architecture/decisions/0005-autosave-world-collection-drafts.md) the autosave of
+  their drafts and
+  [ADR 0006](../architecture/decisions/0006-let-world-collections-turn-off-holographic-draws.md)
+  turning off their holographic draws.
 - `site/mod-base.json` and `scripts/pages/mod_base_adapter.py` connect this repository to the
   mod-base public-evidence kit; `scripts/ci/mod_base_kit.py` finds the pinned kit.
 
@@ -57,7 +62,8 @@ The screens share Quick Skin's look and its menu scale ([`docs/ui.md`](../ui.md)
 writes the player's GUI Scale option or calls `resizeDisplay()`: a menu sets only the window's
 scale while it is shown (`MenuGuiScale`), chosen from the window size, and puts the player's scale
 back in `removed()`; a dialog over a menu follows the menu's scale. Layouts derive from the
-canvas that scale gives, from about 400x300 up.
+canvas that scale gives, from about 400x300 up; the creator's screens from 427x240, and down to
+320x240 through their scrolling areas.
 
 Every text a player reads is a key of `assets/blockpops/lang/en_us.json`, never a literal in the
 code, and each other file of that folder translates all of its keys (CONTRIBUTING.md, Translations).
@@ -76,7 +82,8 @@ clicked; a plush collection lists a base plush's variants as its alternatives, i
 `BuiltInPlushes.VARIANT_GROUPS`.
 
 A drawn figure or plush comes out holographic one time in 25 (`figure.Holographic`; never in the
-packaged E2E). The `Holographic` flag travels in the block-entity data of the box, the figure
+packaged E2E, and never from a World collection that turned it off, which `Holographic.roll` checks
+on the server). The `Holographic` flag travels in the block-entity data of the box, the figure
 taken out of it, the plush and every item they drop; tooltips, the draw result card and an
 announcement with its own sound show it. `HolographicRenderTypes` draws it with a shader on
 every lane, by era: 1.20.1 and 1.21.1 swap in the shader instance each loader registers, 1.21.4
@@ -133,9 +140,7 @@ collection, `e2e_fixture`, comes from the verified caches `e2e/custom_fixture.py
 
 World collections
 ([ADR 0003](../architecture/decisions/0003-accept-operator-uploaded-world-collections.md)) are
-authored in game by operators at level 2, which the server re-checks for every packet. Until they
-are finished, `/blockpops worldcollections` is registered only in a development environment, as the
-creator opens only there. Their files
+authored in game by operators at level 2, which the server re-checks for every packet. Their files
 come only from that operator's upload in `WorldUpload*Packet`s or from a datapack's
 `blockpops_world_collections/` directory; never from a URL, the CDN or a path a server names.
 `com.theplumteam.worldcontent` validates every file (`PngValidator`, `GeoJsonCheck`,
@@ -151,7 +156,9 @@ owns, are never written into GeckoLib's caches, are refused when a bundled resou
 id, and are left alone by `RuntimeAssets.clear()`. Since
 [ADR 0004](../architecture/decisions/0004-extend-world-collections-for-the-redesigned-creator.md)
 a record may carry optional keys (draft, author link, logo placement, plush, rarity, texture-only
-skin variants, box face), each left out while it holds its default so older records keep their
+skin variants, box face, and since
+[ADR 0006](../architecture/decisions/0006-let-world-collections-turn-off-holographic-draws.md)
+holographic draws turned off), each left out while it holds its default so older records keep their
 bytes; the store stays at format 1, and client and server must run the same BlockPops version. A
 draft is synced only to operators, whose status the server polls, and is offered by no machine. The
 author link is display-only: `http` or `https`, printable ASCII, never fetched by the game, and
@@ -163,20 +170,26 @@ duplicate, a purge or a datapack import started in the editor, is an action of
 `WorldCollectionEditPacket` answered by `WorldCollectionStatusPacket`; an editor import reads only
 the server's own datapacks by exact name, as the command does.
 
-The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: a
-development environment, an operator, and World collections synced. Its entry points are the
-machine screen's **Creator** button, the Settings **Creator** tab and the client command
-`/blockpopscreator`, which is registered only in a development environment. Packaged E2E players
-run production code and are not operators, so no entry point may bypass that check. The creator
-previews files that are not sent yet: it decodes them under the same content-addressed ids a synced
-copy gets, and materializes the draft into a client-only overlay of the collection registry under
-the reserved id `creator_preview.<slot>`. That overlay answers only on the client thread, appears
+The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: an
+operator and World collections synced. Its entry points are the machine screen's **Creator**
+button, the Settings **Creator** tab and the client command `/blockpopscreator`. Packaged E2E players
+run production code and are not operators, so no entry point may bypass that check. Its screens
+are a sidebar and one content panel built on `SidebarScreen`; the editor's one explicit step is
+Publish, at the foot of its sidebar. The creator previews files before they are sent. A draft's
+changes are sent a few seconds after they settle, and its files when the operator moves to another
+figure or tab, by a saver that outlives the editor screen until they are sent; a published
+collection's changes wait for Publish changes
+([ADR 0005](../architecture/decisions/0005-autosave-world-collection-drafts.md)). It decodes
+previewed files under the same content-addressed ids a synced copy gets, and materializes the draft
+into a client-only overlay of the collection registry under the reserved id
+`creator_preview.<slot>`. That overlay answers only on the client thread, appears
 in no collection list, and is cleared when the creator closes; nothing of a preview is sent or
-stored. "Use my skin" contacts no network: it reads the player's own skin from the game's local
-skin cache (`skins/<first two>/<name>` under the assets directory, where the name is the SHA-1 of
-the texture hash in the player's own textures property), only as a regular file of at most 64 KiB
-and never through a link. The bytes pass the same 64×64 PNG checks as a picked skin, and the
-default skin resource is used otherwise. "Download box template" writes two bundled images to
+stored. "Use my skin", and the sample figure the new-collection form's box holds, contact no
+network: they read the player's own skin from the game's local skin cache
+(`skins/<first two>/<name>` under the assets directory, where the name is the SHA-1 of the texture
+hash in the player's own textures property), only as a regular file of at most 64 KiB and never
+through a link. The bytes pass the same 64×64 PNG checks as a picked skin, and the default skin
+resource is used otherwise. "Download box template" writes two bundled images to
 `blockpops/templates/` in the game folder and opens that folder; it takes no path from the user.
 
 ## Trust model

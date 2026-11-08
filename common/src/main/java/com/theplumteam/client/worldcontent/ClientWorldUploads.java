@@ -6,11 +6,14 @@ import com.theplumteam.network.WorldCollectionStatusPacket;
 import com.theplumteam.network.WorldUploadBeginPacket;
 import com.theplumteam.network.WorldUploadChunkPacket;
 import com.theplumteam.network.WorldUploadCommitPacket;
+import com.theplumteam.server.worldcollections.WorldRateLimits;
 import com.theplumteam.server.worldcollections.WorldUploads;
 import com.theplumteam.worldcontent.Sha256;
 import com.theplumteam.worldcontent.WorldCollectionEdit;
+import com.theplumteam.worldcontent.WorldContentLimits;
 import com.theplumteam.worldcontent.WorldContentStatus;
 import com.theplumteam.worldcontent.WorldContentStatus.Result;
+import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 
@@ -26,7 +29,7 @@ import java.util.function.Consumer;
  * Files and edits this client sends to the server's World collections.
  *
  * <p>A submission is a list of checked files followed by an optional edit that names
- * them, as an editor's Save produces. Submissions run one at a time, because the server
+ * them, as a creator save produces. Submissions run one at a time, because the server
  * takes one upload per player. Each file is announced with its type, size and sha; once
  * the server answers READY its bytes follow in {@link WorldUploads#CHUNK_BYTES} chunks,
  * at most {@link #CHUNKS_PER_TICK} per client tick, and a commit asks the server to check
@@ -43,8 +46,19 @@ import java.util.function.Consumer;
  * paused ({@link #pause()}), the submission in flight finishes and the next one waits.
  *
  * <p>Receivers run on the render thread even when the screen that submitted has closed,
- * so a Save completes in the background; a receiver that updates a screen checks that it
+ * so a save completes in the background; a receiver that updates a screen checks that it
  * is still shown.
+ *
+ * <p>Every submission is charged to one budget of this client's, a sliding-window ledger that
+ * mirrors the server's per-player limits ({@link WorldRateLimits}, the upload limits of
+ * {@link WorldContentLimits}) a little under them: edits per second and per minute, where a batch
+ * costs one edit per {@link WorldRateLimits#EDITS_PER_COST} it holds, upload begins and bytes per
+ * minute, and imports per minute, which an import spends instead of an edit. Each part is charged
+ * when it is sent. A submission at the head of the queue that the budget has no room for waits
+ * until it has ({@link #waitMillis}) rather than being refused as busy by the server. A
+ * {@linkplain #submit(List, WorldCollectionEdit, Object, boolean, Consumer) background} submission,
+ * such as an autosave or a bulk add, also leaves a reserve, so what the operator does by hand still
+ * finds room.
  *
  * Client thread only.
  */
@@ -55,6 +69,19 @@ public final class ClientWorldUploads {
     private static final long ANSWER_TIMEOUT_NANOS = 30_000_000_000L;
     /** Submissions waiting behind the current one. */
     private static final int MAX_QUEUED = 8;
+    private static final long SECOND_MS = 1_000;
+    private static final long MINUTE_MS = 60_000;
+    // The budget, a margin under the server's limits
+    private static final int EDITS_PER_SECOND = WorldRateLimits.EDITS_PER_SECOND - 1;
+    private static final int EDITS_PER_MINUTE = WorldRateLimits.EDITS_PER_MINUTE - 5;
+    private static final int BEGINS_PER_MINUTE = WorldContentLimits.UPLOAD_BEGINS_PER_MINUTE - 10;
+    private static final long BYTES_PER_MINUTE = WorldContentLimits.UPLOAD_BYTES_PER_MINUTE - 2L * 1024 * 1024;
+    private static final int IMPORTS_PER_MINUTE = WorldContentLimits.IMPORTS_PER_MINUTE;
+    // What a background submission leaves for the operator's own actions
+    private static final int RESERVE_EDITS_PER_SECOND = 1;
+    private static final int RESERVE_EDITS_PER_MINUTE = 10;
+    private static final int RESERVE_BEGINS = 20;
+    private static final long RESERVE_BYTES = 4L * 1024 * 1024;
 
     /**
      * How a submission ended.
@@ -95,6 +122,31 @@ public final class ClientWorldUploads {
         EDIT
     }
 
+    /**
+     * What sending something takes of the budget.
+     *
+     * @param editCost what its edit costs, as the server counts it; 0 for none or an import
+     * @param imports  1 for an import, which spends an import instead of an edit
+     * @param begins   how many uploads it begins
+     * @param bytes    how many bytes those uploads hold
+     */
+    public record Cost(int editCost, int imports, int begins, long bytes) {
+        /** What a submission of these files and this edit takes. */
+        public static Cost of(List<FilePicker.LocalFile> files, @Nullable WorldCollectionEdit edit) {
+            long bytes = 0;
+            for (FilePicker.LocalFile file : files) {
+                bytes += file.bytes().length;
+            }
+            boolean imports = edit instanceof WorldCollectionEdit.ImportPack;
+            int cost = edit == null || imports ? 0 : WorldRateLimits.editCost(edit);
+            return new Cost(cost, imports ? 1 : 0, files.size(), bytes);
+        }
+    }
+
+    // One charge of the budget: when, and how much of its kind
+    private record Charge(long at, long amount) {
+    }
+
     private static final class Submission {
         final List<FilePicker.LocalFile> files;
         @Nullable
@@ -102,6 +154,8 @@ public final class ClientWorldUploads {
         final Consumer<Outcome> receiver;
         @Nullable
         final Object tag;
+        final boolean background;
+        final Cost cost;
         int index;
         Phase phase;
         int requestId;
@@ -110,11 +164,13 @@ public final class ClientWorldUploads {
         long deadline;
 
         Submission(List<FilePicker.LocalFile> files, @Nullable WorldCollectionEdit edit, Consumer<Outcome> receiver,
-                   @Nullable Object tag) {
+                   @Nullable Object tag, boolean background) {
             this.files = files;
             this.edit = edit;
             this.receiver = receiver;
             this.tag = tag;
+            this.background = background;
+            this.cost = Cost.of(files, edit);
         }
 
         FilePicker.LocalFile file() {
@@ -127,6 +183,11 @@ public final class ClientWorldUploads {
     private static Submission current;
     private static int lastRequestId;
     private static boolean paused;
+    // The budget's ledger, oldest first
+    private static final ArrayDeque<Charge> EDITS = new ArrayDeque<>();
+    private static final ArrayDeque<Charge> BEGINS = new ArrayDeque<>();
+    private static final ArrayDeque<Charge> BYTES = new ArrayDeque<>();
+    private static final ArrayDeque<Charge> IMPORTS = new ArrayDeque<>();
 
     private ClientWorldUploads() {
     }
@@ -153,6 +214,21 @@ public final class ClientWorldUploads {
      */
     public static boolean submit(List<FilePicker.LocalFile> files, @Nullable WorldCollectionEdit edit,
                                  @Nullable Object tag, Consumer<Outcome> receiver) {
+        return submit(files, edit, tag, false, receiver);
+    }
+
+    /**
+     * Uploads the files the server does not have yet, then sends the edit, if any, tagged as
+     * {@link #submit(List, WorldCollectionEdit, Object, Consumer)} does.
+     *
+     * @param background whether it is sent on the operator's behalf rather than at their request,
+     *                   as an autosave or a bulk add is: it then waits until the budget has room
+     *                   for it and the reserve
+     * @return whether it was accepted; false while not connected or when too many wait, which
+     *         {@link #isFull()} tells apart
+     */
+    public static boolean submit(List<FilePicker.LocalFile> files, @Nullable WorldCollectionEdit edit,
+                                 @Nullable Object tag, boolean background, Consumer<Outcome> receiver) {
         if (files.isEmpty() && edit == null) {
             throw new IllegalArgumentException("Nothing to submit");
         }
@@ -168,11 +244,16 @@ public final class ClientWorldUploads {
         if (minecraft.getConnection() == null || QUEUE.size() >= MAX_QUEUED) {
             return false;
         }
-        QUEUE.add(new Submission(List.copyOf(unique.values()), edit, receiver, tag));
+        QUEUE.add(new Submission(List.copyOf(unique.values()), edit, receiver, tag, background));
         if (current == null && !paused) {
             startNext();
         }
         return true;
+    }
+
+    /** Whether as many submissions wait as may, so another is refused until one is sent. */
+    public static boolean isFull() {
+        return QUEUE.size() >= MAX_QUEUED;
     }
 
     /** Sends one edit, after anything submitted before it. */
@@ -238,6 +319,100 @@ public final class ClientWorldUploads {
         return current != null || !QUEUE.isEmpty();
     }
 
+    // The budget
+
+    /**
+     * How long, in milliseconds, until the budget has room for a cost, with the reserve when it
+     * is sent in the background; 0 when it has room now.
+     */
+    public static long roomInMillis(Cost cost, boolean background) {
+        long now = Util.getMillis();
+        prune(now);
+        int reserveSecond = background ? RESERVE_EDITS_PER_SECOND : 0;
+        int reserveMinute = background ? RESERVE_EDITS_PER_MINUTE : 0;
+        long wait = 0;
+        wait = Math.max(wait, waitFor(EDITS, now, SECOND_MS, EDITS_PER_SECOND - reserveSecond, cost.editCost()));
+        wait = Math.max(wait, waitFor(EDITS, now, MINUTE_MS, EDITS_PER_MINUTE - reserveMinute, cost.editCost()));
+        wait = Math.max(wait, waitFor(BEGINS, now, MINUTE_MS, BEGINS_PER_MINUTE - (background ? RESERVE_BEGINS : 0),
+                cost.begins()));
+        wait = Math.max(wait, waitFor(BYTES, now, MINUTE_MS, BYTES_PER_MINUTE - (background ? RESERVE_BYTES : 0),
+                cost.bytes()));
+        wait = Math.max(wait, waitFor(IMPORTS, now, MINUTE_MS, IMPORTS_PER_MINUTE, cost.imports()));
+        return wait;
+    }
+
+    /** Whether the budget has room for a cost now; see {@link #roomInMillis}. */
+    public static boolean hasRoom(Cost cost, boolean background) {
+        return roomInMillis(cost, background) == 0;
+    }
+
+    /**
+     * How long the next submission with the tag waits for the budget, in milliseconds, while it
+     * is the one at the head of the queue and the budget holds it; 0 otherwise.
+     */
+    public static long waitMillis(Object tag) {
+        Submission head = QUEUE.peek();
+        if (current != null || paused || head == null || head.tag != tag) {
+            return 0;
+        }
+        return roomInMillis(head.cost, head.background);
+    }
+
+    /**
+     * How long until the charges of a window leave room for more: the oldest charges within
+     * the window drop out first. A need larger than the whole window waits for the window to be
+     * empty, so it is never held for ever.
+     */
+    private static long waitFor(ArrayDeque<Charge> charges, long now, long window, long limit, long need) {
+        if (need <= 0) {
+            return 0;
+        }
+        long used = 0;
+        for (Charge charge : charges) {
+            if (now - charge.at() < window) {
+                used += charge.amount();
+            }
+        }
+        if (used + need <= Math.max(0, limit)) {
+            return 0;
+        }
+        long left = used;
+        for (Charge charge : charges) {
+            if (now - charge.at() >= window) {
+                continue;
+            }
+            left -= charge.amount();
+            if (left + need <= limit || left <= 0) {
+                return Math.max(1, charge.at() + window - now);
+            }
+        }
+        return 0;
+    }
+
+    // Forgets the charges the longest window no longer holds
+    private static void prune(long now) {
+        for (ArrayDeque<Charge> charges : List.of(EDITS, BEGINS, BYTES, IMPORTS)) {
+            while (!charges.isEmpty() && now - charges.peekFirst().at() >= MINUTE_MS) {
+                charges.removeFirst();
+            }
+        }
+    }
+
+    private static void chargeEdit(WorldCollectionEdit edit) {
+        long now = Util.getMillis();
+        if (edit instanceof WorldCollectionEdit.ImportPack) {
+            IMPORTS.addLast(new Charge(now, 1));
+        } else {
+            EDITS.addLast(new Charge(now, WorldRateLimits.editCost(edit)));
+        }
+    }
+
+    private static void chargeBegin(FilePicker.LocalFile file) {
+        long now = Util.getMillis();
+        BEGINS.addLast(new Charge(now, 1));
+        BYTES.addLast(new Charge(now, file.bytes().length));
+    }
+
     /** How far the current submission is, or null when there is none. */
     @Nullable
     public static Progress progress() {
@@ -291,10 +466,16 @@ public final class ClientWorldUploads {
         }
     }
 
-    /** Sends the next chunks and gives up on answers that are overdue. Every client tick. */
+    /**
+     * Sends the next chunks, gives up on answers that are overdue and starts the submission the
+     * budget held once it has room. Every client tick.
+     */
     public static void tick() {
         Submission submission = current;
         if (submission == null) {
+            if (!paused && !QUEUE.isEmpty()) {
+                startNext();
+            }
             return;
         }
         if (submission.phase != Phase.SENDING) {
@@ -321,8 +502,9 @@ public final class ClientWorldUploads {
 
     /**
      * Cancels everything in flight and waiting, telling each submission it was
-     * disconnected, and drops any file pick still on its way. Runs when the client leaves
-     * or joins a server.
+     * disconnected, and drops any file pick still on its way, the budget's ledger, the
+     * creator's runs ({@link CreatorRuns}) and its savers ({@link CreatorAutosave}). Runs when
+     * the client leaves or joins a server, whose limits start again for this player.
      */
     public static void reset() {
         List<Submission> cancelled = new ArrayList<>();
@@ -338,6 +520,12 @@ public final class ClientWorldUploads {
         for (Submission submission : cancelled) {
             notify(submission, disconnected);
         }
+        EDITS.clear();
+        BEGINS.clear();
+        BYTES.clear();
+        IMPORTS.clear();
+        CreatorRuns.reset();
+        CreatorAutosave.reset();
     }
 
     /** Begins the next file, or sends the edit after the last one, or ends with the last answer. */
@@ -349,24 +537,30 @@ public final class ClientWorldUploads {
             submission.offset = 0;
             submission.requestId = nextRequestId();
             submission.deadline = System.nanoTime() + ANSWER_TIMEOUT_NANOS;
+            chargeBegin(file);
             new WorldUploadBeginPacket(submission.requestId, file.type(), file.bytes().length, file.sha())
                     .sendToServer();
         } else if (submission.edit != null) {
             submission.phase = Phase.EDIT;
             submission.requestId = nextRequestId();
             submission.deadline = System.nanoTime() + ANSWER_TIMEOUT_NANOS;
+            chargeEdit(submission.edit);
             new WorldCollectionEditPacket(submission.requestId, submission.edit).sendToServer();
         } else {
             finish(new Outcome(last, false));
         }
     }
 
+    /** Starts the submission at the head of the queue, unless the budget has no room for it yet. */
     private static void startNext() {
+        Submission head = QUEUE.peek();
+        if (head == null || roomInMillis(head.cost, head.background) > 0) {
+            // tick() tries again once the budget has room
+            return;
+        }
         Submission next = QUEUE.poll();
         current = next;
-        if (next != null) {
-            advance(next, WorldContentStatus.of(Result.OK));
-        }
+        advance(next, WorldContentStatus.of(Result.OK));
     }
 
     private static void finish(Outcome outcome) {

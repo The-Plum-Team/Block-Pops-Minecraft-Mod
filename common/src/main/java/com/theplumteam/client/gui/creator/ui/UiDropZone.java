@@ -1,6 +1,7 @@
 package com.theplumteam.client.gui.creator.ui;
 
 import com.theplumteam.client.gui.style.DialogFrame;
+import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.runtime.RuntimeTextures;
 import com.theplumteam.client.worldcontent.FilePicker;
@@ -23,8 +24,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * A place to put a file: a sunk well, as the menus' fields, with a dashed edge inside it, that
@@ -46,6 +49,20 @@ import java.util.function.Function;
  * {@link #showFile} when it builds its zones. A thumbnail is the texture loaded under the file's
  * content-addressed id, which a synced file always has and a local one has once the preview
  * pipeline has loaded it; until then the zone shows the file's kind in its place.
+ *
+ * <p>A zone can also be one {@link #line line} of a form, as the look's box image is: a dashed
+ * edge in its well, a small upload glyph or the file's thumbnail on the left, then what to drop or
+ * the file's name and chips, amber while the file it asks for is missing. Its label is still what
+ * the screen's which-slot menu names it by, even where it is not drawn ({@link #showLabel}), and a
+ * one-line zone may show only some of its chips ({@link #chips}). Enter opens the file dialog of a
+ * zone that has the keyboard.
+ *
+ * <p>A zone can be {@link #hidden}: it draws nothing and takes no click, takes a file only while
+ * the pointer is over it, and is never one of the slots the which-slot menu names, so a zone that
+ * shows elsewhere is not named twice. A button can still open its dialog ({@link #choose}), and
+ * the screen reads its state ({@link #error}, {@link #waitingNote}) to show it its own way. A
+ * hidden zone may also {@link #routing route} a file by its kind to one of several zones, as a
+ * figure's preview hands a model, its texture or its poses each to its own.
  */
 public class UiDropZone extends UiNode.Box {
     /** The height of a zone with a thumbnail. */
@@ -64,6 +81,29 @@ public class UiDropZone extends UiNode.Box {
     private static final int REMOVE = 0xFFFF9A9A;
     private static final int REMOVE_HOVER = 0xFFFFC8C8;
     private static final int ERROR_TEXT = 0xFFFF8080;
+    // A line zone's dashed edge, inside its well's border, and its slot for the glyph or thumbnail
+    private static final int LINE_DASH_INSET = 2;
+    private static final int LINE_SLOT_WIDTH = 10;
+    private static final int LINE_SLOT_HEIGHT = 9;
+    private static final int LINE_TEXT_GAP = 4;
+
+    /** Which of a file's checks a zone shows as chips; the zone judges the file by all of them. */
+    public enum Chips {
+        /** Every check. */
+        ALL,
+        /** The first check, which is the size, and any that failed. */
+        SIZE_AND_FAILED,
+        /** Only the checks that failed, so a short line keeps its room for the name. */
+        FAILED
+    }
+
+    /**
+     * A part of a texture a line zone shows as its file's thumbnail, such as the front face of a
+     * box image: the region from texel {@code (u, v)}, and the texture's whole size.
+     */
+    public record Thumbnail(ResourceLocation texture, int u, int v, int width, int height, int textureWidth,
+                            int textureHeight) {
+    }
 
     private final CreatorScreen host;
     @Nullable
@@ -93,6 +133,17 @@ public class UiDropZone extends UiNode.Box {
     private long flashUntil;
     @Nullable
     private Component disabledReason;
+    private boolean labelShown = true;
+    private Chips chips = Chips.ALL;
+    // The line style: whether the file it asks for is missing, and the thumbnail to show for it
+    private boolean line;
+    private BooleanSupplier missing = () -> false;
+    @Nullable
+    private Supplier<Thumbnail> thumbnail;
+    // A hidden zone, and the zone a routing one hands each file to by its kind
+    private boolean hidden;
+    @Nullable
+    private Function<Path, UiDropZone> route;
 
     private UiDropZone(CreatorScreen host, @Nullable FilePicker.Slot slot, Component label,
                        @Nullable Consumer<FilePicker.LocalFile> onFile,
@@ -120,6 +171,18 @@ public class UiDropZone extends UiNode.Box {
     /** A zone for the bulk add, which hands over every file read from a drop or a pick at once. */
     public static UiDropZone many(CreatorScreen host, Component label, Consumer<List<FilePicker.PickResult>> onFiles) {
         return new UiDropZone(host, null, label, null, onFiles);
+    }
+
+    /**
+     * A hidden zone that takes one file dropped on it and hands it to the zone its kind goes to,
+     * as the route answers for the file's path, or nowhere when it answers null. Its label is
+     * never shown: it is not one of the which-slot menu's slots.
+     */
+    public static UiDropZone routing(CreatorScreen host, Component label, Function<Path, UiDropZone> route) {
+        UiDropZone zone = new UiDropZone(host, null, label, null, null);
+        zone.route = route;
+        zone.hidden = true;
+        return zone;
     }
 
     /** What a zone of a slot says it accepts. */
@@ -157,6 +220,71 @@ public class UiDropZone extends UiNode.Box {
     public UiDropZone labelWidth(int width) {
         this.labelWidth = width;
         return this;
+    }
+
+    /**
+     * Draws the zone or not: false keeps its label for the screen's which-slot menu, which names
+     * every zone that could take a dropped file, but leaves it off the zone itself, where the
+     * section the zone is in names it already. A full zone then shows its file without the label
+     * under it, and the label column of a one-line zone takes no room.
+     */
+    public UiDropZone showLabel(boolean shown) {
+        this.labelShown = shown;
+        return this;
+    }
+
+    /** Which of the file's checks the zone shows as chips; all unless set. */
+    public UiDropZone chips(Chips shown) {
+        this.chips = shown;
+        return this;
+    }
+
+    /**
+     * Draws the zone as one line of a form, {@link #COMPACT_HEIGHT} high: a dashed edge two units
+     * inside its well, then a slot with the upload glyph, or once filled the file's thumbnail, and
+     * after it what to drop, or the file's name with its chips and "Remove". While {@code missing}
+     * says the file is missing, the edge and the glyph are amber, as the box image of a box that
+     * needs one.
+     *
+     * @param thumbnail the part of the file's texture to show, asked as the zone is drawn; null
+     *                  for none, or a supplier of null while there is none, such as before the
+     *                  file is loaded, which shows the glyph
+     */
+    public UiDropZone line(BooleanSupplier missing, @Nullable Supplier<Thumbnail> thumbnail) {
+        this.line = true;
+        this.missing = missing;
+        this.thumbnail = thumbnail;
+        this.labelShown = false;
+        return this;
+    }
+
+    /**
+     * Hides the zone: it draws nothing and takes no click or key, takes a file dropped only while
+     * the pointer is over it, and stays out of the which-slot menu. {@link #choose} still opens
+     * its dialog, and a file it takes reaches its receiver as from a shown zone.
+     */
+    public UiDropZone hidden() {
+        this.hidden = true;
+        return this;
+    }
+
+    public boolean isHidden() {
+        return hidden;
+    }
+
+    /** Why the last file was refused or could not be read, or null; for a screen that shows a hidden zone's state. */
+    @Nullable
+    public Component error() {
+        return error;
+    }
+
+    /**
+     * What the zone is waiting for, such as the file dialog or a file being checked, or null
+     * while it waits for nothing; for a screen that shows a hidden zone's state.
+     */
+    @Nullable
+    public Component waitingNote() {
+        return waiting ? waitingText() : null;
     }
 
     /** Stops the zone taking files, saying why in its tooltip; null lets it take them again. */
@@ -203,6 +331,21 @@ public class UiDropZone extends UiNode.Box {
         return info != null;
     }
 
+    // The chips shown, as the zone's filter picks them from its checks
+    private List<FileChecks.Check> shownChecks() {
+        if (chips == Chips.ALL) {
+            return checks;
+        }
+        List<FileChecks.Check> kept = new ArrayList<>();
+        for (int i = 0; i < checks.size(); i++) {
+            FileChecks.Check check = checks.get(i);
+            if (!check.ok() || chips == Chips.SIZE_AND_FAILED && i == 0) {
+                kept.add(check);
+            }
+        }
+        return kept;
+    }
+
     /** Whether every check of the zone's file passes; an empty zone has none. */
     public boolean checksPass() {
         return FileChecks.allOk(checks);
@@ -217,6 +360,10 @@ public class UiDropZone extends UiNode.Box {
     public boolean accepts(List<Path> paths) {
         if (disabledReason != null || paths.isEmpty()) {
             return false;
+        }
+        if (route != null) {
+            UiDropZone target = routed(paths);
+            return target != null && target.accepts(paths);
         }
         if (slot == null) {
             for (Path path : paths) {
@@ -242,6 +389,15 @@ public class UiDropZone extends UiNode.Box {
 
     /** Reads dropped paths into the zone; {@link CreatorScreen} calls this for the zone it routed them to. */
     public void receive(List<Path> paths) {
+        if (route != null) {
+            UiDropZone target = routed(paths);
+            if (target != null) {
+                target.receive(paths);
+            } else {
+                host.status(CreatorScreen.tr("drop.nowhere"), Theme.RED);
+            }
+            return;
+        }
         flash();
         if (disabledReason != null) {
             host.status(disabledReason, Theme.RED);
@@ -253,6 +409,16 @@ public class UiDropZone extends UiNode.Box {
         started(problem);
     }
 
+    // The zone a routing zone hands one dropped file to, or null; never itself
+    @Nullable
+    private UiDropZone routed(List<Path> paths) {
+        if (route == null || paths.size() != 1) {
+            return null;
+        }
+        UiDropZone target = route.apply(paths.get(0));
+        return target == this ? null : target;
+    }
+
     /** Lights the zone up briefly, as when a file lands on it. */
     public void flash() {
         this.flashUntil = Util.getMillis() + FLASH_MS;
@@ -260,7 +426,7 @@ public class UiDropZone extends UiNode.Box {
 
     /** Opens the file dialog, or, where none can be shown, asks for the file's path. */
     public void choose() {
-        if (disabledReason != null) {
+        if (disabledReason != null || route != null) {
             return;
         }
         if (!FilePicker.isNativeAvailable()) {
@@ -289,7 +455,7 @@ public class UiDropZone extends UiNode.Box {
 
     /** A dialog with a path field, for systems with no file dialog; dropping always works too. */
     private void askForPath() {
-        UiModal dialog = new UiModal(CreatorScreen.tr("drop.path_title"), Component.literal(FilePicker.NO_DIALOG_HINT))
+        UiModal dialog = new UiModal(CreatorScreen.tr("drop.path_title"), CreatorScreen.tr("drop.path_body"))
                 .accent(DialogFrame.Accent.CREATE, Theme.ICON_FILE);
         EditBox field = dialog.field(CreatorScreen.tr("path_hint"), FilePicker.MAX_TYPED_PATH, "",
                 CreatorScreen.tr("path_hint"), text -> { });
@@ -329,12 +495,28 @@ public class UiDropZone extends UiNode.Box {
                     onFile.accept(file);
                 }
             }
-            case REFUSED -> this.error = Component.literal(result.message());
+            case REFUSED -> this.error = refusal(result);
             case UNAVAILABLE -> askForPath();
             case CANCELLED -> {
             }
         }
         clearHint();
+    }
+
+    /**
+     * Why a file was refused, in the player's language when the zone's own checks can say it: an
+     * image of the wrong size for the slot gets the check it fails, as its chip would read.
+     */
+    private Component refusal(FilePicker.PickResult result) {
+        BlobInfo refused = result.refused();
+        if (refused != null) {
+            for (FileChecks.Check check : checker.apply(refused)) {
+                if (!check.ok()) {
+                    return check.text();
+                }
+            }
+        }
+        return Component.literal(result.message());
     }
 
     private void clearHint() {
@@ -366,6 +548,10 @@ public class UiDropZone extends UiNode.Box {
         if (!visible()) {
             return null;
         }
+        if (hidden) {
+            // Only under the pointer, and never a slot of the which-slot menu
+            return isMouseOver(mouseX, mouseY) ? this : null;
+        }
         zones.add(this);
         return isMouseOver(mouseX, mouseY) ? this : null;
     }
@@ -378,7 +564,7 @@ public class UiDropZone extends UiNode.Box {
 
     @Override
     public void draw(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        if (!visible()) {
+        if (!visible() || hidden) {
             return;
         }
         Font font = Minecraft.getInstance().font;
@@ -390,6 +576,21 @@ public class UiDropZone extends UiNode.Box {
         Draw.well(graphics, x, y, width, height, border);
         if (lit) {
             graphics.fill(x + 2, y + 2, x + width - 2, y + height - 2, flashing ? 0x406FA0FF : 0x186FA0FF);
+        }
+        if (line) {
+            List<Component> tooltip = new ArrayList<>();
+            drawLine(graphics, font, mouseX, mouseY, lit, tooltip);
+            if (!usable) {
+                graphics.fill(x, y, x + width, y + height, 0x90000000);
+            }
+            if (hovered) {
+                if (!usable) {
+                    UiTooltip.set(disabledReason);
+                } else if (!tooltip.isEmpty()) {
+                    UiTooltip.set(tooltip);
+                }
+            }
+            return;
         }
         if (!compact()) {
             int edge = error != null ? EDGE_ERROR : lit ? Theme.SELECTED : slot == null ? EDGE_MANY : EDGE;
@@ -452,18 +653,22 @@ public class UiDropZone extends UiNode.Box {
             tooltip.add(error);
         } else if (waiting) {
             Draw.text(graphics, font, waitingText().getString(), textX, line + 13, room, Theme.PENDING);
-        } else if (!drawChecks(graphics, font, textX, line + 11, right)) {
+        } else if (!drawChecks(graphics, font, shownChecks(), textX, line + 11, right)) {
             addChecks(tooltip);
         }
-        Draw.text(graphics, font, label.getString(), textX, line + 24, room, Theme.FAINT);
+        if (labelShown) {
+            Draw.text(graphics, font, label.getString(), textX, line + 24, room, Theme.FAINT);
+        }
     }
 
     private void drawCompact(GuiGraphics graphics, Font font, int mouseX, int mouseY, List<Component> tooltip) {
         int textY = y + (height - 8) / 2;
         int left = x + PADDING;
-        int column = labelWidth >= 0 ? labelWidth : font.width(label) + 8;
-        Draw.text(graphics, font, label.getString(), left, textY, column - 4, Theme.CONTROL_TEXT);
-        left += column;
+        if (labelShown) {
+            int column = labelWidth >= 0 ? labelWidth : font.width(label) + 8;
+            Draw.text(graphics, font, label.getString(), left, textY, column - 4, Theme.CONTROL_TEXT);
+            left += column;
+        }
         int right = x + width - PADDING;
         if (info != null && onRemove != null) {
             Rect remove = removeLink(font);
@@ -481,15 +686,96 @@ public class UiDropZone extends UiNode.Box {
             return;
         }
         // The chips keep the right side; the name has what is left
+        List<FileChecks.Check> shownChecks = shownChecks();
         int chipsWidth = 0;
-        for (FileChecks.Check check : checks) {
+        for (FileChecks.Check check : shownChecks) {
             chipsWidth += chipWidth(font, check) + 3;
         }
         chipsWidth = Math.min(chipsWidth, Math.max(0, (right - left) * 2 / 3));
-        int nameRoom = Math.max(0, right - left - chipsWidth - 6);
-        Draw.text(graphics, font, fileName, left, textY, nameRoom, Theme.TEXT);
-        if (!drawChecks(graphics, font, right - chipsWidth, y + (height - CHIP_HEIGHT) / 2, right)) {
+        int nameRoom = Math.max(0, right - left - (chipsWidth > 0 ? chipsWidth + 6 : 0));
+        String name = Draw.cut(font, fileName, nameRoom);
+        Draw.string(graphics, font, name, left, textY, Theme.TEXT);
+        int chipsY = y + (height - CHIP_HEIGHT) / 2;
+        boolean everyChip = drawChecks(graphics, font, shownChecks, right - chipsWidth, chipsY, right);
+        // What the line leaves out, the whole name or checks it shows no chip for, is in the tooltip
+        if (!name.equals(fileName)) {
+            tooltip.add(Component.literal(fileName));
+        }
+        if (!everyChip || shownChecks.size() != checks.size()) {
             addChecks(tooltip);
+        }
+    }
+
+    /**
+     * The line style: the dashed edge, the glyph or thumbnail in its slot, then the hint, or the
+     * name, the chips and "Remove", with a refusal in red in place of the name.
+     */
+    private void drawLine(GuiGraphics graphics, Font font, int mouseX, int mouseY, boolean lit,
+                          List<Component> tooltip) {
+        boolean wanted = missing.getAsBoolean();
+        int edge = error != null ? EDGE_ERROR : wanted ? Theme.AMBER : lit ? Theme.SELECTED : EDGE;
+        int textY = y + (height - 8) / 2;
+        int right = x + width - PADDING;
+        Rect remove = info != null && onRemove != null ? removeLink(font) : null;
+        if (remove != null) {
+            drawLink(graphics, font, CreatorScreen.tr("drop.remove"), remove, remove.contains(mouseX, mouseY),
+                    REMOVE, REMOVE_HOVER);
+            right = remove.x() - 6;
+        }
+        // The bottom dashes stop before "Remove", whose underline they would run into
+        int left = x + LINE_DASH_INSET;
+        int top = y + LINE_DASH_INSET;
+        int edgeRight = x + width - LINE_DASH_INSET;
+        int bottom = y + height - LINE_DASH_INSET - 1;
+        dashRow(graphics, left, top, edgeRight, edge);
+        dashRow(graphics, left, bottom, remove != null ? remove.x() - 3 : edgeRight, edge);
+        for (int i = top; i <= bottom; i += 4) {
+            int end = Math.min(bottom + 1, i + 2);
+            graphics.fill(left, i, left + 1, end, edge);
+            graphics.fill(edgeRight - 1, i, edgeRight, end, edge);
+        }
+        int slotX = x + PADDING;
+        int slotY = y + (height - LINE_SLOT_HEIGHT) / 2;
+        Thumbnail shown = info != null && thumbnail != null ? thumbnail.get() : null;
+        if (shown != null) {
+            int[] fitted = Draw.fitInside(shown.width(), shown.height(), LINE_SLOT_WIDTH, LINE_SLOT_HEIGHT);
+            Draw.texture(graphics, shown.texture(), slotX + (LINE_SLOT_WIDTH - fitted[0]) / 2,
+                    slotY + (LINE_SLOT_HEIGHT - fitted[1]) / 2, fitted[0], fitted[1], shown.u(), shown.v(),
+                    shown.width(), shown.height(), shown.textureWidth(), shown.textureHeight());
+        } else {
+            int glyph = wanted ? Theme.AMBER : lit ? Theme.TEXT : Theme.MUTED;
+            PixelIcon.draw(graphics, PixelIcon.UPLOAD, slotX, slotY, glyph);
+        }
+        int textX = slotX + LINE_SLOT_WIDTH + LINE_TEXT_GAP;
+        if (info == null || error != null || waiting) {
+            Component text = error != null ? error : waiting ? waitingText() : emptyHint();
+            int colour = error != null ? ERROR_TEXT : waiting ? Theme.PENDING : wanted ? Theme.AMBER : Theme.MUTED;
+            String whole = text.getString();
+            String cut = Draw.cut(font, whole, Math.max(0, right - textX));
+            Draw.string(graphics, font, cut, textX, textY, colour);
+            if (error != null || !cut.equals(whole)) {
+                tooltip.add(text);
+            }
+            return;
+        }
+        List<FileChecks.Check> shownChecks = shownChecks();
+        int chipsWidth = 0;
+        for (FileChecks.Check check : shownChecks) {
+            chipsWidth += chipWidth(font, check) + 3;
+        }
+        chipsWidth = Math.min(chipsWidth, Math.max(0, (right - textX) * 2 / 3));
+        int nameRoom = Math.max(0, right - textX - chipsWidth - 6);
+        Draw.text(graphics, font, fileName, textX, textY, nameRoom, Theme.TEXT);
+        int chipsY = y + (height - CHIP_HEIGHT) / 2;
+        if (!drawChecks(graphics, font, shownChecks, right - chipsWidth, chipsY, right)) {
+            addChecks(tooltip);
+        }
+    }
+
+    // A row of dashes two units long, two apart
+    private static void dashRow(GuiGraphics graphics, int from, int rowY, int to, int colour) {
+        for (int i = from; i < to; i += 4) {
+            graphics.fill(i, rowY, Math.min(to, i + 2), rowY + 1, colour);
         }
     }
 
@@ -550,8 +836,9 @@ public class UiDropZone extends UiNode.Box {
      *
      * @return whether every chip fitted
      */
-    private boolean drawChecks(GuiGraphics graphics, Font font, int left, int top, int right) {
-        for (FileChecks.Check check : checks) {
+    private static boolean drawChecks(GuiGraphics graphics, Font font, List<FileChecks.Check> shown, int left,
+                                      int top, int right) {
+        for (FileChecks.Check check : shown) {
             int chip = chipWidth(font, check);
             if (left + chip > right) {
                 return false;
@@ -607,9 +894,21 @@ public class UiDropZone extends UiNode.Box {
         graphics.fill(at.x(), at.y() + 9, at.right(), at.y() + 10, shown);
     }
 
+    /** Enter opens the file dialog of a zone that has the keyboard, as a click on it does. */
+    @Override
+    public boolean key(UiInput.Key key) {
+        if (!visible() || hidden || !key.enter() || !CreatorScreen.hasKeyboard(this)) {
+            return false;
+        }
+        if (disabledReason == null) {
+            choose();
+        }
+        return true;
+    }
+
     @Override
     public boolean click(UiInput.Click click) {
-        if (!click.left() || !isMouseOver(click.x(), click.y())) {
+        if (hidden || !click.left() || !isMouseOver(click.x(), click.y())) {
             return false;
         }
         if (disabledReason != null) {

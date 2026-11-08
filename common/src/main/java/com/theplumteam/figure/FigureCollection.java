@@ -121,6 +121,10 @@ public class FigureCollection {
     // Optional: the day (yyyy-MM-dd) this collection's specials came out. A supporter whose
     // subscription has lapsed keeps the specials released while it was running.
     private final String specialsReleasedAt;
+    // Whether a draw from it may come out holographic. Only a World collection's operator can
+    // turn it off, and a World collection never travels as this class's JSON (the shared sync
+    // refuses its id), so fromJson and toJson leave it out.
+    private final boolean holographic;
 
     public FigureCollection(String id, String name, String author, String authorUrl, ResourceLocation boxTexture, LogoConfig logoConfig, List<FigureDefinition> figures, int[] backgroundColor) {
         this(id, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor, false);
@@ -131,7 +135,16 @@ public class FigureCollection {
     }
 
     public FigureCollection(String id, String name, String author, String authorUrl, ResourceLocation boxTexture, LogoConfig logoConfig, List<FigureDefinition> figures, int[] backgroundColor, boolean plush, String specialsReleasedAt) {
+        this(id, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor, plush, specialsReleasedAt, true);
+    }
+
+    /**
+     * @param holographic whether a draw from it may come out holographic; false only for a World
+     *                    collection whose operator turned that off
+     */
+    public FigureCollection(String id, String name, String author, String authorUrl, ResourceLocation boxTexture, LogoConfig logoConfig, List<FigureDefinition> figures, int[] backgroundColor, boolean plush, String specialsReleasedAt, boolean holographic) {
         this.plush = plush;
+        this.holographic = holographic;
         this.specialsReleasedAt = specialsReleasedAt;
         this.id = id;
         this.name = name;
@@ -227,17 +240,26 @@ public class FigureCollection {
     /** This collection marked as a plush collection. */
     public FigureCollection asPlush() {
         return plush ? this
-                : new FigureCollection(id, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor, true, specialsReleasedAt);
+                : new FigureCollection(id, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor, true, specialsReleasedAt, holographic);
     }
 
     /** This collection under another id, as the creator's previews register a draft. */
     public FigureCollection withId(String nextId) {
-        return new FigureCollection(nextId, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor, plush, specialsReleasedAt);
+        return new FigureCollection(nextId, name, author, authorUrl, boxTexture, logoConfig, figures, backgroundColor, plush, specialsReleasedAt, holographic);
     }
 
     /** This collection with another list of figures. */
     public FigureCollection withFigures(List<FigureDefinition> nextFigures) {
-        return new FigureCollection(id, name, author, authorUrl, boxTexture, logoConfig, nextFigures, backgroundColor, plush, specialsReleasedAt);
+        return new FigureCollection(id, name, author, authorUrl, boxTexture, logoConfig, nextFigures, backgroundColor, plush, specialsReleasedAt, holographic);
+    }
+
+    /**
+     * Whether a draw from this collection may come out holographic ({@link Holographic#roll}).
+     * Every bundled and Custom collection may; a World collection may unless its operator turned
+     * it off.
+     */
+    public boolean allowsHolographic() {
+        return holographic;
     }
 
     public String getId() {

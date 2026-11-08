@@ -2,7 +2,6 @@ package com.theplumteam.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.theplumteam.BlockPopsMod;
-import com.theplumteam.platform.PlatformHelper;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -36,11 +35,7 @@ public class ModCommands {
         GetBoxCommand.register(dispatcher);
         SetDefaultColorCommand.register(dispatcher);
         CustomCollectionsCommand.register(dispatcher);
-        // World collections are not finished: like their creator, they are made only in a
-        // development environment for now
-        if (PlatformHelper.isDevelopmentEnvironment()) {
-            WorldCollectionsCommand.register(dispatcher);
-        }
+        WorldCollectionsCommand.register(dispatcher);
         SupporterCommand.register(dispatcher);
 
         BlockPopsMod.logDebug("BlockPops commands registered");

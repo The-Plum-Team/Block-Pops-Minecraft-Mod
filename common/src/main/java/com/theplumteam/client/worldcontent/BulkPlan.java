@@ -531,6 +531,14 @@ public final class BulkPlan {
         return nameOf(stem);
     }
 
+    /**
+     * The name a figure takes from one of its files, as "File name" names the figures of a bulk
+     * add: "krilin_base.png" becomes "Krilin Base"; "New figure" when the file's name makes none.
+     */
+    public static String figureName(String fileName) {
+        return nameOf(stem(fileName));
+    }
+
     /** A figure name from a file name: "krilin_base" becomes "Krilin Base". */
     private static String nameOf(String stem) {
         StringBuilder name = new StringBuilder();

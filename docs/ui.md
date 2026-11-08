@@ -15,7 +15,8 @@ the option changes or the display resizes under them.
   true), and calls `MenuGuiScale.restore(minecraft)` from `removed()`. The scale is chosen from the
   window size (`MenuGuiScale.forFramebuffer`) as Quick Skin chooses its own, but for a canvas of at
   least 640x360 GUI units: 640x360 at 720p, 1080p, 1440p and 4K, 800x450 at 1600x900, wider on
-  ultrawide windows, and smaller (down to 400x300) only in windows under 1280x720.
+  ultrawide windows, and smaller only in windows under 1280x720, down to 320x240: 400x300 in an
+  800x600 window, and 427x240 in Minecraft's default 854x480 window.
 - A dialog drawn over a menu (`DialogScreen`, or a screen that calls `MenuGuiScale.follow` first in
   `init()` and `MenuGuiScale.leave` from `removed()`) takes the menu's scale, so the menu behind it
   keeps its layout.
@@ -23,7 +24,9 @@ the option changes or the display resizes under them.
   block), is a `DialogScreen` that also implements `MenuGuiScale.Scaled`: it calls `enter` before
   `super.init()` and `restore` from `removed()`, and the world stays visible under its veil.
 - Layouts are responsive within that canvas: sizes come from `this.width` and `this.height`, never
-  from a fixed GUI scale, and every screen stays usable at 400x300.
+  from a fixed GUI scale. Screens are laid out from 400x300 up; the creator's sidebar screens
+  (`SidebarScreen`) are laid out for 427x240 too, and stay usable through their scrolling areas
+  down to 320x240.
 
 ## Surfaces and colours
 
@@ -55,13 +58,73 @@ the option changes or the display resizes under them.
 | A mark over something not ready | `Stamp` (a rubber stamp in red ink, turned a little; Settings' Custom tab says IN DEVELOPMENT) |
 | A menu's opening | `HalftoneTransition` (a ring of black halftone dots travels from the middle outward, the world beyond it and the menu inside it) |
 | Text on a dark face | `UiText.draw`, `drawFitted` (cut with "..."), `wrap` (word-wrapped lines) |
-| A text field in the creator | `creator.ui.UiField`, an `EditBox` in a well |
+| A text field in the creator | `creator.ui.UiField`, an `EditBox` in a well; its hint is cut to the field (`setFittedHint`) and it shows the start of its text once it loses the keyboard |
+| A creator screen: a sidebar and one content panel | `creator.ui.SidebarScreen`: both panels laid out from the canvas (narrow under 360 content units wide, short under 300 high), one baseline for every bottom button, a heading with glyph buttons, a status slot, toasts over the content, and a budget of 15 models a screen |
+| A row of a creator sidebar | `creator.ui.UiSideRow` (icon or box, label, count, status, dot or chevron; selecting one plays the tab sound), in a `creator.ui.UiSideList` (selection by key, folds, arrow keys, lock, only the rows in sight drawn) |
+| A settings row that opens something or acts | `creator.ui.UiFoldRow` (label, faint hint, dot, chevron; red for what takes something away); a hint may have a short form for a narrow row, and `keepHint` cuts the label rather than a short value |
+| An on/off setting in a creator list | `creator.ui.UiToggleRow`, a node on `ToggleRow`'s look that scrolls and can unfold content under it; `wrapLabel` wraps a long label instead of cutting it |
+| A dialog that stands on a button | `creator.ui.UiPopover`, opened with `CreatorScreen.openPopover`; it shares the one dialog slot with `UiModal`, keeps its buttons on the screen, can line up with its panel's edge (`leftEdge`) or be held inside a panel on every side (`within`), and runs `onClose` whatever closes it |
+| A collection's showcase | `creator.ui.UiStage` (its box and the figures that fit on a ledge, then a "+N" tile) |
+| A row of figure thumbnails | `creator.ui.UiThumbStrip` (selection, arrow keys, drag to reorder, a "+" tile, scrolling arrows; `selectable(false)` for one that only shows); every figure drawn at the usual size, one mark at most, and a thumbnail left without a model drawn flat from its texture |
+| A figure's big preview | `creator.ui.UiFigureView`: the figure alone on a stage in the collection's colour, 70% of its height, with one "View ⌄" (`UiViewButton`) whose menu picks the view, the pose, the light, the spinning and the skin variant, kept inside its panel (`within`); a model is fitted by the extent its host gives (`setExtent`), and a figure of another size stands beside the 1x figure; a hidden drop zone laid over it takes a file dropped on the figure |
+| A place to drop or choose a file | `creator.ui.UiDropZone` (one slot, or `many` for the bulk add); `hidden()` draws nothing, takes a drop only under the pointer and is never named in the which-slot menu, and `routing` hands each file to the zone of its kind |
+| A row of tiles to pick from (colours, boxes, Image, More) | `creator.ui.UiTileRow`: `UiSwatches`' tiles and selection ring kept inside the row, tiles asked for on every frame, optional captions, wrapping, a tooltip a tile, and a keyboard cursor once a key moves it |
+| The head of a form's section, or a narrow row's label | `creator.ui.UiSectionHead`: a line, the small pixel-font name and its value on the right; `stacked` puts the value under the name |
+| A preview's corner controls | `creator.ui.UiViewButton` ("View ⌄", a small grey button with a pixel chevron that opens a menu) and `creator.ui.UiIconButton` (14×14, a pixel icon, lit blue while on), placed by `UiBoxView.corners` |
+| The front of a box with the logo to drag on it | `creator.ui.UiBoxFrontEditor`, shown by `UiBoxView.frontEditor` in place of the box; the logo sits where the box draws it (`LogoLayout.onFace`) |
 
 Dialog accents: `SETTINGS` (slate) for settings, `EDIT` (blue) to edit or rename, `CREATE` (green)
 to create or upload, `DANGER` (red) to delete, `COLLECTION` (purple) for collection content.
 
 Messages stay as written (for example "Done", "Use Regular Token"): the pixel font upper-cases only
 what it draws, and the packaged E2E scenario finds widgets by their message.
+
+## The creator
+
+The World-collection creator's screens, its home and its editor, are laid out as Quick Skin's
+settings: a sidebar and one content panel, both from `SidebarScreen`. Its home lists the
+collections in the sidebar and shows the selected one in the content; its editor lists the
+collection's tabs (Figures, Look, Options) and shows the selected tab's page.
+
+- **Panels.** Both panels sit on the starry background, 8 units in from the canvas edge, together
+  at most 900x520. The sidebar is a quarter of that width plus 20, from 116 to 156 units; the
+  content takes the rest, 6 units to its right. The sidebar holds a heading with glyph buttons at
+  its right (the help, and on the home a cross that leaves; the editor's heading is a back arrow
+  before the collection's name), a list of whole rows, a one-line status slot and one button at its
+  foot.
+- **One green action.** Each screen state has one PRIMARY button: **Open** on the home, **Create**
+  in its form (and the empty world's invitation), **Publish** or **Publish changes** in the editor.
+  While the publish popover is open the editor's button is drawn pressed in the SECONDARY face, so
+  the popover's own button is the only green. Rarer actions stay out of the main view: a
+  collection's in the home's **More** menu (archiving, deleting and importing also in the editor's
+  Options), the test draw in the publish popover (or at the editor's foot on a published or archived
+  collection with nothing waiting), the collection's settings in Options.
+- **Footer baseline.** Every bottom button of either panel sits on one line, `footerY`. Toasts are
+  centred over the content panel just above it, or over its foot on a small canvas when the screen
+  has no buttons there.
+- **Narrow and short.** The content is narrow under 360 units wide (in an 800x600 or 854x480
+  window), which tightens its padding and puts side by side less: the home's showcase holds fewer
+  figures and its **More** becomes a glyph, Look's view becomes a band over one labelled row a
+  section, and the Figures column shortens its hints. The canvas is short under 300 units high
+  (427x240 in Minecraft's default window), which raises the content's title and lets the columns
+  that no longer fit scroll. Below that, down to 320x240, the scrolling areas keep every control in
+  reach.
+- **Model budget.** From 1.21.6 each figure or box drawn into a screen takes a render target of its
+  own, so a creator screen draws at most 15 models, handed out in a fixed order: the big preview or
+  the showcase's box, the showcase's figures or Look's sample, the figure strip's thumbs from the
+  selected one, then the sidebar's boxes. A node left without one draws a flat stand-in (a thumb
+  its figure's texture, a sidebar row a swatch of the collection's colour) or, on the showcase's
+  stage, nothing; while a dialog that draws models of its own is open (the test draw, the machine's
+  screen) the screen behind it draws none.
+- **Rows.** Choosing a sidebar row plays the tab sound. A setting is a `UiFoldRow` or a
+  `UiToggleRow` whose explanation is its label's tooltip, never a second line.
+- **Saving.** The editor's status slot says how the saving stands in a few words, its full sentence
+  in the tooltip: saved, saving soon, uploading, files waiting for the operator to move on, changes
+  that cannot be saved, a refusal, the space running low, or a published collection's changes not
+  published yet. A click on it does what the state offers, such as going to a change that cannot be
+  saved or retrying. A passing message takes the slot for a toast's lifetime, but never covers an
+  urgent state (changes that cannot be saved, no connection, a failed save). The tab rows repeat it
+  as dots: red where something cannot be saved, amber where a published collection's changes wait.
 
 ## Opening transition
 

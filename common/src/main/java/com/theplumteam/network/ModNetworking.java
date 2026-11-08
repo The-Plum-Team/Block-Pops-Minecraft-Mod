@@ -273,12 +273,14 @@ public class ModNetworking {
             com.theplumteam.client.worldcontent.ClientWorldCollections.forget();
             com.theplumteam.client.worldcontent.ClientWorldUploads.reset();
         });
-        // Uploads send their chunks and the file picker takes its dialog's answer on the client tick
+        // Uploads send their chunks, the file picker takes its dialog's answer and the creator's
+        // savers save drafts on the client tick, whichever screen is shown
         dev.architectury.event.events.client.ClientTickEvent.CLIENT_POST.register(minecraft -> {
             com.theplumteam.client.worldcontent.FilePicker.tick();
             com.theplumteam.client.worldcontent.ClientWorldUploads.tick();
+            com.theplumteam.client.worldcontent.CreatorAutosave.tick();
         });
-        // The creator's client command, in a development environment only
+        // The creator's client command
         com.theplumteam.client.CreatorCommand.register();
 
         BlockPopsMod.logDebug("BlockPops client networking initialized");

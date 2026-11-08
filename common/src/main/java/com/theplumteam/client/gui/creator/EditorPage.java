@@ -3,14 +3,15 @@ package com.theplumteam.client.gui.creator;
 import com.theplumteam.client.gui.creator.ui.UiInput;
 import com.theplumteam.client.gui.creator.ui.UiNode;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.EditBox;
 
 /**
- * One tab of the collection editor, drawn in the area under the editor's top bar and tabs. A
- * page reads and changes the editor's {@link com.theplumteam.client.worldcontent.CreatorDraft}
- * and tells the editor after each change through {@link CreatorEditorScreen#changed()}, which
- * updates the live previews, the unsaved count and the Save button. The page lives as long as
- * the editor, so it keeps its nodes across the editor's rebuilds and adds them again in
- * {@link #build}.
+ * One tab of the collection editor, drawn in its content panel, beside the sidebar that picks
+ * the tab. A page reads and changes the editor's
+ * {@link com.theplumteam.client.worldcontent.CreatorDraft} and tells the editor after each change
+ * through {@link CreatorEditorScreen#changed()}, which updates the live previews, the sidebar's
+ * marks and status, and Publish. The page lives as long as the editor, so it keeps its nodes
+ * across the editor's rebuilds and adds them again in {@link #build}.
  */
 interface EditorPage {
     /**
@@ -39,13 +40,30 @@ interface EditorPage {
     default void tick() {
     }
 
-    /** Whether the page has drop zones, so the editor's status row says files can be dropped. */
+    /** Whether the page has drop zones of its own, which files dropped on the window can reach. */
     default boolean takesFiles() {
         return false;
     }
 
     /** The page's keyboard shortcuts, asked after the editor's own. */
     default boolean shortcut(UiInput.Key key) {
+        return false;
+    }
+
+    /**
+     * A key pressed in one of the page's text fields, offered to the page before the field, as
+     * Tab moving on from a field to a control of the page that is not a text field: true when
+     * the page used it. Escape never reaches it: the editor takes the keyboard from the field.
+     */
+    default boolean fieldKey(EditBox field, UiInput.Key key) {
+        return false;
+    }
+
+    /**
+     * Escape, once no menu, dialog or field holds it: the page goes back one step of its own,
+     * such as out of a sub-view, and answers true, or answers false to let the editor leave.
+     */
+    default boolean escape() {
         return false;
     }
 
