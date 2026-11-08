@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "YAKINDA",
   "blockpops.world_creator.done": "Tamam",
   "blockpops.world_creator.machine_button": "Oluşturucu",
-  "blockpops.world_creator.command.refused": "Oluşturucuyu yalnızca geliştirme ortamındaki yöneticiler, dünya koleksiyonları olan bir sunucuda açabilir",
+  "blockpops.world_creator.command.refused": "Oluşturucuyu yalnızca yöneticiler, dünya koleksiyonları olan bir sunucuda açabilir",
   "blockpops.world_creator.slug_hint": "slug: a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "Bir slug, a-z, 0-9 ve _ karakterlerinden oluşur ve 1 ila 24 karakter uzunluğundadır",
   "blockpops.world_creator.slug_taken": "%s zaten var ya da kalıcı olarak silinmiş",

@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "SEGERA",
   "blockpops.world_creator.done": "Selesai",
   "blockpops.world_creator.machine_button": "Kreator",
-  "blockpops.world_creator.command.refused": "Hanya operator di lingkungan pengembangan yang bisa membuka kreator, di server yang punya koleksi dunia",
+  "blockpops.world_creator.command.refused": "Hanya operator yang bisa membuka kreator, di server yang punya koleksi dunia",
   "blockpops.world_creator.slug_hint": "slug: a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "Slug terdiri dari 1 sampai 24 karakter a-z, 0-9, dan _",
   "blockpops.world_creator.slug_taken": "%s sudah ada atau pernah dihapus selamanya",

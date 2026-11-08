@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "BALD",
   "blockpops.world_creator.done": "Fertig",
   "blockpops.world_creator.machine_button": "Werkstatt",
-  "blockpops.world_creator.command.refused": "Nur Operatoren in einer Entwicklungsumgebung können die Werkstatt öffnen, auf einem Server mit Weltsammlungen",
+  "blockpops.world_creator.command.refused": "Nur Operatoren können die Werkstatt öffnen, auf einem Server mit Weltsammlungen",
   "blockpops.world_creator.slug_hint": "Slug: a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "Ein Slug hat 1 bis 24 Zeichen aus a-z, 0-9 und _",
   "blockpops.world_creator.slug_taken": "%s existiert bereits oder wurde endgültig gelöscht",

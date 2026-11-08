@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "將至",
   "blockpops.world_creator.done": "成",
   "blockpops.world_creator.machine_button": "創作坊",
-  "blockpops.world_creator.command.refused": "唯開發之境中之吏，於有世集之伺服器，可啟創作坊",
+  "blockpops.world_creator.command.refused": "唯吏於有世集之伺服器，可啟創作坊",
   "blockpops.world_creator.slug_hint": "代號：a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "代號一至二十四字，唯 a-z, 0-9 與 _",
   "blockpops.world_creator.slug_taken": "已有%s，抑既永刪",

@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "قريبًا",
   "blockpops.world_creator.done": "تم",
   "blockpops.world_creator.machine_button": "المنشئ",
-  "blockpops.world_creator.command.refused": "لا يمكن فتح المنشئ إلا للمشغّلين في بيئة تطوير، وعلى خادم فيه مجموعات عالم",
+  "blockpops.world_creator.command.refused": "لا يمكن فتح المنشئ إلا للمشغّلين، وعلى خادم فيه مجموعات عالم",
   "blockpops.world_creator.slug_hint": "slug: a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "يتكون الـ slug من 1 إلى 24 حرفًا من a-z, 0-9 و _",
   "blockpops.world_creator.slug_taken": "الـ slug %s موجود بالفعل أو حُذف نهائيًا",

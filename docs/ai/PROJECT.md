@@ -140,9 +140,7 @@ collection, `e2e_fixture`, comes from the verified caches `e2e/custom_fixture.py
 
 World collections
 ([ADR 0003](../architecture/decisions/0003-accept-operator-uploaded-world-collections.md)) are
-authored in game by operators at level 2, which the server re-checks for every packet. Until they
-are finished, `/blockpops worldcollections` is registered only in a development environment, as the
-creator opens only there. Their files
+authored in game by operators at level 2, which the server re-checks for every packet. Their files
 come only from that operator's upload in `WorldUpload*Packet`s or from a datapack's
 `blockpops_world_collections/` directory; never from a URL, the CDN or a path a server names.
 `com.theplumteam.worldcontent` validates every file (`PngValidator`, `GeoJsonCheck`,
@@ -172,10 +170,9 @@ duplicate, a purge or a datapack import started in the editor, is an action of
 `WorldCollectionEditPacket` answered by `WorldCollectionStatusPacket`; an editor import reads only
 the server's own datapacks by exact name, as the command does.
 
-The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: a
-development environment, an operator, and World collections synced. Its entry points are the
-machine screen's **Creator** button, the Settings **Creator** tab and the client command
-`/blockpopscreator`, which is registered only in a development environment. Packaged E2E players
+The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: an
+operator and World collections synced. Its entry points are the machine screen's **Creator**
+button, the Settings **Creator** tab and the client command `/blockpopscreator`. Packaged E2E players
 run production code and are not operators, so no entry point may bypass that check. Its screens
 are a sidebar and one content panel built on `SidebarScreen`; the editor's one explicit step is
 Publish, at the foot of its sidebar. The creator previews files before they are sent. A draft's

@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "СКОРО",
   "blockpops.world_creator.done": "Готово",
   "blockpops.world_creator.machine_button": "Конструктор",
-  "blockpops.world_creator.command.refused": "Открыть конструктор могут только операторы в среде разработки, на сервере с коллекциями мира",
+  "blockpops.world_creator.command.refused": "Открыть конструктор могут только операторы, на сервере с коллекциями мира",
   "blockpops.world_creator.slug_hint": "слаг: a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "Слаг — от 1 до 24 символов: a-z, 0-9 и _",
   "blockpops.world_creator.slug_taken": "Слаг %s уже занят или был удалён навсегда",

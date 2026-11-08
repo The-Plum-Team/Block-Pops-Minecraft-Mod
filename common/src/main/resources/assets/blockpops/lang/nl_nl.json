@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "BINNENKORT",
   "blockpops.world_creator.done": "Klaar",
   "blockpops.world_creator.machine_button": "Maker",
-  "blockpops.world_creator.command.refused": "Alleen beheerders in een ontwikkelomgeving kunnen de maker openen, op een server met wereldcollecties",
+  "blockpops.world_creator.command.refused": "Alleen beheerders kunnen de maker openen, op een server met wereldcollecties",
   "blockpops.world_creator.slug_hint": "slug: a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "Een slug bestaat uit 1 tot 24 tekens: a-z, 0-9 en _",
   "blockpops.world_creator.slug_taken": "%s bestaat al of is voorgoed verwijderd",

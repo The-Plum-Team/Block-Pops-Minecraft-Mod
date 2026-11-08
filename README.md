@@ -68,9 +68,7 @@ button offers no checkout.
 
 ## World collections
 
-World collections are still in progress, so for now they can be made only in a
-development environment (a game started from Gradle or an IDE). There,
-operators (permission level 2) make collections for one world from their own
+Operators (permission level 2) make collections for one world from their own
 skins, box textures, logos and Blockbench models, with
 `/blockpops worldcollections` and files imported from a datapack, or with the
 in-game creator, which uploads them from your computer and opens from the
@@ -93,9 +91,8 @@ a datapack or deletes a collection for good.
 
 The server checks every file, stores it with the world under
 `data/blockpops-world-collections/` and sends it to each player who joins;
-nothing is published anywhere else. A world that already holds some still sends
-them to its players outside a development environment. A datapack can ship one
-for `importpack`. See [World Collections](COLLECTIONS_GUIDE.md#world-collections)
+nothing is published anywhere else. A datapack can ship a World collection for
+`importpack`. See [World Collections](COLLECTIONS_GUIDE.md#world-collections)
 for how to use the creator, the file rules, limits and commands, and
 [ADR 0003](docs/architecture/decisions/0003-accept-operator-uploaded-world-collections.md),
 [ADR 0004](docs/architecture/decisions/0004-extend-world-collections-for-the-redesigned-creator.md),

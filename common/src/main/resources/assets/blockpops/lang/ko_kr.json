@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "곧 출시",
   "blockpops.world_creator.done": "완료",
   "blockpops.world_creator.machine_button": "제작기",
-  "blockpops.world_creator.command.refused": "제작기는 세계 컬렉션이 있는 서버에서 개발 환경의 관리자만 열 수 있습니다",
+  "blockpops.world_creator.command.refused": "제작기는 세계 컬렉션이 있는 서버에서 관리자만 열 수 있습니다",
   "blockpops.world_creator.slug_hint": "슬러그: a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "슬러그는 1~24자이며 a-z, 0-9, _만 쓸 수 있습니다",
   "blockpops.world_creator.slug_taken": "%s 슬러그는 이미 있거나 영구 삭제되었습니다",

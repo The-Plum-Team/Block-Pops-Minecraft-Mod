@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "เร็ว ๆ นี้",
   "blockpops.world_creator.done": "เสร็จสิ้น",
   "blockpops.world_creator.machine_button": "ตัวสร้าง",
-  "blockpops.world_creator.command.refused": "เฉพาะผู้ควบคุมในสภาพแวดล้อมการพัฒนาเท่านั้นที่เปิดตัวสร้างได้ บนเซิร์ฟเวอร์ที่มีคอลเลกชันประจำโลก",
+  "blockpops.world_creator.command.refused": "เฉพาะผู้ควบคุมเท่านั้นที่เปิดตัวสร้างได้ บนเซิร์ฟเวอร์ที่มีคอลเลกชันประจำโลก",
   "blockpops.world_creator.slug_hint": "slug: a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "slug มีได้ 1 ถึง 24 อักขระจาก a-z, 0-9 และ _",
   "blockpops.world_creator.slug_taken": "%s มีอยู่แล้วหรือเคยถูกลบถาวร",

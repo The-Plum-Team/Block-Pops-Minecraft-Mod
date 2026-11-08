@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "SẮP CÓ",
   "blockpops.world_creator.done": "Xong",
   "blockpops.world_creator.machine_button": "Trình tạo",
-  "blockpops.world_creator.command.refused": "Chỉ người điều hành trong môi trường phát triển mới mở được trình tạo, trên máy chủ có bộ sưu tập thế giới",
+  "blockpops.world_creator.command.refused": "Chỉ người điều hành mới mở được trình tạo, trên máy chủ có bộ sưu tập thế giới",
   "blockpops.world_creator.slug_hint": "slug: a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "Slug gồm 1 đến 24 ký tự a-z, 0-9 và _",
   "blockpops.world_creator.slug_taken": "%s đã tồn tại hoặc đã bị xóa vĩnh viễn",

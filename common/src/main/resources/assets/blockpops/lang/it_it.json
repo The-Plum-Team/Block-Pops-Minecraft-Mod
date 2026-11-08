@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "PRESTO",
   "blockpops.world_creator.done": "Fatto",
   "blockpops.world_creator.machine_button": "Creatore",
-  "blockpops.world_creator.command.refused": "Solo gli operatori in un ambiente di sviluppo possono aprire il creatore, su un server che ha collezioni di mondo",
+  "blockpops.world_creator.command.refused": "Solo gli operatori possono aprire il creatore, su un server che ha collezioni di mondo",
   "blockpops.world_creator.slug_hint": "slug: a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "Uno slug ha da 1 a 24 caratteri tra a-z, 0-9 e _",
   "blockpops.world_creator.slug_taken": "%s esiste già o è stato eliminato",

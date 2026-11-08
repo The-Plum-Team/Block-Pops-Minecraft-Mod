@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "जल्द",
   "blockpops.world_creator.done": "पूर्ण",
   "blockpops.world_creator.machine_button": "क्रिएटर",
-  "blockpops.world_creator.command.refused": "क्रिएटर सिर्फ़ डेवलपमेंट एनवायरनमेंट में ऑपरेटर ही खोल सकते हैं, ऐसे सर्वर पर जिसमें दुनिया संग्रह हों",
+  "blockpops.world_creator.command.refused": "क्रिएटर सिर्फ़ ऑपरेटर ही खोल सकते हैं, ऐसे सर्वर पर जिसमें दुनिया संग्रह हों",
   "blockpops.world_creator.slug_hint": "स्लग: a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "स्लग में a-z, 0-9 और _ के 1 से 24 अक्षर होते हैं",
   "blockpops.world_creator.slug_taken": "%s पहले से मौजूद है या हमेशा के लिए डिलीट किया जा चुका है",

@@ -280,7 +280,7 @@ public class ModNetworking {
             com.theplumteam.client.worldcontent.ClientWorldUploads.tick();
             com.theplumteam.client.worldcontent.CreatorAutosave.tick();
         });
-        // The creator's client command, in a development environment only
+        // The creator's client command
         com.theplumteam.client.CreatorCommand.register();
 
         BlockPopsMod.logDebug("BlockPops client networking initialized");

@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "即将推出",
   "blockpops.world_creator.done": "完成",
   "blockpops.world_creator.machine_button": "创作工具",
-  "blockpops.world_creator.command.refused": "只有开发环境中的管理员才能打开创作工具，且服务器上需要有世界系列",
+  "blockpops.world_creator.command.refused": "只有管理员才能打开创作工具，且服务器上需要有世界系列",
   "blockpops.world_creator.slug_hint": "ID：a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "ID 由 1 到 24 个字符组成，只能使用 a-z, 0-9 和 _",
   "blockpops.world_creator.slug_taken": "%s 已存在或已被永久删除",

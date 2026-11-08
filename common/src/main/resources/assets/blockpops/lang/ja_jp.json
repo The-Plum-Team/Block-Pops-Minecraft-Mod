@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "近日公開",
   "blockpops.world_creator.done": "完了",
   "blockpops.world_creator.machine_button": "クリエイター",
-  "blockpops.world_creator.command.refused": "クリエイターは、ワールドコレクションのあるサーバーで、開発環境の管理者だけが開けます",
+  "blockpops.world_creator.command.refused": "クリエイターは、ワールドコレクションのあるサーバーで、管理者だけが開けます",
   "blockpops.world_creator.slug_hint": "スラッグ: a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "スラッグはa-z, 0-9, _を使った1〜24文字です",
   "blockpops.world_creator.slug_taken": "%sはすでに存在するか、完全に削除済みです",

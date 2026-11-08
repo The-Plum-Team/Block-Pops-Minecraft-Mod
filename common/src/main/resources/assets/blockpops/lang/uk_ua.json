@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "НЕЗАБАРОМ",
   "blockpops.world_creator.done": "Готово",
   "blockpops.world_creator.machine_button": "Конструктор",
-  "blockpops.world_creator.command.refused": "Відкрити конструктор можуть лише оператори в середовищі розробки, на сервері з колекціями світу",
+  "blockpops.world_creator.command.refused": "Відкрити конструктор можуть лише оператори, на сервері з колекціями світу",
   "blockpops.world_creator.slug_hint": "slug: a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "Slug має від 1 до 24 символів: a-z, 0-9 і _",
   "blockpops.world_creator.slug_taken": "Slug %s уже існує або був видалений назавжди",

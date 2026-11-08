@@ -199,7 +199,7 @@
   "blockpops.world_creator.soon": "SNART",
   "blockpops.world_creator.done": "Klar",
   "blockpops.world_creator.machine_button": "Skapare",
-  "blockpops.world_creator.command.refused": "Endast operatörer i en utvecklingsmiljö kan öppna skaparen, på en server som har världssamlingar",
+  "blockpops.world_creator.command.refused": "Endast operatörer kan öppna skaparen, på en server som har världssamlingar",
   "blockpops.world_creator.slug_hint": "slug: a-z, 0-9, _",
   "blockpops.world_creator.slug_rule": "En slug består av 1 till 24 tecken: a-z, 0-9 och _",
   "blockpops.world_creator.slug_taken": "%s finns redan eller har tagits bort för alltid",
