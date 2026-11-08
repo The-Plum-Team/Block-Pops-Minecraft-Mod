@@ -96,7 +96,9 @@ right after the Central repository Loom declares. A transient 404 from Central t
 to the same path there. The verification checksums name artifacts, not repositories, so it needs no
 new metadata. The Gradle wrapper downloads its distribution from GitHub's release mirror
 (`github.com/gradle/gradle-distributions`), whose zip has the same SHA-256 as the
-`services.gradle.org` one that `distributionSha256Sum` pins.
+`services.gradle.org` one that `distributionSha256Sum` pins. Its `networkTimeout` is 60 seconds,
+the wrapper's connect and read timeout, because the former 10 seconds lost CI jobs to slow GitHub
+release downloads and the wrapper does not retry.
 
 Two deterministic gates are authoritative. On ordinary PRs into `master`, branch
 protection must require their protected App-authenticated bridge contexts, not a
