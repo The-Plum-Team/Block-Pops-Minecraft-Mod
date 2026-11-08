@@ -15,6 +15,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
@@ -35,6 +37,16 @@ import java.util.function.Predicate;
  * record the draft was made from, which {@link CreatorSave} turns into edits. When a sync
  * brings a newer record, {@link #rebase} takes it for every field the operator did not
  * touch and keeps the rest, so a save that just landed counts as saved.
+ *
+ * <p>The draft remembers what each accepted save sent ({@link #markSent}), by change key, until
+ * a sync that came after the server's answer shows it. A field whose value went out and then
+ * changed back before that sync keeps the value it changed back to, rather than taking the sent
+ * one from the sync, so the next save sends it; and a new figure that was sent and then deleted
+ * here is not brought back by the sync that first holds it. A new figure the server took keeps its
+ * id from then on, before any sync.
+ *
+ * <p>A listener ({@link #listen}) hears the key of every change the operator makes, which is
+ * what {@link AutoSaver} times its saves by.
  *
  * <p>Every change first records a snapshot for {@link #undo()}, at most {@value #MAX_UNDO}
  * of them. Changes to the same field one after another, such as typing a name, share one
@@ -57,8 +69,11 @@ public final class CreatorDraft {
     public static final String LOGO_LAYOUT = "logo_layout";
     public static final String PLUSH = "plush";
     public static final String RARITY_WEIGHTS = "rarity_weights";
+    public static final String HOLOGRAPHIC = "holographic";
     public static final String ARCHIVED = "archived";
     public static final String ORDER = "order";
+    /** The change key {@link #listen} hears for an undo, which may change any field. */
+    public static final String UNDO = "undo";
     /** The prefix of every change to one figure: {@code figure/<id>/<field>}. */
     public static final String FIGURE = "figure/";
 
@@ -343,6 +358,24 @@ public final class CreatorDraft {
             if (!taken.test(wanted)) {
                 id = wanted;
             }
+            owner.touched(key("name"));
+        }
+
+        /**
+         * Gives a new figure the id its name makes again, as {@link #rename} would have, after a
+         * save in flight held its id still while the name changed. A figure the server has is left
+         * alone. It is no undo step.
+         */
+        public void followName() {
+            if (!isNew) {
+                return;
+            }
+            String own = id;
+            Predicate<String> taken = other -> !other.equals(own) && owner.isFigureIdTaken(other);
+            String wanted = Slugs.unique(Slugs.figure(name), taken);
+            if (!taken.test(wanted)) {
+                id = wanted;
+            }
         }
 
         /**
@@ -484,7 +517,8 @@ public final class CreatorDraft {
     private record Snapshot(String slug, String name, String author, int red, int green, int blue, BoxMode boxMode,
                             @Nullable String boxColor, @Nullable FileRef boxTexture, @Nullable FileRef logo,
                             String authorUrl, @Nullable LogoLayout logoLayout, boolean plush,
-                            @Nullable RarityWeights rarityWeights, boolean archived, List<FigureDraft> figures) {
+                            @Nullable RarityWeights rarityWeights, boolean holographic, boolean archived,
+                            List<FigureDraft> figures) {
     }
 
     // The record the draft was made from, or the one a create would make while it is new
@@ -509,12 +543,26 @@ public final class CreatorDraft {
     private boolean plush;
     @Nullable
     private RarityWeights rarityWeights;
+    private boolean holographic;
     private boolean archived;
     private List<FigureDraft> figures = new ArrayList<>();
     private final ArrayDeque<Snapshot> undo = new ArrayDeque<>();
     @Nullable
     private String lastKey;
     private int quiet;
+    // What accepted saves sent, by change key, until a sync after the server's answer shows it
+    private final Map<String, Sent> sent = new HashMap<>();
+    @Nullable
+    private Consumer<String> listener;
+
+    /**
+     * A value a save sent and the server accepted.
+     *
+     * @param revision {@link ClientWorldCollections#revision()} when the server's answer came,
+     *                 so only a sync applied after it counts as showing the value
+     */
+    private record Sent(@Nullable Object value, int revision) {
+    }
 
     private CreatorDraft(WorldCollectionRecord base, boolean isNew) {
         this.base = base;
@@ -552,6 +600,7 @@ public final class CreatorDraft {
         logoLayout = record.logoLayout();
         plush = record.plush();
         rarityWeights = record.rarityWeights();
+        holographic = record.holographic();
         archived = record.archived();
         figures = new ArrayList<>();
         for (WorldCollectionRecord.Figure figure : record.figures()) {
@@ -656,6 +705,11 @@ public final class CreatorDraft {
         return rarityWeights != null ? rarityWeights : RarityWeights.DEFAULT;
     }
 
+    /** Whether a draw from the collection may come out holographic, as it may by default. */
+    public boolean holographic() {
+        return holographic;
+    }
+
     public boolean archived() {
         return archived;
     }
@@ -707,7 +761,7 @@ public final class CreatorDraft {
             undo.addLast(new Snapshot(next, snapshot.name(), snapshot.author(), snapshot.red(), snapshot.green(),
                     snapshot.blue(), snapshot.boxMode(), snapshot.boxColor(), snapshot.boxTexture(), snapshot.logo(),
                     snapshot.authorUrl(), snapshot.logoLayout(), snapshot.plush(), snapshot.rarityWeights(),
-                    snapshot.archived(), snapshot.figures()));
+                    snapshot.holographic(), snapshot.archived(), snapshot.figures()));
         }
         return true;
     }
@@ -836,6 +890,17 @@ public final class CreatorDraft {
         }
     }
 
+    /**
+     * Lets the collection's draws come out holographic, one time in 25 as every collection's may,
+     * or turns that off, so none of them ever does.
+     */
+    public void setHolographic(boolean next) {
+        if (next != holographic) {
+            checkpoint(HOLOGRAPHIC);
+            holographic = next;
+        }
+    }
+
     /** Sets the rarity weights, each within the range {@link RarityWeights#isValid} allows. */
     public void setRarityWeights(RarityWeights next) {
         if (!RarityWeights.isValid(next.common(), next.rare(), next.epic(), next.legendary())) {
@@ -863,7 +928,9 @@ public final class CreatorDraft {
 
     /** Whether a figure of the draft, or one the saved collection had, uses the id. */
     public boolean isFigureIdTaken(String figureId) {
-        return figure(figureId) != null || base.figure(figureId).isPresent();
+        // A figure the server took is there even before the sync shows it, and keeps its id
+        return figure(figureId) != null || base.figure(figureId).isPresent()
+                || sent.containsKey(FIGURE + figureId + "/" + NEW);
     }
 
     /** Whether the draft holds as many figures as a collection may. */
@@ -991,11 +1058,38 @@ public final class CreatorDraft {
         }
         restore(snapshot);
         lastKey = null;
+        touched(UNDO);
         return true;
     }
 
-    // Records a snapshot unless the change continues the previous one
+    /** Forgets every undo step, as when another editor attaches to this draft or it was published. */
+    public void clearUndo() {
+        undo.clear();
+        lastKey = null;
+    }
+
+    /**
+     * Sets what hears the key of every change the operator makes from now on: a field's key as
+     * {@link #changes()} names it, {@link #UNDO} after an undo, or the key of a group of changes
+     * {@link #change} makes. Null for none.
+     */
+    public void listen(@Nullable Consumer<String> next) {
+        this.listener = next;
+    }
+
+    private void touched(String key) {
+        Consumer<String> heard = this.listener;
+        if (heard != null) {
+            heard.accept(key);
+        }
+    }
+
+    // Records a snapshot unless the change continues the previous one; every change passes here
     private void checkpoint(String key) {
+        // A rename keys its step by position, and says its own key once its id followed
+        if (key.indexOf('#') < 0) {
+            touched(key);
+        }
         if (quiet > 0 || key.equals(lastKey)) {
             return;
         }
@@ -1012,7 +1106,7 @@ public final class CreatorDraft {
             copies.add(figure.copy());
         }
         return new Snapshot(slug, name, author, red, green, blue, boxMode, boxColor, boxTexture, logo, authorUrl,
-                logoLayout, plush, rarityWeights, archived, copies);
+                logoLayout, plush, rarityWeights, holographic, archived, copies);
     }
 
     private void restore(Snapshot snapshot) {
@@ -1033,12 +1127,13 @@ public final class CreatorDraft {
         logoLayout = snapshot.logoLayout();
         plush = snapshot.plush();
         rarityWeights = snapshot.rarityWeights();
+        holographic = snapshot.holographic();
         archived = snapshot.archived();
         figures = new ArrayList<>();
         for (FigureDraft figure : snapshot.figures()) {
             FigureDraft copy = figure.copy();
             // Whether a figure is new follows the server, which may have stored or dropped it since
-            copy.isNew = base.figure(copy.id).isEmpty();
+            copy.isNew = base.figure(copy.id).isEmpty() && !sent.containsKey(FIGURE + copy.id + "/" + NEW);
             figures.add(copy);
         }
     }
@@ -1082,6 +1177,9 @@ public final class CreatorDraft {
         }
         if (!Objects.equals(rarityWeights, base.rarityWeights())) {
             changes.add(RARITY_WEIGHTS);
+        }
+        if (holographic != base.holographic()) {
+            changes.add(HOLOGRAPHIC);
         }
         if (archived != base.archived()) {
             changes.add(ARCHIVED);
@@ -1267,7 +1365,7 @@ public final class CreatorDraft {
         }
         return new WorldCollectionRecord(collectionId(), name, author, red, green, blue, boxTextureSha(),
                 boxColorName(), FileRef.shaOf(logo), archived, base.revision(), complete, base.draft(),
-                base.editedAt(), authorUrlOrNull(), effectiveLogoLayout(), plush, rarityWeights);
+                base.editedAt(), authorUrlOrNull(), effectiveLogoLayout(), plush, rarityWeights, holographic);
     }
 
     /** Every file picked on this computer that the draft names, by sha. */
@@ -1382,32 +1480,204 @@ public final class CreatorDraft {
         return new Forecast(WorldCollectionRecord.encodedSize(candidate), collectionBytes, uploadBytes, problem);
     }
 
+    // ---- What saves sent
+
+    /**
+     * Remembers what a save sent once the server accepted it: the value of each change key the
+     * save carried, and the new figures it put, whose ids are fixed from now on. A sync applied
+     * after this call shows those values, and {@link #rebase} judges the fields by them.
+     *
+     * @param values      each change key the save carried, with the value it sent
+     * @param putFigures  the ids of new figures the save put
+     */
+    public void markSent(Map<String, Object> values, Collection<String> putFigures) {
+        int revision = ClientWorldCollections.revision();
+        for (Map.Entry<String, Object> entry : values.entrySet()) {
+            sent.put(entry.getKey(), new Sent(entry.getValue(), revision));
+        }
+        for (String figureId : putFigures) {
+            sent.put(FIGURE + figureId + "/" + NEW, new Sent(Boolean.TRUE, revision));
+            FigureDraft figure = figure(figureId);
+            if (figure != null) {
+                figure.isNew = false;
+            }
+        }
+    }
+
+    /** Whether the draft remembers a sent value no sync has shown yet. */
+    public boolean hasUnconfirmedSends() {
+        return !sent.isEmpty();
+    }
+
+    /** Forgets what saves sent, as when the collection was published and saves start again. */
+    public void forgetSent() {
+        sent.clear();
+    }
+
+    /**
+     * The draft's value of a change key, as {@link #changes()} names it, in a form that equals
+     * what {@link #valueIn} gives for a record holding the same: a figure's {@code new} key is
+     * whether the draft has the figure, and its {@code removed} key whether it does not.
+     */
+    @Nullable
+    Object value(String key) {
+        if (key.startsWith(FIGURE)) {
+            int slash = key.lastIndexOf('/');
+            String figureId = key.substring(FIGURE.length(), slash);
+            String field = key.substring(slash + 1);
+            FigureDraft figure = figure(figureId);
+            if (field.equals(NEW)) {
+                return figure != null;
+            }
+            if (field.equals("removed")) {
+                return figure == null;
+            }
+            return figure != null ? figureValue(figure, field) : null;
+        }
+        return switch (key) {
+            case NAME -> name;
+            case AUTHOR -> author;
+            case COLOUR -> rgb();
+            case BOX -> boxValue(boxTextureSha(), boxColorName());
+            case LOGO -> FileRef.shaOf(logo);
+            case AUTHOR_URL -> authorUrlOrNull();
+            case LOGO_LAYOUT -> effectiveLogoLayout();
+            case PLUSH -> plush;
+            case RARITY_WEIGHTS -> rarityWeights;
+            case HOLOGRAPHIC -> holographic;
+            case ARCHIVED -> archived;
+            case ORDER -> orderedIds(figures);
+            default -> null;
+        };
+    }
+
+    /** A record's value of a change key, in the form {@link #value} gives. */
+    @Nullable
+    static Object valueIn(WorldCollectionRecord record, String key) {
+        if (key.startsWith(FIGURE)) {
+            int slash = key.lastIndexOf('/');
+            String figureId = key.substring(FIGURE.length(), slash);
+            String field = key.substring(slash + 1);
+            WorldCollectionRecord.Figure figure = record.figure(figureId).orElse(null);
+            if (field.equals(NEW)) {
+                return figure != null;
+            }
+            if (field.equals("removed")) {
+                return figure == null;
+            }
+            return figure != null ? recordFigureValue(figure, field) : null;
+        }
+        return switch (key) {
+            case NAME -> record.name();
+            case AUTHOR -> record.author();
+            case COLOUR -> record.red() << 16 | record.green() << 8 | record.blue();
+            case BOX -> boxValue(record.boxTexture(), record.boxColor());
+            case LOGO -> record.logo();
+            case AUTHOR_URL -> record.authorUrl();
+            case LOGO_LAYOUT -> record.logoLayout();
+            case PLUSH -> record.plush();
+            case RARITY_WEIGHTS -> record.rarityWeights();
+            case HOLOGRAPHIC -> record.holographic();
+            case ARCHIVED -> record.archived();
+            case ORDER -> {
+                List<String> ids = new ArrayList<>();
+                for (WorldCollectionRecord.Figure figure : record.figures()) {
+                    ids.add(figure.id());
+                }
+                yield ids;
+            }
+            default -> null;
+        };
+    }
+
+    private static String boxValue(@Nullable String textureSha, @Nullable String colourName) {
+        return textureSha != null ? "texture:" + textureSha : colourName != null ? "colour:" + colourName : "";
+    }
+
+    @Nullable
+    private static Object figureValue(FigureDraft figure, String field) {
+        return switch (field) {
+            case "name" -> figure.name;
+            case "kind" -> figure.kind;
+            case "texture" -> FileRef.shaOf(figure.texture);
+            case "model" -> FileRef.shaOf(figure.model);
+            case "animation" -> FileRef.shaOf(figure.animation);
+            case "scale" -> figure.scale;
+            case "enabled" -> figure.enabled;
+            case "rarity" -> figure.rarity;
+            case "variants" -> {
+                List<WorldCollectionRecord.Variant> records = new ArrayList<>();
+                for (VariantDraft variant : figure.variants) {
+                    records.add(variant.toVariant());
+                }
+                yield records;
+            }
+            case "box_face" -> figure.boxFace;
+            default -> null;
+        };
+    }
+
+    @Nullable
+    private static Object recordFigureValue(WorldCollectionRecord.Figure figure, String field) {
+        return switch (field) {
+            case "name" -> figure.name();
+            case "kind" -> figure.kind();
+            case "texture" -> figure.texture();
+            case "model" -> figure.model();
+            case "animation" -> figure.animation();
+            case "scale" -> figure.scale();
+            case "enabled" -> figure.enabled();
+            case "rarity" -> figure.rarity();
+            case "variants" -> figure.variants();
+            case "box_face" -> figure.boxFace();
+            default -> null;
+        };
+    }
+
     // ---- Syncs
 
     /**
-     * Takes a newer record of the collection the server sent: every field the operator did
-     * not change takes the newer value, and every changed one keeps the draft's. A new
-     * collection becomes an existing one once the server sent it, and a new figure the
-     * server now has is new no longer. Saved figures the newer record dropped leave the
-     * draft unless they hold changes, which then make them new again.
+     * Takes a newer record of the collection the server sent, as {@link #rebase(WorldCollectionRecord, int)}
+     * does for the sync the client applied last.
      */
     public void rebase(WorldCollectionRecord newer) {
+        rebase(newer, ClientWorldCollections.revision());
+    }
+
+    /**
+     * Takes a newer record of the collection the server sent: every field the operator did not
+     * change takes the newer value, and every changed one keeps the draft's. A new collection
+     * becomes an existing one once the server sent it, and a new figure the server now has is
+     * new no longer. Saved figures the newer record dropped leave the draft unless they hold
+     * changes, which then make them new again.
+     *
+     * <p>A field that a save sent counts as untouched here when the draft still holds the value
+     * sent, so it follows the server from then on, and as changed when the operator changed it
+     * again since, whatever the server holds; a sync applied before the server's answer to that
+     * save does not hold it yet, so it leaves such a field as the draft has it. A new figure a save
+     * put and the operator then deleted is not added back. Once a sync after the answer has been
+     * taken, the draft forgets what that save sent.
+     *
+     * @param syncRevision the {@link ClientWorldCollections#revision()} of the sync that brought
+     *                     the record
+     */
+    public void rebase(WorldCollectionRecord newer, int syncRevision) {
         if (!newer.id().equals(collectionId())) {
             throw new IllegalArgumentException("Another collection: " + newer.id());
         }
         WorldCollectionRecord older = base;
         // Every field's change is judged against the older record before any field moves on
-        boolean nameKept = !name.equals(older.name());
-        boolean authorKept = !author.equals(older.author());
-        boolean colourKept = red != older.red() || green != older.green() || blue != older.blue();
-        boolean boxKept = !Objects.equals(boxTextureSha(), older.boxTexture())
-                || !Objects.equals(boxColorName(), older.boxColor());
-        boolean logoKept = !Objects.equals(FileRef.shaOf(logo), older.logo());
-        boolean authorUrlKept = !Objects.equals(authorUrlOrNull(), older.authorUrl());
-        boolean layoutKept = !Objects.equals(effectiveLogoLayout(), older.logoLayout());
-        boolean plushKept = plush != older.plush();
-        boolean weightsKept = !Objects.equals(rarityWeights, older.rarityWeights());
-        boolean archivedKept = archived != older.archived();
+        boolean nameKept = kept(NAME, older, syncRevision);
+        boolean authorKept = kept(AUTHOR, older, syncRevision);
+        boolean colourKept = kept(COLOUR, older, syncRevision);
+        boolean boxKept = kept(BOX, older, syncRevision);
+        boolean logoKept = kept(LOGO, older, syncRevision);
+        boolean authorUrlKept = kept(AUTHOR_URL, older, syncRevision);
+        boolean layoutKept = kept(LOGO_LAYOUT, older, syncRevision);
+        boolean plushKept = kept(PLUSH, older, syncRevision);
+        boolean weightsKept = kept(RARITY_WEIGHTS, older, syncRevision);
+        boolean holographicKept = kept(HOLOGRAPHIC, older, syncRevision);
+        boolean archivedKept = kept(ARCHIVED, older, syncRevision);
         if (!nameKept) {
             name = newer.name();
         }
@@ -1445,32 +1715,46 @@ public final class CreatorDraft {
         if (!weightsKept) {
             rarityWeights = newer.rarityWeights();
         }
+        if (!holographicKept) {
+            holographic = newer.holographic();
+        }
         if (!archivedKept) {
             archived = newer.archived();
         }
-        boolean orderKept = isOrderChanged();
+        boolean orderKept = orderKept(syncRevision);
         List<FigureDraft> next = new ArrayList<>();
         Set<String> present = new HashSet<>();
         for (FigureDraft figure : figures) {
             present.add(figure.id);
             WorldCollectionRecord.Figure before = older.figure(figure.id).orElse(null);
             WorldCollectionRecord.Figure after = newer.figure(figure.id).orElse(null);
+            String newKey = FIGURE + figure.id + "/" + NEW;
+            Sent put = sent.get(newKey);
             if (after == null) {
-                // Gone from the server: kept only when it holds changes, as a figure to add again
-                if (before == null || !figureChanges(figure, before).isEmpty()) {
+                if (put != null && put.revision() >= syncRevision) {
+                    // The server took it after this sync was made: it stays, with its id
+                    next.add(figure);
+                    continue;
+                }
+                // Gone from the server: kept only when it holds changes, or was deleted here and
+                // brought back, as a figure to add again
+                if (before == null || !figureChanges(figure, before).isEmpty()
+                        || sent.containsKey(FIGURE + figure.id + "/removed")) {
                     figure.isNew = true;
                     next.add(figure);
                 }
                 continue;
             }
             if (before != null) {
-                rebaseFigure(figure, before, after);
+                rebaseFigure(figure, older, after, syncRevision);
             }
             figure.isNew = false;
             next.add(figure);
         }
         for (WorldCollectionRecord.Figure added : newer.figures()) {
-            boolean removedHere = older.figure(added.id()).isPresent();
+            // Deleted here: one the older record had, or a new one this draft put and then deleted
+            boolean removedHere = older.figure(added.id()).isPresent()
+                    || sent.containsKey(FIGURE + added.id() + "/" + NEW);
             if (!present.contains(added.id()) && !removedHere) {
                 next.add(FigureDraft.of(this, added));
             }
@@ -1496,36 +1780,142 @@ public final class CreatorDraft {
             ordered.addAll(byId.values());
             figures = ordered;
         }
+        // This sync came after the answers to these saves, so it shows what they sent
+        sent.values().removeIf(entry -> entry.revision() < syncRevision);
     }
 
-    private static void rebaseFigure(FigureDraft figure, WorldCollectionRecord.Figure before,
-                                     WorldCollectionRecord.Figure after) {
-        List<String> changed = figureChanges(figure, before);
-        if (!changed.contains("name")) {
+    /**
+     * Whether a field keeps the draft's value through a rebase: it was changed here, judged by
+     * what a save sent once a sync after the server's answer can show it, and by the older record
+     * otherwise.
+     */
+    private boolean kept(String key, WorldCollectionRecord older, int syncRevision) {
+        Object mine = value(key);
+        Sent was = sent.get(key);
+        if (was != null) {
+            // Before the sync that shows the save, the draft holds what the server is about to have
+            return was.revision() >= syncRevision || !Objects.equals(mine, was.value());
+        }
+        return !Objects.equals(mine, valueIn(older, key));
+    }
+
+    private boolean orderKept(int syncRevision) {
+        Sent was = sent.get(ORDER);
+        if (was != null) {
+            return was.revision() >= syncRevision || !orderedIds(figures).equals(was.value());
+        }
+        return isOrderChanged();
+    }
+
+    private void rebaseFigure(FigureDraft figure, WorldCollectionRecord older, WorldCollectionRecord.Figure after,
+                              int syncRevision) {
+        String prefix = FIGURE + figure.id + "/";
+        if (!kept(prefix + "name", older, syncRevision)) {
             figure.name = after.name();
         }
-        if (!changed.contains("kind") && !changed.contains("texture") && !changed.contains("model")
-                && !changed.contains("animation")) {
+        if (!kept(prefix + "kind", older, syncRevision) && !kept(prefix + "texture", older, syncRevision)
+                && !kept(prefix + "model", older, syncRevision) && !kept(prefix + "animation", older, syncRevision)) {
             // The kind and its files go together, as a put replaces them together
             figure.kind = after.kind();
             figure.texture = keepLocal(figure.texture, after.texture());
             figure.model = after.model() != null ? keepLocal(figure.model, after.model()) : null;
             figure.animation = after.animation() != null ? keepLocal(figure.animation, after.animation()) : null;
         }
-        if (!changed.contains("scale")) {
+        if (!kept(prefix + "scale", older, syncRevision)) {
             figure.scale = after.scale();
         }
-        if (!changed.contains("enabled")) {
+        if (!kept(prefix + "enabled", older, syncRevision)) {
             figure.enabled = after.enabled();
         }
-        if (!changed.contains("rarity")) {
+        if (!kept(prefix + "rarity", older, syncRevision)) {
             figure.rarity = after.rarity();
         }
-        if (!changed.contains("variants")) {
+        if (!kept(prefix + "variants", older, syncRevision)) {
             figure.variants = draftsOf(after.variants());
         }
-        if (!changed.contains("box_face")) {
+        if (!kept(prefix + "box_face", older, syncRevision)) {
             figure.boxFace = after.boxFace();
+        }
+    }
+
+    // ---- Putting changes back
+
+    /**
+     * Drops every change: the draft holds the record it compares against again, as a published
+     * collection's changes are discarded. It is no undo step.
+     */
+    public void discardPending() {
+        takeAll(base);
+        lastKey = null;
+    }
+
+    /** Puts the name, author, colour, box and logo back as the server has them. It is no undo step. */
+    public void revertIdentity() {
+        name = base.name();
+        author = base.author();
+        red = base.red();
+        green = base.green();
+        blue = base.blue();
+        takeBox(base);
+        logo = FileRef.ofNullable(base.logo());
+        if (logo == null) {
+            logoLayout = null;
+        }
+    }
+
+    /** Puts the author link, logo placement, plush flag and rarity weights back as the server has them. */
+    public void revertExtras() {
+        authorUrl = base.authorUrl() != null ? base.authorUrl() : "";
+        logoLayout = base.logoLayout();
+        plush = base.plush();
+        rarityWeights = base.rarityWeights();
+    }
+
+    /**
+     * Puts whether the collection's draws may come out holographic back as the server has it. It is
+     * no undo step.
+     */
+    public void revertHolographic() {
+        holographic = base.holographic();
+    }
+
+    /**
+     * Puts the figures back in the order the server has them, figures it does not have yet
+     * after them in the draft's order. It is no undo step.
+     */
+    public void revertOrder() {
+        Map<String, Integer> order = new HashMap<>();
+        List<WorldCollectionRecord.Figure> saved = base.figures();
+        for (int i = 0; i < saved.size(); i++) {
+            order.put(saved.get(i).id(), i);
+        }
+        // A stable sort, so the new figures keep their own order
+        figures.sort(Comparator.comparingInt(figure -> order.getOrDefault(figure.id(), Integer.MAX_VALUE)));
+    }
+
+    /** Puts the collection back in or out of the machines as the server has it. It is no undo step. */
+    public void revertArchived() {
+        archived = base.archived();
+    }
+
+    /**
+     * Puts one figure back as the server has it, in its place, or takes it out of the draft when
+     * the server does not have it. It is no undo step.
+     */
+    public void revertFigure(String figureId) {
+        FigureDraft figure = figure(figureId);
+        WorldCollectionRecord.Figure saved = base.figure(figureId).orElse(null);
+        if (figure == null) {
+            if (saved != null) {
+                figures.add(FigureDraft.of(this, saved));
+            }
+            return;
+        }
+        int index = figures.indexOf(figure);
+        if (saved == null) {
+            figures.remove(index);
+        } else {
+            figures.set(index, FigureDraft.of(this, saved));
         }
     }
 

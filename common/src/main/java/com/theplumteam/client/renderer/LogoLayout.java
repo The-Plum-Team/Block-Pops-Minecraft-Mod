@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.runtime.RuntimeTextures;
 import com.theplumteam.figure.FigureCollection;
+import com.theplumteam.worldcontent.WorldCollectionRecord;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 
@@ -21,13 +22,24 @@ import java.util.concurrent.ConcurrentHashMap;
  * slowly, so wide logos stay legible and square ones do not cover the window. The
  * constants were fitted to the sixteen logos placed by hand before this existed, and
  * reproduce them to about 0.4 model pixels on average.
+ *
+ * <p>{@link #onFace} gives the same placement on the front face seen flat, as the creator's
+ * box-front editor draws it, from the same constants, so the two always agree.
  */
 public final class LogoLayout {
     // The window face of box_block.geo.json seen from the front, in model pixels:
     // its left edge is at x = 5.5 and its bottom at y = 0.1.
     private static final float FACE_LEFT_X = 5.5f;
     private static final float FACE_BOTTOM_Y = 0.1f;
-    private static final float FACE_WIDTH = 11.0f;
+    /** The width of the box's front face, in model pixels: the face {@link #onFace} places the logo on. */
+    public static final float FACE_WIDTH = 11.0f;
+    /** Where the front face's texels are in the 64 by 64 box texture: from (16, 0), 16 by 22. */
+    public static final int FRONT_U = 16;
+    public static final int FRONT_V = 0;
+    public static final int FRONT_WIDTH = 16;
+    public static final int FRONT_HEIGHT = 22;
+    /** The width and the height of a box texture, in texels. */
+    public static final int BOX_TEXTURE_SIZE = 64;
     // Where the logo cube draws the image's left (u = 0) and top (v = 0) edges, before
     // the placement transform moves and stretches it.
     private static final float CUBE_LEFT_X = 4.86f;
@@ -70,14 +82,36 @@ public final class LogoLayout {
                 : BOUNDS.computeIfAbsent(texture, LogoLayout::measure);
     }
 
+    /**
+     * Where the drawn part of a logo sits on the box's front face, seen flat from the front:
+     * {left, bottom, width, height} in model pixels, from the face's bottom-left corner, on a
+     * face {@link #FACE_WIDTH} pixels wide. The same rule as the box draws it with, so a logo
+     * placed here lands where the box shows it.
+     *
+     * @param bounds the logo's image and drawn part, as {@link #bounds} measures them
+     */
+    public static float[] onFace(int[] bounds, WorldCollectionRecord.LogoLayout layout) {
+        float drawnWidth = Math.max(1, bounds[4] - bounds[2]);
+        float drawnHeight = Math.max(1, bounds[5] - bounds[3]);
+        float aspect = drawnWidth / drawnHeight;
+        float width = fittedWidth(aspect) * layout.scale();
+        return new float[] {MARGIN_LEFT + layout.offsetXPixels(), MARGIN_BOTTOM + layout.offsetYPixels(), width,
+                width / aspect};
+    }
+
+    // The width a logo of this aspect gets at its usual size, in model pixels
+    private static float fittedWidth(float aspect) {
+        return Math.min((float) (SQUARE_WIDTH * Math.pow(aspect, WIDTH_EXPONENT)),
+                Math.min(MAX_WIDTH, MAX_HEIGHT * aspect));
+    }
+
     private static float[] place(int[] bounds, float scale, float offsetX, float offsetY) {
         float imageWidth = bounds[0];
         float imageHeight = bounds[1];
         float drawnWidth = bounds[4] - bounds[2];
         float drawnHeight = bounds[5] - bounds[3];
         float aspect = drawnWidth / drawnHeight;
-        float width = Math.min((float) (SQUARE_WIDTH * Math.pow(aspect, WIDTH_EXPONENT)),
-                Math.min(MAX_WIDTH, MAX_HEIGHT * aspect)) * scale;
+        float width = fittedWidth(aspect) * scale;
         float scaleX = width * imageWidth / drawnWidth;
         float scaleY = width / aspect * imageHeight / drawnHeight;
         // Anchor the drawn part's bottom-left corner, then find where that puts the image's

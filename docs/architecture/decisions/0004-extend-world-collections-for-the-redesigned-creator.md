@@ -4,7 +4,18 @@
 
 Accepted. It partially supersedes
 [ADR 0003](0003-accept-operator-uploaded-world-collections.md), which stays in force for everything
-this record does not change.
+this record does not change. Partially superseded by
+[ADR 0005](0005-autosave-world-collection-drafts.md): a draft's changes, its picked and own-skin
+files included, are no longer kept until Save but saved as they settle, files once the operator
+moves on; the editor's Save, Save draft and Save figure, which saved one figure on its own, are
+gone; and a publish is atomic only with the edits still pending when it is confirmed, not with
+every change of the session. Extended by
+[ADR 0006](0006-let-world-collections-turn-off-holographic-draws.md), which adds one more optional
+key and one more edit under this record's rules. Amended on 2026-11-08: the creator is no longer
+development-only. `SettingsScreen.canOpenCreator()` asks only for an operator and World collections
+synced, and `/blockpopscreator` and `/blockpops worldcollections` are registered in every
+environment, so the creator ships in the next release; the server still checks every request, and
+packaged E2E players are still not operators.
 
 ## Context
 

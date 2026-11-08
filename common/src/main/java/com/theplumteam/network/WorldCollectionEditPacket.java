@@ -134,6 +134,9 @@ public class WorldCollectionEditPacket {
                 buffer.writeVarInt(weights.epic());
                 buffer.writeVarInt(weights.legendary());
             }
+        } else if (edit instanceof WorldCollectionEdit.SetHolographic set) {
+            buffer.writeUtf(set.id(), WorldPacketFields.MAX_ID);
+            buffer.writeBoolean(set.holographic());
         } else if (edit instanceof WorldCollectionEdit.SetFigureExtras set) {
             buffer.writeUtf(set.id(), WorldPacketFields.MAX_ID);
             buffer.writeUtf(set.figure(), WorldPacketFields.MAX_SLUG);
@@ -247,6 +250,8 @@ public class WorldCollectionEditPacket {
                 }
                 yield new WorldCollectionEdit.SetCollectionExtras(id, authorUrl, layout, plush, weights);
             }
+            case SET_HOLOGRAPHIC -> new WorldCollectionEdit.SetHolographic(buffer.readUtf(WorldPacketFields.MAX_ID),
+                    readFlag(buffer));
             case SET_FIGURE_EXTRAS -> {
                 String id = buffer.readUtf(WorldPacketFields.MAX_ID);
                 String figure = buffer.readUtf(WorldPacketFields.MAX_SLUG);

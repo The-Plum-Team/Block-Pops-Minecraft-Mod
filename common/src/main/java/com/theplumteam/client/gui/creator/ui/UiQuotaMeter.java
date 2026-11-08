@@ -8,7 +8,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Locale;
 import java.util.function.IntSupplier;
 
 /**
@@ -57,11 +56,13 @@ public class UiQuotaMeter extends UiNode.Box {
         return this;
     }
 
-    /** An amount of kibibytes in mebibytes, as "18.4 of 64 MiB"; a whole limit has no decimal. */
+    /**
+     * An amount of kibibytes in mebibytes, as "18.4 of 64 MiB", with the decimal separator of the
+     * player's language; a whole amount has no decimal.
+     */
     public static Component text(int usedKiB, int maxKiB) {
-        String used = String.format(Locale.ROOT, "%.1f", Math.max(0, usedKiB) / 1024.0);
-        String limit = maxKiB % 1024 == 0 ? String.valueOf(maxKiB / 1024)
-                : String.format(Locale.ROOT, "%.1f", maxKiB / 1024.0);
+        String used = CreatorScreen.decimal(Math.max(0, usedKiB) / 1024.0, 1);
+        String limit = CreatorScreen.decimal(maxKiB / 1024.0, 1);
         return CreatorScreen.tr("quota.mib", used, limit);
     }
 

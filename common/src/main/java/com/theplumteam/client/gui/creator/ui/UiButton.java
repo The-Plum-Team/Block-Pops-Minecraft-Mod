@@ -73,6 +73,8 @@ public class UiButton extends UiNode.Box {
     @Nullable
     private String[] glyph;
     private boolean pixelLabel;
+    // A main action's label drawn in Minecraft's font all the same, where the pixel font has no room
+    private boolean plainLabel;
 
     public UiButton(Component label, Style style, Runnable onPress) {
         this.label = label;
@@ -113,7 +115,7 @@ public class UiButton extends UiNode.Box {
         Font font = Minecraft.getInstance().font;
         boolean withIcon = !icon.isEmpty() || glyph != null;
         int width = widthFor(font, label, withIcon);
-        if (pixelLabel || style == Style.PRIMARY) {
+        if (drawsPixelLabel()) {
             int iconWidth = !icon.isEmpty() ? 16 + ICON_GAP : glyph != null ? PixelIcon.width(glyph) + ICON_GAP : 0;
             width = Math.max(width, PixelFont.width(label, PixelFont.crispScale(PIXEL_LABEL_SCALE)) + 2 * PADDING
                     + iconWidth);
@@ -153,6 +155,24 @@ public class UiButton extends UiNode.Box {
     public UiButton pixelLabel() {
         this.pixelLabel = true;
         return this;
+    }
+
+    /**
+     * Draws the label in Minecraft's font even on a main action, whose label is otherwise in the
+     * pixel font, for a button too narrow for its words in the wider pixel font; false goes back.
+     */
+    public void setPlainLabel(boolean plain) {
+        this.plainLabel = plain;
+    }
+
+    /** The width the label needs in the pixel font, as a main action draws it, with the padding. */
+    public int pixelWidth() {
+        int iconWidth = !icon.isEmpty() ? 16 + ICON_GAP : glyph != null ? PixelIcon.width(glyph) + ICON_GAP : 0;
+        return PixelFont.width(label, PixelFont.crispScale(PIXEL_LABEL_SCALE)) + 2 * PADDING + iconWidth;
+    }
+
+    private boolean drawsPixelLabel() {
+        return !plainLabel && (pixelLabel || style == Style.PRIMARY);
     }
 
     /** Lets the button be used again, or not, with no reason given. */
@@ -238,7 +258,7 @@ public class UiButton extends UiNode.Box {
         }
         int room = Math.max(0, width - 2 * PADDING - iconWidth);
         int labelWidth;
-        boolean pixel = pixelLabel || style == Style.PRIMARY;
+        boolean pixel = drawsPixelLabel();
         float pixelScale = 0;
         if (pixel) {
             pixelScale = PixelFont.crispScale(PIXEL_LABEL_SCALE);

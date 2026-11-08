@@ -29,7 +29,8 @@ public sealed interface WorldCollectionEdit {
         SET_FIGURE_EXTRAS(11),
         DUPLICATE(12),
         PURGE(13),
-        IMPORT_PACK(14);
+        IMPORT_PACK(14),
+        SET_HOLOGRAPHIC(15);
 
         private final int id;
 
@@ -201,6 +202,17 @@ public sealed interface WorldCollectionEdit {
         @Override
         public Action action() {
             return Action.SET_COLLECTION_EXTRAS;
+        }
+    }
+
+    /**
+     * Lets draws from a collection come out holographic, as they all may by default, or turns
+     * that off, so no draw from it ever does. Figures players already have keep what they are.
+     */
+    record SetHolographic(String id, boolean holographic) implements WorldCollectionEdit {
+        @Override
+        public Action action() {
+            return Action.SET_HOLOGRAPHIC;
         }
     }
 

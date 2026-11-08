@@ -139,10 +139,17 @@ public final class FilePicker {
     /**
      * What came of a pick.
      *
-     * @param name the file's name for display when the result is about one file, otherwise
-     *             empty
+     * @param name    the file's name for display when the result is about one file, otherwise
+     *                empty
+     * @param refused for a sound image refused only for what its slot allows, as its size, what
+     *                it is, so a screen can say why in the player's language; otherwise null
      */
-    public record PickResult(Kind kind, @Nullable LocalFile file, String name, String message) {
+    public record PickResult(Kind kind, @Nullable LocalFile file, String name, String message,
+                             @Nullable BlobInfo refused) {
+        public PickResult(Kind kind, @Nullable LocalFile file, String name, String message) {
+            this(kind, file, name, message, null);
+        }
+
         public enum Kind {
             /** {@link #file()} holds the checked file. */
             ACCEPTED,
@@ -164,6 +171,10 @@ public final class FilePicker {
 
         static PickResult refused(String name, String message) {
             return new PickResult(Kind.REFUSED, null, name, message);
+        }
+
+        static PickResult refused(String name, String message, BlobInfo info) {
+            return new PickResult(Kind.REFUSED, null, name, message, info);
         }
 
         static PickResult unavailable() {
@@ -688,7 +699,15 @@ public final class FilePicker {
             if (type == BlobType.PNG) {
                 // Metadata and every other ancillary chunk stay on this computer
                 bytes = PngValidator.canonicalize(raw);
-                info = role != null ? PngValidator.validateCanonical(bytes, role) : PngValidator.validateCanonical(bytes);
+                info = PngValidator.validateCanonical(bytes);
+                if (role != null) {
+                    try {
+                        role.check(info);
+                    } catch (WorldContentException e) {
+                        // A sound image of the wrong size for its slot: what it is goes with the refusal
+                        return PickResult.refused(name, e.getMessage(), info);
+                    }
+                }
             } else {
                 bytes = raw;
                 info = type.validate(bytes);

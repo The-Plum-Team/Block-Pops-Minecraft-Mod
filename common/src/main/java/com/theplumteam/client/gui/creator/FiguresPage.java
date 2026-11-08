@@ -1,27 +1,33 @@
 package com.theplumteam.client.gui.creator;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import com.theplumteam.client.gui.creator.ui.CreatorScreen;
 import com.theplumteam.client.gui.creator.ui.Draw;
 import com.theplumteam.client.gui.creator.ui.FileChecks;
+import com.theplumteam.client.gui.creator.ui.SidebarScreen;
 import com.theplumteam.client.gui.creator.ui.Theme;
 import com.theplumteam.client.gui.creator.ui.UiButton;
-import com.theplumteam.client.gui.creator.ui.UiCardGrid;
 import com.theplumteam.client.gui.creator.ui.UiDropZone;
+import com.theplumteam.client.gui.creator.ui.UiField;
 import com.theplumteam.client.gui.creator.ui.UiInput;
 import com.theplumteam.client.gui.creator.ui.UiMenu;
 import com.theplumteam.client.gui.creator.ui.UiNode;
 import com.theplumteam.client.gui.creator.ui.UiQuotaMeter;
-import com.theplumteam.client.gui.creator.ui.UiScrollPane;
+import com.theplumteam.client.gui.creator.ui.UiSideRow;
 import com.theplumteam.client.gui.creator.ui.UiSizeSlider;
+import com.theplumteam.client.gui.creator.ui.UiThumbStrip;
 import com.theplumteam.client.gui.creator.ui.UiTooltip;
 import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.style.Surfaces;
+import com.theplumteam.client.gui.util.UiSounds;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.client.worldcontent.CreatorDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FigureDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FileRef;
 import com.theplumteam.client.worldcontent.CreatorPreview;
+import com.theplumteam.client.worldcontent.CreatorSave;
 import com.theplumteam.client.worldcontent.FilePicker;
+import com.theplumteam.registry.ModSounds;
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldCollectionRecord.Kind;
@@ -36,221 +42,203 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
+import java.util.Objects;
 import java.util.function.Function;
-import java.util.function.IntConsumer;
-import java.util.function.Supplier;
 
 import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
 
 /**
- * The editor's second tab, "Figures": every figure of the draft as a grid of cards (see
- * {@link FigureCard}), drawn from the editor's live preview, so figures and files not yet saved
- * show at once.
+ * The editor's first tab, "Figures", in the look of Quick Skin's figure editor: a strip of the
+ * collection's figures across the top ({@link UiThumbStrip}), and under it the selected figure's
+ * big preview on the left and its column on the right ({@link FigureInspector}). Everything is
+ * drawn from the editor's live preview, so figures and files not yet saved show at once.
  *
- * <p>The toolbar adds a figure with no files yet, adds several from files, and searches by name
- * or id; chips under it show all the figures or only the skins, the 3D models, the retired ones
- * or those with a problem, each with its count, beside how many figures and how much file space
- * the collection uses. "Add several…", and files dropped anywhere on the grid or chosen through
- * its last cell, open the bulk add ({@link BulkAddScreen}) over the editor, which shows the
- * figures the files make before adding and uploading them.
+ * <p>The strip shows every figure in the draft's order, then a "+" tile that adds an empty figure
+ * and takes files dropped on it, or anywhere over the strip, into the bulk add
+ * ({@link BulkAddScreen}). A figure that needs a look carries a red "!" (its problems, or a change
+ * of it that cannot be saved, in its tooltip), one that cannot be shown yet a "?", and a retired
+ * one shows in black and white. The "!" marks follow the rules the collection's saver holds a
+ * figure back by, so every figure it holds has one, and the "With errors" filter lists and counts
+ * exactly those. A click selects a figure, Ctrl and Shift pick several, the arrow keys step
+ * through them, and Enter or a double click puts the keyboard in the figure's name. With every
+ * figure shown and no search, dragging one moves it, as one undo step.
  *
- * <p>Ctrl or Shift and a click pick several cards, and a bar under the grid then retires,
- * restores, resizes or duplicates them together. With every figure shown and no search,
- * dragging a card moves the figure. All of these only change the draft, and the editor's Save
- * sends them.
+ * <p>The search button at the strip's right opens a menu: how many figures and how much file space
+ * the collection uses, "Search…" (Ctrl+F), which opens a search row over the strip, the button
+ * then at the row's end, and the filters, all the figures or only the skins, the 3D models, the
+ * retired ones or those with a problem, each with its count. While one of them is on the button is
+ * lit and says which. An empty collection has nothing to search, so it shows no button.
  *
- * <p>The side panel is the {@link FigureInspector}, which shows and edits the one selected figure;
- * the left and right arrow keys step through the cards while no field has the keyboard, and a
- * double click or Enter on a card puts the keyboard in the figure's name.
+ * <p>The page opens on the first figure, and a figure a filter or the search hides gives its place
+ * to the first one shown. Adding, duplicating and the bulk add's figures show every figure again,
+ * select the new ones and scroll to them; a single new one gets the keyboard in its name. An
+ * empty collection shows how to add the first figure in place of the preview and the column, a
+ * strip with none selected how to pick one, and a search or filter that matches nothing says so
+ * over a link that shows every figure again.
+ * Every change goes to the editor's draft, which the collection's saver sends, and the editor's
+ * Undo takes it back; moving to another figure counts as moving on, so what waits is saved, files
+ * included.
  */
 final class FiguresPage implements EditorPage {
-    // The grid takes the mockup's 676 of 1244 units; the panel beside it the rest
-    private static final int GRID_SHARE = 54;
-    // On a narrow panel the inspector keeps room for its fields, and the grid narrows to four cards
-    private static final int MIN_GRID_WIDTH = 200;
-    private static final int MIN_PANEL_WIDTH = 140;
-    private static final int GAP = 4;
-    private static final int COLUMN_GAP = 9;
-    private static final int ROW_GAP = 6;
-    private static final int COLUMNS = 6;
-    private static final int MIN_CARD_WIDTH = 46;
-    private static final int SEARCH_MIN = 50;
-    private static final int BOTTOM_ROW = UiButton.SMALL_HEIGHT;
-    private static final int HINT = 0xFFA8A8A8;
+    // The tools button's side, and the room it takes at the strip's right
+    private static final int TOOLS = 22;
+    private static final int TOOLS_ROOM = 28;
+    // The search row over the strip, and the gap under the strip
+    private static final int SEARCH_ROW = 24;
+    private static final int UNDER_STRIP = 12;
+    // A thumbnail's height on a tall, an ordinary and a short canvas, and its width against it
+    private static final int TALL_THUMB = 52;
+    private static final int THUMB = 44;
+    private static final int SHORT_THUMB = 36;
+    private static final int TALL_CANVAS = 420;
+    private static final float THUMB_RATIO = 0.77f;
+    // The preview's share of the page and its limits, on a narrow and a wide content panel
+    private static final float NARROW_PREVIEW = 0.38f;
+    private static final float WIDE_PREVIEW = 0.45f;
+    private static final int NARROW_GAP = 12;
+    private static final int WIDE_GAP = 16;
 
-    /** Which figures the grid shows. */
+    /** Which figures the strip shows. */
     private enum Filter {
-        ALL, SKINS, MODELS, RETIRED, ERRORS
+        ALL("figures.filter.all"), SKINS("figures.filter.skins"), MODELS("figures.filter.models"),
+        RETIRED("figures.filter.retired"), ERRORS("figures.filter.errors");
+
+        final String key;
+
+        Filter(String key) {
+            this.key = key;
+        }
     }
 
     private final CreatorEditorScreen editor;
-    private final FigureCard cards = new FigureCard();
-    private final UiButton addButton;
-    private final UiButton severalButton;
-    private final FilterChips chips;
-    private final UiDropZone dropZone;
-    private final DropCell dropCell;
-    // The selection bar
-    private final UiButton retireAll;
-    private final UiButton restoreAll;
-    private final UiButton sizeAll;
-    private final UiButton duplicateAll;
-    private final UiButton clearSelection;
+    private final UiDropZone filesZone;
+    private final ToolsButton tools = new ToolsButton();
     private final FigureInspector inspector;
+    // Under "No figure matches": clears the search and the filter
+    private final UiButton clearLink;
     @Nullable
-    private UiCardGrid<FigureDraft> grid;
-    private int gridCardWidth;
+    private UiThumbStrip<FigureDraft> strip;
+    private int stripThumbWidth;
+    private int stripThumbHeight;
     @Nullable
     private EditBox searchBox;
 
     private Filter filter = Filter.ALL;
     private String search = "";
+    private boolean searchOpen;
     private final int[] counts = new int[Filter.values().length];
-    private Set<String> dirtyIds = Set.of();
+    // What is wrong with each figure, worked out once per change, and what of each cannot be saved
     private Map<String, List<Component>> problems = Map.of();
+    private Map<String, List<Component>> held = Map.of();
     // How many figures and how much file space, worked out once per change rather than per frame
     private Component counter = Component.empty();
-    // A double click on a card asks for the name field, which gets the keyboard at the next tick:
-    // the screen gives it to the clicked grid once the click is handled
+    // The figure the column showed last, and its id, which tell a move to another figure apart
+    @Nullable
+    private FigureDraft inspected;
+    @Nullable
+    private String inspectedId;
+    // Enter or a double click asks for the name field, which gets the keyboard at the next tick:
+    // the screen gives it to the clicked strip once the click is handled
     private boolean focusNameSoon;
-    private float partialTick;
+    private boolean focusSearchSoon;
 
     // Where build() put what drawContents() draws
-    private UiNode.Rect gridArea = UiNode.Rect.EMPTY;
-    private UiNode.Rect panel = UiNode.Rect.EMPTY;
-    private int chipsY;
-    private int bottomY;
+    private UiNode.Rect below = UiNode.Rect.EMPTY;
 
     FiguresPage(CreatorEditorScreen editor) {
         this.editor = editor;
-        this.addButton = new UiButton(tr("figures.add"), UiButton.Style.PRIMARY, this::addFigure);
-        this.dropZone = UiDropZone.many(editor, tr("figures.drop"), this::openBulkAdd).help(tr("figures.drop_help"));
-        this.dropCell = new DropCell(this.dropZone);
-        this.severalButton = new UiButton(tr("figures.add_several"), UiButton.Style.SECONDARY,
-                () -> openBulkAdd(List.of()));
-        this.chips = new FilterChips(this::chipLabels, index -> {
-            this.filter = Filter.values()[index];
-            refreshItems();
-        });
-
-        this.retireAll = small(tr("figures.retire"), UiButton.Style.SECONDARY, () -> setEnabled(false));
-        this.retireAll.setTooltip(tr("figures.retire_tip"));
-        this.restoreAll = small(tr("figures.restore"), UiButton.Style.SECONDARY, () -> setEnabled(true));
-        this.sizeAll = small(tr("figures.size"), UiButton.Style.SECONDARY, this::openSizeMenu);
-        this.duplicateAll = small(tr("figures.duplicate"), UiButton.Style.SECONDARY, this::duplicateSelected);
-        this.clearSelection = small(Component.literal("✕"), UiButton.Style.LINK, this::clearSelection);
-        this.clearSelection.setTooltip(tr("figures.clear_tip"));
+        this.filesZone = UiDropZone.many(editor, tr("bulk.title_short"), this::openBulkAdd);
         this.inspector = new FigureInspector(editor, this);
-    }
-
-    private static UiButton small(Component label, UiButton.Style style, Runnable action) {
-        UiButton button = new UiButton(label, style, action);
-        button.at(0, 0, 0, UiButton.SMALL_HEIGHT);
-        return button;
+        this.clearLink = new UiButton(tr("figures.clear_search"), UiButton.Style.LINK, this::showEvery);
     }
 
     // Building
 
     @Override
     public void build(UiNode.Rect area) {
-        Font font = Minecraft.getInstance().font;
-        int gridWidth = Math.max(MIN_GRID_WIDTH, Math.min(area.width() - COLUMN_GAP - MIN_PANEL_WIDTH,
-                area.width() * GRID_SHARE / 100));
-        gridWidth = Math.min(gridWidth, area.width());
+        boolean narrow = this.editor.narrow();
+        int thumbHeight = this.editor.height >= TALL_CANVAS ? TALL_THUMB : this.editor.isShort() ? SHORT_THUMB : THUMB;
+        int thumbWidth = Math.round(thumbHeight * THUMB_RATIO);
         int left = area.x();
-        int right = left + gridWidth;
-        int y = area.y();
-
-        // Toolbar: the two ways to add, then the search filling the rest
-        int addWidth = CreatorEditorScreen.buttonWidth(font, this.addButton);
-        this.addButton.at(left, y, addWidth, UiButton.HEIGHT);
-        int severalWidth = UiButton.widthFor(font, this.severalButton.label(), false);
-        this.severalButton.at(left + addWidth + GAP, y, severalWidth, UiButton.HEIGHT);
-        int searchX = this.severalButton.bounds().right() + GAP + 2;
-        this.severalButton.setVisible(right - searchX >= SEARCH_MIN);
-        if (!this.severalButton.visible()) {
-            searchX = this.addButton.bounds().right() + GAP + 2;
+        int inner = area.width();
+        int right = left + inner;
+        int stripY = area.y();
+        if (this.searchOpen) {
+            this.searchBox = this.editor.field("figure_search", left, stripY, inner - TOOLS_ROOM,
+                    WorldContentLimits.MAX_NAME_LENGTH, tr("figures.search_hint"), this.search, value -> {
+                        this.search = value;
+                        refreshItems();
+                    });
+            // The button at the search row's end, in line with the field and the strip's right edge
+            this.tools.at(right - TOOLS, stripY + (UiField.HEIGHT - TOOLS) / 2, TOOLS, TOOLS);
+            stripY += SEARCH_ROW;
+        } else {
+            this.searchBox = null;
         }
-        this.searchBox = this.editor.field("figure_search", searchX, y, Math.max(SEARCH_MIN, right - searchX),
-                WorldContentLimits.MAX_NAME_LENGTH, tr("figures.search_hint"), this.search, value -> {
-                    this.search = value;
-                    refreshItems();
-                });
-        this.editor.add(this.addButton);
-        this.editor.add(this.severalButton);
-        y += UiButton.HEIGHT + ROW_GAP;
-
-        // The chips, with the counters beside them when there is room
-        this.chipsY = y;
-        this.chips.at(left, y, gridWidth, FilterChips.HEIGHT);
-        this.editor.add(this.chips);
-        y += FilterChips.HEIGHT + ROW_GAP;
-
-        this.bottomY = area.bottom() - BOTTOM_ROW;
-        this.gridArea = new UiNode.Rect(left, y, gridWidth, Math.max(0, this.bottomY - 4 - y));
-        UiCardGrid<FigureDraft> cardGrid = grid(gridWidth);
-        cardGrid.at(this.gridArea.x(), this.gridArea.y(), this.gridArea.width(), this.gridArea.height());
-        this.editor.add(cardGrid);
-
-        for (UiButton button : List.of(this.retireAll, this.restoreAll, this.sizeAll, this.duplicateAll,
-                this.clearSelection)) {
-            this.editor.add(button);
+        UiThumbStrip<FigureDraft> row = strip(thumbWidth, thumbHeight);
+        row.at(left, stripY, inner - TOOLS_ROOM, thumbHeight);
+        this.editor.add(row);
+        this.editor.budgetNode(row);
+        if (!this.searchOpen) {
+            this.tools.at(right - TOOLS, stripY + (thumbHeight - TOOLS) / 2, TOOLS, TOOLS);
         }
+        this.editor.add(this.tools);
 
-        // The side panel: the inspector of the selected figure
-        int panelX = right + COLUMN_GAP;
-        this.panel = new UiNode.Rect(panelX, area.y(), Math.max(0, area.right() - panelX), area.height());
-        this.inspector.build(this.panel);
+        // The preview on the left, as tall as the page, and the column beside it
+        int top = stripY + thumbHeight + UNDER_STRIP;
+        int footerY = this.editor.footerY();
+        int previewWidth = narrow ? SidebarScreen.clamp(Math.round(inner * NARROW_PREVIEW), 88, 150)
+                : SidebarScreen.clamp(Math.round(inner * WIDE_PREVIEW), 150, 280);
+        int columnX = left + previewWidth + (narrow ? NARROW_GAP : WIDE_GAP);
+        this.below = new UiNode.Rect(left, top, inner, Math.max(0, area.bottom() - top));
+        this.editor.add(this.clearLink);
+        this.inspector.build(new UiNode.Rect(left, top, previewWidth, Math.max(0, area.bottom() - top)),
+                new UiNode.Rect(columnX, top, Math.max(0, right - columnX), Math.max(0, footerY - 6 - top)), footerY,
+                right);
+        // With nothing selected yet, the first figure is
         refreshItems();
     }
 
     /**
-     * The grid, made again only when the cards change width, as when the window is resized, so
-     * a rebuild keeps the selection and the scroll.
+     * The strip, made again only when its thumbnails change size, as when the window is resized,
+     * so a rebuild keeps the selection and the scroll.
      */
-    private UiCardGrid<FigureDraft> grid(int width) {
-        int contentWidth = width - UiScrollPane.BAR - 2;
-        int columns = Math.max(1, Math.min(COLUMNS, (contentWidth + GAP) / (MIN_CARD_WIDTH + GAP)));
-        int cardWidth = Math.max(MIN_CARD_WIDTH / 2, (contentWidth - (columns - 1) * GAP) / columns);
-        if (this.grid != null && this.gridCardWidth == cardWidth) {
-            return this.grid;
+    private UiThumbStrip<FigureDraft> strip(int thumbWidth, int thumbHeight) {
+        if (this.strip != null && this.stripThumbWidth == thumbWidth && this.stripThumbHeight == thumbHeight) {
+            return this.strip;
         }
-        List<FigureDraft> selected = this.grid != null ? this.grid.selected() : List.of();
-        UiCardGrid<FigureDraft> cardGrid = new UiCardGrid<FigureDraft>(cardWidth, FigureCard.HEIGHT,
-                (graphics, figure, at) -> this.cards.draw(graphics, figure, at,
-                        CreatorPreview.collection(CreatorEditorScreen.PREVIEW_SLOT),
-                        0xFF000000 | this.editor.draft().rgb(), this.dirtyIds.contains(figure.id()),
-                        this.problems.getOrDefault(figure.id(), List.of()), this.partialTick)) {
-            // Files dropped anywhere on the grid go to the bulk add, even with its last cell scrolled
-            // out of sight, where the window would otherwise find no zone to take them
-            @Override
-            @Nullable
-            public UiDropZone dropZones(double mouseX, double mouseY, List<UiDropZone> zones) {
-                UiDropZone under = super.dropZones(mouseX, mouseY, zones);
-                if (!visible()) {
-                    return under;
-                }
-                UiDropZone figureFiles = FiguresPage.this.dropZone;
-                if (!zones.contains(figureFiles)) {
-                    zones.add(figureFiles);
-                }
-                return under == null && bounds().contains(mouseX, mouseY) ? figureFiles : under;
-            }
-        }
-                .gap(GAP)
+        List<FigureDraft> items = this.strip != null ? this.strip.items() : List.of();
+        List<FigureDraft> selected = this.strip != null ? this.strip.selected() : List.of();
+        UiThumbStrip<FigureDraft> made = new UiThumbStrip<>(thumbWidth, thumbHeight, this::look)
+                .collection(() -> CreatorPreview.collection(CreatorEditorScreen.PREVIEW_SLOT))
+                .colour(() -> 0xFF000000 | this.editor.draft().rgb())
                 .keys(FigureDraft::id)
+                .onSelection(chosen -> updateSelection())
                 .onActivate(figure -> this.focusNameSoon = true)
-                .onSelection(chosen -> updateSelection());
-        cardGrid.lastCell(this.dropCell);
-        cardGrid.select(selected);
-        this.grid = cardGrid;
-        this.gridCardWidth = cardWidth;
-        return cardGrid;
+                .addTile(this::addFigure, tr("figures.add_tip"))
+                .filesZone(this.filesZone);
+        made.setItems(items);
+        made.select(selected);
+        this.strip = made;
+        this.stripThumbWidth = thumbWidth;
+        this.stripThumbHeight = thumbHeight;
+        return made;
+    }
+
+    // How a figure's thumbnail looks: its marks and its tooltip, "Name · Skin · 1.5x"
+    private UiThumbStrip.Look look(FigureDraft figure) {
+        List<Component> wrong = new ArrayList<>(this.problems.getOrDefault(figure.id(), List.of()));
+        wrong.addAll(this.held.getOrDefault(figure.id(), List.of()));
+        String name = figure.name().isBlank() ? figure.id() : figure.name();
+        Component tooltip = Component.literal(name + " · ")
+                .append(tr(figure.kind() == Kind.SKIN ? "bulk.type.skin" : "bulk.type.model"))
+                .append(" · " + UiSizeSlider.scaleText(figure.scale()));
+        List<Component> lines = figure.enabled() ? List.of(tooltip) : List.of(tooltip, tr("figures.retired_ribbon"));
+        return new UiThumbStrip.Look(figure.id(), name, figure.isComplete(), !figure.enabled(), wrong, lines,
+                figure.scale());
     }
 
     // Following the draft
@@ -258,38 +246,69 @@ final class FiguresPage implements EditorPage {
     @Override
     public void draftChanged() {
         CreatorDraft draft = this.editor.draft();
-        Set<String> dirty = new HashSet<>();
-        for (String change : this.editor.changes()) {
-            if (change.startsWith(CreatorDraft.FIGURE)) {
-                int end = change.indexOf('/', CreatorDraft.FIGURE.length());
-                dirty.add(end < 0 ? change.substring(CreatorDraft.FIGURE.length())
-                        : change.substring(CreatorDraft.FIGURE.length(), end));
-            }
-        }
-        this.dirtyIds = dirty;
         Map<String, List<Component>> found = new HashMap<>();
-        Arrays.fill(this.counts, 0);
         for (FigureDraft figure : draft.figures()) {
             List<Component> wrong = problemsOf(figure);
             if (!wrong.isEmpty()) {
                 found.put(figure.id(), wrong);
             }
+        }
+        this.problems = found;
+        refreshHeld();
+        recount();
+        long bytes = this.editor.forecast().collectionBytes();
+        int usedKiB = (int) Math.min(Integer.MAX_VALUE, (bytes + 1023) / 1024);
+        int maxKiB = (int) (WorldContentLimits.MAX_COLLECTION_BYTES / 1024);
+        // Under a mebibyte the files read in kibibytes, so a few small skins never read as 0
+        this.counter = tr("card.joined", tr("figures.count", draft.figures().size(), WorldContentLimits.MAX_FIGURES),
+                usedKiB < 1024 ? tr("figures.space_kib", usedKiB, CreatorScreen.decimal(maxKiB / 1024.0, 1))
+                        : UiQuotaMeter.text(usedKiB, maxKiB));
+        Component full = draft.isFull() ? tr("figures.full", WorldContentLimits.MAX_FIGURES) : null;
+        this.filesZone.disable(full);
+        if (this.strip != null) {
+            this.strip.disableAdd(full);
+        }
+        refreshItems();
+    }
+
+    /**
+     * The changes of each figure the collection's saver holds back that the figure's own problems
+     * do not already say: every refusal of the server's, and any other held figure whose problems
+     * missed why, as a file the server dropped from its table, so every held figure has its "!".
+     * Asked again on every tick, since the saver learns them without a change.
+     *
+     * @return whether the figures held changed
+     */
+    private boolean refreshHeld() {
+        Map<String, List<Component>> found = new HashMap<>();
+        for (CreatorSave.Held unit : this.editor.saver().held()) {
+            String figureId = unit.figureId();
+            if (figureId == null || unit.reason() != CreatorSave.Reason.REFUSED && this.problems.containsKey(figureId)) {
+                continue;
+            }
+            found.computeIfAbsent(figureId, id -> new ArrayList<>()).add(unit.detail());
+        }
+        boolean changed = !found.keySet().equals(this.held.keySet());
+        this.held = found;
+        return changed;
+    }
+
+    // Whether a figure has a problem or a change held back: its "!", and the "With errors" filter
+    private boolean hasProblem(FigureDraft figure) {
+        return this.problems.containsKey(figure.id()) || this.held.containsKey(figure.id());
+    }
+
+    // The filters' counts, the figures with errors from the same marks the strip shows
+    private void recount() {
+        Arrays.fill(this.counts, 0);
+        for (FigureDraft figure : this.editor.draft().figures()) {
+            boolean wrong = hasProblem(figure);
             for (Filter which : Filter.values()) {
-                if (accepts(which, figure, !wrong.isEmpty())) {
+                if (accepts(which, figure, wrong)) {
                     this.counts[which.ordinal()]++;
                 }
             }
         }
-        this.problems = found;
-        long bytes = draft.forecast().collectionBytes();
-        this.counter = tr("card.joined", tr("figures.count", draft.figures().size(), WorldContentLimits.MAX_FIGURES),
-                UiQuotaMeter.text((int) Math.min(Integer.MAX_VALUE, (bytes + 1023) / 1024),
-                        (int) (WorldContentLimits.MAX_COLLECTION_BYTES / 1024)));
-        Component full = draft.isFull() ? tr("figures.full", WorldContentLimits.MAX_FIGURES) : null;
-        this.addButton.disable(full);
-        this.severalButton.disable(full);
-        this.dropZone.disable(full);
-        refreshItems();
     }
 
     private static boolean accepts(Filter which, FigureDraft figure, boolean hasProblem) {
@@ -303,11 +322,18 @@ final class FiguresPage implements EditorPage {
     }
 
     /**
-     * Everything that keeps a figure from being saved or shown as it should: a file it still
-     * needs, a file the server lost or could not load, and a picked file that breaks a rule.
+     * Everything that keeps a figure from being saved or shown as it should, by the rules the
+     * collection's saver holds a figure back by ({@link CreatorSave#figureHeld}): its name, a file
+     * it still needs, a file the server lost or could not load, a file that breaks a rule, a skin
+     * variant's name or texture, and a box face outside the texture.
      */
     private static List<Component> problemsOf(FigureDraft figure) {
         List<Component> found = new ArrayList<>();
+        if (figure.name().isBlank()) {
+            found.add(tr("inspector.name_empty"));
+        } else if (!WorldCollectionRecord.isPlainText(figure.name())) {
+            found.add(tr("name_rule"));
+        }
         boolean skin = figure.kind() == Kind.SKIN;
         if (figure.texture() == null || !skin && figure.model() == null) {
             found.add(tr(skin ? "figures.problem.no_skin"
@@ -315,15 +341,25 @@ final class FiguresPage implements EditorPage {
                     : figure.model() == null ? "figures.problem.no_model" : "figures.problem.no_texture"));
         }
         BlobInfo model = figure.model() != null ? figure.model().info() : null;
-        fileProblems(found, figure.texture(), skin ? FilePicker.Slot.SKIN : FilePicker.Slot.MODEL_TEXTURE,
-                info -> skin ? FileChecks.skin(info) : FileChecks.modelTexture(info, model));
+        Function<BlobInfo, List<FileChecks.Check>> textureChecks = FigureExtrasPanel.textureChecks(figure.kind(), model);
+        FilePicker.Slot textureSlot = skin ? FilePicker.Slot.SKIN : FilePicker.Slot.MODEL_TEXTURE;
+        fileProblems(found, figure.texture(), textureSlot, textureChecks);
         if (!skin) {
             fileProblems(found, figure.model(), FilePicker.Slot.MODEL, FileChecks::geo);
             fileProblems(found, figure.animation(), FilePicker.Slot.ANIMATION, FileChecks::animation);
         }
+        // A variant's texture gets its figure's checks, as one the model no longer fits
         for (CreatorDraft.VariantDraft variant : figure.variants()) {
-            fileProblems(found, variant.texture(), skin ? FilePicker.Slot.SKIN : FilePicker.Slot.MODEL_TEXTURE,
-                    info -> List.of());
+            if (variant.name().isBlank() || !WorldCollectionRecord.isPlainText(variant.name())) {
+                found.add(tr("extras.variant_name_rule"));
+            }
+            fileProblems(found, variant.texture(), textureSlot, textureChecks);
+        }
+        WorldCollectionRecord.BoxFace face = figure.boxFace();
+        BlobInfo texture = figure.texture() != null ? figure.texture().info() : null;
+        if (!skin && face != null && face.show() && face.uv() != null && texture != null
+                && !FigureExtrasPanel.fits(face.uv(), texture)) {
+            found.add(tr("extras.face_outside", texture.width(), texture.height()));
         }
         return found;
     }
@@ -353,38 +389,49 @@ final class FiguresPage implements EditorPage {
         }
     }
 
-    /** Shows the figures the chip and the search pick, in the draft's order. */
+    /** Shows the figures the filter and the search pick, in the draft's order. */
     private void refreshItems() {
-        if (this.grid == null) {
+        UiThumbStrip<FigureDraft> row = this.strip;
+        if (row == null) {
             return;
         }
         String query = this.search.strip().toLowerCase(Locale.ROOT);
         List<FigureDraft> shown = new ArrayList<>();
         for (FigureDraft figure : this.editor.draft().figures()) {
-            if (accepts(this.filter, figure, this.problems.containsKey(figure.id())) && (query.isEmpty()
+            if (accepts(this.filter, figure, hasProblem(figure)) && (query.isEmpty()
                     || figure.name().toLowerCase(Locale.ROOT).contains(query) || figure.id().contains(query))) {
                 shown.add(figure);
             }
         }
-        List<FigureDraft> before = this.grid.items();
+        List<FigureDraft> before = row.items();
         FigureDraft was = single();
-        this.grid.setItems(shown);
+        row.setItems(shown);
         keepRenamed(before, was, shown);
+        if (row.selected().isEmpty() && !shown.isEmpty()) {
+            // The figure shown left the strip, as a filter or the search hid it: the first one takes its place
+            row.select(List.of(shown.get(0)));
+        }
         // Only the whole list in its own order can be reordered by dragging
-        boolean whole = this.filter == Filter.ALL && query.isEmpty();
-        this.grid.onReorder(whole ? this::moveFigure : null);
-        this.chips.select(this.filter.ordinal());
+        row.onReorder(whole() ? this::moveFigure : null, tr("figures.hint_filtered"));
+        // An empty collection has nothing to search or filter
+        this.tools.setVisible(!this.editor.draft().figures().isEmpty());
         updateSelection();
     }
 
+    // Whether every figure shows, in its own order
+    private boolean whole() {
+        return this.filter == Filter.ALL && this.search.strip().isEmpty();
+    }
+
     /**
-     * Keeps the one selected card selected when its figure came back under another id, as when
-     * Undo takes back the rename of a new figure: the grid tells cards apart by id, so it lost
-     * the card. Only the same number of cards, with an id at its place that none had before,
+     * Keeps the one selected figure selected when it came back under another id, as when Undo
+     * takes back the rename of a new figure: the strip tells figures apart by id, so it lost the
+     * figure. Only the same number of figures, with an id at its place that none had before,
      * counts as the same figure.
      */
     private void keepRenamed(List<FigureDraft> before, @Nullable FigureDraft was, List<FigureDraft> shown) {
-        if (was == null || this.grid == null || !this.grid.selected().isEmpty() || before.size() != shown.size()) {
+        UiThumbStrip<FigureDraft> row = this.strip;
+        if (was == null || row == null || !row.selected().isEmpty() || before.size() != shown.size()) {
             return;
         }
         int index = before.indexOf(was);
@@ -397,19 +444,13 @@ final class FiguresPage implements EditorPage {
                 return;
             }
         }
-        this.grid.select(List.of(now));
-    }
-
-    private List<Component> chipLabels() {
-        return List.of(tr("figures.filter.all", this.counts[0]), tr("figures.filter.skins", this.counts[1]),
-                tr("figures.filter.models", this.counts[2]), tr("figures.filter.retired", this.counts[3]),
-                tr("figures.filter.errors", this.counts[4]));
+        row.select(List.of(now));
     }
 
     // Selection
 
     private List<FigureDraft> selected() {
-        return this.grid != null ? this.grid.selected() : List.of();
+        return this.strip != null ? this.strip.selected() : List.of();
     }
 
     @Nullable
@@ -418,85 +459,59 @@ final class FiguresPage implements EditorPage {
         return chosen.size() == 1 ? chosen.get(0) : null;
     }
 
-    /** Shows the bar for several figures, or the panel's buttons for one, as the selection now is. */
+    /**
+     * Shows the selection in the preview and the column, or, with none, hides them for the page's
+     * own line, and saves what waits when it is another figure.
+     */
     private void updateSelection() {
         List<FigureDraft> chosen = selected();
-        Font font = Minecraft.getInstance().font;
-
-        // The bar under the grid, after its "n selected"
-        boolean several = chosen.size() >= 2;
-        int x = this.gridArea.x() + font.width(tr("figures.selected", chosen.size())) + 8;
-        boolean anyEnabled = false;
-        boolean anyRetired = false;
-        for (FigureDraft figure : chosen) {
-            anyEnabled |= figure.enabled();
-            anyRetired |= !figure.enabled();
+        // Shown first, so the column's footer link follows it
+        this.inspector.setVisible(!chosen.isEmpty());
+        this.inspector.show(chosen);
+        // A search or filter that matches nothing offers to show every figure again
+        boolean noMatch = noMatch();
+        this.clearLink.setLabel(tr(this.search.strip().isEmpty() ? "figures.show_all" : "figures.clear_search"));
+        if (noMatch) {
+            Font font = Minecraft.getInstance().font;
+            int linkWidth = Math.min(this.below.width(), font.width(this.clearLink.label()) + 2);
+            this.clearLink.at(this.below.centerX() - linkWidth / 2, messageTop() + Theme.LINE_HEIGHT + 6, linkWidth, 12);
         }
-        this.retireAll.disable(anyEnabled ? null : tr("figures.none_to_retire"));
-        this.restoreAll.disable(anyRetired ? null : tr("figures.none_to_restore"));
-        Component noRoom = this.editor.draft().figures().size() + chosen.size() > WorldContentLimits.MAX_FIGURES
-                ? tr("figures.full", WorldContentLimits.MAX_FIGURES) : null;
-        this.duplicateAll.disable(noRoom);
-        for (UiButton button : List.of(this.retireAll, this.restoreAll, this.sizeAll, this.duplicateAll,
-                this.clearSelection)) {
-            int width = button == this.clearSelection ? font.width(button.label()) + 6
-                    : UiButton.widthFor(font, button.label(), false);
-            button.at(x, this.bottomY, width, UiButton.SMALL_HEIGHT);
-            button.setVisible(several && x + width <= this.gridArea.right());
-            x += width + 3;
-        }
-
-        // The inspector shows the one figure selected, and where its card is among those shown
+        this.clearLink.setVisible(noMatch);
+        // Another figure, or none: the operator moved on, so what waits is saved, files included.
+        // A rename keeps the figure and an undo its id, so neither counts.
         FigureDraft figure = chosen.size() == 1 ? chosen.get(0) : null;
-        List<FigureDraft> shown = this.grid != null ? this.grid.items() : List.of();
-        this.inspector.show(figure, figure != null ? Math.max(0, shown.indexOf(figure)) : 0, shown.size(),
-                chosen.size());
+        String figureId = figure != null ? figure.id() : null;
+        if (figure != this.inspected && !Objects.equals(figureId, this.inspectedId)) {
+            this.editor.navigated();
+        }
+        this.inspected = figure;
+        this.inspectedId = figureId;
     }
 
-    private void clearSelection() {
-        if (this.grid != null) {
-            this.grid.clearSelection();
-            updateSelection();
-        }
+    /** The new figure whose name field has the keyboard, or null. */
+    @Nullable
+    String typingFigureId() {
+        return this.inspector.typingFigureId();
     }
 
-    /**
-     * Selects the card before or after the one selected among those shown, going round at the
-     * ends, as the inspector's arrows and the arrow keys do.
-     */
-    void step(int delta) {
-        FigureDraft figure = single();
-        if (figure == null || this.grid == null) {
-            return;
-        }
-        List<FigureDraft> shown = this.grid.items();
-        int index = shown.indexOf(figure);
-        if (index < 0 || shown.size() < 2) {
-            return;
-        }
-        FigureDraft next = shown.get(Math.floorMod(index + delta, shown.size()));
-        this.grid.select(List.of(next));
-        this.grid.reveal(next);
-        updateSelection();
-    }
-
-    /** Keeps a figure selected after its id changed, since the grid tells its cards apart by id. */
+    /** Keeps a figure selected after its id changed, since the strip tells figures apart by id. */
     void keepSelected(FigureDraft figure) {
-        if (this.grid != null) {
-            this.grid.select(List.of(figure));
+        if (this.strip != null) {
+            this.strip.select(List.of(figure));
         }
     }
 
     /** After a figure left the draft, selects the one that took its place, or the last. */
-    void selectNear(int index) {
-        if (this.grid == null) {
+    private void selectNear(int index) {
+        UiThumbStrip<FigureDraft> row = this.strip;
+        if (row == null) {
             return;
         }
-        List<FigureDraft> shown = this.grid.items();
+        List<FigureDraft> shown = row.items();
         if (!shown.isEmpty()) {
             FigureDraft next = shown.get(Math.max(0, Math.min(index, shown.size() - 1)));
-            this.grid.select(List.of(next));
-            this.grid.reveal(next);
+            row.select(List.of(next));
+            row.reveal(next);
         }
         updateSelection();
     }
@@ -514,34 +529,50 @@ final class FiguresPage implements EditorPage {
         reveal(List.of(figure));
     }
 
-    /** Selects figures just added and scrolls to the first, showing every figure if a filter hid them. */
+    /**
+     * Selects figures just added and scrolls to the first, showing every figure again if a filter
+     * or the search hid them; a single new one gets the keyboard in its name.
+     */
     void reveal(List<FigureDraft> added) {
-        if (added.isEmpty() || this.grid == null) {
+        UiThumbStrip<FigureDraft> row = this.strip;
+        if (added.isEmpty() || row == null) {
             return;
         }
         if (this.filter != Filter.ALL || !this.search.isEmpty()) {
             this.filter = Filter.ALL;
+            this.search = "";
             if (this.searchBox != null) {
                 // The field's responder shows every figure again
                 this.searchBox.setValue("");
             }
-            this.search = "";
             refreshItems();
         }
-        this.grid.select(added);
-        this.grid.reveal(added.get(0));
+        row.select(added);
+        row.reveal(added.get(0));
         updateSelection();
-    }
-
-    /** Retires the one selected figure from the draw, or restores it. */
-    void toggleRetired() {
-        FigureDraft figure = single();
-        if (figure != null) {
-            setEnabled(!figure.enabled());
+        if (added.size() == 1 && added.get(0).isNew()) {
+            this.focusNameSoon = true;
         }
     }
 
-    private void setEnabled(boolean enabled) {
+    // Whether the draft has figures but the filter and the search show none of them
+    private boolean noMatch() {
+        return !this.editor.draft().figures().isEmpty() && this.strip != null && this.strip.items().isEmpty();
+    }
+
+    // Shows every figure again, the search and the filter cleared, as the link under "No figure matches" does
+    private void showEvery() {
+        this.filter = Filter.ALL;
+        this.search = "";
+        if (this.searchBox != null) {
+            // The field's responder shows the figures again
+            this.searchBox.setValue("");
+        }
+        refreshItems();
+    }
+
+    /** Takes the selected figures out of the draw, or puts them back, as one undo step. */
+    void setEnabled(boolean enabled) {
         List<FigureDraft> chosen = selected();
         if (chosen.isEmpty()) {
             return;
@@ -552,31 +583,17 @@ final class FiguresPage implements EditorPage {
             }
         });
         this.editor.changed();
+        if (!enabled) {
+            // Taking figures out of the draw is the change to undo, which the toast offers
+            FigureDraft first = chosen.get(0);
+            this.editor.undoToast(chosen.size() == 1
+                    ? tr("figures.retired_toast_one", first.name().isBlank() ? first.id() : first.name())
+                    : tr("figures.retired_toast", chosen.size()));
+        }
     }
 
-    private void openSizeMenu() {
-        List<FigureDraft> chosen = selected();
-        UiMenu menu = new UiMenu();
-        List<Float> scales = WorldCollectionRecord.SCALES;
-        int common = -1;
-        for (int i = 0; i < scales.size(); i++) {
-            float scale = scales.get(i);
-            menu.item(UiSizeSlider.label(i), () -> setScale(chosen, scale));
-            boolean all = !chosen.isEmpty();
-            for (FigureDraft figure : chosen) {
-                all &= figure.scale() == scale;
-            }
-            if (all) {
-                common = i;
-            }
-        }
-        if (common >= 0) {
-            menu.highlight(common);
-        }
-        this.editor.openMenu(menu, this.sizeAll.bounds());
-    }
-
-    private void setScale(List<FigureDraft> chosen, float scale) {
+    /** Gives figures one size, as one undo step. */
+    void setScale(List<FigureDraft> chosen, float scale) {
         this.editor.draft().change("figures/scale", () -> {
             for (FigureDraft figure : chosen) {
                 // A figure an undo replaced meanwhile is looked up again
@@ -589,13 +606,14 @@ final class FiguresPage implements EditorPage {
         this.editor.changed();
     }
 
+    /** Adds a copy of each selected figure after the others, as one undo step, and selects the copies. */
     void duplicateSelected() {
         List<FigureDraft> chosen = selected();
         if (chosen.isEmpty()) {
             return;
         }
         CreatorDraft draft = this.editor.draft();
-        if (draft.isFull()) {
+        if (draft.figures().size() + chosen.size() > WorldContentLimits.MAX_FIGURES) {
             // Checked first, so a refused duplicate leaves no empty undo step
             this.editor.status(tr("figures.full", WorldContentLimits.MAX_FIGURES), Theme.RED);
             return;
@@ -617,16 +635,31 @@ final class FiguresPage implements EditorPage {
         reveal(copies);
     }
 
-    /** Drops the one selected figure if it was never saved, which just goes. */
+    /** Drops the one selected figure if it was never saved, which just goes; the toast takes it back. */
     void discard() {
         FigureDraft figure = single();
         if (figure == null || !figure.isNew()) {
             return;
         }
-        int index = this.grid != null ? this.grid.items().indexOf(figure) : -1;
+        remove(figure, tr("inspector.deleted", figure.name().isBlank() ? figure.id() : figure.name()));
+    }
+
+    /** Deletes a draft collection's one selected figure for good; the toast takes it back. */
+    void deleteSelected() {
+        FigureDraft figure = single();
+        if (figure == null || figure.isNew() || !this.editor.draft().isDraftCollection()) {
+            return;
+        }
+        remove(figure, tr("figures.deleted", figure.name().isBlank() ? figure.id() : figure.name()));
+    }
+
+    private void remove(FigureDraft figure, Component toast) {
+        int index = this.strip != null ? this.strip.items().indexOf(figure) : -1;
         if (this.editor.draft().removeFigure(figure.id())) {
             this.editor.changed();
             selectNear(index);
+            // Its files go with it, so the toast offers to take it back
+            this.editor.undoToast(toast);
         }
     }
 
@@ -637,12 +670,7 @@ final class FiguresPage implements EditorPage {
         this.editor.changed();
     }
 
-    // Adding figures from files
-
-    /**
-     * Opens the bulk add over the editor, with the files dropped on the grid or chosen through
-     * its last cell, or with none for "Add several…".
-     */
+    /** Opens the bulk add over the editor with the files dropped on the strip or its "+" tile. */
     private void openBulkAdd(List<FilePicker.PickResult> results) {
         if (this.editor.draft().isFull()) {
             this.editor.status(tr("figures.full", WorldContentLimits.MAX_FIGURES), Theme.RED);
@@ -650,6 +678,62 @@ final class FiguresPage implements EditorPage {
         }
         this.editor.status(Component.empty());
         this.editor.openChild(new BulkAddScreen(this.editor, results));
+    }
+
+    // The search and the filters
+
+    /**
+     * The search button's menu: the collection's counters, "Search…", and the filters with their
+     * counts, the one on ticked. Under the button, by its right edge.
+     */
+    private void openToolsMenu() {
+        UiMenu menu = new UiMenu();
+        menu.heading(this.counter);
+        menu.item(tr("figures.search"), Component.literal("Ctrl+F"), this::openSearch);
+        menu.separator();
+        menu.heading(tr("figures.show"));
+        for (Filter each : Filter.values()) {
+            menu.radio(tr(each.key, this.counts[each.ordinal()]), this.filter == each, () -> {
+                this.filter = each;
+                refreshItems();
+            });
+        }
+        menu.highlight(4 + this.filter.ordinal());
+        UiNode.Rect button = this.tools.bounds();
+        menu.place(button, this.editor.width, this.editor.height);
+        int menuX = Math.max(0, button.right() - menu.bounds().width());
+        this.editor.openMenu(menu, new UiNode.Rect(menuX, button.y(), button.width(), button.height()));
+    }
+
+    // Opens the search row over the strip, or puts the keyboard back in it
+    private void openSearch() {
+        if (!this.searchOpen) {
+            this.searchOpen = true;
+            this.editor.rebuildPage();
+        }
+        this.focusSearchSoon = true;
+        focusSearch();
+    }
+
+    private void focusSearch() {
+        EditBox box = this.searchBox;
+        if (box != null) {
+            this.focusSearchSoon = false;
+            this.editor.focusNode(null);
+            this.editor.setFocused(box);
+            UiField.cursorToEnd(box);
+        }
+    }
+
+    // What the search button's tooltip says: what it does, or which filter or search is on
+    private Component toolsTooltip() {
+        if (!this.search.strip().isEmpty()) {
+            return tr("card.joined", tr("figures.search"), Component.literal("«" + this.search.strip() + "»"));
+        }
+        if (this.filter != Filter.ALL) {
+            return tr(this.filter.key, this.counts[this.filter.ordinal()]);
+        }
+        return tr("figures.tools");
     }
 
     // Drawing
@@ -661,216 +745,172 @@ final class FiguresPage implements EditorPage {
 
     @Override
     public void tick() {
+        if (refreshHeld()) {
+            // The saver held a figure back, or let one go: its "!" and the errors filter follow
+            recount();
+            if (this.filter == Filter.ERRORS) {
+                refreshItems();
+            }
+        }
+        if (this.focusSearchSoon) {
+            focusSearch();
+        }
         if (this.focusNameSoon) {
             this.focusNameSoon = false;
             this.inspector.focusName();
         }
     }
 
+    /**
+     * Escape: "More settings" goes up a level; else the search is cleared, or its empty row
+     * closed; else a selection of several comes back to its first figure.
+     */
+    @Override
+    public boolean escape() {
+        if (this.inspector.escape()) {
+            return true;
+        }
+        if (this.searchOpen) {
+            if (!this.search.isEmpty() && this.searchBox != null) {
+                this.searchBox.setValue("");
+            } else {
+                this.searchOpen = false;
+                this.search = "";
+                this.editor.rebuildPage();
+                refreshItems();
+            }
+            return true;
+        }
+        List<FigureDraft> chosen = selected();
+        if (chosen.size() > 1 && this.strip != null) {
+            FigureDraft first = this.strip.current() != null && chosen.contains(this.strip.current())
+                    ? this.strip.current() : chosen.get(0);
+            this.strip.select(List.of(first));
+            updateSelection();
+            return true;
+        }
+        return false;
+    }
+
+    // Where the page's own line starts when the preview and the column are hidden
+    private int messageTop() {
+        return this.below.y() + this.below.height() / 3 - Theme.LINE_HEIGHT;
+    }
+
     @Override
     public void drawContents(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.partialTick = partialTick;
+        boolean empty = this.editor.draft().figures().isEmpty();
+        if (!empty && !selected().isEmpty()) {
+            return;
+        }
+        // Where the preview and the column will be: how to add the first figure, how to pick one,
+        // or that the search and the filter show none
         Font font = Minecraft.getInstance().font;
-        CreatorDraft draft = this.editor.draft();
-
-        // The counters, beside the chips or else at the end of the bottom row
-        Component counter = this.counter;
-        int counterWidth = font.width(counter);
-        int chipsRight = this.chips.bounds().x() + this.chips.naturalWidth();
-        boolean besideChips = chipsRight + 8 + counterWidth <= this.gridArea.right();
-        this.chips.setRoom(besideChips ? this.chips.naturalWidth() : this.gridArea.width());
-        List<FigureDraft> chosen = selected();
-        int bottomRight = this.gridArea.right();
-        if (besideChips) {
-            Draw.string(graphics, font, counter, this.gridArea.right() - counterWidth, this.chipsY + 4, HINT);
-        } else if (chosen.size() < 2) {
-            // The selection bar takes the whole row while it shows
-            Draw.string(graphics, font, counter, bottomRight - counterWidth, this.bottomY + 4, HINT);
-            bottomRight -= counterWidth + 8;
+        int width = Math.min(this.below.width() - 16, 280);
+        int top = messageTop();
+        if (!empty) {
+            boolean none = noMatch();
+            Draw.centred(graphics, font, tr(none ? "figures.no_match" : "figures.select").getString(),
+                    this.below.centerX(), top, width, none ? Theme.MUTED : Theme.TEXT);
+            if (none) {
+                return;
+            }
+            top += Theme.LINE_HEIGHT + 3;
         }
-
-        int textY = this.bottomY + 4;
-        if (chosen.size() >= 2) {
-            Draw.string(graphics, font, tr("figures.selected", chosen.size()), this.gridArea.x(), textY,
-                    Theme.SELECTED);
-        } else {
-            boolean whole = this.filter == Filter.ALL && this.search.strip().isEmpty();
-            Draw.text(graphics, font, tr(whole ? "figures.hint" : "figures.hint_filtered").getString(),
-                    this.gridArea.x(), textY, Math.max(0, bottomRight - this.gridArea.x()), Theme.FAINT);
+        String hint = tr(empty ? "figures.empty_hint" : "figures.select_hint").getString();
+        for (String line : Draw.fit(font, hint, width, 4)) {
+            Draw.centred(graphics, font, line, this.below.centerX(), top, width, Theme.MUTED);
+            top += Theme.LINE_HEIGHT;
         }
-        if (this.grid != null && this.grid.items().isEmpty() && !draft.figures().isEmpty()) {
-            Draw.centred(graphics, font, tr("figures.no_match").getString(), this.gridArea.centerX(),
-                    this.gridArea.y() + FigureCard.HEIGHT + 12, this.gridArea.width(), Theme.MUTED);
-        }
-        this.inspector.drawContents(graphics);
     }
 
     // Input
 
     @Override
     public boolean shortcut(UiInput.Key key) {
-        if (key.ctrl() && key.is(InputConstants.KEY_F) && this.searchBox != null) {
-            this.editor.focusNode(null);
-            this.editor.setFocused(this.searchBox);
+        if (key.ctrl() && key.is(InputConstants.KEY_F)) {
+            if (!this.editor.draft().figures().isEmpty()) {
+                openSearch();
+            }
             return true;
         }
+        UiThumbStrip<FigureDraft> row = this.strip;
         // Only asked while no field or node has the keyboard, which keeps the arrows of each
         if (!key.ctrl() && !key.shift() && (key.is(InputConstants.KEY_LEFT) || key.is(InputConstants.KEY_RIGHT))
-                && single() != null) {
-            step(key.is(InputConstants.KEY_LEFT) ? -1 : 1);
+                && row != null && !row.items().isEmpty()) {
+            row.step(key.is(InputConstants.KEY_LEFT) ? -1 : 1);
+            return true;
+        }
+        if (!key.ctrl() && !key.shift() && key.is(InputConstants.KEY_DELETE) && single() != null) {
+            removeSelected();
+            return true;
+        }
+        if (key.enter() && single() != null) {
+            this.inspector.focusName();
             return true;
         }
         return false;
     }
 
     /**
-     * The chips that pick which figures the grid shows, drawn as the editor's switches are: small
-     * raised buttons, the chosen one on the slate of a selected tab inside the blue selection
-     * border. Given less room than their labels need, they share it and cut them.
+     * Delete on the one selected figure: what the column's footer link does with it, in the
+     * link's order. A figure never saved is discarded, a retired one put back in the draw, a
+     * draft collection's saved figure deleted, and a published or archived collection's figure,
+     * which players may own, only retired from the draw; each that takes something away shows a
+     * toast that undoes it.
      */
-    private static final class FilterChips extends UiNode.Box {
-        static final int HEIGHT = 16;
-        private static final int PADDING = 6;
-        private static final int CHIP_GAP = 3;
-
-        private final Supplier<List<Component>> labels;
-        private final IntConsumer onSelect;
-        private int selected;
-        private int room = -1;
-
-        FilterChips(Supplier<List<Component>> labels, IntConsumer onSelect) {
-            this.labels = labels;
-            this.onSelect = onSelect;
-            this.height = HEIGHT;
+    private void removeSelected() {
+        FigureDraft figure = single();
+        if (figure == null) {
+            return;
         }
-
-        void select(int index) {
-            this.selected = index;
-        }
-
-        /** How much of the node's width the chips may take; the rest is left to the counters. */
-        void setRoom(int room) {
-            this.room = room;
-        }
-
-        int naturalWidth() {
-            Font font = Minecraft.getInstance().font;
-            int total = 0;
-            for (Component label : labels.get()) {
-                total += font.width(label) + 2 * PADDING + CHIP_GAP;
-            }
-            return Math.max(0, total - CHIP_GAP);
-        }
-
-        private int[] widths(List<Component> shown) {
-            Font font = Minecraft.getInstance().font;
-            int available = room < 0 ? width : Math.min(width, room);
-            int[] widths = new int[shown.size()];
-            int natural = naturalWidth();
-            for (int i = 0; i < shown.size(); i++) {
-                int own = font.width(shown.get(i)) + 2 * PADDING;
-                widths[i] = natural <= available ? own
-                        : Math.max(12, own * (available - CHIP_GAP * (shown.size() - 1)) / Math.max(1, natural
-                        - CHIP_GAP * (shown.size() - 1)));
-            }
-            return widths;
-        }
-
-        @Override
-        public void draw(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-            Font font = Minecraft.getInstance().font;
-            List<Component> shown = labels.get();
-            int[] widths = widths(shown);
-            int left = x;
-            for (int i = 0; i < shown.size(); i++) {
-                boolean on = i == selected;
-                boolean over = mouseX >= left && mouseX < left + widths[i] && mouseY >= y && mouseY < y + height;
-                boolean lit = over && !on;
-                Draw.raised(graphics, left, y, widths[i], height,
-                        on ? Theme.SELECTED : lit ? Surfaces.BORDER_HOVER : Surfaces.BORDER,
-                        on ? Theme.HIGHLIGHT : lit ? Surfaces.FACE_HOVER : Surfaces.FACE, 1);
-                String text = Draw.cut(font, shown.get(i).getString(), widths[i] - 6);
-                Draw.string(graphics, font, text, left + (widths[i] - font.width(text)) / 2, y + (height - 9) / 2,
-                        on || lit ? Theme.TEXT : Theme.CONTROL_TEXT);
-                if (over && !text.equals(shown.get(i).getString())) {
-                    UiTooltip.set(shown.get(i));
-                }
-                left += widths[i] + CHIP_GAP;
-            }
-        }
-
-        @Override
-        public boolean click(UiInput.Click click) {
-            if (!click.left() || !isMouseOver(click.x(), click.y())) {
-                return false;
-            }
-            int[] widths = widths(labels.get());
-            int left = x;
-            for (int i = 0; i < widths.length; i++) {
-                if (click.x() >= left && click.x() < left + widths[i]) {
-                    selected = i;
-                    onSelect.accept(i);
-                    return true;
-                }
-                left += widths[i] + CHIP_GAP;
-            }
-            return true;
+        if (figure.isNew()) {
+            discard();
+        } else if (!figure.enabled()) {
+            setEnabled(true);
+        } else if (this.editor.draft().isDraftCollection()) {
+            deleteSelected();
+        } else {
+            setEnabled(false);
         }
     }
 
     /**
-     * The grid's last cell: the zone for figure files. Given the room, it is the zone as drawn
-     * anywhere else; in a narrow cell it shows a short label instead, and still takes drops and
-     * clicks.
+     * The button at the strip's right that opens the search and the filters: a magnifying glass
+     * and a chevron on a raised face, lit in the selection's slate while a filter or a search hides
+     * some figures, and saying which in its tooltip.
      */
-    private static final class DropCell extends UiNode.Box {
-        private static final int MIN_FULL_WIDTH = 150;
-        private final UiDropZone zone;
-
-        DropCell(UiDropZone zone) {
-            this.zone = zone;
-        }
-
-        @Override
-        public UiNode.Box at(int x, int y, int width, int height) {
-            super.at(x, y, width, height);
-            zone.at(x, y, width, height);
-            return this;
-        }
-
+    private final class ToolsButton extends UiNode.Box {
         @Override
         public void draw(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-            if (width >= MIN_FULL_WIDTH) {
-                zone.draw(graphics, mouseX, mouseY, partialTick);
+            if (!visible()) {
                 return;
             }
-            Font font = Minecraft.getInstance().font;
-            boolean over = hovered(mouseX, mouseY);
-            // A sunk well, as the menus' drop zones, with a dashed edge inside its border
-            Draw.well(graphics, x, y, width, height, over, false);
-            Draw.dashed(graphics, x + 3, y + 3, width - 6, height - 6, over ? Theme.SELECTED : Theme.CONTROL_OUTLINE);
-            PixelIcon.draw(graphics, PixelIcon.UPLOAD, x + (width - PixelIcon.width(PixelIcon.UPLOAD)) / 2,
-                    y + height / 2 - 16, over ? Theme.SELECTED_LIGHT : Theme.TEXT_SOFT);
-            String text = tr(FilePicker.isReading() ? "drop.reading_many" : "figures.drop_short").getString();
-            int top = y + height / 2 - 2;
-            for (String line : Draw.fit(font, text, width - 8, 3)) {
-                Draw.centred(graphics, font, line, x + width / 2, top, width - 6, Theme.TEXT_SOFT);
-                top += Theme.LINE_HEIGHT;
-            }
-            if (over) {
-                UiTooltip.set(List.of(tr("figures.drop"), tr("figures.drop_help")));
+            boolean hovered = hovered(mouseX, mouseY);
+            boolean on = !whole();
+            int border = on ? Theme.SELECTED : hovered ? Surfaces.BORDER_HOVER : Surfaces.BORDER;
+            int face = on ? Theme.HIGHLIGHT : hovered ? Surfaces.FACE_HOVER : Surfaces.FACE;
+            int faceBottom = Draw.raised(graphics, x, y, width, height, border, face);
+            int colour = on ? Theme.TEXT : hovered ? Theme.TEXT : Theme.TEXT_SOFT;
+            int iconWidth = PixelIcon.width(Theme.ICON_SEARCH);
+            int chevronWidth = PixelIcon.width(UiSideRow.CHEVRON_DOWN);
+            int left = x + (width - iconWidth - 2 - chevronWidth) / 2;
+            int middle = (y + faceBottom) / 2;
+            PixelIcon.draw(graphics, Theme.ICON_SEARCH, left, middle - Theme.ICON_SEARCH.length / 2, colour);
+            PixelIcon.draw(graphics, UiSideRow.CHEVRON_DOWN, left + iconWidth + 2, middle, colour);
+            if (hovered) {
+                UiTooltip.set(SidebarScreen.tooltipLines(toolsTooltip()));
             }
         }
 
         @Override
         public boolean click(UiInput.Click click) {
-            return zone.click(click);
-        }
-
-        @Override
-        @Nullable
-        public UiDropZone dropZones(double mouseX, double mouseY, List<UiDropZone> zones) {
-            return zone.dropZones(mouseX, mouseY, zones);
+            if (!visible() || !click.left() || !isMouseOver(click.x(), click.y())) {
+                return false;
+            }
+            UiSounds.play(ModSounds.CLICK);
+            openToolsMenu();
+            return true;
         }
     }
 }

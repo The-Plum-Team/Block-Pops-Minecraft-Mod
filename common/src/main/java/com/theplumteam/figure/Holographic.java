@@ -8,9 +8,10 @@ import org.jetbrains.annotations.Nullable;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * A drawn figure or plush comes out holographic one time in 25. The flag travels with it under
- * {@link #KEY}: in the box item, the box, the figure taken out of it, the placed figure and
- * plush, and the items they drop. The client draws a holographic one with its own shader.
+ * A drawn figure or plush comes out holographic one time in 25, unless it comes from a World
+ * collection whose operator turned that off. The flag travels with it under {@link #KEY}: in the
+ * box item, the box, the figure taken out of it, the placed figure and plush, and the items they
+ * drop. The client draws a holographic one with its own shader.
  */
 public final class Holographic {
     public static final String KEY = "Holographic";
@@ -19,9 +20,14 @@ public final class Holographic {
     private Holographic() {
     }
 
-    /** Rolls one draw. The packaged E2E never gets one, so its captures stay as they are. */
-    public static boolean roll() {
-        return !E2EDeterminism.ENABLED && ThreadLocalRandom.current().nextFloat() < CHANCE;
+    /**
+     * Rolls one draw from the collection: never holographic when the collection does not allow it
+     * ({@link FigureCollection#allowsHolographic}), and never in the packaged E2E, so its captures
+     * stay as they are. The server rolls every machine draw here.
+     */
+    public static boolean roll(FigureCollection collection) {
+        return collection.allowsHolographic() && !E2EDeterminism.ENABLED
+                && ThreadLocalRandom.current().nextFloat() < CHANCE;
     }
 
     /** Whether a block-entity tag, as an item or a block carries it, is a holographic one. */

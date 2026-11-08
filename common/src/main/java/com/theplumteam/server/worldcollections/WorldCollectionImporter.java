@@ -37,7 +37,8 @@ import java.util.regex.Pattern;
  *
  * <pre>
  * collection.json   {name, author, background_color, box_color?, author_url?, logo_layout?, plush?,
- *                    rarity_weights?, figures: [{id, name, kind, scale?, rarity?, variants?, box_face?}]}
+ *                    rarity_weights?, holographic?,
+ *                    figures: [{id, name, kind, scale?, rarity?, variants?, box_face?}]}
  * box.png, logo.png (optional)
  * figures/&lt;id&gt;/texture.png
  * figures/&lt;id&gt;/variant_&lt;n&gt;.png, for the nth entry of variants (n = 1 to 4)
@@ -45,7 +46,8 @@ import java.util.regex.Pattern;
  * </pre>
  *
  * The optional keys have the record's form; a variant names only its name here, and its
- * texture is the variant file of the same number.
+ * texture is the variant file of the same number. plush and holographic may also be written
+ * at their defaults, false and true.
  *
  * Each file is opened by its exact name, never by listing a directory, and checked as an
  * upload is. {@link WorldCollections#importPack} stores the result.
@@ -57,7 +59,7 @@ public final class WorldCollectionImporter {
     private static final int COLLECTION_JSON_BYTES = 64 * 1024;
     private static final Set<String> KEYS = Set.of("name", "author", "background_color", "figures");
     private static final Set<String> OPTIONAL_KEYS = Set.of("box_color", "author_url", "logo_layout", "plush",
-            "rarity_weights");
+            "rarity_weights", "holographic");
     private static final Set<String> FIGURE_KEYS = Set.of("id", "name", "kind");
     private static final Set<String> FIGURE_OPTIONAL_KEYS = Set.of("scale", "rarity", "variants", "box_face");
     private static final Set<String> VARIANT_KEYS = Set.of("name");
@@ -220,9 +222,11 @@ public final class WorldCollectionImporter {
         boolean plush = json.has("plush") && JsonFields.bool(json.get("plush"), "plush");
         WorldCollectionRecord.RarityWeights rarityWeights = json.has("rarity_weights")
                 ? WorldCollectionRecord.RarityWeights.fromJson(json.get("rarity_weights")) : null;
+        // Draws may come out holographic unless the pack turns that off
+        boolean holographic = !json.has("holographic") || JsonFields.bool(json.get("holographic"), "holographic");
         WorldCollectionRecord record = new WorldCollectionRecord(WorldContentIds.collectionId(slug), name, author,
                 rgb[0], rgb[1], rgb[2], boxTexture, boxColor, logo != null ? logo.sha() : null, false, 0, figures,
-                false, 0L, authorUrl, logoLayout, plush, rarityWeights);
+                false, 0L, authorUrl, logoLayout, plush, rarityWeights, holographic);
         return new Pack(record, files);
     }
 

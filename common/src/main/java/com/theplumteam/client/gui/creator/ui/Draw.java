@@ -261,6 +261,32 @@ public final class Draw {
         //? }
     }
 
+    /**
+     * A part of a texture of a known size, drawn into a rectangle, such as the front face of a box
+     * texture or the drawn part of a logo: the region starts at texel {@code (u, v)} and is
+     * {@code regionWidth} by {@code regionHeight} texels. Transparent texels stay transparent.
+     */
+    public static void texture(GuiGraphics graphics, ResourceLocation texture, int x, int y, int width, int height,
+                               int u, int v, int regionWidth, int regionHeight, int textureWidth, int textureHeight) {
+        if (width <= 0 || height <= 0 || regionWidth <= 0 || regionHeight <= 0) {
+            return;
+        }
+        //? if >=1.21.6 {
+        /*graphics.blit(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, texture, x, y, (float) u,
+                (float) v, width, height, regionWidth, regionHeight, textureWidth, textureHeight);
+        *///? } elif >=1.21.2 {
+        /*graphics.blit(net.minecraft.client.renderer.RenderType::guiTextured, texture, x, y, (float) u, (float) v,
+                width, height, regionWidth, regionHeight, textureWidth, textureHeight);
+        *///? } else {
+        // Transparent pixels need blending, which this blit does not switch on itself
+        com.mojang.blaze3d.systems.RenderSystem.enableBlend();
+        com.mojang.blaze3d.systems.RenderSystem.defaultBlendFunc();
+        graphics.blit(texture, x, y, width, height, (float) u, (float) v, regionWidth, regionHeight, textureWidth,
+                textureHeight);
+        com.mojang.blaze3d.systems.RenderSystem.disableBlend();
+        //? }
+    }
+
     /** The largest size of a width and height that fits a box, keeping their proportions. */
     public static int[] fitInside(int width, int height, int boxWidth, int boxHeight) {
         if (width <= 0 || height <= 0) {

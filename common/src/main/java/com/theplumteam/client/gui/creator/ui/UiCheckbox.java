@@ -11,7 +11,8 @@ import java.util.function.Consumer;
 /**
  * A box that is ticked or not, with its label beside it; clicking the box or the label toggles
  * it. The box is a small sunk well, as the menus' fields are, filled with the settings toggles'
- * green while ticked. It can be disabled with a reason in its tooltip.
+ * green while ticked. It can be disabled with a reason in its tooltip, and can explain itself in
+ * a tooltip rather than in a note under it.
  */
 public class UiCheckbox extends UiNode.Box {
     public static final int BOX = 10;
@@ -25,6 +26,8 @@ public class UiCheckbox extends UiNode.Box {
     private boolean checked;
     @Nullable
     private Component disabledReason;
+    @Nullable
+    private Component tooltip;
     private boolean enabled = true;
 
     public UiCheckbox(Component label, boolean checked, Consumer<Boolean> onChange) {
@@ -54,6 +57,14 @@ public class UiCheckbox extends UiNode.Box {
         this.disabledReason = reason;
     }
 
+    /**
+     * What the setting does, shown while the box can be used and the pointer is over it, wrapped
+     * so a long note stays on the screen; null for none.
+     */
+    public void setTooltip(@Nullable Component tooltip) {
+        this.tooltip = tooltip;
+    }
+
     @Override
     public void draw(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (!visible()) {
@@ -75,6 +86,8 @@ public class UiCheckbox extends UiNode.Box {
                 Math.max(0, width - BOX - GAP), enabled ? Theme.TEXT_SOFT : OFF_TEXT);
         if (hovered && disabledReason != null) {
             UiTooltip.set(disabledReason);
+        } else if (hovered && enabled && tooltip != null) {
+            UiTooltip.set(SidebarScreen.tooltipLines(tooltip));
         }
     }
 
