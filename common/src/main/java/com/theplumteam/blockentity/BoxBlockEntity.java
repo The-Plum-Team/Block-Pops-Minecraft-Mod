@@ -59,12 +59,21 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
     private static final RawAnimation IDLE_ANIMATION = RawAnimation.begin().thenLoop("animation.box_block.idle");
-    private static final RawAnimation OPEN_ANIMATION = RawAnimation.begin().thenPlay("animation.box_block.open");
     private static final RawAnimation OPEN_STATE_ANIMATION = RawAnimation.begin().thenLoop("animation.box_block.open_state");
-    private static final RawAnimation CLOSE_ANIMATION = RawAnimation.begin().thenPlay("animation.box_block.close");
+    // The lid moving, then resting where it went
+    private static final RawAnimation OPENING_ANIMATION = RawAnimation.begin()
+            .thenPlay("animation.box_block.open").thenLoop("animation.box_block.open_state");
+    private static final RawAnimation CLOSING_ANIMATION = RawAnimation.begin()
+            .thenPlay("animation.box_block.close").thenLoop("animation.box_block.idle");
 
     // Box state
     private boolean isOpen = false;
+
+    // Client only: what the lid controller shows, chosen from isOpen alone. A box seen for the
+    // first time rests in its state; a change of isOpen afterwards plays the lid moving.
+    @Nullable
+    private RawAnimation lidAnimation;
+    private boolean lidOpen;
 
     // Collection and figure data
     private String figureId = ""; // Empty means no figure
@@ -131,15 +140,18 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
                 return PlayState.STOP;
             }
 
-            // If the box is open, play the open state animation (holds at final frame)
-            if (isOpen) {
-                return state.setAndContinue(OPEN_STATE_ANIMATION);
+            // The lid follows the synced isOpen only, with no animation triggered by the server:
+            // on 26.2 the triggered open and the block update arrived separately and the lid
+            // was drawn closed again once the open animation ended.
+            if (lidAnimation == null) {
+                lidOpen = isOpen;
+                lidAnimation = isOpen ? OPEN_STATE_ANIMATION : IDLE_ANIMATION;
+            } else if (lidOpen != isOpen) {
+                lidOpen = isOpen;
+                lidAnimation = isOpen ? OPENING_ANIMATION : CLOSING_ANIMATION;
             }
-            // If the box is closed, play the idle animation
-            return state.setAndContinue(IDLE_ANIMATION);
+            return state.setAndContinue(lidAnimation);
         })
-                .triggerableAnim("open", OPEN_ANIMATION)
-                .triggerableAnim("close", CLOSE_ANIMATION)
                 .setAnimationSpeed(1.2)); // 20% faster animations
 
         // Controller for figure pose animations (5 ticks = 0.25 seconds transition)
@@ -421,12 +433,8 @@ public class BoxBlockEntity extends BlockEntity implements GeoBlockEntity {
 
     public void toggleOpen() {
         if (level != null && !level.isClientSide()) {
+            // Every client animates the lid from the isOpen this update carries
             isOpen = !isOpen;
-            if (isOpen) {
-                triggerAnim("box_controller", "open");
-            } else {
-                triggerAnim("box_controller", "close");
-            }
             setChanged();
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
         }
