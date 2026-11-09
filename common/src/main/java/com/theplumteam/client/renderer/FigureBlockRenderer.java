@@ -31,6 +31,8 @@ public class FigureBlockRenderer extends GeoBlockRenderer<FigureBlockEntity> {
 
     public FigureBlockRenderer() {
         super(new FigureBlockModel());
+        // Under a shader pack, a holographic figure gets a second, glint pass
+        addRenderLayer(new HolographicGlintLayer<>(this, FigureBlockEntity::isHolographic));
     }
 //? }
 

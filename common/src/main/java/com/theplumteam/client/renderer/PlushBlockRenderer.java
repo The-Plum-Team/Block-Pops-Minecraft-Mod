@@ -28,6 +28,8 @@ public class PlushBlockRenderer extends GeoBlockRenderer<PlushBlockEntity> {
 
     public PlushBlockRenderer(String plushId) {
         super(new PlushBlockModel(plushId));
+        // Under a shader pack, a holographic plush gets a second, glint pass
+        addRenderLayer(new HolographicGlintLayer<>(this, PlushBlockEntity::isHolographic));
     }
 //? }
 

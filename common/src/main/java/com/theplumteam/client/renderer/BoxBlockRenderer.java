@@ -118,6 +118,8 @@ public class BoxBlockRenderer extends GeoBlockRenderer<BoxBlockEntity> {
             }
             //? }
         };
+        // Under a shader pack, a holographic figure in its box gets a second, glint pass
+        this.figureRenderer.addRenderLayer(new HolographicGlintLayer<>(this.figureRenderer, BoxBlockEntity::isHolographic));
     }
     //? }
 

@@ -542,6 +542,23 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
                 //? }
             );
 
+            // Under a shader pack, a holographic figure gets the glint pass its block renderer
+            // adds in a render layer, which this direct call never reaches. The re-render keeps
+            // the pose the first call left on the stack.
+            RenderType glint = holographic && !greyed && HolographicRenderTypes.glintPass()
+                    ? HolographicRenderTypes.glint() : null;
+            if (glint != null) {
+                figureRenderer.actuallyRender(poseStack, renderEntity, bakedModel, glint, bufferSource,
+                    bufferSource.getBuffer(glint), true, partialTick, 15728880,
+                    net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY,
+                    //? if >=1.21 {
+                    /*0xFFFFFFFF
+                    *///? } else {
+                    1f, 1f, 1f, 1f
+                    //? }
+                );
+            }
+
             bufferSource.endBatch();
         } catch (Exception e) {
             // Silently fail
