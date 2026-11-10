@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "不能補%s之常籌",
   "blockpops.command.reload_guaranteed.done": "既補%s之必籌",
   "blockpops.command.reload_guaranteed.failed": "不能補%s之必籌",
+  "blockpops.command.color_selection_on_join.on": "未擇所好之色者，入世之時問之",
+  "blockpops.command.color_selection_on_join.off": "未擇所好之色者，啟機之時問之，入世之時不問",
   "blockpops.command.default_color.done": "戲者集之預設色既定爲：%s",
   "blockpops.command.default_color.invalid": "色名無效：%s。可用之色：%s",
   "blockpops.message.inventory_full": "行囊已滿！不能受偶匣。",

@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "Impossibile ricaricare i gettoni normali di %s",
   "blockpops.command.reload_guaranteed.done": "Gettone garantito di %s ricaricato",
   "blockpops.command.reload_guaranteed.failed": "Impossibile ricaricare il gettone garantito di %s",
+  "blockpops.command.color_selection_on_join.on": "Ai giocatori senza colore preferito viene chiesto di sceglierlo quando entrano",
+  "blockpops.command.color_selection_on_join.off": "Ai giocatori senza colore preferito viene chiesto di sceglierlo quando aprono una macchina, non quando entrano",
   "blockpops.command.default_color.done": "Colore predefinito della collezione dei giocatori impostato su: %s",
   "blockpops.command.default_color.invalid": "Nome del colore non valido: %s. Colori validi: %s",
   "blockpops.message.inventory_full": "Inventario pieno! Impossibile ricevere la scatola della figura.",

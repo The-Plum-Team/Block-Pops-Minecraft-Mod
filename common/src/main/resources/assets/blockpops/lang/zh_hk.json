@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "無法補充 %s 的普通代幣",
   "blockpops.command.reload_guaranteed.done": "已補充 %s 的保底代幣",
   "blockpops.command.reload_guaranteed.failed": "無法補充 %s 的保底代幣",
+  "blockpops.command.color_selection_on_join.on": "尚未選擇喜愛顏色的玩家會在加入時被詢問",
+  "blockpops.command.color_selection_on_join.off": "尚未選擇喜愛顏色的玩家會在打開機器時被詢問，而不是加入時",
   "blockpops.command.default_color.done": "已將玩家系列的預設顏色設為：%s",
   "blockpops.command.default_color.invalid": "無效的顏色名稱：%s。有效顏色：%s",
   "blockpops.message.inventory_full": "物品欄已滿！無法獲得公仔盒子。",

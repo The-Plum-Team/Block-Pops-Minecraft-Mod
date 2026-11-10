@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "Die normalen Münzen von %s konnten nicht aufgeladen werden",
   "blockpops.command.reload_guaranteed.done": "Garantiemünze von %s aufgeladen",
   "blockpops.command.reload_guaranteed.failed": "Die Garantiemünze von %s konnte nicht aufgeladen werden",
+  "blockpops.command.color_selection_on_join.on": "Spieler ohne Lieblingsfarbe werden beim Beitreten danach gefragt",
+  "blockpops.command.color_selection_on_join.off": "Spieler ohne Lieblingsfarbe werden beim Öffnen eines Automaten danach gefragt, nicht beim Beitreten",
   "blockpops.command.default_color.done": "Standardfarbe der Spielersammlung auf %s gesetzt",
   "blockpops.command.default_color.invalid": "Ungültiger Farbname: %s. Gültige Farben: %s",
   "blockpops.message.inventory_full": "Inventar voll! Du kannst die Figurenbox nicht erhalten.",

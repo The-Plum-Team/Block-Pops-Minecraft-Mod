@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "Impossible de recharger les jetons normaux de %s",
   "blockpops.command.reload_guaranteed.done": "Jeton garanti de %s rechargé",
   "blockpops.command.reload_guaranteed.failed": "Impossible de recharger le jeton garanti de %s",
+  "blockpops.command.color_selection_on_join.on": "Les joueurs sans couleur préférée sont invités à en choisir une en rejoignant",
+  "blockpops.command.color_selection_on_join.off": "Les joueurs sans couleur préférée sont invités à en choisir une en ouvrant une machine, pas en rejoignant",
   "blockpops.command.default_color.done": "Couleur par défaut de la collection des joueurs définie sur : %s",
   "blockpops.command.default_color.invalid": "Nom de couleur non valide : %s. Couleurs valides : %s",
   "blockpops.message.inventory_full": "Inventaire plein ! Impossible de recevoir la boîte de figurine.",

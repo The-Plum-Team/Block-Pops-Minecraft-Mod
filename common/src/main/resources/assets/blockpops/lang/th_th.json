@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "เติมเหรียญปกติของ %s ไม่ได้",
   "blockpops.command.reload_guaranteed.done": "เติมเหรียญการันตีให้ %s แล้ว",
   "blockpops.command.reload_guaranteed.failed": "เติมเหรียญการันตีของ %s ไม่ได้",
+  "blockpops.command.color_selection_on_join.on": "ผู้เล่นที่ยังไม่ได้เลือกสีโปรดจะถูกถามเมื่อเข้าร่วม",
+  "blockpops.command.color_selection_on_join.off": "ผู้เล่นที่ยังไม่ได้เลือกสีโปรดจะถูกถามเมื่อเปิดเครื่อง ไม่ใช่เมื่อเข้าร่วม",
   "blockpops.command.default_color.done": "ตั้งสีเริ่มต้นของคอลเลกชันผู้เล่นเป็น: %s",
   "blockpops.command.default_color.invalid": "ชื่อสีไม่ถูกต้อง: %s สีที่ใช้ได้: %s",
   "blockpops.message.inventory_full": "ช่องเก็บของเต็ม! รับกล่องฟิกเกอร์ไม่ได้",

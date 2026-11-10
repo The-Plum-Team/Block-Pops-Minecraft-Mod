@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "%s için normal jetonlar doldurulamadı",
   "blockpops.command.reload_guaranteed.done": "%s için garantili jeton dolduruldu",
   "blockpops.command.reload_guaranteed.failed": "%s için garantili jeton doldurulamadı",
+  "blockpops.command.color_selection_on_join.on": "Favori rengi olmayan oyunculara katıldıklarında sorulur",
+  "blockpops.command.color_selection_on_join.off": "Favori rengi olmayan oyunculara katıldıklarında değil, bir makine açtıklarında sorulur",
   "blockpops.command.default_color.done": "Varsayılan oyuncu koleksiyonu rengi şu olarak ayarlandı: %s",
   "blockpops.command.default_color.invalid": "Geçersiz renk adı: %s. Geçerli renkler: %s",
   "blockpops.message.inventory_full": "Envanter dolu! Figür kutusu alınamıyor.",

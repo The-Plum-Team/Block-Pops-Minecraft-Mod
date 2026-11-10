@@ -33,6 +33,10 @@ public class ServerConfig {
     // Debug logging toggle - when true, shows detailed info logs for troubleshooting
     public boolean debugLogging = false;
 
+    // Whether a player who has not chosen a favorite color gets the color screen on joining.
+    // When false they get it on opening a machine instead (server.FavoriteColorPrompt).
+    public boolean showColorSelectionOnJoin = true;
+
     // The service that tells which players are supporters, who receive the special plushes.
     // With an empty URL nobody is asked and the specials stay locked.
     public String specialAccessApiUrl = "https://kofi-linker.rubengalandiaz.workers.dev";
@@ -101,6 +105,18 @@ public class ServerConfig {
      */
     public void setDebugLogging(boolean enabled) {
         this.debugLogging = enabled;
+        save();
+    }
+
+    /**
+     * Whether a player who has not chosen a favorite color gets the color screen on joining.
+     */
+    public boolean isShowColorSelectionOnJoin() {
+        return showColorSelectionOnJoin;
+    }
+
+    public void setShowColorSelectionOnJoin(boolean show) {
+        this.showColorSelectionOnJoin = show;
         save();
     }
 
