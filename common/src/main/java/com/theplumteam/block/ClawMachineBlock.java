@@ -146,6 +146,7 @@ public class ClawMachineBlock extends BaseEntityBlock {
                 // Server side: sync token data to ensure client UI shows correct state
                 if (player instanceof ServerPlayer serverPlayer) {
                     syncTokenDataToClient(serverPlayer);
+                    com.theplumteam.server.FavoriteColorPrompt.onMachineOpened(serverPlayer);
                 }
             }
             //? if >=1.21.2 {

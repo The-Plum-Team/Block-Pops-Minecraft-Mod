@@ -34,6 +34,7 @@ public class ModCommands {
         ChangeFavoriteColorCommand.register(dispatcher);
         GetBoxCommand.register(dispatcher);
         SetDefaultColorCommand.register(dispatcher);
+        ShowColorSelectionOnJoinCommand.register(dispatcher);
         CustomCollectionsCommand.register(dispatcher);
         WorldCollectionsCommand.register(dispatcher);
         SupporterCommand.register(dispatcher);

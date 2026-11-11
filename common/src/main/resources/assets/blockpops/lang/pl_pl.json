@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "Nie udało się uzupełnić zwykłych żetonów gracza %s",
   "blockpops.command.reload_guaranteed.done": "Uzupełniono gwarantowany żeton gracza %s",
   "blockpops.command.reload_guaranteed.failed": "Nie udało się uzupełnić gwarantowanego żetonu gracza %s",
+  "blockpops.command.color_selection_on_join.on": "Gracze bez ulubionego koloru są o niego pytani po dołączeniu",
+  "blockpops.command.color_selection_on_join.off": "Gracze bez ulubionego koloru są o niego pytani po otwarciu automatu, a nie po dołączeniu",
   "blockpops.command.default_color.done": "Ustawiono domyślny kolor kolekcji graczy na: %s",
   "blockpops.command.default_color.invalid": "Nieprawidłowa nazwa koloru: %s. Prawidłowe kolory: %s",
   "blockpops.message.inventory_full": "Ekwipunek jest pełny! Nie można otrzymać pudełka z figurką.",

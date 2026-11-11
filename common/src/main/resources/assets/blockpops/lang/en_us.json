@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "Could not reload the regular tokens of %s",
   "blockpops.command.reload_guaranteed.done": "Reloaded guaranteed token for %s",
   "blockpops.command.reload_guaranteed.failed": "Could not reload the guaranteed token of %s",
+  "blockpops.command.color_selection_on_join.on": "Players without a favorite color are asked for one when they join",
+  "blockpops.command.color_selection_on_join.off": "Players without a favorite color are asked for one when they open a machine, not when they join",
   "blockpops.command.default_color.done": "Set default player collection color to: %s",
   "blockpops.command.default_color.invalid": "Invalid color name: %s. Valid colors: %s",
   "blockpops.message.inventory_full": "Inventory is full! Cannot receive figure box.",

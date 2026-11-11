@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "Kunde inte fylla på de vanliga polletterna för %s",
   "blockpops.command.reload_guaranteed.done": "Fyllde på garantipolletten för %s",
   "blockpops.command.reload_guaranteed.failed": "Kunde inte fylla på garantipolletten för %s",
+  "blockpops.command.color_selection_on_join.on": "Spelare utan favoritfärg får frågan när de ansluter",
+  "blockpops.command.color_selection_on_join.off": "Spelare utan favoritfärg får frågan när de öppnar en maskin, inte när de ansluter",
   "blockpops.command.default_color.done": "Satte spelarsamlingens standardfärg till: %s",
   "blockpops.command.default_color.invalid": "Ogiltigt färgnamn: %s. Giltiga färger: %s",
   "blockpops.message.inventory_full": "Förrådet är fullt! Kan inte ta emot figurlådan.",

@@ -73,6 +73,11 @@ public class ClientHelpers {
     }
 
     public static void openFavoriteColorScreen() {
-        Minecraft.getInstance().setScreen(new FavoriteColorSelectionScreen());
+        Minecraft minecraft = Minecraft.getInstance();
+        // A server that leaves the question for the first machine asks while the machine's
+        // screen is open: the player goes back to the machine afterwards
+        net.minecraft.client.gui.screens.Screen parent =
+                minecraft.screen instanceof CollectionSelectionScreen ? minecraft.screen : null;
+        minecraft.setScreen(new FavoriteColorSelectionScreen(parent));
     }
 }

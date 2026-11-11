@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "Kon de gewone munten van %s niet herladen",
   "blockpops.command.reload_guaranteed.done": "Garantiemunt van %s herladen",
   "blockpops.command.reload_guaranteed.failed": "Kon de garantiemunt van %s niet herladen",
+  "blockpops.command.color_selection_on_join.on": "Spelers zonder favoriete kleur krijgen de vraag wanneer ze meedoen",
+  "blockpops.command.color_selection_on_join.off": "Spelers zonder favoriete kleur krijgen de vraag wanneer ze een machine openen, niet wanneer ze meedoen",
   "blockpops.command.default_color.done": "Standaardkleur van de spelerscollectie ingesteld op: %s",
   "blockpops.command.default_color.invalid": "Ongeldige kleurnaam: %s. Geldige kleuren: %s",
   "blockpops.message.inventory_full": "Je inventaris is vol! Je kunt de figuurdoos niet ontvangen.",

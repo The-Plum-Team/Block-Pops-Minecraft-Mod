@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "%s के साधारण टोकन रीलोड नहीं हो सके",
   "blockpops.command.reload_guaranteed.done": "%s का गारंटीड टोकन रीलोड किया गया",
   "blockpops.command.reload_guaranteed.failed": "%s का गारंटीड टोकन रीलोड नहीं हो सका",
+  "blockpops.command.color_selection_on_join.on": "जिन खिलाड़ियों ने पसंदीदा रंग नहीं चुना है, उनसे जुड़ते समय पूछा जाता है",
+  "blockpops.command.color_selection_on_join.off": "जिन खिलाड़ियों ने पसंदीदा रंग नहीं चुना है, उनसे मशीन खोलते समय पूछा जाता है, जुड़ते समय नहीं",
   "blockpops.command.default_color.done": "खिलाड़ी संग्रह का डिफ़ॉल्ट रंग सेट किया गया: %s",
   "blockpops.command.default_color.invalid": "अमान्य रंग नाम: %s। मान्य रंग: %s",
   "blockpops.message.inventory_full": "वस्तुसूची भरी हुई है! फ़िगर बॉक्स नहीं मिल सकता।",

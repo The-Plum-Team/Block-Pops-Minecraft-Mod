@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "Không nạp lại được xu thường của %s",
   "blockpops.command.reload_guaranteed.done": "Đã nạp lại xu đảm bảo cho %s",
   "blockpops.command.reload_guaranteed.failed": "Không nạp lại được xu đảm bảo của %s",
+  "blockpops.command.color_selection_on_join.on": "Người chơi chưa chọn màu yêu thích sẽ được hỏi khi tham gia",
+  "blockpops.command.color_selection_on_join.off": "Người chơi chưa chọn màu yêu thích sẽ được hỏi khi mở máy, không phải khi tham gia",
   "blockpops.command.default_color.done": "Đã đặt màu mặc định của bộ sưu tập người chơi thành: %s",
   "blockpops.command.default_color.invalid": "Tên màu không hợp lệ: %s. Các màu hợp lệ: %s",
   "blockpops.message.inventory_full": "Túi đồ đã đầy! Không thể nhận hộp tượng.",

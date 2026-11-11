@@ -9,7 +9,6 @@ import com.theplumteam.data.PlayerDataManager;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.figure.PlayerCollectionHelper;
-import com.theplumteam.network.OpenFavoriteColorScreenPacket;
 import com.theplumteam.network.SyncDiscoveryDataPacket;
 import com.theplumteam.network.SyncDynamicCollectionsPacket;
 import com.theplumteam.network.SyncTokenDataPacket;
@@ -181,12 +180,9 @@ public class BlockPopsFabric implements ModInitializer {
                             discovery.getRegularTokens(),
                             discovery.getGuaranteedTokens());
 
-                    // Check if favorite color needs to be chosen
-                    if (!discovery.hasChosenFavoriteColor()) {
-                        BlockPopsMod.logDebug("Player {} has not chosen a favorite color. Sending packet to open selection screen.",
-                                serverPlayer.getName().getString());
-                        OpenFavoriteColorScreenPacket.sendToPlayer(serverPlayer);
-                    }
+                    // A player without a favorite color is asked for one, unless the server
+                    // leaves that for the first machine they open
+                    com.theplumteam.server.FavoriteColorPrompt.onJoin(serverPlayer, discovery.hasChosenFavoriteColor());
                 }
             }
         });

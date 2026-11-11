@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "%s의 일반 토큰을 충전하지 못했습니다",
   "blockpops.command.reload_guaranteed.done": "%s의 확정 토큰을 충전했습니다",
   "blockpops.command.reload_guaranteed.failed": "%s의 확정 토큰을 충전하지 못했습니다",
+  "blockpops.command.color_selection_on_join.on": "좋아하는 색을 고르지 않은 플레이어에게 접속할 때 묻습니다",
+  "blockpops.command.color_selection_on_join.off": "좋아하는 색을 고르지 않은 플레이어에게 접속할 때가 아니라 기계를 열 때 묻습니다",
   "blockpops.command.default_color.done": "플레이어 컬렉션의 기본 색상을 설정했습니다: %s",
   "blockpops.command.default_color.invalid": "잘못된 색상 이름: %s. 사용 가능한 색상: %s",
   "blockpops.message.inventory_full": "보관함이 가득 찼습니다! 피규어 박스를 받을 수 없습니다.",

@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "Token biasa %s tidak bisa diisi ulang",
   "blockpops.command.reload_guaranteed.done": "Token terjamin %s diisi ulang",
   "blockpops.command.reload_guaranteed.failed": "Token terjamin %s tidak bisa diisi ulang",
+  "blockpops.command.color_selection_on_join.on": "Pemain tanpa warna favorit ditanya saat bergabung",
+  "blockpops.command.color_selection_on_join.off": "Pemain tanpa warna favorit ditanya saat membuka mesin, bukan saat bergabung",
   "blockpops.command.default_color.done": "Warna bawaan koleksi pemain diatur ke: %s",
   "blockpops.command.default_color.invalid": "Nama warna tidak valid: %s. Warna yang valid: %s",
   "blockpops.message.inventory_full": "Persediaan penuh! Tidak bisa menerima kotak figur.",

@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "Не удалось пополнить обычные жетоны игрока %s",
   "blockpops.command.reload_guaranteed.done": "Гарантированный жетон игрока %s пополнен",
   "blockpops.command.reload_guaranteed.failed": "Не удалось пополнить гарантированный жетон игрока %s",
+  "blockpops.command.color_selection_on_join.on": "Игроков без любимого цвета спрашивают о нём при входе",
+  "blockpops.command.color_selection_on_join.off": "Игроков без любимого цвета спрашивают о нём при открытии автомата, а не при входе",
   "blockpops.command.default_color.done": "Стандартный цвет коллекции игроков изменён на: %s",
   "blockpops.command.default_color.invalid": "Неверное название цвета: %s. Допустимые цвета: %s",
   "blockpops.message.inventory_full": "Инвентарь заполнен! Не удаётся получить коробку с фигуркой.",

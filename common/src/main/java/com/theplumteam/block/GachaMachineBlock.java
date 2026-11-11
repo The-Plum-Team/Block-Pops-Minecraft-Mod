@@ -137,6 +137,7 @@ public class GachaMachineBlock extends BaseEntityBlock {
                 if (player instanceof ServerPlayer serverPlayer) {
                     syncTokenDataToClient(serverPlayer);
                     SyncSpecialAccessPacket.sendToPlayer(serverPlayer);
+                    com.theplumteam.server.FavoriteColorPrompt.onMachineOpened(serverPlayer);
                 }
             }
             //? if >=1.21.2 {

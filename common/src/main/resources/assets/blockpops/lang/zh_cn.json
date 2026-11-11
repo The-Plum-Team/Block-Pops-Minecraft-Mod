@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "无法补充 %s 的普通代币",
   "blockpops.command.reload_guaranteed.done": "已补充 %s 的保底代币",
   "blockpops.command.reload_guaranteed.failed": "无法补充 %s 的保底代币",
+  "blockpops.command.color_selection_on_join.on": "尚未选择喜爱颜色的玩家会在加入时被询问",
+  "blockpops.command.color_selection_on_join.off": "尚未选择喜爱颜色的玩家会在打开机器时被询问，而不是加入时",
   "blockpops.command.default_color.done": "已将玩家系列的默认颜色设为：%s",
   "blockpops.command.default_color.invalid": "无效的颜色名称：%s。有效颜色：%s",
   "blockpops.message.inventory_full": "物品栏已满！无法获得手办盒子。",

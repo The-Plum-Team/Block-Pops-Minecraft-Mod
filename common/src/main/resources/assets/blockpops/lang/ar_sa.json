@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "تعذّرت إعادة تعبئة العملات العادية لـ %s",
   "blockpops.command.reload_guaranteed.done": "تمت إعادة تعبئة العملة المضمونة لـ %s",
   "blockpops.command.reload_guaranteed.failed": "تعذّرت إعادة تعبئة العملة المضمونة لـ %s",
+  "blockpops.command.color_selection_on_join.on": "يُسأل اللاعبون الذين لم يختاروا لونًا مفضلًا عند دخولهم",
+  "blockpops.command.color_selection_on_join.off": "يُسأل اللاعبون الذين لم يختاروا لونًا مفضلًا عند فتح آلة، لا عند دخولهم",
   "blockpops.command.default_color.done": "تم تعيين لون مجموعة اللاعبين الافتراضي إلى: %s",
   "blockpops.command.default_color.invalid": "اسم لون غير صالح: %s. الألوان الصالحة: %s",
   "blockpops.message.inventory_full": "الحقيبة ممتلئة! لا يمكن استلام علبة المجسم.",

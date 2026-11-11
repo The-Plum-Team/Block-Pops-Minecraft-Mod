@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "Не вдалося поповнити звичайні жетони гравця %s",
   "blockpops.command.reload_guaranteed.done": "Гарантований жетон гравця %s поповнено",
   "blockpops.command.reload_guaranteed.failed": "Не вдалося поповнити гарантований жетон гравця %s",
+  "blockpops.command.color_selection_on_join.on": "Гравців без улюбленого кольору питають про нього під час входу",
+  "blockpops.command.color_selection_on_join.off": "Гравців без улюбленого кольору питають про нього під час відкриття автомата, а не під час входу",
   "blockpops.command.default_color.done": "Колір за замовчуванням для колекції гравців: %s",
   "blockpops.command.default_color.invalid": "Неправильна назва кольору: %s. Допустимі кольори: %s",
   "blockpops.message.inventory_full": "Інвентар заповнено! Не вдалося отримати коробку з фігуркою.",

@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "%sの通常トークンを補充できませんでした",
   "blockpops.command.reload_guaranteed.done": "%sの確定トークンを補充しました",
   "blockpops.command.reload_guaranteed.failed": "%sの確定トークンを補充できませんでした",
+  "blockpops.command.color_selection_on_join.on": "お気に入りの色を選んでいないプレイヤーには、参加時に選択画面が表示されます",
+  "blockpops.command.color_selection_on_join.off": "お気に入りの色を選んでいないプレイヤーには、参加時ではなくマシンを開いたときに選択画面が表示されます",
   "blockpops.command.default_color.done": "プレイヤーコレクションのデフォルトの色を設定しました: %s",
   "blockpops.command.default_color.invalid": "無効な色名です: %s。有効な色: %s",
   "blockpops.message.inventory_full": "インベントリがいっぱいです！フィギュアのボックスを受け取れません。",

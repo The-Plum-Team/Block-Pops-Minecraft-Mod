@@ -982,6 +982,8 @@
   "blockpops.command.reload_regular.failed": "Não foi possível recarregar as fichas normais de %s",
   "blockpops.command.reload_guaranteed.done": "Ficha garantida de %s recarregada",
   "blockpops.command.reload_guaranteed.failed": "Não foi possível recarregar a ficha garantida de %s",
+  "blockpops.command.color_selection_on_join.on": "Jogadores sem cor favorita são perguntados ao entrar",
+  "blockpops.command.color_selection_on_join.off": "Jogadores sem cor favorita são perguntados ao abrir uma máquina, não ao entrar",
   "blockpops.command.default_color.done": "Cor padrão da coleção de jogadores definida como: %s",
   "blockpops.command.default_color.invalid": "Nome de cor inválido: %s. Cores válidas: %s",
   "blockpops.message.inventory_full": "Inventário cheio! Não é possível receber a caixa da figura.",
