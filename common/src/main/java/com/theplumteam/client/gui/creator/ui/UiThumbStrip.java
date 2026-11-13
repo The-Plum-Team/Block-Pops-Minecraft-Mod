@@ -54,6 +54,11 @@ import java.util.function.Supplier;
  * dragging one more than 6 units shows a blue line where it would land, carrying the row along
  * near its ends at a steady speed, whatever the frame rate, and letting go there moves it.
  *
+ * <p>With {@link #onRemove} set, the thumbnail under the pointer shows a small "×" in its top
+ * left corner, which takes that item away without selecting it first; its tooltip says what
+ * that means for the item, and an item it would do nothing for shows none. It is on the left
+ * because the thumbnail's own tooltip opens to the right of the pointer, over the other corner.
+ *
  * <p>Files dropped anywhere over the strip go to its {@link #filesZone}, the bulk add's, which
  * the strip lays over itself without drawing. Its models are the strip's share of the screen's
  * ({@link SidebarScreen.ModelBudget}): the selected thumbnail first, then the others in sight
@@ -107,6 +112,10 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     private static final double EDGE_SPEED = 160.0;
     private static final int LIP = 2;
     private static final int PROBLEM = 0xFFE04040;
+    // The "×" in a thumbnail's corner: its side, its glyph and its face until the pointer is on it
+    private static final int REMOVE = 9;
+    private static final String[] REMOVE_GLYPH = {"#...#", ".#.#.", "..#..", ".#.#.", "#...#"};
+    private static final int REMOVE_FACE = 0xD0141416;
     // A retired figure's cell: a neutral grey, and a wash that leaves its figure readable
     private static final int RETIRED_CELL = 0xFF5C5D61;
     private static final int RETIRED_WASH = 0x40000000;
@@ -149,6 +158,9 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     private Reorder onReorder;
     @Nullable
     private Component reorderBlocked;
+    @Nullable
+    private Consumer<T> onRemove;
+    private Function<T, List<Component>> removeTooltip = item -> null;
     @Nullable
     private Runnable onAdd;
     @Nullable
@@ -224,6 +236,19 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     public UiThumbStrip<T> onReorder(@Nullable Reorder onReorder, @Nullable Component whyNot) {
         this.onReorder = onReorder;
         this.reorderBlocked = onReorder == null ? whyNot : null;
+        return this;
+    }
+
+    /**
+     * Puts a small "×" in the corner of the thumbnail under the pointer, which takes its item away
+     * when clicked, selected or not.
+     *
+     * @param tooltip what the button would do to an item, as the button's tooltip; null for an
+     *                item it would do nothing to, which then shows no button
+     */
+    public UiThumbStrip<T> onRemove(@Nullable Consumer<T> onRemove, Function<T, List<Component>> tooltip) {
+        this.onRemove = onRemove;
+        this.removeTooltip = tooltip;
         return this;
     }
 
@@ -446,6 +471,25 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
         return index;
     }
 
+    // What the "×" of a thumbnail would do, as its tooltip, or null for a thumbnail without one
+    @Nullable
+    private List<Component> removeTip(int index) {
+        if (!selectable || onRemove == null || dragging || index < 0 || index >= items.size()) {
+            return null;
+        }
+        return removeTooltip.apply(items.get(index));
+    }
+
+    private int removeX(int index) {
+        return cellX(index) + 3;
+    }
+
+    // Whether a point is on a thumbnail's "×", which sits in the top left corner of its cell
+    private boolean overRemove(int index, double mouseX, double mouseY) {
+        int left = removeX(index);
+        return mouseX >= left && mouseX < left + REMOVE && mouseY >= y + 3 && mouseY < y + 3 + REMOVE;
+    }
+
     // Where a dragged thumbnail would land: the gap nearest the pointer, from 0 before the first
     // to the item count after the last
     private int slotAt(double mouseX) {
@@ -615,8 +659,17 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
             if (dragging && index == pressedIndex) {
                 graphics.fill(left, y, left + thumbWidth, y + thumbHeight, DRAGGED_WASH);
             }
+            List<Component> removeTip = hovered ? removeTip(index) : null;
+            boolean overRemove = removeTip != null && overRemove(index, mouseX, mouseY);
+            if (removeTip != null) {
+                int removeX = removeX(index);
+                graphics.fill(removeX, cellY, removeX + REMOVE, cellY + REMOVE, overRemove ? PROBLEM : REMOVE_FACE);
+                PixelIcon.draw(graphics, REMOVE_GLYPH, removeX + 2, cellY + 2, overRemove ? Theme.TEXT : Theme.TEXT_SOFT);
+            }
             if (hovered) {
-                if (overProblem) {
+                if (overRemove) {
+                    UiTooltip.set(removeTip);
+                } else if (overProblem) {
                     UiTooltip.set(shown.problems());
                 } else if (!shown.tooltip().isEmpty()) {
                     UiTooltip.set(shown.tooltip());
@@ -757,6 +810,12 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
             return true;
         }
         T item = items.get(index);
+        if (removeTip(index) != null && overRemove(index, click.x(), click.y())) {
+            // Takes the thumbnail away as it is, without selecting it first
+            UiSounds.play(ModSounds.CLICK);
+            onRemove.accept(item);
+            return true;
+        }
         if (click.doubleClick() && !click.ctrl() && !click.shift()) {
             if (onActivate != null) {
                 onActivate.accept(item);
