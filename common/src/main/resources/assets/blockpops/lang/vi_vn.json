@@ -430,7 +430,7 @@
   "blockpops.world_creator.wizard.name_empty": "Nhập tên",
   "blockpops.world_creator.wizard.author_hint": "Tên của bạn hoặc nhóm của bạn",
   "blockpops.world_creator.wizard.author_rule": "Tên tác giả không được chứa ký tự điều khiển",
-  "blockpops.world_creator.wizard.logo_help": "Thả ảnh PNG vào đây hoặc nhấp để chọn · %s đến %s px",
+  "blockpops.world_creator.wizard.logo_help": "Thả ảnh PNG vào đây hoặc nhấp để chọn · lớn hơn %s px sẽ được thu nhỏ",
   "blockpops.world_creator.wizard.colour": "Màu nền",
   "blockpops.world_creator.wizard.colour_value": "%s · %s",
   "blockpops.world_creator.wizard.from_logo": "Lấy từ logo",

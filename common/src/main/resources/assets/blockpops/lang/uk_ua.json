@@ -430,7 +430,7 @@
   "blockpops.world_creator.wizard.name_empty": "Введіть назву",
   "blockpops.world_creator.wizard.author_hint": "Ваше ім'я або назва вашої команди",
   "blockpops.world_creator.wizard.author_rule": "Ім'я автора не може містити керівних символів",
-  "blockpops.world_creator.wizard.logo_help": "Перетягніть PNG сюди або натисніть, щоб вибрати · від %s до %s px",
+  "blockpops.world_creator.wizard.logo_help": "Перетягніть PNG сюди або натисніть, щоб вибрати · понад %s px зменшується автоматично",
   "blockpops.world_creator.wizard.colour": "Колір фону",
   "blockpops.world_creator.wizard.colour_value": "%s · %s",
   "blockpops.world_creator.wizard.from_logo": "Взяти з логотипа",

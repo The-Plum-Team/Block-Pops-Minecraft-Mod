@@ -1,5 +1,6 @@
 package com.theplumteam.client.worldcontent;
 
+import com.mojang.blaze3d.platform.NativeImage;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.BlobType;
@@ -10,6 +11,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.DirectoryStream;
@@ -45,6 +47,10 @@ import java.util.regex.Pattern;
  * asked is still the current one and no {@link #forgetPending()} came in between. The
  * local path never leaves this class: a result carries the file name and the checked
  * bytes only.
+ *
+ * <p>A logo that is not one a logo may be, most often because it is larger, is not refused
+ * while it can be decoded: {@link LogoFit} scales it to fit and the result gets the same
+ * checks, so what is kept and sent is still a canonical PNG within the logo's limits.
  *
  * <p>Besides one file for one slot, it reads many at once for the bulk add: several files
  * chosen in the dialog or dropped together, and the files directly inside a dropped
@@ -641,7 +647,8 @@ public final class FilePicker {
      */
     private static PickResult read(Path path, BlobType type, @Nullable PngValidator.Role role, OpenOption[] options) {
         String name = displayName(path);
-        int cap = type.maxBytes();
+        // A logo larger than a logo may be is scaled down, so a larger file is read for it
+        int cap = role == PngValidator.Role.LOGO ? LogoFit.SOURCE_BYTES : type.maxBytes();
         try {
             if (!Files.isRegularFile(path)) {
                 return PickResult.refused(name, name + " is not a file");
@@ -684,8 +691,69 @@ public final class FilePicker {
         }
     }
 
-    // The checks of a file's bytes once read: its size, then its type's validator
+    // The checks of a file's bytes once read; a logo that fails them is scaled to fit when it can be
     private static PickResult check(String name, byte[] raw, BlobType type, @Nullable PngValidator.Role role) {
+        PickResult result = checkAsIs(name, raw, type, role);
+        if (role == PngValidator.Role.LOGO && result.kind() == PickResult.Kind.REFUSED) {
+            PickResult fitted = fitLogo(name, raw);
+            if (fitted != null) {
+                return fitted;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * A refused logo scaled to fit and checked again, or null when it cannot be: the bytes are
+     * no PNG, cannot be decoded, or still fail a check, and the first refusal then stands. An
+     * image too large to decode safely is refused here, saying so.
+     */
+    @Nullable
+    private static PickResult fitLogo(String name, byte[] raw) {
+        int[] declared = LogoFit.declaredSize(raw);
+        if (declared == null) {
+            return null;
+        }
+        if (declared[0] > LogoFit.SOURCE_MAX_SIDE || declared[1] > LogoFit.SOURCE_MAX_SIDE) {
+            return PickResult.refused(name, "PNG is " + declared[0] + "x" + declared[1] + "; a logo is scaled down from up to "
+                    + LogoFit.SOURCE_MAX_SIDE + " pixels a side");
+        }
+        int width;
+        int height;
+        int[] argb;
+        try (NativeImage image = NativeImage.read(new ByteArrayInputStream(raw))) {
+            width = image.getWidth();
+            height = image.getHeight();
+            if (width > LogoFit.SOURCE_MAX_SIDE || height > LogoFit.SOURCE_MAX_SIDE) {
+                return null;
+            }
+            argb = new int[width * height];
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    //? if >=1.21.2 {
+                    /*argb[y * width + x] = image.getPixel(x, y);
+                    *///? } else {
+                    // Below 1.21.2 pixels read as ABGR: red and blue change places
+                    int abgr = image.getPixelRGBA(x, y);
+                    argb[y * width + x] = abgr & 0xFF00FF00 | (abgr & 0xFF) << 16 | (abgr >> 16) & 0xFF;
+                    //? }
+                }
+            }
+        } catch (IOException | RuntimeException e) {
+            BlockPopsMod.logDebug("Could not decode a logo to scale it: {}", e.toString());
+            return null;
+        }
+        LogoFit.Fitted fitted = LogoFit.fit(argb, width, height);
+        PickResult result = checkAsIs(name, fitted.png(), BlobType.PNG, PngValidator.Role.LOGO);
+        if (result.kind() != PickResult.Kind.ACCEPTED) {
+            return null;
+        }
+        BlockPopsMod.logDebug("Scaled a logo from {}x{} to {}x{}", width, height, fitted.width(), fitted.height());
+        return result;
+    }
+
+    // A file's bytes as they are: their size, then their type's validator
+    private static PickResult checkAsIs(String name, byte[] raw, BlobType type, @Nullable PngValidator.Role role) {
         int cap = type.maxBytes();
         if (raw.length == 0) {
             return PickResult.refused(name, name + " is empty");
