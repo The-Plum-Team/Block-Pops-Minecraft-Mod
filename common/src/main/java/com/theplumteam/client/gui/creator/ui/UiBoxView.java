@@ -19,13 +19,11 @@ import java.util.function.Predicate;
 
 /**
  * The live preview of a collection's box and look, as the identity page shows it, in one of
- * three views a switch at the top picks:
+ * two views a switch at the top picks:
  * <ul>
  *   <li>{@link Mode#BOX}: the box holding the collection's first figure, or the one its host
  *       chose ({@link #setFigure}), seen from the front and a little above, as the favorite
  *       colour screen shows boxes;</li>
- *   <li>{@link Mode#WORLD}: the box standing on a grass block under the sky, both at the angle
- *       Minecraft shows blocks at in a slot, as it looks placed in the world;</li>
  *   <li>{@link Mode#SCREEN}: the claw machine's screen showing the collection, through a
  *       {@link UiMachineReplica}.</li>
  * </ul>
@@ -53,17 +51,11 @@ import java.util.function.Predicate;
 public class UiBoxView extends UiViewport {
     /** What the view shows the box in. */
     public enum Mode {
-        BOX, WORLD, SCREEN
+        BOX, SCREEN
     }
 
     private static final int BOX_TOP = 0xFF34353A;
     private static final int BOX_BOTTOM = 0xFF151617;
-    private static final int SKY_TOP = 0xFF8FB6FF;
-    private static final int SKY_BOTTOM = 0xFFB9D2FF;
-    // A box on a block at the slot angle, against the size they are drawn at, and how far the
-    // block reaches below its centre
-    private static final float WORLD_HEIGHT = 1.5f;
-    private static final float BLOCK_BELOW_CENTRE = 0.5f;
     // A box drawn at a size is this much of it wide and high, which a ghost's outline follows
     private static final float BOX_WIDTH = 0.87f;
     private static final float BOX_HEIGHT = 1.08f;
@@ -86,8 +78,6 @@ public class UiBoxView extends UiViewport {
     private boolean hintShown = true;
     private boolean stageShown;
     private ItemStack box = ItemStack.EMPTY;
-    private ItemStack worldBox = ItemStack.EMPTY;
-    private final ItemStack grass = grassStack();
     @Nullable
     private String boxKey;
     // The host's corner controls and box size, the mark of a missing image, and the front's editor
@@ -109,8 +99,7 @@ public class UiBoxView extends UiViewport {
 
     public UiBoxView() {
         this.modes = new UiSegmented(0, index -> setMode(Mode.values()[index]),
-                CreatorScreen.tr("preview.box"), CreatorScreen.tr("preview.world"),
-                CreatorScreen.tr("preview.screen"));
+                CreatorScreen.tr("preview.box"), CreatorScreen.tr("preview.screen"));
         this.controls.add(this.modes);
         this.replica.setVisible(false);
         // The replica takes its clicks before the view could start a turn
@@ -149,7 +138,7 @@ public class UiBoxView extends UiViewport {
     }
 
     /**
-     * Shows or hides the switch between the three views at the top, for a host that picks the
+     * Shows or hides the switch between the two views at the top, for a host that picks the
      * view itself; hidden, the scene starts at the view's top.
      */
     public UiBoxView modeSwitch(boolean shown) {
@@ -321,13 +310,12 @@ public class UiBoxView extends UiViewport {
         return figures.isEmpty() ? null : figures.get(0).getId();
     }
 
-    // The boxes hold one of the collection's figures, as a box the machine hands out does
-    private void updateBoxes(FigureCollection collection) {
+    // The box holds one of the collection's figures, as a box the machine hands out does
+    private void updateBox(FigureCollection collection) {
         String figureId = figureOf(collection);
         String key = collection.getId() + ":" + figureId;
         if (!key.equals(boxKey)) {
-            box = boxStack(collection.getId(), figureId, false);
-            worldBox = boxStack(collection.getId(), figureId, true);
+            box = boxStack(collection.getId(), figureId);
             boxKey = key;
         }
     }
@@ -395,18 +383,8 @@ public class UiBoxView extends UiViewport {
             case BOX -> {
                 drawStage(graphics, collection);
                 if (collection != null) {
-                    updateBoxes(collection);
+                    updateBox(collection);
                     drawBoxFront(graphics, box, yaw(), 0, x + width / 2.0f, boxCenterY(), boxSize());
-                }
-            }
-            case WORLD -> {
-                graphics.fillGradient(x, y, x + width, y + height, SKY_TOP, SKY_BOTTOM);
-                if (collection != null) {
-                    updateBoxes(collection);
-                    // Two blocks stacked at the slot angle are about one and a half sizes tall
-                    float size = Math.max(8.0f, Math.min(width * 0.45f, (sceneBottom() - sceneTop()) / WORLD_HEIGHT));
-                    float blockCenterY = sceneBottom() - size * BLOCK_BELOW_CENTRE;
-                    drawBoxOnBlock(graphics, worldBox, grass, yaw(), 0, x + width / 2.0f, blockCenterY, size);
                 }
             }
             case SCREEN -> graphics.fill(x, y, x + width, y + height, BACKGROUND);

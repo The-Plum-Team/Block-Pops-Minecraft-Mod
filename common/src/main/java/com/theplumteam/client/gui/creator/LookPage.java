@@ -107,9 +107,9 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  * A box image chosen as the kind with none yet, or a blank name, holds the collection's own
  * changes back, which the view, the box's head, the tab's dot and the status say.
  *
- * <p>The view's "View ⌄" menu shows the box alone or standing in the world, or opens the machine's
- * screen in a dialog ({@link MachineScreenDialog}); two icons spin the box and switch the night
- * light. Tab in the name moves on to the background's tiles; then the arrow keys move along a row,
+ * <p>The view shows the box; its "View ⌄" menu opens the machine's screen in a dialog
+ * ({@link MachineScreenDialog}), and two icons spin the box and switch the night light. Tab in
+ * the name moves on to the background's tiles; then the arrow keys move along a row,
  * Enter or Space picks, and Up, Down and Tab go from row to row, to the box image, the logo, its
  * size and "Position…".
  */
@@ -295,7 +295,7 @@ final class LookPage implements EditorPage {
     LookPage(CreatorEditorScreen editor) {
         this.editor = editor;
         this.previewId = CreatorPreview.previewId(CreatorEditorScreen.PREVIEW_SLOT);
-        this.previewBox = UiViewport.boxStack(this.previewId, null, false);
+        this.previewBox = UiViewport.boxStack(this.previewId, null);
         this.view.setCollection(this.previewId);
         this.view.stageBackground(true);
         this.viewButton = new UiViewButton(tr("preview.view"), this::openViewMenu);
@@ -1185,17 +1185,15 @@ final class LookPage implements EditorPage {
     }
 
     /**
-     * "View ⌄": the box alone or in the world, the chosen one checked, then the machine's screen,
-     * which opens in a dialog. Under the button, by its right edge on the wide page and its left
-     * on the narrow one, so it never covers the icons.
+     * "View ⌄": the box, checked as the view shown, then the machine's screen, which opens in a
+     * dialog. Under the button, by its right edge on the wide page and its left on the narrow
+     * one, so it never covers the icons.
      */
     private void openViewMenu() {
         UiMenu menu = new UiMenu();
-        UiBoxView.Mode mode = this.view.mode();
-        menu.radio(tr("preview.box"), mode != UiBoxView.Mode.WORLD, () -> this.view.setMode(UiBoxView.Mode.BOX));
-        menu.radio(tr("preview.world"), mode == UiBoxView.Mode.WORLD, () -> this.view.setMode(UiBoxView.Mode.WORLD));
+        menu.radio(tr("preview.box"), true, () -> this.view.setMode(UiBoxView.Mode.BOX));
         menu.item(tr("preview.screen"), this::openMachineScreen);
-        menu.highlight(mode == UiBoxView.Mode.WORLD ? 1 : 0);
+        menu.highlight(0);
         UiNode.Rect button = this.viewButton.bounds();
         menu.place(button, this.editor.width, this.editor.height);
         int menuX = this.narrow ? button.x() : Math.max(0, button.right() - menu.bounds().width());
