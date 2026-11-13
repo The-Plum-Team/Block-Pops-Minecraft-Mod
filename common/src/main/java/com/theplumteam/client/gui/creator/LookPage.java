@@ -78,13 +78,16 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
 
 /**
  * The editor's "Look" tab: how the collection looks in the machines, all of it in view at once.
- * On the left a live view of the box holding the collection's first figure, drawn from the
- * editor's preview of the draft, so every change shows before it is saved; on the right the
+ * On the left a live view of the box holding the collection's first figure, or the one clicked in
+ * the background's sample, drawn from the editor's preview of the draft, so every change shows
+ * before it is saved; on the right the
  * collection's name, then three sections under thin lines, each head saying what it is set to:
  * <ul>
  *   <li><b>Background</b>, the panel behind the figures in the machine: the twelve colours, a
  *       colour of one's own and the logo's main colour, and under them a sample of the machine's
- *       panel in that colour with the collection's first figures on it;</li>
+ *       panel in that colour with the collection's first figures on it, where a click on one
+ *       puts it in the box of the view, marked as the one shown; the choice is the view's alone
+ *       and is not saved;</li>
  *   <li><b>Box</b>: five box colours, then "Image" (the collection's own 64×64 picture, with the
  *       line that takes it and a link to the template), "Normal" (the mod's usual box) and "More",
  *       the other colours in a popover;</li>
@@ -341,6 +344,7 @@ final class LookPage implements EditorPage {
                 .colour(() -> 0xFF000000 | editor.draft().rgb())
                 .keys(FigureDefinition::getId)
                 .selectable(false)
+                .onPick(figure -> this.view.setFigure(figure.getId()), this.view::shownFigure)
                 .rank(SidebarScreen.ModelBudget.Rank.SHOWCASE);
 
         this.boxPopover = new UiPopover(tr("look.box_colours"), () -> onScreen(this.boxes.cellOf(BOX_MORE)))

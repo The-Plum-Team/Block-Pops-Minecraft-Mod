@@ -21,8 +21,9 @@ import java.util.function.Predicate;
  * The live preview of a collection's box and look, as the identity page shows it, in one of
  * three views a switch at the top picks:
  * <ul>
- *   <li>{@link Mode#BOX}: the box holding the collection's first figure, seen from the front and
- *       a little above, as the favorite colour screen shows boxes;</li>
+ *   <li>{@link Mode#BOX}: the box holding the collection's first figure, or the one its host
+ *       chose ({@link #setFigure}), seen from the front and a little above, as the favorite
+ *       colour screen shows boxes;</li>
  *   <li>{@link Mode#WORLD}: the box standing on a grass block under the sky, both at the angle
  *       Minecraft shows blocks at in a slot, as it looks placed in the world;</li>
  *   <li>{@link Mode#SCREEN}: the claw machine's screen showing the collection, through a
@@ -78,6 +79,8 @@ public class UiBoxView extends UiViewport {
     private final UiMachineReplica replica = new UiMachineReplica();
     @Nullable
     private String collectionId;
+    @Nullable
+    private String figureId;
     private Mode mode = Mode.BOX;
     private boolean switchShown = true;
     private boolean hintShown = true;
@@ -118,6 +121,22 @@ public class UiBoxView extends UiViewport {
     public void setCollection(@Nullable String collectionId) {
         this.collectionId = collectionId;
         this.replica.setCollection(collectionId);
+    }
+
+    /**
+     * The figure the box holds, by id; null, or a figure the collection does not have, as once it
+     * is deleted, shows the collection's first.
+     */
+    public void setFigure(@Nullable String figureId) {
+        this.figureId = figureId;
+    }
+
+    /** The id of the figure the box holds now, or null when the collection has none. */
+    @Nullable
+    public String shownFigure() {
+        FigureCollection collection = collectionId != null
+                ? CollectionRegistry.getCollection(collectionId).orElse(null) : null;
+        return collection != null ? figureOf(collection) : null;
     }
 
     public Mode mode() {
@@ -290,10 +309,21 @@ public class UiBoxView extends UiViewport {
         return replica.visible() && replica.key(key);
     }
 
-    // The boxes hold the collection's first figure, as a box the machine hands out does
-    private void updateBoxes(FigureCollection collection) {
+    // The figure the boxes hold: the chosen one while the collection has it, or else its first
+    @Nullable
+    private String figureOf(FigureCollection collection) {
         List<FigureDefinition> figures = collection.getRegularFigures();
-        String figureId = figures.isEmpty() ? null : figures.get(0).getId();
+        for (FigureDefinition figure : figures) {
+            if (figure.getId().equals(this.figureId)) {
+                return this.figureId;
+            }
+        }
+        return figures.isEmpty() ? null : figures.get(0).getId();
+    }
+
+    // The boxes hold one of the collection's figures, as a box the machine hands out does
+    private void updateBoxes(FigureCollection collection) {
+        String figureId = figureOf(collection);
         String key = collection.getId() + ":" + figureId;
         if (!key.equals(boxKey)) {
             box = boxStack(collection.getId(), figureId, false);

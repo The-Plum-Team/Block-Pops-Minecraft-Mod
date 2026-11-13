@@ -66,7 +66,8 @@ import java.util.function.Supplier;
  * a paper figure and a model's texture whole, and only one whose texture has not arrived shows its
  * figure's initial. A strip that only
  * shows figures, as a sample of the machine's screen does, is made {@link #selectable(boolean)
- * unselectable} and may ask the budget at another {@link #rank}.
+ * unselectable} and may ask the budget at another {@link #rank}. Such a strip may still let one
+ * of its thumbnails be picked with a click ({@link #onPick}), which it then draws as selected.
  *
  * @param <T> what a thumbnail shows, such as a figure of the draft
  */
@@ -172,6 +173,9 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     private int scroll;
     private int grantedModels = Integer.MAX_VALUE;
     private boolean selectable = true;
+    @Nullable
+    private Consumer<T> onPick;
+    private Supplier<Object> pickedKey = () -> null;
     private SidebarScreen.ModelBudget.Rank rank = SidebarScreen.ModelBudget.Rank.STRIP;
     // A press on a thumbnail, which a long enough drag turns into moving it
     private int pressedIndex = -1;
@@ -267,6 +271,18 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
      */
     public UiThumbStrip<T> rank(SidebarScreen.ModelBudget.Rank rank) {
         this.rank = rank;
+        return this;
+    }
+
+    /**
+     * Lets a strip that only shows its thumbnails have one picked with a click, as the figure a
+     * view beside it shows: no keys, no dragging and never several.
+     *
+     * @param picked the key of the thumbnail drawn as selected, asked on every frame; null for none
+     */
+    public UiThumbStrip<T> onPick(@Nullable Consumer<T> onPick, Supplier<Object> picked) {
+        this.onPick = onPick;
+        this.pickedKey = picked;
         return this;
     }
 
@@ -585,7 +601,11 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     }
 
     private boolean isSelected(int index) {
-        return selectable && selectedKeys.contains(keyOf.apply(items.get(index)));
+        if (!selectable) {
+            // A strip that only shows marks the one thumbnail its host says is picked
+            return onPick != null && Objects.equals(pickedKey.get(), keyOf.apply(items.get(index)));
+        }
+        return selectedKeys.contains(keyOf.apply(items.get(index)));
     }
 
     private void drawThumb(GuiGraphics graphics, Font font, int index, boolean hovered, boolean withModel,
@@ -593,8 +613,10 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
         Look shown = look.apply(items.get(index));
         boolean selected = isSelected(index);
         int left = cellX(index);
-        int border = selected ? Theme.SELECTED : hovered ? Surfaces.BORDER_HOVER : Surfaces.BORDER;
-        Draw.raised(graphics, left, y, thumbWidth, thumbHeight, border, hovered ? Surfaces.FACE_HOVER : Surfaces.FACE,
+        // A thumbnail that does nothing when clicked does not light up under the pointer
+        boolean lit = hovered && (selectable || onPick != null);
+        int border = selected ? Theme.SELECTED : lit ? Surfaces.BORDER_HOVER : Surfaces.BORDER;
+        Draw.raised(graphics, left, y, thumbWidth, thumbHeight, border, lit ? Surfaces.FACE_HOVER : Surfaces.FACE,
                 LIP);
         if (selected) {
             Draw.outline(graphics, left + 1, y + 1, thumbWidth - 2, thumbHeight - 4, Theme.SELECTED);
@@ -786,6 +808,15 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     public boolean click(UiInput.Click click) {
         pressedIndex = -1;
         dragging = false;
+        if (visible() && !selectable && onPick != null && click.left()) {
+            int picked = cellAt(click.x(), click.y());
+            if (picked < 0 || picked >= items.size()) {
+                return false;
+            }
+            UiSounds.play(ModSounds.CLICK);
+            onPick.accept(items.get(picked));
+            return true;
+        }
         if (!visible() || !selectable || !isMouseOver(click.x(), click.y())) {
             return false;
         }
