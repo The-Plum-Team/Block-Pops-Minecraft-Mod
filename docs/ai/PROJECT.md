@@ -296,7 +296,8 @@ creator is left. One session at a time and never beside a World save in flight. 
 session Publish means publishing on BlockPops (`BlockPopsPublish`: the terms once, `PlayerExport`,
 `PublishRun`, then the code to share or the error in the game's words); `PersonalLinks` remembers
 which published collection and revision each draft became, so the next publish is a new revision
-of it. What only a server can do (a machine, players' progress, archiving, data-pack import) is not
+of it, and its menu deletes that collection from BlockPops again, which is the owner's to do
+whether or not they still support the project. What only a server can do (a machine, players' progress, archiving, data-pack import) is not
 offered there.
 
 The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: an

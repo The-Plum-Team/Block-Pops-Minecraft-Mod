@@ -172,6 +172,61 @@ final class BlockPopsPublish {
         });
     }
 
+    // ---- Taking a published collection down
+
+    /**
+     * Asks before deleting from BlockPops the collection a draft was published as, then deletes
+     * it: its code stops working for everybody and is never used again. The draft stays.
+     */
+    static void confirmDelete(String draftId, String name) {
+        PersonalLinks.Link link = linkOf(draftId);
+        if (link == null) {
+            return;
+        }
+        // The menu's words, without the dots that say a question follows
+        String title = Component.translatable("blockpops.mycollections.delete").getString()
+                .replace("\u2026", "").replace("...", "").trim();
+        UiModal dialog = new UiModal(Component.literal(title), Component.empty())
+                .width(WIDTH).accent(DialogFrame.Accent.DANGER, Theme.ICON_WARNING);
+        lines(dialog, () -> Component.translatable("blockpops.mycollections.delete_confirm", name, link.code()),
+                Theme.TEXT_SOFT, LINES);
+        UiButton keep = dialog.cancelButton(Component.translatable("blockpops.upload.gate.later"));
+        dialog.button(Component.translatable("blockpops.mycollections.delete_button"), UiButton.Style.DANGER,
+                () -> delete(draftId, name, link, link.rev(), true));
+        dialog.defaultButton(keep);
+        show(dialog, null);
+    }
+
+    private static void delete(String draftId, String name, PersonalLinks.Link link, int headRev, boolean again) {
+        Minecraft minecraft = Minecraft.getInstance();
+        UploadExecutor.get().execute(() -> {
+            UploadApi api = UploadApi.forGame();
+            try {
+                new ManageRun(api, new SessionClient(api, MojangJoin.forGame())).delete(link.id(), headRev);
+                minecraft.execute(() -> deleted(draftId, name));
+            } catch (UploadException e) {
+                minecraft.execute(() -> {
+                    if (e.error() == ApiError.UNAVAILABLE || e.error() == ApiError.NOT_FOUND) {
+                        // Gone already, as when it was deleted from another computer
+                        deleted(draftId, name);
+                    } else if (e.error() == ApiError.CONFLICT && again && e.detail() >= 1) {
+                        // Published again since from somewhere else: whatever is there now is what is deleted
+                        delete(draftId, name, link, (int) e.detail(), false);
+                    } else {
+                        failed(UploadErrors.message(e), null, null);
+                    }
+                });
+            }
+        });
+    }
+
+    private static void deleted(String draftId, String name) {
+        if (links != null) {
+            links.remove(draftId);
+        }
+        UiToast.show(Component.translatable("blockpops.mycollections.deleted", name));
+    }
+
     // ---- How it ended
 
     private static void published(String draftId, Run run, PersonalLinks links, UploadApi.Published published,

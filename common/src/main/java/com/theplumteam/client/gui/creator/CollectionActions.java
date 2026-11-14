@@ -166,6 +166,9 @@ final class CollectionActions {
             PersonalLinks.Link link = BlockPopsPublish.linkOf(record.id());
             if (link != null) {
                 menu.item(Component.translatable("blockpops.upload.done.copy"), () -> BlockPopsPublish.copyCode(link.code()));
+                // Taking it down is always the owner's to do, whether or not they still support the project
+                menu.warning(Component.translatable("blockpops.mycollections.delete"),
+                        () -> BlockPopsPublish.confirmDelete(record.id(), record.name()));
             }
         }
         menu.separator();
