@@ -53,7 +53,7 @@ class PlayerDocumentsTest {
     }
 
     @Test
-    void aPlayerIdAndAPlayerCodeHaveOneShapeEach() {
+    void aPlayerIdAndAPlayerCodeHaveOneShapeEach() throws RemoteException {
         assertTrue(PlayerIds.isPlayerId(ID));
         assertTrue(PlayerIds.isPlayerId("p_abcdefghijkl"));
         assertTrue(PlayerIds.isPlayerId("p_234567234567"));
@@ -62,8 +62,17 @@ class PlayerDocumentsTest {
             "p_k3v7q2m5x4aé"}) {
             assertFalse(PlayerIds.isPlayerId(bad), String.valueOf(bad));
         }
-        // It is a Custom id by grammar, and the family is told apart by its prefix alone
-        assertTrue(RemotePaths.isValidCollectionId(ID));
+        // It has the shape of a Custom id, and the official tree refuses the whole reserved space
+        assertFalse(RemotePaths.isValidCollectionId(ID));
+        assertFalse(RemotePaths.isValidCollectionId("p_anything"));
+        assertFalse(RemotePaths.isValidCollectionId("p_"));
+        assertTrue(RemotePaths.isValidCollectionId("willow_media"));
+        assertTrue(RemotePaths.isValidCollectionId("pokemon"));
+        assertTrue(RemotePaths.isValidCollectionId("p2_x"));
+        assertThrows(RemoteException.class, () -> com.theplumteam.remote.CodeEntry.parse(
+                ("{\"id\":\"" + ID + "\",\"name\":\"Mine\"}").getBytes(StandardCharsets.UTF_8)));
+        assertEquals("willow_media", com.theplumteam.remote.CodeEntry.parse(
+                "{\"id\":\"willow_media\",\"name\":\"WillowMedia\"}".getBytes(StandardCharsets.UTF_8)).id());
         assertTrue(PlayerIds.isReserved("p_anything"));
         assertFalse(PlayerIds.isReserved("willow_media"));
 

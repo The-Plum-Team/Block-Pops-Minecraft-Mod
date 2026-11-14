@@ -191,8 +191,12 @@ there.
 Player collections, which players are to publish themselves, exist so far only as the part of the
 content core that says what one is: `com.theplumteam.remote.player`, `CanonicalJson`, `ImageHash`
 and the record's published form (`WorldCollectionRecord.toPlayerJson` and `parsePlayer`). Their ids
-are `p_` and twelve of `a-z2-7`, a shape reserved both ways, and their codes are two words and two
-digits, a shape no official code takes. Every path is computed below `p/` by `PlayerPaths` from
+are `p_` and twelve of `a-z2-7`, a shape reserved both ways (the official tree refuses every id
+that starts with `p_`, `RemotePaths.isValidCollectionId`), and their codes are two words and two
+digits, a shape no official code takes. `figure.CollectionFamilies` is the one place that says
+which family an id belongs to (built-in, Custom, World, player or a creator preview): the shared
+collection sync, which a client of any version registers unchecked, carries built-in collections
+only, on the sending side and again on the receiving one, and nothing else tests a prefix by hand. Every path is computed below `p/` by `PlayerPaths` from
 checked parts. A head, an index, a status, a revocation list and the offline root are each the
 payload of a `SignedEnvelope`, and each, like the upload package, a published record and a
 published model or animation (`CanonicalJson`), is accepted only as the exact bytes it writes

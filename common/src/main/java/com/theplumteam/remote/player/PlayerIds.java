@@ -1,19 +1,22 @@
 package com.theplumteam.remote.player;
 
+import com.theplumteam.remote.RemotePaths;
+
 /**
  * The names of player collections: the ones players publish themselves.
  *
- * <p>An id is {@code p_} and twelve characters of {@code a-z} and {@code 2-7}. It fits the
- * grammar of a Custom collection id, so everything that holds a collection id holds it as it is,
- * and the prefix is reserved both ways: no official collection has a {@code p_} id, and no player
- * collection has any other.
+ * <p>An id is {@code p_} and twelve characters of {@code a-z} and {@code 2-7}. It has the shape
+ * of a Custom collection id, so everything that holds a collection id holds it as it is, and
+ * the prefix is reserved both ways: no official collection has a {@code p_} id (the official
+ * tree refuses one, see {@link RemotePaths#isValidCollectionId}), and no player collection has
+ * any other.
  *
  * <p>A code is two words and two digits, such as {@code maple-orbit-42}. It fits the grammar of
  * a collection code, and no official code takes that shape, so the shape alone says where a code
  * is looked up.
  */
 public final class PlayerIds {
-    public static final String PREFIX = "p_";
+    public static final String PREFIX = RemotePaths.PLAYER_PREFIX;
     private static final int ID_LENGTH = 14;
     private static final int WORD_MIN = 3;
     private static final int WORD_MAX = 8;

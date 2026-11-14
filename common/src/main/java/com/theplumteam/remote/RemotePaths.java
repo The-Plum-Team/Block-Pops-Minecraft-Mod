@@ -23,6 +23,12 @@ public final class RemotePaths {
     private static final Pattern SAFE_RELATIVE = Pattern.compile("[a-z0-9_-]+(?:\\.[a-z0-9_-]+)*(?:/[a-z0-9_-]+(?:\\.[a-z0-9_-]+)*)*");
     private static final int MAX_PATH_LENGTH = 255;
     private static final Set<String> RESERVED_IDS = Set.of("default", "world_players");
+    /**
+     * What every id of a collection that players publish starts with. No official collection has
+     * such an id: one in the manifest or behind a code is refused, so the two trees cannot stand
+     * in for each other.
+     */
+    public static final String PLAYER_PREFIX = "p_";
     /** Names Windows maps to devices whatever their extension. */
     private static final Pattern WINDOWS_DEVICE = Pattern.compile("(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\\..*)?");
 
@@ -51,9 +57,13 @@ public final class RemotePaths {
         return CODE.matcher(code).matches() ? code : null;
     }
 
-    /** Whether the id may name a Custom collection; the built-in pseudo-collections are refused. */
+    /**
+     * Whether the id may name a Custom collection; the built-in pseudo-collections and the ids
+     * reserved for player collections are refused.
+     */
     public static boolean isValidCollectionId(String id) {
-        return id != null && COLLECTION_ID.matcher(id).matches() && !RESERVED_IDS.contains(id);
+        return id != null && COLLECTION_ID.matcher(id).matches() && !RESERVED_IDS.contains(id)
+                && !id.startsWith(PLAYER_PREFIX);
     }
 
     /** Where the collection JSON of a valid collection id lives on the CDN and on disk. */

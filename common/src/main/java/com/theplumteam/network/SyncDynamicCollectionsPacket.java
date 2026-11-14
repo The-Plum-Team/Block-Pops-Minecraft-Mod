@@ -3,8 +3,11 @@ package com.theplumteam.network;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.client.remote.ClientCustomCollections;
+import com.theplumteam.figure.CollectionFamilies;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
+import com.theplumteam.remote.player.PlayerIds;
 import com.theplumteam.util.ResourceLocations;
 import com.theplumteam.worldcontent.WorldContentIds;
 import dev.architectury.networking.NetworkManager;
@@ -32,12 +35,10 @@ public class SyncDynamicCollectionsPacket {
     public SyncDynamicCollectionsPacket(List<FigureCollection> collections) {
         this.collectionsJson = new ArrayList<>();
         for (FigureCollection collection : collections) {
-            // Custom collections only travel in SyncCustomCollectionsPacket, to clients that can load them
-            if (com.theplumteam.server.CustomCollections.isCustom(collection.getId())) {
-                continue;
-            }
-            // World collections only travel in SyncWorldCollectionsPacket, checked on arrival
-            if (WorldContentIds.isWorldCollectionId(collection.getId())) {
+            // Custom, World and player collections each travel only in their family's own packet,
+            // to clients that can load them and check them on arrival. A client of any version
+            // registers what arrives here unchecked, so this is what keeps them out of it.
+            if (!CollectionFamilies.genericSyncAllows(collection.getId())) {
                 continue;
             }
             JsonObject json = collection.toJson();
@@ -77,9 +78,12 @@ public class SyncDynamicCollectionsPacket {
                 try {
                     JsonObject jsonObject = GSON.fromJson(json, JsonObject.class);
                     FigureCollection collection = FigureCollection.fromJson(jsonObject);
-                    // This route registers without any check, so it never accepts a World collection
-                    if (WorldContentIds.isWorldCollectionId(collection.getId())) {
-                        LOGGER.warn("Ignoring World collection {} sent as a dynamic collection", collection.getId());
+                    // This route registers without any check, so it never accepts a collection of a
+                    // family that has checks of its own, whatever a server sends
+                    String id = collection.getId();
+                    if (WorldContentIds.isWorldCollectionId(id) || PlayerIds.isReserved(id)
+                            || ClientCustomCollections.owns(id)) {
+                        LOGGER.warn("Ignoring collection {} sent as a dynamic collection", id);
                         continue;
                     }
                     CollectionRegistry.registerDynamicCollection(collection);
