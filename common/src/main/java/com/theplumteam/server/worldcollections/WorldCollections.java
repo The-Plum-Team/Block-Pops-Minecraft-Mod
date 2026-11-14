@@ -425,6 +425,48 @@ public final class WorldCollections {
         dirty = true;
     }
 
+    /**
+     * What follows a change of a store besides the change itself. The server's own store
+     * registers what changed for the game and schedules a sync to its players; a store nobody
+     * is synced from, as the one a player keeps their own drafts in, does neither.
+     */
+    public interface Effects {
+        /** A record was saved: its collection is to be shown as it is now. */
+        void registered(WorldCollectionRecord record, Map<String, BlobInfo> blobs);
+
+        /** A collection was purged. */
+        void unregistered(String id);
+
+        /** Something whoever reads the store shows has changed. */
+        void changed();
+
+        /** The files in the store have changed, and nothing else. */
+        void filesChanged();
+    }
+
+    private static final Effects SERVER = new Effects() {
+        @Override
+        public void registered(WorldCollectionRecord record, Map<String, BlobInfo> blobs) {
+            register(record, blobs);
+        }
+
+        @Override
+        public void unregistered(String id) {
+            CollectionRegistry.unregisterDynamicCollection(id);
+            REGISTERED.remove(id);
+        }
+
+        @Override
+        public void changed() {
+            markDirty();
+        }
+
+        @Override
+        public void filesChanged() {
+            revision++;
+        }
+    };
+
     // Uploads
 
     /**
@@ -434,7 +476,13 @@ public final class WorldCollections {
      */
     @Nullable
     public static WorldContentStatus checkUpload(String sha, @Nullable BlobType type, long size) {
-        WorldCollectionStore current = store;
+        return checkUpload(store, sha, type, size);
+    }
+
+    /** {@link #checkUpload(String, BlobType, long)} for a store that is given. */
+    @Nullable
+    public static WorldContentStatus checkUpload(@Nullable WorldCollectionStore current, String sha, @Nullable BlobType type,
+                                                 long size) {
         if (current == null || current.isDegraded()) {
             return WorldContentStatus.of(Result.DEGRADED);
         }
@@ -505,7 +553,7 @@ public final class WorldCollections {
                         return;
                     }
                     IN_FLIGHT.remove(sha);
-                    reply.accept(outcome != null ? outcome : addBlob(current, sha, checked, by));
+                    reply.accept(outcome != null ? outcome : addBlob(current, sha, checked, by, SERVER));
                 });
             });
         } catch (RejectedExecutionException e) {
@@ -515,7 +563,7 @@ public final class WorldCollections {
     }
 
     /**
-     * Adds a written file to the table. Server thread.
+     * Adds a written file to the table. Server thread, or the one thread a store of its own is used on.
      *
      * <p>Neither the metadata nor a sync goes for the file at once: no record names it yet,
      * and the edit that names it, which follows in every autosave, saves the table and syncs
@@ -523,8 +571,9 @@ public final class WorldCollections {
      * (ADR 0005). A file no edit names within {@link #UNSAVED_FILE_TICKS} is saved and synced
      * on its own. A file that was missing is synced at once, since players were told it was.
      */
-    private static WorldContentStatus addBlob(WorldCollectionStore current, String sha, BlobInfo info, UUID by) {
-        WorldContentStatus refused = checkUpload(sha, info.type(), info.size());
+    public static WorldContentStatus addBlob(WorldCollectionStore current, String sha, BlobInfo info, UUID by,
+                                             Effects effects) {
+        WorldContentStatus refused = checkUpload(current, sha, info.type(), info.size());
         if (refused != null) {
             if (refused.result() == Result.QUOTA || refused.result() == Result.DEGRADED) {
                 // Not in the table, so nothing else uses the copy just written
@@ -537,10 +586,10 @@ public final class WorldCollections {
         current.addUnsavedBlob(sha, new WorldCollectionStore.StoredBlob(info, System.currentTimeMillis(), by));
         current.markPresent(sha);
         if (wasMissing) {
-            markDirty();
+            effects.changed();
         } else {
             // The stored bytes a sync carries have changed: whichever sync goes next is built again
-            revision++;
+            effects.filesChanged();
         }
         return WorldContentStatus.of(Result.STORED, sha);
     }
@@ -605,12 +654,20 @@ public final class WorldCollections {
      * checked the operator.
      */
     public static WorldContentStatus edit(WorldCollectionEdit edit, UUID by) {
-        WorldCollectionStore current = store;
+        return edit(store, edit, by, SERVER);
+    }
+
+    /**
+     * {@link #edit(WorldCollectionEdit, UUID)} for a store that is given: the same edits, checks
+     * and saves, with what follows a change left to the store's owner.
+     */
+    public static WorldContentStatus edit(@Nullable WorldCollectionStore current, WorldCollectionEdit edit, UUID by,
+                                          Effects effects) {
         if (current == null || current.isDegraded()) {
             return WorldContentStatus.of(Result.DEGRADED);
         }
         if (edit instanceof WorldCollectionEdit.Purge purge) {
-            return purgeFromEditor(purge);
+            return purgeFromEditor(current, purge, effects);
         }
         if (edit instanceof WorldCollectionEdit.ImportPack) {
             return WorldContentStatus.of(Result.INVALID, "An import reads the server's datapacks and is not an edit");
@@ -633,7 +690,7 @@ public final class WorldCollections {
                 return refused;
             }
         }
-        return finish(current, txn);
+        return finish(current, txn, effects);
     }
 
     /**
@@ -766,7 +823,7 @@ public final class WorldCollections {
      * Then the state is saved once, every changed collection is registered again and one
      * sync is scheduled.
      */
-    private static WorldContentStatus finish(WorldCollectionStore current, Txn txn) {
+    private static WorldContentStatus finish(WorldCollectionStore current, Txn txn, Effects effects) {
         // Stamped after the equality test, so an edit that changes nothing still saves nothing
         long editedAt = editedNow();
         WorldCollectionStore.State next = txn.working;
@@ -804,9 +861,9 @@ public final class WorldCollections {
             return WorldContentStatus.of(Result.SAVE_FAILED);
         }
         for (WorldCollectionRecord record : saved) {
-            register(record, blobs);
+            effects.registered(record, blobs);
         }
-        markDirty();
+        effects.changed();
         return WorldContentStatus.of(Result.OK, name);
     }
 
@@ -1073,23 +1130,27 @@ public final class WorldCollections {
      * archived collection or a draft can go, so a collection still in the machines is never
      * deleted by one mistaken click.
      */
-    private static WorldContentStatus purgeFromEditor(WorldCollectionEdit.Purge purge) {
+    private static WorldContentStatus purgeFromEditor(WorldCollectionStore current, WorldCollectionEdit.Purge purge,
+                                                      Effects effects) {
         if (!purge.id().equals(purge.idAgain())) {
             return WorldContentStatus.of(Result.INVALID, "The two ids of a purge differ");
         }
-        WorldCollectionRecord record = record(purge.id());
+        WorldCollectionRecord record = current.state().record(purge.id());
         if (record == null) {
             return WorldContentStatus.of(Result.UNKNOWN_COLLECTION, WorldContentException.excerpt(purge.id()));
         }
         if (!record.archived() && !record.draft()) {
             return WorldContentStatus.of(Result.STILL_LIVE, record.name());
         }
-        return purge(purge.id());
+        return purge(current, purge.id(), effects);
     }
 
     /** Purges a collection: it is unregistered, its id is never used again and its files are left to collection. */
     public static WorldContentStatus purge(String id) {
-        WorldCollectionStore current = store;
+        return purge(store, id, SERVER);
+    }
+
+    private static WorldContentStatus purge(@Nullable WorldCollectionStore current, String id, Effects effects) {
         if (current == null || current.isDegraded()) {
             return WorldContentStatus.of(Result.DEGRADED);
         }
@@ -1105,9 +1166,8 @@ public final class WorldCollections {
         if (!current.save(state.purged(id))) {
             return WorldContentStatus.of(Result.SAVE_FAILED);
         }
-        CollectionRegistry.unregisterDynamicCollection(id);
-        REGISTERED.remove(id);
-        markDirty();
+        effects.unregistered(id);
+        effects.changed();
         return WorldContentStatus.of(Result.OK, record.name());
     }
 
