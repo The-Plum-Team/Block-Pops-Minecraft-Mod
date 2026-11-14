@@ -6,6 +6,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.util.GeoAssets;
 import com.theplumteam.util.ResourceLocations;
+import com.theplumteam.worldcontent.WorldAssetIds;
 import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
@@ -217,8 +218,8 @@ public final class RuntimeAssets {
      */
     public static void clear() {
         GENERATION.incrementAndGet();
-        RuntimeGeo.clear(id -> !WorldContentIds.owns(id));
-        RuntimeTextures.clear(id -> !WorldContentIds.owns(id));
+        RuntimeGeo.clear(id -> !WorldAssetIds.owns(id));
+        RuntimeTextures.clear(id -> !WorldAssetIds.owns(id));
         FigureVariants.clear();
     }
 }

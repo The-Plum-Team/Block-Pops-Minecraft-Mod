@@ -9,8 +9,9 @@ import com.theplumteam.client.runtime.RuntimeTextures;
 import com.theplumteam.util.GeoAssets;
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.BlobType;
+import com.theplumteam.worldcontent.JdkSha256;
 import com.theplumteam.worldcontent.JsonFields;
-import com.theplumteam.worldcontent.Sha256;
+import com.theplumteam.worldcontent.WorldAssetIds;
 import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
@@ -74,9 +75,9 @@ public final class ClientWorldAssets {
     /** The runtime asset id a file of this type is loaded as. */
     public static ResourceLocation id(String sha, BlobType type) {
         return switch (type) {
-            case PNG -> WorldContentIds.texture(sha);
-            case GEO -> WorldContentIds.model(sha);
-            case ANIMATION -> WorldContentIds.animation(sha);
+            case PNG -> WorldAssetIds.texture(sha);
+            case GEO -> WorldAssetIds.model(sha);
+            case ANIMATION -> WorldAssetIds.animation(sha);
         };
     }
 
@@ -113,7 +114,7 @@ public final class ClientWorldAssets {
     private static void loadOne(String sha, BlobInfo info, byte[] bytes, Listener listener, int generation) {
         // The same checks the server made, so a damaged or swapped copy is never decoded
         try {
-            if (!Sha256.of(bytes).equals(sha)) {
+            if (!JdkSha256.of(bytes).equals(sha)) {
                 throw new IllegalStateException("its bytes do not match its SHA-256");
             }
             BlobInfo actual = info.type().validate(bytes);
@@ -222,8 +223,8 @@ public final class ClientWorldAssets {
      */
     public static void forget() {
         GENERATION.incrementAndGet();
-        RuntimeGeo.clear(WorldContentIds::owns);
-        RuntimeTextures.clear(WorldContentIds::owns);
-        GreyedTextures.forget(WorldContentIds::owns);
+        RuntimeGeo.clear(WorldAssetIds::owns);
+        RuntimeTextures.clear(WorldAssetIds::owns);
+        GreyedTextures.forget(WorldAssetIds::owns);
     }
 }

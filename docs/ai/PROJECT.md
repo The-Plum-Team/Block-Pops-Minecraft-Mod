@@ -153,7 +153,7 @@ upload concurrency caps and timeouts in `WorldUploads`. They are stored content-
 `<world>/data/blockpops-world-collections/` and travel only in `SyncWorldCollectionsPacket` and
 `WorldAssetChunkPacket`, never in the shared collection sync, the Custom packet or
 `blockpops-cache/`. Their ids are `w-<slug>`, and the shared sync refuses them on both sides.
-Their assets are served only by the runtime registries in `client.runtime` under ids `WorldContentIds`
+Their assets are served only by the runtime registries in `client.runtime` under ids `WorldAssetIds`
 owns, are never written into GeckoLib's caches, are refused when a bundled resource has the same
 id, and are left alone by `RuntimeAssets.clear()`. Since
 [ADR 0004](../architecture/decisions/0004-extend-world-collections-for-the-redesigned-creator.md)
@@ -171,6 +171,17 @@ block's data. Every operator request, from a batch of edits to a
 duplicate, a purge or a datapack import started in the editor, is an action of
 `WorldCollectionEditPacket` answered by `WorldCollectionStatusPacket`; an editor import reads only
 the server's own datapacks by exact name, as the command does.
+
+The checks of untrusted content form the content core: the files `common/content-core.txt` lists,
+from `com.theplumteam.remote` and `com.theplumteam.worldcontent`. A listed file imports only the
+JDK's plain classes, Gson's tree and stream classes, compile-time annotations and other listed
+files, never Minecraft, a loader or the rest of the mod, so the same source can check content
+where there is no game. A refusal there carries a `ContentError` code beside its message, and
+`JsonOut` is its one writer, giving a World record the bytes it has always had. What needs more
+than that stays outside and is handed in or kept beside it: hashing (`Sha256`, with `JdkSha256` in
+the game), which links may be an author link (`WorldCollectionRecord.LinkRule`, with
+`AuthorLinks.RULE` in the game), where a path lands on disk (`RemoteFiles`) and the names of
+runtime assets (`WorldAssetIds`). Add a file to the list only if it keeps to those imports.
 
 The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: an
 operator and World collections synced. Its entry points are the machine screen's **Creator**

@@ -862,7 +862,10 @@ public final class CreatorDraft {
         }
     }
 
-    /** Sets the author link, or none with empty; checked by {@link WorldCollectionRecord#isValidAuthorUrl}. */
+    /**
+     * Sets the author link, or none with empty; checked by
+     * {@link com.theplumteam.worldcontent.AuthorLinks#isValid}.
+     */
     public void setAuthorUrl(String next) {
         checkLength(next, WorldContentLimits.MAX_AUTHOR_URL_LENGTH);
         if (!next.equals(authorUrl)) {

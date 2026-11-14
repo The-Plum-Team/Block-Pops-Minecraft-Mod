@@ -22,7 +22,7 @@ import java.util.UUID;
  * A file is kept only once its SHA-256 matches the manifest (and, for a texture, its PNG
  * header passes {@link PngCheck}); a mismatch writes nothing. Every write lands in a fresh
  * staging file and is moved into place in one step, so a crash never leaves a half-written
- * file where a verified one is expected. Paths are resolved with {@link RemotePaths#resolveInside},
+ * file where a verified one is expected. Paths are resolved with {@link RemoteFiles#resolveInside},
  * so a link planted in the store cannot redirect a write.
  *
  * Not thread-safe: use it from one thread at a time, such as {@link RemoteExecutor}'s.
@@ -39,7 +39,7 @@ public final class VerifiedStore {
 
     /** The stored file for the entry, if it is a regular file whose SHA-256 matches. */
     public Optional<Path> cached(ManifestEntry entry) throws IOException {
-        Path file = RemotePaths.resolveInside(root, entry.path());
+        Path file = RemoteFiles.resolveInside(root, entry.path());
         long limit = RemoteLimits.limitFor(entry.path());
         if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS) || Files.size(file) > limit) {
             return Optional.empty();
@@ -59,7 +59,7 @@ public final class VerifiedStore {
             throw new RemoteException("Not a downloadable file: " + entry.path());
         }
         // Refuse a path that cannot be stored before spending a download on it
-        RemotePaths.resolveInside(root, entry.path());
+        RemoteFiles.resolveInside(root, entry.path());
         byte[] bytes = source.fetch(entry.path(), limit);
         if (bytes.length > limit) {
             throw new RemoteException(entry.path() + " is larger than " + limit + " bytes");
@@ -83,7 +83,7 @@ public final class VerifiedStore {
 
     /** The last manifest kept by {@link #saveManifest}, unparsed. */
     public Optional<byte[]> loadManifest() throws IOException {
-        Path file = RemotePaths.resolveInside(root, RemotePaths.MANIFEST);
+        Path file = RemoteFiles.resolveInside(root, RemotePaths.MANIFEST);
         if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
             return Optional.empty();
         }
@@ -98,10 +98,10 @@ public final class VerifiedStore {
 
     private Path write(String relativePath, byte[] bytes) throws IOException {
         Path staging = stagingDirectory();
-        Path target = RemotePaths.resolveInside(root, relativePath);
+        Path target = RemoteFiles.resolveInside(root, relativePath);
         Files.createDirectories(target.getParent());
         // Check again now that the directories exist
-        target = RemotePaths.resolveInside(root, relativePath);
+        target = RemoteFiles.resolveInside(root, relativePath);
         Path temporary = staging.resolve(UUID.randomUUID() + ".tmp");
         try {
             Files.write(temporary, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);

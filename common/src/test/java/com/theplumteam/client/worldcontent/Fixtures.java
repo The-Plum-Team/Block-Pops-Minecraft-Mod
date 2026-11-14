@@ -2,7 +2,7 @@ package com.theplumteam.client.worldcontent;
 
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.BlobType;
-import com.theplumteam.worldcontent.Sha256;
+import com.theplumteam.worldcontent.JdkSha256;
 import com.theplumteam.worldcontent.WorldCollectionEdit;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldCollectionRecord.Figure;
@@ -34,7 +34,7 @@ final class Fixtures {
 
     static FilePicker.LocalFile png(String tag, int width, int height) {
         byte[] bytes = ("png " + tag).getBytes(StandardCharsets.UTF_8);
-        return new FilePicker.LocalFile(tag + ".png", BlobType.PNG, bytes, Sha256.of(bytes),
+        return new FilePicker.LocalFile(tag + ".png", BlobType.PNG, bytes, JdkSha256.of(bytes),
                 BlobInfo.png(bytes.length, width, height));
     }
 

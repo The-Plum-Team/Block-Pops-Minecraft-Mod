@@ -1,7 +1,7 @@
 package com.theplumteam.client.runtime;
 
 import com.mojang.blaze3d.platform.NativeImage;
-import com.theplumteam.worldcontent.WorldContentIds;
+import com.theplumteam.worldcontent.WorldAssetIds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.TextureManager;
@@ -39,7 +39,7 @@ public final class RuntimeTextures {
      * registered here, which the texture manager cannot have either.
      */
     public static boolean isPending(@Nullable ResourceLocation id) {
-        return id != null && (PENDING.contains(id) || WorldContentIds.owns(id) && !TEXTURES.containsKey(id));
+        return id != null && (PENDING.contains(id) || WorldAssetIds.owns(id) && !TEXTURES.containsKey(id));
     }
 
     /** Uploads an image under the id, taking ownership of it. Render thread only. */

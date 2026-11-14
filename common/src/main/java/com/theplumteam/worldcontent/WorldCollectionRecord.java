@@ -1,24 +1,20 @@
 package com.theplumteam.worldcontent;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import com.theplumteam.block.PopBlockColor;
+import com.theplumteam.remote.player.ContentError;
+import com.theplumteam.remote.player.JsonOut;
 import org.jetbrains.annotations.Nullable;
 
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -33,7 +29,7 @@ import java.util.Set;
  * default, so a record that does not use a feature keeps the exact bytes it always had.
  *
  * @param boxTexture    the sha of the box texture, or null
- * @param boxColor      the {@link PopBlockColor} name of a plain box, or null; never set
+ * @param boxColor      the name of a plain box's colour ({@link BoxColors}), or null; never set
  *                      together with boxTexture
  * @param logo          the sha of the logo, or null
  * @param revision      counts the edits, so a changed record is always told apart
@@ -72,7 +68,17 @@ public record WorldCollectionRecord(String id, String name, String author, int r
     private static final Set<String> VARIANT_KEYS = Set.of("name", "texture");
     private static final Set<String> BOX_FACE_KEYS = Set.of("show");
     private static final Set<String> BOX_FACE_OPTIONAL_KEYS = Set.of("uv");
-    private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().serializeNulls().create();
+    /** What a refused author link is told. */
+    public static final String AUTHOR_URL_RULE = "author_url must be an http or https link with a host, without spaces";
+
+    /**
+     * Which links a record's author link may be. The host that parses the record supplies it:
+     * reading a link takes more than the content core has, and the game's rule is
+     * {@link AuthorLinks#RULE}.
+     */
+    public interface LinkRule {
+        boolean allows(String url);
+    }
 
     /** Whether a figure is a skin on the default model, or a model of its own. */
     public enum Kind {
@@ -134,7 +140,7 @@ public record WorldCollectionRecord(String id, String name, String author, int r
         public static Rarity fromJson(JsonElement element, String what) throws WorldContentException {
             Rarity rarity = byName(JsonFields.string(element, what, 16));
             if (rarity == null || rarity == COMMON) {
-                throw new WorldContentException(what + " must be rare, epic or legendary");
+                throw new WorldContentException(ContentError.RECORD_RARITY, what + " must be rare, epic or legendary");
             }
             return rarity;
         }
@@ -228,7 +234,8 @@ public record WorldCollectionRecord(String id, String name, String author, int r
         public static RarityWeights fromJson(JsonElement element) throws WorldContentException {
             JsonArray json = JsonFields.array(element, "rarity_weights");
             if (json.size() != 4) {
-                throw new WorldContentException("rarity_weights must have 4 values");
+                throw new WorldContentException(ContentError.RECORD_RARITY_WEIGHTS,
+                        "rarity_weights must have 4 values");
             }
             int[] weights = new int[4];
             for (int i = 0; i < 4; i++) {
@@ -288,7 +295,7 @@ public record WorldCollectionRecord(String id, String name, String author, int r
             if (json.has("uv")) {
                 JsonArray array = JsonFields.array(json.get("uv"), what + " uv");
                 if (array.size() != 4) {
-                    throw new WorldContentException(what + " uv must have 4 values");
+                    throw new WorldContentException(ContentError.RECORD_BOX_FACE, what + " uv must have 4 values");
                 }
                 int max = WorldContentLimits.PNG_MAX_SIZE;
                 uv = new Uv((int) JsonFields.integer(array.get(0), what + " uv", 0, max),
@@ -596,35 +603,38 @@ public record WorldCollectionRecord(String id, String name, String author, int r
 
     /** The record as the UTF-8 bytes that are stored and sent; the same record always gives the same bytes. */
     public byte[] toUtf8() {
-        return GSON.toJson(toJson()).getBytes(StandardCharsets.UTF_8);
+        return JsonOut.write(toJson()).getBytes(StandardCharsets.UTF_8);
     }
 
     /** Checks this record against the blob table by its own serialized form, as a receiver would. */
-    public WorldCollectionRecord validated(Map<String, BlobInfo> blobs) throws WorldContentException {
-        return parse(toUtf8(), blobs);
+    public WorldCollectionRecord validated(Map<String, BlobInfo> blobs, LinkRule links) throws WorldContentException {
+        return parse(toUtf8(), blobs, links);
     }
 
     /** Parses and checks a record received or read as bytes. */
-    public static WorldCollectionRecord parse(byte[] utf8, Map<String, BlobInfo> blobs) throws WorldContentException {
+    public static WorldCollectionRecord parse(byte[] utf8, Map<String, BlobInfo> blobs, LinkRule links)
+            throws WorldContentException {
         if (utf8.length > WorldContentLimits.RECORD_BYTES) {
-            throw new WorldContentException("Collection record is larger than " + WorldContentLimits.RECORD_BYTES + " bytes");
+            throw new WorldContentException(ContentError.RECORD_BYTES,
+                    "Collection record is larger than " + WorldContentLimits.RECORD_BYTES + " bytes");
         }
-        return fromJson(JsonFields.parse(utf8, WorldContentLimits.RECORD_BYTES), blobs);
+        return fromJson(JsonFields.parse(utf8, WorldContentLimits.RECORD_BYTES), blobs, links);
     }
 
     /** Checks a record already parsed strictly, such as one embedded in the store file. */
-    public static WorldCollectionRecord fromJson(JsonObject json, Map<String, BlobInfo> blobs)
+    public static WorldCollectionRecord fromJson(JsonObject json, Map<String, BlobInfo> blobs, LinkRule links)
             throws WorldContentException {
         JsonFields.keys(json, "collection", KEYS, OPTIONAL_KEYS);
         String id = JsonFields.string(json.get("id"), "id", 32);
         if (!WorldContentIds.isWorldCollectionId(id)) {
-            throw new WorldContentException("Collection id must be w- and 1 to 24 of a-z, 0-9 and _");
+            throw new WorldContentException(ContentError.RECORD_ID,
+                    "Collection id must be w- and 1 to 24 of a-z, 0-9 and _");
         }
         String name = text(json.get("name"), "name", 1, WorldContentLimits.MAX_NAME_LENGTH);
         String author = text(json.get("author"), "author", 0, WorldContentLimits.MAX_AUTHOR_LENGTH);
         JsonArray color = JsonFields.array(json.get("background_color"), "background_color");
         if (color.size() != 3) {
-            throw new WorldContentException("background_color must have 3 values");
+            throw new WorldContentException(ContentError.RECORD_BACKGROUND, "background_color must have 3 values");
         }
         int red = (int) JsonFields.integer(color.get(0), "background_color", 0, 255);
         int green = (int) JsonFields.integer(color.get(1), "background_color", 0, 255);
@@ -636,7 +646,7 @@ public record WorldCollectionRecord(String id, String name, String author, int r
         if (!box.isJsonNull()) {
             JsonObject boxObject = JsonFields.object(box, "box");
             if (boxObject.size() != 1) {
-                throw new WorldContentException("box must name either a texture or a color");
+                throw new WorldContentException(ContentError.RECORD_BOX, "box must name either a texture or a color");
             }
             if (boxObject.has("texture")) {
                 boxTexture = sha(boxObject.get("texture"), "box texture");
@@ -644,10 +654,11 @@ public record WorldCollectionRecord(String id, String name, String author, int r
             } else if (boxObject.has("color")) {
                 boxColor = JsonFields.string(boxObject.get("color"), "box color", 16);
                 if (!isBoxColor(boxColor)) {
-                    throw new WorldContentException("Unknown box color " + WorldContentException.excerpt(boxColor));
+                    throw new WorldContentException(ContentError.RECORD_BOX,
+                            "Unknown box color " + WorldContentException.excerpt(boxColor));
                 }
             } else {
-                throw new WorldContentException("box must name either a texture or a color");
+                throw new WorldContentException(ContentError.RECORD_BOX, "box must name either a texture or a color");
             }
         }
         String logo = null;
@@ -660,7 +671,8 @@ public record WorldCollectionRecord(String id, String name, String author, int r
 
         JsonArray array = JsonFields.array(json.get("figures"), "figures");
         if (array.size() > WorldContentLimits.MAX_FIGURES) {
-            throw new WorldContentException("Collection has more than " + WorldContentLimits.MAX_FIGURES + " figures");
+            throw new WorldContentException(ContentError.RECORD_FIGURES,
+                    "Collection has more than " + WorldContentLimits.MAX_FIGURES + " figures");
         }
         List<Figure> figures = new ArrayList<>(array.size());
         Set<String> figureIds = new HashSet<>();
@@ -668,27 +680,36 @@ public record WorldCollectionRecord(String id, String name, String author, int r
         for (JsonElement element : array) {
             Figure figure = figure(JsonFields.object(element, "figure"), blobs);
             if (!figureIds.add(figure.id())) {
-                throw new WorldContentException("Figure " + figure.id() + " is listed twice");
+                throw new WorldContentException(ContentError.RECORD_FIGURE_ID,
+                        "Figure " + figure.id() + " is listed twice");
             }
             variants += figure.variants().size();
             figures.add(figure);
         }
         if (variants > WorldContentLimits.MAX_VARIANTS) {
-            throw new WorldContentException("Collection has more than " + WorldContentLimits.MAX_VARIANTS
+            throw new WorldContentException(ContentError.RECORD_VARIANTS,
+                    "Collection has more than " + WorldContentLimits.MAX_VARIANTS
                     + " skin variants");
         }
 
         boolean draft = trueOnly(json, "draft");
         if (draft && archived) {
-            throw new WorldContentException("A draft is never archived");
+            throw new WorldContentException(ContentError.RECORD_FLAG, "A draft is never archived");
         }
         long editedAt = json.has("edited_at")
                 ? JsonFields.integer(json.get("edited_at"), "edited_at", 1, MAX_EDITED_AT) : 0L;
-        String authorUrl = json.has("author_url") ? authorUrl(json.get("author_url")) : null;
+        String authorUrl = null;
+        if (json.has("author_url")) {
+            authorUrl = JsonFields.string(json.get("author_url"), "author_url", WorldContentLimits.MAX_AUTHOR_URL_LENGTH);
+            if (!links.allows(authorUrl)) {
+                throw new WorldContentException(ContentError.RECORD_AUTHOR_URL, AUTHOR_URL_RULE);
+            }
+        }
         LogoLayout logoLayout = null;
         if (json.has("logo_layout")) {
             if (logo == null) {
-                throw new WorldContentException("logo_layout places a logo the collection does not have");
+                throw new WorldContentException(ContentError.RECORD_LOGO_LAYOUT,
+                        "logo_layout places a logo the collection does not have");
             }
             logoLayout = LogoLayout.fromJson(json.get("logo_layout"));
         }
@@ -699,7 +720,8 @@ public record WorldCollectionRecord(String id, String name, String author, int r
                 boxTexture, boxColor, logo, archived, revision, figures, draft, editedAt, authorUrl, logoLayout,
                 plush, rarityWeights, holographic);
         if (record.toUtf8().length > WorldContentLimits.RECORD_BYTES) {
-            throw new WorldContentException("Collection record is larger than " + WorldContentLimits.RECORD_BYTES + " bytes");
+            throw new WorldContentException(ContentError.RECORD_BYTES,
+                    "Collection record is larger than " + WorldContentLimits.RECORD_BYTES + " bytes");
         }
         return record;
     }
@@ -708,12 +730,14 @@ public record WorldCollectionRecord(String id, String name, String author, int r
         JsonFields.keys(json, "figure", FIGURE_KEYS, FIGURE_OPTIONAL_KEYS);
         String id = JsonFields.string(json.get("id"), "figure id", 24);
         if (!WorldContentIds.isSlug(id)) {
-            throw new WorldContentException("Figure id must be 1 to 24 of a-z, 0-9 and _");
+            throw new WorldContentException(ContentError.RECORD_FIGURE_ID,
+                    "Figure id must be 1 to 24 of a-z, 0-9 and _");
         }
         String name = text(json.get("name"), "figure " + id + " name", 1, WorldContentLimits.MAX_NAME_LENGTH);
         Kind kind = Kind.byName(JsonFields.string(json.get("kind"), "kind", 16));
         if (kind == null) {
-            throw new WorldContentException("Figure " + id + " kind must be skin or model");
+            throw new WorldContentException(ContentError.RECORD_FIGURE_KIND,
+                    "Figure " + id + " kind must be skin or model");
         }
         String texture = sha(json.get("texture"), "figure " + id + " texture");
         String model = json.get("model").isJsonNull() ? null : sha(json.get("model"), "figure " + id + " model");
@@ -722,7 +746,8 @@ public record WorldCollectionRecord(String id, String name, String author, int r
         double scaleValue = JsonFields.number(json.get("scale"), "scale", 0, 16);
         int scaleIndex = scaleIndex((float) scaleValue);
         if (scaleIndex < 0 || SCALES.get(scaleIndex) != scaleValue) {
-            throw new WorldContentException("Figure " + id + " scale must be one of " + SCALES);
+            throw new WorldContentException(ContentError.RECORD_SCALE,
+                    "Figure " + id + " scale must be one of " + SCALES);
         }
         boolean enabled = JsonFields.bool(json.get("enabled"), "enabled");
 
@@ -730,27 +755,32 @@ public record WorldCollectionRecord(String id, String name, String author, int r
         BlobInfo modelInfo = null;
         if (kind == Kind.SKIN) {
             if (model != null || animation != null) {
-                throw new WorldContentException("Skin figure " + id + " cannot have a model or animation");
+                throw new WorldContentException(ContentError.RECORD_FIGURE_KIND,
+                        "Skin figure " + id + " cannot have a model or animation");
             }
             PngValidator.Role.SKIN.check(textureInfo);
         } else {
             if (model == null) {
-                throw new WorldContentException("Model figure " + id + " has no model");
+                throw new WorldContentException(ContentError.RECORD_FIGURE_KIND,
+                        "Model figure " + id + " has no model");
             }
             modelInfo = blob(blobs, model, "figure " + id + " model");
             if (modelInfo.type() != BlobType.GEO) {
-                throw new WorldContentException("Figure " + id + " model is not a .geo.json file");
+                throw new WorldContentException(ContentError.RECORD_FIGURE_KIND,
+                        "Figure " + id + " model is not a .geo.json file");
             }
             PngValidator.Role.MODEL_TEXTURE.check(textureInfo);
             if ((long) textureInfo.width() * modelInfo.texHeight() != (long) textureInfo.height() * modelInfo.texWidth()) {
-                throw new WorldContentException("Figure " + id + " texture is " + textureInfo.width() + "x"
+                throw new WorldContentException(ContentError.RECORD_TEXTURE_RATIO,
+                        "Figure " + id + " texture is " + textureInfo.width() + "x"
                         + textureInfo.height() + " but the model expects " + modelInfo.texWidth() + ":"
                         + modelInfo.texHeight());
             }
             if (animation != null) {
                 BlobInfo animationInfo = blob(blobs, animation, "figure " + id + " animation");
                 if (animationInfo.type() != BlobType.ANIMATION || !animationInfo.hasPose(BlobInfo.POSE_STAND)) {
-                    throw new WorldContentException("Figure " + id + " animation has no Pose_Stand");
+                    throw new WorldContentException(ContentError.RECORD_ANIMATION,
+                            "Figure " + id + " animation has no Pose_Stand");
                 }
             }
         }
@@ -760,7 +790,7 @@ public record WorldCollectionRecord(String id, String name, String author, int r
         if (json.has("variants")) {
             JsonArray array = JsonFields.array(json.get("variants"), "figure " + id + " variants");
             if (array.isEmpty() || array.size() > WorldContentLimits.MAX_VARIANTS_PER_FIGURE) {
-                throw new WorldContentException("Figure " + id + " has 1 to "
+                throw new WorldContentException(ContentError.RECORD_VARIANTS, "Figure " + id + " has 1 to "
                         + WorldContentLimits.MAX_VARIANTS_PER_FIGURE + " variants when it lists any");
             }
             for (JsonElement element : array) {
@@ -789,7 +819,8 @@ public record WorldCollectionRecord(String id, String name, String author, int r
         } else {
             PngValidator.Role.MODEL_TEXTURE.check(info);
             if (modelInfo != null && (long) info.width() * modelInfo.texHeight() != (long) info.height() * modelInfo.texWidth()) {
-                throw new WorldContentException("Figure " + figureId + " variant " + name + " texture is "
+                throw new WorldContentException(ContentError.RECORD_TEXTURE_RATIO,
+                        "Figure " + figureId + " variant " + name + " texture is "
                         + info.width() + "x" + info.height() + " but the model expects " + modelInfo.texWidth() + ":"
                         + modelInfo.texHeight());
             }
@@ -802,58 +833,22 @@ public record WorldCollectionRecord(String id, String name, String author, int r
             throws WorldContentException {
         if (kind == Kind.SKIN) {
             if (boxFace.uv() != null) {
-                throw new WorldContentException("Skin figure " + figureId + " box_face cannot name a uv");
+                throw new WorldContentException(ContentError.RECORD_BOX_FACE,
+                        "Skin figure " + figureId + " box_face cannot name a uv");
             }
             return;
         }
         Uv uv = boxFace.uv();
         if (uv == null) {
-            throw new WorldContentException("Model figure " + figureId + " box_face needs a uv");
+            throw new WorldContentException(ContentError.RECORD_BOX_FACE,
+                    "Model figure " + figureId + " box_face needs a uv");
         }
         if (uv.u() < 0 || uv.v() < 0 || uv.w() < 1 || uv.h() < 1
                 || (long) uv.u() + uv.w() > textureInfo.width() || (long) uv.v() + uv.h() > textureInfo.height()) {
-            throw new WorldContentException("Figure " + figureId + " box_face uv lies outside its "
+            throw new WorldContentException(ContentError.RECORD_BOX_FACE,
+                    "Figure " + figureId + " box_face uv lies outside its "
                     + textureInfo.width() + "x" + textureInfo.height() + " texture");
         }
-    }
-
-    /** Reads an author link and refuses anything {@link #isValidAuthorUrl} does not accept. */
-    public static String authorUrl(JsonElement element) throws WorldContentException {
-        String url = JsonFields.string(element, "author_url", WorldContentLimits.MAX_AUTHOR_URL_LENGTH);
-        if (!isValidAuthorUrl(url)) {
-            throw new WorldContentException("author_url must be an http or https link with a host, without spaces");
-        }
-        return url;
-    }
-
-    /**
-     * Whether a link may be an author link: at most {@link WorldContentLimits#MAX_AUTHOR_URL_LENGTH}
-     * printable ASCII characters without spaces, an http or https scheme, a host and no user
-     * info. ASCII alone keeps look-alike letters out of a link players are asked to open.
-     */
-    public static boolean isValidAuthorUrl(String url) {
-        if (url == null || url.isEmpty() || url.length() > WorldContentLimits.MAX_AUTHOR_URL_LENGTH) {
-            return false;
-        }
-        for (int i = 0; i < url.length(); i++) {
-            char c = url.charAt(i);
-            if (c <= ' ' || c > '~') {
-                return false;
-            }
-        }
-        URI uri;
-        try {
-            uri = new URI(url);
-        } catch (URISyntaxException e) {
-            return false;
-        }
-        String scheme = uri.getScheme();
-        if (scheme == null) {
-            return false;
-        }
-        scheme = scheme.toLowerCase(Locale.ROOT);
-        return (scheme.equals("https") || scheme.equals("http")) && uri.getHost() != null && !uri.getHost().isEmpty()
-                && uri.getRawUserInfo() == null;
     }
 
     /** An optional flag that is written only when true; false is the omitted default. */
@@ -862,7 +857,7 @@ public record WorldCollectionRecord(String id, String name, String author, int r
             return false;
         }
         if (!JsonFields.bool(json.get(key), key)) {
-            throw new WorldContentException(key + " is written only when true");
+            throw new WorldContentException(ContentError.RECORD_FLAG, key + " is written only when true");
         }
         return true;
     }
@@ -876,7 +871,7 @@ public record WorldCollectionRecord(String id, String name, String author, int r
             return false;
         }
         if (JsonFields.bool(json.get(key), key)) {
-            throw new WorldContentException(key + " is written only when false");
+            throw new WorldContentException(ContentError.RECORD_FLAG, key + " is written only when false");
         }
         return true;
     }
@@ -889,20 +884,23 @@ public record WorldCollectionRecord(String id, String name, String author, int r
     public static void checkBudgets(Collection<WorldCollectionRecord> records, Map<String, BlobInfo> blobs)
             throws WorldContentException {
         if (records.size() > WorldContentLimits.MAX_COLLECTIONS) {
-            throw new WorldContentException("Budget collections: more than " + WorldContentLimits.MAX_COLLECTIONS);
+            throw new WorldContentException(ContentError.BUDGET_COLLECTIONS,
+                    "Budget collections: more than " + WorldContentLimits.MAX_COLLECTIONS);
         }
         Set<String> ids = new HashSet<>();
         Set<String> referenced = new HashSet<>();
         for (WorldCollectionRecord record : records) {
             if (!ids.add(record.id())) {
-                throw new WorldContentException("Collection " + record.id() + " is defined twice");
+                throw new WorldContentException(ContentError.BUDGET_COLLECTIONS,
+                        "Collection " + record.id() + " is defined twice");
             }
             long bytes = 0;
             for (String sha : record.referencedShas()) {
                 bytes += blob(blobs, sha, "collection " + record.id() + " file").size();
             }
             if (bytes > WorldContentLimits.MAX_COLLECTION_BYTES) {
-                throw new WorldContentException("Budget collection bytes: " + record.id() + " uses "
+                throw new WorldContentException(ContentError.BUDGET_BYTES,
+                        "Budget collection bytes: " + record.id() + " uses "
                         + bytes / 1024 + " KiB of " + WorldContentLimits.MAX_COLLECTION_BYTES / 1024);
             }
             referenced.addAll(record.referencedShas());
@@ -919,25 +917,23 @@ public record WorldCollectionRecord(String id, String name, String author, int r
             }
         }
         if (pixels > WorldContentLimits.MAX_DECODED_PIXELS) {
-            throw new WorldContentException("Budget texture pixels: " + pixels + " of " + WorldContentLimits.MAX_DECODED_PIXELS);
+            throw new WorldContentException(ContentError.BUDGET_PIXELS,
+                    "Budget texture pixels: " + pixels + " of " + WorldContentLimits.MAX_DECODED_PIXELS);
         }
         if (cubes > WorldContentLimits.MAX_DECODED_CUBES) {
-            throw new WorldContentException("Budget model cubes: " + cubes + " of " + WorldContentLimits.MAX_DECODED_CUBES);
+            throw new WorldContentException(ContentError.BUDGET_CUBES,
+                    "Budget model cubes: " + cubes + " of " + WorldContentLimits.MAX_DECODED_CUBES);
         }
         if (keyframes > WorldContentLimits.MAX_DECODED_KEYFRAMES) {
-            throw new WorldContentException("Budget animation keyframes: " + keyframes + " of "
+            throw new WorldContentException(ContentError.BUDGET_KEYFRAMES,
+                    "Budget animation keyframes: " + keyframes + " of "
                     + WorldContentLimits.MAX_DECODED_KEYFRAMES);
         }
     }
 
     /** Whether the name is a box colour, each of which has a bundled plain box texture. */
     public static boolean isBoxColor(String name) {
-        for (PopBlockColor color : PopBlockColor.values()) {
-            if (color.getSerializedName().equals(name)) {
-                return true;
-            }
-        }
-        return false;
+        return BoxColors.NAMES.contains(name);
     }
 
     /**
@@ -947,10 +943,11 @@ public record WorldCollectionRecord(String id, String name, String author, int r
     private static String text(JsonElement element, String what, int min, int max) throws WorldContentException {
         String text = JsonFields.string(element, what, max);
         if (text.length() < min || (min > 0 && text.isBlank())) {
-            throw new WorldContentException(what + " must not be empty");
+            throw new WorldContentException(ContentError.TEXT_EMPTY, what + " must not be empty");
         }
         if (!isPlainText(text)) {
-            throw new WorldContentException(what + " has a control or formatting character");
+            throw new WorldContentException(ContentError.TEXT_CHARACTERS,
+                    what + " has a control or formatting character");
         }
         return text;
     }
@@ -968,7 +965,7 @@ public record WorldCollectionRecord(String id, String name, String author, int r
     private static BlobInfo blob(Map<String, BlobInfo> blobs, String sha, String what) throws WorldContentException {
         BlobInfo info = blobs.get(sha);
         if (info == null) {
-            throw new WorldContentException(what + " names a file that is not stored");
+            throw new WorldContentException(ContentError.FILE_MISSING, what + " names a file that is not stored");
         }
         return info;
     }

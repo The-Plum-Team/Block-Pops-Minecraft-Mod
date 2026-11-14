@@ -3,6 +3,7 @@ package com.theplumteam.client.worldcontent;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.client.gui.creator.ui.FileChecks;
 import com.theplumteam.network.WorldCollectionEditPacket;
+import com.theplumteam.worldcontent.AuthorLinks;
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.WorldCollectionEdit;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
@@ -610,7 +611,7 @@ public final class CreatorSave {
         if (!Objects.equals(draft.authorUrlOrNull(), base.authorUrl()) || !Objects.equals(layout, base.logoLayout())
                 || draft.plush() != base.plush() || !Objects.equals(draft.value(CreatorDraft.RARITY_WEIGHTS),
                 base.rarityWeights())) {
-            if (!draft.authorUrl().isEmpty() && !WorldCollectionRecord.isValidAuthorUrl(draft.authorUrl())) {
+            if (!draft.authorUrl().isEmpty() && !AuthorLinks.isValid(draft.authorUrl())) {
                 held.add(new Held("extras", Reason.LINK, null, Component.translatable(KEY + "identity.url_rule")));
             } else {
                 Unit unit = extrasUnit(draft, layout);

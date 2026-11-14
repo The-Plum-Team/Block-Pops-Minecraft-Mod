@@ -6,8 +6,10 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.theplumteam.BlockPopsMod;
-import com.theplumteam.remote.RemotePaths;
+import com.theplumteam.remote.RemoteFiles;
+import com.theplumteam.worldcontent.AuthorLinks;
 import com.theplumteam.worldcontent.BlobInfo;
+import com.theplumteam.worldcontent.JdkSha256;
 import com.theplumteam.worldcontent.JsonFields;
 import com.theplumteam.worldcontent.Sha256;
 import com.theplumteam.worldcontent.WorldCollectionCheck;
@@ -217,9 +219,9 @@ public final class WorldCollectionStore {
         }
         try {
             Files.createDirectories(dataDirectory);
-            Path file = RemotePaths.resolveInside(dataDirectory, FILE_NAME);
-            Path temporary = RemotePaths.resolveInside(dataDirectory, FILE_NAME + ".tmp");
-            Path backup = RemotePaths.resolveInside(dataDirectory, FILE_NAME + ".bak");
+            Path file = RemoteFiles.resolveInside(dataDirectory, FILE_NAME);
+            Path temporary = RemoteFiles.resolveInside(dataDirectory, FILE_NAME + ".tmp");
+            Path backup = RemoteFiles.resolveInside(dataDirectory, FILE_NAME + ".bak");
             Files.write(temporary, bytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
                     StandardOpenOption.WRITE);
             if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
@@ -295,7 +297,7 @@ public final class WorldCollectionStore {
         requireSha(sha);
         Path staging = directory(STAGING);
         directory(BLOBS);
-        Path target = RemotePaths.resolveInside(root, BLOBS + "/" + sha);
+        Path target = RemoteFiles.resolveInside(root, BLOBS + "/" + sha);
         Path temporary = staging.resolve(UUID.randomUUID() + ".tmp");
         try {
             Files.write(temporary, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
@@ -316,7 +318,7 @@ public final class WorldCollectionStore {
      */
     public byte[] readBlob(String sha, int maxBytes) throws IOException {
         requireSha(sha);
-        Path file = RemotePaths.resolveInside(root, BLOBS + "/" + sha);
+        Path file = RemoteFiles.resolveInside(root, BLOBS + "/" + sha);
         byte[] bytes;
         try (InputStream in = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)) {
             bytes = in.readNBytes(maxBytes + 1);
@@ -324,7 +326,7 @@ public final class WorldCollectionStore {
         if (bytes.length > maxBytes) {
             throw new IOException("Stored file " + sha + " is larger than " + maxBytes + " bytes");
         }
-        if (!Sha256.of(bytes).equals(sha)) {
+        if (!JdkSha256.of(bytes).equals(sha)) {
             throw new IOException("Stored file " + sha + " no longer matches its SHA-256");
         }
         return bytes;
@@ -334,7 +336,7 @@ public final class WorldCollectionStore {
     public void deleteBlobFiles(Collection<String> shas) {
         for (String sha : shas) {
             try {
-                Files.deleteIfExists(RemotePaths.resolveInside(root, BLOBS + "/" + requireSha(sha)));
+                Files.deleteIfExists(RemoteFiles.resolveInside(root, BLOBS + "/" + requireSha(sha)));
             } catch (IOException e) {
                 BlockPopsMod.LOGGER.warn("Could not delete the unused World collection file {}: {}", sha, e.getMessage());
             }
@@ -533,7 +535,7 @@ public final class WorldCollectionStore {
     }
 
     private State read(String name) throws IOException, WorldContentException {
-        Path file = RemotePaths.resolveInside(dataDirectory, name);
+        Path file = RemoteFiles.resolveInside(dataDirectory, name);
         byte[] bytes;
         try (InputStream in = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)) {
             bytes = in.readNBytes(WorldContentLimits.STORE_JSON_BYTES + 1);
@@ -571,7 +573,7 @@ public final class WorldCollectionStore {
             JsonObject collection = JsonFields.object(element, "collection");
             JsonFields.keys(collection, "collection", COLLECTION_KEYS, Set.of());
             WorldCollectionRecord record = WorldCollectionRecord.fromJson(
-                    JsonFields.object(collection.get("record"), "record"), infos);
+                    JsonFields.object(collection.get("record"), "record"), infos, AuthorLinks.RULE);
             UUID createdBy = uuid(collection.get("created_by"), "created_by");
             long createdAt = JsonFields.integer(collection.get("created_at"), "created_at", 0, Long.MAX_VALUE);
             if (collections.put(record.id(), new StoredCollection(record, createdBy, createdAt)) != null) {

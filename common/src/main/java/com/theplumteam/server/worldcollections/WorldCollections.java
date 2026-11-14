@@ -5,8 +5,10 @@ import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.network.SyncWorldCollectionsPacket;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.util.ServerLevels;
+import com.theplumteam.worldcontent.AuthorLinks;
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.BlobType;
+import com.theplumteam.worldcontent.JdkSha256;
 import com.theplumteam.worldcontent.Sha256;
 import com.theplumteam.worldcontent.WorldCollectionCheck;
 import com.theplumteam.worldcontent.WorldCollectionEdit;
@@ -484,7 +486,7 @@ public final class WorldCollections {
                 BlobInfo info = null;
                 WorldContentStatus failure = null;
                 try {
-                    if (!Sha256.of(bytes).equals(sha)) {
+                    if (!JdkSha256.of(bytes).equals(sha)) {
                         throw new WorldContentException("The file does not match its SHA-256");
                     }
                     info = type.validate(bytes);
@@ -889,7 +891,7 @@ public final class WorldCollections {
                                                               WorldCollectionEdit.SetCollectionExtras set)
             throws WorldContentException {
         String authorUrl = set.authorUrl().isEmpty() ? null : set.authorUrl();
-        if (authorUrl != null && !WorldCollectionRecord.isValidAuthorUrl(authorUrl)) {
+        if (authorUrl != null && !AuthorLinks.isValid(authorUrl)) {
             throw new WorldContentException("The author link must be an http or https link with a host, "
                     + "at most " + WorldContentLimits.MAX_AUTHOR_URL_LENGTH + " characters, without spaces");
         }
@@ -1327,7 +1329,7 @@ public final class WorldCollections {
             }
         }
         try {
-            candidate.validated(blobs);
+            candidate.validated(blobs, AuthorLinks.RULE);
         } catch (WorldContentException e) {
             return WorldContentStatus.invalid(e);
         }

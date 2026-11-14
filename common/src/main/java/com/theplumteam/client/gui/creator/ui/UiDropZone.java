@@ -7,7 +7,7 @@ import com.theplumteam.client.runtime.RuntimeTextures;
 import com.theplumteam.client.worldcontent.FilePicker;
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.BlobType;
-import com.theplumteam.worldcontent.WorldContentIds;
+import com.theplumteam.worldcontent.WorldAssetIds;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -807,7 +807,7 @@ public class UiDropZone extends UiNode.Box {
             Draw.centred(graphics, font, "+", left + size / 2, top + (size - 8) / 2, size, Theme.SELECTED_LIGHT);
             return;
         }
-        ResourceLocation texture = info.type() == BlobType.PNG && sha != null ? WorldContentIds.texture(sha) : null;
+        ResourceLocation texture = info.type() == BlobType.PNG && sha != null ? WorldAssetIds.texture(sha) : null;
         if (texture != null && !RuntimeTextures.isPending(texture)) {
             int[] fitted = Draw.fitInside(info.width(), info.height(), size, size);
             Draw.texture(graphics, texture, left + (size - fitted[0]) / 2, top + (size - fitted[1]) / 2, fitted[0],

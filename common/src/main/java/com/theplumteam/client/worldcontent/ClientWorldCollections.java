@@ -7,6 +7,7 @@ import com.theplumteam.network.SyncWorldCollectionsPacket;
 import com.theplumteam.network.WorldAssetAckPacket;
 import com.theplumteam.network.WorldAssetChunkPacket;
 import com.theplumteam.network.WorldAssetRequestPacket;
+import com.theplumteam.worldcontent.AuthorLinks;
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.Sha256;
 import com.theplumteam.worldcontent.WorldCollectionCheck;
@@ -200,7 +201,7 @@ public final class ClientWorldCollections {
                 }
             }
             for (byte[] bytes : recordBytes) {
-                WorldCollectionRecord record = WorldCollectionRecord.parse(bytes, newBlobs);
+                WorldCollectionRecord record = WorldCollectionRecord.parse(bytes, newBlobs, AuthorLinks.RULE);
                 if (newRecords.put(record.id(), record) != null) {
                     throw new IllegalStateException("collection " + record.id() + " is listed twice");
                 }

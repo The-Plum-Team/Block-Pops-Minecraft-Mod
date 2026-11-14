@@ -3,8 +3,8 @@ package com.theplumteam.client.worldcontent;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.BlobType;
+import com.theplumteam.worldcontent.JdkSha256;
 import com.theplumteam.worldcontent.PngValidator;
-import com.theplumteam.worldcontent.Sha256;
 import com.theplumteam.worldcontent.WorldContentException;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -712,7 +712,7 @@ public final class FilePicker {
                 bytes = raw;
                 info = type.validate(bytes);
             }
-            return PickResult.accepted(new LocalFile(name, type, bytes, Sha256.of(bytes), info));
+            return PickResult.accepted(new LocalFile(name, type, bytes, JdkSha256.of(bytes), info));
         } catch (WorldContentException e) {
             return PickResult.refused(name, e.getMessage());
         }

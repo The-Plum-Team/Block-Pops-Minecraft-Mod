@@ -5,11 +5,12 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.theplumteam.util.ResourceLocations;
 import com.theplumteam.worldcontent.AnimationJsonCheck;
+import com.theplumteam.worldcontent.AuthorLinks;
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.GeoJsonCheck;
+import com.theplumteam.worldcontent.JdkSha256;
 import com.theplumteam.worldcontent.JsonFields;
 import com.theplumteam.worldcontent.PngValidator;
-import com.theplumteam.worldcontent.Sha256;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldContentException;
 import com.theplumteam.worldcontent.WorldContentIds;
@@ -235,7 +236,7 @@ public final class WorldCollectionImporter {
 
     /** Reads the {@link Options} of a collection.json, refusing a key of another type or form. */
     static Options options(JsonObject json) throws WorldContentException {
-        String authorUrl = json.has("author_url") ? WorldCollectionRecord.authorUrl(json.get("author_url")) : null;
+        String authorUrl = json.has("author_url") ? AuthorLinks.read(json.get("author_url")) : null;
         WorldCollectionRecord.LogoLayout logoLayout = json.has("logo_layout")
                 ? WorldCollectionRecord.LogoLayout.fromJson(json.get("logo_layout")) : null;
         boolean plush = json.has("plush") && JsonFields.bool(json.get("plush"), "plush");
@@ -267,7 +268,7 @@ public final class WorldCollectionImporter {
             canonical = PngValidator.canonicalize(bytes);
             info = PngValidator.validateCanonical(canonical, role);
         } catch (WorldContentException e) {
-            throw new WorldContentException(path + ": " + e.getMessage());
+            throw new WorldContentException(e.code(), path + ": " + e.getMessage());
         }
         return add(files, canonical, info);
     }
@@ -285,13 +286,13 @@ public final class WorldCollectionImporter {
         try {
             info = model ? GeoJsonCheck.validate(bytes) : AnimationJsonCheck.validate(bytes);
         } catch (WorldContentException e) {
-            throw new WorldContentException(path + ": " + e.getMessage());
+            throw new WorldContentException(e.code(), path + ": " + e.getMessage());
         }
         return add(files, bytes, info);
     }
 
     private static PackFile add(Map<String, PackFile> files, byte[] bytes, BlobInfo info) {
-        String sha = Sha256.of(bytes);
+        String sha = JdkSha256.of(bytes);
         return files.computeIfAbsent(sha, key -> new PackFile(key, info, bytes));
     }
 

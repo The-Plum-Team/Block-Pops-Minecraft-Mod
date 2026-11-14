@@ -24,9 +24,9 @@ import com.theplumteam.client.worldcontent.CreatorDraft.FileRef;
 import com.theplumteam.client.worldcontent.CreatorDraft.VariantDraft;
 import com.theplumteam.client.worldcontent.FilePicker;
 import com.theplumteam.worldcontent.BlobInfo;
+import com.theplumteam.worldcontent.WorldAssetIds;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldCollectionRecord.Kind;
-import com.theplumteam.worldcontent.WorldContentIds;
 import com.theplumteam.worldcontent.WorldContentLimits;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -956,7 +956,7 @@ final class FigureExtrasPanel {
             }
             Rect image = image();
             graphics.fill(image.x(), image.y(), image.right(), image.bottom(), Surfaces.WELL);
-            ResourceLocation id = WorldContentIds.texture(ref.sha());
+            ResourceLocation id = WorldAssetIds.texture(ref.sha());
             if (!RuntimeTextures.isPending(id)) {
                 Draw.texture(graphics, id, image.x(), image.y(), image.width(), image.height(), textureInfo.width(),
                         textureInfo.height());

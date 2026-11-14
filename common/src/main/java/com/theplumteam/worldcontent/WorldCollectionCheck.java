@@ -50,14 +50,14 @@ public final class WorldCollectionCheck {
             boxTextures.add(WorldCollectionMaterializer.boxColorTexture(color.getSerializedName()));
         }
         if (record.boxTexture() != null) {
-            boxTextures.add(WorldContentIds.texture(record.boxTexture()));
+            boxTextures.add(WorldAssetIds.texture(record.boxTexture()));
         }
         if (collection.getBoxTexture() != null && !boxTextures.contains(collection.getBoxTexture())) {
             return "names box texture " + collection.getBoxTexture();
         }
         FigureCollection.LogoConfig logo = collection.getLogoConfig();
         if (logo != null && (record.logo() == null || !logo.isAutomatic()
-                || !WorldContentIds.texture(record.logo()).equals(logo.getTexture()))) {
+                || !WorldAssetIds.texture(record.logo()).equals(logo.getTexture()))) {
             return "names logo " + logo.getTexture();
         }
         WorldCollectionRecord.LogoLayout layout = record.effectiveLogoLayout();
@@ -99,7 +99,7 @@ public final class WorldCollectionCheck {
             FigureDefinition.AlternativeSkin alternative = alternatives.get(i);
             WorldCollectionRecord.Variant variant = source.variants().get(i);
             if (!alternative.name().equals(variant.name())
-                    || !WorldContentIds.texture(variant.texture()).equals(alternative.texture())
+                    || !WorldAssetIds.texture(variant.texture()).equals(alternative.texture())
                     || alternative.model() != null || alternative.scale() != null || alternative.showBoxFace() != null
                     || alternative.boxFaceUv() != null || !alternative.hiddenBones().isEmpty()) {
                 return "names alternative " + alternative.texture();
@@ -108,7 +108,7 @@ public final class WorldCollectionCheck {
         if (!sameBoxFace(figure.getRenderOptions(), source)) {
             return "shows its box face apart from its record";
         }
-        ResourceLocation model = source.model() != null ? WorldContentIds.model(source.model()) : null;
+        ResourceLocation model = source.model() != null ? WorldAssetIds.model(source.model()) : null;
         if (!figure.getModelPath().equals(FigureDefinition.DEFAULT_MODEL) && !figure.getModelPath().equals(model)) {
             return "names model " + figure.getModelPath();
         }
@@ -117,10 +117,10 @@ public final class WorldCollectionCheck {
         }
         ResourceLocation poses = figure.getRenderOptions().poseAnimation();
         if (poses != null && !SHARED_ANIMATIONS.contains(poses)
-                && (source.animation() == null || !poses.equals(WorldContentIds.animation(source.animation())))) {
+                && (source.animation() == null || !poses.equals(WorldAssetIds.animation(source.animation())))) {
             return "names poses " + poses;
         }
-        if (!WorldContentIds.texture(source.texture()).equals(figure.getTexturePath())) {
+        if (!WorldAssetIds.texture(source.texture()).equals(figure.getTexturePath())) {
             return "names texture " + figure.getTexturePath();
         }
         return null;

@@ -1,5 +1,7 @@
 package com.theplumteam.worldcontent;
 
+import com.theplumteam.remote.player.ContentError;
+
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -57,13 +59,15 @@ public final class PngValidator {
         /** Throws unless the described file is a PNG this role accepts. */
         public void check(BlobInfo info) throws WorldContentException {
             if (info.type() != BlobType.PNG) {
-                throw new WorldContentException(label + " must be a PNG");
+                throw new WorldContentException(ContentError.FILE_NOT_PNG, label + " must be a PNG");
             }
             if (info.size() > maxBytes) {
-                throw new WorldContentException(label + " is larger than " + maxBytes / 1024 + " KiB");
+                throw new WorldContentException(ContentError.PNG_BYTES_ROLE,
+                        label + " is larger than " + maxBytes / 1024 + " KiB");
             }
             if (info.width() < minSide || info.width() > maxSide || info.height() < minSide || info.height() > maxSide) {
-                throw new WorldContentException(label + " is " + info.width() + "x" + info.height() + "; it must be "
+                throw new WorldContentException(ContentError.PNG_SIZE_ROLE,
+                        label + " is " + info.width() + "x" + info.height() + "; it must be "
                         + (minSide == maxSide ? minSide + "x" + maxSide : minSide + " to " + maxSide + " pixels per side"));
             }
         }
@@ -118,10 +122,11 @@ public final class PngValidator {
 
     private static Parsed parse(byte[] bytes, boolean canonical) throws WorldContentException {
         if (bytes.length > WorldContentLimits.PNG_BYTES) {
-            throw new WorldContentException("PNG is larger than " + WorldContentLimits.PNG_BYTES / 1024 + " KiB");
+            throw new WorldContentException(ContentError.PNG_BYTES,
+                    "PNG is larger than " + WorldContentLimits.PNG_BYTES / 1024 + " KiB");
         }
         if (bytes.length < SIGNATURE.length || !Arrays.equals(bytes, 0, SIGNATURE.length, SIGNATURE, 0, SIGNATURE.length)) {
-            throw new WorldContentException("Not a PNG file");
+            throw new WorldContentException(ContentError.PNG_SIGNATURE, "Not a PNG file");
         }
         int width = 0;
         int height = 0;
@@ -137,31 +142,31 @@ public final class PngValidator {
         int pos = SIGNATURE.length;
         while (true) {
             if (bytes.length - pos < CHUNK_OVERHEAD) {
-                throw new WorldContentException("PNG is truncated");
+                throw new WorldContentException(ContentError.PNG_TRUNCATED, "PNG is truncated");
             }
             long length = readUnsigned(bytes, pos);
             if (length > bytes.length - pos - CHUNK_OVERHEAD) {
-                throw new WorldContentException("PNG chunk runs past the end of the file");
+                throw new WorldContentException(ContentError.PNG_TRUNCATED, "PNG chunk runs past the end of the file");
             }
             String type = chunkType(bytes, pos + 4);
             Chunk chunk = new Chunk(pos + 8, (int) length);
             CRC32 crc = new CRC32();
             crc.update(bytes, pos + 4, 4 + chunk.length());
             if (crc.getValue() != readUnsigned(bytes, chunk.offset() + chunk.length())) {
-                throw new WorldContentException("PNG chunk " + type + " is corrupt (bad CRC)");
+                throw new WorldContentException(ContentError.PNG_CRC, "PNG chunk " + type + " is corrupt (bad CRC)");
             }
             pos = chunk.offset() + chunk.length() + 4;
 
             if (ihdr == null) {
                 if (!type.equals("IHDR") || chunk.length() != 13) {
-                    throw new WorldContentException("PNG does not start with IHDR");
+                    throw new WorldContentException(ContentError.PNG_HEADER, "PNG does not start with IHDR");
                 }
                 ihdr = chunk;
                 long w = readUnsigned(bytes, chunk.offset());
                 long h = readUnsigned(bytes, chunk.offset() + 4);
                 if (w < WorldContentLimits.PNG_MIN_SIZE || w > WorldContentLimits.PNG_MAX_SIZE
                         || h < WorldContentLimits.PNG_MIN_SIZE || h > WorldContentLimits.PNG_MAX_SIZE) {
-                    throw new WorldContentException("PNG is " + w + "x" + h + "; sides must be "
+                    throw new WorldContentException(ContentError.PNG_SIZE, "PNG is " + w + "x" + h + "; sides must be "
                             + WorldContentLimits.PNG_MIN_SIZE + " to " + WorldContentLimits.PNG_MAX_SIZE + " pixels");
                 }
                 width = (int) w;
@@ -170,36 +175,42 @@ public final class PngValidator {
                 colorType = bytes[chunk.offset() + 9] & 0xFF;
                 checkDepth(colorType, bitDepth);
                 if (bytes[chunk.offset() + 10] != 0 || bytes[chunk.offset() + 11] != 0) {
-                    throw new WorldContentException("PNG uses an unknown compression or filter method");
+                    throw new WorldContentException(ContentError.PNG_METHOD,
+                            "PNG uses an unknown compression or filter method");
                 }
                 if (bytes[chunk.offset() + 12] != 0) {
-                    throw new WorldContentException("PNG is interlaced; save it without interlacing");
+                    throw new WorldContentException(ContentError.PNG_INTERLACED,
+                            "PNG is interlaced; save it without interlacing");
                 }
                 continue;
             }
             switch (type) {
-                case "IHDR" -> throw new WorldContentException("PNG has a second IHDR");
+                case "IHDR" -> throw new WorldContentException(ContentError.PNG_HEADER, "PNG has a second IHDR");
                 case "PLTE" -> {
                     if (plte != null || !idats.isEmpty() || trns != null) {
-                        throw new WorldContentException("PNG palette is repeated or out of order");
+                        throw new WorldContentException(ContentError.PNG_PALETTE,
+                                "PNG palette is repeated or out of order");
                     }
                     if (colorType == 0 || colorType == 4) {
-                        throw new WorldContentException("Greyscale PNG cannot have a palette");
+                        throw new WorldContentException(ContentError.PNG_PALETTE,
+                                "Greyscale PNG cannot have a palette");
                     }
                     if (canonical && colorType != 3) {
-                        throw new WorldContentException("PNG is not canonical: palette on a true-colour image");
+                        throw new WorldContentException(ContentError.PNG_NOT_CANONICAL,
+                                "PNG is not canonical: palette on a true-colour image");
                     }
                     int entries = chunk.length() / 3;
                     int maxEntries = 1 << Math.min(bitDepth, 8);
                     if (chunk.length() % 3 != 0 || entries < 1 || entries > maxEntries) {
-                        throw new WorldContentException("PNG palette has an invalid size");
+                        throw new WorldContentException(ContentError.PNG_PALETTE, "PNG palette has an invalid size");
                     }
                     plte = chunk;
                     paletteEntries = entries;
                 }
                 case "tRNS" -> {
                     if (trns != null || !idats.isEmpty()) {
-                        throw new WorldContentException("PNG transparency is repeated or after the image data");
+                        throw new WorldContentException(ContentError.PNG_TRANSPARENCY,
+                                "PNG transparency is repeated or after the image data");
                     }
                     boolean valid = switch (colorType) {
                         case 0 -> chunk.length() == 2;
@@ -208,32 +219,35 @@ public final class PngValidator {
                         default -> false;
                     };
                     if (!valid) {
-                        throw new WorldContentException("PNG transparency chunk does not fit its colour type");
+                        throw new WorldContentException(ContentError.PNG_TRANSPARENCY,
+                                "PNG transparency chunk does not fit its colour type");
                     }
                     trns = chunk;
                 }
                 case "IDAT" -> {
                     if (idatEnded) {
-                        throw new WorldContentException("PNG image data chunks are not contiguous");
+                        throw new WorldContentException(ContentError.PNG_STRUCTURE,
+                                "PNG image data chunks are not contiguous");
                     }
                     if (colorType == 3 && plte == null) {
-                        throw new WorldContentException("Indexed PNG has no palette");
+                        throw new WorldContentException(ContentError.PNG_PALETTE, "Indexed PNG has no palette");
                     }
                     if (canonical && !idats.isEmpty()) {
-                        throw new WorldContentException("PNG is not canonical: more than one IDAT");
+                        throw new WorldContentException(ContentError.PNG_NOT_CANONICAL,
+                                "PNG is not canonical: more than one IDAT");
                     }
                     idats.add(chunk);
                     idatBytes += chunk.length();
                 }
                 case "IEND" -> {
                     if (chunk.length() != 0) {
-                        throw new WorldContentException("PNG end chunk is not empty");
+                        throw new WorldContentException(ContentError.PNG_STRUCTURE, "PNG end chunk is not empty");
                     }
                     if (idats.isEmpty()) {
-                        throw new WorldContentException("PNG has no image data");
+                        throw new WorldContentException(ContentError.PNG_STRUCTURE, "PNG has no image data");
                     }
                     if (pos != bytes.length) {
-                        throw new WorldContentException("PNG has data after its end");
+                        throw new WorldContentException(ContentError.PNG_STRUCTURE, "PNG has data after its end");
                     }
                     byte[] idat = new byte[(int) idatBytes];
                     int at = 0;
@@ -243,13 +257,16 @@ public final class PngValidator {
                     }
                     return new Parsed(width, height, colorType, bitDepth, ihdr, plte, trns, idat);
                 }
-                case "acTL", "fcTL", "fdAT" -> throw new WorldContentException("Animated PNG is not supported");
+                case "acTL", "fcTL", "fdAT" -> throw new WorldContentException(ContentError.PNG_ANIMATED,
+                        "Animated PNG is not supported");
                 default -> {
                     if ((type.charAt(0) & 0x20) == 0) {
-                        throw new WorldContentException("PNG has unknown critical chunk " + type);
+                        throw new WorldContentException(ContentError.PNG_CRITICAL_CHUNK,
+                                "PNG has unknown critical chunk " + type);
                     }
                     if (canonical) {
-                        throw new WorldContentException("PNG is not canonical: extra chunk " + type);
+                        throw new WorldContentException(ContentError.PNG_NOT_CANONICAL,
+                                "PNG is not canonical: extra chunk " + type);
                     }
                 }
             }
@@ -269,9 +286,10 @@ public final class PngValidator {
             return;
         }
         if (bitDepth == 16) {
-            throw new WorldContentException("PNG uses 16 bits per channel; " + DEPTH_RULE);
+            throw new WorldContentException(ContentError.PNG_DEPTH, "PNG uses 16 bits per channel; " + DEPTH_RULE);
         }
-        throw new WorldContentException("PNG colour type " + colorType + " with bit depth " + bitDepth
+        throw new WorldContentException(ContentError.PNG_DEPTH,
+                "PNG colour type " + colorType + " with bit depth " + bitDepth
                 + " is not supported; " + DEPTH_RULE);
     }
 
@@ -282,15 +300,15 @@ public final class PngValidator {
     private static void inflate(Parsed png) throws WorldContentException {
         byte[] idat = png.idat();
         if (idat.length < 2) {
-            throw new WorldContentException("PNG image data is truncated");
+            throw new WorldContentException(ContentError.PNG_DATA, "PNG image data is truncated");
         }
         int cmf = idat[0] & 0xFF;
         int flg = idat[1] & 0xFF;
         if ((cmf & 0x0F) != 8 || (cmf >> 4) > 7 || (cmf * 256 + flg) % 31 != 0) {
-            throw new WorldContentException("PNG image data is not a zlib stream");
+            throw new WorldContentException(ContentError.PNG_DATA, "PNG image data is not a zlib stream");
         }
         if ((flg & 0x20) != 0) {
-            throw new WorldContentException("PNG image data needs a preset dictionary");
+            throw new WorldContentException(ContentError.PNG_DATA, "PNG image data needs a preset dictionary");
         }
         int channels = switch (png.colorType()) {
             case 2 -> 3;
@@ -309,37 +327,38 @@ public final class PngValidator {
             int produced = 0;
             for (long step = 0; !inflater.finished(); step++) {
                 if (step >= maxSteps) {
-                    throw new WorldContentException("PNG image data does not decompress");
+                    throw new WorldContentException(ContentError.PNG_DATA, "PNG image data does not decompress");
                 }
                 int n = inflater.inflate(out, produced, out.length - produced);
                 produced += n;
                 if (produced > expected) {
-                    throw new WorldContentException("PNG image data is larger than the image");
+                    throw new WorldContentException(ContentError.PNG_DATA, "PNG image data is larger than the image");
                 }
                 if (n == 0 && !inflater.finished()) {
                     if (inflater.needsDictionary()) {
-                        throw new WorldContentException("PNG image data needs a preset dictionary");
+                        throw new WorldContentException(ContentError.PNG_DATA,
+                                "PNG image data needs a preset dictionary");
                     }
                     if (inflater.needsInput()) {
-                        throw new WorldContentException("PNG image data is truncated");
+                        throw new WorldContentException(ContentError.PNG_DATA, "PNG image data is truncated");
                     }
-                    throw new WorldContentException("PNG image data does not decompress");
+                    throw new WorldContentException(ContentError.PNG_DATA, "PNG image data does not decompress");
                 }
             }
             if (produced != expected) {
-                throw new WorldContentException("PNG image data is smaller than the image");
+                throw new WorldContentException(ContentError.PNG_DATA, "PNG image data is smaller than the image");
             }
             if (inflater.getRemaining() != 0) {
-                throw new WorldContentException("PNG has data after its compressed image");
+                throw new WorldContentException(ContentError.PNG_DATA, "PNG has data after its compressed image");
             }
         } catch (DataFormatException e) {
-            throw new WorldContentException("PNG image data is corrupt");
+            throw new WorldContentException(ContentError.PNG_DATA, "PNG image data is corrupt");
         } finally {
             inflater.end();
         }
         for (long row = 0; row < png.height(); row++) {
             if ((out[(int) (row * rowBytes)] & 0xFF) > 4) {
-                throw new WorldContentException("PNG row " + row + " has an unknown filter");
+                throw new WorldContentException(ContentError.PNG_DATA, "PNG row " + row + " has an unknown filter");
             }
         }
         if (png.colorType() == 3) {
@@ -378,7 +397,8 @@ public final class PngValidator {
                 int bit = x * depth;
                 int index = (data[start + bit / 8] & 0xFF) >>> (8 - depth - bit % 8) & mask;
                 if (index >= entries) {
-                    throw new WorldContentException("PNG pixel at " + x + "," + row + " uses colour " + index
+                    throw new WorldContentException(ContentError.PNG_PALETTE,
+                            "PNG pixel at " + x + "," + row + " uses colour " + index
                             + " but the palette has " + entries);
                 }
             }
@@ -423,7 +443,7 @@ public final class PngValidator {
         for (int i = at; i < at + 4; i++) {
             int c = bytes[i] & 0xFF;
             if (!(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z')) {
-                throw new WorldContentException("PNG has a chunk with an invalid type");
+                throw new WorldContentException(ContentError.PNG_STRUCTURE, "PNG has a chunk with an invalid type");
             }
         }
         return new String(bytes, at, 4, StandardCharsets.US_ASCII);

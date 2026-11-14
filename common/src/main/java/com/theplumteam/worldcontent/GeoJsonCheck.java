@@ -3,6 +3,7 @@ package com.theplumteam.worldcontent;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.theplumteam.remote.player.ContentError;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -37,7 +38,8 @@ public final class GeoJsonCheck {
     /** Parses and checks a model file. */
     public static BlobInfo validate(byte[] bytes) throws WorldContentException {
         if (bytes.length > WorldContentLimits.GEO_BYTES) {
-            throw new WorldContentException("Model is larger than " + WorldContentLimits.GEO_BYTES / 1024 + " KiB");
+            throw new WorldContentException(ContentError.GEO_BYTES,
+                    "Model is larger than " + WorldContentLimits.GEO_BYTES / 1024 + " KiB");
         }
         Geometry geometry = check(JsonFields.parse(bytes, WorldContentLimits.GEO_BYTES));
         return BlobInfo.geo(bytes.length, geometry.cubes(), geometry.textureWidth(), geometry.textureHeight(),
@@ -50,7 +52,7 @@ public final class GeoJsonCheck {
         JsonFields.string(json.get("format_version"), "format_version", 16);
         JsonArray geometries = JsonFields.array(json.get("minecraft:geometry"), "minecraft:geometry");
         if (geometries.size() != 1) {
-            throw new WorldContentException("Model must hold exactly one geometry");
+            throw new WorldContentException(ContentError.GEO_GEOMETRIES, "Model must hold exactly one geometry");
         }
         JsonObject geometry = JsonFields.object(geometries.get(0), "geometry");
         JsonFields.keys(geometry, "geometry", Set.of("description", "bones"), Set.of());
@@ -76,7 +78,8 @@ public final class GeoJsonCheck {
 
         JsonArray bones = JsonFields.array(geometry.get("bones"), "bones");
         if (bones.isEmpty() || bones.size() > WorldContentLimits.GEO_MAX_BONES) {
-            throw new WorldContentException("Model must have 1 to " + WorldContentLimits.GEO_MAX_BONES + " bones");
+            throw new WorldContentException(ContentError.GEO_BONES,
+                    "Model must have 1 to " + WorldContentLimits.GEO_MAX_BONES + " bones");
         }
         Map<String, String> parents = new HashMap<>();
         Map<String, JsonObject> boneObjects = new LinkedHashMap<>();
@@ -86,10 +89,11 @@ public final class GeoJsonCheck {
             JsonObject bone = JsonFields.object(element, "bone");
             String name = boneName(bone.get("name"));
             if (parents.containsKey(name)) {
-                throw new WorldContentException("Bone " + name + " is defined twice");
+                throw new WorldContentException(ContentError.GEO_BONE_TREE, "Bone " + name + " is defined twice");
             }
             if (bone.has("poly_mesh") || bone.has("texture_meshes")) {
-                throw new WorldContentException("Bone " + name + " uses a mesh, which is not supported");
+                throw new WorldContentException(ContentError.GEO_MESH,
+                        "Bone " + name + " uses a mesh, which is not supported");
             }
             JsonFields.keys(bone, "bone " + name, Set.of("name", "pivot"),
                     Set.of("parent", "rotation", "mirror", "inflate", "cubes", "locators"));
@@ -109,7 +113,8 @@ public final class GeoJsonCheck {
                 JsonObject boneLocators = JsonFields.object(bone.get("locators"), "locators");
                 locators += boneLocators.size();
                 if (locators > WorldContentLimits.GEO_MAX_LOCATORS) {
-                    throw new WorldContentException("Model has more than " + WorldContentLimits.GEO_MAX_LOCATORS
+                    throw new WorldContentException(ContentError.GEO_LOCATORS,
+                            "Model has more than " + WorldContentLimits.GEO_MAX_LOCATORS
                             + " locators");
                 }
                 for (Map.Entry<String, JsonElement> locator : boneLocators.entrySet()) {
@@ -121,7 +126,8 @@ public final class GeoJsonCheck {
                 JsonArray boneCubes = JsonFields.array(bone.get("cubes"), "cubes");
                 cubes += boneCubes.size();
                 if (cubes > WorldContentLimits.GEO_MAX_CUBES) {
-                    throw new WorldContentException("Model has more than " + WorldContentLimits.GEO_MAX_CUBES + " cubes");
+                    throw new WorldContentException(ContentError.GEO_CUBES,
+                            "Model has more than " + WorldContentLimits.GEO_MAX_CUBES + " cubes");
                 }
                 for (JsonElement cube : boneCubes) {
                     checkCube(JsonFields.object(cube, "cube"), textureWidth, textureHeight);
@@ -132,10 +138,12 @@ public final class GeoJsonCheck {
             String parent = bone.getValue();
             for (int depth = 0; parent != null; depth++) {
                 if (!parents.containsKey(parent)) {
-                    throw new WorldContentException("Bone " + bone.getKey() + " names a missing parent");
+                    throw new WorldContentException(ContentError.GEO_BONE_TREE,
+                            "Bone " + bone.getKey() + " names a missing parent");
                 }
                 if (depth >= parents.size()) {
-                    throw new WorldContentException("Bone " + bone.getKey() + " is its own ancestor");
+                    throw new WorldContentException(ContentError.GEO_BONE_TREE,
+                            "Bone " + bone.getKey() + " is its own ancestor");
                 }
                 parent = parents.get(parent);
             }
@@ -260,7 +268,8 @@ public final class GeoJsonCheck {
 
     private static String checkName(String name) throws WorldContentException {
         if (!NAME.matcher(name).matches()) {
-            throw new WorldContentException("Bone or locator name " + WorldContentException.excerpt(name)
+            throw new WorldContentException(ContentError.GEO_NAME,
+                    "Bone or locator name " + WorldContentException.excerpt(name)
                     + " may use only letters, digits, _ . and -");
         }
         return name;
@@ -304,7 +313,8 @@ public final class GeoJsonCheck {
         JsonObject faces = JsonFields.object(uv, "cube uv");
         for (Map.Entry<String, JsonElement> face : faces.entrySet()) {
             if (!FACES.contains(face.getKey())) {
-                throw new WorldContentException("Cube uv has unknown face " + WorldContentException.excerpt(face.getKey()));
+                throw new WorldContentException(ContentError.GEO_UV,
+                        "Cube uv has unknown face " + WorldContentException.excerpt(face.getKey()));
             }
             JsonObject faceUv = JsonFields.object(face.getValue(), "face uv");
             JsonFields.keys(faceUv, "face uv", Set.of("uv", "uv_size"), Set.of("material_instance", "uv_rotation"));
@@ -313,7 +323,7 @@ public final class GeoJsonCheck {
             double[] size = JsonFields.numbers(faceUv.get("uv_size"), "face uv_size", 2,
                     -Math.max(textureWidth, textureHeight), Math.max(textureWidth, textureHeight));
             if (Math.abs(size[0]) > textureWidth || Math.abs(size[1]) > textureHeight) {
-                throw new WorldContentException("Face uv_size is larger than the texture");
+                throw new WorldContentException(ContentError.GEO_UV, "Face uv_size is larger than the texture");
             }
             if (faceUv.has("material_instance")) {
                 JsonFields.string(faceUv.get("material_instance"), "material_instance", 32);
@@ -321,7 +331,7 @@ public final class GeoJsonCheck {
             if (faceUv.has("uv_rotation")) {
                 long rotation = JsonFields.integer(faceUv.get("uv_rotation"), "uv_rotation", 0, 270);
                 if (rotation % 90 != 0) {
-                    throw new WorldContentException("uv_rotation must be 0, 90, 180 or 270");
+                    throw new WorldContentException(ContentError.GEO_UV, "uv_rotation must be 0, 90, 180 or 270");
                 }
             }
         }
@@ -332,7 +342,7 @@ public final class GeoJsonCheck {
             throws WorldContentException {
         JsonArray uv = JsonFields.array(element, "uv");
         if (uv.size() != 2) {
-            throw new WorldContentException("uv must have 2 numbers");
+            throw new WorldContentException(ContentError.GEO_UV, "uv must have 2 numbers");
         }
         JsonFields.number(uv.get(0), "uv", (double) lowest * textureWidth, textureWidth);
         JsonFields.number(uv.get(1), "uv", (double) lowest * textureHeight, textureHeight);
