@@ -264,6 +264,23 @@ of all of them together. While any is shown the client checks the status and the
 again at the interval the status asks for, and stops showing what they take out of use whatever
 the server sends.
 
+`com.theplumteam.client.upload` is the only code that sends anything of a player's to the internet,
+and it sends only what an explicit action of the player asks for: never from a dedicated server,
+never on its own, and never to a URL from a server, a packet or a file. `UploadHttp` talks to
+`UploadOrigin.ORIGIN`, a third fixed origin compiled into the build, with redirects off, deadlines
+and answers bounded at 64 KiB; `UploadTransport.forGame()` gives the game that transport and
+`MojangJoin.forGame()` the join, and both do nothing in the packaged E2E. Every action is one
+`UploadIntent` and one session for exactly it (`SessionClient`): the service gives a number, the
+game joins the server that number and the intent name through its own session service, so the
+access token never leaves authlib, and Mojang tells the service which account joined. `UploadApi`
+reads every answer as strict JSON of the keys and shapes it is known to have, and holds names,
+codes and ids that come back to the grammar a published record holds them to; an answer that is
+anything else is `internal`, never shown. `PublishRun` sends the package, each file the service is
+missing and the commit, asking again for an answer that never came. The service sends a code and
+bounded numbers, never text: `UploadErrors` has the game's own words for each. A session's token
+lives in memory only. Do not add another origin to write to, a request the player did not ask
+for, or text from the service on screen.
+
 The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: an
 operator and World collections synced. Its entry points are the machine screen's **Creator**
 button, the Settings **Creator** tab and the client command `/blockpopscreator`. Packaged E2E players
