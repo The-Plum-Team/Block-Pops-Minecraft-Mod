@@ -10,11 +10,6 @@ import com.google.gson.stream.JsonToken;
 
 import java.io.IOException;
 import java.io.StringReader;
-import java.math.BigDecimal;
-import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
 
 /**
  * Parses remote JSON documents with none of Gson's leniency.
@@ -73,14 +68,8 @@ public final class StrictJson {
         if (utf8.length > maxBytes) {
             throw new RemoteException("JSON document is larger than " + maxBytes + " bytes");
         }
-        String text;
-        try {
-            text = StandardCharsets.UTF_8.newDecoder()
-                    .onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT)
-                    .decode(ByteBuffer.wrap(utf8))
-                    .toString();
-        } catch (CharacterCodingException e) {
+        String text = CoreText.decodeUtf8(utf8);
+        if (text == null) {
             throw new RemoteException("JSON document is not valid UTF-8");
         }
         // JsonReader would skip a byte order mark silently; JSON text never starts with one
@@ -176,7 +165,10 @@ public final class StrictJson {
                     throw new RemoteException("JSON number is longer than " + PLAYER_NUMBER_LENGTH
                             + " characters or has an exponent beyond " + PLAYER_NUMBER_EXPONENT);
                 }
-                return new JsonPrimitive(new BigDecimal(token));
+                // A published document's numbers are bounded, so building one cannot fail and is
+                // left until a check needs it; any other number is built now, so that one the
+                // arbitrary-precision reader refuses still fails the parse
+                return new JsonPrimitive(new JsonNumber(token, !playerNumbers));
             }
             case BOOLEAN:
                 return new JsonPrimitive(reader.nextBoolean());

@@ -27,6 +27,8 @@ public final class GeoJsonCheck {
     private static final Set<String> FACES = Set.of("north", "south", "east", "west", "up", "down");
     /** An affine transform as a row-major 3x3 matrix followed by its translation. */
     private static final double[] IDENTITY = {1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0};
+    // What Math.toRadians multiplies by, written out so that every host uses the same factor
+    private static final double DEGREES_TO_RADIANS = 0.017453292519943295;
 
     /** What the blob table records about a valid model. */
     public record Geometry(int cubes, int textureWidth, int textureHeight, ModelBounds bounds) {
@@ -98,7 +100,8 @@ public final class GeoJsonCheck {
             throw new WorldContentException(ContentError.GEO_BONES,
                     "Model must have 1 to " + WorldContentLimits.GEO_MAX_BONES + " bones");
         }
-        Map<String, String> parents = new HashMap<>();
+        // In the file's order, so the first broken bone reported is the same on every host
+        Map<String, String> parents = new LinkedHashMap<>();
         Map<String, JsonObject> boneObjects = new LinkedHashMap<>();
         int cubes = 0;
         int locators = 0;
@@ -236,12 +239,12 @@ public final class GeoJsonCheck {
 
     /** A turn by a file's rotation in degrees about a file's pivot, in GeckoLib's drawn space. */
     private static double[] turn(double[] pivot, double[] degrees) {
-        double x = Math.toRadians(-degrees[0]);
-        double y = Math.toRadians(-degrees[1]);
-        double z = Math.toRadians(degrees[2]);
-        double cx = StrictMath.cos(x), sx = StrictMath.sin(x);
-        double cy = StrictMath.cos(y), sy = StrictMath.sin(y);
-        double cz = StrictMath.cos(z), sz = StrictMath.sin(z);
+        double x = -degrees[0] * DEGREES_TO_RADIANS;
+        double y = -degrees[1] * DEGREES_TO_RADIANS;
+        double z = degrees[2] * DEGREES_TO_RADIANS;
+        double cx = CoreMath.cos(x), sx = CoreMath.sin(x);
+        double cy = CoreMath.cos(y), sy = CoreMath.sin(y);
+        double cz = CoreMath.cos(z), sz = CoreMath.sin(z);
         // Rz * Ry * Rx
         double[] m = {
                 cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx,

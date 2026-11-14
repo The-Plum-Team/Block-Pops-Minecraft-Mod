@@ -126,7 +126,7 @@ public final class PngValidator {
         Parsed png = parse(bytes, false);
         inflate(png);
         ByteArrayOutputStream out = new ByteArrayOutputStream(png.idat().length + 1024);
-        out.writeBytes(SIGNATURE);
+        out.write(SIGNATURE, 0, SIGNATURE.length);
         writeChunk(out, "IHDR", bytes, png.ihdr());
         if (png.colorType() == 3) {
             writeChunk(out, "PLTE", bytes, png.plte());
@@ -504,7 +504,7 @@ public final class PngValidator {
     private static void writeChunk(ByteArrayOutputStream out, String type, byte[] source, Chunk chunk) {
         byte[] typeBytes = type.getBytes(StandardCharsets.US_ASCII);
         writeInt(out, chunk.length());
-        out.writeBytes(typeBytes);
+        out.write(typeBytes, 0, typeBytes.length);
         out.write(source, chunk.offset(), chunk.length());
         CRC32 crc = new CRC32();
         crc.update(typeBytes);

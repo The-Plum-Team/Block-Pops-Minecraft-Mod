@@ -181,7 +181,12 @@ where there is no game. A refusal there carries a `ContentError` code beside its
 than that stays outside and is handed in or kept beside it: hashing (`Sha256`, with `JdkSha256` in
 the game), which links may be an author link (`WorldCollectionRecord.LinkRule`, with
 `AuthorLinks.RULE` in the game), where a path lands on disk (`RemoteFiles`) and the names of
-runtime assets (`WorldAssetIds`). Add a file to the list only if it keeps to those imports.
+runtime assets (`WorldAssetIds`). Where hosts differ in what the same call gives, the core does the
+work itself, with tests that hold it to the JDK's own answer: decoding UTF-8 and telling a blank
+string (`CoreText`), the value of a number, which is kept as it was written (`JsonNumber`), and
+sine and cosine (`CoreMath`). Add a file to the list only if it keeps to those imports, and do not
+call `Math.toRadians`, `StrictMath`, `Double.parseDouble`, `String.isBlank` or a charset decoder
+there.
 
 Player collections, which players are to publish themselves, exist so far only as the part of the
 content core that says what one is: `com.theplumteam.remote.player`, `CanonicalJson`, `ImageHash`

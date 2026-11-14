@@ -4,12 +4,14 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import com.theplumteam.remote.JsonNumber;
 import com.theplumteam.remote.RemoteException;
 import com.theplumteam.remote.StrictJson;
 import com.theplumteam.remote.player.ContentError;
 
 import java.math.BigDecimal;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Typed, bounded reads of World collection JSON; every failure names the field. The
@@ -46,7 +48,8 @@ public final class JsonFields {
                         what + " has unknown key " + WorldContentException.excerpt(key));
             }
         }
-        for (String key : required) {
+        // In sorted order, so the key reported missing is the same on every run and every host
+        for (String key : new TreeSet<>(required)) {
             if (!object.has(key)) {
                 throw new WorldContentException(ContentError.JSON_MISSING_KEY, what + " is missing " + key);
             }
@@ -96,6 +99,9 @@ public final class JsonFields {
             throw new WorldContentException(ContentError.JSON_TYPE, what + " must be a number");
         }
         JsonPrimitive primitive = element.getAsJsonPrimitive();
+        if (primitive.getAsNumber() instanceof JsonNumber number) {
+            return number.decimal();
+        }
         try {
             return primitive.getAsBigDecimal();
         } catch (NumberFormatException e) {
@@ -105,7 +111,12 @@ public final class JsonFields {
 
     /** A finite number within [min, max]. */
     public static double number(JsonElement element, String what, double min, double max) throws WorldContentException {
-        double value = decimal(element, what).doubleValue();
+        if (!isNumber(element)) {
+            throw new WorldContentException(ContentError.JSON_TYPE, what + " must be a number");
+        }
+        // A parsed number gives its double without building the arbitrary-precision value
+        Number raw = element.getAsJsonPrimitive().getAsNumber();
+        double value = raw instanceof JsonNumber ? raw.doubleValue() : decimal(element, what).doubleValue();
         if (!Double.isFinite(value) || value < min || value > max) {
             throw new WorldContentException(ContentError.JSON_RANGE,
                     what + " must be between " + plain(min) + " and " + plain(max));

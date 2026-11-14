@@ -4,6 +4,8 @@
 # files: never Minecraft, a loader or the rest of the mod, so the same source can check
 # content where there is no game. See docs/ai/PROJECT.md.
 com/theplumteam/remote/CodeEntry.java
+com/theplumteam/remote/CoreText.java
+com/theplumteam/remote/JsonNumber.java
 com/theplumteam/remote/RemoteException.java
 com/theplumteam/remote/RemoteLimits.java
 com/theplumteam/remote/RemotePaths.java
@@ -30,6 +32,7 @@ com/theplumteam/worldcontent/BlobInfo.java
 com/theplumteam/worldcontent/BlobType.java
 com/theplumteam/worldcontent/BoxColors.java
 com/theplumteam/worldcontent/CanonicalJson.java
+com/theplumteam/worldcontent/CoreMath.java
 com/theplumteam/worldcontent/GeoJsonCheck.java
 com/theplumteam/worldcontent/ImageHash.java
 com/theplumteam/worldcontent/JsonFields.java

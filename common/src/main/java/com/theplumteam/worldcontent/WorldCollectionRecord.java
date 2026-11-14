@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import com.theplumteam.remote.CoreText;
 import com.theplumteam.remote.player.ContentError;
 import com.theplumteam.remote.player.JsonOut;
 import com.theplumteam.remote.player.PlayerIds;
@@ -1109,7 +1110,7 @@ public record WorldCollectionRecord(String id, String name, String author, int r
             }
             return text;
         }
-        if (text.length() < min || (min > 0 && text.isBlank())) {
+        if (text.length() < min || (min > 0 && CoreText.isBlank(text))) {
             throw new WorldContentException(ContentError.TEXT_EMPTY, what + " must not be empty");
         }
         if (!isPlainText(text)) {
