@@ -192,8 +192,12 @@ checked parts. A head, an index, a status, a revocation list and the offline roo
 payload of a `SignedEnvelope`, and each, like the upload package, a published record and a
 published model or animation (`CanonicalJson`), is accepted only as the exact bytes it writes
 back, with numbers bounded as `StrictJson.parsePlayerObject` bounds them and names of the
-characters `PlayerText` lists. Nothing in the game calls any of this yet: the game holds no key,
-checks no signature and contacts no origin for it.
+characters `PlayerText` lists. `WorldCollectionMaterializer` and `WorldCollectionCheck` build and
+check a collection of either family from its record, told apart by a `ContentIdStrategy`: a World
+collection's assets are named by content (`WorldAssetIds`), a player collection's under its own id
+as well (`PlayerAssetIds`), so neither is taken for the other. Nothing in the game calls any of
+this for a player collection yet: the game holds no key, checks no signature and contacts no
+origin for it.
 
 The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: an
 operator and World collections synced. Its entry points are the machine screen's **Creator**

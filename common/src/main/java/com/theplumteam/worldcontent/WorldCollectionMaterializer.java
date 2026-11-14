@@ -16,7 +16,8 @@ import java.util.Map;
 /**
  * Turns a checked record into the collection the registry holds. It runs on the server
  * and on the client and depends on nothing but the record and the blob table, so both
- * sides build the same collection.
+ * sides build the same collection. The family the collection belongs to names its assets
+ * ({@link ContentIdStrategy}); everything else is the same for every family.
  */
 public final class WorldCollectionMaterializer {
     /** The animation every figure plays in its box, as bundled figures do. */
@@ -49,21 +50,33 @@ public final class WorldCollectionMaterializer {
     }
 
     /**
-     * Builds the collection of a record that passed {@link WorldCollectionRecord#parse}.
+     * Builds the World collection of a record that passed {@link WorldCollectionRecord#parse}.
      * An archived collection, or a draft, keeps every figure defined but enables none of them.
      */
     public static FigureCollection materialize(WorldCollectionRecord record, Map<String, BlobInfo> blobs) {
+        return materialize(record, blobs, ContentIdStrategy.WORLD);
+    }
+
+    /**
+     * Builds the collection of a checked record, with its assets named as its family names
+     * them. The record's id must be one of that family's.
+     */
+    public static FigureCollection materialize(WorldCollectionRecord record, Map<String, BlobInfo> blobs,
+                                               ContentIdStrategy ids) {
+        if (!ids.names(record.id())) {
+            throw new IllegalArgumentException("The record's id is not of the family that names its assets");
+        }
         List<FigureDefinition> figures = new ArrayList<>(record.figures().size());
         boolean offered = !record.archived() && !record.draft();
         for (WorldCollectionRecord.Figure figure : record.figures()) {
-            figures.add(figure(figure, blobs, figure.enabled() && offered, record.drawWeight(figure)));
+            figures.add(figure(figure, blobs, figure.enabled() && offered, record.drawWeight(figure), ids));
         }
-        ResourceLocation boxTexture = record.boxTexture() != null ? WorldAssetIds.texture(record.boxTexture())
+        ResourceLocation boxTexture = record.boxTexture() != null ? ids.texture(record.boxTexture())
                 : record.boxColor() != null ? boxColorTexture(record.boxColor())
                 : null;
         WorldCollectionRecord.LogoLayout layout = record.effectiveLogoLayout();
         FigureCollection.LogoConfig logo = record.logo() != null
-                ? FigureCollection.LogoConfig.automatic(WorldAssetIds.texture(record.logo()), layout.scale(),
+                ? FigureCollection.LogoConfig.automatic(ids.texture(record.logo()), layout.scale(),
                         layout.offsetXPixels(), layout.offsetYPixels())
                 : null;
         return new FigureCollection(record.id(), record.name(), record.author().isEmpty() ? "Unknown" : record.author(),
@@ -87,13 +100,13 @@ public final class WorldCollectionMaterializer {
     }
 
     private static FigureDefinition figure(WorldCollectionRecord.Figure figure, Map<String, BlobInfo> blobs,
-                                           boolean enabled, int drawWeight) {
+                                           boolean enabled, int drawWeight, ContentIdStrategy ids) {
         float scale = figure.scale();
-        ResourceLocation texture = WorldAssetIds.texture(figure.texture());
+        ResourceLocation texture = ids.texture(figure.texture());
         // Variants are textures only: model, size, poses and box face come from the figure
         List<FigureDefinition.AlternativeSkin> variants = new ArrayList<>(figure.variants().size());
         for (WorldCollectionRecord.Variant variant : figure.variants()) {
-            variants.add(new FigureDefinition.AlternativeSkin(variant.name(), WorldAssetIds.texture(variant.texture()),
+            variants.add(new FigureDefinition.AlternativeSkin(variant.name(), ids.texture(variant.texture()),
                     null, null, null, null, List.of()));
         }
         WorldCollectionRecord.BoxFace face = figure.boxFace();
@@ -104,7 +117,7 @@ public final class WorldCollectionMaterializer {
                             face != null ? face.show() : null, false, List.of(), List.of(), List.of()),
                     false, enabled, figure.rarity(), drawWeight);
         }
-        ResourceLocation poses = figure.animation() != null ? WorldAssetIds.animation(figure.animation()) : null;
+        ResourceLocation poses = figure.animation() != null ? ids.animation(figure.animation()) : null;
         BlobInfo animation = figure.animation() != null ? blobs.get(figure.animation()) : null;
         // A model with no sitting pose of its own keeps its stand pose instead of cycling
         boolean poseLocked = animation == null || !animation.hasPose(BlobInfo.POSE_SIT);
@@ -116,7 +129,7 @@ public final class WorldCollectionMaterializer {
         float guiScale = scale * (float) fit(FIT_GUI_HEIGHT / bounds.height(), FIT_GUI_WIDTH / bounds.width(),
                 Double.POSITIVE_INFINITY);
         // A model's face is not where a skin's is, so it shows only where the record places it
-        return FigureDefinition.weighted(figure.id(), figure.name(), WorldAssetIds.model(figure.model()), texture,
+        return FigureDefinition.weighted(figure.id(), figure.name(), ids.model(figure.model()), texture,
                 FIGURE_ANIMATION, variants,
                 new FigureDefinition.RenderOptions(poses, fitted, guiScale, boxFaceUv(figure, blobs),
                         bounds.equals(ModelBounds.NONE) ? null : offset(bounds, fitted), face != null && face.show(),
