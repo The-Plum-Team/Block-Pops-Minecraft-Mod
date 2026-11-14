@@ -225,8 +225,25 @@ build, by paths `PlayerPaths` computes, and only `PlayerCdn.forGame()` gives the
 which is `RemoteSource.NONE` in the packaged E2E. Do not add another origin for player content, a
 URL or a path from a server, packet or file, or a way to build from anything whose signature or
 SHA-256 has not held. `PlayerStore` keeps, below `p/` of `blockpops-cache/`, what a game believes
-and the indexes and records it has verified, so a world opens with no network. Nothing in the game
-calls the fetcher yet, and with no key in the build it asks the origin nothing.
+and the heads, indexes and records it has verified, so a world opens with no network. With no key
+in the build the fetcher asks the origin nothing.
+
+A server shows the player collections added to its world by code. `/blockpops customcollections
+add` and the request packet send a code of the player shape to `server.PlayerCollections` and any
+other code down the official path, so neither tree is asked for the other's codes; both are for
+operators at level 2 and for the host of their own world (`ServerProfiles.managesCodes`). The
+world's list is `<world>/data/blockpops-player-collections.json` (`PlayerCollectionSettings`, at
+most 32): each entry pins the world to one revision, and its revision and index only select which
+signed index to load. `PlayerCollectionEngine`, which knows nothing of the game, decides what is
+shown: what is kept when the world opens, then the status and the revocation list, then each head,
+at the intervals the status asks for. A collection, or all of them, stops being shown when a signed
+document takes it out of use, and stays in the list so a restore needs nobody; a pinned world is
+told of a newer revision and moves only with `update` or when the entry is set to `follow`. A
+player collection is registered like any dynamic one but travels only in
+`SyncPlayerCollectionsPacket`, which carries pointers and the signed head and no content, and only
+to a client that sent `PlayerCollectionsHelloPacket` (`ClientCapabilities`); a client that did not
+is refused a draw from one and a machine set to one, and is answered with results it can read. No
+client sends that hello yet, so no client is sent a player collection.
 
 The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: an
 operator and World collections synced. Its entry points are the machine screen's **Creator**

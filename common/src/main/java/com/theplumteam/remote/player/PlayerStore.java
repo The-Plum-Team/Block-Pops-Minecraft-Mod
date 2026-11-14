@@ -14,8 +14,8 @@ import java.util.Set;
 
 /**
  * What a game keeps of player collections between runs, in its cache below {@code p/}: what it
- * believes ({@link PlayerState}), the indexes whose signatures it has checked, and the records
- * they name. It is what lets a world open with no network.
+ * believes ({@link PlayerState}), the heads and the indexes whose signatures it has checked, and
+ * the records they name. It is what lets a world open with no network.
  *
  * <p>An index is kept as its payload with the key that signed it and the epoch it was accepted
  * in, written only after its signature held; the game's own disk is inside its trust boundary,
@@ -102,10 +102,34 @@ public final class PlayerStore {
         return kept.isPresent() && JdkSha256.of(kept.get()).equals(recordSha256) ? kept : Optional.empty();
     }
 
-    /** Deletes everything kept of one collection, as when it is revoked. */
+    /**
+     * Keeps the envelope a collection's head was published in, whose signature has just held:
+     * a server hands it to each client, which checks the signature for itself.
+     */
+    public void saveHead(String id, byte[] envelope) throws IOException {
+        files.save(verifiedHead(id), envelope);
+    }
+
+    public Optional<byte[]> loadHead(String id) throws IOException {
+        return files.load(verifiedHead(id), PlayerHead.ENVELOPE_BYTES);
+    }
+
+    /** Deletes the files kept of one collection, as when it is revoked. */
     public void delete(String id) throws IOException {
         String directory = PlayerPaths.directory(id);
         files.deleteDirectory(directory.substring(0, directory.length() - 1));
+    }
+
+    /** Deletes the head kept of one collection, as when the collection leaves the game for good. */
+    public void deleteHead(String id) throws IOException {
+        files.delete(verifiedHead(id));
+    }
+
+    private static String verifiedHead(String id) {
+        if (!PlayerIds.isPlayerId(id)) {
+            throw new IllegalArgumentException("Invalid player collection id");
+        }
+        return "p/verified/heads/" + id + ".json";
     }
 
     private static String verifiedIndex(String indexSha256) {

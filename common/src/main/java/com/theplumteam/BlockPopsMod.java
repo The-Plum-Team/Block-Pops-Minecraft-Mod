@@ -8,6 +8,7 @@ import com.theplumteam.registry.ModCreativeTabs;
 import com.theplumteam.registry.ModItems;
 import com.theplumteam.registry.ModLoot;
 import com.theplumteam.server.CustomCollections;
+import com.theplumteam.server.PlayerCollections;
 import com.theplumteam.server.ServerTickHandler;
 import com.theplumteam.server.SpecialAccess;
 import com.theplumteam.server.config.ServerConfig;
@@ -77,6 +78,12 @@ public final class BlockPopsMod {
         LifecycleEvent.SERVER_STARTING.register(CustomCollections::onServerStarting);
         LifecycleEvent.SERVER_STOPPED.register(server -> CustomCollections.onServerStopped());
         PlayerEvent.PLAYER_JOIN.register(CustomCollections::sendTo);
+
+        // Player collections: added by code, kept on the revision the world is pinned to
+        LifecycleEvent.SERVER_STARTING.register(PlayerCollections::onServerStarting);
+        LifecycleEvent.SERVER_STOPPED.register(server -> PlayerCollections.onServerStopped());
+        PlayerEvent.PLAYER_QUIT.register(PlayerCollections::onPlayerQuit);
+        TickEvent.SERVER_POST.register(PlayerCollections::onServerTick);
 
         // World collections: stored with the world, edited by its operators
         LifecycleEvent.SERVER_STARTING.register(WorldCollections::onServerStarting);

@@ -8,6 +8,7 @@ import com.theplumteam.remote.player.PlayerFetcher.Refused;
 import com.theplumteam.remote.player.PlayerFetcher.Resolved;
 import com.theplumteam.remote.player.PlayerFetcher.Revision;
 import com.theplumteam.remote.player.PlayerFetcher.Why;
+import com.theplumteam.remote.player.PlayerOrigin.Origin;
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.JdkSha256;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
@@ -29,6 +30,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static com.theplumteam.remote.player.PlayerOrigin.CODE;
+import static com.theplumteam.remote.player.PlayerOrigin.DAY;
+import static com.theplumteam.remote.player.PlayerOrigin.ID;
+import static com.theplumteam.remote.player.PlayerOrigin.KEYS;
+import static com.theplumteam.remote.player.PlayerOrigin.O2;
+import static com.theplumteam.remote.player.PlayerOrigin.R1;
+import static com.theplumteam.remote.player.PlayerOrigin.SKIN;
+import static com.theplumteam.remote.player.PlayerOrigin.START;
+import static com.theplumteam.remote.player.PlayerOrigin.pair;
+import static com.theplumteam.remote.player.PlayerOrigin.sign;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -41,102 +52,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the test and sign nothing real.
  */
 class PlayerFetcherTest {
-    private static final String ID = "p_k3v7q2m5x4ab";
-    private static final String CODE = "maple-orbit-42";
-    private static final String SKIN = JdkSha256.of("skin".getBytes(StandardCharsets.UTF_8));
-    private static final long START = 1_794_050_000L;
-    private static final long DAY = 24 * 60 * 60;
-
-    private static final KeyPair O1 = pair();
-    private static final KeyPair O2 = pair();
-    private static final KeyPair R1 = pair();
-    private static final PlayerKeys KEYS = PlayerKeys.of(new String[][] {
-        {"o1", "online", spki(O1)}, {"o2", "online", spki(O2)}, {"r1", "root", spki(R1)}});
-
     @TempDir
     Path cache;
-
-    private static KeyPair pair() {
-        try {
-            return KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
-        } catch (GeneralSecurityException e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    private static String spki(KeyPair pair) {
-        return Base64.getEncoder().encodeToString(pair.getPublic().getEncoded());
-    }
-
-    private static byte[] sign(String kid, KeyPair signer, byte[] payload) {
-        try {
-            Signature signature = Signature.getInstance("Ed25519");
-            signature.initSign(signer.getPrivate());
-            signature.update(payload);
-            return new SignedEnvelope(kid, payload, signature.sign()).toUtf8();
-        } catch (GeneralSecurityException e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    /** What the upload service would have published: an origin as a map of paths to bytes. */
-    private static final class Origin implements RemoteSource {
-        final Map<String, byte[]> files = new HashMap<>();
-        final List<String> asked = new ArrayList<>();
-        boolean down;
-        long now = START;
-        long statusSeq;
-        long listSeq;
-        String kid = "o1";
-        KeyPair signer = O1;
-
-        @Override
-        public byte[] fetch(String path, long maxBytes) throws IOException {
-            asked.add(path);
-            if (down) {
-                throw new RemoteException("The origin cannot be reached");
-            }
-            byte[] bytes = files.get(path);
-            if (bytes == null) {
-                throw new RemoteNotFoundException("Not found: " + path);
-            }
-            if (bytes.length > maxBytes) {
-                throw new RemoteException(path + " is too large");
-            }
-            return bytes;
-        }
-
-        /** Publishes a revocation list and the status that names it, as the service does every day. */
-        void status(boolean loading, PlayerRevocations.Collection... revoked) {
-            PlayerRevocations list = new PlayerRevocations(++listSeq, now, now + 3 * DAY, List.of(revoked), List.of());
-            byte[] envelope = sign(kid, signer, list.toPayload());
-            files.put(PlayerPaths.REVOCATIONS, envelope);
-            files.put(PlayerPaths.STATUS, sign(kid, signer, new PlayerStatus(++statusSeq, now, now + 3 * DAY, loading,
-                    list.seq(), JdkSha256.of(envelope), 900, 1800, 3600).toPayload()));
-        }
-
-        /** Publishes a revision of the collection and makes it the head; says the index's SHA-256. */
-        String publish(int rev, long seq, String name, String author) {
-            WorldCollectionRecord record = new WorldCollectionRecord("w-col", name, "", 10, 20, 30, null, "red", null, false,
-                    0, List.of(new WorldCollectionRecord.Figure("zombi", "Zombi", WorldCollectionRecord.Kind.SKIN, SKIN,
-                            null, null, 1.0f, true)));
-            byte[] recordBytes = record.toPlayerUtf8();
-            String recordSha = JdkSha256.of(recordBytes);
-            files.put(PlayerPaths.record(ID, recordSha), recordBytes);
-            Map<String, BlobInfo> blobs = new LinkedHashMap<>();
-            blobs.put(SKIN, BlobInfo.png(1_000, 64, 64));
-            byte[] index = sign(kid, signer, new PlayerIndex(ID, rev, now, author, recordSha, recordBytes.length, blobs, 1,
-                    JdkSha256.of(new byte[0])).toPayload());
-            String indexSha = JdkSha256.of(index);
-            files.put(PlayerPaths.index(ID, indexSha), index);
-            head(new PlayerHead(seq, now, CODE, ID, PlayerHead.State.LIVE, rev, indexSha, null));
-            return indexSha;
-        }
-
-        void head(PlayerHead head) {
-            files.put(PlayerPaths.head(CODE), sign(kid, signer, head.toPayload()));
-        }
-    }
 
     private PlayerFetcher fetcher(Origin origin) {
         return fetcher(origin, KEYS);
@@ -306,8 +223,8 @@ class PlayerFetcherTest {
         origin.files.put(recordPath, changed);
         assertThrows(RemoteException.class, () -> fetcher(origin).resolve(CODE));
         origin.files.put(recordPath, record);
-        // Nothing of a refused collection was kept
-        assertFalse(Files.exists(cache.resolve("p/verified")));
+        // Nothing of a refused collection was kept, beyond the genuine head of the last cases
+        assertFalse(Files.exists(cache.resolve("p/verified/i")));
         assertFalse(Files.exists(cache.resolve("p/c")));
         assertEquals(ID, fetcher(origin).resolve(CODE).head().id());
         assertTrue(Files.exists(cache.resolve("p/verified/i/" + indexSha + ".json")));

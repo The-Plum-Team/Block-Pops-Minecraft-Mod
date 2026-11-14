@@ -74,6 +74,14 @@ public final class PlayerFetcher {
     public record Resolved(PlayerHead head, byte[] headEnvelope, Revision revision) {
     }
 
+    /**
+     * A collection's head, believed.
+     *
+     * @param envelope the head as it was published, for a client to verify by itself
+     */
+    public record Head(PlayerHead head, byte[] envelope) {
+    }
+
     private final RemoteSource source;
     private final PlayerStore store;
     private final PlayerKeys keys;
@@ -88,6 +96,11 @@ public final class PlayerFetcher {
         this.store = store;
         this.keys = keys;
         this.clock = clock;
+    }
+
+    /** Whether this build can believe anything: with no key in it, player collections are off. */
+    public boolean hasKeys() {
+        return !keys.isEmpty();
     }
 
     /** What this game believes, as kept from earlier runs and brought up to date by each call here. */
@@ -173,6 +186,7 @@ public final class PlayerFetcher {
         }
         held.acceptHead(head, signed.kid(), now);
         store.saveState(held);
+        store.saveHead(head.id(), envelope);
         if (head.state() != PlayerHead.State.LIVE || !held.mayAdd(head.id(), head.rev(), now)) {
             throw new Refused(Why.UNAVAILABLE);
         }
@@ -181,26 +195,72 @@ public final class PlayerFetcher {
 
     /**
      * The head a code points at now, believed if genuine and current, for a game that already
-     * holds the collection and asks whether anything changed.
+     * holds the collection and asks whether anything changed. Whatever it says, live or not, is
+     * what {@link #state()} holds for the collection from then on.
      */
-    public Resolved poll(String code, String id) throws IOException, Refused {
+    public Head head(String code, String id) throws IOException {
         if (keys.isEmpty() || !PlayerIds.isPlayerCode(code)) {
-            throw new Refused(Why.OFF);
+            throw new RemoteException("Player collections are off");
         }
         PlayerState held = state();
-        long now = clock.getAsLong();
         byte[] envelope = source.fetch(PlayerPaths.head(code), Kind.HEAD.envelopeBytes());
         Signed signed = PlayerSignatures.open(Kind.HEAD, envelope, keys, held.revokedKids());
         PlayerHead head = PlayerHead.parse(signed.payload());
         if (!head.code().equals(code) || !head.id().equals(id)) {
             throw new RemoteException("The head under " + code + " is another collection's");
         }
-        held.acceptHead(head, signed.kid(), now);
+        held.acceptHead(head, signed.kid(), clock.getAsLong());
         store.saveState(held);
-        if (head.state() != PlayerHead.State.LIVE || !held.keeps(id, head.rev())) {
+        store.saveHead(id, envelope);
+        return new Head(head, envelope);
+    }
+
+    /**
+     * The head kept of a collection, with no network: the one {@link #state()} holds, in the
+     * envelope it was published in. Empty when none is kept or the two do not agree.
+     */
+    public Optional<Head> keptHead(String id) throws IOException {
+        PlayerHead believed = state().head(id);
+        Optional<byte[]> envelope = store.loadHead(id);
+        if (believed == null || envelope.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            PlayerHead kept = PlayerHead.parse(SignedEnvelope.parse(envelope.get(), Kind.HEAD.envelopeBytes()).payload());
+            return kept.equals(believed) ? Optional.of(new Head(kept, envelope.get())) : Optional.empty();
+        } catch (RemoteException e) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * The revision a code's head names now, for a game that already holds the collection.
+     *
+     * @throws Refused when the collection, or that revision of it, is not to be loaded
+     */
+    public Resolved poll(String code, String id) throws IOException, Refused {
+        if (keys.isEmpty() || !PlayerIds.isPlayerCode(code)) {
+            throw new Refused(Why.OFF);
+        }
+        Head now = head(code, id);
+        PlayerHead head = now.head();
+        if (head.state() != PlayerHead.State.LIVE || !state().keeps(id, head.rev())) {
             throw new Refused(Why.UNAVAILABLE);
         }
-        return new Resolved(head, envelope, revision(id, head.rev(), head.index()));
+        return new Resolved(head, now.envelope(), revision(id, head.rev(), head.index()));
+    }
+
+    /**
+     * Whether an index is still published. One that is not has aged out of what the service
+     * keeps: a game that kept it could go on, but no other game could load it.
+     */
+    public boolean published(String id, String indexSha256) throws IOException {
+        try {
+            byte[] envelope = source.fetch(PlayerPaths.index(id, indexSha256), Kind.INDEX.envelopeBytes());
+            return JdkSha256.of(envelope).equals(indexSha256);
+        } catch (RemoteNotFoundException gone) {
+            return false;
+        }
     }
 
     /**
@@ -253,11 +313,17 @@ public final class PlayerFetcher {
         }
     }
 
+    /** Deletes the files kept of a collection that is not to be loaded; its head stays believed. */
+    public void discard(String id) throws IOException {
+        store.delete(id);
+    }
+
     /** Forgets a collection for good: what is kept of it and its head. */
     public void forget(String id) throws IOException {
         state().forgetHead(id);
         store.saveState(state());
         store.delete(id);
+        store.deleteHead(id);
     }
 
     private static PlayerIndex index(byte[] payload, String id, int rev) throws RemoteException {

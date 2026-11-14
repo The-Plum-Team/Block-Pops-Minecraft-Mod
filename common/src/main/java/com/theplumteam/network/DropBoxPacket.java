@@ -6,6 +6,7 @@ import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.data.IPlayerDiscovery;
 import com.theplumteam.data.PlayerDataManager;
+import com.theplumteam.figure.CollectionFamilies;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.DrawOdds;
 import com.theplumteam.figure.FigureCollection;
@@ -16,6 +17,7 @@ import com.theplumteam.figure.PlayerCollectionHelper;
 import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.item.PlushPrizes;
 import com.theplumteam.registry.ModItems;
+import com.theplumteam.server.ClientCapabilities;
 import com.theplumteam.server.ServerTickHandler;
 import com.theplumteam.server.PlayerSkins;
 import com.theplumteam.server.SpecialAccess;
@@ -97,6 +99,16 @@ public class DropBoxPacket {
                     player.sendSystemMessage(Component.translatable("blockpops.message.collection_unavailable")
                             .withStyle(ChatFormatting.RED));
                     BlockPopsMod.logDebug("Collection {} is hidden, token not consumed", packet.collectionId);
+                    return;
+                }
+
+                // A client from before player collections cannot show what it would draw
+                if (CollectionFamilies.family(packet.collectionId) == CollectionFamilies.Family.PLAYER
+                        && !ClientCapabilities.playerCollections(player)) {
+                    player.sendSystemMessage(Component.translatable("blockpops.message.collection_unavailable")
+                            .withStyle(ChatFormatting.RED));
+                    BlockPopsMod.logDebug("Player collection {} is not loaded by this client, token not consumed",
+                            packet.collectionId);
                     return;
                 }
 

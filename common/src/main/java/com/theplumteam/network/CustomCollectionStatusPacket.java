@@ -1,6 +1,7 @@
 package com.theplumteam.network;
 
 import com.theplumteam.BlockPopsMod;
+import com.theplumteam.server.ClientCapabilities;
 import com.theplumteam.server.CustomCollections;
 import com.theplumteam.util.ResourceLocations;
 import dev.architectury.networking.NetworkManager;
@@ -44,7 +45,11 @@ public class CustomCollectionStatusPacket {
 
     public static void send(ServerPlayer player, CustomCollections.Status status) {
         if (PacketNetworking.canPlayerReceive(player, ID)) {
-            PacketNetworking.sendToPlayer(player, ID, new CustomCollectionStatusPacket(status).encode());
+            // A client from before player collections cannot read their results, which it would
+            // decode by a number it does not have
+            CustomCollections.Status readable = ClientCapabilities.playerCollections(player) ? status
+                    : new CustomCollections.Status(status.result().forOlderClient(), status.name());
+            PacketNetworking.sendToPlayer(player, ID, new CustomCollectionStatusPacket(readable).encode());
         }
     }
 }

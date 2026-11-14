@@ -17,9 +17,12 @@ import com.theplumteam.remote.RemotePaths;
  */
 public final class PlayerIds {
     public static final String PREFIX = RemotePaths.PLAYER_PREFIX;
-    private static final int ID_LENGTH = 14;
+    /** How long every id is. */
+    public static final int ID_LENGTH = 14;
     private static final int WORD_MIN = 3;
     private static final int WORD_MAX = 8;
+    /** How long a code is at most. */
+    public static final int CODE_LENGTH = WORD_MAX + 1 + WORD_MAX + 1 + 2;
 
     private PlayerIds() {
     }

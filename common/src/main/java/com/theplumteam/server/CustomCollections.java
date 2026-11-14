@@ -18,6 +18,7 @@ import com.theplumteam.remote.RemotePaths;
 import com.theplumteam.remote.RemoteSource;
 import com.theplumteam.remote.StrictJson;
 import com.theplumteam.remote.VerifiedStore;
+import com.theplumteam.remote.player.PlayerIds;
 import dev.architectury.platform.Platform;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -45,8 +46,26 @@ import java.util.function.Consumer;
  * {@link RemoteExecutor}; the registry and players are only touched on the server thread.
  */
 public final class CustomCollections {
-    /** What an operator's request came to. */
-    public enum Result { ADDED, REMOVED, UNKNOWN_CODE, ALREADY_ENABLED, NOT_ENABLED, CLASHES, FULL, FAILED }
+    /**
+     * What a request came to. The last three are of player collections alone, and are written
+     * after the others so a client from before them still reads the first eight.
+     */
+    public enum Result {
+        ADDED, REMOVED, UNKNOWN_CODE, ALREADY_ENABLED, NOT_ENABLED, CLASHES, FULL, FAILED,
+        PLAYER_ADDED, UNAVAILABLE, PLAYER_OFF;
+
+        /** The result a client from before player collections is told instead. */
+        public Result forOlderClient() {
+            return switch (this) {
+                case PLAYER_ADDED -> ADDED;
+                case UNAVAILABLE, PLAYER_OFF -> FAILED;
+                default -> this;
+            };
+        }
+    }
+
+    /** The most bytes the packet that carries every Custom collection to a client may have. */
+    public static final int PACKET_BUDGET_BYTES = 960 * 1024;
 
     /** A result, with the collection's name or id when there is one. */
     public record Status(Result result, String name) {
@@ -138,8 +157,18 @@ public final class CustomCollections {
         server.execute(() -> {
             // Keep only what is still enabled; an operator may have changed the list meanwhile
             Set<String> stillEnabled = CustomCollectionSettings.get(server).enabled();
-            loaded.stream().filter(entry -> stillEnabled.contains(entry.collection().getId()))
-                    .forEach(CustomCollections::publish);
+            for (Loaded entry : loaded) {
+                String collectionId = entry.collection().getId();
+                if (!stillEnabled.contains(collectionId)) {
+                    continue;
+                }
+                if (fits(entry)) {
+                    publish(entry);
+                } else {
+                    BlockPopsMod.LOGGER.warn("Custom collection {} grew past what one packet carries; keeping what"
+                            + " was loaded before", collectionId);
+                }
+            }
             sendToAll(server);
         });
     }
@@ -172,6 +201,18 @@ public final class CustomCollections {
         return new Loaded(collection, new String(bytes, StandardCharsets.UTF_8), List.copyOf(files));
     }
 
+    /** Whether every Custom collection still fits in the one packet that carries them, with this one in. */
+    private static boolean fits(Loaded candidate) {
+        List<SyncCustomCollectionsPacket.Entry> entries = new ArrayList<>();
+        for (Loaded loaded : LOADED.values()) {
+            if (!loaded.collection().getId().equals(candidate.collection().getId())) {
+                entries.add(new SyncCustomCollectionsPacket.Entry(loaded.json(), loaded.files()));
+            }
+        }
+        entries.add(new SyncCustomCollectionsPacket.Entry(candidate.json(), candidate.files()));
+        return SyncCustomCollectionsPacket.encodedBytes(entries) <= PACKET_BUDGET_BYTES;
+    }
+
     private static void publish(Loaded loaded) {
         LOADED.put(loaded.collection().getId(), loaded);
         CollectionRegistry.registerDynamicCollection(loaded.collection());
@@ -180,11 +221,19 @@ public final class CustomCollections {
     /**
      * Enables the collection an access code names. Looks it up and downloads its
      * definition in the background; {@code reply} runs on the server thread.
+     *
+     * <p>A code of the player shape names a player collection and goes to
+     * {@link PlayerCollections}; nothing of the official tree is asked for it. Any other code
+     * is an official one, and nothing below {@code p/} is asked for it.
      */
     public static void enableByCode(MinecraftServer server, String rawCode, Consumer<Status> reply) {
         String code = RemotePaths.normalizeCode(rawCode);
         if (code == null) {
             reply.accept(new Status(Result.UNKNOWN_CODE, ""));
+            return;
+        }
+        if (PlayerIds.isPlayerCode(code)) {
+            PlayerCollections.add(server, code, reply);
             return;
         }
         RemoteExecutor.get().execute(() -> {
@@ -216,6 +265,9 @@ public final class CustomCollections {
         if (settings.enabled().contains(collection.getId())) {
             return new Status(Result.ALREADY_ENABLED, collection.getName());
         }
+        if (!fits(loaded)) {
+            return new Status(Result.FULL, collection.getName());
+        }
         if (!settings.setEnabled(collection.getId(), true)) {
             return new Status(settings.enabled().size() >= CustomCollectionSettings.MAX_ENABLED
                     ? Result.FULL : Result.FAILED, collection.getName());
@@ -225,8 +277,15 @@ public final class CustomCollections {
         return new Status(Result.ADDED, collection.getName());
     }
 
-    /** Disables a collection by its id and tells every player. Server thread. */
+    /**
+     * Disables a collection by its id and tells every player. Server thread. A player
+     * collection is named by its id or its code, and {@code reply} then runs later.
+     */
     public static void disable(MinecraftServer server, String collectionId, Consumer<Status> reply) {
+        if (PlayerIds.isReserved(collectionId) || PlayerIds.isPlayerCode(collectionId)) {
+            PlayerCollections.remove(server, collectionId, reply);
+            return;
+        }
         CustomCollectionSettings settings = CustomCollectionSettings.get(server);
         if (!settings.enabled().contains(collectionId)) {
             reply.accept(new Status(Result.NOT_ENABLED, collectionId));
@@ -251,6 +310,14 @@ public final class CustomCollections {
                     loaded != null ? loaded.collection().getName() + " (" + collectionId + ")" : collectionId));
         }
         return statuses;
+    }
+
+    /** Reads the enabled collections from the CDN again and sends what changed. */
+    public static void refreshNow(MinecraftServer server) {
+        Set<String> enabled = CustomCollectionSettings.get(server).enabled();
+        if (!enabled.isEmpty()) {
+            RemoteExecutor.get().execute(() -> refresh(server, enabled));
+        }
     }
 
     public static void sendTo(ServerPlayer player) {
