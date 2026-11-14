@@ -31,9 +31,12 @@ public enum ContentError {
     JSON_STRING_LENGTH,
     JSON_RANGE,
     JSON_VECTOR,
+    JSON_NOT_CANONICAL,
 
     // Text an operator or a player typed
     TEXT_EMPTY,
+    TEXT_LENGTH,
+    TEXT_SPACES,
     TEXT_CHARACTERS,
 
     // PNG
@@ -104,6 +107,7 @@ public enum ContentError {
 
     // What a set of collections may hold together
     BUDGET_COLLECTIONS,
+    BUDGET_FILES,
     BUDGET_BYTES,
     BUDGET_PIXELS,
     BUDGET_CUBES,

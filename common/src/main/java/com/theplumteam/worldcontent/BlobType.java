@@ -66,4 +66,16 @@ public enum BlobType {
             case ANIMATION -> AnimationJsonCheck.validate(bytes);
         };
     }
+
+    /**
+     * Validates a complete file of this type that players publish, and describes it. Every
+     * type must be in canonical form, and a model's or animation's numbers are bounded.
+     */
+    public BlobInfo validatePlayer(byte[] bytes) throws WorldContentException {
+        return switch (this) {
+            case PNG -> PngValidator.validateCanonical(bytes);
+            case GEO -> GeoJsonCheck.validatePlayer(bytes);
+            case ANIMATION -> AnimationJsonCheck.validatePlayer(bytes);
+        };
+    }
 }

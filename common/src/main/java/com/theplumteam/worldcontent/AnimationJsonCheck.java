@@ -110,6 +110,21 @@ public final class AnimationJsonCheck {
         return BlobInfo.animation(bytes.length, animations.keyframes(), animations.poses());
     }
 
+    /**
+     * Parses and checks an animation file that players publish: the same rules, on a file that
+     * is in its canonical form ({@link CanonicalJson}) and whose numbers are bounded.
+     */
+    public static BlobInfo validatePlayer(byte[] bytes) throws WorldContentException {
+        if (bytes.length > WorldContentLimits.ANIMATION_BYTES) {
+            throw new WorldContentException(ContentError.ANIMATION_BYTES,
+                    "Animation is larger than " + WorldContentLimits.ANIMATION_BYTES / 1024 + " KiB");
+        }
+        JsonObject json = JsonFields.parsePlayer(bytes, WorldContentLimits.ANIMATION_BYTES);
+        CanonicalJson.requireCanonical(bytes);
+        Animations animations = check(json);
+        return BlobInfo.animation(bytes.length, animations.keyframes(), animations.poses());
+    }
+
     /** Checks a parsed animation file, throwing the first problem found. */
     public static Animations check(JsonObject json) throws WorldContentException {
         JsonFields.keys(json, "animation file", Set.of("format_version", "animations"), Set.of());

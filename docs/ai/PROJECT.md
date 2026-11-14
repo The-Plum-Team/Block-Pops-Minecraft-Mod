@@ -183,6 +183,18 @@ the game), which links may be an author link (`WorldCollectionRecord.LinkRule`, 
 `AuthorLinks.RULE` in the game), where a path lands on disk (`RemoteFiles`) and the names of
 runtime assets (`WorldAssetIds`). Add a file to the list only if it keeps to those imports.
 
+Player collections, which players are to publish themselves, exist so far only as the part of the
+content core that says what one is: `com.theplumteam.remote.player`, `CanonicalJson`, `ImageHash`
+and the record's published form (`WorldCollectionRecord.toPlayerJson` and `parsePlayer`). Their ids
+are `p_` and twelve of `a-z2-7`, a shape reserved both ways, and their codes are two words and two
+digits, a shape no official code takes. Every path is computed below `p/` by `PlayerPaths` from
+checked parts. A head, an index, a status, a revocation list and the offline root are each the
+payload of a `SignedEnvelope`, and each, like the upload package, a published record and a
+published model or animation (`CanonicalJson`), is accepted only as the exact bytes it writes
+back, with numbers bounded as `StrictJson.parsePlayerObject` bounds them and names of the
+characters `PlayerText` lists. Nothing in the game calls any of this yet: the game holds no key,
+checks no signature and contacts no origin for it.
+
 The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: an
 operator and World collections synced. Its entry points are the machine screen's **Creator**
 button, the Settings **Creator** tab and the client command `/blockpopscreator`. Packaged E2E players

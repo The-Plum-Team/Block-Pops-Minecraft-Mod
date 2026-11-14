@@ -28,6 +28,15 @@ public final class JsonFields {
         }
     }
 
+    /** Parses one strict JSON object of at most maxBytes that players publish, whose numbers are bounded. */
+    public static JsonObject parsePlayer(byte[] utf8, int maxBytes) throws WorldContentException {
+        try {
+            return StrictJson.parsePlayerObject(utf8, maxBytes);
+        } catch (RemoteException e) {
+            throw new WorldContentException(ContentError.JSON_SYNTAX, e.getMessage());
+        }
+    }
+
     /** Requires every required key, and refuses any key that is neither required nor optional. */
     public static void keys(JsonObject object, String what, Set<String> required, Set<String> optional)
             throws WorldContentException {

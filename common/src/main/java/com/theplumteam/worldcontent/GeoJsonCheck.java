@@ -41,7 +41,24 @@ public final class GeoJsonCheck {
             throw new WorldContentException(ContentError.GEO_BYTES,
                     "Model is larger than " + WorldContentLimits.GEO_BYTES / 1024 + " KiB");
         }
-        Geometry geometry = check(JsonFields.parse(bytes, WorldContentLimits.GEO_BYTES));
+        return described(bytes, check(JsonFields.parse(bytes, WorldContentLimits.GEO_BYTES)));
+    }
+
+    /**
+     * Parses and checks a model file that players publish: the same rules, on a file that is in
+     * its canonical form ({@link CanonicalJson}) and whose numbers are bounded.
+     */
+    public static BlobInfo validatePlayer(byte[] bytes) throws WorldContentException {
+        if (bytes.length > WorldContentLimits.GEO_BYTES) {
+            throw new WorldContentException(ContentError.GEO_BYTES,
+                    "Model is larger than " + WorldContentLimits.GEO_BYTES / 1024 + " KiB");
+        }
+        JsonObject json = JsonFields.parsePlayer(bytes, WorldContentLimits.GEO_BYTES);
+        CanonicalJson.requireCanonical(bytes);
+        return described(bytes, check(json));
+    }
+
+    private static BlobInfo described(byte[] bytes, Geometry geometry) {
         return BlobInfo.geo(bytes.length, geometry.cubes(), geometry.textureWidth(), geometry.textureHeight(),
                 geometry.bounds());
     }

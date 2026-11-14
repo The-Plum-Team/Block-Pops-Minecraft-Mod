@@ -85,6 +85,25 @@ public final class PngValidator {
     private PngValidator() {
     }
 
+    /**
+     * A decoded image: its pixels as 0xAARRGGBB, not premultiplied, row by row from the top.
+     */
+    public record Image(int width, int height, int[] argb) {
+    }
+
+    /** Validates a canonical PNG and decodes it to its pixels. */
+    public static Image decode(byte[] bytes) throws WorldContentException {
+        Parsed png = parse(bytes, true);
+        byte[] data = inflate(png);
+        int channels = channels(png.colorType());
+        int rowBytes = 1 + (png.width() * channels * png.bitDepth() + 7) / 8;
+        if (png.colorType() != 3) {
+            // An indexed image's rows were unfiltered to check its palette
+            unfilter(data, png.height(), rowBytes, Math.max(1, channels * png.bitDepth() / 8));
+        }
+        return new Image(png.width(), png.height(), pixels(bytes, png, data, rowBytes));
+    }
+
     /** Validates a PNG that must already be canonical, and describes it. */
     public static BlobInfo validateCanonical(byte[] bytes) throws WorldContentException {
         Parsed png = parse(bytes, true);
@@ -295,9 +314,11 @@ public final class PngValidator {
 
     /**
      * Inflates the image data into a buffer of exactly the size the header implies, with
-     * a bounded number of steps, and checks every row's filter byte.
+     * a bounded number of steps, and checks every row's filter byte. The rows come back as
+     * they are stored, each after its filter byte and still filtered, except an indexed
+     * image's, which are unfiltered to check its palette.
      */
-    private static void inflate(Parsed png) throws WorldContentException {
+    private static byte[] inflate(Parsed png) throws WorldContentException {
         byte[] idat = png.idat();
         if (idat.length < 2) {
             throw new WorldContentException(ContentError.PNG_DATA, "PNG image data is truncated");
@@ -310,12 +331,7 @@ public final class PngValidator {
         if ((flg & 0x20) != 0) {
             throw new WorldContentException(ContentError.PNG_DATA, "PNG image data needs a preset dictionary");
         }
-        int channels = switch (png.colorType()) {
-            case 2 -> 3;
-            case 4 -> 2;
-            case 6 -> 4;
-            default -> 1;
-        };
+        int channels = channels(png.colorType());
         long rowBytes = 1 + ((long) png.width() * channels * png.bitDepth() + 7) / 8;
         int expected = (int) (rowBytes * png.height());
         // One spare byte, so a stream that holds more than the image is caught rather than cut
@@ -364,6 +380,16 @@ public final class PngValidator {
         if (png.colorType() == 3) {
             checkIndices(png, out, (int) rowBytes);
         }
+        return out;
+    }
+
+    private static int channels(int colorType) {
+        return switch (colorType) {
+            case 2 -> 3;
+            case 4 -> 2;
+            case 6 -> 4;
+            default -> 1;
+        };
     }
 
     /**
@@ -375,24 +401,9 @@ public final class PngValidator {
         int entries = png.plte().length() / 3;
         int depth = png.bitDepth();
         int mask = (1 << depth) - 1;
-        int stride = rowBytes - 1;
+        unfilter(data, png.height(), rowBytes, 1);
         for (int row = 0; row < png.height(); row++) {
             int start = row * rowBytes + 1;
-            int above = start - rowBytes;
-            int filter = data[start - 1] & 0xFF;
-            for (int i = 0; i < stride; i++) {
-                int left = i > 0 ? data[start + i - 1] & 0xFF : 0;
-                int up = row > 0 ? data[above + i] & 0xFF : 0;
-                int upLeft = row > 0 && i > 0 ? data[above + i - 1] & 0xFF : 0;
-                int predicted = switch (filter) {
-                    case 1 -> left;
-                    case 2 -> up;
-                    case 3 -> (left + up) >>> 1;
-                    case 4 -> paeth(left, up, upLeft);
-                    default -> 0;
-                };
-                data[start + i] = (byte) (data[start + i] + predicted);
-            }
             for (int x = 0; x < png.width(); x++) {
                 int bit = x * depth;
                 int index = (data[start + bit / 8] & 0xFF) >>> (8 - depth - bit % 8) & mask;
@@ -403,6 +414,80 @@ public final class PngValidator {
                 }
             }
         }
+    }
+
+    /**
+     * Reverses the row filters in place. A filter predicts each byte from the one a whole pixel
+     * before it, which for a pixel under one byte is the byte before.
+     */
+    private static void unfilter(byte[] data, int height, int rowBytes, int pixelBytes) {
+        int stride = rowBytes - 1;
+        for (int row = 0; row < height; row++) {
+            int start = row * rowBytes + 1;
+            int above = start - rowBytes;
+            int filter = data[start - 1] & 0xFF;
+            for (int i = 0; i < stride; i++) {
+                int left = i >= pixelBytes ? data[start + i - pixelBytes] & 0xFF : 0;
+                int up = row > 0 ? data[above + i] & 0xFF : 0;
+                int upLeft = row > 0 && i >= pixelBytes ? data[above + i - pixelBytes] & 0xFF : 0;
+                int predicted = switch (filter) {
+                    case 1 -> left;
+                    case 2 -> up;
+                    case 3 -> (left + up) >>> 1;
+                    case 4 -> paeth(left, up, upLeft);
+                    default -> 0;
+                };
+                data[start + i] = (byte) (data[start + i] + predicted);
+            }
+        }
+    }
+
+    // The unfiltered rows as pixels, with the palette and the transparency chunk applied
+    private static int[] pixels(byte[] bytes, Parsed png, byte[] data, int rowBytes) {
+        int width = png.width();
+        int depth = png.bitDepth();
+        int type = png.colorType();
+        Chunk trns = png.trns();
+        int[] argb = new int[width * png.height()];
+        // A grey or true-colour image names one colour that is fully transparent
+        int clear = -1;
+        if (trns != null && type == 0) {
+            clear = (bytes[trns.offset()] & 0xFF) << 8 | bytes[trns.offset() + 1] & 0xFF;
+        } else if (trns != null && type == 2 && bytes[trns.offset()] == 0 && bytes[trns.offset() + 2] == 0
+                && bytes[trns.offset() + 4] == 0) {
+            // Each sample is written in 16 bits; one above 255 is a colour no 8-bit pixel has
+            clear = (bytes[trns.offset() + 1] & 0xFF) << 16 | (bytes[trns.offset() + 3] & 0xFF) << 8
+                    | bytes[trns.offset() + 5] & 0xFF;
+        }
+        for (int row = 0; row < png.height(); row++) {
+            int start = row * rowBytes + 1;
+            for (int x = 0; x < width; x++) {
+                int pixel;
+                if (type == 0 || type == 3) {
+                    int bit = x * depth;
+                    int value = (data[start + bit / 8] & 0xFF) >>> (8 - depth - bit % 8) & ((1 << depth) - 1);
+                    if (type == 3) {
+                        int entry = png.plte().offset() + value * 3;
+                        int alpha = trns != null && value < trns.length() ? bytes[trns.offset() + value] & 0xFF : 0xFF;
+                        pixel = alpha << 24 | (bytes[entry] & 0xFF) << 16 | (bytes[entry + 1] & 0xFF) << 8
+                                | bytes[entry + 2] & 0xFF;
+                    } else {
+                        // A grey sample of 1, 2 or 4 bits spans the whole range, as 8 bits do
+                        int grey = value * 255 / ((1 << depth) - 1);
+                        pixel = (value == clear ? 0 : 0xFF000000) | grey << 16 | grey << 8 | grey;
+                    }
+                } else if (type == 4) {
+                    int grey = data[start + x * 2] & 0xFF;
+                    pixel = (data[start + x * 2 + 1] & 0xFF) << 24 | grey << 16 | grey << 8 | grey;
+                } else {
+                    int at = start + x * (type == 6 ? 4 : 3);
+                    int rgb = (data[at] & 0xFF) << 16 | (data[at + 1] & 0xFF) << 8 | data[at + 2] & 0xFF;
+                    pixel = (type == 6 ? (data[at + 3] & 0xFF) << 24 : rgb == clear ? 0 : 0xFF000000) | rgb;
+                }
+                argb[row * width + x] = pixel;
+            }
+        }
+        return argb;
     }
 
     private static int paeth(int left, int up, int upLeft) {
