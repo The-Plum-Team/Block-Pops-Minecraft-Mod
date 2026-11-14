@@ -16,11 +16,15 @@ import com.theplumteam.client.gui.style.ToggleRow;
 import com.theplumteam.client.gui.style.UiText;
 import com.theplumteam.client.gui.widget.TabButton;
 import com.theplumteam.client.remote.ClientCustomCollections;
+import com.theplumteam.client.remote.ClientPlayerCollections;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.network.UnlockCollectionPacket;
 import com.theplumteam.network.CustomCollectionRequestPacket;
+import com.theplumteam.network.PlayerCollectionActionPacket;
+import com.theplumteam.network.SyncPlayerCollectionLinesPacket;
+import com.theplumteam.server.PlayerCollectionEngine;
 import com.theplumteam.network.ReloadTokensPacket;
 import com.theplumteam.network.SetCollectionHiddenPacket;
 import com.theplumteam.network.UpdateGuaranteedResetHourPacket;
@@ -133,6 +137,7 @@ public class SettingsScreen extends DialogScreen {
     private String pendingCustomCode = "";
     private Component customStatus;
     private int shownCustomRevision;
+    private int shownPlayerRevision;
 
     // Creator tab: whether it was shown, to rebuild only when it comes or goes; its text
     // reads the World collections as it draws
@@ -204,6 +209,7 @@ public class SettingsScreen extends DialogScreen {
         tabButtons.clear();
         collectionToggles.clear();
         shownCustomRevision = ClientCustomCollections.revision();
+        shownPlayerRevision = ClientPlayerCollections.revision();
         shownCreator = canOpenCreator();
         // A tab goes away when the player may no longer use it
         if (!isShown(activeTab)) {
@@ -376,8 +382,9 @@ public class SettingsScreen extends DialogScreen {
         ticks++;
         // Follow the server's answers and permission changes while the screen is open
         refreshServerSettings();
-        // A new Custom list, or a server that starts or stops offering them, rebuilds the tabs
-        if (shownCustomRevision != ClientCustomCollections.revision()) {
+        // A new Custom or player list, or a server that starts or stops offering them, rebuilds the tabs
+        if (shownCustomRevision != ClientCustomCollections.revision()
+                || shownPlayerRevision != ClientPlayerCollections.revision()) {
             this.rebuildWidgets();
         }
         // The Creator tab comes and goes with operator status and a server that syncs World
@@ -622,11 +629,17 @@ public class SettingsScreen extends DialogScreen {
     }
 
     /**
-     * Check if the current player can enable Custom collections for this world.
-     * Same access as cheats, and the server has to be one that offers Custom collections.
+     * Check if the current player can enable Custom and player collections for this world.
+     * Same access as cheats, or the host of their own world, who has no operator level while
+     * cheats are off; the server checks again. The server has to be one that offers them.
      */
     private boolean canManageCustomCollections() {
-        return canAccessCheats() && ClientCustomCollections.isSynced();
+        return (canAccessCheats() || isHost()) && ClientCustomCollections.isSynced();
+    }
+
+    /** Whether this game is running the world itself: a guest on a world opened to LAN is not. */
+    private boolean isHost() {
+        return this.minecraft != null && this.minecraft.getSingleplayerServer() != null;
     }
 
     /**
@@ -699,6 +712,74 @@ public class SettingsScreen extends DialogScreen {
                     .icon(PixelIcon.BIN);
             tabRows.add(widgetRow(collection::getName, remove));
         }
+        createPlayerCollectionRows(tabRows);
+    }
+
+    /**
+     * The player collections added to this world, shown or not: who published each (by its
+     * signed index, when it is shown), where it stands, and what whoever manages codes can do
+     * about it. The list is the server's; a name in it is shown as data.
+     */
+    private void createPlayerCollectionRows(List<Row> tabRows) {
+        List<SyncPlayerCollectionLinesPacket.Line> lines = ClientPlayerCollections.managed();
+        if (lines.isEmpty()) {
+            return;
+        }
+        tabRows.add(heading(Component.translatable("blockpops.settings.custom.players").getString(), null));
+        int refreshWidth = 110;
+        StyledButton refresh = new StyledButton(contentRight - refreshWidth, 0, refreshWidth, WIDGET_HEIGHT,
+                Component.translatable("blockpops.player.refresh"),
+                button -> new PlayerCollectionActionPacket(PlayerCollectionActionPacket.Action.REFRESH, "").sendToServer());
+        tabRows.add(widgetRow(null, refresh));
+        tabRows.add(paragraph(() -> Component.translatable("blockpops.player.follow_tip").getString(), Surfaces.TEXT_DIM));
+
+        int removeWidth = 70;
+        int actionWidth = Math.min(150, (contentRight - contentX - 6) / 2);
+        for (SyncPlayerCollectionLinesPacket.Line line : lines) {
+            StyledButton remove = new StyledButton(contentRight - removeWidth, 0, removeWidth, WIDGET_HEIGHT,
+                    Component.translatable("blockpops.settings.custom.remove"),
+                    button -> new CustomCollectionRequestPacket(false, line.code()).sendToServer())
+                    .tone(StyledButton.Tone.DANGER)
+                    .icon(PixelIcon.BIN);
+            tabRows.add(widgetRow(line::name, remove));
+            tabRows.add(paragraph(() -> playerCollectionStatus(line),
+                    line.condition() == PlayerCollectionEngine.Condition.LOADED ? Surfaces.TEXT_DIM : STATUS_COLOR));
+
+            boolean movable = line.newest() > line.rev();
+            StyledButton follow = new StyledButton(contentX + (movable ? actionWidth + 6 : 0), 0, actionWidth, WIDGET_HEIGHT,
+                    Component.translatable(line.follow() ? "blockpops.player.follow_on" : "blockpops.player.follow_off"),
+                    button -> new PlayerCollectionActionPacket(line.follow() ? PlayerCollectionActionPacket.Action.UNFOLLOW
+                            : PlayerCollectionActionPacket.Action.FOLLOW, line.code()).sendToServer());
+            if (movable) {
+                StyledButton use = new StyledButton(contentX, 0, actionWidth, WIDGET_HEIGHT,
+                        Component.translatable("blockpops.player.update_button", line.newest()),
+                        button -> new PlayerCollectionActionPacket(PlayerCollectionActionPacket.Action.UPDATE, line.code())
+                                .sendToServer())
+                        .tone(StyledButton.Tone.PRIMARY);
+                tabRows.add(gridRow(use, follow));
+            } else {
+                tabRows.add(gridRow(follow));
+            }
+        }
+    }
+
+    // Who published a collection and where it stands, in one line under its name
+    private static String playerCollectionStatus(SyncPlayerCollectionLinesPacket.Line line) {
+        String author = ClientPlayerCollections.author(line.id());
+        String badge = (author != null ? Component.translatable("blockpops.player.badge", author)
+                : Component.translatable("blockpops.player.badge_anonymous")).getString();
+        String state = switch (line.condition()) {
+            case LOADED -> line.newest() > line.rev()
+                    ? Component.translatable("blockpops.player.update_available", line.name(), line.newest(), line.rev())
+                            .getString()
+                    : Component.translatable("blockpops.player.row.code", line.code(), line.rev()).getString();
+            case WAITING -> Component.translatable("blockpops.player.row.waiting").getString();
+            case PIN_GONE -> line.newest() > line.rev()
+                    ? Component.translatable("blockpops.player.pin_gone", line.name(), line.newest()).getString()
+                    : Component.translatable("blockpops.player.row.removed").getString();
+            case RETIRED -> Component.translatable("blockpops.player.row.removed").getString();
+        };
+        return badge + " · " + state;
     }
 
     /**

@@ -5,6 +5,7 @@ import com.theplumteam.client.ClientPacketNetworking;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.network.PlayerCollectionsHelloPacket;
+import com.theplumteam.network.SyncPlayerCollectionLinesPacket;
 import com.theplumteam.network.SyncPlayerCollectionsPacket;
 import com.theplumteam.remote.RemoteExecutor;
 import com.theplumteam.remote.player.PlayerBudgets;
@@ -66,6 +67,8 @@ public final class ClientPlayerCollections {
     private static int revision;
     private static long nextPoll = Long.MAX_VALUE;
     private static boolean polling;
+    /** Every collection added to this world, for whoever manages its codes; empty for anybody else. */
+    private static List<SyncPlayerCollectionLinesPacket.Line> managed = List.of();
 
     private ClientPlayerCollections() {
     }
@@ -264,9 +267,21 @@ public final class ClientPlayerCollections {
         });
     }
 
+    /** Takes the server's list of every added collection and where it stands. Client thread. */
+    public static void managed(List<SyncPlayerCollectionLinesPacket.Line> lines) {
+        managed = List.copyOf(lines);
+        revision++;
+    }
+
+    /** Every collection added to this world, shown or not; empty unless this player manages its codes. */
+    public static List<SyncPlayerCollectionLinesPacket.Line> managed() {
+        return managed;
+    }
+
     /** Forgets every player collection, as when leaving a server. Client thread. */
     public static void forget() {
         session++;
+        managed = List.of();
         SHOWN.keySet().forEach(CollectionRegistry::unregisterDynamicCollection);
         SHOWN.clear();
         UNREQUESTED.clear();

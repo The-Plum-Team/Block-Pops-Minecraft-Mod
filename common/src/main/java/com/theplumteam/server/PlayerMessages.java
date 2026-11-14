@@ -46,4 +46,26 @@ public enum PlayerMessages {
     public MutableComponent with(Object... arguments) {
         return Component.translatableWithFallback(key, english, arguments);
     }
+
+    /** What to say to whoever asked, and whether what they asked was done. */
+    public record Reply(Component text, boolean success) {
+    }
+
+    /** The answer to moving a collection's pin or setting whether it follows, in the words of player collections. */
+    public static Reply of(PlayerCollectionEngine.Result result) {
+        return switch (result.outcome()) {
+            case UPDATED -> new Reply(UPDATED.with(result.name(), result.rev()), true);
+            case UP_TO_DATE -> new Reply(UP_TO_DATE.with(result.name(), result.rev()), true);
+            case FOLLOWING -> new Reply(FOLLOWING.with(result.name()), true);
+            case PINNED -> new Reply(PINNED.with(result.name(), result.rev()), true);
+            case NOT_ENABLED -> new Reply(
+                    Component.translatable("blockpops.custom_collections.not_enabled", result.name()), false);
+            case UNAVAILABLE -> new Reply(Component.translatableWithFallback(
+                    "blockpops.custom_collections.unavailable", "That collection is no longer available."), false);
+            case OFF -> new Reply(Component.translatableWithFallback(
+                    "blockpops.custom_collections.player_off", "Player collections are turned off right now."), false);
+            case UNKNOWN_CODE -> new Reply(Component.translatable("blockpops.custom_collections.unknown_code"), false);
+            default -> new Reply(Component.translatable("blockpops.custom_collections.failed"), false);
+        };
+    }
 }

@@ -114,6 +114,12 @@ public class ModNetworking {
             PlayerCollectionsHelloPacket::handleServer
         );
 
+        PacketNetworking.registerReceiver(
+            NetworkManager.c2s(),
+            PlayerCollectionActionPacket.ID,
+            PlayerCollectionActionPacket::handleServer
+        );
+
         // World collections: uploads and edits from operators, file requests from every player
         PacketNetworking.registerReceiver(
             NetworkManager.c2s(),
@@ -159,7 +165,7 @@ public class ModNetworking {
                 AdminProgressionSyncPacket.ID, SyncSpecialAccessPacket.ID,
                 SyncCustomCollectionsPacket.ID, CustomCollectionStatusPacket.ID, DrawResultPacket.ID,
                 SyncWorldCollectionsPacket.ID, WorldAssetChunkPacket.ID, WorldCollectionStatusPacket.ID,
-                OpenSupportCheckoutPacket.ID, SyncPlayerCollectionsPacket.ID);
+                OpenSupportCheckoutPacket.ID, SyncPlayerCollectionsPacket.ID, SyncPlayerCollectionLinesPacket.ID);
         *///? }
 
         BlockPopsMod.logDebug("BlockPops networking initialized");
@@ -273,6 +279,12 @@ public class ModNetworking {
             NetworkManager.s2c(),
             SyncPlayerCollectionsPacket.ID,
             SyncPlayerCollectionsPacket::handleClient
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.s2c(),
+            SyncPlayerCollectionLinesPacket.ID,
+            SyncPlayerCollectionLinesPacket::handleClient
         );
 
         // Leaving a server forgets its Custom, player and World collections and their loaded assets

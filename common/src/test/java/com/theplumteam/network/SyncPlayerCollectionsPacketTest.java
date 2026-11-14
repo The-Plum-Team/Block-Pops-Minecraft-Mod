@@ -1,6 +1,7 @@
 package com.theplumteam.network;
 
 import com.theplumteam.server.CustomCollections;
+import com.theplumteam.server.PlayerCollectionEngine;
 import com.theplumteam.server.PlayerCollectionSettings;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
@@ -103,5 +104,85 @@ class SyncPlayerCollectionsPacketTest {
         assertEquals(CustomCollections.Result.FAILED, CustomCollections.Result.UNAVAILABLE.forOlderClient());
         assertEquals(CustomCollections.Result.FAILED, CustomCollections.Result.PLAYER_OFF.forOlderClient());
         assertEquals(CustomCollections.Result.FULL, CustomCollections.Result.FULL.forOlderClient());
+    }
+
+    @Test
+    void whoeverManagesCodesIsToldWhereEachAddedCollectionStands() {
+        SyncPlayerCollectionLinesPacket.Line shown = new SyncPlayerCollectionLinesPacket.Line(ID, CODE, 5, true,
+                PlayerCollectionEngine.Condition.LOADED, null, 6, "Mis figuras");
+        SyncPlayerCollectionLinesPacket.Line retired = new SyncPlayerCollectionLinesPacket.Line("p_aaaaaaaaaaaa",
+                "birch-comet-10", 2, false, PlayerCollectionEngine.Condition.RETIRED, PlayerCollectionEngine.Reason.OWNER, 0,
+                "birch-comet-10");
+        FriendlyByteBuf buffer = new SyncPlayerCollectionLinesPacket(List.of(shown, retired)).encode();
+        try {
+            assertEquals(List.of(shown, retired), SyncPlayerCollectionLinesPacket.decode(buffer).lines());
+            assertEquals(0, buffer.readableBytes());
+        } finally {
+            buffer.release();
+        }
+        // A name no collection could have is not shown as one: the code stands in for it
+        assertEquals(CODE, new SyncPlayerCollectionLinesPacket.Line(ID, CODE, 5, false,
+                PlayerCollectionEngine.Condition.LOADED, null, 0, "\u00a7kMis figuras").name());
+        assertEquals(CODE, new SyncPlayerCollectionLinesPacket.Line(ID, CODE, 5, false,
+                PlayerCollectionEngine.Condition.LOADED, null, 0, "").name());
+        assertThrows(IllegalArgumentException.class, () -> new SyncPlayerCollectionLinesPacket.Line("w-mine", CODE, 5, false,
+                PlayerCollectionEngine.Condition.LOADED, null, 0, "x"));
+        assertThrows(IllegalArgumentException.class, () -> new SyncPlayerCollectionLinesPacket.Line(ID, CODE, 5, false,
+                null, null, 0, "x"));
+        // A state this game does not know is refused, not guessed
+        FriendlyByteBuf unknown = new FriendlyByteBuf(Unpooled.buffer());
+        unknown.writeVarInt(1);
+        unknown.writeUtf(ID);
+        unknown.writeUtf(CODE);
+        unknown.writeVarInt(5);
+        unknown.writeBoolean(false);
+        unknown.writeByte(99);
+        unknown.writeByte(-1);
+        unknown.writeVarInt(0);
+        unknown.writeUtf("x");
+        try {
+            assertThrows(RuntimeException.class, () -> SyncPlayerCollectionLinesPacket.decode(unknown));
+        } finally {
+            unknown.release();
+        }
+    }
+
+    @Test
+    void anActionNamesACodeOfThePlayerShapeOrNoneAtAll() {
+        for (PlayerCollectionActionPacket.Action action : PlayerCollectionActionPacket.Action.values()) {
+            String code = action == PlayerCollectionActionPacket.Action.REFRESH ? "" : CODE;
+            FriendlyByteBuf buffer = new PlayerCollectionActionPacket(action, code).encode();
+            try {
+                byte[] sent = new byte[buffer.readableBytes()];
+                buffer.getBytes(buffer.readerIndex(), sent);
+                FriendlyByteBuf again = PlayerCollectionActionPacket.decode(buffer).encode();
+                try {
+                    byte[] back = new byte[again.readableBytes()];
+                    again.getBytes(again.readerIndex(), back);
+                    assertArrayEquals(sent, back);
+                } finally {
+                    again.release();
+                }
+            } finally {
+                buffer.release();
+            }
+        }
+        // The order is the wire's
+        assertEquals(List.of("UPDATE", "FOLLOW", "UNFOLLOW", "REFRESH"),
+                java.util.Arrays.stream(PlayerCollectionActionPacket.Action.values()).map(Enum::name).toList());
+        assertThrows(IllegalArgumentException.class,
+                () -> new PlayerCollectionActionPacket(PlayerCollectionActionPacket.Action.UPDATE, "willow-media"));
+        assertThrows(IllegalArgumentException.class,
+                () -> new PlayerCollectionActionPacket(PlayerCollectionActionPacket.Action.UPDATE, ""));
+        assertThrows(IllegalArgumentException.class,
+                () -> new PlayerCollectionActionPacket(PlayerCollectionActionPacket.Action.REFRESH, CODE));
+        FriendlyByteBuf unknown = new FriendlyByteBuf(Unpooled.buffer());
+        unknown.writeByte(9);
+        unknown.writeUtf(CODE);
+        try {
+            assertThrows(RuntimeException.class, () -> PlayerCollectionActionPacket.decode(unknown));
+        } finally {
+            unknown.release();
+        }
     }
 }

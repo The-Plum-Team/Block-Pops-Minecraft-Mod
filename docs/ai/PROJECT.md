@@ -243,6 +243,11 @@ player collection is registered like any dynamic one but travels only in
 `SyncPlayerCollectionsPacket`, which carries pointers and the signed head and no content, and only
 to a client that sent `PlayerCollectionsHelloPacket` (`ClientCapabilities`); a client that did not
 is refused a draw from one and a machine set to one, and is answered with results it can read.
+Whoever manages codes is also sent `SyncPlayerCollectionLinesPacket`, every added collection and
+where it stands, shown or not; it is a list to read, and nothing is registered because of it. The
+Settings tab for Custom collections shows that list and sends `PlayerCollectionActionPacket` to
+move a pin, set whether a collection follows new revisions, or check for changes now, which the
+server allows whoever the commands allow.
 
 On a client, `client.remote.ClientPlayerCollections` is the only code that registers a player
 collection, and it believes nothing because the server said it. For each pointer

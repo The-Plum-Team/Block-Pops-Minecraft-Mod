@@ -2,6 +2,7 @@ package com.theplumteam.server;
 
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.network.SyncPlayerCollectionLinesPacket;
 import com.theplumteam.network.SyncPlayerCollectionsPacket;
 import com.theplumteam.remote.RemoteExecutor;
 import com.theplumteam.remote.VerifiedStore;
@@ -285,6 +286,23 @@ public final class PlayerCollections {
         for (Notice notice : notices) {
             tell(server, notice);
         }
+        // Whoever manages codes sees where every added collection stands, shown or not
+        if (server.getPlayerList() != null) {
+            server.getPlayerList().getPlayers().forEach(PlayerCollections::sendLinesTo);
+        }
+    }
+
+    private static void sendLinesTo(ServerPlayer player) {
+        PlayerCollectionEngine current = engine;
+        if (current == null || !ClientCapabilities.playerCollections(player) || !ServerProfiles.managesCodes(player)) {
+            return;
+        }
+        List<SyncPlayerCollectionLinesPacket.Line> lines = new ArrayList<>();
+        for (Line line : current.lines()) {
+            lines.add(new SyncPlayerCollectionLinesPacket.Line(line.entry().id(), line.entry().code(), line.entry().rev(),
+                    line.entry().follow(), line.condition(), line.reason(), line.newest(), line.name()));
+        }
+        SyncPlayerCollectionLinesPacket.sendToPlayer(player, lines);
     }
 
     private static void tell(MinecraftServer server, Notice notice) {
@@ -319,5 +337,6 @@ public final class PlayerCollections {
                     loaded.entry().rev(), loaded.entry().index(), loaded.head()));
         }
         SyncPlayerCollectionsPacket.sendToPlayer(player, entries);
+        sendLinesTo(player);
     }
 }

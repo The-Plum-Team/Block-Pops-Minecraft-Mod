@@ -157,21 +157,11 @@ public class CustomCollectionsCommand {
 
     // What moving a pin or following came to, in the words of player collections
     private static void reply(CommandSourceStack source, PlayerCollectionEngine.Result result) {
-        switch (result.outcome()) {
-            case UPDATED -> source.sendSuccess(() -> PlayerMessages.UPDATED.with(result.name(), result.rev()), true);
-            case UP_TO_DATE -> source.sendSuccess(() -> PlayerMessages.UP_TO_DATE.with(result.name(), result.rev()),
-                    false);
-            case FOLLOWING -> source.sendSuccess(() -> PlayerMessages.FOLLOWING.with(result.name()), true);
-            case PINNED -> source.sendSuccess(() -> PlayerMessages.PINNED.with(result.name(), result.rev()), true);
-            case NOT_ENABLED -> source.sendFailure(
-                    Component.translatable("blockpops.custom_collections.not_enabled", result.name()));
-            case UNAVAILABLE -> source.sendFailure(Component.translatableWithFallback(
-                    "blockpops.custom_collections.unavailable", "That collection is no longer available."));
-            case OFF -> source.sendFailure(Component.translatableWithFallback(
-                    "blockpops.custom_collections.player_off", "Player collections are turned off right now."));
-            case UNKNOWN_CODE -> source.sendFailure(
-                    Component.translatable("blockpops.custom_collections.unknown_code"));
-            default -> source.sendFailure(Component.translatable("blockpops.custom_collections.failed"));
+        PlayerMessages.Reply reply = PlayerMessages.of(result);
+        if (reply.success()) {
+            source.sendSuccess(reply::text, result.outcome() != PlayerCollectionEngine.Outcome.UP_TO_DATE);
+        } else {
+            source.sendFailure(reply.text());
         }
     }
 }
