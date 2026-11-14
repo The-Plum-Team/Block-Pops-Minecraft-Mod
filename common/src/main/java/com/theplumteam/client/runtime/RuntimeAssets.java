@@ -6,6 +6,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.util.GeoAssets;
 import com.theplumteam.util.ResourceLocations;
+import com.theplumteam.worldcontent.PlayerAssetIds;
 import com.theplumteam.worldcontent.WorldAssetIds;
 import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.Minecraft;
@@ -38,7 +39,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>The registries also hold the assets of World collections, which a server sends by
  * another route and {@code ClientWorldAssets} loads and releases. Their ids belong to
  * {@link WorldContentIds}, and {@link #clear()} leaves them alone, so a Custom sync never
- * takes a World collection's textures or models away.
+ * takes a World collection's textures or models away. The same holds for the assets of player
+ * collections, which {@code ClientPlayerAssets} loads and releases under {@link PlayerAssetIds}.
  */
 public final class RuntimeAssets {
     private static final String ROOT = "assets/" + BlockPopsMod.MOD_ID + "/";
@@ -213,13 +215,13 @@ public final class RuntimeAssets {
     }
 
     /**
-     * Forgets everything loaded so far and drops what is still in flight, except World
-     * content, which has its own owner. Render thread only.
+     * Forgets everything loaded so far and drops what is still in flight, except World and
+     * player content, each of which has its own owner. Render thread only.
      */
     public static void clear() {
         GENERATION.incrementAndGet();
-        RuntimeGeo.clear(id -> !WorldAssetIds.owns(id));
-        RuntimeTextures.clear(id -> !WorldAssetIds.owns(id));
+        RuntimeGeo.clear(id -> !WorldAssetIds.owns(id) && !PlayerAssetIds.ownsAny(id));
+        RuntimeTextures.clear(id -> !WorldAssetIds.owns(id) && !PlayerAssetIds.ownsAny(id));
         FigureVariants.clear();
     }
 }

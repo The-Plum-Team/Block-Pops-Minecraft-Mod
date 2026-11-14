@@ -1,6 +1,8 @@
 package com.theplumteam.client.runtime;
 
 import com.google.gson.JsonObject;
+import com.theplumteam.client.remote.ClientPlayerCollections;
+import com.theplumteam.worldcontent.PlayerAssetIds;
 import com.theplumteam.worldcontent.WorldAssetIds;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
@@ -47,10 +49,18 @@ public final class RuntimeGeo {
         PENDING.addAll(ids);
     }
 
-    /** Whether an id was announced and has not arrived (or failed to), or is World content not baked here. */
+    /** Whether an id was announced and has not arrived (or failed to), or is World or player content not baked here. */
     public static boolean isPending(@Nullable ResourceLocation id) {
-        return id != null && (PENDING.contains(id)
-                || WorldAssetIds.owns(id) && !MODELS.containsKey(id) && !ANIMATIONS.containsKey(id));
+        if (id == null) {
+            return false;
+        }
+        if (PENDING.contains(id)) {
+            // A player collection's files are fetched when something of it is first drawn
+            ClientPlayerCollections.wanted(id);
+            return true;
+        }
+        return (WorldAssetIds.owns(id) || PlayerAssetIds.ownsAny(id)) && !MODELS.containsKey(id)
+                && !ANIMATIONS.containsKey(id);
     }
 
     @Nullable

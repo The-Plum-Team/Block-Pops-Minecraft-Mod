@@ -50,16 +50,16 @@ public final class PlayerAssetIds implements ContentIdStrategy {
 
     /** Whether the id is an asset of this collection. */
     public boolean owns(ResourceLocation asset) {
-        return owner(asset).equals(id);
+        return collectionOf(asset).equals(id);
     }
 
     /** Whether the id is an asset of any player collection. */
     public static boolean ownsAny(ResourceLocation asset) {
-        return !owner(asset).isEmpty();
+        return !collectionOf(asset).isEmpty();
     }
 
-    // The player collection an asset id is named under, or empty when it is no player asset
-    private static String owner(ResourceLocation asset) {
+    /** The player collection an asset id is named under, or empty when it is no player asset. */
+    public static String collectionOf(ResourceLocation asset) {
         if (asset == null || !BlockPopsMod.MOD_ID.equals(asset.getNamespace())) {
             return "";
         }

@@ -21,6 +21,23 @@ public final class ClientPacketNetworking {
         sendToServer(Minecraft.getInstance().getConnection(), id, encoder);
     }
 
+    /**
+     * Whether the server this client is connected to takes a client-to-server packet. From
+     * 1.21 a server that never registered it is not sent it, and some loaders refuse to. Before
+     * 1.21 there is no telling, and a server that does not know a packet drops it.
+     */
+    public static boolean canServerReceive(ResourceLocation id) {
+        //? if >=26 {
+        /*return NetworkManager.canServerReceive(
+                new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<
+                        com.theplumteam.network.PacketNetworking.RawPayload>(id));
+        *///? } elif >=1.21 {
+        /*return NetworkManager.canServerReceive(id);
+        *///? } else {
+        return true;
+        //? }
+    }
+
     static void sendToServer(ClientPacketListener connection, ResourceLocation id, Supplier<FriendlyByteBuf> encoder) {
         if (connection == null) {
             throw new IllegalStateException("Unable to send packet to the server while not in game!");

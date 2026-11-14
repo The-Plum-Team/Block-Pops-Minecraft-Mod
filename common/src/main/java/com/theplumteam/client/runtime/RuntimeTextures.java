@@ -1,6 +1,8 @@
 package com.theplumteam.client.runtime;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import com.theplumteam.client.remote.ClientPlayerCollections;
+import com.theplumteam.worldcontent.PlayerAssetIds;
 import com.theplumteam.worldcontent.WorldAssetIds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.DynamicTexture;
@@ -35,11 +37,19 @@ public final class RuntimeTextures {
     }
 
     /**
-     * Whether an id was announced and not registered yet, or is World content not
+     * Whether an id was announced and not registered yet, or is World or player content not
      * registered here, which the texture manager cannot have either.
      */
     public static boolean isPending(@Nullable ResourceLocation id) {
-        return id != null && (PENDING.contains(id) || WorldAssetIds.owns(id) && !TEXTURES.containsKey(id));
+        if (id == null) {
+            return false;
+        }
+        if (PENDING.contains(id)) {
+            // A player collection's files are fetched when something of it is first drawn
+            ClientPlayerCollections.wanted(id);
+            return true;
+        }
+        return (WorldAssetIds.owns(id) || PlayerAssetIds.ownsAny(id)) && !TEXTURES.containsKey(id);
     }
 
     /** Uploads an image under the id, taking ownership of it. Render thread only. */

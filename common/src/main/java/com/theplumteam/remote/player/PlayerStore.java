@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.theplumteam.remote.RemoteException;
 import com.theplumteam.remote.StrictJson;
 import com.theplumteam.remote.VerifiedStore;
+import com.theplumteam.worldcontent.BlobType;
 import com.theplumteam.worldcontent.JdkSha256;
 import com.theplumteam.worldcontent.WorldContentLimits;
 
@@ -112,6 +113,17 @@ public final class PlayerStore {
 
     public Optional<byte[]> loadHead(String id) throws IOException {
         return files.load(verifiedHead(id), PlayerHead.ENVELOPE_BYTES);
+    }
+
+    /** Keeps a file of a collection under the SHA-256 of its bytes. */
+    public void saveAsset(String id, String sha256, BlobType type, byte[] bytes) throws IOException {
+        files.save(PlayerPaths.asset(id, sha256, type), bytes);
+    }
+
+    /** A kept file of a collection, if its bytes still are the ones that SHA-256 names. */
+    public Optional<byte[]> loadAsset(String id, String sha256, BlobType type, long maxBytes) throws IOException {
+        Optional<byte[]> kept = files.load(PlayerPaths.asset(id, sha256, type), maxBytes);
+        return kept.isPresent() && JdkSha256.of(kept.get()).equals(sha256) ? kept : Optional.empty();
     }
 
     /** Deletes the files kept of one collection, as when it is revoked. */

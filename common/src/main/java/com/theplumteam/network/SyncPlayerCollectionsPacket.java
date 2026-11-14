@@ -6,6 +6,7 @@ import com.theplumteam.remote.player.PlayerIds;
 import com.theplumteam.server.PlayerCollectionSettings;
 import com.theplumteam.util.ResourceLocations;
 import com.theplumteam.worldcontent.Sha256;
+import dev.architectury.networking.NetworkManager;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
@@ -94,6 +95,12 @@ public class SyncPlayerCollectionsPacket {
                     buffer.readUtf(64), buffer.readByteArray(PlayerHead.ENVELOPE_BYTES)));
         }
         return new SyncPlayerCollectionsPacket(entries);
+    }
+
+    public static void handleClient(FriendlyByteBuf buf, NetworkManager.PacketContext context) {
+        SyncPlayerCollectionsPacket packet = decode(buf);
+        // Use fully qualified name to avoid importing client classes
+        context.queue(() -> com.theplumteam.client.remote.ClientPlayerCollections.apply(packet.entries));
     }
 
     public static void sendToPlayer(ServerPlayer player, List<Entry> entries) {

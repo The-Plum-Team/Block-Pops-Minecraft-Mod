@@ -242,8 +242,22 @@ told of a newer revision and moves only with `update` or when the entry is set t
 player collection is registered like any dynamic one but travels only in
 `SyncPlayerCollectionsPacket`, which carries pointers and the signed head and no content, and only
 to a client that sent `PlayerCollectionsHelloPacket` (`ClientCapabilities`); a client that did not
-is refused a draw from one and a machine set to one, and is answered with results it can read. No
-client sends that hello yet, so no client is sent a player collection.
+is refused a draw from one and a machine set to one, and is answered with results it can read.
+
+On a client, `client.remote.ClientPlayerCollections` is the only code that registers a player
+collection, and it believes nothing because the server said it. For each pointer
+`PlayerFetcher.follow` requires the head handed over with it to be genuine (or the very head this
+game already holds), live and not behind the revision the pointer names; it loads the index by its
+SHA-256 from the cache or the CDN at a computed path, and builds the collection from the record
+that index names. A revision the game does not keep loads only while the status was confirmed
+moments ago. The files are fetched when something of the collection is first drawn (the runtime
+registries' `isPending` asks for them), each as exactly the bytes its index names, and
+`ClientPlayerAssets` loads one only after the whole check of a published file passes and comes to
+what the index says. Their assets live under `PlayerAssetIds`, are never written into GeckoLib's
+caches, and are left alone by `RuntimeAssets.clear()`. `PlayerBudgets` bounds what one game holds
+of all of them together. While any is shown the client checks the status and the revocation list
+again at the interval the status asks for, and stops showing what they take out of use whatever
+the server sends.
 
 The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: an
 operator and World collections synced. Its entry points are the machine screen's **Creator**

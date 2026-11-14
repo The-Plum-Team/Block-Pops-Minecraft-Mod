@@ -6,6 +6,7 @@ import com.theplumteam.remote.RemoteNotFoundException;
 import com.theplumteam.remote.RemoteSource;
 import com.theplumteam.remote.player.PlayerSignatures.Kind;
 import com.theplumteam.remote.player.PlayerSignatures.Signed;
+import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.JdkSha256;
 import com.theplumteam.worldcontent.PlayerAssetIds;
 import com.theplumteam.worldcontent.WorldCollectionCheck;
@@ -87,6 +88,7 @@ public final class PlayerFetcher {
     private final PlayerKeys keys;
     private final LongSupplier clock;
     private PlayerState state;
+    private long refreshTriedAt = Long.MIN_VALUE / 2;
 
     /**
      * @param clock the time in Unix seconds
@@ -216,6 +218,87 @@ public final class PlayerFetcher {
     }
 
     /**
+     * Believes a head somebody handed over, as a server hands each client the heads of what it
+     * shows: if it is the head this game already holds for the collection it is that, and
+     * otherwise it is believed like one fetched, by its signature and its number.
+     */
+    public Head believe(String code, String id, byte[] envelope) throws IOException {
+        PlayerState held = state();
+        PlayerHead head = PlayerHead.parse(SignedEnvelope.parse(envelope, Kind.HEAD.envelopeBytes()).payload());
+        if (!head.code().equals(code) || !head.id().equals(id)) {
+            throw new RemoteException("The head handed over for " + code + " is another collection's");
+        }
+        // The very document this game verified before: its own disk is inside its trust boundary
+        if (head.equals(held.head(id))) {
+            return new Head(head, envelope);
+        }
+        if (keys.isEmpty()) {
+            throw new RemoteException("Player collections are off");
+        }
+        Signed signed = PlayerSignatures.open(Kind.HEAD, envelope, keys, held.revokedKids());
+        held.acceptHead(head, signed.kid(), clock.getAsLong());
+        store.saveState(held);
+        store.saveHead(id, envelope);
+        return new Head(head, envelope);
+    }
+
+    /**
+     * What a server's pointer to a collection comes to on this game: the revision it names, once
+     * the head handed over with it is believed, live and not behind that revision. A revision
+     * this game keeps loads for as long as nothing signed takes it out of use; one it does not
+     * keep is fetched only while loading is on and was confirmed to be moments ago, which is
+     * asked again at most once every few minutes.
+     *
+     * @throws Refused when the collection, or that revision of it, is not to be loaded
+     */
+    public Revision follow(String code, String id, int rev, String indexSha256, byte[] headEnvelope)
+            throws IOException, Refused {
+        PlayerHead head = believe(code, id, headEnvelope).head();
+        if (head.state() != PlayerHead.State.LIVE || rev > head.rev()) {
+            throw new Refused(Why.UNAVAILABLE);
+        }
+        PlayerState held = state();
+        Optional<Revision> kept = kept(id, rev, indexSha256);
+        if (kept.isPresent()) {
+            if (!held.keeps(id, rev)) {
+                throw new Refused(held.keepsLoading() ? Why.UNAVAILABLE : Why.OFF);
+            }
+            return kept.get();
+        }
+        long now = clock.getAsLong();
+        if (!held.mayAdd(now) && now - refreshTriedAt >= PlayerState.CONFIRM_SECONDS) {
+            refreshTriedAt = now;
+            try {
+                refresh();
+            } catch (IOException unreachable) {
+                // Nothing is confirmed, so nothing new loads; what is kept is not touched
+            }
+        }
+        if (!held.mayAdd(id, rev, now)) {
+            throw new Refused(held.mayAdd(now) ? Why.UNAVAILABLE : Why.OFF);
+        }
+        return revision(id, rev, indexSha256);
+    }
+
+    /**
+     * One file of a collection, from what this game keeps or from the origin at its computed
+     * path: exactly as many bytes as its index says, with the SHA-256 that names it. Whether
+     * it is a well-formed file of its type is for the caller to check before using it.
+     */
+    public byte[] file(String id, String sha256, BlobInfo fact) throws IOException {
+        Optional<byte[]> kept = store.loadAsset(id, sha256, fact.type(), fact.size());
+        if (kept.isPresent() && kept.get().length == fact.size()) {
+            return kept.get();
+        }
+        byte[] bytes = source.fetch(PlayerPaths.asset(id, sha256, fact.type()), fact.size());
+        if (bytes.length != fact.size() || !JdkSha256.of(bytes).equals(sha256)) {
+            throw new RemoteException("A file of " + id + " is not the one its index names");
+        }
+        store.saveAsset(id, sha256, fact.type(), bytes);
+        return bytes;
+    }
+
+    /**
      * The head kept of a collection, with no network: the one {@link #state()} holds, in the
      * envelope it was published in. Empty when none is kept or the two do not agree.
      */
@@ -226,7 +309,8 @@ public final class PlayerFetcher {
             return Optional.empty();
         }
         try {
-            PlayerHead kept = PlayerHead.parse(SignedEnvelope.parse(envelope.get(), Kind.HEAD.envelopeBytes()).payload());
+            PlayerHead kept = PlayerHead.parse(
+                    SignedEnvelope.parse(envelope.get(), Kind.HEAD.envelopeBytes()).payload());
             return kept.equals(believed) ? Optional.of(new Head(kept, envelope.get())) : Optional.empty();
         } catch (RemoteException e) {
             return Optional.empty();

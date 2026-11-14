@@ -298,4 +298,109 @@ class PlayerFetcherTest {
         PlayerFetcher behind = new PlayerFetcher(stale, new PlayerStore(new VerifiedStore(cache)), KEYS, () -> stale.now);
         assertThrows(RemoteException.class, () -> behind.resolve(CODE));
     }
+
+    @Test
+    void aPointerIsFollowedOnlyThroughAHeadThatIsGenuineLiveAndNotBehindIt() throws IOException, Refused {
+        Origin origin = new Origin();
+        origin.status(true);
+        String first = origin.publish(5, 7, "Col", "Steve");
+        byte[] head = origin.files.get(PlayerPaths.head(CODE));
+        PlayerFetcher fetcher = fetcher(origin);
+
+        Revision revision = fetcher.follow(CODE, ID, 5, first, head);
+        assertEquals("Col", revision.collection().getName());
+        assertEquals("Steve", revision.index().author());
+        // The head came with the pointer; only the status and the revision were asked of the origin
+        assertFalse(origin.asked.contains(PlayerPaths.head(CODE)));
+        // A world still on an earlier revision than the head's is followed to that revision
+        String second = origin.publish(6, 8, "Col 2", "Steve");
+        assertEquals(5, fetcher.follow(CODE, ID, 5, first, origin.files.get(PlayerPaths.head(CODE))).rev());
+        // But not past the head, to another collection's index, or through a head that says another code
+        assertEquals(Why.UNAVAILABLE, assertThrows(Refused.class, () -> fetcher.follow(CODE, ID, 7, second,
+                origin.files.get(PlayerPaths.head(CODE)))).why());
+        assertThrows(RemoteException.class, () -> fetcher.follow("birch-comet-10", ID, 5, first, head));
+        assertThrows(RemoteException.class, () -> fetcher.follow(CODE, ID, 6, first, origin.files.get(PlayerPaths.head(CODE))));
+        // An older head than the one believed is a replay, and a head nobody signed is nobody's
+        assertThrows(RemoteException.class, () -> fetcher.follow(CODE, ID, 5, first, head));
+        byte[] forged = sign("o1", pair(), new PlayerHead(9, START, CODE, ID, PlayerHead.State.LIVE, 6, second, null).toPayload());
+        assertThrows(RemoteException.class, () -> fetcher.follow(CODE, ID, 6, second, forged));
+
+        // The very head this game already holds needs no signature again: its disk is its own
+        byte[] unsigned = new SignedEnvelope("o1", SignedEnvelope.parse(origin.files.get(PlayerPaths.head(CODE)),
+                PlayerHead.ENVELOPE_BYTES).payload(), new byte[SignedEnvelope.SIGNATURE_BYTES]).toUtf8();
+        origin.down = true;
+        assertEquals(5, fetcher.follow(CODE, ID, 5, first, unsigned).rev());
+        // What is kept loads with the origin out of reach; what is not does not, and is not asked for at every pointer
+        origin.asked.clear();
+        assertEquals(Why.OFF, assertThrows(Refused.class, () -> {
+            origin.now += PlayerState.CONFIRM_SECONDS + 1;
+            fetcher.follow(CODE, ID, 6, second, unsigned);
+        }).why());
+        int asked = origin.asked.size();
+        assertEquals(Why.OFF, assertThrows(Refused.class, () -> fetcher.follow(CODE, ID, 6, second, unsigned)).why());
+        assertEquals(asked, origin.asked.size());
+        origin.down = false;
+
+        // A revision the list names is not followed, kept or not
+        origin.status(true, List.of(), List.of(new PlayerRevocations.Revision(ID, 5, false)));
+        fetcher.refresh();
+        assertEquals(Why.UNAVAILABLE, assertThrows(Refused.class, () -> fetcher.follow(CODE, ID, 5, first, unsigned)).why());
+        assertEquals(6, fetcher.follow(CODE, ID, 6, second, unsigned).rev());
+        // Nor anything once loading is off
+        origin.status(false);
+        fetcher.refresh();
+        assertEquals(Why.OFF, assertThrows(Refused.class, () -> fetcher.follow(CODE, ID, 6, second, unsigned)).why());
+    }
+
+    @Test
+    void aFileIsTheBytesItsIndexNamesFromTheCacheOrItsComputedPath() throws IOException {
+        Origin origin = new Origin();
+        byte[] skin = "skin".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        BlobInfo fact = BlobInfo.png(skin.length, 64, 64);
+        String path = PlayerPaths.asset(ID, SKIN, com.theplumteam.worldcontent.BlobType.PNG);
+        origin.files.put(path, skin);
+        PlayerFetcher fetcher = fetcher(origin);
+
+        assertArrayEquals(skin, fetcher.file(ID, SKIN, fact));
+        assertEquals(List.of(path), origin.asked);
+        // Kept: the second time nothing is asked
+        origin.down = true;
+        assertArrayEquals(skin, fetcher.file(ID, SKIN, fact));
+        assertEquals(1, origin.asked.size());
+        origin.down = false;
+
+        // Other bytes under the name, or more of them than the index says, are refused and not kept
+        String other = JdkSha256.of("other".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        origin.files.put(PlayerPaths.asset(ID, other, com.theplumteam.worldcontent.BlobType.PNG), skin);
+        assertThrows(RemoteException.class, () -> fetcher.file(ID, other, fact));
+        assertThrows(RemoteException.class, () -> fetcher.file(ID, SKIN, BlobInfo.png(skin.length - 1, 64, 64)));
+        assertThrows(RemoteException.class, () -> fetcher.file(ID, SKIN, BlobInfo.png(skin.length + 1, 64, 64)));
+        assertFalse(Files.exists(cache.resolve(PlayerPaths.asset(ID, other, com.theplumteam.worldcontent.BlobType.PNG))));
+        // A kept file that was changed on disk is fetched again
+        Files.write(cache.resolve(path), "tampered".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        assertArrayEquals(skin, fetcher.file(ID, SKIN, fact));
+    }
+
+    @Test
+    void aGameHoldsOnlySoMuchOfPlayerCollectionsAtATime() {
+        PlayerBudgets budgets = new PlayerBudgets();
+        Map<String, BlobInfo> large = new LinkedHashMap<>();
+        // Sixteen images of 512 by 512 are an eighth of the pixels a game holds
+        for (int i = 0; i < 16; i++) {
+            large.put(JdkSha256.of(new byte[] {(byte) i}), BlobInfo.png(1_000, 512, 512));
+        }
+        for (int i = 0; i < 8; i++) {
+            assertTrue(budgets.admit("p_aaaaaaaaaaa" + (char) ('a' + i), large));
+        }
+        assertFalse(budgets.admit(ID, Map.of(SKIN, BlobInfo.png(1_000, 64, 64))));
+        // One counted in already is counted once, and what is released makes room
+        assertTrue(budgets.admit("p_aaaaaaaaaaaa", large));
+        budgets.release("p_aaaaaaaaaaab");
+        assertTrue(budgets.admit(ID, Map.of(SKIN, BlobInfo.png(1_000, 64, 64))));
+        assertFalse(budgets.admit("p_aaaaaaaaaaab", large));
+        budgets.clear();
+        assertTrue(budgets.admit("p_aaaaaaaaaaab", large));
+        // Bytes count as well
+        assertFalse(budgets.admit("p_bbbbbbbbbbbb", Map.of(SKIN, BlobInfo.png(Integer.MAX_VALUE, 16, 16))));
+    }
 }
