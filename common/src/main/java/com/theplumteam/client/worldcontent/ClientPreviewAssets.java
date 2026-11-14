@@ -67,7 +67,7 @@ public final class ClientPreviewAssets {
         String sha = file.sha();
         USED.add(sha);
         if (REGISTERED.contains(sha) || QUEUED.contains(sha) || FAILED.contains(sha)
-                || ClientWorldCollections.isLoaded(sha)) {
+                || CreatorSource.isLoaded(sha)) {
             return;
         }
         QUEUED.add(sha);
@@ -126,7 +126,7 @@ public final class ClientPreviewAssets {
             QUEUED.remove(sha);
             // A sync that loaded the same file meanwhile already shows it, and a bundled
             // resource with the id is never replaced, as the World collections refuse it too
-            if (!USED.contains(sha) || ClientWorldCollections.isLoaded(sha)
+            if (!USED.contains(sha) || CreatorSource.isLoaded(sha)
                     || ClientWorldAssets.isBundled(sha, file.type())) {
                 dropped.run();
                 return;
@@ -159,7 +159,7 @@ public final class ClientPreviewAssets {
     public static void release() {
         GENERATION.incrementAndGet();
         Set<String> referenced = new HashSet<>();
-        for (WorldCollectionRecord record : ClientWorldCollections.records()) {
+        for (WorldCollectionRecord record : CreatorSource.records()) {
             referenced.addAll(record.referencedShas());
         }
         Set<String> free = new HashSet<>(USED);

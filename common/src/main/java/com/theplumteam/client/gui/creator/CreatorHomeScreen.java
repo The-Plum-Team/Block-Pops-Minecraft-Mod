@@ -19,7 +19,8 @@ import com.theplumteam.client.gui.creator.ui.UiViewport;
 import com.theplumteam.client.gui.style.PixelFont;
 import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.util.UiSounds;
-import com.theplumteam.client.worldcontent.ClientWorldCollections;
+import com.theplumteam.client.worldcontent.CreatorPreview;
+import com.theplumteam.client.worldcontent.CreatorSource;
 import com.theplumteam.client.worldcontent.CreatorAutosave;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
@@ -43,6 +44,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
@@ -88,6 +90,8 @@ import java.util.function.IntConsumer;
  * server, which checks it again; the screen follows the collections the server syncs back.
  */
 public class CreatorHomeScreen extends SidebarScreen {
+    /** The preview slot a draft of the player's own is staged in; the editor and its forms use the lower ones. */
+    private static final int PERSONAL_SLOT = CreatorPreview.MAX_SLOTS - 1;
     // The search row shows by itself once the world has more collections than this
     private static final int SEARCH_ALWAYS = 8;
     // The search row under the sidebar's heading, and how far it moves the list down
@@ -198,7 +202,7 @@ public class CreatorHomeScreen extends SidebarScreen {
 
     @Override
     protected void buildSidebar() {
-        List<WorldCollectionRecord> records = ClientWorldCollections.records();
+        List<WorldCollectionRecord> records = CreatorSource.records();
         splitForList(records);
         String revealed = takeReveal();
         keepSelection();
@@ -285,7 +289,7 @@ public class CreatorHomeScreen extends SidebarScreen {
             return null;
         }
         String id = this.revealWhenSynced;
-        WorldCollectionRecord record = id == null ? null : ClientWorldCollections.record(id);
+        WorldCollectionRecord record = id == null ? null : CreatorSource.record(id);
         if (record == null) {
             return null;
         }
@@ -326,7 +330,7 @@ public class CreatorHomeScreen extends SidebarScreen {
 
     @Nullable
     private WorldCollectionRecord selectedRecord() {
-        return this.selectedId == null ? null : ClientWorldCollections.record(this.selectedId);
+        return this.selectedId == null ? null : CreatorSource.record(this.selectedId);
     }
 
     /**
@@ -465,13 +469,13 @@ public class CreatorHomeScreen extends SidebarScreen {
     @Override
     @Nullable
     protected SideStatus sideStatus() {
-        int used = ClientWorldCollections.quotaUsedKiB();
-        int limit = ClientWorldCollections.quotaMaxKiB();
+        int used = CreatorSource.quotaUsedKiB();
+        int limit = CreatorSource.quotaMaxKiB();
         float fraction = limit <= 0 ? 0.0f : used / (float) limit;
         if (fraction >= 1.0f) {
             return spaceStatus(tr("side.space_full"), Theme.RED, PixelIcon.CLOSE);
         }
-        int collections = ClientWorldCollections.records().size();
+        int collections = CreatorSource.records().size();
         if (collections >= WorldContentLimits.MAX_COLLECTIONS) {
             return spaceStatus(tr("side.collections_full", collections, WorldContentLimits.MAX_COLLECTIONS),
                     Theme.AMBER, Theme.ICON_WARNING);
@@ -501,11 +505,11 @@ public class CreatorHomeScreen extends SidebarScreen {
             this.form.build(this.content);
             return;
         }
-        if (ClientWorldCollections.records().isEmpty()) {
+        if (CreatorSource.records().isEmpty()) {
             buildEmpty();
             return;
         }
-        WorldCollectionRecord record = this.selectedId == null ? null : ClientWorldCollections.record(this.selectedId);
+        WorldCollectionRecord record = this.selectedId == null ? null : CreatorSource.record(this.selectedId);
         if (record == null) {
             return;
         }
@@ -513,7 +517,10 @@ public class CreatorHomeScreen extends SidebarScreen {
         this.shown = status;
         String id = record.id();
         layoutShowcase(status);
-        UiStage stage = new UiStage(id, status.boxFigureId(), status.figureOrder(), status.bandColour())
+        // One of the player's own drafts is registered nowhere: its stage shows a preview of it
+        String staged = CreatorSource.isPersonal() && CreatorPreview.show(PERSONAL_SLOT, record, Map.of())
+                ? CreatorPreview.previewId(PERSONAL_SLOT) : id;
+        UiStage stage = new UiStage(staged, status.boxFigureId(), status.figureOrder(), status.bandColour())
                 .narrow(narrow())
                 .greyed(record.archived())
                 .emptyNote(tr("show.no_figures"))
@@ -597,7 +604,7 @@ public class CreatorHomeScreen extends SidebarScreen {
         String id = record.id();
         String name = record.name();
         TextLink put = new TextLink(link, () -> CollectionActions.put(machine, id, name), () -> {
-            WorldCollectionRecord now = ClientWorldCollections.record(id);
+            WorldCollectionRecord now = CreatorSource.record(id);
             return now != null && CollectionActions.putProblem(now) == null;
         });
         put.at(linkX, stateLineY() + (this.stateText.size() - 1) * INFO_LINE - 1, linkWidth, Theme.LINE_HEIGHT);
@@ -623,7 +630,9 @@ public class CreatorHomeScreen extends SidebarScreen {
     // The empty state: the machine and a box, the invitation and its button, the help, and the import
     private void buildEmpty() {
         int centre = this.content.x() + this.content.width() / 2;
-        this.emptyHelp = Draw.fit(this.font, tr("home.subtitle").getString(), inner(), EMPTY_HELP_LINES);
+        this.emptyHelp = Draw.fit(this.font, (CreatorSource.isPersonal()
+                ? Component.translatable("blockpops.mycollections.intro") : tr("home.subtitle")).getString(), inner(),
+                EMPTY_HELP_LINES);
         int blockHeight = EMPTY_ART + EMPTY_GAP + Theme.LINE_HEIGHT + EMPTY_GAP + EMPTY_BUTTON_HEIGHT + 8
                 + this.emptyHelp.size() * Theme.LINE_HEIGHT + 8 + Theme.LINE_HEIGHT;
         this.emptyTop = this.content.y() + Math.max(Theme.SPACE_S, (bottom() - this.content.y() - blockHeight) / 2);
@@ -634,12 +643,15 @@ public class CreatorHomeScreen extends SidebarScreen {
         create.disable(CollectionActions.tooManyCollections());
         addNode(create);
         this.emptyHelpY = buttonY + EMPTY_BUTTON_HEIGHT + 8;
-        Component link = tr("create.import");
-        int linkWidth = Math.min(inner(), this.font.width(link));
-        TextLink importLink = new TextLink(link, this.actions::openImport, null);
-        importLink.at(centre - linkWidth / 2, this.emptyHelpY + this.emptyHelp.size() * Theme.LINE_HEIGHT + 8 - 1,
-                linkWidth, Theme.LINE_HEIGHT);
-        addNode(importLink);
+        // A data pack is the server's to read: the player's own drafts are not made from one
+        if (!CreatorSource.isPersonal()) {
+            Component link = tr("create.import");
+            int linkWidth = Math.min(inner(), this.font.width(link));
+            TextLink importLink = new TextLink(link, this.actions::openImport, null);
+            importLink.at(centre - linkWidth / 2, this.emptyHelpY + this.emptyHelp.size() * Theme.LINE_HEIGHT + 8 - 1,
+                    linkWidth, Theme.LINE_HEIGHT);
+            addNode(importLink);
+        }
         this.emptyBox = sampleBox();
         if (!this.emptyBox.isEmpty()) {
             budget((SidebarScreen.Budgeted) models -> models.request(SidebarScreen.ModelBudget.Rank.PREVIEW, 1,
@@ -683,7 +695,7 @@ public class CreatorHomeScreen extends SidebarScreen {
             this.form.draw(graphics, mouseX, mouseY);
             return;
         }
-        if (ClientWorldCollections.records().isEmpty()) {
+        if (CreatorSource.records().isEmpty()) {
             drawEmpty(graphics);
             return;
         }
@@ -823,7 +835,7 @@ public class CreatorHomeScreen extends SidebarScreen {
         if (this.form != null) {
             return belowLines;
         }
-        if (ClientWorldCollections.records().isEmpty()) {
+        if (CreatorSource.records().isEmpty()) {
             return bottom() - 4;
         }
         if (this.shown == null) {
@@ -871,7 +883,7 @@ public class CreatorHomeScreen extends SidebarScreen {
             }
             return false;
         }
-        WorldCollectionRecord selected = this.selectedId == null ? null : ClientWorldCollections.record(this.selectedId);
+        WorldCollectionRecord selected = this.selectedId == null ? null : CreatorSource.record(this.selectedId);
         if (selected == null) {
             return false;
         }
@@ -901,7 +913,7 @@ public class CreatorHomeScreen extends SidebarScreen {
 
     /** Shows the search row, when a world of few collections leaves it out, and gives it the keyboard. */
     private void focusSearch() {
-        if (ClientWorldCollections.records().isEmpty()) {
+        if (CreatorSource.records().isEmpty()) {
             return;
         }
         if (this.searchBox == null) {
@@ -936,7 +948,7 @@ public class CreatorHomeScreen extends SidebarScreen {
             }
             return;
         }
-        if (this.searchAsked && ClientWorldCollections.records().size() <= SEARCH_ALWAYS) {
+        if (this.searchAsked && CreatorSource.records().size() <= SEARCH_ALWAYS) {
             this.searchAsked = false;
             rebuild();
             focusNode(this.list);
@@ -1082,7 +1094,7 @@ public class CreatorHomeScreen extends SidebarScreen {
 
     /** Opens a collection in the editor, on its figures. */
     private void open(String collectionId) {
-        if (ClientWorldCollections.record(collectionId) == null) {
+        if (CreatorSource.record(collectionId) == null) {
             // Gone in a sync since the screen was built
             return;
         }
@@ -1092,7 +1104,7 @@ public class CreatorHomeScreen extends SidebarScreen {
 
     /** Opens a collection's menu of its own actions at an anchor, such as the pointer on its row. */
     private void openMenuFor(String collectionId, UiNode.Rect anchor) {
-        WorldCollectionRecord record = ClientWorldCollections.record(collectionId);
+        WorldCollectionRecord record = CreatorSource.record(collectionId);
         if (record != null) {
             openMenu(this.actions.menu(record), anchor);
         }
@@ -1100,7 +1112,7 @@ public class CreatorHomeScreen extends SidebarScreen {
 
     /** Opens the selected collection's menu from "More", its right edge on the button's. */
     private void openMoreMenu(String collectionId, UiNode.Rect button) {
-        WorldCollectionRecord record = ClientWorldCollections.record(collectionId);
+        WorldCollectionRecord record = CreatorSource.record(collectionId);
         if (record == null) {
             return;
         }
@@ -1125,7 +1137,7 @@ public class CreatorHomeScreen extends SidebarScreen {
      */
     void reveal(String collectionId) {
         this.revealWhenSynced = collectionId;
-        if (ClientWorldCollections.record(collectionId) != null && this.minecraft.screen == this) {
+        if (CreatorSource.record(collectionId) != null && this.minecraft.screen == this) {
             rebuild();
         }
     }

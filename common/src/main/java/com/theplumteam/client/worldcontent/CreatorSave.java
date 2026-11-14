@@ -838,13 +838,13 @@ public final class CreatorSave {
      * for a day; it goes by its sha, and the server's refusal says when it is gone.
      */
     private static boolean isLost(String sha) {
-        if (ClientWorldCollections.isMissingOnServer(sha)) {
+        if (CreatorSource.isMissing(sha)) {
             return true;
         }
-        if (ClientWorldCollections.blob(sha) != null) {
+        if (CreatorSource.blob(sha) != null) {
             return false;
         }
-        for (WorldCollectionRecord record : ClientWorldCollections.records()) {
+        for (WorldCollectionRecord record : CreatorSource.records()) {
             if (record.referencedShas().contains(sha)) {
                 return true;
             }

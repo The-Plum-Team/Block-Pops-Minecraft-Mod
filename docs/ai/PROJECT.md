@@ -281,6 +281,24 @@ bounded numbers, never text: `UploadErrors` has the game's own words for each. A
 lives in memory only. Do not add another origin to write to, a request the player did not ask
 for, or text from the service on screen.
 
+The creator also works on a player's own drafts, for any player on any server: Settings → **My
+collections** opens it over a `PersonalSession` (`SettingsScreen.openPersonalCreator`; the tab is
+not shown in the packaged E2E). The drafts are kept in a store of the kind a server keeps World
+collections in, below `blockpops/creator/` in the game folder. While the session is open it stands
+in for the server: it is the `ClientWorldUploads.Host` the creator's saves are handed to, and
+applies them to that store with the server's own `WorldCollections.edit` and upload checks, so a
+draft is checked, bounded and stored exactly as a World collection is; an answer is handed back
+first and the change shown afterwards, the order a server keeps. The creator reads its collections
+only through `CreatorSource`, which answers from the session while one is open and from
+`ClientWorldCollections` otherwise; nothing outside the creator reads drafts, nothing of one is
+registered for the game or reaches the server the player is on, and the session closes when the
+creator is left. One session at a time and never beside a World save in flight. In a personal
+session Publish means publishing on BlockPops (`BlockPopsPublish`: the terms once, `PlayerExport`,
+`PublishRun`, then the code to share or the error in the game's words); `PersonalLinks` remembers
+which published collection and revision each draft became, so the next publish is a new revision
+of it. What only a server can do (a machine, players' progress, archiving, data-pack import) is not
+offered there.
+
 The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: an
 operator and World collections synced. Its entry points are the machine screen's **Creator**
 button, the Settings **Creator** tab and the client command `/blockpopscreator`. Packaged E2E players

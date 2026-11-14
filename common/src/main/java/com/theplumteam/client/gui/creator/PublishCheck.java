@@ -3,7 +3,7 @@ package com.theplumteam.client.gui.creator;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.client.gui.creator.ui.UiQuotaMeter;
 import com.theplumteam.client.gui.creator.ui.UiSwatches;
-import com.theplumteam.client.worldcontent.ClientWorldCollections;
+import com.theplumteam.client.worldcontent.CreatorSource;
 import com.theplumteam.client.worldcontent.CreatorDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FigureDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FileRef;
@@ -282,7 +282,7 @@ final class PublishCheck {
             refs.add(variant.texture());
         }
         for (FileRef ref : refs) {
-            if (ref != null && ref.local() == null && ClientWorldCollections.isMissingOnServer(ref.sha())) {
+            if (ref != null && ref.local() == null && CreatorSource.isMissing(ref.sha())) {
                 return true;
             }
         }

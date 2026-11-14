@@ -246,7 +246,7 @@ public final class AutoSaver {
         this.collectionId = record.id();
         this.draft = CreatorDraft.of(record);
         this.mode = record.draft() ? Mode.AUTO : Mode.HOLD;
-        this.seenRevision = ClientWorldCollections.revision();
+        this.seenRevision = CreatorSource.revision();
         this.draft.listen(this::changed);
     }
 
@@ -891,14 +891,14 @@ public final class AutoSaver {
      * collection no longer synced ends the saver.
      */
     public void syncNow() {
-        int revision = ClientWorldCollections.revision();
+        int revision = CreatorSource.revision();
         if (revision == this.seenRevision || this.cancelled) {
             return;
         }
         this.seenRevision = revision;
-        WorldCollectionRecord record = ClientWorldCollections.record(this.collectionId);
+        WorldCollectionRecord record = CreatorSource.record(this.collectionId);
         if (record == null) {
-            if (ClientWorldCollections.isSynced()) {
+            if (CreatorSource.isReady()) {
                 // Deleted for good, or no longer sent to this player
                 BlockPopsMod.logDebug("World collection {} is gone; its saver ends", this.collectionId);
                 cancel();

@@ -13,8 +13,8 @@ import com.theplumteam.client.gui.creator.ui.UiNode;
 import com.theplumteam.client.gui.creator.ui.UiToast;
 import com.theplumteam.client.gui.creator.ui.UiTooltip;
 import com.theplumteam.client.gui.util.UiSounds;
+import com.theplumteam.client.worldcontent.CreatorSource;
 import com.theplumteam.client.worldcontent.ClientPreviewAssets;
-import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.client.worldcontent.CreatorDraft;
 import com.theplumteam.client.worldcontent.CreatorPreview;
 import com.theplumteam.client.worldcontent.CreatorSave;
@@ -531,7 +531,7 @@ final class CreateForm {
         if (id == null || !this.home.isShown()) {
             return;
         }
-        if (ClientWorldCollections.record(id) != null) {
+        if (CreatorSource.record(id) != null) {
             this.createdId = null;
             this.home.created(this, id);
         } else if (Util.getMillis() - this.createdAt > SYNC_TIMEOUT_MS) {

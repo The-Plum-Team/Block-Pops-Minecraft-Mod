@@ -55,7 +55,7 @@ public final class CreatorRuns {
 
         // Whether it still counts: in flight, or accepted and its sync not in yet
         private boolean counts(long now) {
-            return !this.finished || ClientWorldCollections.revision() == this.revisionAtFinish
+            return !this.finished || CreatorSource.revision() == this.revisionAtFinish
                     && now - this.finishedAt < SYNC_WAIT_MS;
         }
     }
@@ -85,7 +85,7 @@ public final class CreatorRuns {
             return;
         }
         entry.finished = true;
-        entry.revisionAtFinish = ClientWorldCollections.revision();
+        entry.revisionAtFinish = CreatorSource.revision();
         entry.finishedAt = ClientWorldUploads.millis();
         if (!changedServer) {
             ENTRIES.remove(entry);

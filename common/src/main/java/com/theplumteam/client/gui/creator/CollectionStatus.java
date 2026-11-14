@@ -3,7 +3,8 @@ package com.theplumteam.client.gui.creator;
 import com.theplumteam.client.ClientHiddenCollections;
 import com.theplumteam.client.gui.creator.ui.Theme;
 import com.theplumteam.client.gui.creator.ui.UiSideRow;
-import com.theplumteam.client.worldcontent.ClientWorldCollections;
+import com.theplumteam.client.worldcontent.CreatorSource;
+import com.theplumteam.client.worldcontent.PersonalLinks;
 import com.theplumteam.client.worldcontent.CreatorAutosave;
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
@@ -77,11 +78,11 @@ final class CollectionStatus {
         long total = 0;
         int missing = 0;
         for (String sha : record.referencedShas()) {
-            BlobInfo info = ClientWorldCollections.blob(sha);
+            BlobInfo info = CreatorSource.blob(sha);
             if (info != null) {
                 total += info.size();
             }
-            if (ClientWorldCollections.isMissingOnServer(sha)) {
+            if (CreatorSource.isMissing(sha)) {
                 missing++;
             }
         }
@@ -228,7 +229,7 @@ final class CollectionStatus {
         return switch (state()) {
             case ARCHIVED -> new StateLine(tr("show.state.archived"), ARCHIVED_DOT, Theme.FAINT);
             case MISSING_FILES -> new StateLine(tr("card.badge.missing_tip"), Theme.RED, Theme.RED);
-            case DRAFT -> new StateLine(tr("show.state.draft"), Theme.AMBER, Theme.FAINT);
+            case DRAFT -> personalLine(this.record.id());
             case PUBLISHED -> hidden() ? new StateLine(tr("show.state.hidden"), Theme.RED, Theme.RED)
                     : new StateLine(tr(record.plush() ? "show.state.gacha" : "show.state.claw"), Theme.GREEN,
                     Theme.FAINT);
@@ -300,5 +301,18 @@ final class CollectionStatus {
             blue = grey;
         }
         return 0xFF000000 | (red & 0xFF) << 16 | (green & 0xFF) << 8 | (blue & 0xFF);
+    }
+
+    // A draft's line: in a world it waits to be published there; one of the player's own is kept on this
+    // computer, and says its code once it was published on BlockPops
+    private static StateLine personalLine(String draftId) {
+        if (!CreatorSource.isPersonal()) {
+            return new StateLine(tr("show.state.draft"), Theme.AMBER, Theme.FAINT);
+        }
+        PersonalLinks.Link link = BlockPopsPublish.linkOf(draftId);
+        return link == null
+                ? new StateLine(Component.translatable("blockpops.mycollections.draft_note"), Theme.AMBER, Theme.FAINT)
+                : new StateLine(Component.translatable("blockpops.mycollections.published", link.code(), link.rev()),
+                        Theme.GREEN, Theme.FAINT);
     }
 }

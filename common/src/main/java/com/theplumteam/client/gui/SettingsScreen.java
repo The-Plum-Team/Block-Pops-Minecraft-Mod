@@ -18,6 +18,7 @@ import com.theplumteam.client.gui.widget.TabButton;
 import com.theplumteam.client.remote.ClientCustomCollections;
 import com.theplumteam.client.remote.ClientPlayerCollections;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
+import com.theplumteam.client.worldcontent.PersonalSession;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.FigureCollection;
 import com.theplumteam.network.UnlockCollectionPacket;
@@ -96,7 +97,8 @@ public class SettingsScreen extends DialogScreen {
         CHEATS("blockpops.settings.tab.cheats", PixelIcon.KEY),
         COLLECTIONS("blockpops.settings.tab.collections", PixelIcon.LIST),
         CUSTOM("blockpops.settings.tab.custom", PixelIcon.STAR),
-        CREATOR("blockpops.settings.tab.creator", PixelIcon.PALETTE);
+        CREATOR("blockpops.settings.tab.creator", PixelIcon.PALETTE),
+        MY_COLLECTIONS("blockpops.settings.tab.mycollections", PixelIcon.BOX);
 
         private final String nameKey;
         private final String[] icon;
@@ -138,6 +140,9 @@ public class SettingsScreen extends DialogScreen {
     private Component customStatus;
     private int shownCustomRevision;
     private int shownPlayerRevision;
+    // My collections tab: why the creator could not open, when it could not
+    @Nullable
+    private Component personalStatus;
 
     // Creator tab: whether it was shown, to rebuild only when it comes or goes; its text
     // reads the World collections as it draws
@@ -265,6 +270,10 @@ public class SettingsScreen extends DialogScreen {
             createCreatorSettings();
         }
 
+        if (showsPersonalTab()) {
+            createMyCollectionsSettings();
+        }
+
         // Show initial tab and update action button state
         switchTab(activeTab);
     }
@@ -285,6 +294,8 @@ public class SettingsScreen extends DialogScreen {
             case CUSTOM -> canManageCustomCollections();
             // Creator: for operators, on a server that syncs its World collections
             case CREATOR -> canOpenCreator();
+            // My collections: for every player, wherever they play
+            case MY_COLLECTIONS -> showsPersonalTab();
         };
     }
 
@@ -334,6 +345,11 @@ public class SettingsScreen extends DialogScreen {
         } else if (activeTab == Tab.CREATOR) {
             // The creator's overview, which returns here when it closes
             openCreator(this, machinePosOf(this.parent));
+        } else if (activeTab == Tab.MY_COLLECTIONS) {
+            // The same creator over the player's own drafts
+            if (!openPersonalCreator(this)) {
+                personalStatus = Component.translatable("blockpops.mycollections.busy");
+            }
         }
     }
 
@@ -365,6 +381,10 @@ public class SettingsScreen extends DialogScreen {
         } else if (activeTab == Tab.CREATOR) {
             this.actionButton.setMessage(Component.translatable("blockpops.settings.open_creator"));
             this.actionButton.active = true;
+            this.actionButton.visible = true;
+        } else if (activeTab == Tab.MY_COLLECTIONS) {
+            this.actionButton.setMessage(Component.translatable("blockpops.mycollections.open"));
+            this.actionButton.active = canOpenPersonalCreator();
             this.actionButton.visible = true;
         } else {
             // No action on the other tabs (Collections)
@@ -665,6 +685,8 @@ public class SettingsScreen extends DialogScreen {
      *                   offer to put a collection in; null when there is none
      */
     public static void openCreator(@Nullable Screen parent, @Nullable BlockPos machinePos) {
+        // The World creator works with the server: the player's own drafts are closed first
+        PersonalSession.close();
         if (canOpenCreator()) {
             net.minecraft.client.Minecraft.getInstance().setScreen(new CreatorHomeScreen(parent, machinePos));
         }
@@ -780,6 +802,51 @@ public class SettingsScreen extends DialogScreen {
             case RETIRED -> Component.translatable("blockpops.player.row.removed").getString();
         };
         return badge + " · " + state;
+    }
+
+    /**
+     * Whether the tab of the player's own collections is shown: to every player, on any server,
+     * except in the packaged E2E, whose captures of these settings stay as they are.
+     */
+    public static boolean showsPersonalTab() {
+        return !com.theplumteam.util.E2EDeterminism.ENABLED;
+    }
+
+    /**
+     * Whether the creator can open over the player's own drafts. Making drafts needs no
+     * permission, as they stay on this computer; its previews need a world to draw in.
+     */
+    public static boolean canOpenPersonalCreator() {
+        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        return minecraft.level != null && minecraft.player != null;
+    }
+
+    /**
+     * Opens the creator over the player's own drafts, which are kept on this computer and reach
+     * no server until the player publishes one.
+     *
+     * @return false when it cannot open now, as while a World collection is being saved
+     */
+    public static boolean openPersonalCreator(@Nullable Screen parent) {
+        net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+        if (!canOpenPersonalCreator()
+                || !PersonalSession.open(minecraft.gameDirectory.toPath(), minecraft.player.getUUID())) {
+            return false;
+        }
+        minecraft.setScreen(new CreatorHomeScreen(parent, null));
+        return true;
+    }
+
+    /**
+     * Create the My collections tab: what the creator is for, and where the drafts are kept
+     */
+    private void createMyCollectionsSettings() {
+        List<Row> tabRows = rowsFor(Tab.MY_COLLECTIONS);
+        tabRows.add(paragraph(() -> Component.translatable("blockpops.mycollections.intro").getString(), ROW_TEXT));
+        tabRows.add(paragraph(() -> Component.translatable(canOpenPersonalCreator()
+                ? "blockpops.mycollections.local_note" : "blockpops.mycollections.needs_world").getString(),
+                Surfaces.TEXT_DIM));
+        tabRows.add(paragraph(() -> personalStatus == null ? "" : personalStatus.getString(), STATUS_COLOR));
     }
 
     /**

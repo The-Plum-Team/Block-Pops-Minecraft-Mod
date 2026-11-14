@@ -18,7 +18,7 @@ import com.theplumteam.client.gui.creator.ui.UiToggleRow;
 import com.theplumteam.client.gui.creator.ui.UiTooltip;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.runtime.RuntimeTextures;
-import com.theplumteam.client.worldcontent.ClientWorldCollections;
+import com.theplumteam.client.worldcontent.CreatorSource;
 import com.theplumteam.client.worldcontent.CreatorDraft.FigureDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FileRef;
 import com.theplumteam.client.worldcontent.CreatorDraft.VariantDraft;
@@ -539,7 +539,7 @@ final class FigureExtrasPanel {
             this.zone.checks(checks);
             FileRef ref = variant.texture();
             String key = ref.sha() + "/" + (ref.info() != null) + "/"
-                    + ClientWorldCollections.isMissingOnServer(ref.sha()) + "/"
+                    + CreatorSource.isMissing(ref.sha()) + "/"
                     + (figure != null && figure.model() != null ? figure.model().sha() : "");
             if (key.equals(this.shownKey)) {
                 return;
@@ -553,8 +553,8 @@ final class FigureExtrasPanel {
                 this.zone.showError(tr("file_unknown"));
                 return;
             } else {
-                this.zone.showFile(tr("identity.stored_file").getString(), ref.sha(), info);
-                if (ClientWorldCollections.isMissingOnServer(ref.sha())) {
+                this.zone.showFile(CreatorScreen.storedFile().getString(), ref.sha(), info);
+                if (CreatorSource.isMissing(ref.sha())) {
                     this.zone.showError(tr("file_missing"));
                     return;
                 }

@@ -50,7 +50,7 @@ public final class CreatorAutosave {
     public static AutoSaver attach(String collectionId) {
         AutoSaver saver = SAVERS.get(collectionId);
         if (saver == null || saver.isCancelled()) {
-            WorldCollectionRecord record = ClientWorldCollections.record(collectionId);
+            WorldCollectionRecord record = CreatorSource.record(collectionId);
             if (record == null) {
                 throw new IllegalStateException("No synced World collection " + collectionId);
             }
