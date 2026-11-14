@@ -195,9 +195,16 @@ back, with numbers bounded as `StrictJson.parsePlayerObject` bounds them and nam
 characters `PlayerText` lists. `WorldCollectionMaterializer` and `WorldCollectionCheck` build and
 check a collection of either family from its record, told apart by a `ContentIdStrategy`: a World
 collection's assets are named by content (`WorldAssetIds`), a player collection's under its own id
-as well (`PlayerAssetIds`), so neither is taken for the other. Nothing in the game calls any of
-this for a player collection yet: the game holds no key, checks no signature and contacts no
-origin for it.
+as well (`PlayerAssetIds`), so neither is taken for the other. A signed document is opened only by
+`PlayerSignatures`: under a key of `PlayerKeys` that may sign its kind (an online key for a head,
+an index, the status and the revocation list; the offline root key for the root alone), that the
+last root has not revoked, and whose Ed25519 signature holds over the exact payload. `PlayerState`
+then accepts a genuine document only if it is current: a sequence number above the one held by a
+plausible step, not issued a day ahead of the clock; a root with a higher number starts a new epoch
+that forgets every other document; and collections load only while the root allows it, the status
+is fresh and the revocation list it names is the one held. The public keys are compiled in
+(`PlayerBuildFlags`); the build holds none yet, so nothing signed is believed, and nothing in the
+game fetches a player document or contacts an origin for one.
 
 The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: an
 operator and World collections synced. Its entry points are the machine screen's **Creator**
