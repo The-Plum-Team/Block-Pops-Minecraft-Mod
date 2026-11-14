@@ -96,6 +96,54 @@ public final class VerifiedStore {
         }
     }
 
+    /**
+     * Keeps bytes its caller has verified, under a path of the store's layout.
+     *
+     * @throws RemoteException if the path is not a safe relative one
+     */
+    public void save(String relativePath, byte[] bytes) throws IOException {
+        write(relativePath, bytes);
+    }
+
+    /**
+     * The bytes kept under a path, if it is a regular file of at most maxBytes. They are
+     * whatever was kept there: a caller that names files by their content checks it again.
+     */
+    public Optional<byte[]> load(String relativePath, long maxBytes) throws IOException {
+        Path file = RemoteFiles.resolveInside(root, relativePath);
+        if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS) || Files.size(file) > maxBytes) {
+            return Optional.empty();
+        }
+        try (InputStream in = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)) {
+            byte[] bytes = in.readNBytes((int) Math.min(maxBytes + 1, Integer.MAX_VALUE));
+            return bytes.length > maxBytes ? Optional.empty() : Optional.of(bytes);
+        }
+    }
+
+    /**
+     * Deletes a directory of the store with everything in it. No link is followed: not on the
+     * way to the directory, which must lie inside the store by real directories only, and not
+     * below it, where a link is deleted as a link.
+     */
+    public void deleteDirectory(String relativePath) throws IOException {
+        // Resolving a name inside the directory checks every component down to the directory itself
+        Path target = RemoteFiles.resolveInside(root, relativePath + "/x").getParent();
+        if (!Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
+            return;
+        }
+        // Children before their directory
+        try (java.util.stream.Stream<Path> walk = Files.walk(target)) {
+            for (Path path : walk.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                Files.delete(path);
+            }
+        }
+    }
+
+    /** Deletes a kept file. */
+    public void delete(String relativePath) throws IOException {
+        Files.deleteIfExists(RemoteFiles.resolveInside(root, relativePath));
+    }
+
     private Path write(String relativePath, byte[] bytes) throws IOException {
         Path staging = stagingDirectory();
         Path target = RemoteFiles.resolveInside(root, relativePath);

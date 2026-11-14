@@ -33,9 +33,11 @@ follow-up pull request (#11). `site/mod-base.json` no longer defers it or any ot
   [ADR 0004](../architecture/decisions/0004-extend-world-collections-for-the-redesigned-creator.md)
   their extensions for the redesigned creator,
   [ADR 0005](../architecture/decisions/0005-autosave-world-collection-drafts.md) the autosave of
-  their drafts and
+  their drafts,
   [ADR 0006](../architecture/decisions/0006-let-world-collections-turn-off-holographic-draws.md)
-  turning off their holographic draws.
+  turning off their holographic draws and
+  [ADR 0007](../architecture/decisions/0007-publish-player-collections-to-the-cdn.md) the
+  collections players publish.
 - `site/mod-base.json` and `scripts/pages/mod_base_adapter.py` connect this repository to the
   mod-base public-evidence kit; `scripts/ci/mod_base_kit.py` finds the pinned kit.
 
@@ -212,8 +214,19 @@ then accepts a genuine document only if it is current: a sequence number above t
 plausible step, not issued a day ahead of the clock; a root with a higher number starts a new epoch
 that forgets every other document; and collections load only while the root allows it, the status
 is fresh and the revocation list it names is the one held. The public keys are compiled in
-(`PlayerBuildFlags`); the build holds none yet, so nothing signed is believed, and nothing in the
-game fetches a player document or contacts an origin for one.
+(`PlayerBuildFlags`); the build holds none yet, so nothing signed is believed.
+
+[ADR 0007](../architecture/decisions/0007-publish-player-collections-to-the-cdn.md) is the decision
+behind player collections. `remote.player.PlayerFetcher` turns a player code into a collection:
+the signed head the code points at, the signed index of the revision, the record it names, and
+the collection built and checked from the record and the index's facts; it fetches none of the
+collection's files. It reads only from `PlayerCdn.ORIGIN`, a second fixed origin compiled into the
+build, by paths `PlayerPaths` computes, and only `PlayerCdn.forGame()` gives the game that source,
+which is `RemoteSource.NONE` in the packaged E2E. Do not add another origin for player content, a
+URL or a path from a server, packet or file, or a way to build from anything whose signature or
+SHA-256 has not held. `PlayerStore` keeps, below `p/` of `blockpops-cache/`, what a game believes
+and the indexes and records it has verified, so a world opens with no network. Nothing in the game
+calls the fetcher yet, and with no key in the build it asks the origin nothing.
 
 The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: an
 operator and World collections synced. Its entry points are the machine screen's **Creator**
