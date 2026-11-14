@@ -31,6 +31,7 @@ public final class PngValidator {
     /** A chunk's length, type and CRC around its data. */
     private static final int CHUNK_OVERHEAD = 12;
     private static final String DEPTH_RULE = "save it with 8 bits per channel (or an indexed palette)";
+    private static final String DATA_DAMAGED = "PNG image data is truncated or corrupt";
 
     /** What a PNG is used for, and the sizes that use allows. */
     public enum Role {
@@ -126,7 +127,7 @@ public final class PngValidator {
         Parsed png = parse(bytes, false);
         inflate(png);
         ByteArrayOutputStream out = new ByteArrayOutputStream(png.idat().length + 1024);
-        out.writeBytes(SIGNATURE);
+        out.write(SIGNATURE, 0, SIGNATURE.length);
         writeChunk(out, "IHDR", bytes, png.ihdr());
         if (png.colorType() == 3) {
             writeChunk(out, "PLTE", bytes, png.plte());
@@ -356,7 +357,9 @@ public final class PngValidator {
                                 "PNG image data needs a preset dictionary");
                     }
                     if (inflater.needsInput()) {
-                        throw new WorldContentException(ContentError.PNG_DATA, "PNG image data is truncated");
+                        // One host's inflater asks for more input where another's calls the data
+                        // corrupt, so a stream cut short and a corrupt one are told the same
+                        throw new WorldContentException(ContentError.PNG_DATA, DATA_DAMAGED);
                     }
                     throw new WorldContentException(ContentError.PNG_DATA, "PNG image data does not decompress");
                 }
@@ -368,7 +371,7 @@ public final class PngValidator {
                 throw new WorldContentException(ContentError.PNG_DATA, "PNG has data after its compressed image");
             }
         } catch (DataFormatException e) {
-            throw new WorldContentException(ContentError.PNG_DATA, "PNG image data is corrupt");
+            throw new WorldContentException(ContentError.PNG_DATA, DATA_DAMAGED);
         } finally {
             inflater.end();
         }
@@ -504,7 +507,7 @@ public final class PngValidator {
     private static void writeChunk(ByteArrayOutputStream out, String type, byte[] source, Chunk chunk) {
         byte[] typeBytes = type.getBytes(StandardCharsets.US_ASCII);
         writeInt(out, chunk.length());
-        out.writeBytes(typeBytes);
+        out.write(typeBytes, 0, typeBytes.length);
         out.write(source, chunk.offset(), chunk.length());
         CRC32 crc = new CRC32();
         crc.update(typeBytes);

@@ -10,7 +10,7 @@ import com.theplumteam.remote.player.ContentError;
  *
  * A model figure is fitted to its box from these bounds on both sides, so they travel in
  * the blob table instead of being worked out again from a file a client may not have yet.
- * Validation computes them with {@link StrictMath}, so every JVM arrives at the same values.
+ * Validation computes them with {@link CoreMath}, so every host arrives at the same values.
  */
 public record ModelBounds(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
     /** The bounds of a model without cubes, and of every file that is not a model. */
