@@ -806,10 +806,16 @@ public class SettingsScreen extends DialogScreen {
 
     /**
      * Whether the tab of the player's own collections is shown: to every player, on any server,
-     * except in the packaged E2E, whose captures of these settings stay as they are.
+     * in a build that carries the keys player collections are believed with. A build without
+     * them reads no player collection, so what a player published could be used nowhere; there
+     * the tab is shown only in a development environment. The packaged E2E never shows it, so
+     * its captures of these settings stay as they are.
      */
     public static boolean showsPersonalTab() {
-        return !com.theplumteam.util.E2EDeterminism.ENABLED;
+        if (com.theplumteam.util.E2EDeterminism.ENABLED) {
+            return false;
+        }
+        return !com.theplumteam.remote.player.PlayerKeys.builtIn().isEmpty() || isDevelopmentMode();
     }
 
     /**

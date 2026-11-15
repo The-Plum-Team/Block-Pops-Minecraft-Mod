@@ -282,8 +282,10 @@ lives in memory only. Do not add another origin to write to, a request the playe
 for, or text from the service on screen.
 
 The creator also works on a player's own drafts, for any player on any server: Settings → **My
-collections** opens it over a `PersonalSession` (`SettingsScreen.openPersonalCreator`; the tab is
-not shown in the packaged E2E). The drafts are kept in a store of the kind a server keeps World
+collections** opens it over a `PersonalSession` (`SettingsScreen.openPersonalCreator`). The tab is
+shown only in a build that carries the keys player collections are believed with
+(`PlayerKeys.builtIn()`), or in a development environment, and never in the packaged E2E: a build
+without keys reads no player collection, so nothing published could be used. The drafts are kept in a store of the kind a server keeps World
 collections in, below `blockpops/creator/` in the game folder. While the session is open it stands
 in for the server: it is the `ClientWorldUploads.Host` the creator's saves are handed to, and
 applies them to that store with the server's own `WorldCollections.edit` and upload checks, so a
