@@ -1,5 +1,6 @@
 package com.theplumteam.client.upload;
 
+import com.theplumteam.client.remote.PlayerDownload;
 import com.theplumteam.client.upload.UploadApi.Account;
 import com.theplumteam.client.upload.UploadApi.Published;
 import com.theplumteam.client.upload.UploadTransport.Answer;
@@ -200,6 +201,16 @@ class UploadRehearsalTest {
         assertEquals(ApiError.CONFLICT, stale.error());
         assertEquals(2, stale.detail());
         assertEquals(2, fetcher.resolve(published.code()).revision().collection().getFigures().size());
+
+        // ---- Its owner brings it back whole where its draft is not: what was published, file for file
+        PlayerDownload.Download download = PlayerDownload.of(fetcher, published.code());
+        assertEquals(published.id(), download.id());
+        assertEquals(2, download.rev());
+        assertArrayEquals(exportTwo.record(), download.record().toPlayerUtf8());
+        assertEquals(exportTwo.facts().keySet(), download.files().keySet());
+        for (Map.Entry<String, PlayerDownload.File> file : download.files().entrySet()) {
+            assertArrayEquals(exportTwo.bytes(file.getKey()), file.getValue().bytes());
+        }
 
         // ---- The owner's list, a rollback, a withdrawal
         Account account = manage.list();

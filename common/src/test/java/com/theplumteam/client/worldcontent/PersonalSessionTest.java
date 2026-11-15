@@ -1,10 +1,12 @@
 package com.theplumteam.client.worldcontent;
 
+import com.theplumteam.client.upload.PlayerExport;
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.BlobType;
 import com.theplumteam.worldcontent.JdkSha256;
 import com.theplumteam.worldcontent.WorldCollectionEdit;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
+import com.theplumteam.worldcontent.WorldContentStatus;
 import com.theplumteam.worldcontent.WorldContentStatus.Result;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -17,8 +19,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -147,6 +151,68 @@ class PersonalSessionTest extends CreatorTestBase {
         assertNull(CreatorSource.record("w-mine"));
         // And a datapack is the server's to import, not a draft's
         assertFalse(send(List.of(), new WorldCollectionEdit.ImportPack("other", "blockpops", "x", true)).ok());
+    }
+
+    @Test
+    void aPublishedCollectionComesBackAsADraft() throws Exception {
+        assertTrue(open());
+        assertTrue(send(List.of(), new WorldCollectionEdit.CreateDraft("mine", "Mis figuras")).ok());
+        FilePicker.LocalFile uno = skin("uno", 0);
+        FilePicker.LocalFile dos = skin("dos", 9);
+        assertTrue(send(List.of(uno), new WorldCollectionEdit.PutFigure("w-mine", "uno", "Uno", 0, uno.sha(), "", "", 2)).ok());
+        assertTrue(send(List.of(dos), new WorldCollectionEdit.PutFigure("w-mine", "dos", "Dos", 0, dos.sha(), "", "", 2)).ok());
+
+        // What is published of it, read as a game reads it: the record under the collection's published id
+        PlayerExport.Export export = PlayerExport.of(CreatorSource.record("w-mine"), CreatorSource.blobs(),
+                CreatorSource::personalBytes, null, 0, 1, "2.2.0+1.20.1-fabric", "Steve");
+        WorldCollectionRecord published = WorldCollectionRecord.parsePlayer(export.record(), export.facts(),
+                "p_k3v7q2m5x4ab", "Steve", 1);
+        Map<String, PersonalSession.Taken> files = new HashMap<>();
+        export.facts().forEach((sha, fact) -> files.put(sha, new PersonalSession.Taken(fact.type(), export.bytes(sha))));
+
+        // On a computer that has no draft of it: nothing is stored yet
+        PersonalSession.close();
+        try (Stream<Path> stored = Files.walk(game.resolve("blockpops"))) {
+            for (Path file : stored.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                Files.delete(file);
+            }
+        }
+        assertTrue(open());
+        assertTrue(CreatorSource.records().isEmpty());
+
+        WorldContentStatus taken = PersonalSession.adopt("back", published, files);
+        assertEquals(Result.OK, taken.result());
+        assertEquals("w-back", taken.detail());
+        // It shows once the session has told the creator, as any change does
+        PersonalSession.tick();
+        WorldCollectionRecord draft = CreatorSource.record("w-back");
+        assertNotNull(draft);
+        assertTrue(draft.draft());
+        assertEquals(0, draft.revision());
+        assertEquals("Mis figuras", draft.name());
+        assertEquals(published.figures(), draft.figures());
+        assertArrayEquals(uno.bytes(), CreatorSource.personalBytes(uno.sha()));
+        assertTrue(loaded.contains(dos.sha()));
+        // And it publishes as exactly what it was
+        assertArrayEquals(export.record(), PlayerExport.of(draft, CreatorSource.blobs(), CreatorSource::personalBytes, null, 0,
+                1, "2.2.0+1.20.1-fabric", "Steve").record());
+
+        // The same slug again, a file that is not at hand, or bytes that are not the file named: nothing is taken in
+        assertEquals(Result.ID_TAKEN, PersonalSession.adopt("back", published, files).result());
+        assertEquals(Result.MISSING_ASSET, PersonalSession.adopt("other", published, Map.of(uno.sha(), files.get(uno.sha())))
+                .result());
+        // The file is stored already, so its bytes are not read again; a file that is new is checked
+        FilePicker.LocalFile tres = skin("tres", 20);
+        WorldCollectionRecord other = published.withFigures(List.of(new WorldCollectionRecord.Figure("tres", "Tres",
+                WorldCollectionRecord.Kind.SKIN, tres.sha(), null, null, 1.0f, true)));
+        assertEquals(Result.INVALID, PersonalSession.adopt("other", other,
+                Map.of(tres.sha(), new PersonalSession.Taken(BlobType.PNG, uno.bytes()))).result());
+        PersonalSession.tick();
+        assertNull(CreatorSource.record("w-other"));
+        assertEquals(1, CreatorSource.records().size());
+        // With no session open there is nowhere to keep it
+        PersonalSession.close();
+        assertEquals(Result.DEGRADED, PersonalSession.adopt("late", published, files).result());
     }
 
     @Test

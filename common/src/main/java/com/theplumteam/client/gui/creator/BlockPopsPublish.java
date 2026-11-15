@@ -87,10 +87,15 @@ final class BlockPopsPublish {
     /** What a draft was published as, for the creator to show its code; null when it was not. */
     @Nullable
     static PersonalLinks.Link linkOf(String draftId) {
+        return links().link(draftId).orElse(null);
+    }
+
+    /** What each draft on this computer was published as. */
+    static PersonalLinks links() {
         if (links == null) {
             links = PersonalLinks.load(Minecraft.getInstance().gameDirectory.toPath());
         }
-        return links.link(draftId).orElse(null);
+        return links;
     }
 
     /** Copies a published collection's code, and says so. */
@@ -374,7 +379,7 @@ final class BlockPopsPublish {
     }
 
     // In the creator when it is open, as a dialog; anywhere else as a toast, when there is something to say
-    private static void show(UiModal dialog, @Nullable Component otherwise) {
+    static void show(UiModal dialog, @Nullable Component otherwise) {
         // By this name the build finds the current screen on every version of the game
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.screen instanceof CreatorScreen screen) {
@@ -385,7 +390,7 @@ final class BlockPopsPublish {
     }
 
     // Text that may change while the dialog is open, wrapped to its width
-    private static void lines(UiModal dialog, Supplier<Component> text, int colour, int most) {
+    static void lines(UiModal dialog, Supplier<Component> text, int colour, int most) {
         dialog.node(new UiNode.Box() {
             @Override
             public void draw(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {

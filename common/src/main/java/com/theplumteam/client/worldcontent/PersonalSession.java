@@ -11,6 +11,7 @@ import com.theplumteam.worldcontent.Sha256;
 import com.theplumteam.worldcontent.WorldCollectionEdit;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldContentException;
+import com.theplumteam.worldcontent.WorldContentIds;
 import com.theplumteam.worldcontent.WorldContentStatus;
 import com.theplumteam.worldcontent.WorldContentStatus.Result;
 import net.minecraft.Util;
@@ -257,6 +258,71 @@ public final class PersonalSession implements ClientWorldUploads.Host {
             return store.readBlob(sha, info.type().maxBytes());
         } catch (IOException e) {
             return null;
+        }
+    }
+
+    // ---- Taking a whole collection in
+
+    /**
+     * One file of a collection that is taken in whole.
+     *
+     * @param type  what it says it is
+     * @param bytes its bytes, which are checked as an upload's are
+     */
+    public record Taken(BlobType type, byte[] bytes) {
+    }
+
+    /**
+     * Takes a whole collection in as a new draft, as when its owner brings back one they
+     * published: each file is checked and stored as an uploaded one is, and the draft is made of
+     * the record with the slug given, checked as any changed draft is. Nothing is kept of a
+     * collection that is refused but files no draft names, which are swept as any others are.
+     *
+     * @param files every file the record names, by its SHA-256
+     * @return {@link Result#OK} with the draft's id, or why it was not taken in; a refusal when
+     *         no session is open
+     */
+    public static WorldContentStatus adopt(String slug, WorldCollectionRecord record, Map<String, Taken> files) {
+        PersonalSession session = active;
+        if (session == null) {
+            return WorldContentStatus.of(Result.DEGRADED);
+        }
+        for (String sha : record.referencedShas()) {
+            Taken file = files.get(sha);
+            if (file == null) {
+                return WorldContentStatus.of(Result.MISSING_ASSET, "A file it names is not at hand: " + sha);
+            }
+            WorldContentStatus refused = session.take(sha, file);
+            if (refused != null) {
+                return refused;
+            }
+        }
+        session.store.saveUnsavedBlobs();
+        WorldContentStatus status = WorldCollections.adopt(session.store, slug, record, session.owner, session.effects);
+        return status.result() == Result.OK
+                ? WorldContentStatus.of(Result.OK, WorldContentIds.collectionId(slug)) : status;
+    }
+
+    // Stores one file as a finished upload is stored; null when it is in the store afterwards
+    @Nullable
+    private WorldContentStatus take(String sha, Taken file) {
+        WorldContentStatus refused = WorldCollections.checkUpload(store, sha, file.type(), file.bytes().length);
+        if (refused != null) {
+            return refused.result() == Result.ALREADY_STORED ? null : refused;
+        }
+        try {
+            if (!JdkSha256.of(file.bytes()).equals(sha)) {
+                throw new WorldContentException("The file does not match its SHA-256");
+            }
+            BlobInfo info = file.type().validate(file.bytes());
+            store.writeBlob(sha, file.bytes());
+            WorldContentStatus status = WorldCollections.addBlob(store, sha, info, owner, effects);
+            return status.result() == Result.STORED ? null : status;
+        } catch (WorldContentException e) {
+            return WorldContentStatus.invalid(e);
+        } catch (IOException e) {
+            BlockPopsMod.LOGGER.error("Failed to write the draft file {}", sha, e);
+            return WorldContentStatus.of(Result.SAVE_FAILED);
         }
     }
 

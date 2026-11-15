@@ -213,6 +213,11 @@ public class CreatorHomeScreen extends SidebarScreen {
         // Each glyph goes left of the one before: the cross at the far right, the help before it
         headingGlyph(PixelIcon.CLOSE, tr("side.close"), this::closeCreator);
         headingGlyph(Theme.ICON_HELP, tr("side.help"), this.actions::openHelp).disable(lock);
+        if (CreatorSource.isPersonal()) {
+            // What this account published, wherever its drafts are
+            headingGlyph(Theme.ICON_ARCHIVE, Component.translatable("blockpops.published.open_tip"),
+                    BlockPopsLibrary::open).disable(lock);
+        }
 
         UiNode.Rect area = sideList();
         this.searchBox = null;
@@ -643,11 +648,13 @@ public class CreatorHomeScreen extends SidebarScreen {
         create.disable(CollectionActions.tooManyCollections());
         addNode(create);
         this.emptyHelpY = buttonY + EMPTY_BUTTON_HEIGHT + 8;
-        // A data pack is the server's to read: the player's own drafts are not made from one
-        if (!CreatorSource.isPersonal()) {
-            Component link = tr("create.import");
+        // A data pack is the server's to read: the player's own drafts are not made from one. What they
+        // have is what they published, which may have no draft on this computer
+        {
+            boolean personal = CreatorSource.isPersonal();
+            Component link = personal ? Component.translatable("blockpops.published.link_empty") : tr("create.import");
             int linkWidth = Math.min(inner(), this.font.width(link));
-            TextLink importLink = new TextLink(link, this.actions::openImport, null);
+            TextLink importLink = new TextLink(link, personal ? BlockPopsLibrary::open : this.actions::openImport, null);
             importLink.at(centre - linkWidth / 2, this.emptyHelpY + this.emptyHelp.size() * Theme.LINE_HEIGHT + 8 - 1,
                     linkWidth, Theme.LINE_HEIGHT);
             addNode(importLink);

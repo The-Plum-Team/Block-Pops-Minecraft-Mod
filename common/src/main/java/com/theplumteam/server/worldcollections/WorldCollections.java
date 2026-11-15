@@ -794,6 +794,30 @@ public final class WorldCollections {
         return null;
     }
 
+    /**
+     * Adds a whole collection that is handed over to a store as a new draft with the slug: its
+     * name, look, figures and extras, at revision 0, as a duplicate is made of one the store
+     * holds. Every file it names must be in the store already, and the draft is checked as any
+     * changed collection is before anything is saved.
+     */
+    public static WorldContentStatus adopt(@Nullable WorldCollectionStore current, String slug,
+                                           WorldCollectionRecord source, UUID by, Effects effects) {
+        if (current == null || current.isDegraded()) {
+            return WorldContentStatus.of(Result.DEGRADED);
+        }
+        Txn txn = new Txn(current.state());
+        WorldContentStatus refused = refuseNew(txn.working, slug);
+        if (refused != null) {
+            return refused;
+        }
+        WorldCollectionRecord draft = new WorldCollectionRecord(WorldContentIds.collectionId(slug), source.name(),
+                source.author(), source.red(), source.green(), source.blue(), source.boxTexture(), source.boxColor(),
+                source.logo(), false, 0, source.figures(), true, 0L, source.authorUrl(), source.logoLayout(),
+                source.plush(), source.rarityWeights(), source.holographic());
+        txn.create(draft, by, System.currentTimeMillis());
+        return finish(current, txn, effects);
+    }
+
     /** Why a new collection cannot take the slug in the state, or null when it can. */
     @Nullable
     private static WorldContentStatus refuseNew(WorldCollectionStore.State state, String slug) {

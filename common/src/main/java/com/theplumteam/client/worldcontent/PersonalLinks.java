@@ -115,6 +115,16 @@ public final class PersonalLinks {
         return Optional.ofNullable(links.get(draftId));
     }
 
+    /** The draft that was published as that collection, if one is recorded. */
+    public Optional<String> draftOf(String publishedId) {
+        for (Map.Entry<String, Link> entry : links.entrySet()) {
+            if (entry.getValue().id().equals(publishedId)) {
+                return Optional.of(entry.getKey());
+            }
+        }
+        return Optional.empty();
+    }
+
     /** The version of the publishing terms the player accepted; 0 when none. */
     public int terms() {
         return terms;
