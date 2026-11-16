@@ -111,7 +111,7 @@ EXPECTED_REMOTE_IDENTITIES = frozenset(
         "dl.cloudsmith.io/public/geckolib3/geckolib/maven",
         "repo.maven.apache.org/maven2",
         "maven-central.storage-download.googleapis.com/maven2",
-        "the-plum-team.github.io/maven-mirror",
+        "maven.quickskin.net/",
     }
 )
 EXPECTED_LOCAL_REPOSITORIES = frozenset(
@@ -144,9 +144,9 @@ PLUGIN_ONLY_EXCLUSIONS = tuple(
     f"excludeModule('{group}', '{name}')"
     for group, name, _ in STONECUTTER_COMPONENTS
 )
-EXPECTED_POLICY_SHA256 = "a8882f8501acdfca4a0661e2c3a8d78b2d3cfbb16e8dcbfbdebec8097613110a"
-EXPECTED_PLUGIN_MANAGEMENT_SHA256 = "2338eb73b0bf812e367c3a040c48c6430b3335b9f914b6166846754c533c6e93"
-EXPECTED_SETTINGS_SHA256 = "29acbf650f1f2b132464df635d60be3fbb466d79974601f8d1a2aa5d7ce90e19"
+EXPECTED_POLICY_SHA256 = "6f76a40a6539983c7a5cf6931f27573f8e1d4d35686b584b1f6b4dd733c06dd3"
+EXPECTED_PLUGIN_MANAGEMENT_SHA256 = "0de7869fd6bfcea00ae2422056d223ae92f341231f800505e94f5e111730e716"
+EXPECTED_SETTINGS_SHA256 = "b178e505a1e3e4a9e21fdcea894d39ae9f2a6a7ef0da3842477344d98bca9ad8"
 XML_DECLARATION = b'<?xml version="1.0" encoding="UTF-8"?>\n'
 
 
@@ -260,7 +260,7 @@ def validate_plugin_management_text(plugin_management: str) -> None:
             "https://maven.neoforged.net/releases/",
             "https://repo.spongepowered.org/repository/maven-public/",
             "https://maven.kikugie.dev/releases",
-            "https://the-plum-team.github.io/maven-mirror/",
+            "https://maven.quickskin.net/",
             "https://maven-central.storage-download.googleapis.com/maven2/",
         }
     )
@@ -272,9 +272,9 @@ def validate_plugin_management_text(plugin_management: str) -> None:
         or plugin_management.count("mavenContent { releasesOnly() }") != 9
     ):
         raise DependencyPolicyError("plugin repositories are not release-only")
-    # The plugin portal and Google's mirror of Maven Central behind it exclude every generated
-    # namespace; the Forge and NeoForge repositories exclude their own hash-named one.
-    expected_plugin_exclusion_counts = (2, 2, 3, 3, 2)
+    # The team's mirror, the plugin portal and Google's mirror of Maven Central behind it exclude
+    # every generated namespace; the Forge and NeoForge repositories exclude their own hash-named one.
+    expected_plugin_exclusion_counts = (3, 3, 4, 4, 3)
     if tuple(plugin_management.count(value) for value in REMOTE_EXCLUSIONS) != (
         expected_plugin_exclusion_counts
     ):

@@ -80,11 +80,15 @@ canonical cache paths. Git-tracked `.gradle` content and implicit `buildSrc`
 builds are forbidden. Never broaden either side or add observed generated
 hashes one run at a time.
 
-The Plum Team's [Maven mirror](https://github.com/The-Plum-Team/maven-mirror) is the first
-repository for the Fabric, Architectury, Stonecutter, NeoForge, Forge and GeckoLib groups, in
-`settings.gradle` and through `gradle/repository-policy.gradle`. It serves only openly licensed
-files whose SHA-256 matched the mods' verification metadata and answers 404 for everything else,
-so Gradle falls back to the upstream repositories unchanged. Strict verification still checks
+The Plum Team's [Maven mirror](https://github.com/The-Plum-Team/maven-mirror), at
+`https://maven.quickskin.net/`, is the first repository for everything but Mojang's and
+Minecraft's files, in `settings.gradle` and through `gradle/repository-policy.gradle`: the Fabric,
+Architectury, Stonecutter, NeoForge, Forge and GeckoLib groups and the libraries and plugins Maven
+Central and the Gradle Plugin Portal serve. It serves only openly licensed files whose SHA-256
+matched the mods' verification metadata and answers 404 for everything else, so Gradle falls back
+to the upstream repositories unchanged. LWJGL is the exception among Maven Central's libraries:
+Loom takes it from Maven Central alone, and a NeoForge build takes it from Mojang's host, so the
+mirror is never asked for it. Strict verification still checks
 every file it serves. `-Pplum.mavenMirror=false` (or `ORG_GRADLE_PROJECT_plum.mavenMirror=false`
 in the environment) is the emergency switch: it leaves the mirror out of both places, so every
 group resolves from its upstream repositories.

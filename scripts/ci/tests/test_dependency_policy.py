@@ -242,7 +242,7 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
             "dl.cloudsmith.io/public/geckolib3/geckolib/maven",
             "repo.maven.apache.org/maven2",
             "maven-central.storage-download.googleapis.com/maven2",
-            "the-plum-team.github.io/maven-mirror",
+            "maven.quickskin.net/",
         ):
             self.assertEqual(after_hosts.count(f"case '{identity}':"), 1, identity)
         self.assertIn("default:", after_hosts)
@@ -265,13 +265,14 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
             "forge/transformed-dependencies-v1",
         ):
             self.assertIn(exact_path, policy)
-        for exact_owner in (
-            "includeGroupByRegex('org\\\\.lwjgl(\\\\..*)?')",
-            "includeGroupByRegex('cpw\\\\.mods(\\\\..*)?')",
-            "excludeGroupByRegex('org\\\\.lwjgl(\\\\..*)?')",
-            "excludeGroupByRegex('cpw\\\\.mods(\\\\..*)?')",
+        # Where LWJGL comes from Mojang's host, Central and the team's mirror of it both give it up.
+        for exact_owner, count in (
+            ("includeGroupByRegex('org\\\\.lwjgl(\\\\..*)?')", 1),
+            ("includeGroupByRegex('cpw\\\\.mods(\\\\..*)?')", 1),
+            ("excludeGroupByRegex('org\\\\.lwjgl(\\\\..*)?')", 2),
+            ("excludeGroupByRegex('cpw\\\\.mods(\\\\..*)?')", 1),
         ):
-            self.assertEqual(policy.count(exact_owner), 1, exact_owner)
+            self.assertEqual(policy.count(exact_owner), count, exact_owner)
         self.assertEqual(
             policy.count(
                 "def useNeoForgeRepositoryOrigins = "
@@ -279,7 +280,7 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
             ),
             1,
         )
-        self.assertEqual(policy.count("if (useNeoForgeRepositoryOrigins)"), 3)
+        self.assertEqual(policy.count("if (useNeoForgeRepositoryOrigins)"), 4)
         self.assertNotIn("includeGroupByRegex('org\\\\.lwjgl.*')", policy)
         self.assertNotIn("includeGroupByRegex('cpw\\\\.mods.*')", policy)
         self.assertIn("actualLocalPath != expectedLocalPath", policy)
@@ -349,7 +350,7 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
                 )
                 self.assertIn('"plum.mavenMirror must be true or false', script)
                 # The mirror repository is declared exactly once, inside the switch's block.
-                declaration = "url = 'https://the-plum-team.github.io/maven-mirror/'"
+                declaration = "url = 'https://maven.quickskin.net/'"
                 self.assertEqual(script.count(declaration), 1)
                 start = script.index(guard)
                 self.assertGreater(script.index(declaration), start)
@@ -429,14 +430,14 @@ class DependencyVerificationPolicyTests(unittest.TestCase):
         plugin_management = settings.split("plugins {", 1)[0]
         self.assertEqual(plugin_management.count("mavenContent { releasesOnly() }"), 9)
         self.assertEqual(plugin_management.count("content {"), 10)
-        # The portal and Google's mirror of Maven Central behind it reject every generated
-        # namespace; the Forge and NeoForge repositories reject their own hash-named one.
+        # The team's mirror, the portal and Google's mirror of Maven Central behind it reject every
+        # generated namespace; the Forge and NeoForge repositories reject their own hash-named one.
         expected_exclusions = {
-            "excludeGroup('loom')": 2,
-            "excludeGroup('net.minecraft')": 2,
-            "excludeGroupByRegex('net\\\\.minecraftforge\\\\.[0-9a-f]{64}')": 3,
-            "excludeGroupByRegex('net\\\\.neoforged\\\\.fancymodloader\\\\.[0-9a-f]{64}')": 3,
-            "excludeGroupByRegex('remapped\\\\..+')": 2,
+            "excludeGroup('loom')": 3,
+            "excludeGroup('net.minecraft')": 3,
+            "excludeGroupByRegex('net\\\\.minecraftforge\\\\.[0-9a-f]{64}')": 4,
+            "excludeGroupByRegex('net\\\\.neoforged\\\\.fancymodloader\\\\.[0-9a-f]{64}')": 4,
+            "excludeGroupByRegex('remapped\\\\..+')": 3,
         }
         for exclusion, count in expected_exclusions.items():
             self.assertEqual(plugin_management.count(exclusion), count, exclusion)

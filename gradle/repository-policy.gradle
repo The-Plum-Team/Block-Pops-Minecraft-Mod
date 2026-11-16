@@ -133,18 +133,18 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
                 includeGroup('com.eliotlash.mclib')
             }
             break
-        case 'the-plum-team.github.io/maven-mirror':
-            // The Plum Team's hash-checked mirror, added first below. Exact groups only, so
-            // Loom's generated hash-named namespaces can never match it.
+        case 'maven.quickskin.net/':
+            // The Plum Team's hash-checked mirror, added first below. It is asked for everything
+            // but what it never holds: Mojang's files here, and above, as for every repository,
+            // Minecraft and the namespaces Loom generates. Where LWJGL comes from Mojang's host,
+            // it is kept away from LWJGL too: the mirror holds Maven Central's copies.
             repository.content {
-                [
-                    'net.fabricmc', 'net.fabricmc.fabric-api', 'net.fabricmc.unpick',
-                    'dev.architectury', 'dev.architectury.loom', 'dev.architectury.loom-no-remap',
-                    'architectury-plugin', 'dev.kikugie', 'dev.kikugie.stonecutter',
-                    'net.neoforged', 'net.neoforged.fancymodloader', 'net.neoforged.installertools',
-                    'net.neoforged.accesstransformers', 'cpw.mods', 'net.minecraftforge',
-                    'software.bernie.geckolib', 'com.geckolib',
-                ].each { includeGroup(it) }
+                excludeGroupByRegex('com\\.mojang(\\..*)?')
+                excludeGroupByRegex('de\\.oceanlabs\\.mcp(\\..*)?')
+                excludeGroup('com.eliotlash.mclib')
+                if (useNeoForgeRepositoryOrigins) {
+                    excludeGroupByRegex('org\\.lwjgl(\\..*)?')
+                }
             }
             break
         case 'repo.maven.apache.org/maven2':
@@ -175,14 +175,15 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
     }
 }
 
-// The Plum Team's hash-checked Maven mirror (https://github.com/The-Plum-Team/maven-mirror) serves
-// the openly licensed Fabric, Architectury, Stonecutter, NeoForge, Forge and GeckoLib artifacts
-// this build resolves. It is searched first, limited by the case above, so an outage of those
+// The Plum Team's hash-checked Maven mirror (https://github.com/The-Plum-Team/maven-mirror), on the
+// team's own host, serves the openly licensed artifacts this build resolves: the Fabric,
+// Architectury, Stonecutter, NeoForge, Forge and GeckoLib ones and the libraries Maven Central
+// serves. It is searched first, limited by the case above, so an outage or a rate limit of those
 // hosts does not break the build; whenever it answers 404, Gradle continues with the upstream
 // repositories declared after it, unchanged. Every file it serves is still checked against
 // gradle/verification-metadata.xml.
 // Emergency switch: -Pplum.mavenMirror=false leaves the mirror out, so every group resolves from
-// its upstream repositories only (for example while GitHub Pages is down or serves a bad file).
+// its upstream repositories only (for example while the mirror is down or serves a bad file).
 // settings.gradle reads the same property for plugins.
 def plumMirrorSwitch = providers.gradleProperty('plum.mavenMirror').orNull
 if (!(plumMirrorSwitch in [null, 'true', 'false'])) {
@@ -191,7 +192,7 @@ if (!(plumMirrorSwitch in [null, 'true', 'false'])) {
 if (plumMirrorSwitch != 'false') {
     def plumMirror = repositories.findByName('PlumMavenMirror') ?: repositories.maven {
         name = 'PlumMavenMirror'
-        url = 'https://the-plum-team.github.io/maven-mirror/'
+        url = 'https://maven.quickskin.net/'
         // The mirror holds exactly the files in the verification metadata: a module's .module
         // file, without the .pom that only points to it.
         metadataSources { gradleMetadata(); mavenPom() }
