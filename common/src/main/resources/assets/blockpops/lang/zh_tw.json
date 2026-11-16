@@ -430,7 +430,7 @@
   "blockpops.world_creator.wizard.name_empty": "請輸入名稱",
   "blockpops.world_creator.wizard.author_hint": "你或你團隊的名字",
   "blockpops.world_creator.wizard.author_rule": "作者不能包含控制字元",
-  "blockpops.world_creator.wizard.logo_help": "將 PNG 拖放至此或點擊選擇 · %s 到 %s px",
+  "blockpops.world_creator.wizard.logo_help": "將 PNG 拖放至此或點擊選擇 · 超過 %s px 會自動縮小",
   "blockpops.world_creator.wizard.colour": "背景顏色",
   "blockpops.world_creator.wizard.colour_value": "%s · %s",
   "blockpops.world_creator.wizard.from_logo": "從 Logo 取色",

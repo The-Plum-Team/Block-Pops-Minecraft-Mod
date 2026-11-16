@@ -430,7 +430,7 @@
   "blockpops.world_creator.wizard.name_empty": "Typ een naam",
   "blockpops.world_creator.wizard.author_hint": "Jouw naam of die van je team",
   "blockpops.world_creator.wizard.author_rule": "Een auteur mag geen stuurtekens bevatten",
-  "blockpops.world_creator.wizard.logo_help": "Sleep een PNG hierheen of klik om te kiezen · %s tot %s px",
+  "blockpops.world_creator.wizard.logo_help": "Sleep een PNG hierheen of klik om te kiezen · groter dan %s px wordt verkleind",
   "blockpops.world_creator.wizard.colour": "Achtergrondkleur",
   "blockpops.world_creator.wizard.colour_value": "%s · %s",
   "blockpops.world_creator.wizard.from_logo": "Uit het logo halen",

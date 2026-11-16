@@ -430,7 +430,7 @@
   "blockpops.world_creator.wizard.name_empty": "Type a name",
   "blockpops.world_creator.wizard.author_hint": "Your name or your team's",
   "blockpops.world_creator.wizard.author_rule": "An author cannot hold control characters",
-  "blockpops.world_creator.wizard.logo_help": "Drop a PNG here or click to choose · %s to %s px",
+  "blockpops.world_creator.wizard.logo_help": "Drop a PNG here or click to choose · larger than %s px is scaled down",
   "blockpops.world_creator.wizard.colour": "Background colour",
   "blockpops.world_creator.wizard.colour_value": "%s · %s",
   "blockpops.world_creator.wizard.from_logo": "Take from the logo",
