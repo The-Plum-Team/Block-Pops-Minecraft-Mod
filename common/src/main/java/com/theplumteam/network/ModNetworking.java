@@ -289,6 +289,8 @@ public class ModNetworking {
 
         // Leaving a server forgets its Custom, player and World collections and their loaded assets
         dev.architectury.event.events.client.ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(player -> {
+            // The creator's drafts are closed first: its saving goes back to being the server's
+            com.theplumteam.client.worldcontent.PersonalSession.close();
             com.theplumteam.client.remote.ClientCustomCollections.forget();
             com.theplumteam.client.remote.ClientPlayerCollections.forget();
             com.theplumteam.client.worldcontent.ClientWorldCollections.forget();
@@ -296,6 +298,7 @@ public class ModNetworking {
         });
         // A proxy can move the client to another server without a disconnect; that server sends its own
         dev.architectury.event.events.client.ClientPlayerEvent.CLIENT_PLAYER_JOIN.register(player -> {
+            com.theplumteam.client.worldcontent.PersonalSession.close();
             com.theplumteam.client.worldcontent.ClientWorldCollections.forget();
             // Player collections are sent only to a client that says it loads them
             com.theplumteam.client.remote.ClientPlayerCollections.forget();
@@ -306,6 +309,9 @@ public class ModNetworking {
         // savers save drafts on the client tick, whichever screen is shown
         dev.architectury.event.events.client.ClientTickEvent.CLIENT_POST.register(minecraft -> {
             com.theplumteam.client.worldcontent.FilePicker.tick();
+            com.theplumteam.client.worldcontent.PersonalSession.watch(minecraft.screen,
+                    minecraft.screen instanceof com.theplumteam.client.gui.SettingsScreen);
+            com.theplumteam.client.worldcontent.PersonalSession.tick();
             com.theplumteam.client.worldcontent.ClientWorldUploads.tick();
             com.theplumteam.client.worldcontent.CreatorAutosave.tick();
             com.theplumteam.client.remote.ClientPlayerCollections.tick();

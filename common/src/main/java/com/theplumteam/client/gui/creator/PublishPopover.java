@@ -10,6 +10,7 @@ import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.worldcontent.AutoSaver;
 import com.theplumteam.client.worldcontent.CreatorDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FigureDraft;
+import com.theplumteam.client.worldcontent.CreatorSource;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
@@ -137,7 +138,8 @@ final class PublishPopover {
         }
 
         // 3. Where players find it
-        shown.line(hold ? tr("publish.where.live") : tr(draft.plush() ? "publish.where.gacha" : "publish.where.claw"),
+        shown.line(CreatorSource.isPersonal() ? Component.translatable("blockpops.upload.where")
+                : hold ? tr("publish.where.live") : tr(draft.plush() ? "publish.where.gacha" : "publish.where.claw"),
                 Theme.MUTED);
 
         // 4. The publish on its way, or what the server said

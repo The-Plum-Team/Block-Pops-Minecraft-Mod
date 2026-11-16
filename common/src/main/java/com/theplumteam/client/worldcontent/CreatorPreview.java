@@ -84,7 +84,7 @@ public final class CreatorPreview {
         for (String sha : draftRecord.referencedShas()) {
             BlobInfo info = localBlobs.get(sha);
             if (info == null) {
-                info = ClientWorldCollections.blob(sha);
+                info = CreatorSource.blob(sha);
             }
             if (info != null) {
                 blobs.put(sha, info);

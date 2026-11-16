@@ -214,6 +214,14 @@ public final class ClientWorldUploads {
 
         /** Sends an edit ({@link WorldCollectionEditPacket}). */
         void edit(int requestId, WorldCollectionEdit edit);
+
+        /**
+         * Whether what is sent needs no budget: the budget mirrors a server's limits per player,
+         * and a player's own disk has none.
+         */
+        default boolean unlimited() {
+            return false;
+        }
     }
 
     static final Host GAME = new Host() {
@@ -396,6 +404,9 @@ public final class ClientWorldUploads {
      * is sent in the background; 0 when it has room now.
      */
     public static long roomInMillis(Cost cost, boolean background) {
+        if (host.unlimited()) {
+            return 0;
+        }
         long now = host.millis();
         prune(now);
         int reserveSecond = background ? RESERVE_EDITS_PER_SECOND : 0;

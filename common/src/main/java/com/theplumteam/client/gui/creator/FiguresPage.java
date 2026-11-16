@@ -20,7 +20,7 @@ import com.theplumteam.client.gui.creator.ui.UiTooltip;
 import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.util.UiSounds;
-import com.theplumteam.client.worldcontent.ClientWorldCollections;
+import com.theplumteam.client.worldcontent.CreatorSource;
 import com.theplumteam.client.worldcontent.CreatorDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FigureDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FileRef;
@@ -375,11 +375,11 @@ final class FiguresPage implements EditorPage {
             return;
         }
         // A file picked here goes up again with the next save, so only a stored one stays lost
-        if (file.local() == null && ClientWorldCollections.isMissingOnServer(file.sha())) {
+        if (file.local() == null && CreatorSource.isMissing(file.sha())) {
             found.add(tr("figures.problem.missing", UiDropZone.slotName(slot)));
             return;
         }
-        if (file.local() == null && ClientWorldCollections.failedToLoad(file.sha())) {
+        if (file.local() == null && CreatorSource.failedToLoad(file.sha())) {
             found.add(tr("figures.problem.failed", UiDropZone.slotName(slot)));
             return;
         }

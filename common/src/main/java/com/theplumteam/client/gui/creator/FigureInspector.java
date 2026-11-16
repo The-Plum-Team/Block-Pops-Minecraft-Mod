@@ -15,8 +15,8 @@ import com.theplumteam.client.gui.creator.ui.UiScrollPane;
 import com.theplumteam.client.gui.creator.ui.UiSizeSlider;
 import com.theplumteam.client.gui.creator.ui.UiTooltip;
 import com.theplumteam.client.gui.style.PixelIcon;
+import com.theplumteam.client.worldcontent.CreatorSource;
 import com.theplumteam.client.worldcontent.BulkPlan;
-import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.client.worldcontent.CreatorDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FigureDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FileRef;
@@ -774,8 +774,8 @@ final class FigureInspector {
         // A sync may describe a stored file later, or report it lost or broken, under the same sha
         String key = ref == null ? "/" + against
                 : ref.sha() + "/" + against + "/" + (ref.info() != null) + "/"
-                + ClientWorldCollections.isMissingOnServer(ref.sha()) + "/"
-                + ClientWorldCollections.failedToLoad(ref.sha());
+                + CreatorSource.isMissing(ref.sha()) + "/"
+                + CreatorSource.failedToLoad(ref.sha());
         if (key.equals(slot.shown)) {
             return;
         }
@@ -793,12 +793,12 @@ final class FigureInspector {
             zone.showError(tr("file_unknown"));
             return;
         } else {
-            zone.showFile(tr("identity.stored_file").getString(), ref.sha(), info);
-            if (ClientWorldCollections.isMissingOnServer(ref.sha())) {
+            zone.showFile(CreatorScreen.storedFile().getString(), ref.sha(), info);
+            if (CreatorSource.isMissing(ref.sha())) {
                 zone.showError(tr("file_missing"));
                 return;
             }
-            if (ClientWorldCollections.failedToLoad(ref.sha())) {
+            if (CreatorSource.failedToLoad(ref.sha())) {
                 zone.showError(tr("figures.problem.failed", UiDropZone.slotName(slot.slot)));
                 return;
             }
@@ -1105,7 +1105,7 @@ final class FigureInspector {
                 return wrong;
             }
             boolean stored = ref.local() == null;
-            parts.add(stored ? tr("identity.stored_file").getString() : ref.local().name());
+            parts.add(stored ? CreatorScreen.storedFile().getString() : ref.local().name());
             parts.add(tr("check.size", info.width(), info.height()).getString());
             shortFirst[0] = stored ? tr("figures.file_stored_short").getString() : null;
             return null;
@@ -1162,11 +1162,11 @@ final class FigureInspector {
         // What is wrong with one file: lost, not loaded, not described, or its first failing check
         @Nullable
         private Component fileWrong(FileRef ref, FilePicker.Slot slot, Function<BlobInfo, List<FileChecks.Check>> checks) {
-            if (ref.local() == null && ClientWorldCollections.isMissingOnServer(ref.sha())) {
+            if (ref.local() == null && CreatorSource.isMissing(ref.sha())) {
                 return slot == FilePicker.Slot.SKIN ? tr("file_missing")
                         : tr("figures.problem.missing", UiDropZone.slotName(slot));
             }
-            if (ref.local() == null && ClientWorldCollections.failedToLoad(ref.sha())) {
+            if (ref.local() == null && CreatorSource.failedToLoad(ref.sha())) {
                 return tr("figures.problem.failed", UiDropZone.slotName(slot));
             }
             BlobInfo info = ref.info();

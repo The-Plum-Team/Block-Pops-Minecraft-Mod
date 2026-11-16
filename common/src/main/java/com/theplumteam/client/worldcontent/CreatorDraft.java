@@ -124,13 +124,13 @@ public final class CreatorDraft {
         /** What the picker or the server's file table knows about the file, or null. */
         @Nullable
         public BlobInfo info() {
-            return local != null ? local.info() : ClientWorldCollections.blob(sha);
+            return local != null ? local.info() : CreatorSource.blob(sha);
         }
 
         /** Whether its bytes have to be sent: picked here, and not stored on the server, or lost there. */
         public boolean needsUpload() {
             return local != null
-                    && (ClientWorldCollections.blob(sha) == null || ClientWorldCollections.isMissingOnServer(sha));
+                    && (CreatorSource.blob(sha) == null || CreatorSource.isMissing(sha));
         }
 
         @Override
@@ -1444,7 +1444,7 @@ public final class CreatorDraft {
     }
 
     private static Forecast forecast(WorldCollectionRecord candidate, Map<String, FilePicker.LocalFile> local) {
-        Map<String, BlobInfo> blobs = new HashMap<>(ClientWorldCollections.blobs());
+        Map<String, BlobInfo> blobs = new HashMap<>(CreatorSource.blobs());
         for (FilePicker.LocalFile file : local.values()) {
             blobs.putIfAbsent(file.sha(), file.info());
         }
@@ -1463,7 +1463,7 @@ public final class CreatorDraft {
         }
         List<WorldCollectionRecord> all = new ArrayList<>();
         boolean replaced = false;
-        for (WorldCollectionRecord record : ClientWorldCollections.records()) {
+        for (WorldCollectionRecord record : CreatorSource.records()) {
             if (record.id().equals(candidate.id())) {
                 all.add(candidate);
                 replaced = true;
@@ -1494,7 +1494,7 @@ public final class CreatorDraft {
      * @param putFigures  the ids of new figures the save put
      */
     public void markSent(Map<String, Object> values, Collection<String> putFigures) {
-        int revision = ClientWorldCollections.revision();
+        int revision = CreatorSource.revision();
         for (Map.Entry<String, Object> entry : values.entrySet()) {
             sent.put(entry.getKey(), new Sent(entry.getValue(), revision));
         }
@@ -1644,7 +1644,7 @@ public final class CreatorDraft {
      * does for the sync the client applied last.
      */
     public void rebase(WorldCollectionRecord newer) {
-        rebase(newer, ClientWorldCollections.revision());
+        rebase(newer, CreatorSource.revision());
     }
 
     /**

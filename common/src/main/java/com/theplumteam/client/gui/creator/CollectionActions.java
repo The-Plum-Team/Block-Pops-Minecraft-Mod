@@ -13,7 +13,8 @@ import com.theplumteam.client.gui.creator.ui.UiQuotaMeter;
 import com.theplumteam.client.gui.creator.ui.UiToast;
 import com.theplumteam.client.gui.style.DialogFrame;
 import com.theplumteam.client.gui.style.PixelIcon;
-import com.theplumteam.client.worldcontent.ClientWorldCollections;
+import com.theplumteam.client.worldcontent.CreatorSource;
+import com.theplumteam.client.worldcontent.PersonalLinks;
 import com.theplumteam.client.worldcontent.ClientWorldUploads;
 import com.theplumteam.client.worldcontent.CreatorAutosave;
 import com.theplumteam.client.worldcontent.CreatorRuns;
@@ -83,7 +84,7 @@ final class CollectionActions {
     /** Why no collection can be added now, by a new one, a duplicate or an import, or null when one can. */
     @Nullable
     static Component tooManyCollections() {
-        if (ClientWorldCollections.records().size() >= WorldContentLimits.MAX_COLLECTIONS) {
+        if (CreatorSource.records().size() >= WorldContentLimits.MAX_COLLECTIONS) {
             return tr("too_many_collections", WorldContentLimits.MAX_COLLECTIONS);
         }
         return null;
@@ -135,14 +136,18 @@ final class CollectionActions {
                 menu.item(tr("home.menu.put"), () -> put(machine, record.id(), record.name()));
             }
         }
-        if (saving != null) {
+        // The player's own drafts are in no world: nobody has figures of one, and it is never archived
+        boolean personal = CreatorSource.isPersonal();
+        if (personal) {
+            // Nothing of the server's
+        } else if (saving != null) {
             menu.disabled(tr("home.menu.unlock"), saving);
         } else if (record.figures().stream().anyMatch(WorldCollectionRecord.Figure::enabled)) {
             menu.item(tr("home.menu.unlock"), tr("home.menu.unlock_hint"), () -> unlock(record.id(), record.name()));
         } else {
             menu.disabled(tr("home.menu.unlock"), tr("home.reason.no_figures"));
         }
-        if (!record.draft()) {
+        if (!record.draft() && !personal) {
             // Players can only have figures of a collection that was in the machines
             if (saving != null) {
                 menu.disabled(tr("home.menu.progress"), saving);
@@ -156,8 +161,20 @@ final class CollectionActions {
         } else {
             menu.item(tr("home.menu.duplicate"), () -> duplicate(record));
         }
+        if (personal) {
+            // Once published, its code is here to share again
+            PersonalLinks.Link link = BlockPopsPublish.linkOf(record.id());
+            if (link != null) {
+                menu.item(Component.translatable("blockpops.upload.done.copy"), () -> BlockPopsPublish.copyCode(link.code()));
+                // Taking it down is always the owner's to do, whether or not they still support the project
+                menu.warning(Component.translatable("blockpops.mycollections.delete"),
+                        () -> BlockPopsPublish.confirmDelete(record.id(), record.name()));
+            }
+        }
         menu.separator();
-        if (record.archived()) {
+        if (personal) {
+            // A draft is deleted as it is
+        } else if (record.archived()) {
             if (saving != null) {
                 menu.disabled(tr("home.menu.restore"), saving);
             } else {
@@ -176,6 +193,10 @@ final class CollectionActions {
             menu.disabled(tr("home.menu.purge"), saving);
         } else {
             menu.warning(tr("home.menu.purge"), () -> confirmPurge(record));
+        }
+        if (personal) {
+            // A data pack is the server's to read
+            return menu;
         }
         menu.separator();
         Component importProblem = tooManyCollections();
@@ -338,8 +359,8 @@ final class CollectionActions {
      */
     static Component quotaText() {
         return Component.empty()
-                .append(UiQuotaMeter.text(ClientWorldCollections.quotaUsedKiB(), ClientWorldCollections.quotaMaxKiB()))
-                .append(tr("home.collections", ClientWorldCollections.records().size(),
+                .append(UiQuotaMeter.text(CreatorSource.quotaUsedKiB(), CreatorSource.quotaMaxKiB()))
+                .append(tr("home.collections", CreatorSource.records().size(),
                         WorldContentLimits.MAX_COLLECTIONS));
     }
 

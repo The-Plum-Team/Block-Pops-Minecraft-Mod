@@ -12,6 +12,9 @@ final class PlayerBuildFlags {
     /** Where games read what players publish: everything of theirs lies below {@code p/} there. */
     static final String READ_ORIGIN = "https://blockpops-cdn.quickskin.net";
 
+    /** Where players publish: the upload service, the only origin the game ever writes to. */
+    static final String UPLOAD_ORIGIN = "https://blockpops-uploads.quickskin.net";
+
     static final String[][] KEYS = {};
 
     private PlayerBuildFlags() {

@@ -15,7 +15,7 @@ import com.theplumteam.client.gui.creator.ui.SidebarScreen;
 import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.style.UiText;
-import com.theplumteam.client.worldcontent.ClientWorldCollections;
+import com.theplumteam.client.worldcontent.CreatorSource;
 import com.theplumteam.client.worldcontent.CreatorDraft;
 import com.theplumteam.client.worldcontent.CreatorPreview;
 import com.theplumteam.figure.DrawOdds;
@@ -134,6 +134,11 @@ final class OptionsPage implements EditorPage {
 
     // The rows, top to bottom
     private List<UiNode> rows() {
+        if (CreatorSource.isPersonal()) {
+            // A draft of the player's own names no author, who is the account that publishes it,
+            // and is not made from a server's data pack
+            return List.of(this.space, this.plush, this.holographic, this.weights, this.bulk, this.danger);
+        }
         return List.of(this.space, this.plush, this.holographic, this.weights, this.author, this.bulk, this.pack,
                 this.danger);
     }
@@ -411,8 +416,8 @@ final class OptionsPage implements EditorPage {
         void refresh(CreatorDraft.Forecast forecast) {
             double files = forecast.collectionBytes() / (double) WorldContentLimits.MAX_COLLECTION_BYTES;
             double definition = forecast.recordBytes() / (double) WorldContentLimits.RECORD_BYTES;
-            int quotaMax = ClientWorldCollections.quotaMaxKiB();
-            int quotaUsed = ClientWorldCollections.quotaUsedKiB();
+            int quotaMax = CreatorSource.quotaMaxKiB();
+            int quotaUsed = CreatorSource.quotaUsedKiB();
             double server = quotaMax > 0 ? quotaUsed / (double) quotaMax : 0.0;
             String budget = forecast.budgetProblem();
             double most = Math.max(files, Math.max(definition, server));

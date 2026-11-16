@@ -7,7 +7,7 @@ import com.theplumteam.client.gui.SettingsScreen;
 import com.theplumteam.client.gui.style.MenuGuiScale;
 import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.util.GuiPose;
-import com.theplumteam.client.worldcontent.ClientWorldCollections;
+import com.theplumteam.client.worldcontent.CreatorSource;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -113,7 +113,7 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
     protected CreatorScreen(Component title, @Nullable Screen parent) {
         super(title);
         this.parent = parent;
-        this.shownRevision = ClientWorldCollections.revision();
+        this.shownRevision = CreatorSource.revision();
         if (!(parent instanceof CreatorScreen)) {
             // A message left from an earlier visit, such as one cut short by a disconnect
             UiToast.clear();
@@ -534,12 +534,18 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
         return toastShown.covers(toastWidth(), toastBottom(), mouseX - toastLeft(), mouseY);
     }
 
+    /** What a file that is already kept reads as: on the server, or on this computer for the player's own drafts. */
+    public static Component storedFile() {
+        return CreatorSource.isPersonal() ? Component.translatable("blockpops.mycollections.saved_local")
+                : tr("identity.stored_file");
+    }
+
     // Ticking
 
     @Override
     public void tick() {
         super.tick();
-        if (!SettingsScreen.canOpenCreator()) {
+        if (!CreatorSource.isPersonal() && !SettingsScreen.canOpenCreator()) {
             // Not an operator any more, or the server stopped sending World collections
             leave();
             return;
@@ -548,8 +554,8 @@ public abstract class CreatorScreen extends Screen implements MenuGuiScale.Scale
             // Another mod put the player's scale back on the window after init()
             rebuild();
         }
-        if (ClientWorldCollections.revision() != this.shownRevision) {
-            this.shownRevision = ClientWorldCollections.revision();
+        if (CreatorSource.revision() != this.shownRevision) {
+            this.shownRevision = CreatorSource.revision();
             onSync();
             if (this.minecraft.screen != this) {
                 return;

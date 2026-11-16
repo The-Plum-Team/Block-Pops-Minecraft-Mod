@@ -17,9 +17,9 @@ import com.theplumteam.client.gui.creator.ui.UiToast;
 import com.theplumteam.client.gui.style.DialogFrame;
 import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.gui.style.Surfaces;
+import com.theplumteam.client.worldcontent.CreatorSource;
 import com.theplumteam.client.worldcontent.AutoSaver;
 import com.theplumteam.client.worldcontent.ClientPreviewAssets;
-import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.client.worldcontent.ClientWorldUploads;
 import com.theplumteam.client.worldcontent.CreatorAutosave;
 import com.theplumteam.client.worldcontent.CreatorDraft;
@@ -195,7 +195,7 @@ public class CreatorEditorScreen extends SidebarScreen {
      */
     public CreatorEditorScreen(Screen parent, String collectionId, @Nullable BlockPos machinePos, Tab tab) {
         super(tr("side.heading"), parent);
-        if (ClientWorldCollections.record(collectionId) == null) {
+        if (CreatorSource.record(collectionId) == null) {
             throw new IllegalStateException("No synced World collection " + collectionId);
         }
         this.collectionId = collectionId;
@@ -977,6 +977,23 @@ public class CreatorEditorScreen extends SidebarScreen {
             done.accept(problem);
             return;
         }
+        if (CreatorSource.isPersonal()) {
+            // One of the player's own drafts is published on BlockPops, with its own dialogs: what
+            // is saved on this computer is what goes, so whatever still waits is saved first
+            List<Blocker> blockers = publishBlockers();
+            if (!blockers.isEmpty()) {
+                done.accept(blockers.get(0).text());
+                return;
+            }
+            if (!this.saver.isIdle()) {
+                this.saver.flushNow();
+                done.accept(tr("autosave.saving"));
+                return;
+            }
+            done.accept(null);
+            BlockPopsPublish.start(this.collectionId);
+            return;
+        }
         this.saver.publish(current -> {
             // Checked afresh, whatever the cache holds: this decides what goes to the players
             invalidateChecks();
@@ -1087,7 +1104,7 @@ public class CreatorEditorScreen extends SidebarScreen {
     /** The collection as the server has it, or null once it is gone. */
     @Nullable
     WorldCollectionRecord record() {
-        return ClientWorldCollections.record(this.collectionId);
+        return CreatorSource.record(this.collectionId);
     }
 
     /**
@@ -1226,7 +1243,7 @@ public class CreatorEditorScreen extends SidebarScreen {
         if (refusal == null) {
             // Applied: the draft takes it from the sync it causes, which comes next
             this.importLandedAt = Util.getMillis();
-            this.importRevision = ClientWorldCollections.revision();
+            this.importRevision = CreatorSource.revision();
             return;
         }
         endImport();
@@ -1402,8 +1419,8 @@ public class CreatorEditorScreen extends SidebarScreen {
         CreatorDraft.Forecast forecast = forecast();
         boolean files = forecast.collectionBytes() >= SPACE_LOW * WorldContentLimits.MAX_COLLECTION_BYTES;
         boolean definition = forecast.recordBytes() >= SPACE_LOW * WorldContentLimits.RECORD_BYTES;
-        int quotaMax = ClientWorldCollections.quotaMaxKiB();
-        boolean server = quotaMax > 0 && ClientWorldCollections.quotaUsedKiB() >= SPACE_LOW * quotaMax;
+        int quotaMax = CreatorSource.quotaMaxKiB();
+        boolean server = quotaMax > 0 && CreatorSource.quotaUsedKiB() >= SPACE_LOW * quotaMax;
         if (!files && !definition && !server) {
             return null;
         }
@@ -1444,7 +1461,7 @@ public class CreatorEditorScreen extends SidebarScreen {
             return;
         }
         if (this.importing != null && this.importLandedAt != 0
-                && ClientWorldCollections.revision() != this.importRevision) {
+                && CreatorSource.revision() != this.importRevision) {
             // The first sync after the server applied the import carries the imported collection
             finishImport();
         }
@@ -1747,7 +1764,7 @@ public class CreatorEditorScreen extends SidebarScreen {
     // Opens a collection's editor over the creator screen shown, as the toast's link does
     private static void reopen(String collectionId) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (ClientWorldCollections.record(collectionId) == null) {
+        if (CreatorSource.record(collectionId) == null) {
             return;
         }
         Screen shown = minecraft.screen;

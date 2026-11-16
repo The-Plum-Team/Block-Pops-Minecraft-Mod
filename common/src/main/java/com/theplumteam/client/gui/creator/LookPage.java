@@ -33,7 +33,7 @@ import com.theplumteam.client.gui.style.Surfaces;
 import com.theplumteam.client.gui.util.LinkOpening;
 import com.theplumteam.client.renderer.LogoLayout;
 import com.theplumteam.client.runtime.RuntimeTextures;
-import com.theplumteam.client.worldcontent.ClientWorldCollections;
+import com.theplumteam.client.worldcontent.CreatorSource;
 import com.theplumteam.client.worldcontent.CreatorDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.BoxMode;
 import com.theplumteam.client.worldcontent.CreatorDraft.FileRef;
@@ -782,8 +782,8 @@ final class LookPage implements EditorPage {
             return sha;
         }
         boolean line = zone == this.boxZone || zone == this.logoLine;
-        zone.showFile(tr(line ? "look.stored_short" : "identity.stored_file").getString(), sha, info);
-        if (ClientWorldCollections.isMissingOnServer(sha)) {
+        zone.showFile((line ? tr("look.stored_short") : CreatorScreen.storedFile()).getString(), sha, info);
+        if (CreatorSource.isMissing(sha)) {
             zone.showError(tr("file_missing"));
         }
         return sha;

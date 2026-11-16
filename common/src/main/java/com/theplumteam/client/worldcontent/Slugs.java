@@ -96,7 +96,7 @@ public final class Slugs {
 
     /** Whether a collection with the slug is among the ones this client was sent. */
     public static boolean isCollectionTaken(String slug) {
-        return WorldContentIds.isSlug(slug) && ClientWorldCollections.record(WorldContentIds.collectionId(slug)) != null;
+        return WorldContentIds.isSlug(slug) && CreatorSource.record(WorldContentIds.collectionId(slug)) != null;
     }
 
     // The root is shortened so the whole id stays a slug, as a slug typed in the advanced field may be 24 long
