@@ -6,6 +6,10 @@
 Accepted on 2026-11-14. It is being built in slices, and no game loads a player collection until
 the keys it names are compiled in: a build with no key believes nothing that is signed.
 
+Amended on 2026-11-16, before anything was deployed: publishing is open to every player with a
+verified Minecraft account. The author withdrew the requirement that only supporters publish, and
+with it went the supporter check, the purchase links and the refund freeze this record described.
+
 It amends [ADR 0002](0002-load-custom-collections-at-runtime.md) and the rule in
 [`docs/ai/PROJECT.md`](../../ai/PROJECT.md) that only `com.theplumteam.remote` fetches Custom content,
 from a single fixed origin. Player collections are read under their own prefix `p/` of the same
@@ -28,8 +32,8 @@ anyone can add, as official collections are shared today. The author decided on 
 - players create a collection in game and upload it, getting a share code;
 - only the owner, identified by a verified Minecraft UUID, may edit and re-upload it;
 - uploads publish directly, with no review beforehand;
-- only supporters may upload, as kofi-linker defines them (Ko-fi by name within 35 days, or
-  PayNow);
+- only supporters may upload, as kofi-linker defines them (withdrawn on 2026-11-16: every player
+  may);
 - no secret goes in the jar.
 
 What exists constrains how:
@@ -54,10 +58,9 @@ What exists constrains how:
 - **Hiding a B2 file does not delete it.** B2 answers every download with the file's id, and on this
   public bucket a download by id works without authentication after the name is hidden, until a
   version delete or a lifecycle rule removes it.
-- **The client sends nothing to any service today.** Supporter checks run on the game server, which
-  an offline-mode or modified server can lie to; kofi-linker's public `/api/check` trusts whatever
-  name and UUID it is given; kofi-linker's `/api/link` ties a paying email to any Minecraft name
-  without proof that the payer owns that account, and Mojang names change hands.
+- **The client sends nothing to any service today.** What a game server says about a player proves
+  nothing to a third party: an offline-mode or modified server can lie, and Mojang names change
+  hands.
 - **Mojang's session service can prove an account to a third party.** The client calls `joinServer`
   with a `serverId`, and anyone can ask `hasJoined` who joined with it. The access token goes only
   to Mojang. The call has three shapes across the release's authlib versions (4.0.43 to 10.0.77),
@@ -157,7 +160,7 @@ What exists constrains how:
   revoked one and delete its cached files.
 - **An upload origin, write-only.** `UploadApi.ORIGIN` is a compile-time constant used only by
   `com.theplumteam.client.upload`, only on an explicit player action (publish, list, download for
-  editing, roll back, withdraw, delete, link), never on a dedicated server
+  editing, roll back, withdraw, delete), never on a dedicated server
   and never in the packaged E2E. Responses are bounded and strict; the game shows only lang keys for
   the enumerated errors it receives, and shows the collection names and codes of the player's own
   list as data, only after they pass the text policy and the code grammar.
@@ -167,16 +170,11 @@ What exists constrains how:
   stores anything, asks `hasJoined` with a URL it builds from parameters, never by concatenation,
   and keys ownership on the UUID only when Mojang names the same account the challenge named. No
   Minecraft server takes part. Non-premium accounts cannot publish in this version.
-- **Uploads need a purchase tied to the UUID.** Who counts as a supporter stays kofi-linker's rule,
-  asked through an internal RPC, never through the public check. For uploads, a purchase counts when
-  PayNow recorded it for that UUID, or when its payer linked it to that UUID: a one-time code shown
-  in game after a verified session, entered with the purchase's email on kofi-linker's link page,
-  and confirmed from that inbox. Links live in kofi-linker's own database, survive a rename,
-  and lapse with the payment; a purchase made by name alone never grants uploads, and nothing binds
-  a name. `/api/check`, `/api/link` and in-game perks are unchanged. A lapsed supporter keeps
-  the collections they have published and may still change, roll back, withdraw and delete them,
-  but cannot publish a new one; a PayNow refund or chargeback, resolved through the links, freezes
-  the owner and quarantines their collections.
+- **Publishing is open to every verified account.** Nobody pays to publish and the service asks
+  no one whether an account supports the project: any account Mojang verifies may publish, change,
+  roll back, withdraw and delete its own collections. What bounds abuse is that an account is a
+  bought copy of the game, the quotas and breakers below, the allow list while the beta is closed,
+  and the author's takedown. Supporter perks in game are unchanged and unrelated.
 - **Publish directly; take down by hand.** Nothing is reviewed before it is published. In this
   version there is no report from the game, no automatic quarantine and no public listing of
   codes: a code is shared by its owner with friends and added by a world's operator, and the author
@@ -196,13 +194,13 @@ What exists constrains how:
 - **Kill switches.** Pause uploads (a service flag, also tripped by the global breaker); switch
   loading off with the online key; switch loading off or revoke the online key with the offline
   root key; revoke the service's B2 keys.
-- **The Usage Guidelines position.** Publishing is a perk of supporting BlockPops; published
+- **The Usage Guidelines position.** Publishing is free for every player; published
   collections are free for everyone to add and use; nothing is sold; Mojang and Microsoft marks are
   not allowed.
 
 ## Consequences
 
-- Supporters can share collections they made in game with a code, and edit them from any computer;
+- Players can share collections they made in game with a code, and edit them from any computer;
   official collections, old jars and their players are untouched.
 - Content nobody reviewed is visible to whoever was given its code until the author takes it down. The
   validators bound what it can be (images, geometry and animations within the World limits, no
@@ -217,15 +215,15 @@ What exists constrains how:
   the client keeps downloaded World files in memory only still holds for World collections.
 - The game sends requests to a service other than the CDN and Mojang, but only when a player acts.
   That service sees the player's IP address, Minecraft name and UUID, and stores only hashes of
-  network prefixes; kofi-linker sees the email of a purchase its payer links. The read origin sees
+  network prefixes. The read origin sees
   every downloading player's IP address, and now also clients refreshing the status and revocation
   list.
 - Codes are public identifiers: anyone can enumerate them and see each collection's author, and kept
   revisions show the names an account used while they are kept.
-- Publishing depends on Mojang's session service, on Cloudflare, on kofi-linker and, for purchases
-  made by name, on email delivery; each failure makes publishing fail closed and leaves loading
-  unaffected. A service outage longer than the documents' validity stops games without saved state
-  from loading player collections, and a game with a clock more than a day off has them off.
+- Publishing depends on Mojang's session service and on Cloudflare; each failure makes publishing
+  fail closed and leaves loading unaffected. A service outage longer than the documents' validity
+  stops games without saved state from loading player collections, and a game with a clock more than
+  a day off has them off.
 - The service holds the B2 keys for `p/` and the online signing key. A compromise can publish, alter
   or delete player content, never official content, until the offline root switches it off and the
   online key rotates; rotation needs no release while the successor key is compiled in, and the

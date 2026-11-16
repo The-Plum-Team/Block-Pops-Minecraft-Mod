@@ -18,10 +18,9 @@ import java.nio.charset.StandardCharsets;
  * rollback|&lt;id&gt;|&lt;head rev&gt;|&lt;to rev&gt;
  * withdraw|&lt;id&gt;|&lt;head rev&gt;|&lt;rev&gt;
  * delete|&lt;id&gt;|&lt;head rev&gt;
- * link
  * </pre>
  *
- * @param id       the collection it is about; null for a new one and for list and link
+ * @param id       the collection it is about; null for a new one and for list
  * @param baseRev  the head revision the player last saw: 0 for a new collection
  * @param rev      the revision to go back to or to withdraw; 0 otherwise
  * @param sha256   the SHA-256 of the package to publish; null otherwise
@@ -33,7 +32,7 @@ public record UploadIntent(Action action, @Nullable String id, int baseRev, int 
 
     /** What is asked. */
     public enum Action {
-        PUBLISH("publish"), LIST("list"), ROLLBACK("rollback"), WITHDRAW("withdraw"), DELETE("delete"), LINK("link");
+        PUBLISH("publish"), LIST("list"), ROLLBACK("rollback"), WITHDRAW("withdraw"), DELETE("delete");
 
         private final String word;
 
@@ -48,7 +47,7 @@ public record UploadIntent(Action action, @Nullable String id, int baseRev, int 
 
     public UploadIntent {
         boolean ok = action != null && switch (action) {
-            case LIST, LINK -> id == null && baseRev == 0 && rev == 0 && sha256 == null;
+            case LIST -> id == null && baseRev == 0 && rev == 0 && sha256 == null;
             case PUBLISH -> Sha256.isValidHex(sha256) && rev == 0
                     && (id == null ? baseRev == 0 : PlayerIds.isPlayerId(id) && isRev(baseRev));
             case ROLLBACK, WITHDRAW -> PlayerIds.isPlayerId(id) && isRev(baseRev) && isRev(rev) && rev != baseRev
@@ -84,14 +83,10 @@ public record UploadIntent(Action action, @Nullable String id, int baseRev, int 
         return new UploadIntent(Action.DELETE, id, headRev, 0, null);
     }
 
-    public static UploadIntent link() {
-        return new UploadIntent(Action.LINK, null, 0, 0, null);
-    }
-
     /** The intent as its one line of text. */
     public String text() {
         return switch (action) {
-            case LIST, LINK -> action.word();
+            case LIST -> action.word();
             case PUBLISH -> action.word() + "|" + (id == null ? NEW : id) + "|" + baseRev + "|" + sha256;
             case ROLLBACK, WITHDRAW -> action.word() + "|" + id + "|" + baseRev + "|" + rev;
             case DELETE -> action.word() + "|" + id + "|" + baseRev;
@@ -127,7 +122,6 @@ public record UploadIntent(Action action, @Nullable String id, int baseRev, int 
         try {
             UploadIntent intent = switch (parts[0]) {
                 case "list" -> parts.length == 1 ? list() : null;
-                case "link" -> parts.length == 1 ? link() : null;
                 case "publish" -> parts.length != 4 ? null : NEW.equals(parts[1])
                         ? ("0".equals(parts[2]) ? publishNew(parts[3]) : null)
                         : publishChanges(parts[1], rev(parts[2]), parts[3]);

@@ -1,14 +1,13 @@
 package com.theplumteam.client.upload;
 
 import com.theplumteam.client.upload.UploadApi.Account;
-import com.theplumteam.client.upload.UploadApi.LinkCode;
 import com.theplumteam.client.upload.UploadApi.Rolled;
 import com.theplumteam.remote.player.UploadIntent;
 
 /**
  * What an owner does with what they published, each as one session for exactly that action:
- * see it, go back to an earlier revision, take one revision back, delete it, and start tying
- * a purchase to the account. Each blocks until it is done, and runs on {@link UploadExecutor}.
+ * see it, go back to an earlier revision, take one revision back and delete it. Each blocks
+ * until it is done, and runs on {@link UploadExecutor}.
  */
 public final class ManageRun {
     private final UploadApi api;
@@ -19,7 +18,7 @@ public final class ManageRun {
         this.sessions = sessions;
     }
 
-    /** What this account has published, and whether it supports the project. */
+    /** What this account has published and how much of each quota it uses. */
     public Account list() throws UploadException {
         return api.me(sessions.open(UploadIntent.list()).token());
     }
@@ -41,10 +40,5 @@ public final class ManageRun {
     /** Deletes the collection from the service for good. */
     public void delete(String id, int headRev) throws UploadException {
         api.delete(sessions.open(UploadIntent.delete(id, headRev)).token(), id);
-    }
-
-    /** A code that ties a purchase made under this account's name to the account. */
-    public LinkCode link() throws UploadException {
-        return api.startLink(sessions.open(UploadIntent.link()).token());
     }
 }

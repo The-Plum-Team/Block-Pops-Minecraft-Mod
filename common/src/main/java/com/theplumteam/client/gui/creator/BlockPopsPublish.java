@@ -8,7 +8,6 @@ import com.theplumteam.client.gui.creator.ui.UiModal;
 import com.theplumteam.client.gui.creator.ui.UiNode;
 import com.theplumteam.client.gui.creator.ui.UiToast;
 import com.theplumteam.client.gui.style.DialogFrame;
-import com.theplumteam.client.gui.util.LinkOpening;
 import com.theplumteam.client.remote.ClientCustomCollections;
 import com.theplumteam.client.upload.ManageRun;
 import com.theplumteam.client.upload.MojangJoin;
@@ -33,7 +32,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
-import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -51,7 +49,6 @@ import java.util.function.Supplier;
 final class BlockPopsPublish {
     /** The version of the publishing terms this build shows. */
     static final int TERMS = 1;
-    private static final String DISCORD = "https://discord.gg/yGxdvA7qej";
     private static final int WIDTH = 340;
     private static final int WIDE = 440;
     private static final int LINES = 7;
@@ -126,7 +123,7 @@ final class BlockPopsPublish {
                     .width(WIDTH).accent(DialogFrame.Accent.CREATE, Theme.ICON_HELP);
             lines(terms, () -> Component.translatable("blockpops.upload.terms.body", minecraft.getUser().getName()),
                     Theme.TEXT_SOFT, 10);
-            terms.cancelButton(Component.translatable("blockpops.upload.gate.later"));
+            terms.cancelButton(Component.translatable("blockpops.upload.not_now"));
             terms.button(Component.translatable("blockpops.upload.terms.accept"), UiButton.Style.GREEN, () -> {
                 links.acceptTerms(TERMS);
                 begin(draftId, links);
@@ -195,7 +192,7 @@ final class BlockPopsPublish {
                 .width(WIDTH).accent(DialogFrame.Accent.DANGER, Theme.ICON_WARNING);
         lines(dialog, () -> Component.translatable("blockpops.mycollections.delete_confirm", name, link.code()),
                 Theme.TEXT_SOFT, LINES);
-        UiButton keep = dialog.cancelButton(Component.translatable("blockpops.upload.gate.later"));
+        UiButton keep = dialog.cancelButton(Component.translatable("blockpops.upload.not_now"));
         dialog.button(Component.translatable("blockpops.mycollections.delete_button"), UiButton.Style.DANGER,
                 () -> delete(draftId, name, link, link.rev(), true));
         dialog.defaultButton(keep);
@@ -268,25 +265,6 @@ final class BlockPopsPublish {
         end(draftId, run);
         Component text = UploadErrors.message(e);
         switch (e.error()) {
-            case NOT_SUPPORTER, SUPPORTER_LAPSED -> {
-                UiModal gate = new UiModal(Component.translatable("blockpops.upload.gate.title"), Component.empty())
-                        .width(WIDTH).accent(DialogFrame.Accent.SETTINGS, Theme.ICON_HELP);
-                lines(gate, () -> text, Theme.TEXT_SOFT, LINES);
-                gate.cancelButton(Component.translatable("blockpops.upload.gate.later"));
-                gate.button(Component.translatable("blockpops.upload.gate.recheck"), UiButton.Style.GREEN,
-                        () -> begin(draftId, links));
-                show(gate, text);
-            }
-            case SUPPORTER_LINK_REQUIRED -> {
-                UiModal link = new UiModal(Component.translatable("blockpops.upload.link.title"), Component.empty())
-                        .width(WIDTH).accent(DialogFrame.Accent.SETTINGS, Theme.ICON_HELP);
-                lines(link, () -> Component.translatable("blockpops.upload.link.body",
-                        Minecraft.getInstance().getUser().getName()), Theme.TEXT_SOFT, LINES);
-                link.cancelButton(Component.translatable("blockpops.upload.gate.later"));
-                link.button(Component.translatable("blockpops.upload.link.start"), UiButton.Style.GREEN,
-                        () -> startLink(draftId, links));
-                show(link, text);
-            }
             case CONFLICT -> {
                 PersonalLinks.Link held = links.link(draftId).orElse(null);
                 Runnable overwrite = held == null || e.detail() < 1 ? null : () -> {
@@ -302,49 +280,6 @@ final class BlockPopsPublish {
                  MOJANG_BANNED, NAME_CHANGE_REQUIRED -> failed(text, null, null);
             default -> failed(text, Component.translatable("blockpops.upload.retry"), () -> begin(draftId, links));
         }
-    }
-
-    // Asks for the code that ties a purchase made under this name to this account, and shows it
-    private static void startLink(String draftId, PersonalLinks links) {
-        Minecraft minecraft = Minecraft.getInstance();
-        UploadExecutor.get().execute(() -> {
-            UploadApi api = UploadApi.forGame();
-            try {
-                String code = new ManageRun(api, new SessionClient(api, MojangJoin.forGame())).link().code();
-                minecraft.execute(() -> {
-                    UiModal dialog = new UiModal(Component.translatable("blockpops.upload.link.title"), Component.empty())
-                            .width(WIDTH).accent(DialogFrame.Accent.SETTINGS, Theme.ICON_HELP);
-                    lines(dialog, () -> Component.translatable("blockpops.upload.link.code", code), Theme.TEXT_SOFT, 3);
-                    dialog.cancelButton(Component.translatable("blockpops.upload.done.close"));
-                    dialog.button(Component.translatable("blockpops.upload.link.discord"), UiButton.Style.SECONDARY, () -> {
-                        minecraft.keyboardHandler.setClipboard(code);
-                        openDiscord();
-                    });
-                    dialog.button(Component.translatable("blockpops.upload.done.copy"), UiButton.Style.SECONDARY, () -> {
-                        minecraft.keyboardHandler.setClipboard(code);
-                        UiToast.show(Component.translatable("blockpops.upload.done.copied"));
-                    });
-                    dialog.button(Component.translatable("blockpops.upload.link.recheck"), UiButton.Style.GREEN,
-                            () -> begin(draftId, links));
-                    show(dialog, Component.translatable("blockpops.upload.link.code", code));
-                });
-            } catch (UploadException e) {
-                minecraft.execute(() -> failed(UploadErrors.message(e), null, null));
-            }
-        });
-    }
-
-    // The team's Discord, through the game's own question before any link is opened
-    private static void openDiscord() {
-        Minecraft minecraft = Minecraft.getInstance();
-        URI target = URI.create(DISCORD);
-        net.minecraft.client.gui.screens.Screen back = minecraft.screen;
-        minecraft.setScreen(LinkOpening.confirm(target, confirmed -> {
-            if (confirmed) {
-                LinkOpening.open(target);
-            }
-            minecraft.setScreen(back);
-        }));
     }
 
     private static void failed(Component text, @Nullable Component actionLabel, @Nullable Runnable action) {
