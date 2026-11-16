@@ -137,7 +137,8 @@ repositories.withType(MavenArtifactRepository).configureEach { repository ->
             // The Plum Team's hash-checked mirror, added first below. It is asked for everything
             // but what it never holds: Mojang's files here, and above, as for every repository,
             // Minecraft and the namespaces Loom generates. Where LWJGL comes from Mojang's host,
-            // it is kept away from LWJGL too: the mirror holds Maven Central's copies.
+            // it is kept away from LWJGL too: the mirror holds Maven Central's copies. Elsewhere
+            // the MavenCentralLWJGL repository below lets it serve LWJGL as well.
             repository.content {
                 excludeGroupByRegex('com\\.mojang(\\..*)?')
                 excludeGroupByRegex('de\\.oceanlabs\\.mcp(\\..*)?')
@@ -200,6 +201,20 @@ if (plumMirrorSwitch != 'false') {
     }
     repositories.remove(plumMirror)
     repositories.addFirst(plumMirror)
+
+    // Loom takes LWJGL from Maven Central alone: it declares a repository of this name there and
+    // makes it the only one that may serve org.lwjgl, which shuts the mirror out
+    // (LoomRepositoryPlugin.forceLWJGLFromMavenCentral). It does neither when a repository of that
+    // name already exists. This is the repository Loom would declare, without the exclusivity, so
+    // LWJGL resolves like every other library: from the mirror first, and from Central when the
+    // mirror answers 404. A NeoForge lane takes LWJGL from Mojang's host and needs none of this.
+    if (!useNeoForgeRepositoryOrigins && repositories.findByName('MavenCentralLWJGL') == null) {
+        repositories.maven {
+            name = 'MavenCentralLWJGL'
+            url = 'https://repo.maven.apache.org/maven2/'
+            content { includeGroup('org.lwjgl') }
+        }
+    }
 }
 
 // Google's mirror of Maven Central follows Central, which Loom declares, under Central's filter
@@ -210,7 +225,8 @@ if (plumMirrorSwitch != 'false') {
 // script and before this callback, which also runs before Loom resolves anything after evaluation.
 afterEvaluate {
     def central = repositories.withType(MavenArtifactRepository).find { repository ->
-        repository.url.toString() == 'https://repo.maven.apache.org/maven2/'
+        repository.url.toString() == 'https://repo.maven.apache.org/maven2/' &&
+            repository.name != 'MavenCentralLWJGL'
     }
     if (central != null && repositories.findByName('GoogleMavenCentralMirror') == null) {
         def googleMirror = repositories.maven {
