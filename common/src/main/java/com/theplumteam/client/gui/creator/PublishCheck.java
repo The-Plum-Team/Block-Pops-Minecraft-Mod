@@ -7,6 +7,7 @@ import com.theplumteam.client.worldcontent.ClientWorldCollections;
 import com.theplumteam.client.worldcontent.CreatorDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FigureDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FileRef;
+import com.theplumteam.worldcontent.AuthorLinks;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldCollectionRecord.Kind;
 import com.theplumteam.worldcontent.WorldContentLimits;
@@ -251,7 +252,7 @@ final class PublishCheck {
         if (!WorldCollectionRecord.isPlainText(draft.author())) {
             return tr("wizard.author_rule");
         }
-        if (!draft.authorUrl().isEmpty() && !WorldCollectionRecord.isValidAuthorUrl(draft.authorUrl())) {
+        if (!draft.authorUrl().isEmpty() && !AuthorLinks.isValid(draft.authorUrl())) {
             return tr("identity.url_rule");
         }
         return null;

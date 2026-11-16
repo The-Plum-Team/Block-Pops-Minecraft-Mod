@@ -2,7 +2,7 @@ package com.theplumteam.figure;
 
 import com.theplumteam.util.E2EDeterminism;
 import com.theplumteam.worldcontent.BlobInfo;
-import com.theplumteam.worldcontent.Sha256;
+import com.theplumteam.worldcontent.JdkSha256;
 import com.theplumteam.worldcontent.WorldCollectionMaterializer;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import org.junit.jupiter.api.Test;
@@ -21,7 +21,7 @@ class HolographicTest {
     private static final int DRAWS = 5_000;
 
     private static FigureCollection collection(boolean holographic) {
-        String skin = Sha256.of("skin".getBytes(StandardCharsets.UTF_8));
+        String skin = JdkSha256.of("skin".getBytes(StandardCharsets.UTF_8));
         WorldCollectionRecord record = new WorldCollectionRecord("w-col", "Col", "", 1, 2, 3, null, null, null,
                 false, 1, List.of(new WorldCollectionRecord.Figure("zombi", "Zombi", WorldCollectionRecord.Kind.SKIN,
                 skin, null, null, 1.0f, true))).withHolographic(holographic);

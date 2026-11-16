@@ -153,7 +153,7 @@ upload concurrency caps and timeouts in `WorldUploads`. They are stored content-
 `<world>/data/blockpops-world-collections/` and travel only in `SyncWorldCollectionsPacket` and
 `WorldAssetChunkPacket`, never in the shared collection sync, the Custom packet or
 `blockpops-cache/`. Their ids are `w-<slug>`, and the shared sync refuses them on both sides.
-Their assets are served only by the runtime registries in `client.runtime` under ids `WorldContentIds`
+Their assets are served only by the runtime registries in `client.runtime` under ids `WorldAssetIds`
 owns, are never written into GeckoLib's caches, are refused when a bundled resource has the same
 id, and are left alone by `RuntimeAssets.clear()`. Since
 [ADR 0004](../architecture/decisions/0004-extend-world-collections-for-the-redesigned-creator.md)
@@ -171,6 +171,49 @@ block's data. Every operator request, from a batch of edits to a
 duplicate, a purge or a datapack import started in the editor, is an action of
 `WorldCollectionEditPacket` answered by `WorldCollectionStatusPacket`; an editor import reads only
 the server's own datapacks by exact name, as the command does.
+
+The checks of untrusted content form the content core: the files `common/content-core.txt` lists,
+from `com.theplumteam.remote` and `com.theplumteam.worldcontent`. A listed file imports only the
+JDK's plain classes, Gson's tree and stream classes, compile-time annotations and other listed
+files, never Minecraft, a loader or the rest of the mod, so the same source can check content
+where there is no game. A refusal there carries a `ContentError` code beside its message, and
+`JsonOut` is its one writer, giving a World record the bytes it has always had. What needs more
+than that stays outside and is handed in or kept beside it: hashing (`Sha256`, with `JdkSha256` in
+the game), which links may be an author link (`WorldCollectionRecord.LinkRule`, with
+`AuthorLinks.RULE` in the game), where a path lands on disk (`RemoteFiles`) and the names of
+runtime assets (`WorldAssetIds`). Where hosts differ in what the same call gives, the core does the
+work itself, with tests that hold it to the JDK's own answer: decoding UTF-8 and telling a blank
+string (`CoreText`), the value of a number, which is kept as it was written (`JsonNumber`), and
+sine and cosine (`CoreMath`). Add a file to the list only if it keeps to those imports, and do not
+call `Math.toRadians`, `StrictMath`, `Double.parseDouble`, `String.isBlank` or a charset decoder
+there.
+
+Player collections, which players are to publish themselves, exist so far only as the part of the
+content core that says what one is: `com.theplumteam.remote.player`, `CanonicalJson`, `ImageHash`
+and the record's published form (`WorldCollectionRecord.toPlayerJson` and `parsePlayer`). Their ids
+are `p_` and twelve of `a-z2-7`, a shape reserved both ways (the official tree refuses every id
+that starts with `p_`, `RemotePaths.isValidCollectionId`), and their codes are two words and two
+digits, a shape no official code takes. `figure.CollectionFamilies` is the one place that says
+which family an id belongs to (built-in, Custom, World, player or a creator preview): the shared
+collection sync, which a client of any version registers unchecked, carries built-in collections
+only, on the sending side and again on the receiving one, and nothing else tests a prefix by hand. Every path is computed below `p/` by `PlayerPaths` from
+checked parts. A head, an index, a status, a revocation list and the offline root are each the
+payload of a `SignedEnvelope`, and each, like the upload package, a published record and a
+published model or animation (`CanonicalJson`), is accepted only as the exact bytes it writes
+back, with numbers bounded as `StrictJson.parsePlayerObject` bounds them and names of the
+characters `PlayerText` lists. `WorldCollectionMaterializer` and `WorldCollectionCheck` build and
+check a collection of either family from its record, told apart by a `ContentIdStrategy`: a World
+collection's assets are named by content (`WorldAssetIds`), a player collection's under its own id
+as well (`PlayerAssetIds`), so neither is taken for the other. A signed document is opened only by
+`PlayerSignatures`: under a key of `PlayerKeys` that may sign its kind (an online key for a head,
+an index, the status and the revocation list; the offline root key for the root alone), that the
+last root has not revoked, and whose Ed25519 signature holds over the exact payload. `PlayerState`
+then accepts a genuine document only if it is current: a sequence number above the one held by a
+plausible step, not issued a day ahead of the clock; a root with a higher number starts a new epoch
+that forgets every other document; and collections load only while the root allows it, the status
+is fresh and the revocation list it names is the one held. The public keys are compiled in
+(`PlayerBuildFlags`); the build holds none yet, so nothing signed is believed, and nothing in the
+game fetches a player document or contacts an origin for one.
 
 The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: an
 operator and World collections synced. Its entry points are the machine screen's **Creator**

@@ -10,6 +10,7 @@ import com.theplumteam.client.gui.creator.ui.UiNode;
 import com.theplumteam.client.gui.style.DialogFrame;
 import com.theplumteam.client.gui.style.PixelIcon;
 import com.theplumteam.client.worldcontent.CreatorDraft;
+import com.theplumteam.worldcontent.AuthorLinks;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldContentLimits;
 import net.minecraft.client.Minecraft;
@@ -92,7 +93,7 @@ final class AuthorDialog {
         if (!WorldCollectionRecord.isPlainText(this.author)) {
             return tr("wizard.author_rule");
         }
-        if (!this.link.isEmpty() && !WorldCollectionRecord.isValidAuthorUrl(this.link)) {
+        if (!this.link.isEmpty() && !AuthorLinks.isValid(this.link)) {
             return tr("identity.url_rule");
         }
         return null;

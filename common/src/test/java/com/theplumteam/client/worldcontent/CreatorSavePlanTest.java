@@ -4,7 +4,7 @@ import com.theplumteam.client.worldcontent.CreatorDraft.FigureDraft;
 import com.theplumteam.client.worldcontent.CreatorDraft.FileRef;
 import com.theplumteam.worldcontent.BlobInfo;
 import com.theplumteam.worldcontent.BlobType;
-import com.theplumteam.worldcontent.Sha256;
+import com.theplumteam.worldcontent.JdkSha256;
 import com.theplumteam.worldcontent.WorldCollectionEdit;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldCollectionRecord.LogoLayout;
@@ -232,7 +232,7 @@ class CreatorSavePlanTest extends CreatorTestBase {
         CreatorDraft draft = synced(draftRecord());
         byte[] bytes = "png huge".getBytes(StandardCharsets.UTF_8);
         // What the picker would say of a file over the collection's 16 MiB
-        FilePicker.LocalFile huge = new FilePicker.LocalFile("huge.png", BlobType.PNG, bytes, Sha256.of(bytes),
+        FilePicker.LocalFile huge = new FilePicker.LocalFile("huge.png", BlobType.PNG, bytes, JdkSha256.of(bytes),
                 BlobInfo.png(17 * 1024 * 1024, 64, 64));
         draft.addFigure("Huge").setTexture(FileRef.of(huge));
         draft.setPlush(true);

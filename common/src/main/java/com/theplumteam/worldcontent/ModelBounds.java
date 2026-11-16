@@ -2,6 +2,7 @@ package com.theplumteam.worldcontent;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.theplumteam.remote.player.ContentError;
 
 /**
  * The box a model fills in its rest pose, as GeckoLib draws it: in sixteenths of a pixel,
@@ -9,7 +10,7 @@ import com.google.gson.JsonElement;
  *
  * A model figure is fitted to its box from these bounds on both sides, so they travel in
  * the blob table instead of being worked out again from a file a client may not have yet.
- * Validation computes them with {@link StrictMath}, so every JVM arrives at the same values.
+ * Validation computes them with {@link CoreMath}, so every host arrives at the same values.
  */
 public record ModelBounds(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
     /** The bounds of a model without cubes, and of every file that is not a model. */
@@ -41,7 +42,7 @@ public record ModelBounds(int minX, int minY, int minZ, int maxX, int maxY, int 
     public static ModelBounds checked(long minX, long minY, long minZ, long maxX, long maxY, long maxZ)
             throws WorldContentException {
         if (!within(minX, maxX) || !within(minY, maxY) || !within(minZ, maxZ)) {
-            throw new WorldContentException("Model bounds are out of range");
+            throw new WorldContentException(ContentError.GEO_BOUNDS, "Model bounds are out of range");
         }
         return new ModelBounds((int) minX, (int) minY, (int) minZ, (int) maxX, (int) maxY, (int) maxZ);
     }
@@ -65,7 +66,7 @@ public record ModelBounds(int minX, int minY, int minZ, int maxX, int maxY, int 
     static ModelBounds fromJson(JsonElement element) throws WorldContentException {
         JsonArray array = JsonFields.array(element, "bounds");
         if (array.size() != 6) {
-            throw new WorldContentException("bounds must have 6 numbers");
+            throw new WorldContentException(ContentError.GEO_BOUNDS, "bounds must have 6 numbers");
         }
         long[] values = new long[6];
         for (int i = 0; i < values.length; i++) {

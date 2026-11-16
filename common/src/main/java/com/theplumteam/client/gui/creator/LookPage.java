@@ -45,9 +45,9 @@ import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.registry.ModItems;
 import com.theplumteam.util.ResourceLocations;
 import com.theplumteam.worldcontent.BlobInfo;
+import com.theplumteam.worldcontent.WorldAssetIds;
 import com.theplumteam.worldcontent.WorldCollectionMaterializer;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
-import com.theplumteam.worldcontent.WorldContentIds;
 import com.theplumteam.worldcontent.WorldContentLimits;
 import dev.architectury.registry.registries.RegistrySupplier;
 import net.minecraft.Util;
@@ -1237,7 +1237,7 @@ final class LookPage implements EditorPage {
             });
             return;
         }
-        ResourceLocation texture = WorldContentIds.texture(sha);
+        ResourceLocation texture = WorldAssetIds.texture(sha);
         if (RuntimeTextures.isPending(texture) || RuntimeTextures.image(texture) == null) {
             // Still arriving: not "no colour"
             return;
@@ -1255,7 +1255,7 @@ final class LookPage implements EditorPage {
         if (logo == null || info == null) {
             return null;
         }
-        ResourceLocation texture = WorldContentIds.texture(logo.sha());
+        ResourceLocation texture = WorldAssetIds.texture(logo.sha());
         return RuntimeTextures.isPending(texture) ? null
                 : new UiBoxFrontEditor.Logo(texture, info.width(), info.height());
     }
@@ -1274,7 +1274,7 @@ final class LookPage implements EditorPage {
         if (draft().boxMode() != BoxMode.TEXTURE || image == null) {
             return null;
         }
-        ResourceLocation texture = WorldContentIds.texture(image.sha());
+        ResourceLocation texture = WorldAssetIds.texture(image.sha());
         return RuntimeTextures.isPending(texture) ? null : new UiDropZone.Thumbnail(texture, LogoLayout.FRONT_U,
                 LogoLayout.FRONT_V, LogoLayout.FRONT_WIDTH, LogoLayout.FRONT_HEIGHT, LogoLayout.BOX_TEXTURE_SIZE,
                 LogoLayout.BOX_TEXTURE_SIZE);
@@ -1290,7 +1290,7 @@ final class LookPage implements EditorPage {
                 if (draft.boxTexture() == null) {
                     return usual;
                 }
-                ResourceLocation own = WorldContentIds.texture(draft.boxTexture().sha());
+                ResourceLocation own = WorldAssetIds.texture(draft.boxTexture().sha());
                 return RuntimeTextures.isPending(own) ? usual : own;
             }
             case COLOR -> {

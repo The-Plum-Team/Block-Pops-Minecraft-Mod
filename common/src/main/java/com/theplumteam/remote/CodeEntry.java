@@ -31,7 +31,7 @@ public record CodeEntry(String id, String name) {
 
     /** 1 to 64 characters, not blank, with no control, formatting or separator characters. */
     private static boolean isValidName(String name) {
-        if (name == null || name.isBlank() || name.length() > MAX_NAME_LENGTH) {
+        if (name == null || CoreText.isBlank(name) || name.length() > MAX_NAME_LENGTH) {
             return false;
         }
         return name.codePoints().noneMatch(c -> {

@@ -1,7 +1,7 @@
 package com.theplumteam.client.runtime;
 
 import com.google.gson.JsonObject;
-import com.theplumteam.worldcontent.WorldContentIds;
+import com.theplumteam.worldcontent.WorldAssetIds;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
@@ -50,7 +50,7 @@ public final class RuntimeGeo {
     /** Whether an id was announced and has not arrived (or failed to), or is World content not baked here. */
     public static boolean isPending(@Nullable ResourceLocation id) {
         return id != null && (PENDING.contains(id)
-                || WorldContentIds.owns(id) && !MODELS.containsKey(id) && !ANIMATIONS.containsKey(id));
+                || WorldAssetIds.owns(id) && !MODELS.containsKey(id) && !ANIMATIONS.containsKey(id));
     }
 
     @Nullable

@@ -3,6 +3,7 @@ package com.theplumteam.worldcontent;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.theplumteam.remote.player.ContentError;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -90,7 +91,7 @@ public final class AnimationJsonCheck {
         void add(int count) throws WorldContentException {
             keyframes += count;
             if (keyframes > WorldContentLimits.ANIMATION_MAX_KEYFRAMES) {
-                throw new WorldContentException("Animation file has more than "
+                throw new WorldContentException(ContentError.ANIMATION_KEYFRAMES, "Animation file has more than "
                         + WorldContentLimits.ANIMATION_MAX_KEYFRAMES + " keyframes");
             }
         }
@@ -102,9 +103,25 @@ public final class AnimationJsonCheck {
     /** Parses and checks an animation file. */
     public static BlobInfo validate(byte[] bytes) throws WorldContentException {
         if (bytes.length > WorldContentLimits.ANIMATION_BYTES) {
-            throw new WorldContentException("Animation is larger than " + WorldContentLimits.ANIMATION_BYTES / 1024 + " KiB");
+            throw new WorldContentException(ContentError.ANIMATION_BYTES,
+                    "Animation is larger than " + WorldContentLimits.ANIMATION_BYTES / 1024 + " KiB");
         }
         Animations animations = check(JsonFields.parse(bytes, WorldContentLimits.ANIMATION_BYTES));
+        return BlobInfo.animation(bytes.length, animations.keyframes(), animations.poses());
+    }
+
+    /**
+     * Parses and checks an animation file that players publish: the same rules, on a file that
+     * is in its canonical form ({@link CanonicalJson}) and whose numbers are bounded.
+     */
+    public static BlobInfo validatePlayer(byte[] bytes) throws WorldContentException {
+        if (bytes.length > WorldContentLimits.ANIMATION_BYTES) {
+            throw new WorldContentException(ContentError.ANIMATION_BYTES,
+                    "Animation is larger than " + WorldContentLimits.ANIMATION_BYTES / 1024 + " KiB");
+        }
+        JsonObject json = JsonFields.parsePlayer(bytes, WorldContentLimits.ANIMATION_BYTES);
+        CanonicalJson.requireCanonical(bytes);
+        Animations animations = check(json);
         return BlobInfo.animation(bytes.length, animations.keyframes(), animations.poses());
     }
 
@@ -114,17 +131,19 @@ public final class AnimationJsonCheck {
         JsonFields.string(json.get("format_version"), "format_version", 16);
         JsonObject animations = JsonFields.object(json.get("animations"), "animations");
         if (animations.size() < 1 || animations.size() > WorldContentLimits.ANIMATION_MAX_ANIMATIONS) {
-            throw new WorldContentException("Animation file must hold 1 to "
+            throw new WorldContentException(ContentError.ANIMATION_COUNT, "Animation file must hold 1 to "
                     + WorldContentLimits.ANIMATION_MAX_ANIMATIONS + " animations");
         }
         if (!animations.has(BlobInfo.POSE_STAND_NAME)) {
-            throw new WorldContentException("Animation file has no " + BlobInfo.POSE_STAND_NAME + " animation");
+            throw new WorldContentException(ContentError.ANIMATION_NO_STAND,
+                    "Animation file has no " + BlobInfo.POSE_STAND_NAME + " animation");
         }
         Tally tally = new Tally();
         for (Map.Entry<String, JsonElement> entry : animations.entrySet()) {
             String name = entry.getKey();
             if (!GeoJsonCheck.NAME.matcher(name).matches()) {
-                throw new WorldContentException("Animation name " + WorldContentException.excerpt(name)
+                throw new WorldContentException(ContentError.ANIMATION_NAME,
+                        "Animation name " + WorldContentException.excerpt(name)
                         + " may use only letters, digits, _ . and -");
             }
             checkAnimation(name, JsonFields.object(entry.getValue(), "animation " + name), tally);
@@ -136,7 +155,8 @@ public final class AnimationJsonCheck {
     private static void checkAnimation(String name, JsonObject animation, Tally tally) throws WorldContentException {
         for (String key : REFUSED_KEYS) {
             if (animation.has(key)) {
-                throw new WorldContentException("Animation " + name + " uses " + key + ", which is not supported");
+                throw new WorldContentException(ContentError.ANIMATION_UNSUPPORTED,
+                        "Animation " + name + " uses " + key + ", which is not supported");
             }
         }
         JsonFields.keys(animation, "animation " + name, Set.of("bones"), Set.of("loop", "animation_length"));
@@ -149,33 +169,37 @@ public final class AnimationJsonCheck {
                     && "hold_on_last_frame".equals(loop.getAsString())) {
                 loops = true;
             } else {
-                throw new WorldContentException("Animation " + name + " loop must be true, false or \"hold_on_last_frame\"");
+                throw new WorldContentException(ContentError.ANIMATION_LOOP,
+                        "Animation " + name + " loop must be true, false or \"hold_on_last_frame\"");
             }
         }
         BigDecimal length = null;
         if (animation.has("animation_length")) {
             length = JsonFields.decimal(animation.get("animation_length"), "animation_length");
             if (length.signum() <= 0 || length.compareTo(MAX_LENGTH) > 0) {
-                throw new WorldContentException("Animation " + name + " length must be above 0 and at most 300 s");
+                throw new WorldContentException(ContentError.ANIMATION_LENGTH,
+                        "Animation " + name + " length must be above 0 and at most 300 s");
             }
         }
 
         JsonObject bones = JsonFields.object(animation.get("bones"), "bones");
         if (bones.size() > WorldContentLimits.ANIMATION_MAX_BONES) {
-            throw new WorldContentException("Animation " + name + " moves more than "
+            throw new WorldContentException(ContentError.ANIMATION_BONES, "Animation " + name + " moves more than "
                     + WorldContentLimits.ANIMATION_MAX_BONES + " bones");
         }
         tally.lastKey = BigDecimal.ZERO;
         for (Map.Entry<String, JsonElement> bone : bones.entrySet()) {
             if (!GeoJsonCheck.NAME.matcher(bone.getKey()).matches()) {
-                throw new WorldContentException("Animated bone " + WorldContentException.excerpt(bone.getKey())
+                throw new WorldContentException(ContentError.ANIMATION_NAME,
+                        "Animated bone " + WorldContentException.excerpt(bone.getKey())
                         + " may use only letters, digits, _ . and -");
             }
             JsonObject channels = JsonFields.object(bone.getValue(), "bone " + bone.getKey());
             for (Map.Entry<String, JsonElement> entry : channels.entrySet()) {
                 Channel channel = Channel.of(entry.getKey());
                 if (channel == null) {
-                    throw new WorldContentException("Animated bone " + bone.getKey() + " has unknown channel "
+                    throw new WorldContentException(ContentError.ANIMATION_UNSUPPORTED,
+                            "Animated bone " + bone.getKey() + " has unknown channel "
                             + WorldContentException.excerpt(entry.getKey()));
                 }
                 checkChannel(channel, entry.getValue(), tally);
@@ -183,10 +207,12 @@ public final class AnimationJsonCheck {
         }
         BigDecimal effective = length != null ? length : tally.lastKey;
         if (loops && effective.signum() <= 0) {
-            throw new WorldContentException("Animation " + name + " loops: set the animation length (for example 0.05 s)");
+            throw new WorldContentException(ContentError.ANIMATION_LENGTH,
+                    "Animation " + name + " loops: set the animation length (for example 0.05 s)");
         }
         if (length != null && tally.lastKey.compareTo(length) > 0) {
-            throw new WorldContentException("Animation " + name + " has a keyframe after its length");
+            throw new WorldContentException(ContentError.ANIMATION_LENGTH,
+                    "Animation " + name + " has a keyframe after its length");
         }
     }
 
@@ -202,14 +228,16 @@ public final class AnimationJsonCheck {
             return;
         }
         if (!value.isJsonObject()) {
-            throw new WorldContentException(channel.key + " must hold numbers; expressions are not supported");
+            throw new WorldContentException(ContentError.ANIMATION_EXPRESSION,
+                    channel.key + " must hold numbers; expressions are not supported");
         }
         JsonObject object = value.getAsJsonObject();
         if (object.keySet().stream().anyMatch(KEYFRAME_KEYS::contains)) {
             // GeckoLib reads an object as one keyframe only when it holds a vector, and some
             // versions read any other key beside it as a time
             if (!object.has("vector") || object.has("pre") || object.has("post")) {
-                throw new WorldContentException(channel.key + " keyframe outside a time key needs a vector and no pre or post;"
+                throw new WorldContentException(ContentError.ANIMATION_KEYFRAME,
+                        channel.key + " keyframe outside a time key needs a vector and no pre or post;"
                         + " put it under a time such as \"0\"");
             }
             checkKeyframe(channel, object);
@@ -217,19 +245,21 @@ public final class AnimationJsonCheck {
             return;
         }
         if (object.size() < 1 || object.size() > WorldContentLimits.ANIMATION_MAX_TIME_KEYS) {
-            throw new WorldContentException(channel.key + " must have 1 to "
+            throw new WorldContentException(ContentError.ANIMATION_KEYFRAMES, channel.key + " must have 1 to "
                     + WorldContentLimits.ANIMATION_MAX_TIME_KEYS + " keyframes");
         }
         BigDecimal previous = null;
         for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
             String key = entry.getKey();
             if (!TIME_KEY.matcher(key).matches()) {
-                throw new WorldContentException("Keyframe time " + WorldContentException.excerpt(key)
+                throw new WorldContentException(ContentError.ANIMATION_TIME,
+                        "Keyframe time " + WorldContentException.excerpt(key)
                         + " must be a plain decimal such as 0.5");
             }
             BigDecimal time = new BigDecimal(key);
             if (previous != null && time.compareTo(previous) <= 0) {
-                throw new WorldContentException("Keyframe times must ascend: " + key + " follows " + previous.toPlainString());
+                throw new WorldContentException(ContentError.ANIMATION_TIME,
+                        "Keyframe times must ascend: " + key + " follows " + previous.toPlainString());
             }
             previous = time;
             JsonElement keyframe = entry.getValue();
@@ -238,7 +268,8 @@ public final class AnimationJsonCheck {
             } else if (keyframe.isJsonObject()) {
                 checkKeyframe(channel, keyframe.getAsJsonObject());
             } else {
-                throw new WorldContentException(channel.key + " keyframe must hold 3 numbers");
+                throw new WorldContentException(ContentError.ANIMATION_KEYFRAME,
+                        channel.key + " keyframe must hold 3 numbers");
             }
         }
         if (previous.compareTo(tally.lastKey) > 0) {
@@ -250,7 +281,7 @@ public final class AnimationJsonCheck {
     private static void checkKeyframe(Channel channel, JsonObject keyframe) throws WorldContentException {
         JsonFields.keys(keyframe, "keyframe", Set.of(), KEYFRAME_KEYS);
         if (!keyframe.has("vector") && !keyframe.has("post")) {
-            throw new WorldContentException("Keyframe needs a vector or post value");
+            throw new WorldContentException(ContentError.ANIMATION_KEYFRAME, "Keyframe needs a vector or post value");
         }
         for (String key : new String[] {"vector", "pre", "post"}) {
             if (keyframe.has(key)) {
@@ -261,14 +292,16 @@ public final class AnimationJsonCheck {
         if (keyframe.has("easing")) {
             easing = JsonFields.string(keyframe.get("easing"), "easing", 32).toLowerCase(Locale.ROOT);
             if (!PLAIN_EASINGS.contains(easing) && !ARGUMENT_EASINGS.containsKey(easing)) {
-                throw new WorldContentException("Easing " + WorldContentException.excerpt(keyframe.get("easing").getAsString())
+                throw new WorldContentException(ContentError.ANIMATION_EASING,
+                        "Easing " + WorldContentException.excerpt(keyframe.get("easing").getAsString())
                         + " is not one GeckoLib knows");
             }
         }
         if (keyframe.has("easingArgs")) {
             JsonArray args = JsonFields.array(keyframe.get("easingArgs"), "easingArgs");
             if (args.size() > MAX_EASING_ARGS) {
-                throw new WorldContentException("easingArgs has more than " + MAX_EASING_ARGS + " numbers");
+                throw new WorldContentException(ContentError.ANIMATION_EASING,
+                        "easingArgs has more than " + MAX_EASING_ARGS + " numbers");
             }
             double[] range = ARGUMENT_EASINGS.get(easing);
             for (int i = 0; i < args.size(); i++) {
@@ -286,7 +319,8 @@ public final class AnimationJsonCheck {
         if (keyframe.has("lerp_mode")) {
             String mode = JsonFields.string(keyframe.get("lerp_mode"), "lerp_mode", 16);
             if (!LERP_MODES.contains(mode)) {
-                throw new WorldContentException("lerp_mode must be linear, catmullrom or step");
+                throw new WorldContentException(ContentError.ANIMATION_EASING,
+                        "lerp_mode must be linear, catmullrom or step");
             }
         }
     }

@@ -1,9 +1,9 @@
 package com.theplumteam.item;
 
+import com.theplumteam.figure.CollectionFamilies;
 import com.theplumteam.figure.FigureDefinition;
 import com.theplumteam.figure.Holographic;
 import com.theplumteam.registry.ModItems;
-import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
@@ -34,7 +34,8 @@ public final class PlushPrizes {
      */
     @Nullable
     public static ItemStack of(String collectionId, FigureDefinition figure, boolean holographic) {
-        if (WorldContentIds.isWorldCollectionId(collectionId)) {
+        // A collection built from a record has no plush items of its own: its figures are figure blocks
+        if (CollectionFamilies.isMaterialized(collectionId)) {
             ItemStack figureBlockItem = new ItemStack(ModItems.FIGURE_BLOCK_ITEM.get());
             CompoundTag blockEntityTag = new CompoundTag();
             blockEntityTag.putString("FigureId", figure.getId());
@@ -63,7 +64,7 @@ public final class PlushPrizes {
      * and then have nothing to give.
      */
     public static boolean canGiveAll(String collectionId, List<FigureDefinition> pool) {
-        if (WorldContentIds.isWorldCollectionId(collectionId)) {
+        if (CollectionFamilies.isMaterialized(collectionId)) {
             return true;
         }
         for (FigureDefinition figure : pool) {

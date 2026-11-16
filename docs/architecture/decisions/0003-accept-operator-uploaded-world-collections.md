@@ -61,7 +61,7 @@ Measured limits shaped the design:
   networking for 1.20.1 never learns which ids a client receives, and every client there has the
   mod) and paced by a per-player window of unacknowledged bytes. They never ride the shared collection sync, the Custom packet or
   `blockpops-cache/`, and the shared sync refuses their ids on both sides.
-- **Runtime assets** go into the `client.runtime` registries under ids `WorldContentIds` owns. They
+- **Runtime assets** go into the `client.runtime` registries under ids `WorldAssetIds` owns. They
   are never written into GeckoLib's caches, are refused when a bundled resource has the same id,
   and are left alone by `RuntimeAssets.clear()`, which now clears only the ids World content does
   not own.

@@ -10,36 +10,66 @@ import com.google.gson.stream.JsonToken;
 
 import java.io.IOException;
 import java.io.StringReader;
-import java.math.BigDecimal;
-import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
 
 /**
  * Parses remote JSON documents with none of Gson's leniency.
  *
  * The bytes must be valid UTF-8 holding exactly one object: no duplicate key at any depth,
  * no NaN or Infinity, no comments or unquoted strings, and nothing after the object.
+ *
+ * A document players publish is held to one rule more ({@link #parsePlayerObject}): no number in
+ * it is longer than {@link #PLAYER_NUMBER_LENGTH} characters or has an exponent beyond
+ * {@link #PLAYER_NUMBER_EXPONENT} either way. Reading a number costs more than its length, so an
+ * unbounded one would let a small file hold up everyone who checks it.
  */
 public final class StrictJson {
+    /** The most characters a number has in a document players publish. */
+    public static final int PLAYER_NUMBER_LENGTH = 24;
+    /** The largest exponent, either way, such a number has. */
+    public static final int PLAYER_NUMBER_EXPONENT = 6;
     private static final int MAX_DEPTH = 64;
 
     private StrictJson() {
     }
 
     public static JsonObject parseObject(byte[] utf8, long maxBytes) throws RemoteException {
+        return parse(utf8, maxBytes, false);
+    }
+
+    /** As {@link #parseObject}, for a document players publish: its numbers are bounded too. */
+    public static JsonObject parsePlayerObject(byte[] utf8, long maxBytes) throws RemoteException {
+        return parse(utf8, maxBytes, true);
+    }
+
+    /** Whether a number, as written, is one a document players publish may hold. */
+    public static boolean isPlayerNumber(String token) {
+        if (token.isEmpty() || token.length() > PLAYER_NUMBER_LENGTH) {
+            return false;
+        }
+        int e = Math.max(token.indexOf('e'), token.indexOf('E'));
+        if (e < 0) {
+            return true;
+        }
+        int at = e + 1;
+        if (at < token.length() && (token.charAt(at) == '+' || token.charAt(at) == '-')) {
+            at++;
+        }
+        int exponent = 0;
+        for (; at < token.length(); at++) {
+            exponent = exponent * 10 + (token.charAt(at) - '0');
+            if (exponent > PLAYER_NUMBER_EXPONENT) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static JsonObject parse(byte[] utf8, long maxBytes, boolean playerNumbers) throws RemoteException {
         if (utf8.length > maxBytes) {
             throw new RemoteException("JSON document is larger than " + maxBytes + " bytes");
         }
-        String text;
-        try {
-            text = StandardCharsets.UTF_8.newDecoder()
-                    .onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT)
-                    .decode(ByteBuffer.wrap(utf8))
-                    .toString();
-        } catch (CharacterCodingException e) {
+        String text = CoreText.decodeUtf8(utf8);
+        if (text == null) {
             throw new RemoteException("JSON document is not valid UTF-8");
         }
         // JsonReader would skip a byte order mark silently; JSON text never starts with one
@@ -51,7 +81,7 @@ public final class StrictJson {
             if (reader.peek() != JsonToken.BEGIN_OBJECT) {
                 throw new RemoteException("JSON document is not an object");
             }
-            JsonObject object = read(reader, 0).getAsJsonObject();
+            JsonObject object = read(reader, 0, playerNumbers).getAsJsonObject();
             if (reader.peek() != JsonToken.END_DOCUMENT) {
                 throw new RemoteException("JSON document has data after its object");
             }
@@ -99,7 +129,7 @@ public final class StrictJson {
         return element.getAsString();
     }
 
-    private static JsonElement read(JsonReader reader, int depth) throws IOException {
+    private static JsonElement read(JsonReader reader, int depth, boolean playerNumbers) throws IOException {
         if (depth > MAX_DEPTH) {
             throw new RemoteException("JSON document is nested too deeply");
         }
@@ -112,7 +142,7 @@ public final class StrictJson {
                     if (object.has(key)) {
                         throw new RemoteException("Duplicate JSON key " + RemoteException.excerpt(key));
                     }
-                    object.add(key, read(reader, depth + 1));
+                    object.add(key, read(reader, depth + 1, playerNumbers));
                 }
                 reader.endObject();
                 return object;
@@ -121,16 +151,25 @@ public final class StrictJson {
                 JsonArray array = new JsonArray();
                 reader.beginArray();
                 while (reader.hasNext()) {
-                    array.add(read(reader, depth + 1));
+                    array.add(read(reader, depth + 1, playerNumbers));
                 }
                 reader.endArray();
                 return array;
             }
             case STRING:
                 return new JsonPrimitive(reader.nextString());
-            case NUMBER:
+            case NUMBER: {
                 // Strict mode has already refused NaN, Infinity and malformed numbers
-                return new JsonPrimitive(new BigDecimal(reader.nextString()));
+                String token = reader.nextString();
+                if (playerNumbers && !isPlayerNumber(token)) {
+                    throw new RemoteException("JSON number is longer than " + PLAYER_NUMBER_LENGTH
+                            + " characters or has an exponent beyond " + PLAYER_NUMBER_EXPONENT);
+                }
+                // A published document's numbers are bounded, so building one cannot fail and is
+                // left until a check needs it; any other number is built now, so that one the
+                // arbitrary-precision reader refuses still fails the parse
+                return new JsonPrimitive(new JsonNumber(token, !playerNumbers));
+            }
             case BOOLEAN:
                 return new JsonPrimitive(reader.nextBoolean());
             case NULL:

@@ -120,6 +120,11 @@ public final class ClientCustomCollections {
         revision++;
     }
 
+    /** Whether the id is a Custom collection this server sent, which only this class registers. */
+    public static boolean owns(String collectionId) {
+        return REGISTERED.contains(collectionId);
+    }
+
     /** Whether the server this client is connected to offers Custom collections. */
     public static boolean isSynced() {
         return synced;

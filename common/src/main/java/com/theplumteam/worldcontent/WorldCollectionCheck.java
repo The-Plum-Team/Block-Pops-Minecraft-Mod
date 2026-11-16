@@ -15,10 +15,11 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Checks a materialized World collection before it is registered, on the server and again
- * on the client, as {@link com.theplumteam.figure.CustomCollectionCheck} does for Custom
- * collections: every model, texture, animation and logo it names must be one of its own
- * files in the role the record gives it, or one of the shared assets every figure may use.
+ * Checks a collection materialized from a record before it is registered, on the server and
+ * again on the client, as {@link com.theplumteam.figure.CustomCollectionCheck} does for Custom
+ * collections: its id must be one of its family's, and every model, texture, animation and logo
+ * it names must be one of its own files in the role the record gives it, named as its family
+ * names them ({@link ContentIdStrategy}), or one of the shared assets every figure may use.
  * Whatever else it carries (plush, holographic draws, author link, logo placement, rarity and
  * draw weight, skin variants and box face) must be exactly what its record says.
  */
@@ -30,10 +31,16 @@ public final class WorldCollectionCheck {
     private WorldCollectionCheck() {
     }
 
-    /** Returns null when the collection may be registered, or why it may not. */
+    /** Returns null when the World collection may be registered, or why it may not. */
     @Nullable
     public static String problem(FigureCollection collection, WorldCollectionRecord record) {
-        if (!WorldContentIds.isWorldCollectionId(collection.getId()) || !collection.getId().equals(record.id())) {
+        return problem(collection, record, ContentIdStrategy.WORLD);
+    }
+
+    /** Returns null when the collection of that family may be registered, or why it may not. */
+    @Nullable
+    public static String problem(FigureCollection collection, WorldCollectionRecord record, ContentIdStrategy ids) {
+        if (!ids.names(collection.getId()) || !collection.getId().equals(record.id())) {
             return "declares id " + collection.getId();
         }
         if (collection.isPlush() != record.plush() || collection.getSpecialsReleasedAt() != null
@@ -50,14 +57,14 @@ public final class WorldCollectionCheck {
             boxTextures.add(WorldCollectionMaterializer.boxColorTexture(color.getSerializedName()));
         }
         if (record.boxTexture() != null) {
-            boxTextures.add(WorldContentIds.texture(record.boxTexture()));
+            boxTextures.add(ids.texture(record.boxTexture()));
         }
         if (collection.getBoxTexture() != null && !boxTextures.contains(collection.getBoxTexture())) {
             return "names box texture " + collection.getBoxTexture();
         }
         FigureCollection.LogoConfig logo = collection.getLogoConfig();
         if (logo != null && (record.logo() == null || !logo.isAutomatic()
-                || !WorldContentIds.texture(record.logo()).equals(logo.getTexture()))) {
+                || !ids.texture(record.logo()).equals(logo.getTexture()))) {
             return "names logo " + logo.getTexture();
         }
         WorldCollectionRecord.LogoLayout layout = record.effectiveLogoLayout();
@@ -71,7 +78,7 @@ public final class WorldCollectionCheck {
             if (figure.getRarity() != source.rarity() || figure.getDrawWeight() != record.drawWeight(source)) {
                 return "figure " + figure.getId() + " is drawn apart from its record";
             }
-            String problem = problem(figure, source);
+            String problem = problem(figure, source, ids);
             if (problem != null) {
                 return "figure " + figure.getId() + " " + problem;
             }
@@ -80,7 +87,8 @@ public final class WorldCollectionCheck {
     }
 
     @Nullable
-    private static String problem(FigureDefinition figure, WorldCollectionRecord.Figure source) {
+    private static String problem(FigureDefinition figure, WorldCollectionRecord.Figure source,
+                                  ContentIdStrategy ids) {
         if (figure.getType() != FigureType.STATIC || !WorldContentIds.isSlug(figure.getId())
                 || !figure.getId().equals(source.id())) {
             return "is not a plain figure";
@@ -99,7 +107,7 @@ public final class WorldCollectionCheck {
             FigureDefinition.AlternativeSkin alternative = alternatives.get(i);
             WorldCollectionRecord.Variant variant = source.variants().get(i);
             if (!alternative.name().equals(variant.name())
-                    || !WorldContentIds.texture(variant.texture()).equals(alternative.texture())
+                    || !ids.texture(variant.texture()).equals(alternative.texture())
                     || alternative.model() != null || alternative.scale() != null || alternative.showBoxFace() != null
                     || alternative.boxFaceUv() != null || !alternative.hiddenBones().isEmpty()) {
                 return "names alternative " + alternative.texture();
@@ -108,7 +116,7 @@ public final class WorldCollectionCheck {
         if (!sameBoxFace(figure.getRenderOptions(), source)) {
             return "shows its box face apart from its record";
         }
-        ResourceLocation model = source.model() != null ? WorldContentIds.model(source.model()) : null;
+        ResourceLocation model = source.model() != null ? ids.model(source.model()) : null;
         if (!figure.getModelPath().equals(FigureDefinition.DEFAULT_MODEL) && !figure.getModelPath().equals(model)) {
             return "names model " + figure.getModelPath();
         }
@@ -117,10 +125,10 @@ public final class WorldCollectionCheck {
         }
         ResourceLocation poses = figure.getRenderOptions().poseAnimation();
         if (poses != null && !SHARED_ANIMATIONS.contains(poses)
-                && (source.animation() == null || !poses.equals(WorldContentIds.animation(source.animation())))) {
+                && (source.animation() == null || !poses.equals(ids.animation(source.animation())))) {
             return "names poses " + poses;
         }
-        if (!WorldContentIds.texture(source.texture()).equals(figure.getTexturePath())) {
+        if (!ids.texture(source.texture()).equals(figure.getTexturePath())) {
             return "names texture " + figure.getTexturePath();
         }
         return null;

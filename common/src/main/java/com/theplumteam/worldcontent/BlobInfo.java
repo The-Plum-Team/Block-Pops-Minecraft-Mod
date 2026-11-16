@@ -3,6 +3,7 @@ package com.theplumteam.worldcontent;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.theplumteam.remote.player.ContentError;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -78,10 +79,11 @@ public record BlobInfo(BlobType type, int size, int width, int height, int texWi
                                    long cubes, long keyframes, long poses, ModelBounds bounds)
             throws WorldContentException {
         if (type == null || bounds == null) {
-            throw new WorldContentException("Unknown file type");
+            throw new WorldContentException(ContentError.FILE_TYPE, "Unknown file type");
         }
         if (size < 1 || size > type.maxBytes()) {
-            throw new WorldContentException("File size " + size + " is outside 1.." + type.maxBytes());
+            throw new WorldContentException(ContentError.FILE_SIZE,
+                    "File size " + size + " is outside 1.." + type.maxBytes());
         }
         boolean ok = switch (type) {
             case PNG -> within(width, WorldContentLimits.PNG_MIN_SIZE, WorldContentLimits.PNG_MAX_SIZE)
@@ -99,7 +101,8 @@ public record BlobInfo(BlobType type, int size, int width, int height, int texWi
                     && bounds.equals(ModelBounds.NONE);
         };
         if (!ok) {
-            throw new WorldContentException("File details do not fit a " + type.storeName() + " file");
+            throw new WorldContentException(ContentError.FILE_FACTS,
+                    "File details do not fit a " + type.storeName() + " file");
         }
         return new BlobInfo(type, (int) size, (int) width, (int) height, (int) texWidth, (int) texHeight,
                 (int) cubes, (int) keyframes, (int) poses, bounds);
@@ -147,7 +150,7 @@ public record BlobInfo(BlobType type, int size, int width, int height, int texWi
     public static BlobInfo readJson(JsonObject json, Set<String> storeKeys) throws WorldContentException {
         BlobType type = BlobType.byStoreName(JsonFields.string(json.get("type"), "type", 16));
         if (type == null) {
-            throw new WorldContentException("Unknown file type");
+            throw new WorldContentException(ContentError.FILE_TYPE, "Unknown file type");
         }
         JsonFields.keys(json, "file entry", union(switch (type) {
             case PNG -> PNG_KEYS;
@@ -177,7 +180,8 @@ public record BlobInfo(BlobType type, int size, int width, int height, int texWi
             String name = JsonFields.string(element, "pose", 16);
             int pose = POSE_STAND_NAME.equals(name) ? POSE_STAND : POSE_SIT_NAME.equals(name) ? POSE_SIT : 0;
             if (pose == 0 || (poses & pose) != 0) {
-                throw new WorldContentException("poses must list Pose_Stand and Pose_Sit at most once each");
+                throw new WorldContentException(ContentError.FILE_FACTS,
+                        "poses must list Pose_Stand and Pose_Sit at most once each");
             }
             poses |= pose;
         }

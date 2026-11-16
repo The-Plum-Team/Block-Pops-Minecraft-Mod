@@ -28,7 +28,7 @@ class WorldCollectionRecordTest {
             LOGO, BlobInfo.png(500, 32, 32));
 
     static String sha(String tag) {
-        return Sha256.of(tag.getBytes(StandardCharsets.UTF_8));
+        return JdkSha256.of(tag.getBytes(StandardCharsets.UTF_8));
     }
 
     static WorldCollectionRecord plain() {
@@ -37,7 +37,7 @@ class WorldCollectionRecordTest {
     }
 
     private static WorldCollectionRecord parse(JsonObject json) throws WorldContentException {
-        return WorldCollectionRecord.parse(json.toString().getBytes(StandardCharsets.UTF_8), BLOBS);
+        return WorldCollectionRecord.parse(json.toString().getBytes(StandardCharsets.UTF_8), BLOBS, AuthorLinks.RULE);
     }
 
     @Test
@@ -50,7 +50,7 @@ class WorldCollectionRecordTest {
     void holographicDrawsAreWrittenOnlyWhileTurnedOff() throws WorldContentException {
         WorldCollectionRecord off = plain().withHolographic(false);
         assertFalse(off.toJson().get("holographic").getAsBoolean());
-        WorldCollectionRecord parsed = WorldCollectionRecord.parse(off.toUtf8(), BLOBS);
+        WorldCollectionRecord parsed = WorldCollectionRecord.parse(off.toUtf8(), BLOBS, AuthorLinks.RULE);
         assertEquals(off, parsed);
         assertFalse(parsed.holographic());
 
@@ -80,7 +80,7 @@ class WorldCollectionRecordTest {
                 new LogoLayout(120, 4, -2), true, new RarityWeights(10, 5, 2, 1), false);
         assertEquals(Set.of("draft", "edited_at", "author_url", "logo_layout", "plush", "rarity_weights",
                 "holographic"), keysBeyond(plain().toJson(), full.toJson()));
-        assertEquals(full, WorldCollectionRecord.parse(full.toUtf8(), BLOBS));
+        assertEquals(full, WorldCollectionRecord.parse(full.toUtf8(), BLOBS, AuthorLinks.RULE));
     }
 
     @Test
