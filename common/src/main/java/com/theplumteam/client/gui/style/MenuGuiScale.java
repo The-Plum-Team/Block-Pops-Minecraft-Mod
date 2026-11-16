@@ -76,6 +76,14 @@ public final class MenuGuiScale {
         return screen instanceof Scaled || FOLLOWERS.contains(screen);
     }
 
+    /**
+     * Whether the screen now shown is drawn at a menu's scale. The game's toasts wait while it is,
+     * since they would be drawn over the menu and at its scale.
+     */
+    public static boolean shown(Minecraft minecraft) {
+        return isScaled(minecraft.screen);
+    }
+
     /** Puts back the player's scale when a dialog that {@link #follow followed} a menu goes away. */
     public static void leave(Minecraft minecraft, Screen dialog) {
         if (FOLLOWERS.contains(dialog)) {

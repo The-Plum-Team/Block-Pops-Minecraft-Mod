@@ -78,13 +78,16 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
 
 /**
  * The editor's "Look" tab: how the collection looks in the machines, all of it in view at once.
- * On the left a live view of the box holding the collection's first figure, drawn from the
- * editor's preview of the draft, so every change shows before it is saved; on the right the
+ * On the left a live view of the box holding the collection's first figure, or the one clicked in
+ * the background's sample, drawn from the editor's preview of the draft, so every change shows
+ * before it is saved; on the right the
  * collection's name, then three sections under thin lines, each head saying what it is set to:
  * <ul>
  *   <li><b>Background</b>, the panel behind the figures in the machine: the twelve colours, a
  *       colour of one's own and the logo's main colour, and under them a sample of the machine's
- *       panel in that colour with the collection's first figures on it;</li>
+ *       panel in that colour with the collection's first figures on it, where a click on one
+ *       puts it in the box of the view, marked as the one shown; the choice is the view's alone
+ *       and is not saved;</li>
  *   <li><b>Box</b>: five box colours, then "Image" (the collection's own 64×64 picture, with the
  *       line that takes it and a link to the template), "Normal" (the mod's usual box) and "More",
  *       the other colours in a popover;</li>
@@ -104,9 +107,9 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  * A box image chosen as the kind with none yet, or a blank name, holds the collection's own
  * changes back, which the view, the box's head, the tab's dot and the status say.
  *
- * <p>The view's "View ⌄" menu shows the box alone or standing in the world, or opens the machine's
- * screen in a dialog ({@link MachineScreenDialog}); two icons spin the box and switch the night
- * light. Tab in the name moves on to the background's tiles; then the arrow keys move along a row,
+ * <p>The view shows the box; its "View ⌄" menu opens the machine's screen in a dialog
+ * ({@link MachineScreenDialog}), and two icons spin the box and switch the night light. Tab in
+ * the name moves on to the background's tiles; then the arrow keys move along a row,
  * Enter or Space picks, and Up, Down and Tab go from row to row, to the box image, the logo, its
  * size and "Position…".
  */
@@ -292,7 +295,7 @@ final class LookPage implements EditorPage {
     LookPage(CreatorEditorScreen editor) {
         this.editor = editor;
         this.previewId = CreatorPreview.previewId(CreatorEditorScreen.PREVIEW_SLOT);
-        this.previewBox = UiViewport.boxStack(this.previewId, null, false);
+        this.previewBox = UiViewport.boxStack(this.previewId, null);
         this.view.setCollection(this.previewId);
         this.view.stageBackground(true);
         this.viewButton = new UiViewButton(tr("preview.view"), this::openViewMenu);
@@ -322,7 +325,7 @@ final class LookPage implements EditorPage {
         this.templateLink = new TemplateLink(this::exportTemplate);
 
         this.logoEmpty = UiDropZone.single(editor, FilePicker.Slot.LOGO, tr("look.logo_add"), this::logoPicked)
-                .help(tr("wizard.logo_help", WorldContentLimits.LOGO_MIN_SIZE, WorldContentLimits.LOGO_MAX_SIZE));
+                .help(tr("wizard.logo_help", WorldContentLimits.LOGO_MAX_SIZE));
         this.logoFull = UiDropZone.single(editor, FilePicker.Slot.LOGO, this::logoPicked).onRemove(this::removeLogo)
                 .showLabel(false);
         this.logoLine = UiDropZone.single(editor, FilePicker.Slot.LOGO, this::logoPicked).onRemove(this::removeLogo)
@@ -341,6 +344,7 @@ final class LookPage implements EditorPage {
                 .colour(() -> 0xFF000000 | editor.draft().rgb())
                 .keys(FigureDefinition::getId)
                 .selectable(false)
+                .onPick(figure -> this.view.setFigure(figure.getId()), this.view::shownFigure)
                 .rank(SidebarScreen.ModelBudget.Rank.SHOWCASE);
 
         this.boxPopover = new UiPopover(tr("look.box_colours"), () -> onScreen(this.boxes.cellOf(BOX_MORE)))
@@ -1181,17 +1185,15 @@ final class LookPage implements EditorPage {
     }
 
     /**
-     * "View ⌄": the box alone or in the world, the chosen one checked, then the machine's screen,
-     * which opens in a dialog. Under the button, by its right edge on the wide page and its left
-     * on the narrow one, so it never covers the icons.
+     * "View ⌄": the box, checked as the view shown, then the machine's screen, which opens in a
+     * dialog. Under the button, by its right edge on the wide page and its left on the narrow
+     * one, so it never covers the icons.
      */
     private void openViewMenu() {
         UiMenu menu = new UiMenu();
-        UiBoxView.Mode mode = this.view.mode();
-        menu.radio(tr("preview.box"), mode != UiBoxView.Mode.WORLD, () -> this.view.setMode(UiBoxView.Mode.BOX));
-        menu.radio(tr("preview.world"), mode == UiBoxView.Mode.WORLD, () -> this.view.setMode(UiBoxView.Mode.WORLD));
+        menu.radio(tr("preview.box"), true, () -> this.view.setMode(UiBoxView.Mode.BOX));
         menu.item(tr("preview.screen"), this::openMachineScreen);
-        menu.highlight(mode == UiBoxView.Mode.WORLD ? 1 : 0);
+        menu.highlight(0);
         UiNode.Rect button = this.viewButton.bounds();
         menu.place(button, this.editor.width, this.editor.height);
         int menuX = this.narrow ? button.x() : Math.max(0, button.right() - menu.bounds().width());

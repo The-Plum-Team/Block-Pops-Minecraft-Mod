@@ -259,11 +259,6 @@ public class BoxBlockItemRenderer
     // The creator's box seen from the front, at the favorite color screen's angle
     public static final ResourceLocation CREATOR_BOX_MODEL =
             ResourceLocations.of(BlockPopsMod.MOD_ID, "creator_box");
-    // The creator's box as it stands in the world: at the vanilla block GUI angle once the box's
-    // own half turn is added, and baked at four times the vanilla block GUI scale, so a stack
-    // drawn at a quarter of that size lines up with a block item drawn at the same size
-    public static final ResourceLocation CREATOR_BOX_WORLD_MODEL =
-            ResourceLocations.of(BlockPopsMod.MOD_ID, "creator_box_world");
 
     // 1.21.4 binds a special renderer to an item model through this unbaked codec.
     //? if >=26 {
