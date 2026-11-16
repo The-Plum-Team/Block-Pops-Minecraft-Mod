@@ -54,6 +54,11 @@ import java.util.function.Supplier;
  * dragging one more than 6 units shows a blue line where it would land, carrying the row along
  * near its ends at a steady speed, whatever the frame rate, and letting go there moves it.
  *
+ * <p>With {@link #onRemove} set, the thumbnail under the pointer shows a small "×" in its top
+ * left corner, which takes that item away without selecting it first; its tooltip says what
+ * that means for the item, and an item it would do nothing for shows none. It is on the left
+ * because the thumbnail's own tooltip opens to the right of the pointer, over the other corner.
+ *
  * <p>Files dropped anywhere over the strip go to its {@link #filesZone}, the bulk add's, which
  * the strip lays over itself without drawing. Its models are the strip's share of the screen's
  * ({@link SidebarScreen.ModelBudget}): the selected thumbnail first, then the others in sight
@@ -61,7 +66,8 @@ import java.util.function.Supplier;
  * a paper figure and a model's texture whole, and only one whose texture has not arrived shows its
  * figure's initial. A strip that only
  * shows figures, as a sample of the machine's screen does, is made {@link #selectable(boolean)
- * unselectable} and may ask the budget at another {@link #rank}.
+ * unselectable} and may ask the budget at another {@link #rank}. Such a strip may still let one
+ * of its thumbnails be picked with a click ({@link #onPick}), which it then draws as selected.
  *
  * @param <T> what a thumbnail shows, such as a figure of the draft
  */
@@ -107,6 +113,10 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     private static final double EDGE_SPEED = 160.0;
     private static final int LIP = 2;
     private static final int PROBLEM = 0xFFE04040;
+    // The "×" in a thumbnail's corner: its side, its glyph and its face until the pointer is on it
+    private static final int REMOVE = 9;
+    private static final String[] REMOVE_GLYPH = {"#...#", ".#.#.", "..#..", ".#.#.", "#...#"};
+    private static final int REMOVE_FACE = 0xD0141416;
     // A retired figure's cell: a neutral grey, and a wash that leaves its figure readable
     private static final int RETIRED_CELL = 0xFF5C5D61;
     private static final int RETIRED_WASH = 0x40000000;
@@ -150,6 +160,9 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     @Nullable
     private Component reorderBlocked;
     @Nullable
+    private Consumer<T> onRemove;
+    private Function<T, List<Component>> removeTooltip = item -> null;
+    @Nullable
     private Runnable onAdd;
     @Nullable
     private Component addTooltip;
@@ -160,6 +173,9 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     private int scroll;
     private int grantedModels = Integer.MAX_VALUE;
     private boolean selectable = true;
+    @Nullable
+    private Consumer<T> onPick;
+    private Supplier<Object> pickedKey = () -> null;
     private SidebarScreen.ModelBudget.Rank rank = SidebarScreen.ModelBudget.Rank.STRIP;
     // A press on a thumbnail, which a long enough drag turns into moving it
     private int pressedIndex = -1;
@@ -228,6 +244,19 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     }
 
     /**
+     * Puts a small "×" in the corner of the thumbnail under the pointer, which takes its item away
+     * when clicked, selected or not.
+     *
+     * @param tooltip what the button would do to an item, as the button's tooltip; null for an
+     *                item it would do nothing to, which then shows no button
+     */
+    public UiThumbStrip<T> onRemove(@Nullable Consumer<T> onRemove, Function<T, List<Component>> tooltip) {
+        this.onRemove = onRemove;
+        this.removeTooltip = tooltip;
+        return this;
+    }
+
+    /**
      * Whether the thumbnails can be selected, moved and stepped through; false for a strip that only
      * shows them, which draws no selection, takes no click or key, and lets its tooltips show.
      */
@@ -242,6 +271,18 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
      */
     public UiThumbStrip<T> rank(SidebarScreen.ModelBudget.Rank rank) {
         this.rank = rank;
+        return this;
+    }
+
+    /**
+     * Lets a strip that only shows its thumbnails have one picked with a click, as the figure a
+     * view beside it shows: no keys, no dragging and never several.
+     *
+     * @param picked the key of the thumbnail drawn as selected, asked on every frame; null for none
+     */
+    public UiThumbStrip<T> onPick(@Nullable Consumer<T> onPick, Supplier<Object> picked) {
+        this.onPick = onPick;
+        this.pickedKey = picked;
         return this;
     }
 
@@ -446,6 +487,25 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
         return index;
     }
 
+    // What the "×" of a thumbnail would do, as its tooltip, or null for a thumbnail without one
+    @Nullable
+    private List<Component> removeTip(int index) {
+        if (!selectable || onRemove == null || dragging || index < 0 || index >= items.size()) {
+            return null;
+        }
+        return removeTooltip.apply(items.get(index));
+    }
+
+    private int removeX(int index) {
+        return cellX(index) + 3;
+    }
+
+    // Whether a point is on a thumbnail's "×", which sits in the top left corner of its cell
+    private boolean overRemove(int index, double mouseX, double mouseY) {
+        int left = removeX(index);
+        return mouseX >= left && mouseX < left + REMOVE && mouseY >= y + 3 && mouseY < y + 3 + REMOVE;
+    }
+
     // Where a dragged thumbnail would land: the gap nearest the pointer, from 0 before the first
     // to the item count after the last
     private int slotAt(double mouseX) {
@@ -541,7 +601,11 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     }
 
     private boolean isSelected(int index) {
-        return selectable && selectedKeys.contains(keyOf.apply(items.get(index)));
+        if (!selectable) {
+            // A strip that only shows marks the one thumbnail its host says is picked
+            return onPick != null && Objects.equals(pickedKey.get(), keyOf.apply(items.get(index)));
+        }
+        return selectedKeys.contains(keyOf.apply(items.get(index)));
     }
 
     private void drawThumb(GuiGraphics graphics, Font font, int index, boolean hovered, boolean withModel,
@@ -549,8 +613,10 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
         Look shown = look.apply(items.get(index));
         boolean selected = isSelected(index);
         int left = cellX(index);
-        int border = selected ? Theme.SELECTED : hovered ? Surfaces.BORDER_HOVER : Surfaces.BORDER;
-        Draw.raised(graphics, left, y, thumbWidth, thumbHeight, border, hovered ? Surfaces.FACE_HOVER : Surfaces.FACE,
+        // A thumbnail that does nothing when clicked does not light up under the pointer
+        boolean lit = hovered && (selectable || onPick != null);
+        int border = selected ? Theme.SELECTED : lit ? Surfaces.BORDER_HOVER : Surfaces.BORDER;
+        Draw.raised(graphics, left, y, thumbWidth, thumbHeight, border, lit ? Surfaces.FACE_HOVER : Surfaces.FACE,
                 LIP);
         if (selected) {
             Draw.outline(graphics, left + 1, y + 1, thumbWidth - 2, thumbHeight - 4, Theme.SELECTED);
@@ -615,8 +681,17 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
             if (dragging && index == pressedIndex) {
                 graphics.fill(left, y, left + thumbWidth, y + thumbHeight, DRAGGED_WASH);
             }
+            List<Component> removeTip = hovered ? removeTip(index) : null;
+            boolean overRemove = removeTip != null && overRemove(index, mouseX, mouseY);
+            if (removeTip != null) {
+                int removeX = removeX(index);
+                graphics.fill(removeX, cellY, removeX + REMOVE, cellY + REMOVE, overRemove ? PROBLEM : REMOVE_FACE);
+                PixelIcon.draw(graphics, REMOVE_GLYPH, removeX + 2, cellY + 2, overRemove ? Theme.TEXT : Theme.TEXT_SOFT);
+            }
             if (hovered) {
-                if (overProblem) {
+                if (overRemove) {
+                    UiTooltip.set(removeTip);
+                } else if (overProblem) {
                     UiTooltip.set(shown.problems());
                 } else if (!shown.tooltip().isEmpty()) {
                     UiTooltip.set(shown.tooltip());
@@ -733,6 +808,15 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
     public boolean click(UiInput.Click click) {
         pressedIndex = -1;
         dragging = false;
+        if (visible() && !selectable && onPick != null && click.left()) {
+            int picked = cellAt(click.x(), click.y());
+            if (picked < 0 || picked >= items.size()) {
+                return false;
+            }
+            UiSounds.play(ModSounds.CLICK);
+            onPick.accept(items.get(picked));
+            return true;
+        }
         if (!visible() || !selectable || !isMouseOver(click.x(), click.y())) {
             return false;
         }
@@ -757,6 +841,12 @@ public class UiThumbStrip<T> extends UiNode.Box implements SidebarScreen.Budgete
             return true;
         }
         T item = items.get(index);
+        if (removeTip(index) != null && overRemove(index, click.x(), click.y())) {
+            // Takes the thumbnail away as it is, without selecting it first
+            UiSounds.play(ModSounds.CLICK);
+            onRemove.accept(item);
+            return true;
+        }
         if (click.doubleClick() && !click.ctrl() && !click.shift()) {
             if (onActivate != null) {
                 onActivate.accept(item);

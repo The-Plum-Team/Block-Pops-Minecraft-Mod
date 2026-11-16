@@ -16,7 +16,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -50,24 +49,12 @@ public abstract class UiViewport extends UiNode.Box {
     private static final float SPIN_DEGREES_PER_SECOND = 45.0f;
     // A frame later than this after the last one turns the models no further, as after a pause
     private static final long MAX_FRAME_MS = 100;
-    // The angles of the box views below 1.21.4, as screen rotations about X and Y in degrees.
-    // From 1.21.4 the creator's box item models bake the same angles (see BoxBlockItemRenderer).
+    // The angles of the box view below 1.21.4, as screen rotations about X and Y in degrees.
+    // From 1.21.4 the creator's box item model bakes the same angles (see BoxBlockItemRenderer).
     private static final float FRONT_PITCH = 342.3f;
     private static final float FRONT_YAW = 335.9f;
-    private static final float BLOCK_PITCH = -30.0f;
-    private static final float BLOCK_YAW = 45.0f;
     // How deep below 1.21.4 an item is drawn in a screen, in front of what was drawn before it
     private static final float ITEM_Z = 150.0f;
-    // A block item's size in a slot against the slot: vanilla's block GUI scale
-    private static final float BLOCK_GUI_SCALE = 0.625f;
-    // The box renderer lifts a box in a screen by a pixel of the block, which the world view takes back
-    private static final float BOX_LIFT = 1.0f / 16.0f;
-    // The grass block of the world view, at the vanilla block GUI angle but baked at four times
-    // its scale, as the creator's box models are, so that from 1.21.6 it is drawn at full size
-    //? if >=1.21.4 {
-    /*private static final net.minecraft.resources.ResourceLocation CREATOR_GRASS_MODEL =
-            com.theplumteam.util.ResourceLocations.of(com.theplumteam.BlockPopsMod.MOD_ID, "creator_grass_block");
-    *///? }
 
     protected final List<UiNode> controls = new ArrayList<>();
     private final UiButton spinButton;
@@ -354,22 +341,21 @@ public abstract class UiViewport extends UiNode.Box {
 
     /**
      * A box of a collection, closed, holding a figure when one is named, as the machine hands it
-     * out. From 1.21.4 it is drawn through the creator's own box model, which leaves room for any
-     * turn; {@code world} picks the model at the vanilla block angle over the one seen from the front.
+     * out. From 1.21.4 it is drawn through the creator's own box model, seen from the front, which
+     * leaves room for any turn.
      */
-    public static ItemStack boxStack(String collectionId, @Nullable String figureId, boolean world) {
-        return boxStack(collectionId, figureId, world, 0);
+    public static ItemStack boxStack(String collectionId, @Nullable String figureId) {
+        return boxStack(collectionId, figureId, 0);
     }
 
     /**
      * As above, with the figure wearing one of its skins: 0 its own, 1 onwards its variants, as
      * a placed box keeps the one it was turned to.
      */
-    public static ItemStack boxStack(String collectionId, @Nullable String figureId, boolean world, int skin) {
+    public static ItemStack boxStack(String collectionId, @Nullable String figureId, int skin) {
         ItemStack stack = new ItemStack(ModItems.DEFAULT_BOX_BLOCK_ITEMS.get(PopBlockColor.ORIGINAL).get());
         //? if >=1.21.4 {
-        /*stack.set(net.minecraft.core.component.DataComponents.ITEM_MODEL,
-                world ? BoxBlockItemRenderer.CREATOR_BOX_WORLD_MODEL : BoxBlockItemRenderer.CREATOR_BOX_MODEL);
+        /*stack.set(net.minecraft.core.component.DataComponents.ITEM_MODEL, BoxBlockItemRenderer.CREATOR_BOX_MODEL);
         *///? }
         CompoundTag tag = new CompoundTag();
         tag.putString("CollectionId", collectionId);
@@ -381,15 +367,6 @@ public abstract class UiViewport extends UiNode.Box {
             tag.putInt("AlternativeSkinIndex", skin);
         }
         BlockEntityItemData.write(stack, tag, "blockpops:box_block");
-        return stack;
-    }
-
-    /** The grass block the world view stands a box on. */
-    protected static ItemStack grassStack() {
-        ItemStack stack = new ItemStack(Items.GRASS_BLOCK);
-        //? if >=1.21.4 {
-        /*stack.set(net.minecraft.core.component.DataComponents.ITEM_MODEL, CREATOR_GRASS_MODEL);
-        *///? }
         return stack;
     }
 
@@ -410,32 +387,8 @@ public abstract class UiViewport extends UiNode.Box {
         //? }
     }
 
-    /**
-     * Draws a box from {@link #boxStack} at the vanilla block angle and size, standing on a block
-     * item drawn at the same size whose centre is given, as a box placed on the ground looks.
-     *
-     * @return the top of the drawing, for a label above it
-     */
-    protected static float drawBoxOnBlock(GuiGraphics graphics, ItemStack box, ItemStack block, float yaw, int pose,
-                                          float centerX, float blockCenterY, float size) {
-        // One block up, seen at the vanilla 30 degrees from above, less the box's own lift
-        float unit = size * BLOCK_GUI_SCALE;
-        float boxCenterY = blockCenterY - unit * (float) Math.cos(Math.toRadians(30.0)) * (1.0f - BOX_LIFT);
-        BoxBlockItemRenderer.setView(box, yaw, pose);
-        //? if >=1.21.4 {
-        /*drawItemCentred(graphics, block, centerX, blockCenterY, size / 4.0f);
-        drawItemCentred(graphics, box, centerX, boxCenterY, size / 4.0f);
-        *///? } else {
-        drawItemCentred(graphics, block, centerX, blockCenterY, size);
-        // The box is drawn wholly in front of the block's depth, as it stands on top of it
-        drawItemTurned(graphics, box, centerX, boxCenterY, ITEM_Z + size, size * BLOCK_GUI_SCALE, BLOCK_PITCH,
-                BLOCK_YAW);
-        //? }
-        // A block at that angle reaches a little over half its size above its centre
-        return boxCenterY - unit * 0.79f;
-    }
-
-    // An item as big as one drawn at that size, centred on a point
+    //? if >=1.21.4 {
+    /*// An item as big as one drawn at that size, centred on a point
     private static void drawItemCentred(GuiGraphics graphics, ItemStack stack, float centerX, float centerY,
                                         float size) {
         GuiPose.push(graphics);
@@ -446,6 +399,7 @@ public abstract class UiViewport extends UiNode.Box {
         graphics.renderItem(stack, 0, 0);
         GuiPose.pop(graphics);
     }
+    *///? }
 
     //? if <1.21.4 {
     // Below 1.21.4 the screen's pose is three-dimensional, so an item is simply turned before it
