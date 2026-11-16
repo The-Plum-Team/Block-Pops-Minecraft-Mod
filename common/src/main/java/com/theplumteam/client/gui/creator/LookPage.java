@@ -325,7 +325,7 @@ final class LookPage implements EditorPage {
         this.templateLink = new TemplateLink(this::exportTemplate);
 
         this.logoEmpty = UiDropZone.single(editor, FilePicker.Slot.LOGO, tr("look.logo_add"), this::logoPicked)
-                .help(tr("wizard.logo_help", WorldContentLimits.LOGO_MIN_SIZE, WorldContentLimits.LOGO_MAX_SIZE));
+                .help(tr("wizard.logo_help", WorldContentLimits.LOGO_MAX_SIZE));
         this.logoFull = UiDropZone.single(editor, FilePicker.Slot.LOGO, this::logoPicked).onRemove(this::removeLogo)
                 .showLabel(false);
         this.logoLine = UiDropZone.single(editor, FilePicker.Slot.LOGO, this::logoPicked).onRemove(this::removeLogo)

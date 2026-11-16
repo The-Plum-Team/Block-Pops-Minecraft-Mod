@@ -429,7 +429,7 @@
   "blockpops.world_creator.wizard.name_empty": "Skriv ett namn",
   "blockpops.world_creator.wizard.author_hint": "Ditt namn eller ditt teams",
   "blockpops.world_creator.wizard.author_rule": "Ett författarnamn får inte innehålla styrtecken",
-  "blockpops.world_creator.wizard.logo_help": "Släpp en PNG här eller klicka för att välja · %s till %s px",
+  "blockpops.world_creator.wizard.logo_help": "Släpp en PNG här eller klicka för att välja · över %s px förminskas den",
   "blockpops.world_creator.wizard.colour": "Bakgrundsfärg",
   "blockpops.world_creator.wizard.colour_value": "%s · %s",
   "blockpops.world_creator.wizard.from_logo": "Hämta från loggan",

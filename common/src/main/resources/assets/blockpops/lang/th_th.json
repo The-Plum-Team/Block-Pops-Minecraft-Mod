@@ -429,7 +429,7 @@
   "blockpops.world_creator.wizard.name_empty": "พิมพ์ชื่อ",
   "blockpops.world_creator.wizard.author_hint": "ชื่อของคุณหรือทีมของคุณ",
   "blockpops.world_creator.wizard.author_rule": "ชื่อผู้สร้างต้องไม่มีอักขระควบคุม",
-  "blockpops.world_creator.wizard.logo_help": "วาง PNG ที่นี่หรือคลิกเพื่อเลือก · %s ถึง %s px",
+  "blockpops.world_creator.wizard.logo_help": "วาง PNG ที่นี่หรือคลิกเพื่อเลือก · ถ้าใหญ่กว่า %s px จะย่อให้อัตโนมัติ",
   "blockpops.world_creator.wizard.colour": "สีพื้นหลัง",
   "blockpops.world_creator.wizard.colour_value": "%s · %s",
   "blockpops.world_creator.wizard.from_logo": "ใช้สีจากโลโก้",

@@ -429,7 +429,7 @@
   "blockpops.world_creator.wizard.name_empty": "Wpisz nazwę",
   "blockpops.world_creator.wizard.author_hint": "Twoja nazwa lub twojego zespołu",
   "blockpops.world_creator.wizard.author_rule": "Nazwa autora nie może zawierać znaków sterujących",
-  "blockpops.world_creator.wizard.logo_help": "Upuść tu plik PNG lub kliknij, aby wybrać · od %s do %s px",
+  "blockpops.world_creator.wizard.logo_help": "Upuść tu plik PNG lub kliknij, aby wybrać · powyżej %s px zostanie zmniejszony",
   "blockpops.world_creator.wizard.colour": "Kolor tła",
   "blockpops.world_creator.wizard.colour_value": "%s · %s",
   "blockpops.world_creator.wizard.from_logo": "Pobierz z logo",

@@ -23,6 +23,12 @@ the option changes or the display resizes under them.
 - A dialog that opens on its own, with no menu under it (the figure position editor, opened from a
   block), is a `DialogScreen` that also implements `MenuGuiScale.Scaled`: it calls `enter` before
   `super.init()` and `restore` from `removed()`, and the world stays visible under its veil.
+- The game's toasts (tutorial steps, advancements, recipes, another mod's notices) wait while a
+  screen at a menu's scale is shown (`MenuGuiScale.shown`): the game draws them after the screen,
+  at the window's scale, so they covered the menu's top right corner. `MenuToastsMixin` stops the
+  toast manager from advancing and drawing them, so one that arrives meanwhile stays queued and
+  comes in, with its sound, when the menu goes away. The creator's own messages are `UiToast`s,
+  which the menu draws itself.
 - Layouts are responsive within that canvas: sizes come from `this.width` and `this.height`, never
   from a fixed GUI scale. Screens are laid out from 400x300 up; the creator's sidebar screens
   (`SidebarScreen`) are laid out for 427x240 too, and stay usable through their scrolling areas

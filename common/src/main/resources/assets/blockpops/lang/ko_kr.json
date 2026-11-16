@@ -429,7 +429,7 @@
   "blockpops.world_creator.wizard.name_empty": "이름을 입력하세요",
   "blockpops.world_creator.wizard.author_hint": "내 이름 또는 팀 이름",
   "blockpops.world_creator.wizard.author_rule": "제작자에는 제어 문자를 넣을 수 없습니다",
-  "blockpops.world_creator.wizard.logo_help": "여기에 PNG를 드롭하거나 클릭하여 선택 · %s~%s px",
+  "blockpops.world_creator.wizard.logo_help": "여기에 PNG를 드롭하거나 클릭하여 선택 · %s px보다 크면 자동으로 축소",
   "blockpops.world_creator.wizard.colour": "배경 색상",
   "blockpops.world_creator.wizard.colour_value": "%s · %s",
   "blockpops.world_creator.wizard.from_logo": "로고에서 가져오기",

@@ -191,8 +191,12 @@ network: they read the player's own skin from the game's local skin cache
 (`skins/<first two>/<name>` under the assets directory, where the name is the SHA-1 of the texture
 hash in the player's own textures property), only as a regular file of at most 64 KiB and never
 through a link. The bytes pass the same 64×64 PNG checks as a picked skin, and the default skin
-resource is used otherwise. "Download box template" writes two bundled images to
-`blockpops/templates/` in the game folder and opens that folder; it takes no path from the user.
+resource is used otherwise. A picked logo that fails its checks, most often for being larger than a
+logo may be, is decoded on the client and scaled to fit by `LogoFit`, read from a file of at most
+16 MiB and 4096 pixels a side; the PNG it writes then passes the same checks as any picked file, so
+only a canonical logo within its limits is kept or sent. "Download box template" writes two bundled
+images to `blockpops/templates/` in the game folder and opens that folder; it takes no path from the
+user.
 
 ## Trust model
 

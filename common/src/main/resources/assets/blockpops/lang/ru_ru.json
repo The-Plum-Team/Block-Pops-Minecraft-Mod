@@ -429,7 +429,7 @@
   "blockpops.world_creator.wizard.name_empty": "Введите название",
   "blockpops.world_creator.wizard.author_hint": "Ваше имя или название команды",
   "blockpops.world_creator.wizard.author_rule": "Имя автора не может содержать управляющие символы",
-  "blockpops.world_creator.wizard.logo_help": "Перетащите PNG сюда или нажмите, чтобы выбрать · от %s до %s px",
+  "blockpops.world_creator.wizard.logo_help": "Перетащите PNG сюда или нажмите, чтобы выбрать · больше %s px уменьшается автоматически",
   "blockpops.world_creator.wizard.colour": "Цвет фона",
   "blockpops.world_creator.wizard.colour_value": "%s · %s",
   "blockpops.world_creator.wizard.from_logo": "Взять из логотипа",

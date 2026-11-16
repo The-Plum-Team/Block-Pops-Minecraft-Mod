@@ -429,7 +429,7 @@
   "blockpops.world_creator.wizard.name_empty": "Scrivi un nome",
   "blockpops.world_creator.wizard.author_hint": "Il tuo nome o quello della tua squadra",
   "blockpops.world_creator.wizard.author_rule": "Un autore non può contenere caratteri di controllo",
-  "blockpops.world_creator.wizard.logo_help": "Trascina qui un PNG o fai clic per sceglierlo · da %s a %s px",
+  "blockpops.world_creator.wizard.logo_help": "Trascina qui un PNG o fai clic per sceglierlo · oltre %s px viene ridotto",
   "blockpops.world_creator.wizard.colour": "Colore di sfondo",
   "blockpops.world_creator.wizard.colour_value": "%s · %s",
   "blockpops.world_creator.wizard.from_logo": "Prendi dal logo",

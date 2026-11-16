@@ -429,7 +429,7 @@
   "blockpops.world_creator.wizard.name_empty": "Ketik nama",
   "blockpops.world_creator.wizard.author_hint": "Namamu atau nama timmu",
   "blockpops.world_creator.wizard.author_rule": "Nama pembuat tidak boleh berisi karakter kontrol",
-  "blockpops.world_creator.wizard.logo_help": "Letakkan PNG di sini atau klik untuk memilih · %s sampai %s px",
+  "blockpops.world_creator.wizard.logo_help": "Letakkan PNG di sini atau klik untuk memilih · lebih dari %s px akan diperkecil",
   "blockpops.world_creator.wizard.colour": "Warna latar",
   "blockpops.world_creator.wizard.colour_value": "%s · %s",
   "blockpops.world_creator.wizard.from_logo": "Ambil dari logo",
