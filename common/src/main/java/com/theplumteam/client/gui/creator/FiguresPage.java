@@ -64,7 +64,11 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  * figure back by, so every figure it holds has one, and the "With errors" filter lists and counts
  * exactly those. A click selects a figure, Ctrl and Shift pick several, the arrow keys step
  * through them, and Enter or a double click puts the keyboard in the figure's name. With every
- * figure shown and no search, dragging one moves it, as one undo step.
+ * figure shown and no search, dragging one moves it, as one undo step. The figure under the
+ * pointer shows a small "×" in its corner that takes it away as the Delete key does the selected
+ * one, without selecting it: a figure never saved is discarded, a draft collection's deleted and
+ * a published or archived collection's retired from the draw, each with a toast that undoes it.
+ * A retired figure shows none, since the column puts it back.
  *
  * <p>The search button at the strip's right opens a menu: how many figures and how much file space
  * the collection uses, "Search…" (Ctrl+F), which opens a search row over the strip, the button
@@ -218,6 +222,7 @@ final class FiguresPage implements EditorPage {
                 .keys(FigureDraft::id)
                 .onSelection(chosen -> updateSelection())
                 .onActivate(figure -> this.focusNameSoon = true)
+                .onRemove(this::removeFromStrip, this::removeTip)
                 .addTile(this::addFigure, tr("figures.add_tip"))
                 .filesZone(this.filesZone);
         made.setItems(items);
@@ -573,7 +578,10 @@ final class FiguresPage implements EditorPage {
 
     /** Takes the selected figures out of the draw, or puts them back, as one undo step. */
     void setEnabled(boolean enabled) {
-        List<FigureDraft> chosen = selected();
+        setEnabled(selected(), enabled);
+    }
+
+    private void setEnabled(List<FigureDraft> chosen, boolean enabled) {
         if (chosen.isEmpty()) {
             return;
         }
@@ -655,11 +663,52 @@ final class FiguresPage implements EditorPage {
 
     private void remove(FigureDraft figure, Component toast) {
         int index = this.strip != null ? this.strip.items().indexOf(figure) : -1;
+        // A figure taken away by its thumbnail's "×" need not be a selected one, whose selection then stays
+        boolean shown = selected().contains(figure);
         if (this.editor.draft().removeFigure(figure.id())) {
             this.editor.changed();
-            selectNear(index);
+            if (shown || selected().isEmpty()) {
+                selectNear(index);
+            }
             // Its files go with it, so the toast offers to take it back
             this.editor.undoToast(toast);
+        }
+    }
+
+    // What the "×" on a figure's thumbnail would do, as its tooltip: the column's footer link and its tip
+    @Nullable
+    private List<Component> removeTip(FigureDraft figure) {
+        String label;
+        String tip;
+        if (figure.isNew()) {
+            label = "figures.discard";
+            tip = "figures.discard_tip";
+        } else if (!figure.enabled()) {
+            // A retired figure is put back from the column, not taken away twice
+            return null;
+        } else if (this.editor.draft().isDraftCollection()) {
+            label = "figures.delete";
+            tip = "inspector.delete_tip";
+        } else {
+            label = "figures.retire_one";
+            tip = "figures.retire_tip";
+        }
+        List<Component> lines = new ArrayList<>(SidebarScreen.tooltipLines(tr(label)));
+        lines.addAll(SidebarScreen.tooltipLines(tr(tip)));
+        return lines;
+    }
+
+    // The "×" on a figure's thumbnail: what Delete does with the selected figure, done to this one
+    private void removeFromStrip(FigureDraft figure) {
+        String name = figure.name().isBlank() ? figure.id() : figure.name();
+        if (figure.isNew()) {
+            remove(figure, tr("inspector.deleted", name));
+        } else if (!figure.enabled()) {
+            return;
+        } else if (this.editor.draft().isDraftCollection()) {
+            remove(figure, tr("figures.deleted", name));
+        } else {
+            setEnabled(List.of(figure), false);
         }
     }
 

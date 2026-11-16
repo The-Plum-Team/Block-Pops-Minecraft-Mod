@@ -416,7 +416,7 @@ public class CreatorHomeScreen extends SidebarScreen {
         CollectionStatus status = CollectionStatus.of(record);
         String id = record.id();
         UiSideRow row = new UiSideRow(id, Component.literal(displayName(record)))
-                .box(UiViewport.boxStack(id, status.boxFigureId(), false), status.bandColour())
+                .box(UiViewport.boxStack(id, status.boxFigureId()), status.bandColour())
                 .faint(record.archived())
                 .onSelect(() -> {
                     setSelected(id);
@@ -663,10 +663,10 @@ public class CreatorHomeScreen extends SidebarScreen {
         for (FigureCollection collection : candidates) {
             List<FigureDefinition> figures = collection.getEnabledFigures();
             if (!figures.isEmpty()) {
-                return UiViewport.boxStack(collection.getId(), figures.get(0).getId(), false);
+                return UiViewport.boxStack(collection.getId(), figures.get(0).getId());
             }
         }
-        return fallback == null ? ItemStack.EMPTY : UiViewport.boxStack(fallback.getId(), null, false);
+        return fallback == null ? ItemStack.EMPTY : UiViewport.boxStack(fallback.getId(), null);
     }
 
     @Override
