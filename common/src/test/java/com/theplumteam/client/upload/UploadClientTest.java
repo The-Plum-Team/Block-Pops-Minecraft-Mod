@@ -57,11 +57,10 @@ class UploadClientTest {
         String config = "{\"schema\":1,\"uploads\":\"open\",\"min_client\":\"2.2.0\",\"terms\":1,\"rules\":1,\"limits\":"
                 + "{\"collections\":5,\"figures\":128,\"bytes_collection\":16777216,\"bytes_owner\":67108864,"
                 + "\"daily_commits\":50}}";
-        String supporter = "{\"active\":true,\"via\":\"paynow-uuid\",\"until\":\"2026-12-09\"}";
         String sessionError;
         String sessionName = "Steve";
         String me = "{\"schema\":1,\"collections\":[],\"quota\":{\"collections\":0,\"collections_limit\":5,\"bytes\":0,"
-                + "\"bytes_limit\":67108864,\"commits_today\":0,\"commits_limit\":50},\"supporter\":{\"active\":false},"
+                + "\"bytes_limit\":67108864,\"commits_today\":0,\"commits_limit\":50},"
                 + "\"owner\":{\"state\":\"active\"}}";
         /** How many of the next requests to a path with this prefix get no answer. */
         final Map<String, Integer> lost = new HashMap<>();
@@ -127,7 +126,7 @@ class UploadClientTest {
                 String token = "bpu1.s" + (++counter) + ".mac";
                 sessions.put(token, intent);
                 return json(200, "{\"schema\":1,\"token\":\"" + token + "\",\"expires_in\":900,\"uuid\":\"" + UUID
-                        + "\",\"name\":\"" + sessionName + "\",\"supporter\":" + supporter + ",\"owner\":{\"state\":\"active\"}}");
+                        + "\",\"name\":\"" + sessionName + "\",\"owner\":{\"state\":\"active\"}}");
             }
             String intent = sessions.get(call.token());
             if (intent == null) {
@@ -166,9 +165,6 @@ class UploadClientTest {
             }
             if (call.path().equals("/v1/me")) {
                 return parsed.action() == UploadIntent.Action.LIST ? json(200, me) : error(401, "not_verified");
-            }
-            if (call.path().equals("/v1/links/start")) {
-                return json(200, "{\"schema\":1,\"code\":\"BP-ABCD2345\",\"expires_in\":1800}");
             }
             if (call.path().equals("/v1/collections/" + ID + "/rollback")) {
                 return json(200, "{\"schema\":1,\"rev\":4,\"seq\":6,\"index\":\"" + "cd".repeat(32) + "\"}");
@@ -300,9 +296,13 @@ class UploadClientTest {
         assertEquals(ApiError.CLIENT_OUTDATED, outdated.refused(pack(null, 0)));
 
         Run gate = new Run();
-        gate.service.sessionError = "supporter_link_required";
-        assertEquals(ApiError.SUPPORTER_LINK_REQUIRED, gate.refused(pack(null, 0)));
+        gate.service.sessionError = "not_in_beta";
+        assertEquals(ApiError.NOT_IN_BETA, gate.refused(pack(null, 0)));
         assertTrue(gate.service.arrived.isEmpty());
+        // A reason this build has no words for, such as one of a service that asked for support, is an internal one
+        Run unknown = new Run();
+        unknown.service.sessionError = "not_supporter";
+        assertEquals(ApiError.INTERNAL, unknown.refused(pack(null, 0)));
 
         Run conflict = new Run();
         conflict.service.instead.put("/v1/packages", Service.json(409, "{\"schema\":1,\"error\":\"conflict\",\"detail\":7}"));
@@ -349,7 +349,7 @@ class UploadClientTest {
         assertEquals(ApiError.NOT_VERIFIED, run.refused(pack(null, 0)));
         run.service.sessionName = "Steve";
         run.service.instead.put("/v1/auth/session", Service.json(200, "{\"schema\":1,\"token\":\"Bearer x\\r\\nX-Evil: 1\","
-                + "\"expires_in\":900,\"uuid\":\"" + UUID + "\",\"name\":\"Steve\",\"supporter\":{\"active\":false},"
+                + "\"expires_in\":900,\"uuid\":\"" + UUID + "\",\"name\":\"Steve\","
                 + "\"owner\":{\"state\":\"active\"}}"));
         assertEquals(ApiError.INTERNAL, run.refused(pack(null, 0)));
         // An upload id or a file name that would walk somewhere else never becomes a path
@@ -375,7 +375,7 @@ class UploadClientTest {
         String foreign = row.replace(CODE, "willow-media").replace(ID, "p_bbbbbbbbbbbb");
         String removed = row.replace("\"state\":\"live\"", "\"state\":\"removed\",\"reason\":\"policy\"").replace(ID, "p_cccccccccccc");
         service.me = service.me.replace("\"collections\":[]", "\"collections\":[" + row + "," + hostile + "," + foreign + ","
-                + removed + "]").replace("\"supporter\":{\"active\":false}", "\"supporter\":" + service.supporter);
+                + removed + "]");
 
         Account account = manage.list();
         assertEquals(List.of(ID, "p_cccccccccccc"), account.collections().stream().map(UploadApi.Mine::id).toList());
@@ -384,23 +384,19 @@ class UploadClientTest {
                 .map(UploadApi.RevisionRow::state).toList());
         assertNull(account.collections().get(0).reason());
         assertEquals("policy", account.collections().get(1).reason());
-        assertEquals(new UploadApi.Supporter(true, "paynow-uuid", "2026-12-09"), account.supporter());
         assertEquals(5, account.quota().collectionsLimit());
 
         assertEquals(new UploadApi.Rolled(4, 6, "cd".repeat(32)), manage.rollback(ID, 3, 2));
         manage.withdraw(ID, 3, 2);
         manage.delete(ID, 3);
-        assertEquals("BP-ABCD2345", manage.link().code());
-        assertEquals(List.of("list", "rollback|" + ID + "|3|2", "withdraw|" + ID + "|3|2", "delete|" + ID + "|3", "link"),
+        assertEquals(List.of("list", "rollback|" + ID + "|3|2", "withdraw|" + ID + "|3|2", "delete|" + ID + "|3"),
                 List.copyOf(new LinkedHashSet<>(service.sessions.values())));
-        assertEquals(5, service.joins.size());
+        assertEquals(4, service.joins.size());
         assertTrue(service.asked.containsAll(List.of("POST /v1/collections/" + ID + "/rollback",
-                "POST /v1/collections/" + ID + "/revisions/2/withdraw", "DELETE /v1/collections/" + ID,
-                "POST /v1/links/start")));
-        // A link code of another shape is not shown
-        service.instead.put("/v1/links/start", Service.json(200, "{\"schema\":1,\"code\":\"https://evil.example\","
-                + "\"expires_in\":1800}"));
-        assertEquals(ApiError.INTERNAL, assertThrows(UploadException.class, manage::link).error());
+                "POST /v1/collections/" + ID + "/revisions/2/withdraw", "DELETE /v1/collections/" + ID)));
+        // An answer that still says who supports the project is not one this build knows
+        service.me = service.me.replace("\"owner\":", "\"supporter\":{\"active\":false},\"owner\":");
+        assertEquals(ApiError.INTERNAL, assertThrows(UploadException.class, manage::list).error());
         // Somebody else's collection id is refused before it is asked for
         assertThrows(UploadException.class, () -> api.delete("bpu1.s1.mac", "../../admin"));
     }

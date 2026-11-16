@@ -18,9 +18,6 @@ public enum ApiError {
     // Who is asking
     MOJANG_UNAVAILABLE,
     NOT_VERIFIED,
-    NOT_SUPPORTER,
-    SUPPORTER_LAPSED,
-    SUPPORTER_LINK_REQUIRED,
     NOT_IN_BETA,
     FROZEN,
     BANNED,
@@ -53,7 +50,7 @@ public enum ApiError {
 
     private final String id = name().toLowerCase(Locale.ROOT);
 
-    /** The code as an answer spells it, such as {@code not_supporter}. */
+    /** The code as an answer spells it, such as {@code not_verified}. */
     public String id() {
         return id;
     }

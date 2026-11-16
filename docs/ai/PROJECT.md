@@ -298,8 +298,9 @@ creator is left. One session at a time and never beside a World save in flight. 
 session Publish means publishing on BlockPops (`BlockPopsPublish`: the terms once, `PlayerExport`,
 `PublishRun`, then the code to share or the error in the game's words); `PersonalLinks` remembers
 which published collection and revision each draft became, so the next publish is a new revision
-of it, and its menu deletes that collection from BlockPops again, which is the owner's to do
-whether or not they still support the project. `BlockPopsLibrary`, from the home of a personal
+of it, and its menu deletes that collection from BlockPops again. Publishing is open to every
+account Mojang verifies: the service asks nobody to pay, and the game has no screen that does.
+`BlockPopsLibrary`, from the home of a personal
 session, lists what the account published as the service answers it, goes back to an earlier
 revision or withdraws one, and brings a published collection to this computer as a draft: it is
 read back by `PlayerDownload` exactly as a game reads a player collection (signed head, index and

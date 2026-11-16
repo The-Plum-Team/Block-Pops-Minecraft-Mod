@@ -39,9 +39,6 @@ public final class UploadApi {
     private static final Pattern UUID32 = Pattern.compile("[0-9a-f]{32}");
     private static final Pattern UPLOAD = Pattern.compile("[0-9a-hjkmnp-tv-z]{26}");
     private static final Pattern VERSION = Pattern.compile("[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}");
-    private static final Pattern DATE = Pattern.compile("[0-9]{4}-[0-9]{2}-[0-9]{2}");
-    private static final Pattern VIA = Pattern.compile("[a-z][a-z0-9-]{0,31}");
-    private static final Pattern LINK_CODE = Pattern.compile("BP-[A-Z2-7]{8}");
     private static final Pattern FIELD = Pattern.compile("(/[a-z_]{1,24}|/[0-9]{1,3}){1,6}");
     private static final long MAX_NUMBER = 1L << 40;
 
@@ -53,16 +50,12 @@ public final class UploadApi {
     public record Challenge(String nonce, int expiresIn) {
     }
 
-    /** Whether the account supports the project, as the service saw it when the session began. */
-    public record Supporter(boolean active, @Nullable String via, @Nullable String until) {
-    }
-
     /**
      * A session: the proof that this game speaks for a Minecraft account, good for one action.
      *
      * @param token kept in memory only, never written anywhere
      */
-    public record Session(String token, int expiresIn, String uuid, String name, Supporter supporter, String ownerState) {
+    public record Session(String token, int expiresIn, String uuid, String name, String ownerState) {
     }
 
     public record Begun(String upload, List<String> missing, int expiresIn) {
@@ -85,13 +78,10 @@ public final class UploadApi {
                         int commitsLimit) {
     }
 
-    public record Account(List<Mine> collections, Quota quota, Supporter supporter, String ownerState) {
+    public record Account(List<Mine> collections, Quota quota, String ownerState) {
     }
 
     public record Rolled(int rev, long seq, String index) {
-    }
-
-    public record LinkCode(String code, int expiresIn) {
     }
 
     private final UploadTransport transport;
@@ -134,13 +124,13 @@ public final class UploadApi {
         body.addProperty("schema", 1);
         body.addProperty("nonce", nonce);
         JsonObject json = object(send("POST", "/v1/auth/session", null, bytes(body), JSON, false), "schema", "token",
-                "expires_in", "uuid", "name", "supporter", "owner");
+                "expires_in", "uuid", "name", "owner");
         String name = text(json, "name", 16);
         if (!PlayerIndex.isAccountName(name)) {
             throw new UploadException(ApiError.INTERNAL);
         }
         return new Session(matching(json, "token", TOKEN), (int) number(json, "expires_in", 1, 86_400),
-                matching(json, "uuid", UUID32), name, supporter(json.get("supporter")), ownerState(json.get("owner")));
+                matching(json, "uuid", UUID32), name, ownerState(json.get("owner")));
     }
 
     /** Opens an upload with the package that lists what is to be published. */
@@ -175,7 +165,7 @@ public final class UploadApi {
     /** What this account has published and how much of each quota it uses. */
     public Account me(String token) throws UploadException {
         JsonObject json = object(send("GET", "/v1/me", token, null, null, false), "schema", "collections", "quota",
-                "supporter", "owner");
+                "owner");
         List<Mine> collections = new ArrayList<>();
         for (JsonElement element : array(json.get("collections"), 256)) {
             Mine mine = mine(element);
@@ -188,8 +178,7 @@ public final class UploadApi {
         return new Account(List.copyOf(collections), new Quota((int) number(quota, "collections", 0, 100_000),
                 (int) number(quota, "collections_limit", 0, 100_000), number(quota, "bytes", 0, MAX_NUMBER),
                 number(quota, "bytes_limit", 0, MAX_NUMBER), (int) number(quota, "commits_today", 0, 1_000_000),
-                (int) number(quota, "commits_limit", 0, 1_000_000)), supporter(json.get("supporter")),
-                ownerState(json.get("owner")));
+                (int) number(quota, "commits_limit", 0, 1_000_000)), ownerState(json.get("owner")));
     }
 
     // One collection of the list. A name or a code that is not one a collection can have is left out
@@ -237,13 +226,6 @@ public final class UploadApi {
     /** Deletes the collection from the service for good. */
     public void delete(String token, String id) throws UploadException {
         requireNoBody(send("DELETE", "/v1/collections/" + id(id), token, null, null, false));
-    }
-
-    /** Asks for the code that ties a purchase to this account. */
-    public LinkCode startLink(String token) throws UploadException {
-        JsonObject json = object(send("POST", "/v1/links/start", token, EMPTY, JSON, false), "schema", "code",
-                "expires_in");
-        return new LinkCode(matching(json, "code", LINK_CODE), (int) number(json, "expires_in", 1, 86_400));
     }
 
     // ---- The exchange
@@ -402,20 +384,6 @@ public final class UploadApi {
         }
         return new Published(id, code, (int) number(json, "rev", 1, PlayerHead.MAX_REV), number(json, "seq", 1, MAX_NUMBER),
                 sha(text(json, "index", 64)));
-    }
-
-    private static Supporter supporter(JsonElement element) throws UploadException {
-        JsonObject json = asObject(element);
-        if (!(json.get("active") instanceof JsonPrimitive active) || !active.isBoolean()) {
-            throw new UploadException(ApiError.INTERNAL);
-        }
-        if (!active.getAsBoolean()) {
-            requireKeys(json, "active");
-            return new Supporter(false, null, null);
-        }
-        requireKeys(json, "active", "via", "until");
-        return new Supporter(true, matching(json, "via", VIA),
-                json.get("until").isJsonNull() ? null : matching(json, "until", DATE));
     }
 
     private static String ownerState(JsonElement element) throws UploadException {

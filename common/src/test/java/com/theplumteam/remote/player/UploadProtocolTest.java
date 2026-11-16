@@ -34,9 +34,9 @@ class UploadProtocolTest {
     void anIntentIsOneLineWithOneSpelling() {
         List<UploadIntent> intents = List.of(UploadIntent.publishNew(SHA), UploadIntent.publishChanges(ID, 4, SHA),
                 UploadIntent.list(), UploadIntent.rollback(ID, 5, 3), UploadIntent.withdraw(ID, 5, 2),
-                UploadIntent.delete(ID, 5), UploadIntent.link());
+                UploadIntent.delete(ID, 5));
         assertEquals(List.of("publish|new|0|" + SHA, "publish|" + ID + "|4|" + SHA, "list", "rollback|" + ID + "|5|3",
-                "withdraw|" + ID + "|5|2", "delete|" + ID + "|5", "link"),
+                "withdraw|" + ID + "|5|2", "delete|" + ID + "|5"),
                 intents.stream().map(UploadIntent::text).toList());
         for (UploadIntent intent : intents) {
             assertEquals(intent, UploadIntent.parse(intent.text()));
@@ -47,7 +47,7 @@ class UploadProtocolTest {
             "publish|" + ID + "|04|" + SHA, "publish|" + ID + "|+4|" + SHA, "publish|" + ID + "|4.0|" + SHA,
             "publish|w-col|4|" + SHA, "publish|NEW|0|" + SHA, "rollback|" + ID + "|5|5", "rollback|" + ID + "|5|0",
             "rollback|" + ID + "|5", "withdraw|" + ID + "|5|5", "delete|" + ID, "delete|" + ID + "|5|1",
-            "delete|" + ID + "|10000001", "report|" + ID + "|1|spam|" + SHA, "link|" + ID,
+            "delete|" + ID + "|10000001", "report|" + ID + "|1|spam|" + SHA, "link", "link|" + ID,
             "publish|new|0|" + SHA + "\n", "x".repeat(200)}) {
             assertNull(UploadIntent.parse(bad), String.valueOf(bad));
         }
@@ -108,8 +108,10 @@ class UploadProtocolTest {
         }
         assertEquals(ApiError.INTERNAL, ApiError.byId("made_up"));
         assertEquals(ApiError.INTERNAL, ApiError.byId(null));
-        assertEquals(ApiError.INTERNAL, ApiError.byId("NOT_SUPPORTER"));
-        assertNotNull(ApiError.byId("not_supporter"));
+        assertEquals(ApiError.INTERNAL, ApiError.byId("NOT_VERIFIED"));
+        assertEquals(ApiError.NOT_VERIFIED, ApiError.byId("not_verified"));
+        // Publishing asks nobody to support the project, so no error says they do not
+        assertEquals(ApiError.INTERNAL, ApiError.byId("not_supporter"));
         // No error shares its name with a content rule, so a rule is never read as an error
         for (ContentError rule : ContentError.values()) {
             assertFalse(ids.contains(rule.id()), rule.id());
