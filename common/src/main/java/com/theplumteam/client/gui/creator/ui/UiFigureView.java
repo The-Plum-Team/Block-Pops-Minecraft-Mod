@@ -370,7 +370,7 @@ public class UiFigureView extends UiViewport implements SidebarScreen.Budgeted {
     private ItemStack box(FigureCollection collection, FigureDefinition figure) {
         String key = collection.getId() + ":" + figure.getId() + "#" + skinIndex;
         if (!key.equals(boxKey)) {
-            box = boxStack(collection.getId(), figure.getId(), false, skinIndex);
+            box = boxStack(collection.getId(), figure.getId(), skinIndex);
             boxKey = key;
         }
         return box;

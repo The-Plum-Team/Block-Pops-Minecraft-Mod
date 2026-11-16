@@ -237,7 +237,7 @@ public class UiStage extends UiNode.Box implements SidebarScreen.Budgeted {
             try {
                 if (boxModels > 0) {
                     if (box.isEmpty()) {
-                        box = greyed ? greyBox(collectionId) : UiViewport.boxStack(collectionId, boxFigureId, false);
+                        box = greyed ? greyBox(collectionId) : UiViewport.boxStack(collectionId, boxFigureId);
                     }
                     UiViewport.drawBoxFront(graphics, box, BOX_YAW, 0, rowLeft + boxSize / 2.0f,
                             floor + 2 - boxSize * BOX_MIDDLE, boxSize);
@@ -282,7 +282,7 @@ public class UiStage extends UiNode.Box implements SidebarScreen.Budgeted {
     // A box of the collection in the plain light grey, which its own art and colour give way to,
     // holding no figure: the box and the figure inside it have no black-and-white texture
     private static ItemStack greyBox(String collectionId) {
-        ItemStack stack = UiViewport.boxStack(collectionId, null, false);
+        ItemStack stack = UiViewport.boxStack(collectionId, null);
         CompoundTag tag = BlockEntityItemData.read(stack);
         tag = tag != null ? tag.copy() : new CompoundTag();
         tag.putString("Color", PopBlockColor.LIGHT_GRAY.getSerializedName());
