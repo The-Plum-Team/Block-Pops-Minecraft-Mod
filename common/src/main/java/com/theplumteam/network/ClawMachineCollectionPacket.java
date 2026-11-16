@@ -4,7 +4,9 @@ import com.theplumteam.BlockPopsMod;
 import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.blockentity.ClawMachineBlockEntity;
 import com.theplumteam.blockentity.GachaMachineBlockEntity;
+import com.theplumteam.figure.CollectionFamilies;
 import com.theplumteam.figure.CollectionRegistry;
+import com.theplumteam.server.ClientCapabilities;
 import com.theplumteam.server.worldcollections.WorldCollections;
 import com.theplumteam.worldcontent.WorldCollectionRecord;
 import com.theplumteam.worldcontent.WorldContentIds;
@@ -74,7 +76,7 @@ public class ClawMachineCollectionPacket {
                             player.getName().getString(), packet.collectionId);
                     return;
                 }
-                if (!isOffered(packet.collectionId)) {
+                if (!isOffered(packet.collectionId, player)) {
                     LOGGER.warn("Player {} tried to select collection {}, which no machine offers",
                             player.getName().getString(), packet.collectionId);
                     return;
@@ -102,13 +104,17 @@ public class ClawMachineCollectionPacket {
     }
 
     /**
-     * Whether a machine may be set to the collection: the server must know it, and a World
-     * collection must be neither a draft nor archived. The screen offers no other, so only an
-     * outdated or modified client names one.
+     * Whether a machine may be set to the collection: the server must know it, a World
+     * collection must be neither a draft nor archived, and a player collection is offered only
+     * to a client that loads them. The screen offers no other, so only an outdated or modified
+     * client names one.
      */
-    private static boolean isOffered(String collectionId) {
+    private static boolean isOffered(String collectionId, ServerPlayer player) {
         if (CollectionRegistry.getCollection(collectionId).isEmpty()) {
             return false;
+        }
+        if (CollectionFamilies.family(collectionId) == CollectionFamilies.Family.PLAYER) {
+            return ClientCapabilities.playerCollections(player);
         }
         if (WorldContentIds.isWorldCollectionId(collectionId)) {
             WorldCollectionRecord record = WorldCollections.record(collectionId);

@@ -9,6 +9,9 @@ package com.theplumteam.remote.player;
  * nothing signed is believed, so player collections stay off.
  */
 final class PlayerBuildFlags {
+    /** Where games read what players publish: everything of theirs lies below {@code p/} there. */
+    static final String READ_ORIGIN = "https://blockpops-cdn.quickskin.net";
+
     static final String[][] KEYS = {};
 
     private PlayerBuildFlags() {

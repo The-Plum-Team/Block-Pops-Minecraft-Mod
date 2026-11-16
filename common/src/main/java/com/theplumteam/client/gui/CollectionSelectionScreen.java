@@ -40,7 +40,9 @@ import com.theplumteam.client.gui.widget.TabButton;
 import com.theplumteam.client.gui.widget.LinkButton;
 import com.theplumteam.client.renderer.FigureWidgetRenderer;
 import com.theplumteam.client.token.ClientTokenManager;
+import com.theplumteam.client.remote.ClientPlayerCollections;
 import com.theplumteam.client.worldcontent.ClientWorldCollections;
+import com.theplumteam.figure.CollectionFamilies;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.figure.DrawRules;
 import com.theplumteam.figure.FigureCollection;
@@ -250,14 +252,22 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         return list;
     }
 
-    // World Players first, then the others, then World collections in the server's order: an
-    // edited one is registered again, so the registry's order is not theirs
+    // World Players first, then the others, then player collections and then World collections,
+    // each in the server's order: one that changes is registered again, so the registry's order
+    // is not theirs
     private static int sortKey(String collectionId) {
         if ("world_players".equals(collectionId)) {
             return -1;
         }
-        return WorldContentIds.isWorldCollectionId(collectionId) ? 1 + Math.max(0, ClientWorldCollections.order(collectionId)) : 0;
+        if (ClientPlayerCollections.owns(collectionId)) {
+            return 1 + Math.max(0, ClientPlayerCollections.order(collectionId));
+        }
+        return WorldContentIds.isWorldCollectionId(collectionId)
+                ? PLAYER_SLOTS + 1 + Math.max(0, ClientWorldCollections.order(collectionId)) : 0;
     }
+
+    // More than a world has player collections, so World collections sort after every one of them
+    private static final int PLAYER_SLOTS = 1000;
 
     /**
      * Opens the other tab, with the selection it had when it was left. A tab opened for the first
@@ -873,10 +883,10 @@ public class CollectionSelectionScreen extends Screen implements MenuGuiScale.Sc
         }
 
         // A hidden, archived or draft collection is not offered, so it cannot stay this machine's
-        // selection, and neither can a World collection that was removed
+        // selection, and neither can a World or a player collection that was removed
         if (selectedCollectionId != null && (ClientHiddenCollections.isHidden(selectedCollectionId)
                 || !ClientWorldCollections.isOffered(selectedCollectionId)
-                || (WorldContentIds.isWorldCollectionId(selectedCollectionId)
+                || (CollectionFamilies.isMaterialized(selectedCollectionId)
                         && CollectionRegistry.getCollection(selectedCollectionId).isEmpty()))) {
             selectedCollectionId = "";
             if (figureListWidget != null) {

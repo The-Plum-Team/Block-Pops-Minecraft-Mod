@@ -2,6 +2,7 @@ package com.theplumteam.network;
 
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.server.CustomCollections;
+import com.theplumteam.server.ServerProfiles;
 import com.theplumteam.util.ResourceLocations;
 import com.theplumteam.util.ServerLevels;
 import dev.architectury.networking.NetworkManager;
@@ -13,9 +14,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Client-to-server packet in which an operator enables a Custom collection by its access
- * code, or disables one by its id. The server looks the code up itself and answers with
- * a {@link CustomCollectionStatusPacket}.
+ * Client-to-server packet in which an operator, or the host of their own world, enables a
+ * Custom or a player collection by its access code, or disables one by its id. The server
+ * looks the code up itself and answers with a {@link CustomCollectionStatusPacket}.
  */
 public class CustomCollectionRequestPacket {
     private static final Logger LOGGER = LoggerFactory.getLogger(CustomCollectionRequestPacket.class);
@@ -52,7 +53,7 @@ public class CustomCollectionRequestPacket {
             if (!(context.getPlayer() instanceof ServerPlayer player)) {
                 return;
             }
-            if (!ServerLevels.hasCommandLevel(player, 2)) {
+            if (!ServerProfiles.managesCodes(player)) {
                 LOGGER.warn("Player {} tried to change Custom collections without permission",
                         player.getName().getString());
                 return;

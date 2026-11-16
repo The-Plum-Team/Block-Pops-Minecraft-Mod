@@ -33,9 +33,11 @@ follow-up pull request (#11). `site/mod-base.json` no longer defers it or any ot
   [ADR 0004](../architecture/decisions/0004-extend-world-collections-for-the-redesigned-creator.md)
   their extensions for the redesigned creator,
   [ADR 0005](../architecture/decisions/0005-autosave-world-collection-drafts.md) the autosave of
-  their drafts and
+  their drafts,
   [ADR 0006](../architecture/decisions/0006-let-world-collections-turn-off-holographic-draws.md)
-  turning off their holographic draws.
+  turning off their holographic draws and
+  [ADR 0007](../architecture/decisions/0007-publish-player-collections-to-the-cdn.md) the
+  collections players publish.
 - `site/mod-base.json` and `scripts/pages/mod_base_adapter.py` connect this repository to the
   mod-base public-evidence kit; `scripts/ci/mod_base_kit.py` finds the pinned kit.
 
@@ -212,8 +214,55 @@ then accepts a genuine document only if it is current: a sequence number above t
 plausible step, not issued a day ahead of the clock; a root with a higher number starts a new epoch
 that forgets every other document; and collections load only while the root allows it, the status
 is fresh and the revocation list it names is the one held. The public keys are compiled in
-(`PlayerBuildFlags`); the build holds none yet, so nothing signed is believed, and nothing in the
-game fetches a player document or contacts an origin for one.
+(`PlayerBuildFlags`); the build holds none yet, so nothing signed is believed.
+
+[ADR 0007](../architecture/decisions/0007-publish-player-collections-to-the-cdn.md) is the decision
+behind player collections. `remote.player.PlayerFetcher` turns a player code into a collection:
+the signed head the code points at, the signed index of the revision, the record it names, and
+the collection built and checked from the record and the index's facts; it fetches none of the
+collection's files. It reads only from `PlayerCdn.ORIGIN`, a second fixed origin compiled into the
+build, by paths `PlayerPaths` computes, and only `PlayerCdn.forGame()` gives the game that source,
+which is `RemoteSource.NONE` in the packaged E2E. Do not add another origin for player content, a
+URL or a path from a server, packet or file, or a way to build from anything whose signature or
+SHA-256 has not held. `PlayerStore` keeps, below `p/` of `blockpops-cache/`, what a game believes
+and the heads, indexes and records it has verified, so a world opens with no network. With no key
+in the build the fetcher asks the origin nothing.
+
+A server shows the player collections added to its world by code. `/blockpops customcollections
+add` and the request packet send a code of the player shape to `server.PlayerCollections` and any
+other code down the official path, so neither tree is asked for the other's codes; both are for
+operators at level 2 and for the host of their own world (`ServerProfiles.managesCodes`). The
+world's list is `<world>/data/blockpops-player-collections.json` (`PlayerCollectionSettings`, at
+most 32): each entry pins the world to one revision, and its revision and index only select which
+signed index to load. `PlayerCollectionEngine`, which knows nothing of the game, decides what is
+shown: what is kept when the world opens, then the status and the revocation list, then each head,
+at the intervals the status asks for. A collection, or all of them, stops being shown when a signed
+document takes it out of use, and stays in the list so a restore needs nobody; a pinned world is
+told of a newer revision and moves only with `update` or when the entry is set to `follow`. A
+player collection is registered like any dynamic one but travels only in
+`SyncPlayerCollectionsPacket`, which carries pointers and the signed head and no content, and only
+to a client that sent `PlayerCollectionsHelloPacket` (`ClientCapabilities`); a client that did not
+is refused a draw from one and a machine set to one, and is answered with results it can read.
+Whoever manages codes is also sent `SyncPlayerCollectionLinesPacket`, every added collection and
+where it stands, shown or not; it is a list to read, and nothing is registered because of it. The
+Settings tab for Custom collections shows that list and sends `PlayerCollectionActionPacket` to
+move a pin, set whether a collection follows new revisions, or check for changes now, which the
+server allows whoever the commands allow.
+
+On a client, `client.remote.ClientPlayerCollections` is the only code that registers a player
+collection, and it believes nothing because the server said it. For each pointer
+`PlayerFetcher.follow` requires the head handed over with it to be genuine (or the very head this
+game already holds), live and not behind the revision the pointer names; it loads the index by its
+SHA-256 from the cache or the CDN at a computed path, and builds the collection from the record
+that index names. A revision the game does not keep loads only while the status was confirmed
+moments ago. The files are fetched when something of the collection is first drawn (the runtime
+registries' `isPending` asks for them), each as exactly the bytes its index names, and
+`ClientPlayerAssets` loads one only after the whole check of a published file passes and comes to
+what the index says. Their assets live under `PlayerAssetIds`, are never written into GeckoLib's
+caches, and are left alone by `RuntimeAssets.clear()`. `PlayerBudgets` bounds what one game holds
+of all of them together. While any is shown the client checks the status and the revocation list
+again at the interval the status asks for, and stops showing what they take out of use whatever
+the server sends.
 
 The creator (`client.gui.creator`) opens only when `SettingsScreen.canOpenCreator()` allows it: an
 operator and World collections synced. Its entry points are the machine screen's **Creator**

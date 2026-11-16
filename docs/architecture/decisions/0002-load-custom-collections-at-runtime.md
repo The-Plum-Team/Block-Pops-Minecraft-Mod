@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted.
+Accepted. [ADR 0007](0007-publish-player-collections-to-the-cdn.md) adds a second read origin, for
+the collections players publish; this record stays in force for official Custom collections.
 
 ## Context
 

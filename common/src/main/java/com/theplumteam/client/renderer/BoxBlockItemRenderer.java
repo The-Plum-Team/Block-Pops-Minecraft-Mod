@@ -5,11 +5,11 @@ import com.mojang.math.Axis;
 import com.theplumteam.block.BoxBlock;
 import com.theplumteam.block.PopBlockColor;
 import com.theplumteam.blockentity.BoxBlockEntity;
+import com.theplumteam.figure.CollectionFamilies;
 import com.theplumteam.figure.CollectionRegistry;
 import com.theplumteam.item.BlockEntityItemData;
 import com.theplumteam.item.BoxBlockItem;
 import com.theplumteam.item.GeoBlockItem;
-import com.theplumteam.worldcontent.WorldContentIds;
 import net.minecraft.client.Minecraft;
 //? if >=1.21.4 {
 /*import com.mojang.serialization.MapCodec;
@@ -63,7 +63,7 @@ public class BoxBlockItemRenderer
         }
     }
 
-    // A drawn box of a World collection is the plain default box item with the collection in
+    // A drawn box of a World or a player collection is the plain default box item with the collection in
     // its tag. Unless the tag names a color itself, it shows the collection's box art, as the
     // same box placed in the world does. Custom and built-in boxes keep their item's color.
     // The creator's preview of a collection is drawn the same way.
@@ -72,7 +72,7 @@ public class BoxBlockItemRenderer
         if (item instanceof BoxBlockItem boxItem && boxItem.getCollectionId() == null
                 && boxItem.getColor() == PopBlockColor.ORIGINAL
                 && (blockEntityTag == null || !blockEntityTag.contains("Color"))
-                && (WorldContentIds.isWorldCollectionId(collectionId)
+                && (CollectionFamilies.isMaterialized(collectionId)
                         || collectionId.startsWith(CollectionRegistry.PREVIEW_PREFIX))) {
             renderEntity.clearColorForItemRendering();
         }

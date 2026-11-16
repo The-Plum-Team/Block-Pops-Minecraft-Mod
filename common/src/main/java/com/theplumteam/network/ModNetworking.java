@@ -107,6 +107,19 @@ public class ModNetworking {
             RequestSupportCheckoutPacket::handleServer
         );
 
+        // Player collections: a client says it loads them, and only then is sent any
+        PacketNetworking.registerReceiver(
+            NetworkManager.c2s(),
+            PlayerCollectionsHelloPacket.ID,
+            PlayerCollectionsHelloPacket::handleServer
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.c2s(),
+            PlayerCollectionActionPacket.ID,
+            PlayerCollectionActionPacket::handleServer
+        );
+
         // World collections: uploads and edits from operators, file requests from every player
         PacketNetworking.registerReceiver(
             NetworkManager.c2s(),
@@ -152,7 +165,7 @@ public class ModNetworking {
                 AdminProgressionSyncPacket.ID, SyncSpecialAccessPacket.ID,
                 SyncCustomCollectionsPacket.ID, CustomCollectionStatusPacket.ID, DrawResultPacket.ID,
                 SyncWorldCollectionsPacket.ID, WorldAssetChunkPacket.ID, WorldCollectionStatusPacket.ID,
-                OpenSupportCheckoutPacket.ID);
+                OpenSupportCheckoutPacket.ID, SyncPlayerCollectionsPacket.ID, SyncPlayerCollectionLinesPacket.ID);
         *///? }
 
         BlockPopsMod.logDebug("BlockPops networking initialized");
@@ -262,15 +275,31 @@ public class ModNetworking {
             WorldCollectionStatusPacket::handleClient
         );
 
-        // Leaving a server forgets its Custom and World collections and their downloaded assets
+        PacketNetworking.registerReceiver(
+            NetworkManager.s2c(),
+            SyncPlayerCollectionsPacket.ID,
+            SyncPlayerCollectionsPacket::handleClient
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.s2c(),
+            SyncPlayerCollectionLinesPacket.ID,
+            SyncPlayerCollectionLinesPacket::handleClient
+        );
+
+        // Leaving a server forgets its Custom, player and World collections and their loaded assets
         dev.architectury.event.events.client.ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(player -> {
             com.theplumteam.client.remote.ClientCustomCollections.forget();
+            com.theplumteam.client.remote.ClientPlayerCollections.forget();
             com.theplumteam.client.worldcontent.ClientWorldCollections.forget();
             com.theplumteam.client.worldcontent.ClientWorldUploads.reset();
         });
         // A proxy can move the client to another server without a disconnect; that server sends its own
         dev.architectury.event.events.client.ClientPlayerEvent.CLIENT_PLAYER_JOIN.register(player -> {
             com.theplumteam.client.worldcontent.ClientWorldCollections.forget();
+            // Player collections are sent only to a client that says it loads them
+            com.theplumteam.client.remote.ClientPlayerCollections.forget();
+            com.theplumteam.client.remote.ClientPlayerCollections.hello();
             com.theplumteam.client.worldcontent.ClientWorldUploads.reset();
         });
         // Uploads send their chunks, the file picker takes its dialog's answer and the creator's
@@ -279,6 +308,7 @@ public class ModNetworking {
             com.theplumteam.client.worldcontent.FilePicker.tick();
             com.theplumteam.client.worldcontent.ClientWorldUploads.tick();
             com.theplumteam.client.worldcontent.CreatorAutosave.tick();
+            com.theplumteam.client.remote.ClientPlayerCollections.tick();
         });
         // The creator's client command
         com.theplumteam.client.CreatorCommand.register();

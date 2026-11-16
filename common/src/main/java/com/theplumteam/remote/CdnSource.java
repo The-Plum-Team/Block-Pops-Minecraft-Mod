@@ -25,7 +25,7 @@ import java.util.concurrent.TimeoutException;
  * and redirects are never followed. Only status 200 counts, and a body is abandoned as soon
  * as it proves larger than the caller's cap.
  */
-public final class CdnSource implements RemoteSource {
+public class CdnSource implements RemoteSource {
     public static final String ORIGIN = "https://f003.backblazeb2.com/file/blockpops-assets";
     private static final String USER_AGENT = "BlockPops";
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
@@ -38,13 +38,27 @@ public final class CdnSource implements RemoteSource {
             .followRedirects(HttpClient.Redirect.NEVER)
             .connectTimeout(CONNECT_TIMEOUT)
             .build();
+    private final String origin;
+
+    /** Reads from the CDN's official tree. */
+    public CdnSource() {
+        this(ORIGIN);
+    }
+
+    /**
+     * Reads from another fixed origin in the same careful way. Only a subclass can name one, and
+     * it names a constant of its own: no origin ever comes from a server, a packet or a file.
+     */
+    protected CdnSource(String origin) {
+        this.origin = origin;
+    }
 
     @Override
     public byte[] fetch(String relativePath, long maxBytes) throws IOException {
         if (!RemotePaths.isSafeRelative(relativePath)) {
             throw new RemoteException("Refusing to download " + RemoteException.excerpt(relativePath));
         }
-        HttpRequest request = HttpRequest.newBuilder(URI.create(ORIGIN + "/" + relativePath))
+        HttpRequest request = HttpRequest.newBuilder(URI.create(origin + "/" + relativePath))
                 .timeout(REQUEST_TIMEOUT)
                 .header("User-Agent", USER_AGENT)
                 .GET()

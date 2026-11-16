@@ -8,6 +8,7 @@ Accepted project decisions:
 - [ADR 0004: Extend World collections for the redesigned creator](0004-extend-world-collections-for-the-redesigned-creator.md)
 - [ADR 0005: Autosave World-collection drafts](0005-autosave-world-collection-drafts.md)
 - [ADR 0006: Let a World collection turn off holographic draws](0006-let-world-collections-turn-off-holographic-draws.md)
+- [ADR 0007: Publish players' collections to the Custom CDN](0007-publish-player-collections-to-the-cdn.md)
 
 An ADR records the evidence and trade-offs behind a decision. Operational instructions remain in
 the focused human and AI documentation linked from the repository root. Name each record

@@ -261,8 +261,16 @@ public final class PlayerState {
      * held at all, as right after a new epoch.
      */
     public boolean keeps(String id, int rev) {
+        return keepsLoading() && !revocations.document().revokes(id, rev);
+    }
+
+    /**
+     * Whether what was verified before stays loaded at all: a status and a revocation list are
+     * held, and neither the root nor that status turned loading off.
+     */
+    public boolean keepsLoading() {
         return (root == null || root.document().loading()) && status != null && status.document().loading()
-                && revocations != null && !revocations.document().revokes(id, rev);
+                && revocations != null;
     }
 
     // ---- Storing

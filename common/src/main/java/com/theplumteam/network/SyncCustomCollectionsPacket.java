@@ -57,6 +57,16 @@ public class SyncCustomCollectionsPacket {
         return buffer;
     }
 
+    /** How many bytes the packet with these collections has. */
+    public static int encodedBytes(List<Entry> entries) {
+        FriendlyByteBuf buffer = new SyncCustomCollectionsPacket(entries).encode();
+        try {
+            return buffer.readableBytes();
+        } finally {
+            buffer.release();
+        }
+    }
+
     public static SyncCustomCollectionsPacket decode(FriendlyByteBuf buffer) {
         int count = bounded(buffer.readVarInt(), com.theplumteam.server.CustomCollectionSettings.MAX_ENABLED);
         List<Entry> entries = new ArrayList<>(count);
