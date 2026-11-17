@@ -52,11 +52,9 @@ only to supporters. The supporter button at the top right of that menu (the
 cup with a heart), or `/blockpops supporter`, opens the shop the supporter
 service names. On PayNow the checkout of the monthly supporter subscription is
 already made out to your Minecraft account. On Ko-fi a dialog opens over the
-menu for when you come back: type the email you paid with, then, when the
-supporter service asks for it, the six-digit code it emails to that address,
-and the payment is linked to your
-Minecraft account (`/blockpops supporter link` opens the dialog again). The
-specials unlock about a minute after that. The game sends the email straight
+menu for when you come back: type the email you paid with, and the payment is
+linked to your Minecraft account (`/blockpops supporter link` opens the dialog
+again). The specials unlock about a minute after that. The game sends the email straight
 to the supporter service at its fixed address, never through the server, and
 proves which account is linking through Mojang, as when it joins a server; an
 account Mojang cannot vouch for links by its name. A server with a client from

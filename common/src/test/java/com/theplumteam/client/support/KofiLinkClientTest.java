@@ -79,8 +79,8 @@ class KofiLinkClientTest {
     @Test
     void theServerIdIsTheOneTheServiceComputes() {
         // The same vector as the supporter service's links.test.ts
-        assertEquals("45e98c97f0eb7a7cdccf72a6f5863a98fb6e5b44",
-                KofiLinkClient.serverId(NONCE, "steve@example.com", "123456", "Steve"));
+        assertEquals("22babf36132c19f6c1df204d995d517b5db5b7b2",
+                KofiLinkClient.serverId(NONCE, "steve@example.com", "Steve"));
     }
 
     @Test
@@ -91,61 +91,38 @@ class KofiLinkClientTest {
         }
         assertNull(KofiLinkClient.normalizeEmail(null));
         assertNull(KofiLinkClient.normalizeEmail("a".repeat(250) + "@example.com"));
-        assertTrue(KofiLinkClient.isCode("042137"));
-        assertFalse(KofiLinkClient.isCode("42137"));
-        assertFalse(KofiLinkClient.isCode("04213a"));
     }
 
     @Test
-    void aCodeIsAskedForTheEmailAndThePlayersName() throws LinkException {
-        Service service = new Service().answer(200, "{\"code\":\"sent\"}").answer(200, "{\"code\":\"not_needed\"}");
-        KofiLinkClient client = client(service, new Session("Steve", false));
-        assertTrue(client.requestCode("steve@example.com", "es_es"));
-        assertEquals("/api/link/code", service.paths.get(0));
-        assertEquals("steve@example.com", service.bodies.get(0).get("email").getAsString());
-        assertEquals("Steve", service.bodies.get(0).get("minecraft").getAsString());
-        assertEquals("es_es", service.bodies.get(0).get("lang").getAsString());
-        // A service that sends no codes says so, and the link goes ahead without one
-        assertFalse(client.requestCode("steve@example.com", "es_es"));
-    }
-
-    @Test
-    void aJoinedAccountSendsItsNonceAndTheCode() throws LinkException {
+    void aJoinedAccountSendsItsNonce() throws LinkException {
         Service service = new Service().answer(200,
                 "{\"linked\":true,\"verified\":true,\"name\":\"Steve\",\"supporter\":true}");
         Session session = new Session("Steve", false);
-        Linked linked = client(service, session).link("steve@example.com", "123456");
+        Linked linked = client(service, session).link("steve@example.com");
         assertEquals(new Linked("Steve", true, true), linked);
-        assertEquals(List.of("45e98c97f0eb7a7cdccf72a6f5863a98fb6e5b44"), session.joined);
+        assertEquals(List.of("22babf36132c19f6c1df204d995d517b5db5b7b2"), session.joined);
         JsonObject body = service.bodies.get(0);
         assertEquals("/api/minecraft/link", service.paths.get(0));
         assertEquals(NONCE, body.get("nonce").getAsString());
-        assertEquals("123456", body.get("code").getAsString());
+        assertEquals("steve@example.com", body.get("email").getAsString());
         assertEquals("Steve", body.get("name").getAsString());
+        assertEquals(3, body.size());
     }
 
     @Test
     void anAccountMojangRefusesStillLinksAsAClaimWithoutANonce() throws LinkException {
         Service service = new Service().answer(200, "{\"linked\":true,\"verified\":false,\"name\":\"Steve\",\"supporter\":false}");
-        Linked linked = client(service, new Session("Steve", true)).link("steve@example.com", "");
+        Linked linked = client(service, new Session("Steve", true)).link("steve@example.com");
         assertEquals(new Linked("Steve", false, false), linked);
-        JsonObject body = service.bodies.get(0);
-        assertFalse(body.has("nonce"));
-        assertFalse(body.has("code"));
+        assertFalse(service.bodies.get(0).has("nonce"));
     }
 
     @Test
     void theServicesRefusalsBecomeFailures() {
         String[][] cases = {
-                {"403", "code_wrong", "CODE_WRONG"},
-                {"403", "code_expired", "CODE_EXPIRED"},
-                {"403", "code_mismatch", "CODE_MISMATCH"},
                 {"403", "no_payment", "NO_PAYMENT"},
                 {"409", "name_taken", "NAME_TAKEN"},
                 {"409", "already_linked", "ALREADY_LINKED"},
-                {"403", "not_verified", "NOT_VERIFIED"},
-                {"503", "mojang_unavailable", "MOJANG_UNAVAILABLE"},
-                {"503", "email_failed", "EMAIL_FAILED"},
                 {"400", "bad_request", "BAD_REQUEST"},
                 {"400", "something new", "BAD_REQUEST"},
                 {"500", "something new", "NETWORK"},
@@ -153,23 +130,23 @@ class KofiLinkClientTest {
         for (String[] c : cases) {
             Service service = new Service().answer(Integer.parseInt(c[0]), "{\"error\":\"" + c[1] + "\"}");
             LinkException e = assertThrows(LinkException.class,
-                    () -> client(service, new Session("Steve", false)).link("steve@example.com", "123456"));
+                    () -> client(service, new Session("Steve", false)).link("steve@example.com"));
             assertEquals(Failure.valueOf(c[2]), e.failure(), c[1]);
         }
         Service html = new Service().answer(200, "<html>");
         assertEquals(Failure.NETWORK, assertThrows(LinkException.class,
-                () -> client(html, new Session("Steve", false)).requestCode("steve@example.com", "en_us")).failure());
+                () -> client(html, new Session("Steve", false)).link("steve@example.com")).failure());
         Service down = new Service();
         down.down = true;
         assertEquals(Failure.NETWORK, assertThrows(LinkException.class,
-                () -> client(down, new Session("Steve", false)).link("steve@example.com", "123456")).failure());
+                () -> client(down, new Session("Steve", false)).link("steve@example.com")).failure());
     }
 
     @Test
     void anAccountWithoutAPlayerNameAsksNothing() {
         Service service = new Service();
         assertEquals(Failure.BAD_REQUEST, assertThrows(LinkException.class,
-                () -> client(service, new Session("", false)).requestCode("steve@example.com", "en_us")).failure());
+                () -> client(service, new Session("", false)).link("steve@example.com")).failure());
         assertTrue(service.paths.isEmpty());
     }
 }

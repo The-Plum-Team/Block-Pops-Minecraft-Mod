@@ -27,12 +27,10 @@ import java.util.regex.Pattern;
  * straight to the supporter service, never through the Minecraft server, so no server owner sees
  * the email, and only to the service's fixed origin, so no server can send it elsewhere.
  *
- * <p>First the service emails a six-digit code to that email ({@link #requestCode}), which proves
- * the email is the player's; while the service sends no codes it says so, and the link goes ahead
- * without one. Then {@link #link} joins, through Mojang, the "server" that names the email, the
- * code and the name, as the game joins any server, and the service asks Mojang which account did:
- * the link is then verified, tied to the account rather than only to its name. An account Mojang
- * cannot vouch for (an offline one) still links, as a claim on its name.
+ * <p>{@link #link} joins, through Mojang, the "server" that names the email and the name, as the
+ * game joins any server, and the service asks Mojang which account did: the link is then
+ * verified, tied to the account rather than only to its name. An account Mojang cannot vouch for
+ * (an offline one) still links, as a claim on its name.
  *
  * <p>Every call blocks: run it off the client thread.
  */
@@ -40,12 +38,10 @@ public final class KofiLinkClient {
     /** The supporter service, the one servers ask whether a player is a supporter. */
     public static final String ORIGIN = "https://kofi-linker.rubengalandiaz.workers.dev";
     public static final int MAX_EMAIL_LENGTH = 254;
-    public static final int CODE_LENGTH = 6;
     private static final int MAX_ANSWER_BYTES = 4096;
     // The same shape the service takes: one @, a dot after it, no spaces or address syntax
     private static final Pattern EMAIL = Pattern.compile("[^\\s@<>()\",;:\\\\\\[\\]]+@[^\\s@<>()\",;:\\\\\\[\\]]+\\.[^\\s@<>()\",;:\\\\\\[\\]]+");
     private static final Pattern NAME = Pattern.compile("[A-Za-z0-9_]{1,16}");
-    private static final Pattern DIGITS = Pattern.compile("\\d{6}");
     private static final SecureRandom RANDOM = new SecureRandom();
 
     /** Why a call failed, which the dialog says in the player's language. */
@@ -54,21 +50,12 @@ public final class KofiLinkClient {
         BAD_REQUEST,
         /** The service could not be reached, or answered something unreadable. */
         NETWORK,
-        /** The service could not send the email. */
-        EMAIL_FAILED,
-        CODE_WRONG,
-        CODE_EXPIRED,
-        /** The code was sent for another account. */
-        CODE_MISMATCH,
-        /** Ko-fi has no payment from the email (said only while no codes are sent). */
+        /** Ko-fi has no payment from the email. */
         NO_PAYMENT,
         /** Another email already has this name. */
         NAME_TAKEN,
-        /** The email already has another account (said only while no codes are sent). */
-        ALREADY_LINKED,
-        /** Mojang did not vouch for the account. */
-        NOT_VERIFIED,
-        MOJANG_UNAVAILABLE
+        /** The email already has another account. */
+        ALREADY_LINKED
     }
 
     public static final class LinkException extends Exception {
@@ -130,43 +117,11 @@ public final class KofiLinkClient {
         return email;
     }
 
-    public static boolean isCode(String code) {
-        return code != null && DIGITS.matcher(code).matches();
-    }
-
     /**
-     * Asks the service to email a code. True when it sends codes (it answers the same whether or
-     * not the email has paid, so nothing tells whether one is on its way); false when it sends
-     * none, and {@link #link} goes ahead with an empty code.
+     * Links the email (as {@link #normalizeEmail} gives it) to this game's account. A join Mojang
+     * refuses or cannot take still links, as a claim on the name.
      */
-    public boolean requestCode(String email, String lang) throws LinkException {
-        String name = joiner.name();
-        if (!NAME.matcher(name).matches()) {
-            throw new LinkException(Failure.BAD_REQUEST);
-        }
-        JsonObject body = new JsonObject();
-        body.addProperty("email", email);
-        body.addProperty("minecraft", name);
-        body.addProperty("lang", lang);
-        Answer answer = post("/api/link/code", body);
-        JsonObject json = object(answer.body());
-        if (answer.status() == 200 && json != null) {
-            String code = text(json, "code");
-            if ("sent".equals(code)) {
-                return true;
-            }
-            if ("not_needed".equals(code)) {
-                return false;
-            }
-        }
-        throw new LinkException(failure(answer.status(), json));
-    }
-
-    /**
-     * Links the email to this game's account, with the code it was sent ("" when the service
-     * sends none). A join Mojang refuses or cannot take still links, as a claim on the name.
-     */
-    public Linked link(String email, String code) throws LinkException {
+    public Linked link(String email) throws LinkException {
         String name = joiner.name();
         if (!NAME.matcher(name).matches()) {
             throw new LinkException(Failure.BAD_REQUEST);
@@ -174,7 +129,7 @@ public final class KofiLinkClient {
         String nonce = nonces.get();
         boolean joined;
         try {
-            joiner.join(serverId(nonce, email, code, name));
+            joiner.join(serverId(nonce, email, name));
             joined = true;
         } catch (UploadException e) {
             joined = false;
@@ -182,9 +137,6 @@ public final class KofiLinkClient {
         JsonObject body = new JsonObject();
         body.addProperty("email", email);
         body.addProperty("name", name);
-        if (!code.isEmpty()) {
-            body.addProperty("code", code);
-        }
         if (joined) {
             body.addProperty("nonce", nonce);
         }
@@ -200,11 +152,11 @@ public final class KofiLinkClient {
     }
 
     /**
-     * The server id the game joins: the SHA-1, in hex, of the purpose, the nonce, the email, the
-     * code and the lower-case name, one per line. The service computes the same.
+     * The server id the game joins: the SHA-1, in hex, of the purpose, the nonce, the email and
+     * the lower-case name, one per line. The service computes the same.
      */
-    public static String serverId(String nonce, String email, String code, String name) {
-        String text = String.join("\n", "blockpops-kofi-link-v1", nonce, email, code, name.toLowerCase(Locale.ROOT));
+    public static String serverId(String nonce, String email, String name) {
+        String text = String.join("\n", "blockpops-kofi-link-v1", nonce, email, name.toLowerCase(Locale.ROOT));
         try {
             MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
             return HexFormat.of().formatHex(sha1.digest(text.getBytes(StandardCharsets.UTF_8)));
@@ -227,24 +179,12 @@ public final class KofiLinkClient {
             switch (error) {
                 case "bad_request":
                     return Failure.BAD_REQUEST;
-                case "email_failed":
-                    return Failure.EMAIL_FAILED;
-                case "code_wrong":
-                    return Failure.CODE_WRONG;
-                case "code_expired":
-                    return Failure.CODE_EXPIRED;
-                case "code_mismatch":
-                    return Failure.CODE_MISMATCH;
                 case "no_payment":
                     return Failure.NO_PAYMENT;
                 case "name_taken":
                     return Failure.NAME_TAKEN;
                 case "already_linked":
                     return Failure.ALREADY_LINKED;
-                case "not_verified":
-                    return Failure.NOT_VERIFIED;
-                case "mojang_unavailable":
-                    return Failure.MOJANG_UNAVAILABLE;
                 default:
                     break;
             }

@@ -338,8 +338,8 @@ The Ko-fi link dialog (`client.gui.SupporterLinkScreen`) is the one place the cl
 contacts the supporter service: only at `KofiLinkClient.ORIGIN`, a fixed origin no server can
 change, so a player's email never passes through or is redirected by a Minecraft server, and
 never in the packaged E2E. It proves the account by joining, through the game's own session
-service, a server id that names the email, the emailed code and the name (`KofiLinkClient.serverId`,
-equal to the service's `linkServerId`); the access token never leaves authlib. The client's
+service, a server id that names the email and the name (`KofiLinkClient.serverId`, equal to the
+service's `linkServerId`); the access token never leaves authlib. The client's
 hello announces the dialog (`ClientCapabilities.KOFI_LINK`), and only then does the server offer
 it (`OpenSupporterLinkPacket`) instead of the service's web page. After a link the client asks
 the server to check the player again (`RecheckSupporterPacket`, rate-limited), and the service's
