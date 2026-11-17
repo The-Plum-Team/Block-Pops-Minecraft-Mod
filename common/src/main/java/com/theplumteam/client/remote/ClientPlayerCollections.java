@@ -73,11 +73,14 @@ public final class ClientPlayerCollections {
     private ClientPlayerCollections() {
     }
 
-    /** Tells the server this client loads player collections, once after joining. Client thread. */
+    /**
+     * Tells the server what this client can do, once after joining: it loads player collections and
+     * links a Ko-fi payment in its own dialog. Client thread.
+     */
     public static void hello() {
         if (Minecraft.getInstance().getConnection() != null
                 && ClientPacketNetworking.canServerReceive(PlayerCollectionsHelloPacket.ID)) {
-            new PlayerCollectionsHelloPacket(ClientCapabilities.PLAYER_COLLECTIONS).sendToServer();
+            new PlayerCollectionsHelloPacket(ClientCapabilities.KOFI_LINK).sendToServer();
         }
     }
 

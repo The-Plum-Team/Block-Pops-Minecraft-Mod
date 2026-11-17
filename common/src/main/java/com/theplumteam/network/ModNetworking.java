@@ -107,6 +107,12 @@ public class ModNetworking {
             RequestSupportCheckoutPacket::handleServer
         );
 
+        PacketNetworking.registerReceiver(
+            NetworkManager.c2s(),
+            RecheckSupporterPacket.ID,
+            RecheckSupporterPacket::handleServer
+        );
+
         // Player collections: a client says it loads them, and only then is sent any
         PacketNetworking.registerReceiver(
             NetworkManager.c2s(),
@@ -165,7 +171,8 @@ public class ModNetworking {
                 AdminProgressionSyncPacket.ID, SyncSpecialAccessPacket.ID,
                 SyncCustomCollectionsPacket.ID, CustomCollectionStatusPacket.ID, DrawResultPacket.ID,
                 SyncWorldCollectionsPacket.ID, WorldAssetChunkPacket.ID, WorldCollectionStatusPacket.ID,
-                OpenSupportCheckoutPacket.ID, SyncPlayerCollectionsPacket.ID, SyncPlayerCollectionLinesPacket.ID);
+                OpenSupportCheckoutPacket.ID, SyncPlayerCollectionsPacket.ID, SyncPlayerCollectionLinesPacket.ID,
+                OpenSupporterLinkPacket.ID);
         *///? }
 
         BlockPopsMod.logDebug("BlockPops networking initialized");
@@ -213,6 +220,12 @@ public class ModNetworking {
             NetworkManager.s2c(),
             OpenSupportCheckoutPacket.ID,
             OpenSupportCheckoutPacket::handleClient
+        );
+
+        PacketNetworking.registerReceiver(
+            NetworkManager.s2c(),
+            OpenSupporterLinkPacket.ID,
+            OpenSupporterLinkPacket::handleClient
         );
 
         PacketNetworking.registerReceiver(

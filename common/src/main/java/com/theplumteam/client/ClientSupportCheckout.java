@@ -1,5 +1,6 @@
 package com.theplumteam.client;
 
+import com.theplumteam.client.gui.SupporterLinkScreen;
 import com.theplumteam.client.gui.widget.LinkButton;
 import com.theplumteam.network.OpenSupportCheckoutPacket;
 import com.theplumteam.network.RequestSupportCheckoutPacket;
@@ -10,7 +11,9 @@ import org.jetbrains.annotations.Nullable;
  * The supporter button's side of the checkout: it asks the server for a checkout made for this
  * player, and opens the one the server sends back. A checkout opens only within a short while of
  * the button being pressed and only on PayNow or Ko-fi, so a server cannot open pages on its own. What
- * happened is kept for a few seconds, for the machine menu to show beside the button.
+ * happened is kept for a few seconds, for the machine menu to show beside the button. With Ko-fi,
+ * the dialog where the player links the payment to their account opens over the menu, ready for
+ * when they come back from paying ({@link SupporterLinkScreen}).
  */
 public final class ClientSupportCheckout {
     // How long after the press the server's answer is still taken
@@ -37,8 +40,11 @@ public final class ClientSupportCheckout {
             return;
         }
         LinkButton.openLink(url);
-        setStatus(Component.translatable(OpenSupportCheckoutPacket.isKofi(url)
-                ? "blockpops.support.kofi_open" : "blockpops.support.open").getString());
+        boolean kofi = OpenSupportCheckoutPacket.isKofi(url);
+        setStatus(Component.translatable(kofi ? "blockpops.support.kofi_open" : "blockpops.support.open").getString());
+        if (kofi) {
+            SupporterLinkScreen.openOverCurrent();
+        }
     }
 
     /**

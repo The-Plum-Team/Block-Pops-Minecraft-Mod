@@ -56,10 +56,13 @@ public final class SpecialAccess {
     // specials unlock soon after paying rather than when the kept answer runs out
     private static final long WATCH_INTERVAL_SECONDS = 20;
     private static final long WATCH_MILLIS = 15 * 60_000L;
+    // A client that linked a payment asks for a new check at most this often
+    private static final long RECHECK_INTERVAL_MILLIS = 10_000;
 
     private static final Map<UUID, Answer> ANSWERS = new ConcurrentHashMap<>();
     private static final Set<UUID> ASKING = ConcurrentHashMap.newKeySet();
     private static final Map<UUID, Long> WATCHING = new ConcurrentHashMap<>();
+    private static final Map<UUID, Long> RECHECKED = new ConcurrentHashMap<>();
     private static final ScheduledExecutorService IO = Executors.newSingleThreadScheduledExecutor(runnable -> {
         Thread thread = new Thread(runnable, "BlockPops-SpecialAccess-IO");
         thread.setDaemon(true);
@@ -177,6 +180,22 @@ public final class SpecialAccess {
         if (WATCHING.put(playerId, System.currentTimeMillis() + WATCH_MILLIS) == null) {
             watch(ServerLevels.serverOf(player), playerId);
         }
+    }
+
+    /**
+     * Asks about the player now and then often for a while, as after a checkout: their client has
+     * just linked a Ko-fi payment in the game ({@link com.theplumteam.network.RecheckSupporterPacket}).
+     * The service's answer is what counts; a client asking more often than every few seconds is
+     * not heard.
+     */
+    public static void recheck(ServerPlayer player) {
+        long now = System.currentTimeMillis();
+        Long last = RECHECKED.put(player.getUUID(), now);
+        if (last != null && now - last < RECHECK_INTERVAL_MILLIS) {
+            return;
+        }
+        watchPurchase(player);
+        refresh(player);
     }
 
     private static void watch(MinecraftServer server, UUID playerId) {

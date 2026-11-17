@@ -334,6 +334,17 @@ only a canonical logo within its limits is kept or sent. "Download box template"
 images to `blockpops/templates/` in the game folder and opens that folder; it takes no path from the
 user.
 
+The Ko-fi link dialog (`client.gui.SupporterLinkScreen`) is the one place the client itself
+contacts the supporter service: only at `KofiLinkClient.ORIGIN`, a fixed origin no server can
+change, so a player's email never passes through or is redirected by a Minecraft server, and
+never in the packaged E2E. It proves the account by joining, through the game's own session
+service, a server id that names the email, the emailed code and the name (`KofiLinkClient.serverId`,
+equal to the service's `linkServerId`); the access token never leaves authlib. The client's
+hello announces the dialog (`ClientCapabilities.KOFI_LINK`), and only then does the server offer
+it (`OpenSupporterLinkPacket`) instead of the service's web page. After a link the client asks
+the server to check the player again (`RecheckSupporterPacket`, rate-limited), and the service's
+answer is still what counts.
+
 ## Trust model
 
 - **Protected controller, untrusted candidate.** Build and Packaged E2E run from the protected
