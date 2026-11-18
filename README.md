@@ -51,9 +51,14 @@ apart in the gacha machine's menu (`3/5 | 0/7 figures`). A token gives them
 only to supporters. The supporter button at the top right of that menu (the
 cup with a heart), or `/blockpops supporter`, opens the shop the supporter
 service names. On PayNow the checkout of the monthly supporter subscription is
-already made out to your Minecraft account; on Ko-fi a link in the chat then
-opens a page where you tie the Ko-fi email you paid with to your name. The
-specials unlock about a minute after that.
+already made out to your Minecraft account. On Ko-fi a dialog opens over the
+menu for when you come back: type the email you paid with, and the payment is
+linked to your Minecraft account (`/blockpops supporter link` opens the dialog
+again). The specials unlock about a minute after that. The game sends the email straight
+to the supporter service at its fixed address, never through the server, and
+proves which account is linking through Mojang, as when it joins a server; an
+account Mojang cannot vouch for links by its name. A server with a client from
+before the dialog sends instead a link to the service's web page.
 
 To tell who is a supporter, the server sends each joining player's name, and
 on an online-mode server their UUID, to the service named by

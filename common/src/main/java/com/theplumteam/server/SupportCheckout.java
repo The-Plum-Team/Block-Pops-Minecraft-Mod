@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.theplumteam.BlockPopsMod;
 import com.theplumteam.network.OpenSupportCheckoutPacket;
+import com.theplumteam.network.OpenSupporterLinkPacket;
 import com.theplumteam.server.config.ServerConfig;
 import com.theplumteam.util.E2EDeterminism;
 import com.theplumteam.util.ServerLevels;
@@ -20,6 +21,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.UUID;
@@ -32,9 +34,11 @@ import java.util.concurrent.Executors;
  * (the one {@link SpecialAccess} asks) for the player's checkout, and the player opens it. The
  * service picks the shop. A PayNow checkout is made for the player: an online-mode server sends the
  * player's UUID, so the purchase follows the Mojang account, and an offline-mode one only the
- * name, which is all a non-premium player has. A Ko-fi page comes with a link to the service's
- * page where the player ties the Ko-fi email they paid with to their name. Once the checkout is
- * out, {@link SpecialAccess} asks about the player often until the payment shows.
+ * name, which is all a non-premium player has. A Ko-fi page comes with the way to tie the Ko-fi
+ * email they paid with to their account: the client's own dialog, when it has one
+ * ({@link ClientCapabilities#kofiLink}; the menu opens it with Ko-fi, the chat offers it), or else
+ * a link to the service's web page. Once the checkout is out, {@link SpecialAccess} asks about
+ * the player often until the payment shows.
  */
 public final class SupportCheckout {
     private static final Gson GSON = new Gson();
@@ -111,10 +115,32 @@ public final class SupportCheckout {
                     sendLink(online, answer.url());
                 }
                 if (answer.link() != null) {
-                    sendLinkPage(online, answer.link());
+                    if (!ClientCapabilities.kofiLink(online)) {
+                        sendLinkPage(online, answer.link());
+                    } else if (!fromMenu) {
+                        sendLinkInGame(online);
+                    }
                 }
             });
         });
+    }
+
+    /**
+     * Opens the dialog where the player links their Ko-fi payment ({@code /blockpops supporter
+     * link}), or, for a client without it, sends the service's web page.
+     */
+    public static void openLink(ServerPlayer player) {
+        if (ClientCapabilities.kofiLink(player)) {
+            OpenSupporterLinkPacket.sendToPlayer(player);
+            return;
+        }
+        String apiUrl = ServerConfig.getInstance().getSpecialAccessApiUrl();
+        if (apiUrl.isEmpty() || E2EDeterminism.ENABLED) {
+            tell(player, "blockpops.support.unavailable");
+            return;
+        }
+        sendLinkPage(player, (apiUrl.endsWith("/") ? apiUrl : apiUrl + "/") + "link?minecraft="
+                + URLEncoder.encode(player.getScoreboardName(), StandardCharsets.UTF_8));
     }
 
     // Where the player pays, and the page that ties a Ko-fi payment to them, if the shop needs it
@@ -197,6 +223,20 @@ public final class SupportCheckout {
                 .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url)));
         //? }
         player.sendSystemMessage(prefix().append(Component.translatable("blockpops.support.ready", link)
+                .withStyle(style -> style.withColor(TEXT_COLOR))));
+    }
+
+    // After paying on Ko-fi, the player ties the payment to their account in the game's dialog
+    private static void sendLinkInGame(ServerPlayer player) {
+        MutableComponent link = Component.translatable("blockpops.support.link_account");
+        //? if >=1.21.5 {
+        /*link.withStyle(style -> style.withColor(PREFIX_COLOR).withBold(true).withUnderlined(true)
+                .withClickEvent(new ClickEvent.RunCommand("/blockpops supporter link")));
+        *///? } else {
+        link.withStyle(style -> style.withColor(PREFIX_COLOR).withBold(true).withUnderlined(true)
+                .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/blockpops supporter link")));
+        //? }
+        player.sendSystemMessage(prefix().append(Component.translatable("blockpops.support.kofi_link_game", link)
                 .withStyle(style -> style.withColor(TEXT_COLOR))));
     }
 
