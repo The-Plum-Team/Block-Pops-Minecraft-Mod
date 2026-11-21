@@ -97,15 +97,28 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
                 entry.setPreviewScale(collection.isPlush() ? PLUSH_PREVIEW_SCALE : 1.0f);
                 entry.setDiscovered(discovered);
                 entry.setShownSkins(shownSkins);
+                int headingSpace = 0;
                 if (heading != null) {
                     entry.setHeading(heading);
                     this.headingRow = this.children().size();
                     heading = null;
+                    headingSpace = FigureEntry.HEADING_SPACE;
                 }
-                this.addEntry(entry);
+                addRow(entry, headingSpace);
                 currentRow = new java.util.ArrayList<>();
             }
         }
+    }
+
+    // Until 26.1 the list places every row with getRowTop, which lowers the rows from the
+    // heading's on. 26.1 places each row by the heights of the rows above it and never asks
+    // getRowTop, so there the heading's row is taller by the heading's room instead.
+    private void addRow(FigureEntry entry, int headingSpace) {
+        //? if >=26 {
+        /*this.addEntry(entry, this.itemHeight + headingSpace);
+        *///? } else {
+        this.addEntry(entry);
+        //? }
     }
 
     /**
@@ -291,7 +304,10 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
     protected int getRowTop(int index) {
     //? }
         // The rows after a heading sit lower by the heading's room
-        //? if >=1.21.2 {
+        //? if >=26 {
+        /*// The rows already stand where their heights put them (addRow)
+        return super.getRowTop(index);
+        *///? } elif >=1.21.2 {
         /*return this.y0 + 4 - (int)this.scrollAmount() + index * this.itemHeight + this.headerHeight
                 + (headingRow >= 0 && index >= headingRow ? FigureEntry.HEADING_SPACE : 0);
         *///? } else {
@@ -306,8 +322,13 @@ public class FigureListWidget extends BoundedSelectionList<FigureEntry> {
     *///? } else {
     protected int getMaxPosition() {
     //? }
+        //? if >=26 {
+        /*// The heading's taller row is already in the sum of the rows' heights
+        return super.contentHeight();
+        *///? } else {
         return this.headerHeight + this.getItemCount() * this.itemHeight
                 + (headingRow >= 0 ? FigureEntry.HEADING_SPACE : 0);
+        //? }
     }
 
     @Override
