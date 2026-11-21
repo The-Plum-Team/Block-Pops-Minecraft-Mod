@@ -285,11 +285,14 @@ public class FigureEntry extends ObjectSelectionList.Entry<FigureEntry> {
 
     //? if >=26 {
     /*// 26.1 gives an entry its own bounds and asks it to extract its contents rather
-    // than passing the row geometry in on every draw.
+    // than passing the row geometry in on every draw. The row with a heading is taller by
+    // the heading's room (FigureListWidget), and its cells sit below that room.
     @Override
     public void extractContent(GuiGraphics graphics, int mouseX, int mouseY,
                                boolean isMouseOver, float partialTick) {
-        render(graphics, 0, getY(), getX(), getWidth(), getHeight(), mouseX, mouseY, isMouseOver, partialTick);
+        int headingSpace = heading != null ? HEADING_SPACE : 0;
+        render(graphics, 0, getY() + headingSpace, getX(), getWidth(), getHeight() - headingSpace,
+                mouseX, mouseY, isMouseOver, partialTick);
     }
 
     public void render(GuiGraphics graphics, int index, int y, int x, int entryWidth,

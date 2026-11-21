@@ -29,19 +29,25 @@ import java.util.concurrent.Executors;
  * waiting for its kept answer to run out.
  *
  * <p>It opens over the machine menu after the supporter button opened Ko-fi, and from the chat's
- * "Link my account" ({@code /blockpops supporter link}).
+ * "Link my account" ({@code /blockpops supporter link}). It first says what supporting gives,
+ * as {@link com.theplumteam.server.SpecialAccess} grants it: the special plushes, and every one
+ * released while the support runs stays unlocked after it ends.
  */
 public class SupporterLinkScreen extends DialogScreen {
     private static final int WIDTH = 320;
-    private static final int HEIGHT = 200;
+    // As tall as the smallest menu canvas allows (MenuGuiScale), for the explanation
+    private static final int HEIGHT = 224;
     // The last step has only its message and one button
-    private static final int DONE_HEIGHT = 130;
+    private static final int DONE_HEIGHT = 142;
     private static final int FIELD_HEIGHT = 20;
     private static final int BUTTON_HEIGHT = 20;
+    // Lines kept free above the field for what happened, so an error never falls off the dialog
+    private static final int STATUS_LINES = 2;
     private static final int TEXT = 0xFFE8E4EE;
     private static final int MUTED = 0xFFB6B0C2;
     private static final int ERROR = 0xFFF2A0A8;
     private static final int OK = 0xFF8FE0A0;
+    private static final int GOLD = 0xFFFFD060;
     private static final Executor IO = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "BlockPops-KofiLink");
         thread.setDaemon(true);
@@ -243,17 +249,21 @@ public class SupporterLinkScreen extends DialogScreen {
 
     @Override
     protected void renderDialog(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        Component intro = step == Step.EMAIL
-                ? Component.translatable("blockpops.support.link.intro", Minecraft.getInstance().getUser().getName())
-                : Component.empty();
-        int bottom = step == Step.DONE ? buttonY() - 8 : labelY() - 4;
-        int y = paragraph(graphics, intro.getString(), bodyTop() + DialogFrame.PADDING, bottom, TEXT);
-        // What happened, under the explanation
-        paragraph(graphics, status.getString(), y == bodyTop() + DialogFrame.PADDING ? y : y + 4, bottom, statusColor);
-        if (step != Step.DONE) {
-            UiText.drawFitted(graphics, this.font, Component.translatable("blockpops.support.link.email").getString(),
-                    left(), labelY(), inner(), MUTED);
+        int top = bodyTop() + DialogFrame.PADDING;
+        if (step == Step.DONE) {
+            paragraph(graphics, status.getString(), top, buttonY() - 8, statusColor);
+            return;
         }
+        int bottom = labelY() - 4;
+        // What supporting gives, then what happened in the lines kept for it above the field
+        int statusTop = bottom - STATUS_LINES * (this.font.lineHeight + 2) + 2;
+        int y = paragraph(graphics, Component.translatable("blockpops.support.link.headline").getString(),
+                top, statusTop - 4, GOLD);
+        paragraph(graphics, Component.translatable("blockpops.support.link.perks").getString(),
+                y + 4, statusTop - 4, TEXT);
+        paragraph(graphics, status.getString(), statusTop, bottom, statusColor);
+        UiText.drawFitted(graphics, this.font, Component.translatable("blockpops.support.link.prompt").getString(),
+                left(), labelY(), inner(), MUTED);
     }
 
     // Wrapped lines from y down to bottom at most; returns where the next text goes
