@@ -250,9 +250,20 @@ public class FigurePreviewItemRenderer
         // The renderer centres the block in a hook this direct call never reaches.
         poseStack.translate(0.5, 0, 0.5);
         turn(poseStack, preview.yaw());
-        renderer.actuallyRender(renderState, poseStack, model.getBakedModel(model.getModelResource(renderState)),
+        software.bernie.geckolib.cache.object.BakedGeoModel bakedModel =
+                model.getBakedModel(model.getModelResource(renderState));
+        renderer.actuallyRender(renderState, poseStack, bakedModel,
                 renderType, bufferSource, bufferSource.getBuffer(renderType), false,
                 packedLight, packedOverlay, 0xFFFFFFFF);
+        // Under a shader pack, a holographic figure gets the glint pass its block renderer adds
+        // in a render layer, which this direct call never reaches
+        net.minecraft.client.renderer.RenderType glint = !preview.greyed() && HolographicRenderTypes.glintPass()
+                && renderState.getOrDefaultGeckolibData(HolographicRenderTypes.STATE, false)
+                ? HolographicRenderTypes.glint() : null;
+        if (glint != null) {
+            renderer.actuallyRender(renderState, poseStack, bakedModel, glint, bufferSource,
+                    bufferSource.getBuffer(glint), true, packedLight, packedOverlay, 0xFFFFFFFF);
+        }
         poseStack.popPose();
     }
 
@@ -299,9 +310,19 @@ public class FigurePreviewItemRenderer
         // The renderer centres the block in a hook this direct call never reaches.
         poseStack.translate(0.5, 0, 0.5);
         turn(poseStack, preview.yaw());
-        renderer.actuallyRender(poseStack, entity, model.getBakedModel(model.getModelResource(entity, null)),
+        software.bernie.geckolib.cache.object.BakedGeoModel bakedModel =
+                model.getBakedModel(model.getModelResource(entity, null));
+        renderer.actuallyRender(poseStack, entity, bakedModel,
                 renderType, bufferSource, bufferSource.getBuffer(renderType), false, partialTick,
                 packedLight, packedOverlay, 0xFFFFFFFF);
+        // Under a shader pack, a holographic figure gets the glint pass its block renderer adds
+        // in a render layer, which this direct call never reaches
+        net.minecraft.client.renderer.RenderType glint = !preview.greyed() && entity.isHolographic()
+                && HolographicRenderTypes.glintPass() ? HolographicRenderTypes.glint() : null;
+        if (glint != null) {
+            renderer.actuallyRender(poseStack, entity, bakedModel, glint, bufferSource,
+                    bufferSource.getBuffer(glint), true, partialTick, packedLight, packedOverlay, 0xFFFFFFFF);
+        }
         poseStack.popPose();
     }
     *///? }

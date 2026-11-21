@@ -58,6 +58,7 @@ public final class FigureWidgetRenderer {
                     /*figureRenderer = new BlockPopsGeoBlockRenderer<>(GeoRendererContext.get(), figureModel);
                     *///? } else {
                     figureRenderer = new GeoBlockRenderer<>(figureModel);
+                    figureRenderer.addRenderLayer(new HolographicGlintLayer<>(figureRenderer, BoxBlockEntity::isHolographic));
                     //? }
                     initialized = true;
                 }

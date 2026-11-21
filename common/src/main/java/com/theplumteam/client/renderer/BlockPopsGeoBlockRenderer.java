@@ -17,6 +17,8 @@ class BlockPopsGeoBlockRenderer<T extends BlockEntity & GeoAnimatable, R extends
         extends GeoBlockRenderer<T, R> {
     BlockPopsGeoBlockRenderer(BlockEntityRendererProvider.Context context, GeoModel<T> model) {
         super(context, model);
+        // Under a shader pack, a holographic figure or plush gets a second, glint pass
+        withRenderLayer(new HolographicGlintLayer(this));
     }
 
     @Override

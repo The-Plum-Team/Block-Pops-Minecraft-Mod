@@ -48,7 +48,9 @@ import java.lang.reflect.Modifier;
  *
  * While an Iris or Oculus shader pack is in use, a holographic figure is drawn as any other:
  * the pack draws the world with its own programs and leaves a render type with a shader of a
- * mod's own undrawn, so the figure vanished and its box looked empty.
+ * mod's own undrawn, so the figure vanished and its box looked empty. {@link HolographicGlintLayer}
+ * then draws it once more with {@link #glint()}: vanilla's entity enchantment glint, which every
+ * pack draws with its own glint program, over a rainbow texture of this mod's.
  */
 public final class HolographicRenderTypes {
     /** The shader instance 1.20.1 and 1.21.1 load, under shaders/core/rendertype_holographic.json. */
@@ -290,6 +292,138 @@ public final class HolographicRenderTypes {
             }
         }
         throw new NoSuchMethodException("RenderType.create(String, RenderSetup)");
+    }
+    *///? }
+
+    /** The rainbow texture the glint pass scrolls over a holographic figure under a shader pack. */
+    public static final ResourceLocation GLINT_TEXTURE =
+            ResourceLocations.of(BlockPopsMod.MOD_ID, "textures/misc/holographic_glint.png");
+
+    /** Whether a holographic figure gets the glint pass now: under a shader pack, outside its shadow map. */
+    public static boolean glintPass() {
+        return ShaderPacks.inUse() && !ShaderPacks.renderingShadowPass();
+    }
+
+    @Nullable
+    private static RenderType glint;
+    private static boolean glintFailed;
+
+    //? if <1.21.5 {
+    /**
+     * Vanilla's entity glint with the rainbow texture bound in place of the enchantment one. Its
+     * setup is vanilla's own, so a shader pack swaps in its glint program as it would for an
+     * enchanted item: an equal depth test over the pass just drawn, additive, the texture
+     * scrolling.
+     */
+    public static RenderType glint() {
+        if (glint == null) {
+            //? if >=1.21.2 {
+            /*RenderType vanilla = RenderType.entityGlint();
+            *///? } else {
+            RenderType vanilla = RenderType.entityGlintDirect();
+            //? }
+            glint = new RenderType("blockpops_holographic_glint", DefaultVertexFormat.POSITION_TEX,
+                    VertexFormat.Mode.QUADS, 256, false, false,
+                    () -> {
+                        vanilla.setupRenderState();
+                        RenderSystem.setShaderTexture(0, GLINT_TEXTURE);
+                    },
+                    vanilla::clearRenderState) {
+            };
+        }
+        return glint;
+    }
+    //? } elif <26 {
+    /*/^*
+     * Vanilla's entity glint, built as vanilla builds it (its glint pipeline and its entity glint
+     * texturing) over the rainbow texture. A shader pack recognises vanilla's pipeline and draws
+     * it with its own glint program. The state builder is protected, so it is reached by
+     * reflection, found by parameter types since Fabric runs on other names than Mojang's.
+     * Null if that fails; the figure is then drawn without the glint.
+     ^/
+    @Nullable
+    public static RenderType glint() {
+        if (glint != null || glintFailed) {
+            return glint;
+        }
+        try {
+            if (factory == null) {
+                factory = findFactory();
+            }
+            Object builder = RenderType.CompositeState.builder();
+            //? if >=1.21.6 {
+            /^Object texture = new net.minecraft.client.renderer.RenderStateShard.TextureStateShard(GLINT_TEXTURE, false);
+            ^///? } else {
+            Object texture = new net.minecraft.client.renderer.RenderStateShard.TextureStateShard(GLINT_TEXTURE,
+                    net.minecraft.util.TriState.DEFAULT, false);
+            //? }
+            invokeByParameter(builder, net.minecraft.client.renderer.RenderStateShard.EmptyTextureStateShard.class, texture);
+            invokeByParameter(builder, net.minecraft.client.renderer.RenderStateShard.TexturingStateShard.class,
+                    GlintShards.texturing());
+            Object composite = invokeByParameter(builder, boolean.class, false);
+            glint = (RenderType) factory.invoke(null, "blockpops_holographic_glint", 1536,
+                    RenderPipelines.GLINT, composite);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            glintFailed = true;
+            BlockPopsMod.LOGGER.warn("Holographic figures get no glint under shader packs: {}", e.toString());
+        }
+        return glint;
+    }
+
+    // Calls the builder's one method that takes this parameter type and returns a value
+    private static Object invokeByParameter(Object target, Class<?> parameter, Object argument)
+            throws ReflectiveOperationException {
+        for (Method method : target.getClass().getDeclaredMethods()) {
+            Class<?>[] parameters = method.getParameterTypes();
+            if (!Modifier.isStatic(method.getModifiers()) && parameters.length == 1 && parameters[0] == parameter
+                    && method.getReturnType() != void.class) {
+                method.setAccessible(true);
+                return method.invoke(target, argument);
+            }
+        }
+        throw new NoSuchMethodException(target.getClass().getSimpleName() + "(" + parameter.getSimpleName() + ")");
+    }
+
+    // Vanilla's entity glint texturing, protected on RenderStateShard
+    private static final class GlintShards extends net.minecraft.client.renderer.RenderStateShard {
+        private GlintShards() {
+            super("blockpops_glint_shards", () -> { }, () -> { });
+        }
+
+        static net.minecraft.client.renderer.RenderStateShard.TexturingStateShard texturing() {
+            return ENTITY_GLINT_TEXTURING;
+        }
+    }
+    *///? } else {
+    /*/^*
+     * Vanilla's entity glint, set up as vanilla sets it up (its glint pipeline and its entity
+     * glint texture transform) over the rainbow texture. A shader pack recognises vanilla's
+     * pipeline and draws it with its own glint program. Null if the render type cannot be
+     * made; the figure is then drawn without the glint.
+     ^/
+    @Nullable
+    public static RenderType glint() {
+        if (glint != null || glintFailed) {
+            return glint;
+        }
+        try {
+            if (factory == null) {
+                factory = findFactory();
+            }
+            net.minecraft.client.renderer.rendertype.RenderSetup setup =
+                    net.minecraft.client.renderer.rendertype.RenderSetup.builder(RenderPipelines.GLINT)
+                            .withTexture("Sampler0", GLINT_TEXTURE)
+                            .setTextureTransform(net.minecraft.client.renderer.rendertype.TextureTransform.ENTITY_GLINT_TEXTURING)
+                            //? if >=26.3 {
+                            /^.withForcedSolidModelPhase()
+                            ^///? }
+                            .createRenderSetup();
+            glint = (RenderType) factory.invoke(null, "blockpops_holographic_glint", setup);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            glintFailed = true;
+            BlockPopsMod.LOGGER.warn("Holographic figures get no glint under shader packs: {}", e.toString());
+        }
+        return glint;
     }
     *///? }
 }

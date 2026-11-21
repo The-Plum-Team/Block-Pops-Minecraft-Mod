@@ -99,6 +99,11 @@ variant imports only vanilla includes that 1.21.2 already has and declares the r
 effect follows the view, never the clock. While an Iris or Oculus shader pack is in use
 (`ShaderPacks`, through Iris's public API by reflection) the figure is drawn without it: the pack
 leaves a render type with a mod's own shader undrawn, which made the figure vanish from its box.
+`HolographicGlintLayer` then draws the figure a second time with `HolographicRenderTypes.glint()`,
+vanilla's entity enchantment glint (its shader shard or pipeline, which the pack replaces with its
+own glint program) over `textures/misc/holographic_glint.png`, a rainbow that must tile. The two
+direct GUI draws (`FigureEntry` to 1.21.1, `FigurePreviewItemRenderer` 1.21.4 to 1.21.8) add the
+same pass themselves; the shadow pass gets none.
 
 `common/build.gradle` derives special-item definitions and base-model transforms for Minecraft
 1.21.4 onward with `scripts/release/item_resources.py`, from the authored entity models. Older
