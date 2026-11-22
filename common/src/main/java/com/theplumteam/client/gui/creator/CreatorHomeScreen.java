@@ -70,7 +70,8 @@ import java.util.function.Consumer;
  *
  * <p>A new collection needs only its name, in a form the content panel shows while a temporary
  * "New" row at the top of the list is selected ({@link CreateForm}): the editor's Look page, so
- * its colour, box and logo can be chosen there too. The sidebar's
+ * its colour, box and logo can be chosen there too. A world with no collection opens on that
+ * form by itself, once; cancelling it shows the empty home. The sidebar's
  * button is gone meanwhile; selecting another row, Cancel or Escape closes it and the selection it
  * left returns. From "Create" until the server has synced the new collection, the home is locked:
  * the rows, the help, the search and the shortcuts wait, and only Cancel, Escape and the cross act.
@@ -183,6 +184,8 @@ public class CreatorHomeScreen extends SidebarScreen {
     // The new collection's form while it is open; the content shows it in place of the selection
     @Nullable
     private CreateForm form;
+    // Whether a world without collections was shown the form by itself already
+    private boolean offeredFirst;
     // The collections whose rows said "saving" when the list was last filled
     private Set<String> shownSaving = Set.of();
 
@@ -203,6 +206,14 @@ public class CreatorHomeScreen extends SidebarScreen {
     @Override
     protected void buildSidebar() {
         List<WorldCollectionRecord> records = CreatorSource.records();
+        if (!this.offeredFirst && this.form == null && records.isEmpty()
+                && CollectionActions.tooManyCollections() == null) {
+            // With no collection there is one thing to do, so the home starts on the new
+            // collection's form, once: Cancel then shows the empty home, which also imports
+            this.offeredFirst = true;
+            this.form = new CreateForm(this);
+            this.form.focusName();
+        }
         splitForList(records);
         String revealed = takeReveal();
         keepSelection();
