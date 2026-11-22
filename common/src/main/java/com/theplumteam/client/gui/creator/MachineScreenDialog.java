@@ -1,6 +1,7 @@
 package com.theplumteam.client.gui.creator;
 
 import com.theplumteam.client.gui.creator.ui.Draw;
+import com.theplumteam.client.gui.creator.ui.SidebarScreen;
 import com.theplumteam.client.gui.creator.ui.Theme;
 import com.theplumteam.client.gui.creator.ui.UiInput;
 import com.theplumteam.client.gui.creator.ui.UiMachineReplica;
@@ -31,20 +32,20 @@ final class MachineScreenDialog {
     private static final int FRAME = DialogFrame.HEADER_HEIGHT + 2 + Surfaces.LIP_HEIGHT;
     private static final int BUTTONS = 10 + 20;
 
-    private final CreatorEditorScreen editor;
+    private final SidebarScreen screen;
     private final UiModal modal;
     private final UiMachineReplica replica = new UiMachineReplica();
     private boolean closed;
 
-    private MachineScreenDialog(CreatorEditorScreen editor) {
-        this.editor = editor;
-        int width = Math.min(editor.width - 2 * Theme.SPACE_S, MAX_WIDTH);
-        int height = Math.min(editor.height - 2 * Theme.SPACE_S, MAX_HEIGHT);
+    private MachineScreenDialog(LookHost host) {
+        this.screen = host.screen();
+        int width = Math.min(this.screen.width - 2 * Theme.SPACE_S, MAX_WIDTH);
+        int height = Math.min(this.screen.height - 2 * Theme.SPACE_S, MAX_HEIGHT);
         this.modal = new UiModal(tr("preview.screen"), Component.empty()).width(width)
                 .accent(DialogFrame.Accent.SETTINGS, PixelIcon.PALETTE)
                 .onCancel(this::closed);
-        this.replica.setCollection(CreatorPreview.previewId(CreatorEditorScreen.PREVIEW_SLOT));
-        this.replica.setSourceId(editor.draft().collectionId());
+        this.replica.setCollection(CreatorPreview.previewId(host.previewSlot()));
+        this.replica.setSourceId(host.draft().collectionId());
         this.replica.setDiscovered(key -> true);
         this.replica.setFittedGrid(true);
         this.modal.node(new Body(), Math.max(0, height - FRAME - 2 * DialogFrame.PADDING - BUTTONS));
@@ -52,10 +53,10 @@ final class MachineScreenDialog {
     }
 
     /** Opens the machine's screen over the editor, which draws none of its models meanwhile. */
-    static MachineScreenDialog open(CreatorEditorScreen editor) {
-        MachineScreenDialog dialog = new MachineScreenDialog(editor);
-        editor.openModal(dialog.modal);
-        editor.coverModels(true);
+    static MachineScreenDialog open(LookHost host) {
+        MachineScreenDialog dialog = new MachineScreenDialog(host);
+        dialog.screen.openModal(dialog.modal);
+        dialog.screen.coverModels(true);
         return dialog;
     }
 
@@ -73,7 +74,7 @@ final class MachineScreenDialog {
         }
         this.closed = true;
         this.replica.close();
-        this.editor.coverModels(false);
+        this.screen.coverModels(false);
     }
 
     /** Closes the dialog, as when the editor behind it closes. */

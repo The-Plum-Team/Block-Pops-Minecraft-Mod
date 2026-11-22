@@ -211,7 +211,7 @@ public class CreatorEditorScreen extends SidebarScreen {
                 .pixelLabel();
         this.testButton = new UiButton(tr("publish.test_pull"), UiButton.Style.SECONDARY, () -> openTestDraw(null));
         this.pages.put(Tab.FIGURES, new FiguresPage(this));
-        this.pages.put(Tab.LOOK, new LookPage(this));
+        this.pages.put(Tab.LOOK, new LookPage(new LookOfEditor()));
         this.pages.put(Tab.OPTIONS, new OptionsPage(this));
         refresh();
     }
@@ -334,6 +334,75 @@ public class CreatorEditorScreen extends SidebarScreen {
     /** The collection's saver, which the bulk add of figures pauses while it is open. */
     AutoSaver saver() {
         return this.saver;
+    }
+
+    /** The editor as the Look page sees it; the home's form for a new collection is its other host. */
+    private final class LookOfEditor implements LookHost {
+        @Override
+        public SidebarScreen screen() {
+            return CreatorEditorScreen.this;
+        }
+
+        @Override
+        public CreatorDraft draft() {
+            return CreatorEditorScreen.this.draft();
+        }
+
+        @Override
+        public int previewSlot() {
+            return PREVIEW_SLOT;
+        }
+
+        @Override
+        public <T extends UiNode> T add(T node) {
+            return CreatorEditorScreen.this.add(node);
+        }
+
+        @Override
+        public EditBox field(String name, int x, int y, int width, int maxLength, Component hint, String value,
+                             Consumer<String> responder) {
+            return CreatorEditorScreen.this.field(name, x, y, width, maxLength, hint, value, responder);
+        }
+
+        @Override
+        public <T extends SidebarScreen.Budgeted> T budgetNode(T node) {
+            return CreatorEditorScreen.this.budgetNode(node);
+        }
+
+        @Override
+        public UiNode.Rect contentPanel() {
+            return CreatorEditorScreen.this.contentPanel();
+        }
+
+        @Override
+        public void changed() {
+            CreatorEditorScreen.this.changed();
+        }
+
+        @Override
+        public void rebuildPage() {
+            CreatorEditorScreen.this.rebuildPage();
+        }
+
+        @Override
+        public void navigated() {
+            CreatorEditorScreen.this.navigated();
+        }
+
+        @Override
+        public Component boxProblem() {
+            return CreatorEditorScreen.this.boxProblem();
+        }
+
+        @Override
+        public boolean footerIsPrimary() {
+            return CreatorEditorScreen.this.footerIsPrimary();
+        }
+
+        @Override
+        public void numberReleased() {
+            CreatorEditorScreen.this.saver.numberReleased();
+        }
     }
 
     // Building

@@ -5,7 +5,6 @@ import com.theplumteam.client.gui.creator.ui.CreatorScreen;
 import com.theplumteam.client.gui.creator.ui.Draw;
 import com.theplumteam.client.gui.creator.ui.SidebarScreen;
 import com.theplumteam.client.gui.creator.ui.Theme;
-import com.theplumteam.client.gui.creator.ui.UiBoxView;
 import com.theplumteam.client.gui.creator.ui.UiButton;
 import com.theplumteam.client.gui.creator.ui.UiField;
 import com.theplumteam.client.gui.creator.ui.UiInput;
@@ -37,93 +36,88 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
 
 /**
  * The creator home's form for a new World collection ({@link CreatorHomeScreen}), shown in its
- * content panel while the sidebar's temporary "New" row is selected: a collection starts from its
- * name alone, and everything else is set later in the editor.
+ * content panel while the sidebar's temporary "New" row is selected. It is the editor's Look page
+ * ({@link LookPage}) on a collection that does not exist yet: the box in view on the left, and on
+ * the right the name, the background, the box and the logo. Only the name is asked for; the rest
+ * starts as every new collection does, orange with the mod's usual box, and may be set here or
+ * later in the editor, on the same page.
  *
- * <p>The form holds the name, with its length beside its label, and under it, faint, the id the
- * name makes, free among the collections this client was sent, once a name is typed. Pointing at
- * that line, or reaching it with Tab, offers to change the id, which then gets a labelled field of
- * its own, showing the id it falls back to while it is empty: an id cannot change once the
- * collection exists, and an empty field follows the name again. A message under them says only
- * what is wrong, or that the collection is being created; "Create" says in its tooltip why it
- * cannot be used yet. Beside the form, the box the collection will get holds a figure in the
- * player's own skin, from the game's skin cache or the default skin, in the collection's colour as
- * the home's showcase will show it, and turns when dragged. That box is a preview of its own,
- * which is never sent, so the sample figure is never created.
+ * <p>Between the name and the sections the form has two lines of its own. The first shows, faint,
+ * the id the name makes, free among the collections this client was sent, once a name is typed.
+ * Pointing at that line, or reaching it with Tab, offers to change the id, which then gets a
+ * labelled field of its own, showing the id it falls back to while it is empty: an id cannot
+ * change once the collection exists, and an empty field follows the name again. The second says
+ * only what is wrong, or that the collection is being created. "Create", on the panel's footer
+ * line under the column, says in its tooltip why it cannot be used yet.
  *
- * <p>On a wide canvas the form starts under the subtitle, its label level with the box's top; on a
- * narrow one, which the form and box nearly fill, the two are centred in the height there is.
+ * <p>A short canvas leaves the subtitle out. A narrow one gives the page the whole panel, as the
+ * editor does: Create stands at the sidebar's foot, where the editor has Publish, with Cancel
+ * over it, and the message's line shows only while the id's field is open, a refusal being said
+ * in a toast otherwise.
  *
- * <p>"Create" (or Enter) sends one batch that creates the collection as a draft and sets its
- * author, the player's name, and its orange colour; a slug the server refuses as taken is retried
- * with the next one. From then until the server has synced the new collection, at most for
+ * <p>The box holds a figure in the player's own skin, from the game's skin cache or the default
+ * skin, so it never shows empty. That figure is the preview's alone and is never sent.
+ *
+ * <p>"Create" (or Enter) sends the files picked for the logo and the box image, then one batch
+ * that creates the collection as a draft and sets its name, its author (the player's name), its
+ * colour, its box and its logo; a slug the server refuses as taken is retried with the next one.
+ * From then until the server has synced the new collection, at most for
  * {@value #SYNC_TIMEOUT_MS} ms, the home is locked and only Cancel, Escape and the creator's cross
  * act. Once it has, the home selects it and the collection editor ({@link CreatorEditorScreen})
  * opens on its figures; a sync that does not come in time is said in a toast, and the home
- * selects the collection when it does. A refusal is said under the form and unlocks it again,
- * and the field that had the keyboard before Create gets it back.
+ * selects the collection when it does. A refusal is said under the name and unlocks the form
+ * again, and the field that had the keyboard before Create gets it back.
  *
  * <p>Cancel drops the batch if it has not been sent yet. One already sent may still be saved:
  * the home then says so in a toast and selects the collection once it arrives, but never opens it
  * in the editor after a cancel.
  *
- * <p>The form lives as long as it is open, so what is typed survives the home's rebuilds; the
- * home adds its nodes and fields again in {@link #build} and draws its labels in {@link #draw}.
+ * <p>The form lives as long as it is open, so what is typed and chosen survives the home's
+ * rebuilds; the home adds its nodes and fields again in {@link #build} and draws its labels in
+ * {@link #draw}.
  */
-final class CreateForm {
+final class CreateForm implements LookHost {
     /** The colour a new collection starts with, the swatch named Orange. */
     static final int START_COLOUR = 0xF08A24;
     // How long a created collection may take to arrive before the form stops waiting for it
     private static final long SYNC_TIMEOUT_MS = 10_000;
     // The creator's preview of a new collection uses this slot
     private static final int PREVIEW_SLOT = 0;
-    // From the content panel's top: the subtitle, then the block of the form and its box, raised
-    // on a short canvas; the block keeps this far above the panel's footer line
+    // From the content panel's top: the subtitle, then the Look page, which a short canvas shows
+    // right under the title; the page keeps this far above the panel's footer line, where Create is
     private static final int SUBTITLE_Y = 38;
-    private static final int SUBTITLE_Y_SHORT = 26;
     private static final int BLOCK_TOP = 54;
-    private static final int BLOCK_TOP_SHORT = 40;
+    private static final int BLOCK_TOP_SHORT = 26;
     private static final int BLOCK_BOTTOM_GAP = 8;
-    // The box: square, about this share of the content's width, within bounds
-    private static final float PREVIEW_SHARE = 0.38f;
-    private static final int MIN_PREVIEW = 96;
-    private static final int MIN_PREVIEW_SHORT = 80;
-    private static final int MAX_PREVIEW = 170;
-    // Its caption, under it in up to two lines; a short canvas leaves it out
-    private static final int CAPTION_GAP = 6;
-    private static final int CAPTION_LINES = 2;
-    // Between the form and the box
-    private static final int FORM_GAP = 20;
-    private static final int FORM_GAP_NARROW = 12;
-    // The form's rows, from its top: the label, the name, the id as a line or as a labelled
-    // field, the message and the buttons
+    // The narrow page's view may be this low here, where the title takes some of its room
+    private static final int NARROW_VIEW_MIN = 44;
+    private static final int LINK_HEIGHT = 10;
+    // Under the name: the id as a line or as a labelled field, then one line of message
     private static final int LABEL = 8;
     private static final int LABEL_GAP = 2;
-    private static final int ROW_GAP = 4;
+    private static final int ROW_GAP = 2;
     private static final int ID_LINE = 10;
-    private static final int MESSAGE_LINES = 2;
-    private static final int BUTTON_GAP = 8;
+    private static final int MESSAGE_LINE = 10;
     private static final int MIN_CREATE_WIDTH = 78;
-    // Cancel beside Create, or on its own line under it on a narrow canvas
+    // Cancel beside Create
     private static final int CANCEL_GAP = 14;
-    private static final int CANCEL_GAP_NARROW = 6;
-    private static final int LINK_HEIGHT = 10;
     // Between the id and the link that changes it
     private static final int LINK_GAP = 6;
 
     private final CreatorHomeScreen home;
-    private String name = "";
+    // The collection being made: its name and look as chosen so far, and the sample figure
+    private final CreatorDraft draft;
+    private final LookPage look;
     // The id the operator typed; empty follows the name
     private String typedSlug = "";
     private boolean slugOpen;
-    // The skin the box's sample figure wears once it is read, and its name
-    @Nullable
-    private FilePicker.LocalFile sampleSkin;
+    private boolean sampleAdded;
     private final String sampleName;
     private boolean disposed;
     // The create in flight, then the collection it created while the form waits for its sync
@@ -143,11 +137,11 @@ final class CreateForm {
     private boolean focusName = true;
     private boolean focusSlug;
 
-    // Nodes kept across rebuilds, so the box keeps its turn and the buttons their state
-    private final UiBoxView preview = new UiBoxView().modeSwitch(false).dragHint(false).stageBackground(true);
+    // Nodes kept across rebuilds, so the buttons keep their state
     private final UiButton createButton;
     private final UiButton cancelButton;
     private final IdLine idLine = new IdLine();
+    private final Shield shield = new Shield();
     @Nullable
     private EditBox nameBox;
     @Nullable
@@ -155,24 +149,24 @@ final class CreateForm {
 
     // Where build() put what draw() draws
     private UiNode.Rect content = UiNode.Rect.EMPTY;
+    private UiNode.Rect page = UiNode.Rect.EMPTY;
     private int formX;
-    private int formY;
     private int formWidth;
     private int idY;
     private int slugFieldY;
     private int messageY;
-    private UiNode.Rect previewBounds = UiNode.Rect.EMPTY;
-    private List<String> caption = List.of();
-    private int captionWidth;
 
     CreateForm(CreatorHomeScreen home) {
         this.home = home;
         String player = Minecraft.getInstance().getUser().getName();
         this.sampleName = CreatorHomeScreen.cut(player.isBlank() ? Slugs.FIGURE_FALLBACK : player,
                 WorldContentLimits.MAX_NAME_LENGTH);
+        this.draft = CreatorDraft.create(Slugs.unique(Slugs.collection(""), Slugs::isCollectionTaken), "");
+        this.draft.setRgb(START_COLOUR);
+        this.draft.setAuthor(authorName());
+        this.look = new LookPage(this);
         this.createButton = new UiButton(tr("create.create"), UiButton.Style.PRIMARY, this::create);
         this.cancelButton = new UiButton(tr("cancel"), UiButton.Style.LINK, this::cancel);
-        this.preview.setButtons(false);
         readSampleSkin();
     }
 
@@ -180,13 +174,17 @@ final class CreateForm {
     private void readSampleSkin() {
         OwnSkin.read(result -> {
             FilePicker.PickResult pick = result.pick();
-            if (this.disposed || pick.kind() != FilePicker.PickResult.Kind.ACCEPTED || pick.file() == null) {
+            if (this.disposed || this.sampleAdded || pick.kind() != FilePicker.PickResult.Kind.ACCEPTED
+                    || pick.file() == null) {
                 // Without a skin the box stays empty, which still shows its colour and frame
                 return;
             }
-            this.sampleSkin = pick.file();
+            this.sampleAdded = true;
+            this.draft.addFigure(this.sampleName, WorldCollectionRecord.Kind.SKIN, CreatorDraft.FileRef.of(pick.file()),
+                    null, null, 1.0f);
             if (this.home.isShown()) {
                 refreshPreview();
+                this.look.draftChanged();
             }
         });
     }
@@ -201,97 +199,48 @@ final class CreateForm {
         this.content = area;
         Font font = Minecraft.getInstance().font;
         boolean narrow = this.home.narrow();
-        boolean isShort = this.home.isShort();
-        int inner = this.home.inner();
-        int top = area.y() + (isShort ? BLOCK_TOP_SHORT : BLOCK_TOP);
-        int room = Math.max(0, this.home.footerY() - BLOCK_BOTTOM_GAP - top);
-
-        // The box, square, with its caption under it where the canvas has the height. The caption
-        // may reach half the gap past the box on either side: into the gap before it, and into
-        // the panel's padding, which is wider
-        int gap = narrow ? FORM_GAP_NARROW : FORM_GAP;
-        int captionRoom = isShort ? 0 : CAPTION_GAP + CAPTION_LINES * Theme.LINE_HEIGHT;
-        int size = SidebarScreen.clamp(Math.min(Math.round(inner * PREVIEW_SHARE), room - captionRoom),
-                isShort ? MIN_PREVIEW_SHORT : MIN_PREVIEW, MAX_PREVIEW);
-        this.captionWidth = size + gap;
-        this.caption = isShort ? List.of()
-                : Draw.fit(font, tr("create.preview").getString(), this.captionWidth, CAPTION_LINES);
-        int previewHeight = size + (this.caption.isEmpty() ? 0 : CAPTION_GAP + this.caption.size() * Theme.LINE_HEIGHT);
-
-        // The form beside it. On a wide canvas both start under the subtitle, the form's label
-        // level with the box's top. On a narrow one, which they nearly fill, the block is centred
-        // with the id as one line, so opening the id's field moves only what is under it, and
-        // raised where the open field would pass the footer line
-        this.formWidth = Math.max(0, inner - size - gap);
-        this.formX = this.home.left();
-        int formHeight = formHeight(narrow, false);
-        int previewY;
-        if (narrow || isShort) {
-            int block = Math.max(formHeight, previewHeight);
-            int blockY = top + Math.max(0, (room - block) / 2);
-            int overflow = blockY + (block - formHeight) / 2 + formHeight(narrow, true) - (top + room);
-            blockY = Math.max(top, blockY - Math.max(0, overflow));
-            this.formY = blockY + (block - formHeight) / 2;
-            previewY = blockY + (block - previewHeight) / 2;
-        } else {
-            this.formY = top;
-            previewY = top;
-        }
-        this.previewBounds = new UiNode.Rect(this.home.right() - size, previewY, size, size);
+        int top = area.y() + (this.home.isShort() ? BLOCK_TOP_SHORT : BLOCK_TOP);
+        // Narrow, the buttons are in the sidebar and the page reaches the panel's foot
+        int bottom = narrow ? this.home.footerY() + UiButton.HEIGHT : this.home.footerY() - BLOCK_BOTTOM_GAP;
+        this.page = new UiNode.Rect(this.home.left(), top, this.home.inner(), Math.max(0, bottom - top));
+        refreshPreview();
+        this.slugBox = null;
+        this.look.build(this.page);
 
         boolean locked = locked();
-        int fieldY = this.formY + LABEL + LABEL_GAP;
-        this.nameBox = this.home.field("create_name", this.formX, fieldY, this.formWidth,
-                WorldContentLimits.MAX_NAME_LENGTH, tr("wizard.name_hint"), this.name, this::nameTyped);
-        this.nameBox.active = !locked;
-        this.idY = fieldY + UiField.HEIGHT + ROW_GAP;
-        if (this.slugOpen) {
-            // Under a label of its own; while empty it shows, faint, the id it falls back to,
-            // which a field's hint would hide while the field has the keyboard
-            this.slugFieldY = this.idY + LABEL + LABEL_GAP;
-            this.slugBox = this.home.field("create_slug", this.formX, this.slugFieldY, this.formWidth,
-                    Slugs.MAX_LENGTH, tr("wizard.id"), this.typedSlug, this::slugTyped);
-            this.slugBox.setHint(Component.empty());
-            showFallbackSlug();
-            this.slugBox.active = !locked;
-            this.messageY = this.slugFieldY + UiField.HEIGHT + ROW_GAP;
-        } else {
-            this.slugBox = null;
-            this.idLine.at(this.formX, this.idY, this.formWidth, ID_LINE);
-            this.home.add(this.idLine);
-            this.messageY = this.idY + ID_LINE + ROW_GAP;
+        if (this.nameBox != null) {
+            this.nameBox.active = !locked;
+        }
+        if (locked) {
+            // Nothing of the page acts while the collection is being created; Cancel, added after, does
+            this.shield.at(this.page.x(), this.page.y(), this.page.width(), this.page.height());
+            this.home.add(this.shield);
         }
 
-        // Create, then Cancel beside it, or under it where the form is narrow
-        int buttonY = this.messageY + MESSAGE_LINES * Theme.LINE_HEIGHT + BUTTON_GAP;
-        int createWidth = narrow ? this.formWidth
-                : Math.min(this.formWidth, Math.max(MIN_CREATE_WIDTH, this.createButton.naturalWidth()));
-        this.createButton.at(this.formX, buttonY, createWidth, UiButton.HEIGHT);
         this.createButton.disable(problem());
-        this.home.add(this.createButton);
         int cancelWidth = font.width(this.cancelButton.label());
         if (narrow) {
-            this.cancelButton.at(this.formX, buttonY + UiButton.HEIGHT + CANCEL_GAP_NARROW,
-                    Math.min(cancelWidth, this.formWidth), LINK_HEIGHT);
+            // At the sidebar's foot, and Cancel in the status slot over it
+            this.home.sideFoot(this.createButton);
+            UiNode.Rect list = this.home.sideList();
+            this.cancelButton.at(list.x() + 1, this.home.slotY(), Math.min(cancelWidth, list.width()), LINK_HEIGHT);
         } else {
-            int cancelX = this.formX + createWidth + CANCEL_GAP;
-            int cancelRoom = Math.max(0, this.formX + this.formWidth - cancelX);
-            this.cancelButton.at(cancelX, buttonY, Math.min(cancelWidth, cancelRoom), UiButton.HEIGHT);
+            // Under the column, on the footer line, and Cancel beside it
+            int buttonX = this.look.columnX();
+            int room = Math.max(0, this.home.right() - buttonX);
+            int createWidth = Math.min(room, Math.max(MIN_CREATE_WIDTH, this.createButton.naturalWidth()));
+            this.createButton.at(buttonX, this.home.footerY(), createWidth, UiButton.HEIGHT);
+            this.home.add(this.createButton);
+            int cancelX = buttonX + createWidth + CANCEL_GAP;
+            this.cancelButton.at(cancelX, this.home.footerY(),
+                    Math.min(cancelWidth, Math.max(0, this.home.right() - cancelX)), UiButton.HEIGHT);
         }
         this.home.add(this.cancelButton);
-
-        UiNode.Rect box = this.previewBounds;
-        this.preview.at(box.x(), box.y(), box.width(), box.height());
-        this.home.add(this.preview);
-        // Without a model to spare, the view shows its background alone
-        this.home.budgetPreview(granted -> this.preview.setCollection(granted > 0
-                ? CreatorPreview.previewId(PREVIEW_SLOT) : null));
-        refreshPreview();
 
         if (locked) {
             this.focusName = false;
             this.focusSlug = false;
-        } else if (this.focusName) {
+        } else if (this.focusName && this.nameBox != null) {
             this.focusName = false;
             this.home.focusField(this.nameBox);
         }
@@ -308,15 +257,6 @@ final class CreateForm {
         }
     }
 
-    // The form's height: its label, the name, the id as a line or a labelled field, the message,
-    // Create, and Cancel under it where the form is narrow
-    private static int formHeight(boolean narrow, boolean slugField) {
-        int id = slugField ? LABEL + LABEL_GAP + UiField.HEIGHT : ID_LINE;
-        int height = LABEL + LABEL_GAP + UiField.HEIGHT + ROW_GAP + id + ROW_GAP
-                + MESSAGE_LINES * Theme.LINE_HEIGHT + BUTTON_GAP + UiButton.HEIGHT;
-        return narrow ? height + CANCEL_GAP_NARROW + LINK_HEIGHT : height;
-    }
-
     /** Gives the name field the keyboard at the next build, as when the home is shown again. */
     void focusName() {
         this.focusName = true;
@@ -329,19 +269,128 @@ final class CreateForm {
         }
     }
 
-    // Typing
+    // The Look page's host
 
-    private void nameTyped(String value) {
-        this.name = value;
+    @Override
+    public SidebarScreen screen() {
+        return this.home;
+    }
+
+    @Override
+    public CreatorDraft draft() {
+        return this.draft;
+    }
+
+    @Override
+    public int previewSlot() {
+        return PREVIEW_SLOT;
+    }
+
+    @Override
+    public <T extends UiNode> T add(T node) {
+        return this.home.add(node);
+    }
+
+    @Override
+    public EditBox field(String name, int x, int y, int width, int maxLength, Component hint, String value,
+                         Consumer<String> responder) {
+        EditBox box = this.home.field("create_" + name, x, y, width, maxLength, hint, value, responder);
+        if (name.equals("name")) {
+            this.nameBox = box;
+        }
+        return box;
+    }
+
+    @Override
+    public <T extends SidebarScreen.Budgeted> T budgetNode(T node) {
+        return this.home.budgetNode(node);
+    }
+
+    @Override
+    public UiNode.Rect contentPanel() {
+        return this.content;
+    }
+
+    /** The name or the look changed: the box shows it, and Create says whether it can be used. */
+    @Override
+    public void changed() {
         this.failure = null;
         showFallbackSlug();
-        changed();
+        refreshPreview();
+        this.createButton.disable(problem());
+        this.look.draftChanged();
     }
+
+    @Override
+    public void rebuildPage() {
+        this.home.formChanged(this);
+    }
+
+    @Override
+    public void navigated() {
+        // Nothing is sent before Create
+    }
+
+    @Override
+    @Nullable
+    public Component boxProblem() {
+        return PublishCheck.boxProblem(this.draft);
+    }
+
+    @Override
+    public boolean footerIsPrimary() {
+        return true;
+    }
+
+    @Override
+    public void numberReleased() {
+        // No saver follows the values here
+    }
+
+    /** The id's line or its labelled field, then the message's line where there is one. */
+    @Override
+    public int underNameHeight(boolean narrow) {
+        int id = this.slugOpen ? LABEL + LABEL_GAP + UiField.HEIGHT : ID_LINE;
+        return hasMessageLine() ? id + ROW_GAP + MESSAGE_LINE : id;
+    }
+
+    // The narrow page keeps the message's line only while the id's field is open, which is when
+    // what is typed can be wrong in a way the name's own field does not show
+    private boolean hasMessageLine() {
+        return !this.home.narrow() || this.slugOpen;
+    }
+
+    @Override
+    public int narrowViewMin(int usual) {
+        return Math.min(usual, NARROW_VIEW_MIN);
+    }
+
+    @Override
+    public void buildUnderName(int x, int y, int width) {
+        this.formX = x;
+        this.formWidth = width;
+        this.idY = y;
+        if (this.slugOpen) {
+            // Under a label of its own; while empty it shows, faint, the id it falls back to,
+            // which a field's hint would hide while the field has the keyboard
+            this.slugFieldY = this.idY + LABEL + LABEL_GAP;
+            this.slugBox = this.home.field("create_slug", x, this.slugFieldY, width, Slugs.MAX_LENGTH, tr("wizard.id"),
+                    this.typedSlug, this::slugTyped);
+            this.slugBox.setHint(Component.empty());
+            showFallbackSlug();
+            this.slugBox.active = !locked();
+            this.messageY = this.slugFieldY + UiField.HEIGHT + ROW_GAP;
+        } else {
+            this.idLine.at(x, this.idY, width, ID_LINE);
+            this.home.add(this.idLine);
+            this.messageY = this.idY + ID_LINE + ROW_GAP;
+        }
+    }
+
+    // Typing
 
     private void slugTyped(String value) {
         this.typedSlug = value;
-        this.failure = null;
-        showFallbackSlug();
         changed();
     }
 
@@ -365,17 +414,15 @@ final class CreateForm {
         this.home.formChanged(this);
     }
 
-    // Shows the change in the box and in what Create allows
-    private void changed() {
-        refreshPreview();
-        this.createButton.disable(problem());
-    }
-
     // The collection
+
+    private String name() {
+        return this.draft.name();
+    }
 
     /** The id the name makes, free among the collections this client was sent. */
     private String autoSlug() {
-        return Slugs.unique(Slugs.collection(this.name), Slugs::isCollectionTaken);
+        return Slugs.unique(Slugs.collection(name()), Slugs::isCollectionTaken);
     }
 
     /** The id the collection will be created with: the one typed, or the one the name makes. */
@@ -390,8 +437,8 @@ final class CreateForm {
 
     /**
      * Why the collection cannot be created as it is, or null when it can: one is being created,
-     * the world has every collection it may, the name is missing or not plain text, or the id
-     * typed is not an id or is taken.
+     * the world has every collection it may, the name is missing or not plain text, the id typed
+     * is not an id or is taken, or the box is to have an image and has none yet.
      */
     @Nullable
     private Component problem() {
@@ -402,16 +449,17 @@ final class CreateForm {
         if (full != null) {
             return full;
         }
-        if (this.name.isBlank()) {
+        if (name().isBlank()) {
             return tr("wizard.name_empty");
         }
-        return wrongInput();
+        Component wrong = wrongInput();
+        return wrong != null ? wrong : boxProblem();
     }
 
     /** What is wrong with what was typed, or null: a name that is not plain text, or an id typed wrong or taken. */
     @Nullable
     private Component wrongInput() {
-        if (!this.name.isEmpty() && !WorldCollectionRecord.isPlainText(this.name)) {
+        if (!name().isEmpty() && !WorldCollectionRecord.isPlainText(name())) {
             return tr("name_rule");
         }
         String slug = slug();
@@ -425,26 +473,18 @@ final class CreateForm {
     }
 
     /**
-     * The box's own collection: the name typed, or a stand-in while it cannot be used, in the
-     * orange a new collection starts with, with no box art and one figure in the player's skin,
-     * so the box never shows empty. It is shown in the preview slot only, and never sent.
+     * Shows the draft in the preview slot, under the id it would be created with while that is
+     * one. It is shown there only, and never sent.
      */
     private void refreshPreview() {
         if (this.disposed) {
             return;
         }
         String slug = slug();
-        String shownName = !this.name.isBlank() && WorldCollectionRecord.isPlainText(this.name) ? this.name.strip()
-                : tr("home.new").getString();
-        CreatorDraft draft = CreatorDraft.create(WorldContentIds.isSlug(slug) ? slug : Slugs.COLLECTION_FALLBACK,
-                CreatorHomeScreen.cut(shownName, WorldContentLimits.MAX_NAME_LENGTH));
-        draft.setRgb(START_COLOUR);
-        FilePicker.LocalFile skin = this.sampleSkin;
-        if (skin != null) {
-            draft.addFigure(this.sampleName, WorldCollectionRecord.Kind.SKIN, CreatorDraft.FileRef.of(skin), null, null,
-                    1.0f);
+        if (WorldContentIds.isSlug(slug)) {
+            this.draft.setSlug(slug);
         }
-        draft.preview(PREVIEW_SLOT);
+        this.draft.preview(PREVIEW_SLOT);
     }
 
     /** Presses Create as a click would, when it can be used. */
@@ -457,19 +497,42 @@ final class CreateForm {
             return;
         }
         String slug = slug();
-        String shownName = this.name.strip();
-        String author = authorName();
-        int rgb = START_COLOUR;
+        String shownName = name().strip();
+        String author = this.draft.author();
+        int red = this.draft.red();
+        int green = this.draft.green();
+        int blue = this.draft.blue();
+        // The box and the logo as chosen: their files go first, and the batch names them
+        CreatorDraft.FileRef image = this.draft.boxMode() == CreatorDraft.BoxMode.TEXTURE ? this.draft.boxTexture() : null;
+        String colour = this.draft.boxMode() == CreatorDraft.BoxMode.COLOR ? this.draft.boxColor() : null;
+        int boxMode = image != null ? WorldCollectionEdit.BOX_TEXTURE
+                : colour != null ? WorldCollectionEdit.BOX_COLOR : WorldCollectionEdit.BOX_NONE;
+        String boxValue = image != null ? image.sha() : colour != null ? colour : "";
+        CreatorDraft.FileRef logo = this.draft.logo();
+        WorldCollectionRecord.LogoLayout layout = logo == null ? null : this.draft.logoLayout();
+        List<FilePicker.LocalFile> files = new ArrayList<>();
+        for (CreatorDraft.FileRef file : new CreatorDraft.FileRef[] {image, logo}) {
+            if (file != null && file.local() != null) {
+                files.add(file.local());
+            }
+        }
         this.sentName = shownName;
         this.failure = null;
         this.cancelled = false;
         this.slugHadKeyboard = this.slugBox != null && this.home.getFocused() == this.slugBox;
         // The batch is made again for each slug a retry after ID_TAKEN tries
-        CreatorSave.Run started = CreatorSave.create(slug, List.of(), next -> new WorldCollectionEdit.Batch(List.of(
-                new WorldCollectionEdit.CreateDraft(next, shownName),
-                new WorldCollectionEdit.SetCollection(WorldContentIds.collectionId(next), shownName, author,
-                        rgb >> 16 & 0xFF, rgb >> 8 & 0xFF, rgb & 0xFF, WorldCollectionEdit.BOX_NONE, "", ""))),
-                this::saved);
+        CreatorSave.Run started = CreatorSave.create(slug, files, next -> {
+            String id = WorldContentIds.collectionId(next);
+            List<WorldCollectionEdit> edits = new ArrayList<>();
+            edits.add(new WorldCollectionEdit.CreateDraft(next, shownName));
+            edits.add(new WorldCollectionEdit.SetCollection(id, shownName, author, red, green, blue, boxMode,
+                    boxValue, logo != null ? logo.sha() : ""));
+            if (layout != null && !WorldCollectionRecord.LogoLayout.DEFAULT.equals(layout)) {
+                // The logo's own size and place; the rest of the extras stay as a new collection has them
+                edits.add(new WorldCollectionEdit.SetCollectionExtras(id, "", layout, false, null));
+            }
+            return new WorldCollectionEdit.Batch(edits);
+        }, this::saved);
         // A create that could not be handed over has already told saved() before it returns
         this.run = started.isFinished() ? null : started;
         this.home.formChanged(this);
@@ -509,6 +572,9 @@ final class CreateForm {
             return;
         }
         this.failure = outcome.message();
+        if (!hasMessageLine()) {
+            UiToast.show(this.failure);
+        }
         // The lock lifts, and the field that had the keyboard gets it back to put it right: the
         // id's, when it had it or the server found the id taken, else the name's
         boolean slugFirst = this.slugOpen
@@ -518,8 +584,9 @@ final class CreateForm {
         this.home.formChanged(this);
     }
 
-    /** Runs once per client tick while the home is shown: the wait for the new collection's sync. */
+    /** Runs once per client tick while the home is shown: the page's own tick, and the wait for the new collection's sync. */
     void tick() {
+        this.look.tick();
         if (this.createdId != null) {
             openWhenSynced();
         }
@@ -565,23 +632,25 @@ final class CreateForm {
 
     /** Lets go of the preview while the home is not shown; the next build shows it again. */
     void hide() {
-        this.preview.close();
+        this.look.hide();
         CreatorPreview.clear(PREVIEW_SLOT);
-        // The sample skin stays loaded only while a synced collection names it, which none does
+        // The sample skin and the files picked stay loaded only while a synced collection names them
         ClientPreviewAssets.release();
     }
 
-    /** The form closed: its preview goes, and a skin read late is dropped. */
+    /** The form closed: its page and its preview go, and a skin read late is dropped. */
     void dispose() {
         this.disposed = true;
+        this.look.close();
         hide();
     }
 
     // Input
 
     /**
-     * A key in one of the form's fields: Enter creates the collection, and Tab from the name goes
-     * on to the id's line, which offers to change the id.
+     * A key in one of the form's fields: Enter creates the collection, Tab from the name goes on
+     * to the id's line, which offers to change the id, and from the id's field to the page's
+     * first row.
      */
     boolean fieldKey(EditBox field, UiInput.Key key) {
         if (field != this.nameBox && field != this.slugBox) {
@@ -591,30 +660,37 @@ final class CreateForm {
             submit();
             return true;
         }
-        if (field == this.nameBox && key.is(InputConstants.KEY_TAB) && !key.shift() && !this.slugOpen && !locked()
-                && this.idLine.visible()) {
+        boolean tab = key.is(InputConstants.KEY_TAB) && !key.shift();
+        if (field == this.nameBox && tab && !this.slugOpen && !locked() && this.idLine.visible()) {
             this.home.focusNode(this.idLine);
             return true;
+        }
+        if (tab && !locked() && (field == this.slugBox || field == this.nameBox && !this.slugOpen)) {
+            return this.look.focusFirst();
         }
         return false;
     }
 
+    /** The page's keys while one of its rows has the keyboard, as the editor offers them. */
+    boolean shortcut(UiInput.Key key) {
+        return !locked() && this.look.shortcut(key);
+    }
+
+    /** Escape, before it cancels the form: a sub-view of the page closes, or its row lets the keyboard go. */
+    boolean escape() {
+        return !locked() && this.look.escape();
+    }
+
     // Drawing
 
-    /** Draws the form's labels, its message and the box's caption, under the form's nodes. */
-    void draw(GuiGraphics graphics, int mouseX, int mouseY) {
+    /** Draws the subtitle, the page's own labels, the id's label and the message, under the form's nodes. */
+    void draw(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         Font font = Minecraft.getInstance().font;
-        int inner = this.home.inner();
-        int subtitleY = this.content.y() + (this.home.isShort() ? SUBTITLE_Y_SHORT : SUBTITLE_Y);
-        drawLine(graphics, font, tr("create.subtitle"), this.formX, subtitleY, inner, Theme.MUTED, mouseX, mouseY);
-
-        // The name's label, shrunk to leave its length room, and the length, amber once it is full
-        String counter = this.name.length() + "/" + WorldContentLimits.MAX_NAME_LENGTH;
-        int counterX = this.formX + this.formWidth - font.width(counter);
-        SidebarScreen.smallLabel(graphics, tr("wizard.name"), this.formX, this.formY + LABEL / 2,
-                Math.max(0, counterX - 8 - this.formX), Theme.TEXT_SOFT);
-        Draw.string(graphics, font, counter, counterX, this.formY,
-                this.name.length() >= WorldContentLimits.MAX_NAME_LENGTH ? Theme.AMBER : Theme.FAINT);
+        if (!this.home.isShort()) {
+            drawLine(graphics, font, tr("create.subtitle"), this.home.left(), this.content.y() + SUBTITLE_Y,
+                    this.home.inner(), Theme.MUTED, mouseX, mouseY);
+        }
+        this.look.drawContents(graphics, mouseX, mouseY, partialTick);
 
         // The id's field under its label, with what an id is as its tooltip
         EditBox slugField = this.slugBox;
@@ -627,23 +703,14 @@ final class CreateForm {
             }
         }
 
-        drawMessage(graphics, font, mouseX, mouseY);
-
-        // The caption under the box, and how it turns while the pointer is over it
-        UiNode.Rect box = this.previewBounds;
-        int captionY = box.bottom() + CAPTION_GAP;
-        for (String line : this.caption) {
-            Draw.centred(graphics, font, line, box.centerX(), captionY, this.captionWidth, Theme.MUTED);
-            captionY += Theme.LINE_HEIGHT;
-        }
-        if (box.contains(mouseX, mouseY) && !Minecraft.getInstance().mouseHandler.isLeftPressed()) {
-            UiTooltip.set(tr("preview.drag_hint"));
+        if (hasMessageLine()) {
+            drawMessage(graphics, font, mouseX, mouseY);
         }
     }
 
-    // The message under the id: that the collection is being created, why the last create did
-    // not work, or what is wrong with what was typed, in two lines, the whole of it in its tooltip
-    // when that cut it
+    // The message under the id, on one line with the whole of it in its tooltip when that cut it:
+    // that the collection is being created, why the last create did not work, or what is wrong
+    // with what was typed
     private void drawMessage(GuiGraphics graphics, Font font, int mouseX, int mouseY) {
         Component text;
         int colour;
@@ -663,18 +730,7 @@ final class CreateForm {
         if (text == null || text.getString().isEmpty()) {
             return;
         }
-        String whole = text.getString();
-        List<String> lines = Draw.fit(font, whole, Math.max(1, this.formWidth), MESSAGE_LINES);
-        int y = this.messageY;
-        for (String line : lines) {
-            Draw.string(graphics, font, line, this.formX, y, colour);
-            y += Theme.LINE_HEIGHT;
-        }
-        boolean cut = Draw.wrap(font, whole, Math.max(1, this.formWidth)).size() > lines.size();
-        if (cut && mouseX >= this.formX && mouseX < this.formX + this.formWidth && mouseY >= this.messageY - 1
-                && mouseY < y - 2) {
-            UiTooltip.set(SidebarScreen.tooltipLines(text));
-        }
+        drawLine(graphics, font, text, this.formX, this.messageY, Math.max(1, this.formWidth), colour, mouseX, mouseY);
     }
 
     // A line of text cut to a width, with the whole of it in its tooltip when it was cut
@@ -684,6 +740,18 @@ final class CreateForm {
         Draw.text(graphics, font, whole, x, y, width, colour);
         if (font.width(whole) > width && mouseX >= x && mouseX < x + width && mouseY >= y - 1 && mouseY < y + 10) {
             UiTooltip.set(SidebarScreen.tooltipLines(text));
+        }
+    }
+
+    // Takes every click on the page while the collection is being created
+    private static final class Shield extends UiNode.Box {
+        @Override
+        public void draw(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        }
+
+        @Override
+        public boolean click(UiInput.Click click) {
+            return isMouseOver(click.x(), click.y());
         }
     }
 
@@ -700,7 +768,7 @@ final class CreateForm {
 
         @Override
         public boolean visible() {
-            return super.visible() && !name.isBlank();
+            return super.visible() && !name().isBlank();
         }
 
         @Override
@@ -763,6 +831,10 @@ final class CreateForm {
             if (key.is(InputConstants.KEY_TAB) && key.shift() && nameBox != null) {
                 home.focusField(nameBox);
                 return true;
+            }
+            if (key.is(InputConstants.KEY_TAB)) {
+                // On to the page's first row, as Tab in the name does in the editor
+                return look.focusFirst();
             }
             return false;
         }
