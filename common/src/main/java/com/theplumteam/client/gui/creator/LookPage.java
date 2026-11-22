@@ -112,6 +112,10 @@ import static com.theplumteam.client.gui.creator.ui.CreatorScreen.tr;
  * the name moves on to the background's tiles; then the arrow keys move along a row,
  * Enter or Space picks, and Up, Down and Tab go from row to row, to the box image, the logo, its
  * size and "Position…".
+ *
+ * <p>The page has two hosts ({@link LookHost}): the editor, and the home's form for a new
+ * collection ({@link CreateForm}), whose draft does not exist yet and is sent whole by "Create".
+ * A host may put rows of its own between the name and the sections, as the form does its id.
  */
 final class LookPage implements EditorPage {
     private static final ResourceLocation TEMPLATE =
@@ -132,6 +136,8 @@ final class LookPage implements EditorPage {
     private static final int NAME_TOP = 20;
     private static final int STATUS_TOP = 43;
     private static final int SECTIONS_TOP = 55;
+    // Between a host's own rows under the name and the sections
+    private static final int UNDER_NAME_GAP = 4;
     // A section's head, and the room from the end of a section's content to the next head
     private static final int HEAD = UiSectionHead.HEIGHT;
     private static final int AFTER = 10;
@@ -207,7 +213,8 @@ final class LookPage implements EditorPage {
     private static final String BOX_NORMAL = "box/normal";
     private static final String BOX_MORE = "box/more";
 
-    private final CreatorEditorScreen editor;
+    private final LookHost host;
+    private final SidebarScreen screen;
     private final String previewId;
     private final UiBoxView view = new UiBoxView();
     private final UiViewButton viewButton;
@@ -264,6 +271,8 @@ final class LookPage implements EditorPage {
     private int statusX;
     private int statusY;
     private int statusWidth;
+    // Whether the host shows rows of its own under the name, in place of the name's problem
+    private boolean hostUnderName;
 
     // The files the zones show, so a rebuild leaves a refusal message in place
     @Nullable
@@ -292,9 +301,10 @@ final class LookPage implements EditorPage {
     // opened it has given the keyboard to what it clicked
     private boolean viewTakesKeyboard;
 
-    LookPage(CreatorEditorScreen editor) {
-        this.editor = editor;
-        this.previewId = CreatorPreview.previewId(CreatorEditorScreen.PREVIEW_SLOT);
+    LookPage(LookHost host) {
+        this.host = host;
+        this.screen = host.screen();
+        this.previewId = CreatorPreview.previewId(host.previewSlot());
         this.previewBox = UiViewport.boxStack(this.previewId, null);
         this.view.setCollection(this.previewId);
         this.view.stageBackground(true);
@@ -304,10 +314,10 @@ final class LookPage implements EditorPage {
 
         this.backgroundHead = new UiSectionHead(tr("look.background"), this::backgroundValue).hint(tr("look.bg_hint"));
         this.boxHead = new UiSectionHead(tr("identity.box"), this::boxValue)
-                .valueColour(() -> editor.boxProblem() != null ? Theme.AMBER : Theme.FAINT);
+                .valueColour(() -> host.boxProblem() != null ? Theme.AMBER : Theme.FAINT);
         this.logoHead = new UiSectionHead(tr("identity.logo"), this::logoValue);
         this.nameLabel = new UiSectionHead(tr("name"), this::counter).stacked(true)
-                .valueColour(() -> editor.draft().name().length() >= WorldContentLimits.MAX_NAME_LENGTH ? Theme.AMBER
+                .valueColour(() -> host.draft().name().length() >= WorldContentLimits.MAX_NAME_LENGTH ? Theme.AMBER
                         : Theme.FAINT);
         this.backgroundLabel = new UiSectionHead(tr("look.background"), this::backgroundShort).stacked(true)
                 .hint(tr("look.bg_hint"));
@@ -320,19 +330,19 @@ final class LookPage implements EditorPage {
                 .wrap(BG_POP_PER_ROW);
         this.popoverBoxes = new UiTileRow(BOX_TILE, POPOVER_GAP, this::popoverBoxTiles).wrap(BOX_POP_PER_ROW);
 
-        this.boxZone = UiDropZone.single(editor, FilePicker.Slot.BOX, this::boxPicked)
+        this.boxZone = UiDropZone.single(this.screen, FilePicker.Slot.BOX, this::boxPicked)
                 .line(this::missingImage, this::boxThumbnail);
         this.templateLink = new TemplateLink(this::exportTemplate);
 
-        this.logoEmpty = UiDropZone.single(editor, FilePicker.Slot.LOGO, tr("look.logo_add"), this::logoPicked)
+        this.logoEmpty = UiDropZone.single(this.screen, FilePicker.Slot.LOGO, tr("look.logo_add"), this::logoPicked)
                 .help(tr("wizard.logo_help", WorldContentLimits.LOGO_MAX_SIZE));
-        this.logoFull = UiDropZone.single(editor, FilePicker.Slot.LOGO, this::logoPicked).onRemove(this::removeLogo)
+        this.logoFull = UiDropZone.single(this.screen, FilePicker.Slot.LOGO, this::logoPicked).onRemove(this::removeLogo)
                 .showLabel(false);
-        this.logoLine = UiDropZone.single(editor, FilePicker.Slot.LOGO, this::logoPicked).onRemove(this::removeLogo)
+        this.logoLine = UiDropZone.single(this.screen, FilePicker.Slot.LOGO, this::logoPicked).onRemove(this::removeLogo)
                 .line(() -> false, this::logoThumbnail).help(tr("look.logo_drop_short"))
                 .chips(UiDropZone.Chips.FAILED);
         this.sizeLabel.text = tr("look.logo_size");
-        WorldCollectionRecord.LogoLayout layout = editor.draft().logoLayout();
+        WorldCollectionRecord.LogoLayout layout = host.draft().logoLayout();
         this.logoSize = new SizeSlider(layout.scalePct());
         this.positionLink = new UiButton(tr("look.position"), UiButton.Style.LINK, this::togglePosition);
         this.positionLink.setTooltip(tr("look.position_tip"));
@@ -341,7 +351,7 @@ final class LookPage implements EditorPage {
                 figure -> new UiThumbStrip.Look(figure.getId(), figure.getName(), true, false, List.of(),
                         List.of(Component.literal(figure.getName()), tr("look.bg_hint"))))
                 .collection(() -> CollectionRegistry.getCollection(this.previewId).orElse(null))
-                .colour(() -> 0xFF000000 | editor.draft().rgb())
+                .colour(() -> 0xFF000000 | host.draft().rgb())
                 .keys(FigureDefinition::getId)
                 .selectable(false)
                 .onPick(figure -> this.view.setFigure(figure.getId()), this.view::shownFigure)
@@ -350,7 +360,7 @@ final class LookPage implements EditorPage {
         this.boxPopover = new UiPopover(tr("look.box_colours"), () -> onScreen(this.boxes.cellOf(BOX_MORE)))
                 .accent(DialogFrame.Accent.SETTINGS, PixelIcon.PALETTE)
                 .width(BOX_POP_WIDTH)
-                .within(editor::contentPanel)
+                .within(host::contentPanel)
                 .content(popover -> popover.node(this.popoverBoxes, this.popoverBoxes.heightFor(
                         popoverBoxTiles().size(), popoverInner(BOX_POP_WIDTH))));
         this.backgroundHint.text = tr("look.bg_hint");
@@ -358,7 +368,7 @@ final class LookPage implements EditorPage {
         this.backgroundPopover = new UiPopover(tr("wizard.colour"), () -> onScreen(this.backgrounds.cellOf(BG_MORE)))
                 .accent(DialogFrame.Accent.SETTINGS, PixelIcon.PALETTE)
                 .width(BG_POP_WIDTH)
-                .within(editor::contentPanel)
+                .within(host::contentPanel)
                 .content(popover -> {
                     int inner = popoverInner(BG_POP_WIDTH);
                     popover.node(this.popoverBackgrounds, this.popoverBackgrounds.heightFor(
@@ -368,7 +378,7 @@ final class LookPage implements EditorPage {
     }
 
     private CreatorDraft draft() {
-        return this.editor.draft();
+        return this.host.draft();
     }
 
     // Building
@@ -377,7 +387,7 @@ final class LookPage implements EditorPage {
     public void build(UiNode.Rect area) {
         int top = area.y() - PAGE_TOP;
         int bottom = area.bottom();
-        this.narrow = this.editor.narrow();
+        this.narrow = this.screen.narrow();
         this.column.clear();
         this.controls.clear();
         this.front.narrow(this.narrow);
@@ -391,12 +401,12 @@ final class LookPage implements EditorPage {
         } else {
             buildWide(top, bottom);
         }
-        this.editor.add(this.view);
+        this.host.add(this.view);
         // The view ranks first in the screen's budget, as the home's big preview does
-        this.editor.budgetNode((SidebarScreen.Budgeted) budget -> budget.request(
+        this.host.budgetNode((SidebarScreen.Budgeted) budget -> budget.request(
                 SidebarScreen.ModelBudget.Rank.PREVIEW, 1, granted -> { }));
         if (this.inColumn) {
-            this.editor.add(this.column);
+            this.host.add(this.column);
         }
         place(this.ring);
         this.builtLayout = layoutKey();
@@ -418,21 +428,27 @@ final class LookPage implements EditorPage {
     private void buildWide(int top, int bottom) {
         Font font = Minecraft.getInstance().font;
         CreatorDraft draft = draft();
-        int left = this.editor.left();
-        int viewWidth = SidebarScreen.clamp(this.editor.inner() - VIEW_GAP - COLUMN_WIDTH, MIN_VIEW_WIDTH,
+        int left = this.screen.left();
+        int viewWidth = SidebarScreen.clamp(this.screen.inner() - VIEW_GAP - COLUMN_WIDTH, MIN_VIEW_WIDTH,
                 MAX_VIEW_WIDTH);
         this.view.at(left, top + PAGE_TOP, viewWidth, Math.max(0, bottom - (top + PAGE_TOP)));
         int x = left + viewWidth + VIEW_GAP;
-        int width = Math.max(0, this.editor.right() - x);
+        int width = Math.max(0, this.screen.right() - x);
         this.nameLabelX = x;
         this.nameLabelWidth = width;
         this.nameLabelMiddle = top + NAME_LABEL_MIDDLE;
         this.counterY = top + COUNTER_TOP;
-        this.nameBox = this.editor.field("name", x, top + NAME_TOP, width, WorldContentLimits.MAX_NAME_LENGTH,
+        this.nameBox = this.host.field("name", x, top + NAME_TOP, width, WorldContentLimits.MAX_NAME_LENGTH,
                 tr("wizard.name_hint"), draft.name(), this::nameTyped);
         this.statusX = x;
         this.statusY = top + STATUS_TOP;
         this.statusWidth = width;
+        // The host's own rows under the name push the sections down by their height
+        int under = this.host.underNameHeight(false);
+        this.hostUnderName = under > 0;
+        if (this.hostUnderName) {
+            this.host.buildUnderName(x, this.statusY, width);
+        }
 
         // What fits on a row, worked out before the heights, which follow from it
         this.fullBackgrounds = width >= FULL_FONDO_WIDTH;
@@ -440,7 +456,7 @@ final class LookPage implements EditorPage {
         this.shortBackgrounds = shortBackgrounds(width);
         fitBoxes(width, true);
 
-        int sectionsTop = top + SECTIONS_TOP;
+        int sectionsTop = this.hostUnderName ? this.statusY + under + UNDER_NAME_GAP : top + SECTIONS_TOP;
         int backgroundBlock = HEAD + backgroundTile + RING + AFTER;
         int sampleBlock = SAMPLE_GAP + SAMPLE_HEIGHT;
         int boxBlock = HEAD + BOX_TILE + (this.boxCaptions ? UiTileRow.CAPTION_HEIGHT : RING)
@@ -513,7 +529,7 @@ final class LookPage implements EditorPage {
         if (count > 0) {
             int stripWidth = count * THUMB_STEP - (THUMB_STEP - THUMB_WIDTH);
             place(this.strip.at(x + (width - stripWidth) / 2, y + SAMPLE_PAD, stripWidth, THUMB_HEIGHT));
-            this.editor.budgetNode(this.strip);
+            this.host.budgetNode(this.strip);
         }
     }
 
@@ -557,30 +573,37 @@ final class LookPage implements EditorPage {
     private void buildNarrow(int top, int bottom) {
         Font font = Minecraft.getInstance().font;
         CreatorDraft draft = draft();
-        int left = this.editor.left();
-        int inner = this.editor.inner();
-        boolean problem = PublishCheck.nameProblem(draft) != null;
+        int left = this.screen.left();
+        int inner = this.screen.inner();
+        int under = this.host.underNameHeight(true);
+        this.hostUnderName = under > 0;
+        boolean problem = !this.hostUnderName && PublishCheck.nameProblem(draft) != null;
+        int statusRoom = this.hostUnderName ? under + UNDER_NAME_GAP : problem ? STATUS_ROOM : 0;
         int viewTop = top + VIEW_TOP;
-        int rows = NARROW_ROWS + (problem ? STATUS_ROOM : 0);
-        int viewHeight = SidebarScreen.clamp(bottom - viewTop - rows, MIN_NARROW_VIEW, MAX_NARROW_VIEW);
+        int rows = NARROW_ROWS + statusRoom;
+        int viewHeight = SidebarScreen.clamp(bottom - viewTop - rows, this.host.narrowViewMin(MIN_NARROW_VIEW),
+                MAX_NARROW_VIEW);
         this.view.at(left, viewTop, inner, viewHeight);
         int x = left + LABEL_WIDTH + LABEL_GAP;
         int width = Math.max(0, inner - LABEL_WIDTH - LABEL_GAP);
         int nameY = viewTop + viewHeight + NAME_GAP;
-        this.nameBox = this.editor.field("name", x, nameY, width, WorldContentLimits.MAX_NAME_LENGTH,
+        this.nameBox = this.host.field("name", x, nameY, width, WorldContentLimits.MAX_NAME_LENGTH,
                 tr("wizard.name_hint"), draft.name(), this::nameTyped);
-        this.editor.add(this.nameLabel.at(left, nameY, LABEL_WIDTH, 20));
+        this.host.add(this.nameLabel.at(left, nameY, LABEL_WIDTH, 20));
         this.statusX = x;
         this.statusY = nameY + 22;
         this.statusWidth = width;
         this.nameLabelWidth = 0;
+        if (this.hostUnderName) {
+            this.host.buildUnderName(x, this.statusY, width);
+        }
 
         this.fullBackgrounds = false;
         this.shortBackgrounds = shortBackgrounds(width);
         fitBoxes(width, false);
         this.sampleShown = false;
         this.inColumn = true;
-        int y = nameY + 20 + ROW_GAP + (problem ? STATUS_ROOM : 0);
+        int y = nameY + 20 + ROW_GAP + statusRoom;
         this.column.at(left, y, inner + COLUMN_BAR, Math.max(0, bottom - y));
 
         // Background and box: a row each, the rings inside the row
@@ -624,7 +647,7 @@ final class LookPage implements EditorPage {
         if (this.inColumn) {
             this.column.add(node);
         } else {
-            this.editor.add(node);
+            this.host.add(node);
         }
     }
 
@@ -638,8 +661,8 @@ final class LookPage implements EditorPage {
 
     // The width inside a popover of this width, held in the content panel
     private int popoverInner(int popoverWidth) {
-        int width = Math.max(POPOVER_MIN_WIDTH, Math.min(popoverWidth, this.editor.width - 8));
-        width = Math.min(width, this.editor.contentPanel().width() - 2 * POPOVER_INSET);
+        int width = Math.max(POPOVER_MIN_WIDTH, Math.min(popoverWidth, this.screen.width - 8));
+        width = Math.min(width, this.host.contentPanel().width() - 2 * POPOVER_INSET);
         return Math.max(1, width - 2 * DialogFrame.PADDING);
     }
 
@@ -650,7 +673,7 @@ final class LookPage implements EditorPage {
      */
     private String layoutKey() {
         CreatorDraft draft = draft();
-        boolean problem = this.narrow && PublishCheck.nameProblem(draft) != null;
+        boolean problem = this.narrow && !this.hostUnderName && PublishCheck.nameProblem(draft) != null;
         int sampled = this.sampleShown ? sampleCount(sampleFigures()) : -1;
         return problem + "/" + draft.boxMode() + "/" + (draft.logo() != null) + "/" + this.front.isOpen() + "/"
                 + sampled;
@@ -750,9 +773,9 @@ final class LookPage implements EditorPage {
             }
         }
         Minecraft minecraft = Minecraft.getInstance();
-        if (this.built && !layoutKey().equals(this.builtLayout) && minecraft.screen == this.editor) {
+        if (this.built && !layoutKey().equals(this.builtLayout) && minecraft.screen == this.screen) {
             // A kind of box, a logo, a name problem or a figure that needs other rows; a click on a colour does not
-            this.editor.rebuildPage();
+            this.host.rebuildPage();
         }
     }
 
@@ -940,7 +963,7 @@ final class LookPage implements EditorPage {
                     CreatorDraft draft = draft();
                     draft.checkpoint();
                     draft.setBoxColor(colour.getSerializedName());
-                    this.editor.changed();
+                    this.host.changed();
                 });
     }
 
@@ -1068,14 +1091,14 @@ final class LookPage implements EditorPage {
 
     private void nameTyped(String value) {
         draft().setName(value);
-        this.editor.changed();
+        this.host.changed();
     }
 
     private void setColour(int rgb) {
         CreatorDraft draft = draft();
         draft.checkpoint();
         draft.setRgb(rgb & 0xFFFFFF);
-        this.editor.changed();
+        this.host.changed();
     }
 
     private void setBoxMode(BoxMode mode) {
@@ -1083,12 +1106,12 @@ final class LookPage implements EditorPage {
         CreatorDraft draft = draft();
         draft.checkpoint();
         draft.setBoxMode(mode);
-        this.editor.changed();
+        this.host.changed();
     }
 
     private void pickCustom() {
         closePopovers();
-        UiColourPicker.open(this.editor, draft().rgb(), this::setColour);
+        UiColourPicker.open(this.screen, draft().rgb(), this::setColour);
     }
 
     private void boxPicked(FilePicker.LocalFile file) {
@@ -1096,7 +1119,7 @@ final class LookPage implements EditorPage {
         this.boxShown = file.sha();
         draft.checkpoint();
         draft.setBoxTexture(FileRef.of(file));
-        this.editor.changed();
+        this.host.changed();
     }
 
     private void logoPicked(FilePicker.LocalFile file) {
@@ -1106,7 +1129,7 @@ final class LookPage implements EditorPage {
         this.logoLineShown = null;
         draft.checkpoint();
         draft.setLogo(FileRef.of(file));
-        this.editor.changed();
+        this.host.changed();
     }
 
     // "Remove" takes the logo and its place on the box; a background taken from it stays, as a custom colour
@@ -1118,7 +1141,7 @@ final class LookPage implements EditorPage {
         this.logoLineShown = null;
         draft.checkpoint();
         draft.setLogo(null);
-        this.editor.changed();
+        this.host.changed();
     }
 
     private void placeLogo(int scalePct, int offsetX, int offsetY) {
@@ -1127,7 +1150,7 @@ final class LookPage implements EditorPage {
             return;
         }
         draft.setLogoLayout(new WorldCollectionRecord.LogoLayout(scalePct, offsetX, offsetY));
-        this.editor.changed();
+        this.host.changed();
     }
 
     // Position…: the view turns into the front of the box, or back; closing it is "Done"
@@ -1144,9 +1167,9 @@ final class LookPage implements EditorPage {
             return;
         }
         closePopovers();
-        this.editor.closeMenu();
+        this.screen.closeMenu();
         this.front.open();
-        this.editor.rebuildPage();
+        this.host.rebuildPage();
         // The arrow keys nudge the logo from now on
         this.viewTakesKeyboard = true;
     }
@@ -1158,22 +1181,22 @@ final class LookPage implements EditorPage {
         }
         this.front.close();
         if (CreatorScreen.hasKeyboard(this.view)) {
-            this.editor.focusNode(null);
+            this.screen.focusNode(null);
         }
-        this.editor.navigated();
-        this.editor.rebuildPage();
+        this.host.navigated();
+        this.host.rebuildPage();
     }
 
     // Popovers, the menu and the machine's screen
 
     private void openBoxPopover() {
         closePopovers();
-        this.editor.openPopover(this.boxPopover);
+        this.screen.openPopover(this.boxPopover);
     }
 
     private void openBackgroundPopover() {
         closePopovers();
-        this.editor.openPopover(this.backgroundPopover);
+        this.screen.openPopover(this.backgroundPopover);
     }
 
     private void closePopovers() {
@@ -1195,13 +1218,13 @@ final class LookPage implements EditorPage {
         menu.item(tr("preview.screen"), this::openMachineScreen);
         menu.highlight(0);
         UiNode.Rect button = this.viewButton.bounds();
-        menu.place(button, this.editor.width, this.editor.height);
+        menu.place(button, this.screen.width, this.screen.height);
         int menuX = this.narrow ? button.x() : Math.max(0, button.right() - menu.bounds().width());
-        this.editor.openMenu(menu, new UiNode.Rect(menuX, button.y(), button.width(), button.height()));
+        this.screen.openMenu(menu, new UiNode.Rect(menuX, button.y(), button.width(), button.height()));
     }
 
     private void openMachineScreen() {
-        this.machineScreen = MachineScreenDialog.open(this.editor);
+        this.machineScreen = MachineScreenDialog.open(this.host);
     }
 
     // The logo's colour, for the background's logo tile
@@ -1223,13 +1246,13 @@ final class LookPage implements EditorPage {
                 return;
             }
             Minecraft minecraft = Minecraft.getInstance();
-            if (minecraft.screen != this.editor) {
+            if (minecraft.screen != this.screen) {
                 // Its answer would be dropped; asked once the editor is shown again
                 return;
             }
             this.askedSha = sha;
             this.askedAt = Util.getMillis();
-            DominantColour.ofPngLater(this.editor, logo.local().bytes(), colour -> {
+            DominantColour.ofPngLater(this.screen, logo.local().bytes(), colour -> {
                 this.logoColours.put(sha, colour);
                 if (sha.equals(this.askedSha)) {
                     this.askedSha = null;
@@ -1318,10 +1341,10 @@ final class LookPage implements EditorPage {
             copyResource(minecraft, TEMPLATE_GUIDE, folder.resolve("box_template_guide.png"));
         } catch (IOException | RuntimeException e) {
             BlockPopsMod.LOGGER.warn("Could not write the box template to {}", folder, e);
-            this.editor.status(tr("identity.template_failed"), Theme.RED);
+            this.screen.status(tr("identity.template_failed"), Theme.RED);
             return;
         }
-        this.editor.toast(tr("identity.template_saved"));
+        this.screen.toast(tr("identity.template_saved"));
         try {
             LinkOpening.openFolder(folder);
         } catch (RuntimeException e) {
@@ -1351,7 +1374,7 @@ final class LookPage implements EditorPage {
             Draw.string(graphics, font, count, counterX, this.counterY,
                     draft.name().length() >= WorldContentLimits.MAX_NAME_LENGTH ? Theme.AMBER : Theme.FAINT);
         }
-        Component problem = PublishCheck.nameProblem(draft);
+        Component problem = this.hostUnderName ? null : PublishCheck.nameProblem(draft);
         if (problem != null) {
             Draw.text(graphics, font, problem.getString(), this.statusX, this.statusY, this.statusWidth, Theme.RED);
         }
@@ -1362,11 +1385,7 @@ final class LookPage implements EditorPage {
     /** Tab in the name moves on to the background's tiles. */
     @Override
     public boolean fieldKey(EditBox field, UiInput.Key key) {
-        if (field == this.nameBox && key.is(InputConstants.KEY_TAB) && !key.shift() && !this.controls.isEmpty()) {
-            focus(this.controls.get(0));
-            return true;
-        }
-        return false;
+        return field == this.nameBox && key.is(InputConstants.KEY_TAB) && !key.shift() && focusFirst();
     }
 
     /**
@@ -1392,9 +1411,9 @@ final class LookPage implements EditorPage {
                 focus(this.controls.get(at - 1));
             } else if (this.nameBox != null) {
                 // Back to the name, above the first row
-                this.editor.focusNode(null);
+                this.screen.focusNode(null);
                 this.keyed = null;
-                this.editor.setFocused(this.nameBox);
+                this.screen.setFocused(this.nameBox);
             }
             return true;
         }
@@ -1403,6 +1422,20 @@ final class LookPage implements EditorPage {
             return true;
         }
         return false;
+    }
+
+    /** Gives the page's first row the keyboard, as Tab in the name does; false when it has none. */
+    boolean focusFirst() {
+        if (this.controls.isEmpty()) {
+            return false;
+        }
+        focus(this.controls.get(0));
+        return true;
+    }
+
+    /** The left edge of the name and the sections, as the page was built last. */
+    int columnX() {
+        return this.narrow ? this.screen.left() : this.nameLabelX;
     }
 
     // The page's control that has the keyboard now, by index, or -1
@@ -1417,14 +1450,14 @@ final class LookPage implements EditorPage {
 
     // Gives a control the keyboard from a key, which shows where it is
     private void focus(UiNode control) {
-        this.editor.setFocused(null);
+        this.screen.setFocused(null);
         if (this.inColumn) {
-            this.editor.focusNode(this.column);
+            this.screen.focusNode(this.column);
             this.column.focus(control);
             UiNode.Rect at = control.bounds();
             this.column.reveal(at.y(), at.bottom());
         } else {
-            this.editor.focusNode(control);
+            this.screen.focusNode(control);
         }
         for (UiNode each : this.controls) {
             if (each instanceof UiTileRow row && row != control) {
@@ -1448,7 +1481,7 @@ final class LookPage implements EditorPage {
             return true;
         }
         if (keyboardControl() >= 0 || CreatorScreen.hasKeyboard(this.view)) {
-            this.editor.focusNode(null);
+            this.screen.focusNode(null);
             this.keyed = null;
             return true;
         }
@@ -1466,7 +1499,7 @@ final class LookPage implements EditorPage {
         if (this.viewTakesKeyboard) {
             this.viewTakesKeyboard = false;
             if (this.front.isOpen()) {
-                this.editor.focusNode(this.view);
+                this.screen.focusNode(this.view);
                 this.keyed = null;
             }
         }
@@ -1527,7 +1560,7 @@ final class LookPage implements EditorPage {
 
         @Override
         public void released() {
-            editor.saver().numberReleased();
+            host.numberReleased();
         }
 
         @Override
@@ -1543,7 +1576,7 @@ final class LookPage implements EditorPage {
 
         @Override
         public boolean footerPrimary() {
-            return editor.footerIsPrimary();
+            return host.footerIsPrimary();
         }
     }
 

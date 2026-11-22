@@ -50,7 +50,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
-import java.util.function.IntConsumer;
 
 /**
  * The creator's first screen, in the layout of Quick Skin's settings ({@link SidebarScreen}): the
@@ -69,8 +68,10 @@ import java.util.function.IntConsumer;
  * creator; the status slot speaks up only when the server's space runs low or the world has
  * every collection it may; the sidebar's button starts a new collection.
  *
- * <p>A new collection starts from its name alone, in a form the content panel shows while a
- * temporary "New" row at the top of the list is selected ({@link CreateForm}), and the sidebar's
+ * <p>A new collection needs only its name, in a form the content panel shows while a temporary
+ * "New" row at the top of the list is selected ({@link CreateForm}): the editor's Look page, so
+ * its colour, box and logo can be chosen there too. A world with no collection opens on that
+ * form by itself, once; cancelling it shows the empty home. The sidebar's
  * button is gone meanwhile; selecting another row, Cancel or Escape closes it and the selection it
  * left returns. From "Create" until the server has synced the new collection, the home is locked:
  * the rows, the help, the search and the shortcuts wait, and only Cancel, Escape and the cross act.
@@ -183,6 +184,8 @@ public class CreatorHomeScreen extends SidebarScreen {
     // The new collection's form while it is open; the content shows it in place of the selection
     @Nullable
     private CreateForm form;
+    // Whether a world without collections was shown the form by itself already
+    private boolean offeredFirst;
     // The collections whose rows said "saving" when the list was last filled
     private Set<String> shownSaving = Set.of();
 
@@ -203,6 +206,14 @@ public class CreatorHomeScreen extends SidebarScreen {
     @Override
     protected void buildSidebar() {
         List<WorldCollectionRecord> records = CreatorSource.records();
+        if (!this.offeredFirst && this.form == null && records.isEmpty()
+                && CollectionActions.tooManyCollections() == null) {
+            // With no collection there is one thing to do, so the home starts on the new
+            // collection's form, once: Cancel then shows the empty home, which also imports
+            this.offeredFirst = true;
+            this.form = new CreateForm(this);
+            this.form.focusName();
+        }
         splitForList(records);
         String revealed = takeReveal();
         keepSelection();
@@ -474,6 +485,10 @@ public class CreatorHomeScreen extends SidebarScreen {
     @Override
     @Nullable
     protected SideStatus sideStatus() {
+        if (this.form != null && narrow()) {
+            // The slot holds the form's Cancel there; what the space allows is in Create's tooltip
+            return null;
+        }
         int used = CreatorSource.quotaUsedKiB();
         int limit = CreatorSource.quotaMaxKiB();
         float fraction = limit <= 0 ? 0.0f : used / (float) limit;
@@ -699,7 +714,7 @@ public class CreatorHomeScreen extends SidebarScreen {
     protected void drawContent(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (this.form != null) {
             contentTitle(graphics, tr("home.new"), 0);
-            this.form.draw(graphics, mouseX, mouseY);
+            this.form.draw(graphics, mouseX, mouseY, partialTick);
             return;
         }
         if (CreatorSource.records().isEmpty()) {
@@ -878,7 +893,11 @@ public class CreatorHomeScreen extends SidebarScreen {
             return true;
         }
         if (open != null) {
-            // The form has the content: Enter creates, and the arrows leave it for a collection
+            // The form has the content: its page's rows take their keys first, then Enter
+            // creates, and the arrows leave it for a collection
+            if (open.shortcut(key)) {
+                return true;
+            }
             if (key.enter()) {
                 open.submit();
                 return true;
@@ -942,7 +961,10 @@ public class CreatorHomeScreen extends SidebarScreen {
     @Override
     public void onClose() {
         if (this.form != null) {
-            this.form.cancel();
+            // A sub-view of the form's page closes first, or its row lets the keyboard go
+            if (!this.form.escape()) {
+                this.form.cancel();
+            }
             return;
         }
         if (!this.search.isEmpty()) {
@@ -1045,9 +1067,14 @@ public class CreatorHomeScreen extends SidebarScreen {
         return textField(name, x, y, width, maxLength, hint, value, responder);
     }
 
-    /** Asks the screen's budget for the form's box, which ranks with the big previews. */
-    void budgetPreview(IntConsumer grant) {
-        budget((SidebarScreen.Budgeted) models -> models.request(SidebarScreen.ModelBudget.Rank.PREVIEW, 1, grant));
+    /** Puts the form's Create at the sidebar's foot, where a narrow canvas has it. */
+    UiButton sideFoot(UiButton button) {
+        return sideFooter(button);
+    }
+
+    /** Gives a node of the form's page that draws models its share of the screen's budget. */
+    <T extends SidebarScreen.Budgeted> T budgetNode(T node) {
+        return budget(node);
     }
 
     /** Gives a text field the keyboard, taking it from the node that had it, such as the list. */

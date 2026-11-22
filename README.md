@@ -82,17 +82,18 @@ in-game creator, which uploads them from your computer and opens from the
 
 The creator is laid out like Quick Skin's settings: the world's collections down
 a sidebar, and the one you pick shown off beside them with its box and figures.
-A new collection needs only a name. Its editor has three tabs: **Figures**, a
-strip of the figures over a big live preview and the selected figure's settings;
-**Look**, the name, background, box and logo; and **Options**. A collection
-stays a draft, out of the machines and seen only by operators, until **Publish**
-puts it in them; a draft saves itself as you work, while a published
-collection's changes wait for **Publish changes**. The creator gives figures a
-rarity and up to four skin variants; places the logo on the box; makes plush
-collections for the gacha machine; can keep a collection's draws from ever
-coming out holographic; adds many figures at once from dropped files or a
-folder; tries the draw out without spending tokens; and duplicates, imports from
-a datapack or deletes a collection for good.
+A new collection needs only a name, on the same page as the editor's Look tab,
+so its background, box and logo can be chosen as it is made. Its editor has
+three tabs: **Figures**, a strip of the figures over a big live preview and the
+selected figure's settings; **Look**, the name, background, box and logo; and
+**Options**. A collection stays a draft, out of the machines and seen only by
+operators, until **Publish** puts it in them; a draft saves itself as you work,
+while a published collection's changes wait for **Publish changes**. The creator
+gives figures a rarity and up to four skin variants; places the logo on the box;
+makes plush collections for the gacha machine; can keep a collection's draws
+from ever coming out holographic; adds many figures at once from dropped files
+or a folder; tries the draw out without spending tokens; and duplicates, imports
+from a datapack or deletes a collection for good.
 
 The server checks every file, stores it with the world under
 `data/blockpops-world-collections/` and sends it to each player who joins;
